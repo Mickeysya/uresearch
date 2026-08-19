@@ -1,11 +1,17 @@
 <?php
 include 'db_connect.php';
 
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+$student_id = $_SESSION['user_id'];
+
 $message = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Step 1: create the shared application record first
-    $student_id = 1; // temporary test value, real login comes later
     $module_type = "claims_student";
     $status = "pending";
 
