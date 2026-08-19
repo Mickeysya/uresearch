@@ -10,33 +10,26 @@ $role = $_SESSION['role'];
 ?>
 <!DOCTYPE html>
 <html>
-<head><title>Home</title></head>
+<head>
+    <title>Home</title>
+    <link rel="stylesheet" href="style.css">
+</head>
 <body>
-    <h2>Welcome, <?php echo $_SESSION['name']; ?> (<?php echo $role; ?>)</h2>
-    <p><a href="logout.php">Log out</a></p>
+    <div class="top-header">
+        <img src="images/UResearch_logo.png" alt="UResearch 2.0" class="uresearch-logo">
+        <img src="images/UTP_logo.png" alt="UTP Logo" class="utp-logo">
+    </div>
 
-    <?php if ($role == 'student'): ?>
-        <p><a href="travel_form.php">New Travel Application</a></p>
-        <p><a href="publication_form.php">New Publication Application</a></p>
-        <p><a href="claims_form.php">New Claims Application</a></p>
+    <div class="dashboard-wrapper">
+        <?php include 'sidebar.php'; ?>
 
-    <?php elseif ($role == 'supervisor'): ?>
-        <p><a href="travel_endorsement.php">Travel Applications to Endorse</a></p>
-        <p><a href="publication_endorsement.php">Publication Applications to Endorse</a></p>
-
-    <?php elseif ($role == 'chair'): ?>
-        <p><a href="travel_chair_approval.php">Travel Applications to Approve</a></p>
-        <p><a href="publication_chair_approval.php">Publication Applications to Approve</a></p>
-
-    <?php elseif ($role == 'non_exec_cgs'): ?>
-        <p><a href="travel_cgs_review.php">Travel Applications to Review</a></p>
-        <p><a href="publication_cgs_review.php">Publication Applications to Review</a></p>
-
-    <?php elseif ($role == 'dean_pgr'): ?>
-        <p><a href="travel_dean_approval.php">Travel Applications for Final Approval</a></p>
-
-    <?php elseif ($role == 'senior_director_cgs'): ?>
-        <p><a href="publication_senior_director_approval.php">Publication Applications for Final Approval</a></p>
-    <?php endif; ?>
+        <div class="main-content">
+            <div class="welcome-banner">
+                <h2>Welcome, <?php echo $_SESSION['name']; ?></h2>
+                <p><?php echo ucfirst(str_replace('_', ' ', $role)); ?></p>
+            </div>
+            <p style="color: var(--text-grey);">Select an item from the sidebar to get started.</p>
+        </div>
+    </div>
 </body>
 </html>
