@@ -1,0 +1,42 @@
+<?php
+session_start();
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
+
+$role = $_SESSION['role'];
+?>
+<!DOCTYPE html>
+<html>
+<head><title>Home</title></head>
+<body>
+    <h2>Welcome, <?php echo $_SESSION['name']; ?> (<?php echo $role; ?>)</h2>
+    <p><a href="logout.php">Log out</a></p>
+
+    <?php if ($role == 'student'): ?>
+        <p><a href="travel_form.php">New Travel Application</a></p>
+        <p><a href="publication_form.php">New Publication Application</a></p>
+        <p><a href="claims_form.php">New Claims Application</a></p>
+
+    <?php elseif ($role == 'supervisor'): ?>
+        <p><a href="travel_endorsement.php">Travel Applications to Endorse</a></p>
+        <p><a href="publication_endorsement.php">Publication Applications to Endorse</a></p>
+
+    <?php elseif ($role == 'chair'): ?>
+        <p><a href="travel_chair_approval.php">Travel Applications to Approve</a></p>
+        <p><a href="publication_chair_approval.php">Publication Applications to Approve</a></p>
+
+    <?php elseif ($role == 'non_exec_cgs'): ?>
+        <p><a href="travel_cgs_review.php">Travel Applications to Review</a></p>
+        <p><a href="publication_cgs_review.php">Publication Applications to Review</a></p>
+
+    <?php elseif ($role == 'dean_pgr'): ?>
+        <p><a href="travel_dean_approval.php">Travel Applications for Final Approval</a></p>
+
+    <?php elseif ($role == 'senior_director_cgs'): ?>
+        <p><a href="publication_senior_director_approval.php">Publication Applications for Final Approval</a></p>
+    <?php endif; ?>
+</body>
+</html>
