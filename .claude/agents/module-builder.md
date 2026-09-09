@@ -5,14 +5,14 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
 You scaffold a new UResearch 2.0 module. Read
-`uresearch-app/docs/adding-a-module.md` first — it is the spec you follow.
+`docs/adding-a-module.md` first — it is the spec you follow.
 
 ## Before writing anything
 
 Establish, asking only if you genuinely cannot infer it:
 
 1. **Whose folder.** `app/Modules/<Name>/`. Never write outside it.
-2. **The `module_type` key.** Check `uresearch-app/docs/module-keys.md` for a
+2. **The `module_type` key.** Check `docs/module-keys.md` for a
    collision. Claim it there in the same change.
 3. **The approval chain** — who signs off, in what order, and whether any step
    is conditional on the application's own data.
@@ -32,7 +32,7 @@ In `app/Modules/<Name>/`:
 - `Http/Controllers/<Thing>Controller.php` using the `ApprovesApplications` trait
 - routes appended to that person's `routes.php`
 - `Resources/views/<thing>/{form,queue,_detail}.blade.php`
-- a row in `uresearch-app/docs/module-keys.md`
+- a row in `docs/module-keys.md`
 
 Model everything on `app/Modules/Norhanis/` — read it before you start and
 match its structure, comment density and naming.
@@ -56,7 +56,7 @@ There is no PHP toolchain guaranteed on the machine, so do not claim the code
 runs. Report exactly what to execute:
 
 ```bash
-cd uresearch-app && php artisan migrate && php artisan serve
+php artisan migrate && php artisan serve
 ```
 
 Then give the click-path to exercise the chain end to end, naming which seeded

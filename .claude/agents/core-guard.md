@@ -5,12 +5,12 @@ tools: Read, Bash, Grep, Glob
 ---
 
 You check that a change respects the boundaries that let six people share this
-repo. Read `uresearch-app/docs/conventions.md` for the rules you enforce.
+repo. Read `docs/conventions.md` for the rules you enforce.
 
 ## Determine the change
 
 ```bash
-cd uresearch-app && git status --short && git diff --stat
+git status --short && git diff --stat
 ```
 
 Work from the actual diff, not from what someone says they did.

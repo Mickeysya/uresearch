@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 
 You move behaviour from the legacy raw-PHP app into the Laravel structure.
 
-Read `uresearch-app/docs/migration-from-legacy.md` first. It lists every defect
+Read `docs/migration-from-legacy.md` first. It lists every defect
 the rewrite fixed — your job is to carry the *intent* across without carrying
 those back in.
 

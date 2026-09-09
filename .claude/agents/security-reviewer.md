@@ -5,7 +5,7 @@ tools: Read, Bash, Grep, Glob
 ---
 
 You audit UResearch 2.0 for the specific vulnerability classes that were found
-in the legacy app. Context is in `uresearch-app/docs/migration-from-legacy.md`.
+in the legacy app. Context is in `docs/migration-from-legacy.md`.
 
 This is a student administrative portal holding real personal data — names,
 matric numbers, bank account numbers, uploaded documents. Findings should be

@@ -3,19 +3,20 @@
 Centralized postgraduate administrative portal for the Centre for Graduate
 Studies (CGS), Universiti Teknologi PETRONAS. Six-person Final Year Project.
 
-**The application lives in `uresearch-app/`.** Work there, not at the repo root.
+The Laravel application **is** the repository root — `app/`, `config/`, `routes/`
+and the rest sit directly here.
 
 ## Stack
 
 Laravel 12 · PHP 8.2+ · MySQL 8.4 (Docker) · Blade · Chart.js (CDN) · Dompdf
 
 MySQL, phpMyAdmin and Mailpit run in Docker; Laravel runs on the host via
-`php artisan serve`. `uresearch-app/setup.sh` does first-time setup.
+`php artisan serve`. `setup.sh` does first-time setup.
 
 ## The one thing to understand
 
 Six people share this repo, and **each owns exactly one folder** under
-`uresearch-app/app/Modules/`:
+`app/Modules/`:
 
 | Folder | Owner | Modules |
 |---|---|---|
@@ -78,12 +79,12 @@ the way the legacy app's did.
 
 | Doc | Covers |
 |---|---|
-| `uresearch-app/README.md` | setup, test accounts, commands |
-| `uresearch-app/docs/architecture.md` | layers, engine, data model |
-| `uresearch-app/docs/adding-a-module.md` | full worked example |
-| `uresearch-app/docs/conventions.md` | naming, ownership, the eight rules |
-| `uresearch-app/docs/module-keys.md` | claim a `module_type` here |
-| `uresearch-app/docs/migration-from-legacy.md` | every bug the rewrite fixed |
+| `README.md` | setup, test accounts, commands |
+| `docs/architecture.md` | layers, engine, data model |
+| `docs/adding-a-module.md` | full worked example |
+| `docs/conventions.md` | naming, ownership, the eight rules |
+| `docs/module-keys.md` | claim a `module_type` here |
+| `docs/migration-from-legacy.md` | every bug the rewrite fixed |
 
 `app/Modules/Norhanis/` is the reference implementation — a complete module
 with a workflow, model, migration, controller, routes and views. Point people
@@ -91,12 +92,17 @@ at it, and copy its patterns rather than inventing new ones.
 
 ## Test accounts
 
-Password for all: `password`. See the table in `uresearch-app/README.md`.
+Password for all: `password`. See the table in `README.md`.
 `student@utp.edu.my` → `supervisor@utp.edu.my` → `chair@utp.edu.my` walks a
 full local-travel chain.
 
 ## Context
 
-The FYP scope documents are at the repo root: `technical.md` (system-wide),
+The FYP scope documents are in `docs/scope/`: `technical.md` (system-wide),
 `norhanis.md`, `nureen.md`, `hani.md` (per-person module breakdowns). They
-describe the intended behaviour, including modules not yet built.
+describe the intended behaviour, including modules not yet built — so when a
+module looks half-finished, check there before assuming it is a bug.
+
+The pre-rewrite raw-PHP app is preserved in `legacy-archive.tar.gz`; see
+`LEGACY.md`. Do not copy patterns out of it without reading
+`docs/migration-from-legacy.md` first.
