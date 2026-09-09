@@ -54,24 +54,29 @@ cd uresearch
 ./setup.sh
 ```
 
-That takes a few minutes the first time — mostly pulling images and downloading
-Composer packages. It:
+That takes a few minutes the first time — mostly pulling images, building the
+application image and downloading Composer packages. It:
 
-1. checks PHP, Composer, Docker and the eight required PHP extensions
-2. pulls the MySQL, phpMyAdmin and Mailpit images
-3. starts the three containers and waits for MySQL to accept connections
-4. runs `composer install`
-5. creates `.env` from `.env.example` and generates `APP_KEY`
+1. checks that Docker is installed and running
+2. runs `composer install` inside a throwaway PHP container
+3. creates `.env` from `.env.example` and generates `APP_KEY`
+4. pulls the MySQL, phpMyAdmin and Mailpit images, then builds the app image
+5. starts all five containers and waits for MySQL to accept connections
 6. runs every migration and seeds the test accounts
 
 It is safe to re-run at any time. It will not overwrite an existing `.env`.
 
 ### 3. Start the app
 
-The `./setup.sh` script automatically brings up the containers in the background, including the web server and the queue workers. 
+There is nothing to start — `./setup.sh` already brought the containers up in
+the background, the web server and the queue worker included.
 
 Open **http://localhost:8000** and log in as `student@utp.edu.my` with the
 password `password`.
+
+> **Nothing else may be holding port 8000.** The `laravel.test` container binds
+> it, so a `php artisan serve` left running from before this change will stop
+> the stack from starting. Stop it, or set `APP_PORT=8001` in `.env`.
 
 ---
 
@@ -96,6 +101,26 @@ git pull
 ./vendor/bin/sail composer install         # if composer.json changed
 ./vendor/bin/sail artisan migrate          # if anyone added a migration
 ```
+
+### If the containers are too heavy on your machine
+
+The app and queue containers cost roughly 1 GB of RAM on top of MySQL. If that
+is too much, you can still run Laravel on the host the old way. MySQL, Mailpit
+and phpMyAdmin stay in Docker either way and their ports are published, so
+`.env` needs no changes:
+
+```bash
+docker compose up -d mysql phpmyadmin mailpit   # skip laravel.test and queue
+composer install                                # needs PHP 8.2+ on the host
+php artisan serve                               # terminal 1
+php artisan queue:work                          # terminal 2, for emails
+```
+
+That path needs PHP 8.3 plus the `pdo_mysql`, `mbstring`, `openssl`,
+`tokenizer`, `xml`, `ctype`, `fileinfo` and `curl` extensions and Composer —
+which is exactly the install everyone used to do, and exactly why the
+containerised path is the default now. Pick one or the other; running both at
+once means two things fighting over port 8000.
 
 ---
 
@@ -139,7 +164,7 @@ docker compose exec mysql mysql -uroot -psecret uresearch
 
 | Port | What |
 |---|---|
-| 8000 | Laravel (`php artisan serve`) |
+| 8000 | Laravel (the `laravel.test` container) |
 | 8080 | phpMyAdmin |
 | 8025 | Mailpit web UI |
 | 1025 | Mailpit SMTP |
@@ -174,8 +199,8 @@ relationship can be exercised.
 To get back to a clean database at any time:
 
 ```bash
-./reset.sh                        # asks for confirmation
-php artisan migrate:fresh --seed  # same thing, no prompt
+./reset.sh                                          # asks for confirmation
+./vendor/bin/sail artisan migrate:fresh --seed      # same thing, no prompt
 ```
 
 ---
@@ -206,7 +231,8 @@ unticked**. The stepper now shows only **two** steps, and `chair@utp.edu.my`
 gives final approval — CGS and the Dean are never involved.
 
 **6. Check the email.** http://localhost:8025 — a notification for every
-decision. (Run `php artisan queue:work` if they have not appeared.)
+decision. (The `queue` container sends them — `./vendor/bin/sail logs queue`
+if they have not appeared.)
 
 Also worth trying: as `supervisor@utp.edu.my`, use *Nominate Examiners*. The
 dropdown disables examiners who are assigned, unavailable, or still inside the
@@ -216,9 +242,10 @@ dropdown disables examiners who are assigned, unavailable, or still inside the
 
 ## Troubleshooting
 
-**`ERROR: missing PHP extension(s)` right after installing PHP**
-apt enables extensions a moment after the install command returns. Wait a few
-seconds and re-run `./setup.sh`.
+**`missing PHP extension` when running host PHP**
+Only applies if you chose the host fallback above — `./setup.sh` needs no PHP
+at all. apt enables extensions a moment after the install command returns, so
+wait a few seconds and try again.
 
 **`dependency failed to start: container uresearch-mysql exited (137)`**
 137 means the kernel killed MySQL — almost always memory, on a first run while
@@ -240,28 +267,33 @@ mkdir -p bootstrap/cache && chmod -R 775 bootstrap/cache storage
 ```
 
 **`SQLSTATE[HY000] [2002] Connection refused`**
-MySQL is not up yet. `docker compose ps` — wait for `uresearch-mysql` to read
+MySQL is not up yet. `./vendor/bin/sail ps` — wait for `uresearch-mysql` to read
 `(healthy)`, then retry. First start takes ~15 seconds while it builds the
 data directory.
 
 **Port already in use**
 `ss -ltn | grep 8000` to find the culprit. Either stop it, or change the port:
-`php artisan serve --port=8001`, and edit `docker-compose.yml` for the others.
+set `APP_PORT=8001` in `.env` for the app, and edit `docker-compose.yml` for
+the others.
 
 **No emails arriving**
-They are queued. Run `php artisan queue:work`, or set
-`QUEUE_CONNECTION=sync` in `.env`.
+They are queued, and the `queue` container sends them. Check it is alive with
+`./vendor/bin/sail ps` and `./vendor/bin/sail logs queue`. As a last resort set
+`QUEUE_CONNECTION=sync` in `.env` to send inline instead.
 
 **Changed `.env` and nothing happened**
 
 ```bash
-php artisan optimize:clear
+./vendor/bin/sail artisan optimize:clear
 ```
+
+If you changed `APP_PORT` or anything in `docker-compose.yml`, recreate the
+containers instead: `./vendor/bin/sail down && ./vendor/bin/sail up -d`.
 
 **Starting completely over**
 
 ```bash
-docker compose down -v      # deletes the database volume too
+./vendor/bin/sail down -v   # deletes the database volume too
 rm -rf vendor
 ./setup.sh
 ```
@@ -347,6 +379,9 @@ walkthrough is in [`docs/adding-a-module.md`](docs/adding-a-module.md).
 ```bash
 ./vendor/bin/sail up -d                    # start everything in background
 ./vendor/bin/sail down                     # stop everything
+./vendor/bin/sail build                    # rebuild the app image
+./vendor/bin/sail shell                    # a shell inside the app container
+./vendor/bin/sail artisan migrate          # apply new migrations
 ./vendor/bin/sail artisan route:list       # every route, including all modules
 ./vendor/bin/sail artisan tinker           # REPL against the app
 ./vendor/bin/sail artisan optimize:clear   # clear config/route/view caches
