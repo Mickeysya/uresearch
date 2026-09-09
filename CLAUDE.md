@@ -26,7 +26,6 @@ Six people share this repo, and **each owns exactly one folder** under
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
 | `Jason/` | Jason | to be scoped |
 | `Chloe/` | Chloe | to be scoped |
-| `Sharvin/` | Sharvin | to be scoped |
 
 Everything a module needs — migrations, models, controllers, routes, views —
 lives in its own folder. Nothing central lists the modules, so adding one never
@@ -80,6 +79,7 @@ the way the legacy app's did.
 | Doc | Covers |
 |---|---|
 | `README.md` | setup, test accounts, commands |
+| `TODO.md` | what is built, what is not, and the agreed order of work |
 | `docs/architecture.md` | layers, engine, data model |
 | `docs/adding-a-module.md` | full worked example |
 | `docs/conventions.md` | naming, ownership, the eight rules |
@@ -102,6 +102,10 @@ The FYP scope documents are in `docs/scope/`: `technical.md` (system-wide),
 `norhanis.md`, `nureen.md`, `hani.md` (per-person module breakdowns). They
 describe the intended behaviour, including modules not yet built — so when a
 module looks half-finished, check there before assuming it is a bug.
+
+`TODO.md` is the source of truth for what is actually built — several modules
+described in the scope documents do not exist yet. Check it before telling
+someone a feature is missing or broken.
 
 The pre-rewrite raw-PHP app is preserved in `legacy-archive.tar.gz`; see
 `LEGACY.md`. Do not copy patterns out of it without reading

@@ -21,7 +21,6 @@ Add a row here in the same commit that registers the workflow.
 | `re_viva` | Re-examination Monitoring | Hani | planned |
 | — | — | Jason | to claim |
 | — | — | Chloe | to claim |
-| — | — | Sharvin | to claim |
 
 ## Stage keys in use
 

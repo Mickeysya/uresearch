@@ -80,8 +80,7 @@ the student's progress stepper shows six steps instead of four.
 │   │   ├── Nureen/      Attendance · GA Extension · Supervision · Certification
 │   │   ├── Hani/        Examiner Nomination · Conflict Detection · Re-viva
 │   │   ├── Jason/       (empty)
-│   │   ├── Chloe/       (empty)
-│   │   └── Sharvin/     (empty)
+│   │   └── Chloe/       (empty)
 │   └── Providers/       module auto-discovery
 ├── database/migrations/ framework tables only (users, sessions, jobs, cache)
 ├── docs/                architecture, conventions, how to add a module
@@ -89,6 +88,7 @@ the student's progress stepper shows six steps instead of four.
 ├── public/css/          Norhanis' stylesheet, unchanged
 ├── .claude/agents/      Claude Code agents for this project
 ├── CLAUDE.md            project context loaded by Claude Code
+├── TODO.md              status: done / not done / next
 ├── docker-compose.yml   MySQL · phpMyAdmin · Mailpit
 └── legacy-archive.tar.gz  the pre-rewrite raw-PHP app (see LEGACY.md)
 ```
@@ -107,7 +107,6 @@ central lists the modules, so adding one causes no merge conflict.
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
 | `Jason/` | Jason | to be scoped |
 | `Chloe/` | Chloe | to be scoped |
-| `Sharvin/` | Sharvin | to be scoped |
 
 `Core/` is the shared base. Changing it affects all six of us, so raise it
 with the team first.
@@ -167,6 +166,7 @@ terminal, or set `QUEUE_CONNECTION=sync` in `.env` while developing.
 | [`docs/conventions.md`](docs/conventions.md) | naming, ownership, the rules |
 | [`docs/module-keys.md`](docs/module-keys.md) | the `module_type` registry — claim yours |
 | [`docs/migration-from-legacy.md`](docs/migration-from-legacy.md) | what changed from the raw-PHP version and why |
+| [`TODO.md`](TODO.md) | what's done, what isn't, and what to do next |
 | [`docs/scope/`](docs/scope/) | the FYP scope documents |
 | [`LEGACY.md`](LEGACY.md) | the archived pre-rewrite app, and how to restore it |
 
