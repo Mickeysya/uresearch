@@ -59,6 +59,26 @@ where international travel returns four stages and local travel two.
 columns directly. This is the rule that keeps the modules from drifting apart
 the way the legacy app's did.
 
+## Publishing — the human's call
+
+**Never push, and never publish anything to GitHub.** Not `git push`, not
+`gh pr create`, not releases, not changing a remote. Sharvin does all of that.
+
+This is enforced, not just requested: `.claude/hooks/block-remote-writes.py`
+rejects those commands as a PreToolUse hook. Do not try to work around it.
+
+What you *should* do instead: commit locally on a branch, then tell the user
+exactly what to run, e.g.
+
+```bash
+git push -u origin laravel-rewrite
+```
+
+Still fine: committing, branching, `git fetch` / `pull`, and read-only `gh`
+(`gh pr view`, `gh pr list`, `gh repo view`, `gh api` without `-X`).
+
+Also: do not commit on `main`. Branch first.
+
 ## Hard rules
 
 1. Never write `status` or `current_stage` outside `WorkflowEngine`.

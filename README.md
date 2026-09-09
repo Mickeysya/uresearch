@@ -180,3 +180,12 @@ terminal, or set `QUEUE_CONNECTION=sync` in `.env` while developing.
 | `legacy-porter` | moving an old raw-PHP page onto the module pattern |
 | `core-guard` | checking a change before you commit — ownership and workflow rules |
 | `security-reviewer` | auditing for the vulnerability classes the legacy app had |
+
+Claude cannot push to GitHub on this repo. `.claude/hooks/block-remote-writes.py`
+rejects `git push`, `gh pr create`, releases and remote changes as a PreToolUse
+hook, so publishing stays a human decision. It commits locally and hands you the
+command to run. Verify the hook with:
+
+```bash
+./.claude/hooks/test-block-remote-writes.sh
+```
