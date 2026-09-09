@@ -14,9 +14,28 @@ command -v composer >/dev/null || fail "composer not found (see README)."
 command -v docker >/dev/null   || fail "docker not found. Enable Docker Desktop's WSL integration (see README)."
 docker info >/dev/null 2>&1    || fail "the Docker daemon is not reachable. Start Docker Desktop."
 
+# Read the module list once. Piping `php -m` into `grep -q` per extension is a
+# trap under `set -o pipefail`: grep exits on first match, php can take SIGPIPE,
+# and the pipeline then reports failure even though the extension is present.
+php_modules="$(php -m)"
+missing=""
 for ext in pdo_mysql mbstring openssl tokenizer xml ctype fileinfo curl; do
-    php -m | grep -qi "^${ext}$" || fail "PHP extension '${ext}' is missing."
+    printf '%s\n' "$php_modules" | grep -qix "$ext" || missing="${missing} ${ext}"
 done
+if [ -n "$missing" ]; then
+    printf '\n\033[1;31mERROR:\033[0m missing PHP extension(s):%s\n\n' "$missing" >&2
+    printf 'Install them with:\n\n    sudo apt install -y' >&2
+    for ext in $missing; do
+        case "$ext" in
+            pdo_mysql) printf ' php8.3-mysql' >&2 ;;
+            mbstring|xml|curl) printf ' php8.3-%s' "$ext" >&2 ;;
+            *)         printf ' php8.3-common' >&2 ;;
+        esac
+    done
+    printf '\n\nIf you just installed PHP, apt may still have been enabling\n' >&2
+    printf 'extensions when this ran -- simply re-run ./setup.sh.\n\n' >&2
+    exit 1
+fi
 printf '    php %s, composer, docker — all present\n' "$(php -r 'echo PHP_VERSION;')"
 
 say "Starting MySQL, phpMyAdmin and Mailpit"
