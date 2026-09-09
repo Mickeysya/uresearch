@@ -89,6 +89,12 @@ if ($this->isInternational($application)) {
 The student's stepper shows the right number of steps from the moment they
 submit, because the same declaration drives both the routing and the display.
 
+`stages()` is also called with `null` to ask for the **superset** — every stage
+the module can ever route through. The sidebar and the approval queues are
+built from that, so a stage which only some applications reach (CGS and the
+Dean on international travel) is still visible to the role that owns it.
+
+
 ## Module discovery
 
 `ModuleServiceProvider` scans `app/Modules/*` and wires up, if present:

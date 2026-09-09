@@ -40,7 +40,7 @@ making it — it affects all six people.
 A module declares its approval chain once:
 
 ```php
-public function stages(Application $application): array
+public function stages(?Application $application = null): array
 {
     return [
         new Stage('supervisor', 'Lecturer/Supervisor', Role::SUPERVISOR, 'endorsed'),
@@ -102,7 +102,7 @@ Also: do not commit on `main`. Branch first.
 | `TODO.md` | what is built, what is not, and the agreed order of work |
 | `docs/architecture.md` | layers, engine, data model |
 | `docs/adding-a-module.md` | full worked example |
-| `docs/conventions.md` | naming, ownership, the eight rules |
+| `docs/conventions.md` | naming, ownership, the nine rules |
 | `docs/module-keys.md` | claim a `module_type` here |
 | `docs/migration-from-legacy.md` | every bug the rewrite fixed |
 

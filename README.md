@@ -116,7 +116,7 @@ with the team first.
 Instead of writing an approval page per stage, you declare your chain once:
 
 ```php
-public function stages(Application $application): array
+public function stages(?Application $application = null): array
 {
     return [
         new Stage('supervisor', 'Lecturer/Supervisor', Role::SUPERVISOR, 'endorsed'),

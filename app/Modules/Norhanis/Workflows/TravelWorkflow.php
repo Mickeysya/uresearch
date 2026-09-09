@@ -34,7 +34,7 @@ class TravelWorkflow implements WorkflowModule
         return 'Travel';
     }
 
-    public function stages(Application $application): array
+    public function stages(?Application $application = null): array
     {
         $chain = [
             new Stage(
@@ -46,7 +46,9 @@ class TravelWorkflow implements WorkflowModule
             ),
         ];
 
-        if ($this->isInternational($application)) {
+        // null means "every stage this module can use" -- that is the
+        // international chain, which is a superset of the local one.
+        if ($application === null || $this->isInternational($application)) {
             $chain[] = new Stage('chair', 'Chair of Department', Role::CHAIR, 'endorsed');
             $chain[] = new Stage('cgs_review', 'Non-Executive CGS', Role::NON_EXEC_CGS, 'reviewed');
             $chain[] = new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'approved');

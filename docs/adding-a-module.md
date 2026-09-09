@@ -32,8 +32,10 @@ class ConferenceWorkflow implements WorkflowModule
     public function key(): string   { return 'conference'; }
     public function label(): string { return 'Conference Attendance'; }
 
-    public function stages(Application $application): array
+    public function stages(?Application $application = null): array
     {
+        // $application is null when the registry asks for the full set of
+        // stages. With no conditional routing, one chain answers both.
         return [
             new Stage('supervisor', 'Lecturer/Supervisor', Role::SUPERVISOR,    'endorsed',
                       queueTitle: 'Pending My Endorsement'),

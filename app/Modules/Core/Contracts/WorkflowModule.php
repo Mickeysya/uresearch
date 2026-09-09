@@ -39,9 +39,15 @@ interface WorkflowModule
      * `is_international` is set. Return the chain for THIS application and
      * the engine handles the rest.
      *
+     * When $application is null, return the SUPERSET -- every stage this
+     * module can ever route through, in order. The sidebar and the approval
+     * queues are built from that, so a stage which only appears on some
+     * applications is still reachable by the role that owns it. Returning the
+     * default chain here instead would hide those queues completely.
+     *
      * @return array<int, Stage>
      */
-    public function stages(Application $application): array;
+    public function stages(?Application $application = null): array;
 
     /**
      * One-line description shown on the student's tracking page,

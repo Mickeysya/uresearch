@@ -22,6 +22,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+      # First run initialises the data directory, which takes ~15s and during
+      # which root briefly has no password. Without a start period the health
+      # retries burn down against a server that is still being built.
+      start_period: 45s
 
   phpmyadmin:
     image: phpmyadmin:5

@@ -82,19 +82,20 @@ class ModuleRegistry
     /**
      * Every (module, stage) pair this role is responsible for.
      *
-     * Drives the sidebar. Because stages() needs an Application to resolve a
-     * conditional chain, we probe with a blank one -- that yields the module's
-     * default chain, which is the right thing for a navigation menu.
+     * Drives the sidebar and gates the approval queues. Asks each module for
+     * its stage superset (stages(null)), not the chain for any one
+     * application: a stage that only appears on some applications -- CGS and
+     * the Dean on international travel, say -- must still be reachable by the
+     * role that owns it.
      *
      * @return array<int, array{module: WorkflowModule, stage: \App\Modules\Core\Support\Stage}>
      */
     public function queuesForRole(string $role): array
     {
         $queues = [];
-        $probe = new \App\Modules\Core\Models\Application();
 
         foreach ($this->modules as $module) {
-            foreach ($module->stages($probe) as $stage) {
+            foreach ($module->stages(null) as $stage) {
                 if ($stage->role === $role) {
                     $queues[] = ['module' => $module, 'stage' => $stage];
                 }

@@ -38,8 +38,27 @@ if [ -n "$missing" ]; then
 fi
 printf '    php %s, composer, docker — all present\n' "$(php -r 'echo PHP_VERSION;')"
 
+say "Fetching container images"
+# Pulled as a separate step on purpose: extracting the MySQL image while it is
+# also initialising its data directory can spike memory hard enough for the
+# kernel to kill mysqld (exit 137) on a laptop or a default WSL2 VM.
+docker compose pull --quiet
+
 say "Starting MySQL, phpMyAdmin and Mailpit"
-docker compose up -d
+start_stack() {
+    docker compose up -d --wait --wait-timeout 180 2>&1 | tail -5
+}
+
+if ! start_stack; then
+    printf '\n    first start failed; retrying once with the images already cached\n'
+    docker compose down --remove-orphans >/dev/null 2>&1 || true
+    start_stack || fail "the containers would not start. Run 'docker compose logs mysql' to see why.
+       If mysql exited with 137 it was killed for memory: close other apps, or
+       raise the WSL2 memory limit in %USERPROFILE%\\.wslconfig, e.g.
+           [wsl2]
+           memory=6GB
+       then run 'wsl --shutdown' from PowerShell and try again."
+fi
 
 printf '    waiting for MySQL to accept connections'
 for _ in $(seq 1 60); do

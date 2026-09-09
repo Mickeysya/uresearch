@@ -31,7 +31,7 @@ class ExaminerNominationWorkflow implements WorkflowModule, ProvidesLinks
         return 'Examiner Nomination';
     }
 
-    public function stages(Application $application): array
+    public function stages(?Application $application = null): array
     {
         return [
             new Stage(

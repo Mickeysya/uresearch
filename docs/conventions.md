@@ -36,30 +36,35 @@ and safe to reword.
 `WorkflowEngine::submit()` and `::decide()`. This is the single most important
 rule — it is what stops the modules drifting apart again.
 
-**2. Never add columns to Core's tables.**
+**2. `stages(null)` must return every stage you can ever use.**
+The registry calls it that way to build the sidebar and gate the approval
+queues. If a conditional branch adds stages, the null case must include them,
+or the roles that own those stages get no queue at all.
+
+**3. Never add columns to Core's tables.**
 `users`, `applications`, `approval_history`, `application_documents`. Your
 module gets its own table keyed by `application_id`.
 
-**3. Every query is scoped.**
+**4. Every query is scoped.**
 A student sees only their own applications. An approver sees only the stage
 they own. `queueFor()` and the `role:` middleware do this for you — do not
 write a bare `Application::all()`.
 
-**4. Escape everything.**
+**5. Escape everything.**
 Blade's `{{ }}` escapes; `{!! !!}` does not. Only ever use `{!! !!}` on markup
 you generated yourself, never on anything a user typed.
 
-**5. Validate every input.**
+**6. Validate every input.**
 `$request->validate()` at the top of every `store()`. Never read `$_POST`.
 
-**6. Derive, don't trust.**
+**7. Derive, don't trust.**
 If a value can be computed from other inputs, compute it server-side. Travel
 duration is derived from the dates rather than accepted from the form.
 
-**7. Uploads go through `DocumentStore`.**
+**8. Uploads go through `DocumentStore`.**
 Never `move_uploaded_file()`, never write under `public/`.
 
-**8. No secrets in code.**
+**9. No secrets in code.**
 Credentials belong in `.env`, which is git-ignored. Read them with `config()`.
 
 ## Git

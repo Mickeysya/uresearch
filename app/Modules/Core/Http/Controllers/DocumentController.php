@@ -19,7 +19,7 @@ class DocumentController extends Controller
         $application = $document->application;
 
         $mayView = $application->student_id === $user->id
-            || $user->is(Role::ADMIN)
+            || $user->hasRole(Role::ADMIN)
             || $application->currentStage()?->role === $user->role
             || $application->history()->where('approver_id', $user->id)->exists();
 

@@ -51,7 +51,7 @@ class User extends Authenticatable
         return $this->hasMany(Application::class, 'student_id');
     }
 
-    public function is(string ...$roles): bool
+    public function hasRole(string ...$roles): bool
     {
         return in_array($this->role, $roles, true);
     }

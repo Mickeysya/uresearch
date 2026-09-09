@@ -34,7 +34,7 @@ class GaExtensionWorkflow implements WorkflowModule
         return 'GA Extension';
     }
 
-    public function stages(Application $application): array
+    public function stages(?Application $application = null): array
     {
         return [
             new Stage(
