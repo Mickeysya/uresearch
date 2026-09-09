@@ -21,21 +21,34 @@ as the work it describes.
 | Hani — Conflict detection T2 · Re-viva | not started |
 | Jason · Chloe | scope not yet defined |
 | Automated tests | none |
-| **Ever executed** | **no — see "Before anything else"** |
+| **Runs end to end** | yes — verified 2026-09-09 |
 
 ---
 
-## Before anything else
+## Verified working
 
-- [ ] **Run the app for the first time.** It has never been executed — the
-      machine it was written on had no PHP, Composer or Docker. Every file was
-      verified by parsing and static cross-reference, which catches syntax and
-      broken references but not runtime behaviour. Expect to shake out a
-      detail or two on the first `php artisan migrate`.
+Run end to end on 2026-09-09 (Ubuntu 24.04 / WSL2, PHP 8.3.6, MySQL 8.4.11):
+
+- [x] `./setup.sh` completes from a clean clone and an empty volume
+- [x] All 9 migrations run; 11 accounts and 5 examiners seeded
+- [x] All 20 routes register, including every module — auto-discovery works
+- [x] International travel routes through all four approvers; the student's
+      stepper shows four steps
+- [x] Local travel shows two steps and finishes at the Chair — same form,
+      different chain
+- [x] A student POSTing to the decide route gets 403 (route middleware)
+- [x] The Dean is refused on an application still at the Supervisor stage
+      (the engine's second check) — both authorisation locks work
+- [x] Six notification emails delivered to Mailpit
+
+Three defects were found and fixed in the process: a missing `bootstrap/cache`,
+`User::is()` colliding with Eloquent's `Model::is()`, and conditional stages
+being invisible to the roles that owned them. See `git log`.
+
 - [ ] Confirm `laravel/framework: ^12.0` in `composer.json` is still the
-      version you want when you install; bump if the team prefers newer.
-- [ ] Walk one full chain end to end (student → supervisor → chair) and
-      confirm the emails land in Mailpit.
+      version the team wants; bump if you prefer newer.
+- [ ] Have each teammate run `./setup.sh` on their own machine — the first run
+      is the memory-hungry one, and their laptops differ.
 
 ---
 
