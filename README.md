@@ -30,45 +30,9 @@ Supervisor: Dr. Savita K. Sugathan · Examiner: Dr. Helmi B Mohd Rais
 
 ## First-time setup
 
-You do steps 1 and 2 once per machine. Step 3 is one command.
+You only need Docker to run this project! The web server, queue workers, database, and all other services run entirely in containers.
 
-### 1. Install PHP and Composer
-
-**Ubuntu / WSL2:**
-
-```bash
-sudo apt update
-sudo apt install -y php8.3-cli php8.3-mbstring php8.3-xml php8.3-curl \
-                    php8.3-mysql php8.3-zip php8.3-bcmath unzip
-
-curl -sS https://getcomposer.org/installer | php
-sudo mv composer.phar /usr/local/bin/composer
-```
-
-**macOS:**
-
-```bash
-brew install php composer
-```
-
-**Windows (via Chocolatey):**
-
-```powershell
-choco install php composer -y
-```
-
-Check it worked:
-
-```bash
-php -v          # 8.3.x  (8.2 or newer is fine)
-composer -V     # 2.x
-```
-
-> **If `./setup.sh` then says an extension is missing but you just ran the
-> install:** apt enables extensions slightly after the command returns. Wait a
-> few seconds and run `./setup.sh` again.
-
-### 2. Install Docker
+### 1. Install Docker
 
 **Windows + WSL2:** install [Docker Desktop](https://docs.docker.com/desktop/),
 then **Settings → Resources → WSL Integration → enable your distro → Apply &
@@ -82,7 +46,7 @@ Check it worked:
 docker info     # must print without error
 ```
 
-### 3. Run setup
+### 2. Run setup
 
 ```bash
 git clone git@github.com:Mickeysya/uresearch.git
@@ -102,46 +66,35 @@ Composer packages. It:
 
 It is safe to re-run at any time. It will not overwrite an existing `.env`.
 
-### 4. Start the app
+### 3. Start the app
 
-Two terminals, both in the project root:
-
-```bash
-php artisan serve        # terminal 1
-php artisan queue:work   # terminal 2
-```
+The `./setup.sh` script automatically brings up the containers in the background, including the web server and the queue workers. 
 
 Open **http://localhost:8000** and log in as `student@utp.edu.my` with the
 password `password`.
-
-> The second terminal sends the notification emails, which are queued. If you
-> would rather not keep it open, set `QUEUE_CONNECTION=sync` in `.env` and
-> emails send inline instead.
 
 ---
 
 ## Running it day to day
 
-After the first setup, starting work is:
+Starting work:
 
 ```bash
-docker compose up -d     # MySQL, phpMyAdmin, Mailpit
-php artisan serve
-php artisan queue:work   # second terminal, if you want emails
+./vendor/bin/sail up -d     # Starts web server, queue worker, DB, etc
 ```
 
 Stopping:
 
 ```bash
-docker compose down      # stops the containers; your data survives
+./vendor/bin/sail down      # stops the containers; your data survives
 ```
 
 Pulling teammates' work:
 
 ```bash
 git pull
-composer install         # if composer.json changed
-php artisan migrate      # if anyone added a migration
+./vendor/bin/sail composer install         # if composer.json changed
+./vendor/bin/sail artisan migrate          # if anyone added a migration
 ```
 
 ---
@@ -392,19 +345,16 @@ walkthrough is in [`docs/adding-a-module.md`](docs/adding-a-module.md).
 ## Commands
 
 ```bash
-php artisan serve                  # run the app
-php artisan queue:work             # send queued notification emails
-php artisan migrate                # apply new migrations
-php artisan migrate:fresh --seed   # wipe and reseed (also ./reset.sh)
-php artisan route:list             # every route, including all modules
-php artisan tinker                 # REPL against the app
-php artisan optimize:clear         # clear config/route/view caches
+./vendor/bin/sail up -d                    # start everything in background
+./vendor/bin/sail down                     # stop everything
+./vendor/bin/sail artisan route:list       # every route, including all modules
+./vendor/bin/sail artisan tinker           # REPL against the app
+./vendor/bin/sail artisan optimize:clear   # clear config/route/view caches
 
-docker compose up -d               # start MySQL / phpMyAdmin / Mailpit
-docker compose ps                  # health of each container
-docker compose logs mysql          # why MySQL will not start
-docker compose down                # stop; data survives
-docker compose down -v             # stop AND delete the database
+./vendor/bin/sail logs                     # view all logs
+./vendor/bin/sail logs mysql               # view just MySQL logs
+
+./vendor/bin/sail down -v                  # stop AND delete the database
 ```
 
 ## Documentation
