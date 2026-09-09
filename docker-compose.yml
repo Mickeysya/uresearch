@@ -1,0 +1,54 @@
+# UResearch 2.0 - local development services.
+# Laravel itself runs on the host (php artisan serve); only the DB and
+# supporting tools live in containers so every team member gets an
+# identical database instead of hand-loading .sql into their own XAMPP.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: uresearch-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: uresearch
+      MYSQL_USER: uresearch
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/uresearch.cnf:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-psecret"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  phpmyadmin:
+    image: phpmyadmin:5
+    container_name: uresearch-phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: secret
+      UPLOAD_LIMIT: 64M
+    ports:
+      - "8080:80"
+
+  # Catches every email the app sends. Replaces the hardcoded Mailtrap
+  # credentials that were committed in the old send_email.php.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: uresearch-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+    environment:
+      MP_MAX_MESSAGES: 500
+
+volumes:
+  mysql-data:
