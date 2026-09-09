@@ -45,7 +45,17 @@ curl -sS https://getcomposer.org/installer | php
 sudo mv composer.phar /usr/local/bin/composer
 ```
 
-**macOS:** `brew install php composer`
+**macOS:**
+
+```bash
+brew install php composer
+```
+
+**Windows (via Chocolatey):**
+
+```powershell
+choco install php composer -y
+```
 
 Check it worked:
 
