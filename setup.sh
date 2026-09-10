@@ -33,6 +33,31 @@ else
     printf '    .env already exists — leaving it alone\n'
 fi
 
+# Sail's own CLI script exports APP_PORT=80 into the shell whenever it isn't
+# already set, which overrides docker-compose.yml's default of 8000 for every
+# `sail up` call below. .env.example carries this going forward, but anyone
+# who ran setup.sh before this line existed has a .env missing it — add it on
+# re-run so the app doesn't silently come up on port 80 instead of 8000.
+if ! grep -q '^APP_PORT=' .env; then
+    printf 'APP_PORT=8000\n' >> .env
+    printf '    added APP_PORT=8000 to .env\n'
+fi
+
+# An older .env.example had DB_HOST/MAIL_HOST set to 127.0.0.1 (fixed since,
+# but anyone whose .env predates that fix still has the stale value). CLI
+# commands like `sail artisan` never noticed because they pick up
+# docker-compose.yml's environment: override directly, but `php artisan
+# serve` spawns its HTTP worker without inheriting that override and falls
+# back to whatever is in .env — so every request 500'd on the first query.
+if grep -q '^DB_HOST=127.0.0.1' .env; then
+    sed -i 's/^DB_HOST=127.0.0.1/DB_HOST=mysql/' .env
+    printf '    fixed stale DB_HOST=127.0.0.1 in .env -> mysql\n'
+fi
+if grep -q '^MAIL_HOST=127.0.0.1' .env; then
+    sed -i 's/^MAIL_HOST=127.0.0.1/MAIL_HOST=mailpit/' .env
+    printf '    fixed stale MAIL_HOST=127.0.0.1 in .env -> mailpit\n'
+fi
+
 # Generated before the stack starts, not after: otherwise the app container
 # boots without an APP_KEY and every request 500s until this line runs.
 if ! grep -q '^APP_KEY=base64:' .env; then
