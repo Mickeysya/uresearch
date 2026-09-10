@@ -19,7 +19,8 @@ as the work it describes.
 | Nureen — Attendance · Supervision · Certification | not started |
 | Hani — Examiner pool + Nomination | done |
 | Hani — Conflict detection T2 · Re-viva | not started |
-| Jason · Chloe | scope not yet defined |
+| Jason — Hardbound Submission · Appeal · Appointment Letters | scoped, not started |
+| Chloe | scope not yet defined |
 | Automated tests | none |
 | **Runs end to end** | yes — verified 2026-09-09 |
 
@@ -181,10 +182,84 @@ being invisible to the roles that owned them. See `git log`.
 
 ---
 
-## Jason · Chloe
+## Jason — Hardbound Submission · Appeal Hardbound Submission · Appointment Letters
+
+Scope defined in `docs/scope/jason.md`. Three chains, three `module_type` keys
+already claimed in `docs/module-keys.md`. `docs/scope/hani.md` records that
+Hani originally pitched Hardbound Submission and Appointment Letters and
+handed both off after workshops with CGS — this module folder is that
+handoff, not a duplicate of her scope.
+
+None of the three chains need a new `Support\Role` entry — `chair`,
+`non_exec_cgs`, `senior_exec_cgs`, `academic_exec` and `dean_pgr` already
+exist and already carry this shape of chain elsewhere. `senior_exec_cgs` is
+declared but unused by any built module, and unseeded — see the cross-cutting
+note below.
+
+- [ ] **Hardbound Submission** (`hardbound_submission`) — Non-Executive CGS
+      → Senior Executive CGS
+  - [ ] `hardbound_submission_details` table: thesis title, matric number,
+        programme, supervisor
+  - [ ] Thesis PDF + clearance form uploads via `DocumentStore`
+  - [ ] Non-Exec review screen — forward to Senior Exec, or return to the
+        student with mandatory comments
+  - [ ] Senior Exec approve/reject, auto-email on approval
+  - [ ] Resubmission form for a returned application
+  - [ ] **Open question, resolve before building the review stage:** the
+        spec wants "return to student, application stays open," but
+        `WorkflowEngine::decide()` currently only knows approve (advance) and
+        reject (terminate, freeze `current_stage`). Decide whether "returned"
+        is a new outcome the engine needs to support, or whether a return is
+        modelled as a rejection that the resubmission form clones into a
+        fresh application. This is a `WorkflowEngine` change either way, so
+        raise it with the team first, same as any other Core change.
+
+- [ ] **Appeal Hardbound Submission** (`hardbound_appeal`) — only filable
+      once a Hardbound Submission has been rejected/returned
+  - [ ] `hardbound_appeal_details` table, FK'd to the originating
+        `hardbound_submission` application
+  - [ ] Appeal memo upload + written justification
+  - [ ] Non-Exec: compile the Dean PFR report (Dompdf) from the appeal memo
+        and the original submission, then forward to Senior Exec
+  - [ ] Senior Exec: ruling (accept/reject) — on accept, decide how the
+        original Hardbound Submission application gets reopened
+  - [ ] Auto-email the ruling to the student
+
+- [ ] **Appointment Letter & Report Management** (`appointment_letter`) —
+      Chair of Department (the spec's "Faculty Department") → Academic
+      Executive (the spec's "Faculty Academic") → Dean of PGR
+  - [ ] `appointment_details` table: examiner name, institution, email,
+        expertise, the student it's for
+  - [ ] Chair nomination form; AE endorse or reject-with-comments; Dean
+        approve/reject
+  - [ ] On Dean approval: generate the Appointment Letter PDF (Appendix B
+        template, Dompdf) and email it to the examiner
+  - [ ] **Open question:** every other module's notification goes to the
+        student, a system user with an account. This one's final recipient
+        is an external examiner with no login — that's a plain `Mail`, not
+        the `ApplicationDecided` notification path the rest of the engine
+        uses.
+  - [ ] Archive the generated letter as an `ApplicationDocument` so the
+        existing download route and permission check apply
+
+Not Jason's to (re)build — already exists in Core, or already tracked
+elsewhere in this file:
+- RBAC/login, the progress stepper, and email notifications
+  (`jason.md` §1.1–1.3) — done; see "Core" above.
+- A full audit-log admin viewer covering every view/upload, not just
+  decisions (`jason.md` §1.4) — `approval_history` already logs
+  approve/reject with who and when; logging views and uploads and giving
+  admin a search UI over it is a Core change, not something to build inside
+  this module folder.
+- The Admin Dashboard (`jason.md` §5.5) — already listed, unowned, under
+  "Team" below.
+
+---
+
+## Chloe
 
 - [ ] Define scope, then claim a `module_type` in `docs/module-keys.md`
-- [ ] Folders exist with a README and the pattern to copy
+- [ ] Folder exists with a README and the pattern to copy
 
 ---
 
@@ -204,6 +279,12 @@ being invisible to the roles that owned them. See `git log`.
 - [ ] Password reset UI — the `password_reset_tokens` table exists, no screens.
 - [ ] Profile / change-password screen.
 - [ ] A withdraw/cancel action for students on a pending application.
+- [ ] A "return to submitter, application stays open" outcome for
+      `WorkflowEngine::decide()` — currently only approve/reject exist.
+      Jason's Hardbound Submission needs this; agree the design before
+      building that module's review stage.
+- [ ] Seed a `senior_exec_cgs` test account — no seeded user has this role
+      yet, and Jason's Hardbound Submission and Appeal chains both end there.
 
 ### Team
 - [ ] **Admin module** — user management and role assignment. `technical.md`
@@ -229,3 +310,8 @@ being invisible to the roles that owned them. See `git log`.
 6. Nureen settles the UTrace data source before starting Attendance.
 7. RPD and Re-viva last — they are the two hardest, and both need scheduled
    commands.
+8. Jason can start now, independently of the rest of the team — Hardbound
+   Submission, Appeal Hardbound Submission and Appointment Letters all reuse
+   existing roles. Settle the "return to student" engine question and seed
+   the `senior_exec_cgs` account before building the Hardbound Submission
+   review stage.

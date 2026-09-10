@@ -310,7 +310,7 @@ rm -rf vendor
 │   │   ├── Norhanis/    Travel · Publication · Claims · RPD
 │   │   ├── Nureen/      Attendance · GA Extension · Supervision · Certification
 │   │   ├── Hani/        Examiner Nomination · Conflict Detection · Re-viva
-│   │   ├── Jason/       (empty)
+│   │   ├── Jason/       Hardbound Submission · Appeal · Appointment Letters (scoped, not yet built)
 │   │   └── Chloe/       (empty)
 │   └── Providers/       module auto-discovery
 ├── database/migrations/ framework tables only (users, sessions, jobs, cache)
@@ -336,7 +336,7 @@ central lists the modules, so adding one causes no merge conflict.
 | `Norhanis/` | Norhanis Erna Natasha (22006318) | Travel · Publication · Claims · RPD |
 | `Nureen/` | Nureen Nellysha (22006973) | Attendance · GA Extension · Supervision · Certification |
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
-| `Jason/` | Jason | to be scoped |
+| `Jason/` | Jason | Hardbound Submission · Appeal Hardbound Submission · Appointment Letters |
 | `Chloe/` | Chloe | to be scoped |
 
 `Core/` is shared. Changing it affects all six of us, so raise it with the team

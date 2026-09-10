@@ -19,7 +19,9 @@ Add a row here in the same commit that registers the workflow.
 | `supervision` | Supervisor Appointment | Nureen | planned |
 | `ga_certification` | GA/GRA Certification Letter | Nureen | planned |
 | `re_viva` | Re-examination Monitoring | Hani | planned |
-| — | — | Jason | to claim |
+| `hardbound_submission` | Hardbound Submission | Jason | planned |
+| `hardbound_appeal` | Appeal Hardbound Submission | Jason | planned |
+| `appointment_letter` | Appointment Letter & Report Management | Jason | planned |
 | — | — | Chloe | to claim |
 
 ## Stage keys in use
@@ -37,3 +39,4 @@ across modules is fine and desirable — it keeps the vocabulary consistent.
 | `senior_director` | Senior Director CGS | `senior_director_cgs` |
 | `manager` | Manager CGS | `manager_cgs` |
 | `academic_exec` | Academic Executive | `academic_exec` |
+| `cgs_approve` | Senior Executive CGS | `senior_exec_cgs` |
