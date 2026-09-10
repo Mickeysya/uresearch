@@ -57,7 +57,11 @@ say "Building the application image"
 
 say "Starting the application, queue worker, MySQL, phpMyAdmin and Mailpit"
 start_stack() {
-    ./vendor/bin/sail up -d --wait --wait-timeout 180 2>&1 | tail -5
+    ./vendor/bin/sail up -d --wait --wait-timeout 180 2>&1 | tail -5 &&
+    # Compose doesn't always recreate laravel.test/queue when only .env changed
+    # (e.g. APP_PORT), so a stale container can keep an old port binding even
+    # after `up` reports success. Force those two to match the current .env.
+    ./vendor/bin/sail up -d --force-recreate laravel.test queue 2>&1 | tail -5
 }
 
 if ! start_stack; then
