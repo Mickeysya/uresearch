@@ -22,11 +22,15 @@ services:
       IGNITION_LOCAL_SITES_PATH: '${PWD}'
       DB_HOST: mysql
       MAIL_HOST: mailpit
+      REDIS_HOST: redis
+      QUEUE_CONNECTION: redis
     volumes:
       - '.:/var/www/html'
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_started
 
   queue:
     build:
@@ -43,11 +47,15 @@ services:
       LARAVEL_SAIL: 1
       DB_HOST: mysql
       MAIL_HOST: mailpit
+      REDIS_HOST: redis
+      QUEUE_CONNECTION: redis
     volumes:
       - '.:/var/www/html'
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_started
 
   mysql:
     image: mysql:8.4
@@ -77,6 +85,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       PMA_HOST: mysql
       PMA_USER: root
@@ -94,6 +104,13 @@ services:
       - "8025:8025"   # web UI
     environment:
       MP_MAX_MESSAGES: 500
+
+  redis:
+    image: redis:7-alpine
+    container_name: uresearch-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
 
 volumes:
   mysql-data:
