@@ -21,7 +21,7 @@ Add a row here in the same commit that registers the workflow.
 | `re_viva` | Re-examination Monitoring | Hani | planned |
 | `hardbound_submission` | Hardbound Submission | Jason | planned |
 | `hardbound_appeal` | Appeal Hardbound Submission | Jason | planned |
-| `appointment_letter` | Appointment Letter & Report Management | Jason | planned |
+| `appointment_letter` | Appointment Letter & Report Management | Jason | built |
 | — | — | Chloe | to claim |
 
 ## Stage keys in use
