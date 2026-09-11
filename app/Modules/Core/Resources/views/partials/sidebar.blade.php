@@ -27,7 +27,10 @@
 <div class="sidebar" id="app-sidebar">
     <div class="sidebar-header">
         <button type="button" id="sidebar-toggle" class="sidebar-brand" aria-label="Collapse sidebar" aria-expanded="true">
-            <img src="{{ asset('images/UResearch_logo.png') }}" alt="UResearch 2.0" class="sidebar-logo">
+            <span class="sidebar-brand-mark">
+                <img src="{{ asset('images/uresearch-logo.png') }}" alt="" class="sidebar-logo-icon">
+                <span class="logo sidebar-logo-text"><span>U</span>Research</span>
+            </span>
             <span class="sidebar-brand-toggle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="3" y1="6" x2="21" y2="6"></line>
