@@ -727,7 +727,40 @@ textarea:focus {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding: 8px 0;
+    padding: 8px 0 8px 3px;
+
+    /* Thin, minimal scrollbar instead of the browser's default one --
+       Firefox reads scrollbar-width/-color, WebKit/Blink read the
+       ::-webkit-scrollbar-* rules below. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-grey) transparent;
+
+    /* Flipping the box to rtl moves the scrollbar to the left edge (the
+       side facing the rest of the app, not the outer edge of the screen);
+       every child is flipped straight back to ltr below so text, icons and
+       the nav-item layout all read normally. */
+    direction: rtl;
+}
+
+.sidebar-nav > * {
+    direction: ltr;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: var(--border-grey);
+    border-radius: 999px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+    background: var(--text-grey);
 }
 
 .sidebar .nav-item {
@@ -1004,6 +1037,10 @@ html.sidebar-collapsed .sidebar-profile {
         flex-direction: row;
         flex-wrap: wrap;
         overflow-y: visible;
+        /* The rtl scrollbar-position trick only makes sense for the vertical
+           scroll column on desktop -- in row layout it would reverse the
+           visual order of the nav items instead, which isn't wanted here. */
+        direction: ltr;
     }
 
     .sidebar-footer {
