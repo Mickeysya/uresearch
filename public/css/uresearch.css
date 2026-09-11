@@ -851,19 +851,39 @@ textarea:focus {
 .sidebar .nav-tree-panel {
     display: grid;
     grid-template-rows: 0fr;
+    overflow: hidden;
+    /* Belt and braces on top of the 0fr row collapsing to ~0px: a closed
+       panel can't be clicked at all, so a sub-pixel rounding sliver between
+       two stacked trees is never an accidentally-live hit target. */
+    pointer-events: none;
     transition: grid-template-rows 0.22s ease;
 }
 
 .sidebar .nav-tree.open > .nav-tree-panel {
     grid-template-rows: 1fr;
+    pointer-events: auto;
 }
 
 .sidebar .nav-tree-panel > .nav-tree-items {
     display: flex;
     flex-direction: column;
+    /* The vertical guide line connecting the sub-items, per the design
+       reference -- one continuous line rather than a per-row tick mark,
+       positioned under roughly where the parent's icon sits. */
+    position: relative;
     padding-bottom: 4px;
     overflow: hidden;
     min-height: 0;
+}
+
+.sidebar .nav-tree-items::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 4px;
+    left: 35px;
+    width: 1px;
+    background: var(--border-grey);
 }
 
 .sidebar a.nav-subitem {
