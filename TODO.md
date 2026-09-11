@@ -15,8 +15,7 @@ as the work it describes.
 | Core (auth, RBAC, workflow engine, uploads, UI) | done |
 | Norhanis — Travel | done · reference implementation |
 | Norhanis — Publication · Claims · RPD | not started |
-| Nureen — GA Extension | done |
-| Nureen — Attendance · Supervision · Certification | not started |
+| Nureen — GA Extension · Attendance · Supervision · Certification | done |
 | Hani — Examiner pool + Nomination | done |
 | Hani — Conflict detection T2 · Re-viva | not started |
 | Jason — Hardbound Submission · Appeal · Appointment Letters | scoped, not started |
@@ -126,28 +125,57 @@ being invisible to the roles that owned them. See `git log`.
 - [x] **GA Extension** — Supervisor → CGS Staff → Senior Director CGS, with a
       mandatory supporting document enforced at validation
 
-- [ ] **Attendance Record** — the predictive piece
-  - [ ] **Decide where UTrace data comes from** — API, CSV export, or manual
-        upload. Everything else is blocked on this; settle it first.
-  - [ ] `attendance_records` table + percentage calculation
-  - [ ] At-risk rule against the 80% threshold (rule-based, per the refined scope)
-  - [ ] Proactive alerts to student and supervisor
-  - [ ] CGS "At-Risk" dashboard list
-  - [ ] Attendance appeal workflow routing to CGS
+- [x] **Attendance Record** — the predictive piece
+  - [x] **UTrace data source: CSV upload**, not a live API — this is a real
+        FYP with no UTP system access. CGS staff export from UTrace and
+        upload the CSV at `/attendance/upload`. Ingestion is isolated to
+        `AttendanceController::upload()`; a live API can replace it later
+        without touching the risk/alerting logic. Documented for the FYP
+        report as future work pending UTP granting API access.
+  - [x] `attendance_records` table (`student_id`, `period_end`,
+        `sessions_attended`, `sessions_total`) + percentage, always derived
+        from the two counts server-side, never trusted from the CSV
+  - [x] At-risk rule (`Support\AttendanceRiskEvaluator`): below the 80%
+        threshold outright, OR declining across the last two uploaded
+        periods and within 5 points of it — the early-warning half
+  - [x] Proactive alerts to student and supervisor (`AttendanceAtRisk`,
+        queued) — fires once, on the transition into at-risk, not on every
+        upload
+  - [x] CGS "At-Risk" dashboard (`/attendance/at-risk`)
+  - [x] Attendance appeal workflow (`attendance_appeal`, single stage to
+        Non-Executive CGS), reachable from a student's "My Attendance" page
 
-- [ ] **Supervision** — supervisor appointment requests
-  - [ ] Request → Supervisor → CGS eligibility review
-  - [ ] Specific feedback on rejection
-  - [ ] Reminder escalation when an approval stalls (scheduled command)
-  - [ ] On approval, set `users.supervisor_id` — this is what makes supervisor
-        queue scoping work for everyone
+- [x] **Supervision** — supervisor appointment requests
+  - [x] Request → Supervisor → CGS eligibility review
+  - [x] Specific feedback on rejection (the standard remarks field)
+  - [x] Reminder escalation when an approval stalls
+        (`supervision:remind-stalled`, scheduled daily at 08:00; tracks
+        `supervision_details.reminded_at` so a stall is only nagged once per
+        period)
+  - [x] On CGS approval, sets `users.supervisor_id`
+        (`SupervisionController::decide()`)
+  - [x] **Closed a gap the engine doesn't handle generically yet:** at the
+        "supervisor" stage the student has no `supervisor_id` for
+        `WorkflowEngine::queue()` to scope by, so by default any
+        supervisor-role user would see and could act on every request, not
+        just the ones addressed to them. `SupervisionController` filters its
+        own queue view and overrides `decide()` to check the specific
+        `requested_supervisor_id` before delegating to the engine. This is a
+        module-local patch, not a fix to the underlying queue-scoping gap —
+        see "Correctness gaps in Core" below, still open for every module.
 
-- [ ] **GA/GRA Certification Letter**
-  - [ ] Field completeness check, GA vs GRA verification by CGS
-  - [ ] Approver endorsement stage
-  - [ ] PDF generation with Dompdf (already in `composer.json`, not yet used)
-  - [ ] Store the generated PDF as an `ApplicationDocument` so the existing
-        download route and its permission check apply
+- [x] **GA/GRA Certification Letter**
+  - [x] Field completeness check (validation), GA vs GRA declared by the
+        student and checked by CGS at the `cgs_verify` stage
+  - [x] Approver endorsement stage (Senior Director CGS, `senior_director`)
+  - [x] PDF generation with Dompdf on final approval
+  - [x] Stored via `DocumentStore::storeGenerated()` — new, small, additive
+        method added to Core for this (the only Core change in this work);
+        Jason's Hardbound/Appointment modules can reuse it for their own
+        generated PDFs rather than re-implementing the same storage logic
+  - [x] Attached as an `ApplicationDocument`, so the existing download route
+        and permission check apply unchanged — verified a second student
+        cannot fetch another's certificate (403)
 
 ---
 

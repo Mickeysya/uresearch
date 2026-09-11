@@ -8,14 +8,24 @@
   with a required supporting document enforced at validation so incomplete
   applications never reach CGS.
 
-## Still to build
+- **Attendance Record** — complete. UTrace data comes in as a CGS-uploaded
+  CSV (`/attendance/upload`), not a live API — there's no UTP system access
+  for this FYP; see `Support\AttendanceRiskEvaluator` for the rule-based
+  early-warning logic (threshold + declining-trend) and
+  `Notifications\AttendanceAtRisk` for the proactive alert. The appeal chain
+  (`attendance_appeal`) is a single stage straight to Non-Executive CGS.
 
-- **Attendance Record** — the predictive at-risk piece. Needs a decision on
-  where UTrace data comes from before the risk model matters.
-- **Supervision** — supervisor appointment requests, with reminder escalation
-  when an approval stalls.
-- **GA/GRA Certification Letter** — Dompdf is already in `composer.json`;
-  generate on final approval and stream it through `DocumentController`.
+- **Supervision** — complete. Supervisor → CGS eligibility review. CGS's
+  approval sets `users.supervisor_id`. Because the engine can't yet scope a
+  queue to a *specific* person (only a role — see TODO.md's cross-cutting
+  notes), `SupervisionController` adds its own guard so a supervisor only
+  ever sees and can act on requests actually addressed to them. Stall
+  reminders run daily via `supervision:remind-stalled`.
+
+- **GA/GRA Certification Letter** — complete. CGS verify GA/GRA →
+  Senior Director CGS endorses → Dompdf generates the certificate and
+  `DocumentStore::storeGenerated()` attaches it, so the existing download
+  route and permission check apply with no extra code.
 
 ## Layout
 

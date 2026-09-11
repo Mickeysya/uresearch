@@ -15,9 +15,9 @@ Add a row here in the same commit that registers the workflow.
 | `claims_student` | Student Claims | Norhanis | planned |
 | `rpd_appeal` | RPD Appeal / Extension | Norhanis | planned |
 | `rpd_dismissal` | RPD Dismissal | Norhanis | planned |
-| `attendance_appeal` | Attendance Appeal | Nureen | planned |
-| `supervision` | Supervisor Appointment | Nureen | planned |
-| `ga_certification` | GA/GRA Certification Letter | Nureen | planned |
+| `attendance_appeal` | Attendance Appeal | Nureen | built |
+| `supervision` | Supervisor Appointment | Nureen | built |
+| `ga_certification` | GA/GRA Certification Letter | Nureen | built |
 | `re_viva` | Re-examination Monitoring | Hani | planned |
 | `hardbound_submission` | Hardbound Submission | Jason | planned |
 | `hardbound_appeal` | Appeal Hardbound Submission | Jason | planned |

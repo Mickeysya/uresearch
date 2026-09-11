@@ -6,6 +6,9 @@
 /public/build
 /storage/*.key
 /storage/app/uploads
+# Laravel 11+'s default local-disk root; DocumentStore/DocumentStore::storeGenerated
+# write every upload and generated PDF here.
+/storage/app/private
 /storage/framework/cache/data/*
 /storage/framework/sessions/*
 /storage/framework/views/*
