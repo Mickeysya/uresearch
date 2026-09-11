@@ -49,7 +49,11 @@ Route::middleware('auth')->group(function () {
     });
 
     // ---- Re-viva Monitoring --------------------------------------------
-    Route::middleware('role:'.Role::STUDENT)->group(function () {
+    // Logged by CGS Staff, not the student: the corrected thesis reaches CGS
+    // through the same channel the rest of the re-viva process is informally
+    // run through today, so CGS is the one who records the formal
+    // resubmission timestamp -- not a self-service student upload.
+    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/re-viva/new', [ReVivaController::class, 'create'])->name('reviva.create');
         Route::post('/re-viva', [ReVivaController::class, 'store'])->name('reviva.store');
     });

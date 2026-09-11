@@ -23,9 +23,15 @@ use App\Modules\Hani\Models\ReVivaDetail;
  * chain reaches STATUS_APPROVED, and never touches applications.status or
  * current_stage -- that would violate the one rule this whole engine exists
  * to enforce. A level-4 loop-back is therefore not a loop in this Stage
- * graph at all: it is the student filing a new Application the next time
- * they upload a re-corrected thesis, linked to the previous cycle by
- * ReVivaDetail::previous_cycle_id. See ReVivaController::create().
+ * graph at all: it is CGS Staff logging a new Application the next time the
+ * student's re-corrected thesis reaches them, linked to the previous cycle
+ * by ReVivaDetail::previous_cycle_id. See ReVivaController::create().
+ *
+ * Logged by CGS Staff, not filed by the student -- so unlike every other
+ * module, createRoute() is null (it never belongs in a student's "New
+ * Application" list) and the create screen is reached instead via the
+ * CGS-only link below, the same mechanism the Examiner Pool admin screen
+ * uses to appear for that role.
  */
 class ReVivaWorkflow implements WorkflowModule, ProvidesLinks
 {
@@ -66,7 +72,7 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks
 
     public function createRoute(): ?string
     {
-        return 'reviva.create';
+        return null;
     }
 
     public function queueRoute(): string
@@ -75,17 +81,21 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks
     }
 
     /**
-     * The outcome-recording step happens after an application leaves the
-     * stage chain, so queuesForRole() (stage-derived) never surfaces it.
+     * Two roles need a link here that queuesForRole() (stage-derived) cannot
+     * produce: CGS Staff logs a new cycle but owns no stage in this chain;
+     * the Academic Executive's outcome-recording step happens after an
+     * application leaves the chain, not on any stage in it.
      */
     public function links(User $user): array
     {
-        if ($user->role !== Role::ACADEMIC_EXEC) {
-            return [];
-        }
-
-        return [
-            ['label' => 'Re-viva Outcomes', 'route' => 'reviva.outcomes.index'],
-        ];
+        return match ($user->role) {
+            Role::NON_EXEC_CGS => [
+                ['label' => 'Log Re-viva Submission', 'route' => 'reviva.create'],
+            ],
+            Role::ACADEMIC_EXEC => [
+                ['label' => 'Re-viva Outcomes', 'route' => 'reviva.outcomes.index'],
+            ],
+            default => [],
+        };
     }
 }

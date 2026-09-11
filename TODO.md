@@ -196,16 +196,19 @@ being invisible to the roles that owned them. See `git log`.
       any examiner nominated from more than one department. Read-only, never
       auto-rejects. No migration — reused `examiners.faculty` and
       `users.department`/`faculty`.
-- [x] **Re-viva monitoring** — `re_viva` module: student uploads the
-      re-corrected thesis (`re_viva_details.resubmission_at`, with the
-      6-month/1-year deadlines computed and stored at that moment); AE
-      advances a 4-stage stepper (Report sent → Under panel review → Report
-      received → Consolidation scheduled); AE then records the 5-level
-      outcome on a separate "Re-viva Outcomes" screen, which never touches
-      `applications.status`/`current_stage`. Level 4 is not modeled as a loop
-      in the Stage graph — a student whose latest cycle is level 4 may file a
-      new `re_viva` application, which `ReVivaController` links to the prior
-      one via `re_viva_details.previous_cycle_id`. New table:
+- [x] **Re-viva monitoring** — `re_viva` module: CGS Staff logs the
+      re-corrected thesis once it reaches them (`/re-viva/new`, Non-Exec CGS,
+      not a student self-service upload — an eligibility-aware student picker
+      mirrors the examiner dropdown), stamping `re_viva_details.resubmission_at`
+      with the 6-month/1-year deadlines computed and stored at that moment;
+      AE advances a 4-stage stepper (Report sent → Under panel review →
+      Report received → Consolidation scheduled); AE then records the
+      5-level outcome on a separate "Re-viva Outcomes" screen, which never
+      touches `applications.status`/`current_stage`. Level 4 is not modeled
+      as a loop in the Stage graph — CGS logs a new `re_viva` application the
+      next time that student's thesis reaches them, and `ReVivaController`
+      links it to the prior cycle via `re_viva_details.previous_cycle_id`.
+      New table:
       `re_viva_details`. Verified end to end (submit → 4-stage advance →
       level-4 outcome → second cycle opens and links correctly → third
       submission blocked while cycle 2 is open).

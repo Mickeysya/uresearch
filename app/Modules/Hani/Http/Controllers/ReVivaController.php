@@ -5,11 +5,14 @@ namespace App\Modules\Hani\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\ReVivaDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ReVivaController extends Controller
@@ -21,28 +24,37 @@ class ReVivaController extends Controller
         return 're_viva';
     }
 
-    public function create(Request $request)
+    public function create()
     {
-        return view('hani::re_viva.form', [
-            'blockReason' => $this->blockReason($this->latestCycle($request->user()->id)),
-        ]);
+        $students = User::where('role', Role::STUDENT)->orderBy('name')->get();
+
+        // Same pattern as the examiner dropdown on the nomination form: show
+        // every student, but flag which ones CGS cannot log a new cycle for
+        // right now, and why.
+        $blockedReasons = $students->mapWithKeys(
+            fn (User $student) => [$student->id => $this->blockReason($this->latestCycle($student->id))]
+        );
+
+        return view('hani::re_viva.form', compact('students', 'blockedReasons'));
     }
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
-        $latest = $this->latestCycle($request->user()->id);
-
-        if ($reason = $this->blockReason($latest)) {
-            throw ValidationException::withMessages(['thesis' => $reason]);
-        }
-
         $data = $request->validate([
+            'student_id' => ['required', Rule::exists('users', 'id')->where('role', Role::STUDENT)],
             'thesis' => DocumentStore::rules(required: true),
         ]);
 
+        $latest = $this->latestCycle($data['student_id']);
+
+        if ($reason = $this->blockReason($latest)) {
+            throw ValidationException::withMessages(['student_id' => $reason]);
+        }
+
         $application = DB::transaction(function () use ($request, $data, $engine, $documents, $latest) {
             $application = Application::create([
-                'student_id' => $request->user()->id,
+                'student_id' => $data['student_id'],
+                // The CGS staff member logging it, not the student.
                 'submitted_by_id' => $request->user()->id,
                 'module_type' => $this->moduleKey(),
                 'status' => Application::STATUS_DRAFT,
@@ -65,8 +77,8 @@ class ReVivaController extends Controller
         });
 
         return redirect()
-            ->route('applications.index')
-            ->with('status', "Re-viva monitoring #{$application->id} submitted.");
+            ->route('reviva.create')
+            ->with('status', "Re-viva monitoring #{$application->id} logged for {$application->student->name}.");
     }
 
     public function queue(Request $request, WorkflowEngine $engine)

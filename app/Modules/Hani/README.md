@@ -22,16 +22,17 @@
   nominated by more than one department. Read-only; never auto-rejects.
 - **Examiner admin** — `/examiners` (Non-Exec CGS): add an examiner, toggle
   Unavailable.
-- **Re-viva monitoring** — student uploads the re-corrected thesis
-  (`reviva.create`), which stamps `resubmission_at` and computes the 6-month
-  correction / 1-year hardbound deadlines. The AE advances a 4-stage stepper
-  (Report sent → Under panel review → Report received → Consolidation
-  scheduled), then records the 5-level outcome on a separate screen
-  (`/re-viva/outcomes`) that never touches `applications.status` — see
-  `ReVivaWorkflow`'s docblock for why. A level-4 outcome doesn't loop the
-  Stage graph; it opens the door for the student to file a new `re_viva`
-  application, which links back to the prior cycle via
-  `re_viva_details.previous_cycle_id`.
+- **Re-viva monitoring** — CGS Staff logs the re-corrected thesis once it
+  reaches them (`reviva.create`, Non-Exec CGS, with an eligibility-aware
+  student picker like the examiner dropdown), which stamps `resubmission_at`
+  and computes the 6-month correction / 1-year hardbound deadlines. Not a
+  student self-service upload — see `ReVivaWorkflow`'s docblock. The AE
+  advances a 4-stage stepper (Report sent → Under panel review → Report
+  received → Consolidation scheduled), then records the 5-level outcome on a
+  separate screen (`/re-viva/outcomes`) that never touches
+  `applications.status`. A level-4 outcome doesn't loop the Stage graph; it
+  opens the door for CGS to log the next cycle, which links back to the
+  prior one via `re_viva_details.previous_cycle_id`.
 
 ## Still to build
 
