@@ -886,10 +886,6 @@ html.sidebar-collapsed .sidebar-profile {
     padding: 10px 0;
 }
 
-html.sidebar-collapsed .sidebar-toggle svg {
-    transform: scaleX(-1);
-}
-
 @media (max-width: 860px) {
     .dashboard-wrapper {
         flex-direction: column;
