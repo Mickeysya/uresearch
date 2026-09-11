@@ -1,15 +1,20 @@
 {{--
-    Built from the ModuleRegistry for the parts that vary by module
-    (an approver's "Pending My Action" queues, a student's submittable
-    modules under My Application) so nothing here has to know a module
-    exists -- register one and it appears on its own. The fixed shell
-    around it (Dashboard, Attendance, Notification, Documents, Calendar,
-    Help and Support, the profile footer) is the same for everyone.
+    This is a thin, role-agnostic shell. The parts that actually differ by
+    role are two separate partials switched on $user->isStudent() --
+    sidebar-student-nav (Track My Applications, Attendance, My Application)
+    for students, sidebar-approver-nav (whatever queues ModuleRegistry says
+    this role owns) for every one of the other twelve roles. Neither
+    partial, nor this file, hardcodes a specific role or module: a new
+    module's stage appears in the right role's queue, and a new submittable
+    module appears under My Application, purely by registering it.
+
+    Dashboard, Notification, Documents, Calendar, Help and Support, and the
+    profile footer are the same for every role and live directly below.
 --}}
 @php
     $user = auth()->user();
 
-    $myApplicationOpen = request()->routeIs('applications.*');
+    $myApplicationOpen = false;
     foreach (($submittable ?? []) as $module) {
         if (request()->routeIs($module->createRoute())) {
             $myApplicationOpen = true;
@@ -27,17 +32,8 @@
 <div class="sidebar" id="app-sidebar">
     <div class="sidebar-header">
         <button type="button" id="sidebar-toggle" class="sidebar-brand" aria-label="Collapse sidebar" aria-expanded="true">
-            <span class="sidebar-brand-mark">
-                <img src="{{ asset('images/uresearch-logo.png') }}" alt="" class="sidebar-logo-icon">
-                <span class="logo sidebar-logo-text"><span>U</span>Research</span>
-            </span>
-            <span class="sidebar-brand-toggle">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-            </span>
+            <img src="{{ asset('images/uresearch-logo.png') }}" alt="" class="sidebar-logo-icon">
+            <span class="logo sidebar-logo-text"><span>U</span>Research</span>
         </button>
     </div>
 
@@ -51,55 +47,9 @@
 
         @auth
             @if ($user->isStudent())
-                <div class="nav-tree @if(request()->routeIs('attendance.*')) open @endif">
-                    <button type="button" class="nav-item nav-tree-trigger" title="Attendance"
-                            aria-expanded="@if(request()->routeIs('attendance.*')) true @else false @endif">
-                        <span class="nav-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="16" y1="3" x2="16" y2="7"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 15l2 2 4-4"/></svg>
-                        </span>
-                        <span class="nav-label">Attendance</span>
-                        <span class="nav-chevron">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
-                        </span>
-                    </button>
-                    <div class="nav-tree-panel">
-                        <div class="nav-tree-items">
-                            <a href="{{ route('attendance.overview') }}" class="nav-subitem @if(request()->routeIs('attendance.overview')) active @endif">Overview</a>
-                            <a href="{{ route('attendance.history') }}" class="nav-subitem @if(request()->routeIs('attendance.history')) active @endif">Attendance History</a>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="nav-tree @if($myApplicationOpen) open @endif">
-                    <button type="button" class="nav-item nav-tree-trigger" title="My Application"
-                            aria-expanded="@if($myApplicationOpen) true @else false @endif">
-                        <span class="nav-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                        </span>
-                        <span class="nav-label">My Application</span>
-                        <span class="nav-chevron">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
-                        </span>
-                    </button>
-                    <div class="nav-tree-panel">
-                        <div class="nav-tree-items">
-                            <a href="{{ route('applications.index') }}" class="nav-subitem @if(request()->routeIs('applications.*')) active @endif">Track My Applications</a>
-                            @foreach ($submittable as $module)
-                                <a href="{{ route($module->createRoute()) }}" class="nav-subitem @if(request()->routeIs($module->createRoute())) active @endif">{{ $module->label() }}</a>
-                            @endforeach
-                        </div>
-                    </div>
-                </div>
+                @include('core::partials.sidebar-student-nav', ['submittable' => $submittable, 'myApplicationOpen' => $myApplicationOpen])
             @else
-                @if (! empty($queues))
-                    <div class="nav-section-label"><span class="nav-label">Pending My Action</span></div>
-                    @foreach ($queues as $queue)
-                        <a href="{{ route($queue['module']->queueRoute(), ['stage' => $queue['stage']->key]) }}"
-                           class="nav-item nav-item-flat" title="{{ $queue['module']->label() }}">
-                            <span class="nav-label">{{ $queue['module']->label() }}</span>
-                        </a>
-                    @endforeach
-                @endif
+                @include('core::partials.sidebar-approver-nav', ['queues' => $queues])
             @endif
 
             @if (! empty($extraLinks))

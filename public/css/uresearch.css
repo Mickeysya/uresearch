@@ -652,24 +652,41 @@ textarea:focus {
    That also means the sidebar is the only thing at the very top of the
    page (nothing sits above it), which is what makes position: sticky below
    actually pin it to the viewport instead of scrolling away. */
+/* Fixed, explicit height (not just padding) so this lines up exactly with
+   .main-content-header's border -- the two sit side by side but wrap
+   different content (a 30px icon here, a 42px UTP logo there), so left to
+   their own intrinsic sizing their bottom borders would land at different
+   heights, which is what looked like a broken/offset line across the
+   sidebar/content boundary. box-sizing: border-box means the border itself
+   is included in that 64px, not added on top. */
 .sidebar-header {
     flex-shrink: 0;
-    padding: 16px 20px;
+    height: 64px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
     border-bottom: 1px solid var(--border-grey);
 }
 
+/* The whole logo + "UResearch" text is the collapse/expand toggle -- no
+   separate hamburger icon, so there's only ever one thing to click and the
+   full wordmark is visible whenever the sidebar is open. No negative
+   margins here on purpose: the button fills its padded header exactly,
+   which is what makes centering the icon alone (collapsed, below) simple
+   and reliable instead of fighting an offset box. */
 .sidebar-brand {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 10px;
     width: 100%;
-    /* Negative margin cancels this padding out visually (the icon/text sit
-       where they did before), but gives hover/focus a bit of room to show
-       a simple rounded shade instead of a highlight jammed against the
-       button's edges. */
-    padding: 6px 8px;
-    margin: -6px -8px;
+    /* Some browsers' UA stylesheets give <button> a small default margin;
+       left in place, width: 100% no longer means "the full header width",
+       which is exactly the kind of thing that throws off centering the
+       icon alone once collapsed. */
+    margin: 0;
+    padding: 8px;
     border-radius: 8px;
     /* Explicit, not transparent: a couple of mobile browsers' dark-theme
        heuristics were still painting a dark native surface on a transparent
@@ -693,14 +710,6 @@ textarea:focus {
     outline-offset: 2px;
 }
 
-.sidebar-brand-mark {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    overflow: hidden;
-    min-width: 0;
-}
-
 .sidebar-logo-icon {
     height: 30px;
     width: 30px;
@@ -716,21 +725,6 @@ textarea:focus {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.sidebar-brand-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 30px;
-    height: 30px;
-    color: var(--navy);
-}
-
-.sidebar-brand-toggle svg {
-    width: 18px;
-    height: 18px;
 }
 
 /* Sidebar pins to the viewport (sticky, full height) so a long dashboard
@@ -783,7 +777,11 @@ textarea:focus {
     text-align: left;
     /* nav-tree-trigger is a real <button>; reset it to look identical to
        the <a> nav-items either side of it, and opt out of native button
-       theming the same way .sidebar-brand does. */
+       theming the same way .sidebar-brand does. Several browsers' UA
+       stylesheets give <button> a small default margin that <a> doesn't
+       have, which is exactly what showed up as an odd gap specifically
+       above/below the Attendance and My Application triggers. */
+    margin: 0;
     background: transparent;
     border: none;
     appearance: none;
@@ -937,8 +935,11 @@ textarea:focus {
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    /* Matches .sidebar-header's height exactly -- see the comment there. */
+    height: 64px;
+    box-sizing: border-box;
     margin: -32px -32px 24px;
-    padding: 16px 32px;
+    padding: 0 32px;
     background: white;
     border-bottom: 1px solid var(--border-grey);
 }
@@ -1009,15 +1010,14 @@ html.sidebar-collapsed .sidebar {
     width: 72px;
 }
 
-html.sidebar-collapsed .sidebar-header {
-    padding: 16px 12px;
-}
-
+/* Both the brand button and the profile link go from icon+label to
+   icon-only. Neither needs a padding override here -- .sidebar-header's
+   and .sidebar-brand's own padding is already symmetric on all sides, so
+   justify-content: center alone lands the remaining icon dead centre. */
 html.sidebar-collapsed .sidebar-brand {
     justify-content: center;
 }
 
-html.sidebar-collapsed .sidebar-brand-toggle,
 html.sidebar-collapsed .sidebar-logo-text,
 html.sidebar-collapsed .sidebar .nav-label,
 html.sidebar-collapsed .sidebar .nav-chevron,
