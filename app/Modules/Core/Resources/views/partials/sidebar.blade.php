@@ -48,8 +48,9 @@
 
         @auth
             @if ($user->isStudent())
-                <details class="nav-tree" @if(request()->routeIs('attendance.*')) open @endif>
-                    <summary class="nav-item" title="Attendance">
+                <div class="nav-tree @if(request()->routeIs('attendance.*')) open @endif">
+                    <button type="button" class="nav-item nav-tree-trigger" title="Attendance"
+                            aria-expanded="@if(request()->routeIs('attendance.*')) true @else false @endif">
                         <span class="nav-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="16" y1="3" x2="16" y2="7"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 15l2 2 4-4"/></svg>
                         </span>
@@ -57,15 +58,18 @@
                         <span class="nav-chevron">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
                         </span>
-                    </summary>
-                    <div class="nav-tree-items">
-                        <a href="{{ route('attendance.overview') }}" class="nav-subitem @if(request()->routeIs('attendance.overview')) active @endif">Overview</a>
-                        <a href="{{ route('attendance.history') }}" class="nav-subitem @if(request()->routeIs('attendance.history')) active @endif">Attendance History</a>
+                    </button>
+                    <div class="nav-tree-panel">
+                        <div class="nav-tree-items">
+                            <a href="{{ route('attendance.overview') }}" class="nav-subitem @if(request()->routeIs('attendance.overview')) active @endif">Overview</a>
+                            <a href="{{ route('attendance.history') }}" class="nav-subitem @if(request()->routeIs('attendance.history')) active @endif">Attendance History</a>
+                        </div>
                     </div>
-                </details>
+                </div>
 
-                <details class="nav-tree" @if($myApplicationOpen) open @endif>
-                    <summary class="nav-item" title="My Application">
+                <div class="nav-tree @if($myApplicationOpen) open @endif">
+                    <button type="button" class="nav-item nav-tree-trigger" title="My Application"
+                            aria-expanded="@if($myApplicationOpen) true @else false @endif">
                         <span class="nav-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                         </span>
@@ -73,14 +77,16 @@
                         <span class="nav-chevron">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
                         </span>
-                    </summary>
-                    <div class="nav-tree-items">
-                        <a href="{{ route('applications.index') }}" class="nav-subitem @if(request()->routeIs('applications.*')) active @endif">Track My Applications</a>
-                        @foreach ($submittable as $module)
-                            <a href="{{ route($module->createRoute()) }}" class="nav-subitem @if(request()->routeIs($module->createRoute())) active @endif">{{ $module->label() }}</a>
-                        @endforeach
+                    </button>
+                    <div class="nav-tree-panel">
+                        <div class="nav-tree-items">
+                            <a href="{{ route('applications.index') }}" class="nav-subitem @if(request()->routeIs('applications.*')) active @endif">Track My Applications</a>
+                            @foreach ($submittable as $module)
+                                <a href="{{ route($module->createRoute()) }}" class="nav-subitem @if(request()->routeIs($module->createRoute())) active @endif">{{ $module->label() }}</a>
+                            @endforeach
+                        </div>
                     </div>
-                </details>
+                </div>
             @else
                 @if (! empty($queues))
                     <div class="nav-section-label"><span class="nav-label">Pending My Action</span></div>
@@ -158,3 +164,19 @@
         </div>
     @endauth
 </div>
+
+<script>
+    // Plain <details>/<summary> can't be animated smoothly across browsers
+    // (its content just snaps open/shut), so the Attendance / My Application
+    // trees are a button + panel instead, with the open/closed state carried
+    // by an "open" class rather than the details element's own toggle.
+    (function () {
+        document.querySelectorAll('#app-sidebar .nav-tree-trigger').forEach(function (trigger) {
+            trigger.addEventListener('click', function () {
+                var tree = trigger.closest('.nav-tree');
+                var open = tree.classList.toggle('open');
+                trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+        });
+    })();
+</script>

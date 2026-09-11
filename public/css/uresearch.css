@@ -638,6 +638,15 @@ textarea:focus {
    Calendar / Help and Support / profile footer).
    ===================================================================== */
 
+/* This app has one, light-only palette -- opt out of the browser/OS "auto
+   dark theme" some mobile browsers apply to pages that don't declare a
+   scheme. Without this, Chrome/Android's forced-dark re-themes native
+   controls like <button> even when you set an explicit background: it was
+   painting a dark navy box behind the sidebar logo button below. */
+:root {
+    color-scheme: light;
+}
+
 /* The UResearch mark + collapse toggle live inside the sidebar itself, not
    a page-wide header bar -- see the design reference in images/image.png.
    That also means the sidebar is the only thing at the very top of the
@@ -658,6 +667,12 @@ textarea:focus {
     padding: 0;
     background: transparent;
     border: none;
+    /* Without this, some mobile browsers' dark-theme heuristics still paint
+       a native dark button surface here despite the transparent background
+       above -- appearance: none fully opts the element out of native
+       control theming, on top of the color-scheme: light declaration. */
+    appearance: none;
+    -webkit-appearance: none;
     cursor: pointer;
 }
 
@@ -719,19 +734,22 @@ textarea:focus {
     display: flex;
     align-items: center;
     gap: 12px;
+    width: 100%;
     padding: 11px 24px;
     color: var(--text-dark);
     text-decoration: none;
+    font: inherit;
     font-size: 14px;
+    text-align: left;
+    /* nav-tree-trigger is a real <button>; reset it to look identical to
+       the <a> nav-items either side of it, and opt out of native button
+       theming the same way .sidebar-brand does. */
+    background: transparent;
+    border: none;
+    appearance: none;
+    -webkit-appearance: none;
     cursor: pointer;
-    list-style: none;
     white-space: nowrap;
-}
-
-.sidebar .nav-item::-webkit-details-marker,
-.sidebar .nav-item::marker {
-    display: none;
-    content: '';
 }
 
 .sidebar .nav-item:hover {
@@ -781,14 +799,31 @@ textarea:focus {
     height: 16px;
 }
 
-.sidebar details.nav-tree[open] > summary .nav-chevron {
+.sidebar .nav-tree.open > .nav-tree-trigger .nav-chevron {
     transform: rotate(90deg);
 }
 
-.sidebar .nav-tree-items {
+/* Smooth expand/collapse without measuring pixel heights in JS: animating
+   a grid track from 0fr to 1fr auto-sizes to the content's real height on
+   every frame, which a max-height transition can't do without guessing a
+   fixed cap. Supported in every browser this app targets (Chrome 107+,
+   Firefox 113+, Safari 16.4+, all well before 2026). */
+.sidebar .nav-tree-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.22s ease;
+}
+
+.sidebar .nav-tree.open > .nav-tree-panel {
+    grid-template-rows: 1fr;
+}
+
+.sidebar .nav-tree-panel > .nav-tree-items {
     display: flex;
     flex-direction: column;
     padding-bottom: 4px;
+    overflow: hidden;
+    min-height: 0;
 }
 
 .sidebar a.nav-subitem {
@@ -929,7 +964,7 @@ html.sidebar-collapsed .sidebar-logo {
 html.sidebar-collapsed .sidebar-brand-toggle,
 html.sidebar-collapsed .sidebar .nav-label,
 html.sidebar-collapsed .sidebar .nav-chevron,
-html.sidebar-collapsed .sidebar .nav-tree-items,
+html.sidebar-collapsed .sidebar .nav-tree-panel,
 html.sidebar-collapsed .sidebar .nav-section-label,
 html.sidebar-collapsed .sidebar-profile .profile-text {
     display: none;
