@@ -14,7 +14,9 @@ as the work it describes.
 | Infrastructure (Docker, setup scripts, config) | done |
 | Core (auth, RBAC, workflow engine, uploads, UI) | done |
 | Norhanis — Travel | done · reference implementation |
-| Norhanis — Publication · Claims · RPD | not started |
+| Norhanis — Claims | done |
+| Norhanis — Publication | done |
+| Norhanis — RPD | not started |
 | Nureen — GA Extension · Attendance · Supervision · Certification | done |
 | Hani — Examiner pool + Nomination | done |
 | Hani — Conflict detection T2 · Re-viva | not started |
@@ -95,17 +97,19 @@ being invisible to the roles that owned them. See `git log`.
 - [x] **Travel** — full chain, with conditional routing (local stops at the
       Chair; international continues to CGS and the Dean). Reference module.
 
-- [ ] **Publication** — Supervisor → Chair → Non-Exec CGS → Senior Director CGS
-  - [ ] `publication_details` + `publication_authors` tables (repeatable authors)
-  - [ ] Letter of Undertaking flag and its document
-  - [ ] `PublicationWorkflow`, controller, 3 views
+- [x] **Publication** — Supervisor → Chair → Non-Exec CGS → Senior Director CGS
+  - [x] `publication_details` + `publication_authors` tables (repeatable authors)
+  - [x] Letter of Undertaking flag and its document
+  - [x] `PublicationWorkflow`, controller, 3 views
   - Straightforward: a four-`Stage` chain, no conditional routing.
 
-- [ ] **Claims (student)** — Supervisor → Chair → Non-Exec CGS → Manager CGS → Project Director
-  - [ ] `claims_details` + `claims_items` (repeatable expense rows)
-  - [ ] Server-side total / balance calculation — never trust the posted total
-  - [ ] Receipt uploads via `DocumentStore`
-  - [ ] Decide whether Project Director is a `Stage` or a post-approval export
+- [x] **Claims (student)** — Supervisor → Chair → Non-Exec CGS → Manager CGS.
+      Project Director's payment processing was decided to stay a manual,
+      post-approval step outside the app — not modelled as a `Stage` — so the
+      chain ends at Manager CGS.
+  - [x] `claims_details` + `claims_items` (repeatable expense rows)
+  - [x] Server-side total / balance calculation — never trust the posted total
+  - [x] Receipt uploads via `DocumentStore`
 
 - [ ] **RPD Candidacy** — the largest remaining piece, three separate flows
   - [ ] `candidacies` table: programme type, start date, computed deadline

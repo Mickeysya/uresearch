@@ -3,6 +3,8 @@
 namespace App\Modules\Norhanis;
 
 use App\Modules\Core\Services\ModuleRegistry;
+use App\Modules\Norhanis\Workflows\ClaimsWorkflow;
+use App\Modules\Norhanis\Workflows\PublicationWorkflow;
 use App\Modules\Norhanis\Workflows\TravelWorkflow;
 use Illuminate\Support\ServiceProvider;
 
@@ -17,10 +19,10 @@ class ModuleProvider extends ServiceProvider
     public function boot(ModuleRegistry $registry): void
     {
         $registry->register(new TravelWorkflow());
+        $registry->register(new ClaimsWorkflow());
+        $registry->register(new PublicationWorkflow());
 
-        // Still to build — register them as you go:
-        // $registry->register(new PublicationWorkflow());
-        // $registry->register(new ClaimsWorkflow());
+        // Still to build — register as you go:
         // $registry->register(new RpdAppealWorkflow());
     }
 }
