@@ -25,6 +25,19 @@
         : '';
 @endphp
 <div class="sidebar" id="app-sidebar">
+    <div class="sidebar-header">
+        <button type="button" id="sidebar-toggle" class="sidebar-brand" aria-label="Collapse sidebar" aria-expanded="true">
+            <img src="{{ asset('images/UResearch_logo.png') }}" alt="UResearch 2.0" class="sidebar-logo">
+            <span class="sidebar-brand-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </span>
+        </button>
+    </div>
+
     <nav class="sidebar-nav">
         <a href="{{ route('dashboard') }}" class="nav-item @if(request()->routeIs('dashboard')) active @endif" title="Dashboard">
             <span class="nav-icon">

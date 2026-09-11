@@ -21,24 +21,14 @@
     @stack('head')
 </head>
 <body>
-    <div class="top-header">
-        <div class="top-header-left">
-            <img src="{{ asset('images/UResearch_logo.png') }}" alt="UResearch 2.0" class="uresearch-logo">
-            <button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-label="Collapse sidebar" aria-expanded="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-            </button>
-        </div>
-        <img src="{{ asset('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS" class="utp-logo">
-    </div>
-
     <div class="dashboard-wrapper">
         @include('core::partials.sidebar')
 
         <div class="main-content">
+            <div class="main-content-header">
+                <img src="{{ asset('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS" class="utp-logo">
+            </div>
+
             @include('core::partials.flash')
             @yield('content')
         </div>
