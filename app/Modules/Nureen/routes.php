@@ -52,7 +52,8 @@ Route::middleware('auth')->group(function () {
 
     // ---- Attendance -------------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
-        Route::get('/attendance/mine', [AttendanceController::class, 'mine'])->name('attendance.mine');
+        Route::get('/attendance/overview', [AttendanceController::class, 'overview'])->name('attendance.overview');
+        Route::get('/attendance/history', [AttendanceController::class, 'history'])->name('attendance.history');
 
         Route::get('/attendance-appeal/new', [AttendanceAppealController::class, 'create'])->name('attendance-appeal.create');
         Route::post('/attendance-appeal', [AttendanceAppealController::class, 'store'])->name('attendance-appeal.store');

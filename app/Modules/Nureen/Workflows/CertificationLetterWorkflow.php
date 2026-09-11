@@ -26,7 +26,7 @@ class CertificationLetterWorkflow implements WorkflowModule
 
     public function label(): string
     {
-        return 'GA/GRA Certification Letter';
+        return 'Certification Letter';
     }
 
     public function stages(?Application $application = null): array

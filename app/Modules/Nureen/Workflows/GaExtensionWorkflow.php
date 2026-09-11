@@ -31,7 +31,7 @@ class GaExtensionWorkflow implements WorkflowModule
 
     public function label(): string
     {
-        return 'GA Extension';
+        return 'GA Extension & VISA';
     }
 
     public function stages(?Application $application = null): array

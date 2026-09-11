@@ -100,14 +100,24 @@ class AttendanceController extends Controller
         );
     }
 
-    /** The logged-in student's own attendance history. */
-    public function mine(Request $request)
+    /** The logged-in student's current standing: percentage + at-risk banner. */
+    public function overview(Request $request)
+    {
+        $latest = AttendanceRecord::where('student_id', $request->user()->id)
+            ->orderByDesc('period_end')
+            ->first();
+
+        return view('nureen::attendance.overview', ['latest' => $latest]);
+    }
+
+    /** The logged-in student's full period-by-period attendance record. */
+    public function history(Request $request)
     {
         $records = AttendanceRecord::where('student_id', $request->user()->id)
             ->orderByDesc('period_end')
             ->get();
 
-        return view('nureen::attendance.mine', ['records' => $records]);
+        return view('nureen::attendance.history', ['records' => $records]);
     }
 
     /** CGS's "At-Risk" list: the latest record for every currently at-risk student. */

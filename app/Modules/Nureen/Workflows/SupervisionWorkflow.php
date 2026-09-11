@@ -26,7 +26,7 @@ class SupervisionWorkflow implements WorkflowModule
 
     public function label(): string
     {
-        return 'Supervision';
+        return 'Supervision Request';
     }
 
     public function stages(?Application $application = null): array

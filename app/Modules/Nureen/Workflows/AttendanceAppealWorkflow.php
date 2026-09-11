@@ -16,9 +16,10 @@ use Illuminate\Support\Str;
  * per the scope: "routes to CGS staff for review" -- no supervisor sign-off
  * in between.
  *
- * Also carries the sidebar links for the whole Attendance feature (CSV
- * upload, the at-risk dashboard, a student's own attendance view), since
- * none of those are a create/queue pair a WorkflowModule already exposes.
+ * Also carries the CGS-facing sidebar links for Attendance (CSV upload, the
+ * at-risk dashboard), since neither is a create/queue pair a WorkflowModule
+ * already exposes. A student's own Overview/History pair lives in the app's
+ * fixed sidebar tree instead, not declared here.
  */
 class AttendanceAppealWorkflow implements WorkflowModule, ProvidesLinks
 {
@@ -69,9 +70,6 @@ class AttendanceAppealWorkflow implements WorkflowModule, ProvidesLinks
     public function links(User $user): array
     {
         return match ($user->role) {
-            Role::STUDENT => [
-                ['label' => 'My Attendance', 'route' => 'attendance.mine'],
-            ],
             Role::NON_EXEC_CGS => [
                 ['label' => 'Upload Attendance CSV', 'route' => 'attendance.upload.form'],
                 ['label' => 'At-Risk Students', 'route' => 'attendance.at-risk'],

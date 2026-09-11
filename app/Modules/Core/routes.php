@@ -4,6 +4,7 @@ use App\Modules\Core\Http\Controllers\ApplicationTrackingController;
 use App\Modules\Core\Http\Controllers\DashboardController;
 use App\Modules\Core\Http\Controllers\DocumentController;
 use App\Modules\Core\Http\Controllers\LoginController;
+use App\Modules\Core\Http\Controllers\PageController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -23,4 +24,11 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
+
+    // Sidebar destinations with no feature behind them yet -- see PageController.
+    Route::get('/notifications', [PageController::class, 'notifications'])->name('notifications.index');
+    Route::get('/documents', [PageController::class, 'documents'])->name('documents.index');
+    Route::get('/calendar', [PageController::class, 'calendar'])->name('calendar.index');
+    Route::get('/help', [PageController::class, 'help'])->name('help.index');
+    Route::get('/profile', [PageController::class, 'profile'])->name('profile.show');
 });
