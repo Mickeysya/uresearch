@@ -71,17 +71,28 @@ class ExaminerNominationWorkflow implements WorkflowModule, ProvidesLinks
     }
 
     /**
-     * Supervisors file nominations but own no stage in this chain, so the
-     * queue-derived sidebar would never show them the form.
+     * Three roles need a link here that the stage-derived sidebar cannot
+     * produce on its own: supervisors file nominations but own no stage in
+     * this chain; CGS maintains the examiner pool day-to-day but never
+     * decides a nomination; the Academic Executive owns the one stage this
+     * chain does have, but its two follow-up screens -- closing the
+     * lifecycle and the touchpoint-2 compilation view -- both happen after
+     * or beside that stage, not on it.
      */
     public function links(User $user): array
     {
-        if ($user->role !== Role::SUPERVISOR) {
-            return [];
-        }
-
-        return [
-            ['label' => 'Nominate Examiners', 'route' => 'examiner-nomination.create'],
-        ];
+        return match ($user->role) {
+            Role::SUPERVISOR => [
+                ['label' => 'Nominate Examiners', 'route' => 'examiner-nomination.create'],
+            ],
+            Role::NON_EXEC_CGS => [
+                ['label' => 'Examiner Pool', 'route' => 'examiner-admin.index'],
+            ],
+            Role::ACADEMIC_EXEC => [
+                ['label' => 'Pending Evaluation', 'route' => 'examiner-nomination.pending-evaluation'],
+                ['label' => 'Conflict Detection', 'route' => 'conflict-detection.index'],
+            ],
+            default => [],
+        };
     }
 }

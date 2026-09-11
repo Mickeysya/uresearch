@@ -1,7 +1,10 @@
 <?php
 
 use App\Modules\Core\Support\Role;
+use App\Modules\Hani\Http\Controllers\ConflictDetectionController;
+use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
+use App\Modules\Hani\Http\Controllers\ReVivaController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,6 +27,40 @@ Route::middleware('auth')->group(function () {
             ->name('examiner-nomination.queue');
         Route::post('/examiner-nomination/{application}/decide', [ExaminerNominationController::class, 'decide'])
             ->name('examiner-nomination.decide');
+
+        // Closing the lifecycle: mark an approved nomination's evaluation done.
+        Route::get('/examiner-nomination/pending-evaluation', [ExaminerNominationController::class, 'pendingEvaluation'])
+            ->name('examiner-nomination.pending-evaluation');
+        Route::post('/examiner-nomination/{nomination}/mark-complete', [ExaminerNominationController::class, 'markComplete'])
+            ->name('examiner-nomination.mark-complete');
+
+        // Touchpoint 2: cross-department conflict compilation.
+        Route::get('/examiner-nomination/conflicts', [ConflictDetectionController::class, 'index'])
+            ->name('conflict-detection.index');
+    });
+
+    // ---- Examiner pool admin -------------------------------------------
+    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+        Route::get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
+        Route::get('/examiners/new', [ExaminerAdminController::class, 'create'])->name('examiner-admin.create');
+        Route::post('/examiners', [ExaminerAdminController::class, 'store'])->name('examiner-admin.store');
+        Route::post('/examiners/{examiner}/toggle-active', [ExaminerAdminController::class, 'toggleActive'])
+            ->name('examiner-admin.toggle-active');
+    });
+
+    // ---- Re-viva Monitoring --------------------------------------------
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::get('/re-viva/new', [ReVivaController::class, 'create'])->name('reviva.create');
+        Route::post('/re-viva', [ReVivaController::class, 'store'])->name('reviva.store');
+    });
+
+    Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
+        Route::get('/re-viva/queue', [ReVivaController::class, 'queue'])->name('reviva.queue');
+        Route::post('/re-viva/{application}/decide', [ReVivaController::class, 'decide'])->name('reviva.decide');
+
+        Route::get('/re-viva/outcomes', [ReVivaController::class, 'outcomesIndex'])->name('reviva.outcomes.index');
+        Route::post('/re-viva/outcomes/{detail}', [ReVivaController::class, 'recordOutcome'])
+            ->name('reviva.outcomes.record');
     });
 
 });

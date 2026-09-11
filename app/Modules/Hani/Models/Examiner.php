@@ -20,6 +20,15 @@ class Examiner extends Model
     /** Mandatory cooling-off after an evaluation, in days. */
     public const GAP_DAYS = 90;
 
+    /**
+     * How far out assigned_until is set on approval, absent any other signal
+     * of when the case will actually conclude. Marking the evaluation
+     * complete (ExaminerNominationController::markComplete()) clears this
+     * immediately and starts the gap from that real date instead, so this
+     * window only matters if completion is never recorded.
+     */
+    public const DEFAULT_ASSIGNMENT_DAYS = 180;
+
     public const STATE_ASSIGNED = 'assigned';
     public const STATE_ON_GAP = 'on_gap';
     public const STATE_AVAILABLE = 'available';
