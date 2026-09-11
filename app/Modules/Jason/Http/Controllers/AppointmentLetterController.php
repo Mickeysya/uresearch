@@ -6,6 +6,7 @@ use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Mail\AppointmentLetterMail;
@@ -87,7 +88,7 @@ class AppointmentLetterController extends Controller
             ->with('status', "Nomination #{$application->id} submitted to the Academic Executive.");
     }
 
-    public function queue(Request $request, WorkflowEngine $engine)
+    public function queue(Request $request, WorkflowEngine $engine, ModuleRegistry $registry)
     {
         $queue = $this->queueFor($request, $engine, ['submittedBy']);
 
@@ -95,7 +96,34 @@ class AppointmentLetterController extends Controller
             ->get()
             ->keyBy('application_id');
 
-        return view('jason::appointment_letter.queue', $queue + ['details' => $details]);
+        return view('jason::appointment_letter.queue', $queue + [
+            'details' => $details,
+            'workload' => $this->workload($engine, $registry),
+        ]);
+    }
+
+    /**
+     * One bar per person holding a stage role in this chain (Academic Exec,
+     * Dean), showing how many appointment-letter nominations are currently
+     * sitting there. Stages are role-owned, not assigned to one person, so
+     * everyone sharing a role sees the same count -- this just surfaces that
+     * shared backlog by name instead of only as a role-level total.
+     *
+     * @return array<int, array{label: string, count: int}>
+     */
+    protected function workload(WorkflowEngine $engine, ModuleRegistry $registry): array
+    {
+        $bars = [];
+
+        foreach ($registry->get($this->moduleKey())->stages() as $stage) {
+            $count = $engine->queue($this->moduleKey(), $stage->key)->count();
+
+            foreach (User::where('role', $stage->role)->orderBy('name')->get() as $person) {
+                $bars[] = ['label' => $person->name, 'count' => $count];
+            }
+        }
+
+        return $bars;
     }
 
     /**
