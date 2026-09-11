@@ -664,16 +664,33 @@ textarea:focus {
     justify-content: space-between;
     gap: 10px;
     width: 100%;
-    padding: 0;
-    background: transparent;
+    /* Negative margin cancels this padding out visually (the icon/text sit
+       where they did before), but gives hover/focus a bit of room to show
+       a simple rounded shade instead of a highlight jammed against the
+       button's edges. */
+    padding: 6px 8px;
+    margin: -6px -8px;
+    border-radius: 8px;
+    /* Explicit, not transparent: a couple of mobile browsers' dark-theme
+       heuristics were still painting a dark native surface on a transparent
+       button background despite color-scheme: light + appearance: none, so
+       this pins it to a real, known colour instead of leaving it to guess. */
+    background-color: white;
     border: none;
-    /* Without this, some mobile browsers' dark-theme heuristics still paint
-       a native dark button surface here despite the transparent background
-       above -- appearance: none fully opts the element out of native
-       control theming, on top of the color-scheme: light declaration. */
     appearance: none;
     -webkit-appearance: none;
     cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.sidebar-brand:hover,
+.sidebar-brand:focus-visible {
+    background-color: var(--light-blue-bg);
+}
+
+.sidebar-brand:focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 2px;
 }
 
 .sidebar-brand-mark {
@@ -708,13 +725,7 @@ textarea:focus {
     flex-shrink: 0;
     width: 30px;
     height: 30px;
-    border-radius: 8px;
     color: var(--navy);
-    transition: background-color 0.15s;
-}
-
-.sidebar-brand:hover .sidebar-brand-toggle {
-    background: var(--light-blue-bg);
 }
 
 .sidebar-brand-toggle svg {
