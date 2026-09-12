@@ -3,40 +3,29 @@
 @section('title', 'Dashboard')
 
 @section('content')
-    {{-- Text and artwork are both props — see the component for every knob. --}}
-    <x-core::welcome-banner />
+    {{--
+        Single-screen layout: the page itself never scrolls, individual panels
+        do. .sdash is a three-row grid sized to the viewport (banner, stat
+        cards, then the panels taking whatever height is left), and every
+        panel body is its own scroll container.
 
-    <div class="stat-cards-row">
-        <div class="stat-card accent-gold">
-            <div class="stat-number">{{ $open }}</div>
-            <div class="stat-label">In progress</div>
-        </div>
-        <div class="stat-card accent-green">
-            <div class="stat-number">{{ $approved }}</div>
-            <div class="stat-label">Approved</div>
-        </div>
-        <div class="stat-card accent-red">
-            <div class="stat-number">{{ $rejected }}</div>
-            <div class="stat-label">Not approved</div>
+        Each panel is its own partial, so changing one never touches another.
+    --}}
+    <div class="sdash">
+        <x-core::welcome-banner />
+
+        @include('core::dashboard.partials.stat-cards')
+
+        <div class="sdash-panels">
+            <div class="sdash-col sdash-col-left">
+                @include('core::dashboard.partials.application-status')
+                @include('core::dashboard.partials.notifications')
+            </div>
+
+            <div class="sdash-col sdash-col-right">
+                @include('core::dashboard.partials.attendance-overview')
+                @include('core::dashboard.partials.upcoming-tasks')
+            </div>
         </div>
     </div>
-
-    <h3 style="color: var(--navy); font-size: 15px;">Recent applications</h3>
-
-    @forelse ($recent as $application)
-        <div class="app-item">
-            <div class="app-item-header">
-                <p><b>{{ $application->module()->label() }} #{{ $application->id }}</b></p>
-                <x-core::status-badge :status="$application->status" />
-            </div>
-            <p>{{ $application->module()->summary($application) }}</p>
-            @if ($stage = $application->currentStage())
-                <p style="color: var(--text-grey); font-size: 12.5px;">Now with: {{ $stage->label }}</p>
-            @endif
-        </div>
-    @empty
-        <div class="empty-state">
-            Nothing submitted yet. Choose an application type from the sidebar to begin.
-        </div>
-    @endforelse
 @endsection
