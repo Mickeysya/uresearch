@@ -1,0 +1,146 @@
+/* ============================================================
+   layout.css — Laravel-port additions: status pills, steppers, queue and page chrome
+
+   Split out of the single uresearch.css on 2026-09-12. The four
+   files are linked in this order and concatenate back to exactly
+   what was there before, so cascade order is unchanged:
+       uresearch.css -> layout.css -> sidebar.css -> dashboard.css
+   Load order matters. Do not reorder the <link> tags.
+   ============================================================ */
+
+/* ============================================================
+   Additions for the Laravel port. Everything above this line is
+   Norhanis' original stylesheet, unchanged.
+   ============================================================ */
+
+/* Status pill shown next to an application on the tracking page */
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.status-badge.pending  { background: var(--light-gold-bg); color: #8A5F14; }
+.status-badge.approved { background: #E4F8ED; color: #07794A; }
+.status-badge.rejected { background: #FDEEED; color: #D0342C; }
+.status-badge.draft    { background: var(--border-grey); color: var(--text-grey); }
+
+/* The "who is waiting on this" line above a queue */
+.queue-meta {
+    color: var(--text-grey);
+    font-size: 13px;
+    margin: -6px 0 18px;
+}
+
+.app-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* Shown when a queue or the tracking page has nothing in it */
+.empty-state {
+    background: white;
+    border: 1px dashed var(--border-grey);
+    border-radius: 12px;
+    padding: 34px 24px;
+    text-align: center;
+    color: var(--text-grey);
+    font-size: 14px;
+}
+
+/* Laravel validation errors */
+.field-error {
+    color: #D0342C;
+    font-size: 12.5px;
+    margin: -8px 0 12px;
+}
+
+input.is-invalid, select.is-invalid, textarea.is-invalid {
+    border-color: #D0342C;
+}
+
+/* Decision buttons sit side by side rather than stacking full-width */
+.decision-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.decision-row button {
+    width: auto;
+    padding: 9px 22px;
+}
+
+.btn-reject {
+    background: white;
+    color: #D0342C;
+    border: 1px solid #D0342C;
+}
+
+.btn-reject:hover {
+    background: #FDEEED;
+}
+
+/* Attached files on an application */
+.doc-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0 0;
+}
+
+.doc-list li {
+    font-size: 13px;
+    padding: 6px 0;
+    border-top: 1px solid var(--border-grey);
+}
+
+.doc-list a {
+    color: var(--navy);
+    text-decoration: none;
+}
+
+.doc-list a:hover {
+    text-decoration: underline;
+}
+
+/* Decision trail under an application on the tracking page */
+.history-trail {
+    margin-top: 16px;
+    border-top: 1px solid var(--border-grey);
+    padding-top: 12px;
+}
+
+.history-trail .entry {
+    font-size: 12.5px;
+    color: var(--text-grey);
+    padding: 4px 0;
+}
+
+.history-trail .entry b {
+    color: var(--text-dark);
+}
+
+/* Textareas inherit the input styling Norhanis defined */
+textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-grey);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13.5px;
+    margin-bottom: 16px;
+    resize: vertical;
+    min-height: 74px;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: var(--navy);
+}

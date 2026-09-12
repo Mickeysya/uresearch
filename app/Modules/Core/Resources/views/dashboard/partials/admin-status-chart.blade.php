@@ -56,7 +56,8 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    layout: { padding: { top: 6 } },
+                    // Headroom so the value printed above the tallest bar is not clipped.
+                    layout: { padding: { top: 18 } },
                     animation: { duration: 650, easing: 'easeOutQuart' },
                     scales: {
                         x: {
@@ -82,6 +83,18 @@
                     },
                     plugins: {
                         legend: { display: false },
+                        // The number above each bar, so a value is readable
+                        // without hovering. Zero is shown too: "no drafts" is
+                        // information, and a silently absent bar is not.
+                        datalabels: {
+                            display: true,
+                            anchor: 'end',
+                            align: 'top',
+                            offset: 2,
+                            color: '#23283A',
+                            font: { size: 11, weight: '700' },
+                            formatter: function (value) { return value; },
+                        },
                         tooltip: {
                             callbacks: {
                                 label: function (ctx) {

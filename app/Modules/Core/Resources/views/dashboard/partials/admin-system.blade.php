@@ -1,5 +1,5 @@
 {{--
-    "System Overview" — four health tiles plus the module mix donut.
+    "System Overview" — four health tiles plus the module-mix doughnut.
 
     Every tile reads something the system genuinely records: a real database
     round trip, the `failed_jobs` / `jobs` tables, actual disk usage under
@@ -8,6 +8,11 @@
     The design's "Server Status" tile is replaced by Queue health: a tile
     rendered BY the server saying the server is up proves nothing, whereas
     failed jobs are a real and actionable signal.
+
+    Nesting matters here and has bitten twice — .adm-health and .adm-mix are
+    BOTH children of .sdash-card-body, and the doughnut and its legend are
+    BOTH children of .adm-mix-body. Anything else and the panel escapes the
+    card and the grid row stops constraining it.
 --}}
 @php
     $total = (int) $mix->sum('count');
@@ -24,6 +29,7 @@
     </header>
 
     <div class="sdash-card-body adm-system-body">
+
         <div class="adm-health">
             @foreach ($health as $tile)
                 <div class="adm-tile tone-{{ $tile['tone'] }}" title="{{ $tile['label'] }}: {{ $tile['value'] }} — {{ $tile['note'] }}">
@@ -43,16 +49,15 @@
             <div class="adm-mix-body">
                 <div class="chart-donut-wrap adm-donut-wrap">
                     @if ($total > 0)
-                        <canvas id="{{ $chartId }}" role="img"
-                                aria-label="{{ $total }} applications by module"></canvas>
+                        <canvas id="{{ $chartId }}" role="img" aria-label="{{ $total }} applications by module"></canvas>
                     @else
-                        <div class="chart-donut-empty" aria-hidden="true"></div>
+                        <span class="chart-donut-empty" aria-hidden="true"></span>
                     @endif
+
                     <div class="chart-donut-centre">
                         <span class="cgs-donut-number" data-count-to="{{ $total }}">{{ $total }}</span>
                         <span class="cgs-donut-label">Total</span>
                     </div>
-                </div>
                 </div>
 
                 <ul class="adm-mix-legend">
@@ -62,7 +67,7 @@
                             <span class="cgs-legend-label">{{ $row['label'] }}</span>
                             {{-- Fills what was dead space between the label and the
                                  count, and carries the share as length as well as a
-                                 number — the row reads at a glance now. --}}
+                                 number, so the row reads at a glance. --}}
                             <span class="adm-share" aria-hidden="true">
                                 <span class="adm-share-fill" style="width: {{ max($row['share'], 2) }}%; background: {{ $palette[$i % count($palette)] }}"></span>
                             </span>
@@ -74,10 +79,9 @@
                 </ul>
             </div>
         </div>
+
     </div>
 </section>
-
-@include('core::dashboard.partials.count-up')
 
 @if ($total > 0)
     @push('scripts')
@@ -91,7 +95,7 @@
                     data: {
                         labels: @json($mix->pluck('label')),
                         datasets: [{
-                            label: "Applications",
+                            label: 'Applications',
                             data: @json($mix->pluck('count')),
                             backgroundColor: @json($mix->keys()->map(fn ($i) => $palette[$i % count($palette)])),
                             borderWidth: 2,
@@ -100,8 +104,6 @@
                         }],
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
                         cutout: '66%',
                         animation: { animateRotate: true, duration: 700 },
                         plugins: {
@@ -122,3 +124,5 @@
         </script>
     @endpush
 @endif
+
+@include('core::dashboard.partials.count-up')
