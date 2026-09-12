@@ -28,7 +28,31 @@ class ApplicationDecided extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        // 'database' as well as mail, so the student dashboard's notification
+        // feed and unread badge have something to read. Mail behaviour below
+        // is unchanged.
+        return ['mail', 'database'];
+    }
+
+    /**
+     * The stored form, read back by the dashboard's Recent Notifications
+     * panel. Keep the keys stable -- rows already written carry them.
+     */
+    public function toArray(object $notifiable): array
+    {
+        $module = $this->application->module()->label();
+        $next = $this->application->currentStage();
+
+        return [
+            'application_id' => $this->application->id,
+            'module' => $module,
+            'approved' => $this->approved,
+            'stage_label' => $this->stage->label,
+            'title' => $this->approved
+                ? "Your {$module} application has been {$this->stage->decision} at the {$this->stage->label} stage."
+                : "Your {$module} application was not approved at the {$this->stage->label} stage.",
+            'next_stage' => $next?->label,
+        ];
     }
 
     public function toMail(object $notifiable): MailMessage

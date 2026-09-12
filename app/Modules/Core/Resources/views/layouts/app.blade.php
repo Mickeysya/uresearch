@@ -6,7 +6,10 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>UResearch</title>
     <link rel="icon" type="image/png" href="{{ asset('images/uresearch-logo.png') }}">
-    <link rel="stylesheet" href="{{ asset('css/uresearch.css') }}">
+    {{-- ?v=<file mtime> so a stylesheet change always reaches the browser.
+         Without it the URL never changes, the browser reuses its cached copy,
+         and edits appear to have done nothing until a manual hard refresh. --}}
+    <link rel="stylesheet" href="{{ asset('css/uresearch.css') }}?v={{ @filemtime(public_path('css/uresearch.css')) ?: 1 }}">
     <script>
         // Applied before the body paints, straight from localStorage, so a
         // collapsed sidebar never flashes open-then-closed on page load --
