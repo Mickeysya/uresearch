@@ -64,7 +64,10 @@ application image and downloading Composer packages. It:
 5. starts all five containers and waits for MySQL to accept connections
 6. runs every migration and seeds the test accounts
 
-It is safe to re-run at any time. It will not overwrite an existing `.env`.
+It is safe to re-run at any time: it will not overwrite an existing `.env`,
+and it will not wipe a database that already has data — a re-run applies any
+new migrations and leaves your records alone. Use `./reset.sh` when you
+actually want to start over.
 
 ### 3. Start the app
 
@@ -393,7 +396,7 @@ walkthrough is in [`docs/adding-a-module.md`](docs/adding-a-module.md).
 The three project scripts, all safe to re-run:
 
 ```bash
-./setup.sh                                 # first-time setup, from a clean clone
+./setup.sh                                 # first-time setup, from a clean clone (safe to re-run)
 ./sync.sh                                  # after a git pull or branch switch
 ./sync.sh --check                          # report what sync.sh would do, change nothing
 ./reset.sh                                 # wipe and reseed the database (prompts first)
