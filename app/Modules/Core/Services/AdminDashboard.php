@@ -4,9 +4,11 @@ namespace App\Modules\Core\Services;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
+use App\Modules\Core\Contracts\SuppliesAttendance;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\Concerns\BuildsPanels;
+use App\Modules\Core\Services\Concerns\ReadsAttendance;
 use App\Modules\Core\Support\Role;
-use App\Modules\Nureen\Models\AttendanceRecord;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -35,35 +37,11 @@ use Illuminate\Support\Facades\DB;
  */
 class AdminDashboard
 {
-    /** @var array<string, true> */
-    protected array $failed = [];
+    /** safely(), remember(), markUnavailable(), unavailable(), withTrend(). */
+    use BuildsPanels;
 
-    /** @var array<string, mixed> */
-    protected array $cache = [];
-
-    /**
-     * @template T
-     * @param  callable(): T  $fn
-     * @param  T  $fallback
-     * @return T
-     */
-    protected function safely(string $panel, callable $fn, mixed $fallback): mixed
-    {
-        try {
-            return $fn();
-        } catch (\Throwable $e) {
-            $this->failed[$panel] = true;
-            report($e);
-
-            return $fallback;
-        }
-    }
-
-    /** @return array<string, true> */
-    public function unavailable(): array
-    {
-        return $this->failed;
-    }
+    /** attendanceSource() — the module supplying attendance, or null. */
+    use ReadsAttendance;
 
     /* ---------------------------------------------------------------
      | The five headline figures
@@ -77,7 +55,7 @@ class AdminDashboard
                 ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('created_at', '<', $to))
                 ->count()
-        ), ['count' => 0, 'delta' => null]);
+        ), $this->noTrend());
     }
 
     /**
@@ -91,7 +69,7 @@ class AdminDashboard
         return $this->safely('users', fn () => [
             'count' => User::whereNotNull('programme')->distinct()->count('programme'),
             'delta' => null,
-        ], ['count' => 0, 'delta' => null]);
+        ], $this->noTrend());
     }
 
     /** @return array{count: int, delta: ?float} */
@@ -104,20 +82,22 @@ class AdminDashboard
                 ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('created_at', '<', $to))
                 ->count()
-        ), ['count' => 0, 'delta' => null]);
+        ), $this->noTrend());
     }
 
     /** Mean of every student's most recent attendance record, or null. */
     public function averageAttendance(): ?float
     {
-        if (! class_exists(AttendanceRecord::class)) {
-            $this->failed['attendance'] = true;
+        $source = $this->attendanceSource();
+
+        if (! $source) {
+            $this->markUnavailable('attendance');
 
             return null;
         }
 
-        return $this->safely('attendance', function () {
-            $latest = $this->latestAttendance();
+        return $this->safely('attendance', function () use ($source) {
+            $latest = $this->latestAttendance($source);
 
             return $latest->isEmpty() ? null : round($latest->avg('percentage'), 1);
         }, null);
@@ -131,7 +111,7 @@ class AdminDashboard
                 ->when($from, fn ($q) => $q->where('submitted_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('submitted_at', '<', $to))
                 ->count()
-        ), ['count' => 0, 'delta' => null]);
+        ), $this->noTrend());
     }
 
     /* ---------------------------------------------------------------
@@ -149,9 +129,6 @@ class AdminDashboard
     {
         return $this->safely('activity', function () use ($limit) {
             $registry = app(ModuleRegistry::class);
-            $label = fn (string $k) => $registry->has($k)
-                ? $registry->get($k)->label()
-                : ucfirst(str_replace('_', ' ', $k));
 
             $enrolments = User::where('role', Role::STUDENT)
                 ->latest('created_at')->limit($limit)->get()
@@ -168,7 +145,7 @@ class AdminDashboard
                 ->latest('submitted_at')->limit($limit)->get()
                 ->filter(fn ($a) => $a->student)
                 ->map(fn ($a) => [
-                    'text' => $label($a->module_type).' submitted',
+                    'text' => $registry->labelFor($a->module_type).' submitted',
                     'sub' => $a->student->name.' · '.$a->reference(),
                     'at' => $a->submitted_at,
                     'tone' => 'info',
@@ -179,7 +156,7 @@ class AdminDashboard
                 ->latest('created_at')->limit($limit)->get()
                 ->filter(fn ($h) => $h->application && $h->application->student)
                 ->map(fn ($h) => [
-                    'text' => $label($h->application->module_type).' '.$h->decision,
+                    'text' => $registry->labelFor($h->application->module_type).' '.$h->decision,
                     'sub' => $h->application->student->name.' · by '.($h->approver->name ?? 'an approver'),
                     'at' => $h->created_at,
                     'tone' => $h->decision === 'rejected' ? 'critical' : 'good',
@@ -227,9 +204,7 @@ class AdminDashboard
             $sum = (int) $rows->sum('total');
 
             return $rows->map(fn ($r) => [
-                'label' => $registry->has($r->module_type)
-                    ? $registry->get($r->module_type)->label()
-                    : ucfirst(str_replace('_', ' ', $r->module_type)),
+                'label' => $registry->labelFor($r->module_type),
                 'count' => (int) $r->total,
                 'share' => $sum > 0 ? (int) round($r->total / $sum * 100) : 0,
             ])->values();
@@ -383,34 +358,9 @@ class AdminDashboard
         return round($b, 1).' PB';
     }
 
-    /** @return array{count: int, delta: ?float} */
-    protected function withTrend(callable $counter): array
+    /** @return Collection<int, \App\Modules\Core\Support\AttendanceReading> */
+    protected function latestAttendance(SuppliesAttendance $source): Collection
     {
-        $startOfThis = now()->startOfMonth();
-        $startOfLast = now()->subMonthNoOverflow()->startOfMonth();
-
-        $total = $counter(null, null);
-        $thisMonth = $counter($startOfThis, null);
-        $lastMonth = $counter($startOfLast, $startOfThis);
-
-        return [
-            'count' => $total,
-            'delta' => $lastMonth > 0 ? round((($thisMonth - $lastMonth) / $lastMonth) * 100, 1) : null,
-        ];
-    }
-
-    protected function latestAttendance(): Collection
-    {
-        if (array_key_exists('latestAttendance', $this->cache)) {
-            return $this->cache['latestAttendance'];
-        }
-
-        $newest = AttendanceRecord::select('student_id', DB::raw('MAX(period_end) as max_period_end'))
-            ->groupBy('student_id');
-
-        return $this->cache['latestAttendance'] = AttendanceRecord::joinSub($newest, 'latest', function ($join) {
-            $join->on('attendance_records.student_id', '=', 'latest.student_id')
-                ->on('attendance_records.period_end', '=', 'latest.max_period_end');
-        })->get(['attendance_records.*']);
+        return $this->remember('latestAttendance', fn () => $source->latestPerStudent());
     }
 }

@@ -110,11 +110,21 @@ state — "nothing to show" and "could not load" mean different things to a
 student looking at their own record — and one dead query costs that panel
 rather than the whole page.
 
-**It is the one place Core names a module directly.** Attendance belongs to
-`app/Modules/Nureen`, and Core otherwise only ever goes through
-`ModuleRegistry`. There is no registry hook for panel data yet, so this reaches
-for Nureen's models behind a `class_exists()` guard. Replace it with a
-`ProvidesDashboardPanels` contract when a second module wants a panel.
+**It names no module.** Attendance belongs to `app/Modules/Nureen`, and this
+service used to import its Eloquent models directly behind a `class_exists()`
+guard — the one place Core reached into someone else's folder. It now asks for
+`Core\Contracts\SuppliesAttendance`, which Nureen implements
+(`Support\AttendanceProvider`) and binds from its own `ModuleProvider`.
+
+The dependency points from the module to Core, like every other arrow in the
+system. If no module binds the contract, the attendance panels hold their
+skeletons — the same degradation as before, expressed as a contract rather
+than a string class name. Core hands out `Support\AttendanceReading`, a small
+readonly DTO, so Core never sees another module's Eloquent model.
+
+The three dashboard services also share `Services\Concerns\BuildsPanels` —
+`safely()`, `remember()`, `withTrend()` and the unavailable-panel bookkeeping,
+which had been written out three times and had already started to drift.
 
 The application list itself is registry-driven, so a new module appears there
 with no edit.

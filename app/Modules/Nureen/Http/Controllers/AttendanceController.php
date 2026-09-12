@@ -139,17 +139,14 @@ class AttendanceController extends Controller
     /** CGS's "At-Risk" list: the latest record for every currently at-risk student. */
     public function atRisk()
     {
-        $latestPerStudent = AttendanceRecord::select('student_id', DB::raw('MAX(period_end) as max_period_end'))
-            ->groupBy('student_id');
-
-        $records = AttendanceRecord::joinSub($latestPerStudent, 'latest', function ($join) {
-            $join->on('attendance_records.student_id', '=', 'latest.student_id')
-                ->on('attendance_records.period_end', '=', 'latest.max_period_end');
-        })
+        // latestPerStudent() lives on the model: the CGS dashboard and the
+        // admin average both need the same "one row per student, their most
+        // recent period" join, and all three had built it separately.
+        $records = AttendanceRecord::latestPerStudent()
             ->where('attendance_records.at_risk', true)
             ->with('student')
             ->orderBy('attendance_records.percentage')
-            ->get(['attendance_records.*']);
+            ->get();
 
         return view('nureen::attendance.at_risk', ['records' => $records]);
     }
