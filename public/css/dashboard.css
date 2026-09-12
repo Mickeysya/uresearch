@@ -2468,3 +2468,52 @@ button.sdash-note-row:focus-visible {
     outline: 2px solid var(--navy);
     outline-offset: -2px;
 }
+
+/* =====================================================================
+   Attendance gauge (Chart.js half-doughnut).
+
+   2:1 box, because the chart is a semicircle — a square would leave half
+   the container empty and halve the dial's drawn size.
+   ===================================================================== */
+
+.chart-gauge-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    width: clamp(150px, 24vh, 230px);
+    aspect-ratio: 2 / 1;
+    align-self: center;
+}
+
+.chart-gauge-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+
+/* Sits in the mouth of the arc. pointer-events:none so it never steals a
+   hover from the segment underneath. */
+.chart-gauge-value {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    pointer-events: none;
+}
+
+.chart-gauge-value .sdash-gauge-number {
+    font-size: clamp(20px, 2.3vw, 30px);
+    font-weight: 700;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-gauge-value.tone-good     .sdash-gauge-number { color: #00A857; }
+.chart-gauge-value.tone-warn     .sdash-gauge-number { color: #C98A12; }
+.chart-gauge-value.tone-critical .sdash-gauge-number { color: #D0342C; }
+.chart-gauge-value.tone-none     .sdash-gauge-number { color: var(--text-grey); }
+
+.chart-gauge-value .sdash-gauge-caption { font-size: 11px; color: var(--text-grey); }
+
+@media (max-width: 560px) {
+    .chart-gauge-wrap { width: 100%; max-width: 260px; margin: 0 auto; }
+}

@@ -7,7 +7,8 @@
 | `app/Modules/Core/**` | the team | by agreement — it affects all six of us |
 | `app/Modules/<Name>/**` | that person | only them |
 | `database/migrations/**` | the team | framework tables only; put yours in your module |
-| `public/css/uresearch.css` | Norhanis | append below the marked line; do not restyle above it |
+| `public/css/uresearch.css` | Norhanis | do not edit — her original sheet |
+| `public/css/dashboard.css` | the team | put new shared styling here |
 | `routes/web.php` | nobody | it only redirects `/` — your routes go in your folder |
 
 If you need something from Core, ask. A five-minute conversation beats a
@@ -91,10 +92,20 @@ Do not commit `.env`, `vendor/`, `node_modules/`, or anything under
 - Extend `core::layouts.app` for signed-in pages, `core::layouts.guest` for auth.
 - Reuse the existing classes: `.card`, `.card-wide`, `.app-item`, `.stat-card`,
   `.status-badge`, `.empty-state`, `.stepper`. Norhanis' palette is in `:root`.
-- New shared styling goes **below** the marked line at the bottom of
-  `uresearch.css`, so her original sheet stays intact and reviewable. That
-  includes overriding a rule she already wrote: append a new declaration
-  rather than editing hers in place.
+- New shared styling goes at the bottom of **`public/css/dashboard.css`**.
+  `uresearch.css` is Norhanis' original and is not edited at all now, so it
+  stays reviewable. To override a rule she wrote, append a new one — and
+  scope it with at least two classes, because `uresearch.css` contains broad
+  element rules like `.sidebar a` (0,1,1) that outrank a single class.
+- The four sheets load in a fixed order: `uresearch` → `layout` → `sidebar` →
+  `dashboard`. Do not reorder the `<link>` tags; the cascade depends on it.
+- Charts are Chart.js. Include `core::dashboard.partials.chartjs` and the
+  shared tooltip, defaults and data-label plugin come with it.
 - Blade's directive regex is `\B`-anchored, so two directives written back to
   back as `@endif@if` silently fail to compile the second one. Put a newline or
   a non-word character between them — `}}@if` and `>@endif` are both fine.
+- **Check tag balance after editing a Blade partial.** A single stray `</div>`
+  leaks the rest of the panel out of its card and out of its grid row, which
+  looks like a CSS bug and is not one. The same applies to CSS: removing one
+  selector from a comma-separated group takes the declaration block with it
+  and silently kills the whole rule.

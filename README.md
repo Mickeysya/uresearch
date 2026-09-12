@@ -3,7 +3,7 @@
 Centralized postgraduate administrative portal for the **Centre for Graduate
 Studies (CGS)**, Universiti Teknologi PETRONAS.
 
-Laravel 12 · PHP 8.3 · MySQL 8.4 (Docker) · Blade · Chart.js
+Laravel 12 · PHP 8.3 · MySQL 8.4 (Docker) · Blade · Chart.js · Dompdf
 
 Final Year Project · six-member team
 Supervisor: Dr. Savita K. Sugathan · Examiner: Dr. Helmi B Mohd Rais
