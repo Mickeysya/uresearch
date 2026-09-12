@@ -6,6 +6,7 @@ use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Models\SupervisionDetail;
@@ -30,13 +31,19 @@ class SupervisionController extends Controller
         return view('nureen::supervision.form', ['supervisors' => $supervisors]);
     }
 
-    public function store(Request $request, WorkflowEngine $engine)
+    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
         $data = $request->validate([
             'requested_supervisor_id' => ['required', 'exists:users,id'],
             'justification' => ['required', 'string', 'min:20', 'max:2000'],
+            // The scope calls for the request to carry its supporting
+            // documentation and for completeness to be checked before it
+            // reaches the supervisor, so this is required rather than
+            // optional -- the same bar GA Extension sets.
+            'supporting_document' => DocumentStore::rules(required: true),
         ], [
             'justification.min' => 'Please give a sentence or two on why you are requesting this supervisor.',
+            'supporting_document.required' => 'Attach your research proposal or supporting document.',
         ]);
 
         // The dropdown only ever lists supervisors, but the id is still
@@ -45,7 +52,7 @@ class SupervisionController extends Controller
             ->where('role', Role::SUPERVISOR)
             ->firstOrFail();
 
-        $application = DB::transaction(function () use ($request, $supervisor, $data, $engine) {
+        $application = DB::transaction(function () use ($request, $supervisor, $data, $engine, $documents) {
             $application = Application::create([
                 'student_id' => $request->user()->id,
                 'submitted_by_id' => $request->user()->id,
@@ -59,6 +66,11 @@ class SupervisionController extends Controller
                 'justification' => $data['justification'],
             ]);
 
+            // Through DocumentStore, so it lands on the private disk under a
+            // random name and is served back only by the authorised download
+            // route -- no column on supervision_details, and no new migration.
+            $documents->attach($application, $request->file('supporting_document'), 'Supporting Document');
+
             return $engine->submit($application);
         });
 
@@ -69,7 +81,7 @@ class SupervisionController extends Controller
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
-        $queue = $this->queueFor($request, $engine);
+        $queue = $this->queueFor($request, $engine, ['documents']);
 
         $details = SupervisionDetail::with('requestedSupervisor')
             ->whereIn('application_id', $queue['applications']->pluck('id'))

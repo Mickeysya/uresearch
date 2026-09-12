@@ -30,8 +30,16 @@
 --}}
 @once
     @push('head')
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+        {{-- Served from public/js, not a CDN. Three reasons, in order:
+             the Content-Security-Policy's script-src is then nonce-only with
+             no host allow-list, which is the strict form; the demo works on a
+             flaky connection or none at all; and nothing the portal runs can
+             change underneath it. Same files, same versions — Chart.js 4.4.1
+             and chartjs-plugin-datalabels 2.2.0, minified, straight from npm.
+             ?v=<file mtime>, the same cache-busting the stylesheets use. --}}
+        @foreach (['chart.umd.min', 'chartjs-plugin-datalabels.min'] as $lib)
+            <script src="{{ asset("js/{$lib}.js") }}?v={{ @filemtime(public_path("js/{$lib}.js")) ?: 1 }}"></script>
+        @endforeach
         <script @cspNonce>
             (function () {
                 if (typeof Chart === 'undefined') return;

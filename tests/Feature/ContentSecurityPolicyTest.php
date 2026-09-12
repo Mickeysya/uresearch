@@ -72,6 +72,52 @@ class ContentSecurityPolicyTest extends TestCase
         $this->assertMatchesRegularExpression("/'nonce-[A-Za-z0-9]+'/", $matches[1]);
     }
 
+    /**
+     * A strict CSP names no script origin at all. An allow-listed CDN is a
+     * standing permission to run anything that CDN serves, and the two
+     * charting libraries are vendored into public/js precisely so the
+     * allow-list can stay empty.
+     */
+    public function test_the_policy_allow_lists_no_external_script_host(): void
+    {
+        $this->signIn();
+
+        $policy = $this->get('/dashboard')->headers->get('Content-Security-Policy');
+
+        preg_match('/script-src ([^;]+)/', $policy, $matches);
+
+        $this->assertStringNotContainsString('http', $matches[1],
+            'script-src should name no origin — vendor the library into public/js instead.');
+    }
+
+    /**
+     * And the charts must actually be served locally, or the page renders
+     * with no Chart global and every dashboard panel silently draws nothing.
+     */
+    public function test_the_charting_libraries_are_served_from_this_app(): void
+    {
+        foreach (['chart.umd.min.js', 'chartjs-plugin-datalabels.min.js'] as $file) {
+            $this->assertFileExists(public_path('js/'.$file));
+        }
+
+        // A live source-map directive would have the browser request a map
+        // that connect-src refuses — the warning this vendoring ended. The
+        // `//#` form is what the browser acts on; prose mentioning the word
+        // is fine, and the file carries a note explaining the removal.
+        $this->assertStringNotContainsString(
+            '//# sourceMappingURL=',
+            file_get_contents(public_path('js/chart.umd.min.js')),
+            'Strip the source-map directive, or ship the .map file beside it.'
+        );
+
+        $this->signIn();
+
+        $html = $this->get('/dashboard')->getContent();
+
+        $this->assertStringContainsString('js/chart.umd.min.js', $html);
+        $this->assertStringNotContainsString('cdn.jsdelivr.net', $html);
+    }
+
     public function test_the_nonce_is_different_on_every_response(): void
     {
         $this->signIn();

@@ -4,7 +4,7 @@
 
 | Layer | What it is here |
 |---|---|
-| Presentation | Blade templates + four stylesheets (see below), Chart.js + chartjs-plugin-datalabels via CDN |
+| Presentation | Blade templates + the stylesheets below; Chart.js + chartjs-plugin-datalabels served from `public/js` |
 | Application | Laravel controllers, one thin controller per module |
 | Shared services | `WorkflowEngine`, `ModuleRegistry`, `DocumentStore`, `EnsureRole`, notifications |
 | Data | MySQL 8.4 in Docker, accessed through Eloquent |
