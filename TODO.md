@@ -28,7 +28,7 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | 29, covering the engine, the seams, the CSP, the import and Nureen’s chains |
+| Automated tests | 42, covering the engine, the seams, the CSP, the import, Nureen’s chains and the profile |
 | **Runs end to end** | yes — verified 2026-09-09 |
 
 ---
@@ -780,7 +780,9 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       debugging Chart.js internals — so it is not shipped; the directive is
       stripped instead, with a note in the file saying how to restore it.
       The portal now loads **zero** off-origin resources.
-- [ ] Password reset UI — the `password_reset_tokens` table exists, no screens.
+- [ ] Password reset UI ("forgot password") — the `password_reset_tokens`
+      table exists, no screens. Changing a password you already know is done;
+      see the profile screen below.
 - [x] **Fixed: Core named a module directly.** All three dashboard services
       imported Nureen's `AttendanceRecord` / `AttendanceRiskEvaluator` behind
       a `class_exists()` guard — Core reaching into a teammate's folder, which
@@ -809,11 +811,63 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       CGS queue, no notifications. Demo data was created locally during
       development but deliberately not committed to the seeder, so it exists
       on one machine only. Worth fixing before the FYP demo.
-- [ ] Give `/notifications`, `/calendar`, `/documents` and `/profile` real
-      screens. The dashboard now links to all four and they are still
-      `PageController` placeholders; the notification feed in particular has
-      real data behind it now.
-- [ ] Profile / change-password screen.
+- [ ] Give `/calendar` and `/documents` real screens. Both are still
+      `PageController` placeholders that the dashboard links to.
+      (`/notifications` and `/profile` are done — see below.)
+- [x] **Profile screen (2026-09-13)** — `/profile`, replacing the placeholder.
+      `Http\Controllers\ProfileController`, `Resources/views/profile/show`,
+      `public/css/profile.css`.
+      **Nobody owned this.** "Profile" appears in none of the six scope
+      documents; the nearest claims (`jason.md` §1.1 authentication, §5.5
+      "User Management", `technical.md` §3 "System Administrators manage user
+      roles") are all about an administrator editing *other people's*
+      accounts, never a user editing their own. Built as Core, like the
+      dashboards and the notification feed — but if the Users and Roles screen
+      goes to Jason, this belongs beside it.
+      **Almost everything is read-only, deliberately.** Name, email, matric
+      number, programme, department, faculty, role and supervisor are
+      administrative facts: a student who could edit `programme` could move
+      their own candidacy deadline, and one who could edit `supervisor_id`
+      could reassign their supervisor and redirect their own approval queue —
+      that column is set by CGS approving a Supervision request and is the
+      only thing that makes an appointment real. The screen shows them,
+      explains that CGS holds them, and lets the user edit a contact number
+      and their password. A test posts `role=admin` and `supervisor_id` at the
+      contact form and asserts neither moves.
+      Password change requires the current password, is written to the audit
+      log (never the password itself), and regenerates the session id.
+      Recent sign-ins are listed from the activity log `LoginController`
+      already writes, so an unfamiliar time or IP is visible to the account's
+      owner.
+      **Layout:** identity card left, task-grouped cards right — the shape
+      account screens converge on, where the profile card is the visual anchor
+      and everything else is grouped by what the reader came to do. No tabs:
+      with two groups, hiding one behind a tab costs a click and buys nothing.
+      The first attempt capped itself at 1080px and left a third of a wide
+      monitor empty; the identity card now takes a fixed 300px and the right
+      column takes the slack, pairing into two columns above 1280px. Below
+      1000px the card becomes a banner across the top rather than a cramped
+      rail.
+      The card carries real figures rather than a bio field nobody fills in —
+      applications, in-progress count, attendance, supervisee count — each
+      dropped when it does not apply, so CGS and admin see a short card
+      instead of a row of dashes. Attendance comes through
+      `Contracts\SuppliesAttendance`, which is the first use of that contract
+      outside the dashboards and confirms it generalises.
+- [x] **The top bar is pinned (2026-09-13).** `.main-content-header` is now
+      `position: sticky; top: 0`. The sidebar beside it was already sticky, so
+      scrolling a long page (the notification feed, the audit log, the
+      profile) slid the UTP bar away while the sidebar stayed — the content
+      boundary looked broken halfway down the page. Sticky rather than fixed:
+      fixed takes it out of flow and its 64px would have to be paid back with
+      padding every page would need to know about. `z-index: 5` clears page
+      content (0–3) and stays under the chart tooltip's 9999, so a tooltip
+      near the top of a chart still draws over the bar instead of being
+      clipped by it. Anything else made sticky must clear 64px — the profile's
+      identity card sits at `top: 80px` for exactly this reason.
+- [ ] **Password reset ("forgot password") is still missing** — this screen
+      only covers changing a password you already know. The
+      `password_reset_tokens` table has been waiting since the first migration.
 - [ ] A withdraw/cancel action for students on a pending application.
 - [ ] A "return to submitter, application stays open" outcome for
       `WorkflowEngine::decide()` — currently only approve/reject exist.

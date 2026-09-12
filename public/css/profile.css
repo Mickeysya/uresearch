@@ -1,0 +1,508 @@
+/* ============================================================
+   profile.css — the signed-in user's own record (/profile)
+
+   LAYOUT: identity card left, task-grouped cards right — the shape almost
+   every account screen uses, where the profile card is the page's visual
+   anchor and everything else is grouped by what the reader came to do. The
+   first version capped itself at 1080px and left a third of a wide monitor
+   empty; this one spans the content area and lets the right column take the
+   slack.
+
+   Shares the dashboards' vocabulary rather than inventing one: .prof-card is
+   .sdash-card's shape (white, 1px --border-grey, 12px radius), the palette is
+   Norhanis' :root, and headings sit at the same 13px uppercase weight as the
+   dashboard panels.
+
+   It differs where a form should differ from a dashboard. A dashboard locks
+   to one screen and scrolls inside its panels; this page scrolls normally,
+   because a form whose submit button is inside a nested scroller is a form
+   people do not finish.
+
+   Load order matters. Do not reorder the <link> tags.
+   ============================================================ */
+
+.prof {
+    max-width: 1400px;
+    padding-bottom: 40px;
+}
+
+/* ---- the two columns ---------------------------------------------
+   The identity card is a fixed 300px; everything else takes what is left,
+   so the page fills a wide screen instead of stopping at a fixed width.
+   ------------------------------------------------------------------ */
+
+.prof-layout {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+/* Follows the reader down a long page — the identity stays in view while
+   they work through the forms on the right.
+
+   top is 80px, not 0: .main-content-header is pinned at the top of the
+   viewport and is 64px tall, so a card stuck at 0 would slide underneath it.
+   64 + 16 leaves the same gap below the bar that the layout uses elsewhere. */
+.prof-aside {
+    position: sticky;
+    top: 80px;
+}
+
+.prof-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    min-width: 0;
+}
+
+/* Wide enough for two, and the cards are short enough to pair. Below this
+   they stack, which keeps the forms comfortably wide rather than cramped. */
+@media (min-width: 1280px) {
+    .prof-main {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+}
+
+/* ---- card --------------------------------------------------------- */
+
+.prof-card {
+    background: white;
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.prof-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid #EDF0F4;
+}
+
+.prof-card-head h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--navy);
+}
+
+/* Says whether a card is editable, so the reader knows before they try. */
+.prof-card-note {
+    font-size: 11px;
+    color: var(--text-grey);
+    white-space: nowrap;
+}
+
+.prof-card-link {
+    font-size: 12px;
+    color: var(--navy);
+    text-decoration: none;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.prof-card-link:hover { text-decoration: underline; }
+
+/* A quiet footnote inside the card, for the "why can't I edit this" note. */
+.prof-card-foot {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 18px 14px;
+    background: #FAFBFD;
+    border-top: 1px solid #EDF0F4;
+    color: var(--text-grey);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.prof-foot-icon {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    margin-top: 1px;
+    color: var(--text-grey);
+}
+
+.prof-foot-icon svg { width: 100%; height: 100%; display: block; }
+
+/* ---- identity card ------------------------------------------------ */
+
+.prof-identity {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 26px 20px 0;
+}
+
+.prof-avatar {
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--navy);
+    color: white;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    user-select: none;
+}
+
+.prof-name {
+    margin: 14px 0 2px;
+    color: var(--navy);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.prof-email {
+    margin: 0 0 12px;
+    color: var(--text-grey);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.prof-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin: 0;
+}
+
+/* Role first, in the portal's navy; supporting facts recede to grey. The
+   hierarchy is the point — one badge is identity, the rest are context. */
+.prof-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background: var(--light-blue-bg);
+    color: var(--navy);
+}
+
+.prof-badge-quiet {
+    background: #F1F3F7;
+    color: var(--text-grey);
+}
+
+/* ---- the figures on the identity card ----------------------------- */
+
+.prof-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 1px;
+    width: 100%;
+    margin: 18px 0 0;
+    background: #EDF0F4;
+    border: 1px solid #EDF0F4;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.prof-stat {
+    background: white;
+    padding: 10px 6px;
+}
+
+.prof-stat dt {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-grey);
+    margin-bottom: 3px;
+}
+
+.prof-stat dd {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Semantic, and separate from the navy accent: a figure that needs
+   attention says so in colour as well as in number. */
+.prof-stat dd.tone-good     { color: #00873E; }
+.prof-stat dd.tone-critical { color: #D0342C; }
+.prof-stat dd.tone-info     { color: var(--navy); }
+
+.prof-identity-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: calc(100% + 40px);
+    margin: 18px -20px 0;
+    padding: 12px 18px;
+    border-top: 1px solid #EDF0F4;
+    background: #FAFBFD;
+}
+
+.prof-since {
+    font-size: 11px;
+    color: var(--text-grey);
+}
+
+.prof-signout-form { margin: 0; }
+
+/* A link, not a button: signing out is a POST for CSRF reasons, but it
+   should not compete with the page's real actions. */
+.prof-signout {
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: #D0342C;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.prof-signout:hover { text-decoration: underline; }
+
+.prof-signout:focus-visible {
+    outline: 2px solid #D0342C;
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+/* ---- the read-only record ----------------------------------------- */
+
+.prof-record {
+    margin: 0;
+    padding: 4px 18px 6px;
+}
+
+/* Label left, value right, hairline between — a record to be read down,
+   not a form. Two real columns rather than a dt/dd stack, so the values
+   line up and the eye can scan one side. */
+.prof-record-row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 16px;
+    padding: 11px 0;
+    border-bottom: 1px solid #F2F4F7;
+}
+
+.prof-record-row:last-child { border-bottom: 0; }
+
+.prof-record-row dt {
+    color: var(--text-grey);
+    font-size: 12px;
+}
+
+.prof-record-row dd {
+    margin: 0;
+    color: var(--text-dark);
+    font-size: 13px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+/* ---- forms --------------------------------------------------------- */
+
+.prof-form {
+    padding: 16px 18px 18px;
+}
+
+.prof-field-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+/* The two new-password fields belong beside each other — they are one
+   decision, and stacking them reads as two separate questions. */
+@media (min-width: 620px) {
+    .prof-field-row-split {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.prof-field { min-width: 0; }
+
+.prof-form label,
+.prof-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.prof-form > label + input { margin-bottom: 14px; }
+
+.prof-form input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border-grey);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-dark);
+    background: white;
+}
+
+.prof-form input:focus {
+    outline: none;
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(40, 75, 128, 0.12);
+}
+
+/* Keyboard users need to see where they are even on a button. */
+.prof-form button:focus-visible,
+.prof-card-link:focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 2px;
+}
+
+.prof-form input.is-invalid { border-color: #D0342C; }
+
+.prof-hint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-grey);
+    line-height: 1.5;
+}
+
+/* One action per card, right-aligned, separated by a rule so it reads as
+   the end of the form rather than another field. */
+.prof-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #EDF0F4;
+}
+
+.prof-actions button {
+    margin: 0;
+    padding: 9px 20px;
+    font-size: 13px;
+}
+
+/* ---- sign-in list --------------------------------------------------- */
+
+.prof-signins {
+    list-style: none;
+    margin: 0;
+    padding: 6px 18px 10px;
+}
+
+.prof-signin {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid #F2F4F7;
+}
+
+.prof-signin:last-child { border-bottom: 0; }
+
+.prof-signin-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    margin-top: 6px;
+    border-radius: 50%;
+    background: var(--border-grey);
+}
+
+/* The newest entry is this session, so it gets the live colour. */
+.prof-signin.is-current .prof-signin-dot { background: var(--success-green); }
+
+.prof-signin-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.prof-signin-when {
+    font-size: 13px;
+    color: var(--text-dark);
+    font-weight: 500;
+}
+
+.prof-signin-now {
+    margin-left: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--success-green);
+}
+
+.prof-signin-meta {
+    font-size: 12px;
+    color: var(--text-grey);
+}
+
+.prof-empty {
+    padding: 14px 0;
+    color: var(--text-grey);
+    font-size: 13px;
+}
+
+/* ---- responsive ------------------------------------------------------
+   Below 1000px the identity card stops being a column and becomes a banner
+   across the top: a 300px rail beside a 400px form is two cramped columns,
+   not two comfortable ones.
+   -------------------------------------------------------------------- */
+
+@media (max-width: 1000px) {
+    .prof-layout { grid-template-columns: minmax(0, 1fr); }
+
+    .prof-aside { position: static; }
+
+    /* As a banner it reads horizontally — avatar beside the name rather
+       than above it — so it costs a strip of height, not a screenful. */
+    .prof-identity {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas:
+            'avatar name'
+            'avatar badges'
+            'stats  stats'
+            'foot   foot';
+        align-items: center;
+        text-align: left;
+        gap: 2px 18px;
+        padding: 20px 20px 0;
+    }
+
+    .prof-avatar {
+        grid-area: avatar;
+        width: 64px;
+        height: 64px;
+        font-size: 22px;
+    }
+
+    .prof-name   { grid-area: name; margin: 0; align-self: end; }
+    .prof-email  { display: none; }
+    .prof-badges { grid-area: badges; justify-content: flex-start; align-self: start; }
+    .prof-stats  { grid-area: stats; margin-top: 16px; }
+
+    .prof-identity-foot { grid-area: foot; }
+}
+
+@media (max-width: 560px) {
+    .prof-record-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2px;
+    }
+
+    .prof-actions button { width: 100%; }
+}

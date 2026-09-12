@@ -13,6 +13,7 @@
       sidebar.css         sidebar nav
       dashboard-*.css     one dashboard screen each
       notifications.css   the /notifications feed
+      profile.css         the /profile screen
       charts.css          every Chart.js surface, shared by all dashboards
       sidebar-identity.css the sidebar's identity card
 
@@ -30,6 +31,7 @@
     'dashboard-cgs',
     'notifications',
     'dashboard-admin',
+    'profile',
     'charts',
     'sidebar-identity',
 ] as $sheet)
