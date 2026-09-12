@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Spatie\Activitylog\Models\Activity;
 
 /**
  * The system administrator's screens.
@@ -111,13 +112,31 @@ class AdminController extends Controller
             .'getting a separate Faculty screen.');
     }
 
-    public function auditLogs()
+    /**
+     * The audit log, backed by spatie/laravel-activitylog.
+     *
+     * Closes what docs/scope/jason.md §1.4 asks for and `approval_history`
+     * could not: that table records decisions only, so a document *view* or
+     * *upload* left no trace. Those are now logged from DocumentController,
+     * DocumentStore, WorkflowEngine and LoginController.
+     */
+    public function auditLogs(Request $request)
     {
-        return $this->page('Audit Logs',
-            'A searchable log of every action — jason.md §1.4 asks for timestamp, user, action '
-            .'(view / upload / approve / reject) and record id. NOTE: this needs a new table. '
-            .'`approval_history` records decisions only, so views and uploads are not captured '
-            .'anywhere yet. That table is the real work behind this screen.');
+        $log = $request->query('log');
+
+        $activities = Activity::with('causer')
+            ->when($log, fn ($q) => $q->where('log_name', $log))
+            ->latest('id')
+            ->paginate(25)
+            ->withQueryString();
+
+        return view('core::admin.audit', [
+            'activities' => $activities,
+            'log' => $log,
+            'logNames' => Activity::select('log_name')
+                ->distinct()->orderBy('log_name')->pluck('log_name')->filter()->values(),
+            'total' => Activity::count(),
+        ]);
     }
 
     public function documents()

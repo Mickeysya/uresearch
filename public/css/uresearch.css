@@ -949,18 +949,8 @@ textarea:focus {
     border-bottom: 1px solid var(--border-grey);
 }
 
-.sidebar-profile {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 20px;
-    text-decoration: none;
-    color: var(--text-dark);
-}
-
-.sidebar-profile:hover {
-    background: var(--light-blue-bg);
-}
+/* .sidebar-profile now lives with the identity-card rules near the end of
+   this file, scoped as `.sidebar .sidebar-profile`. */
 
 .sidebar-profile .avatar {
     flex-shrink: 0;
@@ -1023,12 +1013,15 @@ html.sidebar-collapsed .sidebar-brand {
     justify-content: center;
 }
 
+/* Everything that is text-only, hidden at 64px wide. .profile-text used to
+   be the last selector in this group; it now lives with the identity-card
+   rules at the end of the file, but the group still has to terminate here
+   or the whole rule is discarded and every label reappears. */
 html.sidebar-collapsed .sidebar-logo-text,
 html.sidebar-collapsed .sidebar .nav-label,
 html.sidebar-collapsed .sidebar .nav-chevron,
 html.sidebar-collapsed .sidebar .nav-tree-panel,
-html.sidebar-collapsed .sidebar .nav-section-label,
-html.sidebar-collapsed .sidebar-profile .profile-text {
+html.sidebar-collapsed .sidebar .nav-section-label {
     display: none;
 }
 
@@ -1423,7 +1416,12 @@ html.sidebar-collapsed .sidebar-profile {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding: 0 14px 14px;
+    /* The 4px top is headroom, not decoration. This box clips -- overflow-y
+       here, overflow:hidden on the shortcut and quick-action grids -- so a
+       child that lifts on hover moves outside it and has its top edge cut
+       off, which reads as the tile sliding behind the panel heading. The
+       lift is 2px; 4px clears it. */
+    padding: 4px 14px 14px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -2107,7 +2105,7 @@ body::-webkit-scrollbar,
 .sdash-cgs .sdash-pill  { margin-top: clamp(4px, 0.8vh, 8px); padding: clamp(2px, 0.5vh, 4px) 10px; }
 
 .sdash-cgs .sdash-card-head { padding: clamp(8px, 1.3vh, 14px) 16px clamp(4px, 0.8vh, 10px); }
-.sdash-cgs .sdash-card-body { padding: 0 12px clamp(8px, 1.2vh, 14px); gap: clamp(4px, 0.8vh, 8px); }
+.sdash-cgs .sdash-card-body { padding: 4px 12px clamp(8px, 1.2vh, 14px); gap: clamp(4px, 0.8vh, 8px); }
 .sdash-cgs .sdash-row       { padding: clamp(5px, 0.9vh, 10px) 8px clamp(5px, 0.9vh, 10px) 10px; }
 .sdash-cgs .sdash-note      { margin: 0 12px clamp(8px, 1.2vh, 14px); padding: clamp(6px, 1vh, 10px) 12px; }
 
@@ -2695,3 +2693,724 @@ html.sidebar-collapsed .sidebar .nav-badge { display: none; }
 @media (prefers-reduced-motion: reduce) {
     .notif-row:hover { transform: none; }
 }
+
+/* =====================================================================
+   Admin dashboard — four rows on one screen, no banner.
+
+   Same compress-don't-scroll contract as the CGS dashboard: no min-height
+   floor, everything vertical in vh. The heading row replaces the banner,
+   so it is deliberately compact.
+   ===================================================================== */
+
+.sdash-admin {
+    grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 0.9fr);
+    height: calc(100vh - var(--sdash-chrome));
+    gap: clamp(8px, 1.1vh, 16px);
+}
+
+@supports (height: 100dvh) {
+    .sdash-admin { height: calc(100dvh - var(--sdash-chrome)); }
+}
+
+.adm-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.adm-header h2 {
+    margin: 0 0 2px;
+    color: var(--navy);
+    font-size: clamp(17px, 2.4vh, 23px);
+}
+
+.adm-header p {
+    margin: 0;
+    font-size: clamp(11px, 1.5vh, 13.5px);
+    color: var(--text-grey);
+}
+
+.adm-generate {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: clamp(7px, 1.1vh, 11px) clamp(12px, 1vw, 18px);
+    border-radius: 9px;
+    background: var(--navy);
+    color: white;
+    font-size: clamp(11px, 1.4vh, 13px);
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.15s, transform 0.15s;
+}
+
+.adm-generate:hover { background: var(--navy-dark); transform: translateY(-1px); }
+.adm-generate span { display: grid; place-items: center; width: 15px; height: 15px; }
+.adm-generate svg { width: 100%; height: 100%; }
+
+/* Shared vertical compression, same as the CGS dashboard. */
+.sdash-admin .sdash-stat  { padding: clamp(7px, 1.1vh, 14px) clamp(10px, 0.9vw, 16px); }
+.sdash-admin .sdash-stat-value { font-size: clamp(16px, 2.6vh, 26px); }
+.sdash-admin .sdash-stat-note  { font-size: clamp(9px, 1.1vh, 11px); }
+.sdash-admin .sdash-stat-icon  { width: clamp(22px, 3.2vh, 30px); height: clamp(22px, 3.2vh, 30px); }
+.sdash-admin .sdash-card-head  { padding: clamp(8px, 1.3vh, 14px) 16px clamp(4px, 0.8vh, 10px); }
+.sdash-admin .sdash-card-body  { padding: 4px 12px clamp(8px, 1.2vh, 14px); gap: clamp(4px, 0.8vh, 8px); }
+.sdash-admin .sdash-row        { padding: clamp(5px, 0.9vh, 9px) 8px clamp(5px, 0.9vh, 9px) 10px; }
+
+.adm-row-top    { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+.adm-row-bottom { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+
+/* Activity rows are informational, not links, so they do not lift on hover. */
+.adm-activity { cursor: default; }
+.adm-activity:hover { border-color: var(--border-grey); background: white; }
+
+/* ---- system health tiles ---- */
+
+.adm-system-body { gap: clamp(6px, 1vh, 12px) !important; }
+
+.adm-health {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(5px, 0.7vw, 9px);
+    flex-shrink: 0;
+}
+
+.adm-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: clamp(6px, 1vh, 11px) 5px;
+    border: 1px solid var(--border-grey);
+    border-radius: 9px;
+    text-align: center;
+    min-width: 0;
+}
+
+.adm-tile-icon {
+    display: grid;
+    place-items: center;
+    width: clamp(15px, 2.1vh, 19px);
+    height: clamp(15px, 2.1vh, 19px);
+    margin-bottom: 2px;
+}
+
+.adm-tile-icon svg { width: 100%; height: 100%; }
+
+.adm-tile-label {
+    font-size: clamp(8.5px, 1.05vh, 10px);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-grey);
+}
+
+.adm-tile-value {
+    font-size: clamp(11px, 1.55vh, 13.5px);
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.adm-tile-note {
+    font-size: clamp(8px, 1vh, 9.5px);
+    color: var(--text-grey);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.adm-tile.tone-good     .adm-tile-icon { color: #067A42; }
+.adm-tile.tone-info     .adm-tile-icon { color: #2456A6; }
+.adm-tile.tone-warn     .adm-tile-icon { color: #8A5D12; }
+.adm-tile.tone-critical .adm-tile-icon { color: #A8271C; }
+.adm-tile.tone-muted    .adm-tile-icon { color: var(--text-grey); }
+
+.adm-tile.tone-critical { border-color: #F3C9C4; background: #FEF7F6; }
+.adm-tile.tone-critical .adm-tile-value { color: #A8271C; }
+
+/* ---- module mix ---- */
+
+.adm-mix {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    flex: 1 1 auto;
+    padding-top: clamp(4px, 0.8vh, 9px);
+    border-top: 1px solid #EFF1F6;
+}
+
+.adm-mix-title {
+    font-size: clamp(9.5px, 1.2vh, 11.5px);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-grey);
+}
+
+.adm-mix-body {
+    display: flex;
+    align-items: center;
+    gap: clamp(8px, 1.2vw, 18px);
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+.adm-donut-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    width: clamp(68px, 12vh, 104px);
+}
+
+.adm-mix-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2px, 0.6vh, 6px);
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.adm-mix-legend li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: clamp(9px, 1.25vh, 11.5px);
+    min-width: 0;
+}
+
+/* ---- status columns ---- */
+
+.adm-chart-body { justify-content: flex-end; }
+
+.adm-bars {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: end;
+    gap: clamp(6px, 0.8vw, 14px);
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 4px;
+}
+
+.adm-bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    height: 100%;
+    justify-content: flex-end;
+}
+
+.adm-bar-value {
+    font-size: clamp(10px, 1.4vh, 13px);
+    font-weight: 700;
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+}
+
+.adm-bar-track {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: flex-end;
+}
+
+.adm-bar-fill {
+    width: 100%;
+    height: var(--h);
+    min-height: 0;
+    border-radius: 5px 5px 0 0;
+    background: var(--bar-colour);
+    animation: adm-bar-grow 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+    animation-delay: var(--bar-delay, 0s);
+}
+
+@keyframes adm-bar-grow {
+    from { height: 0; }
+}
+
+.adm-bar-label {
+    font-size: clamp(8px, 1.05vh, 10px);
+    line-height: 1.25;
+    color: var(--text-grey);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+/* ---- quick actions ---- */
+
+.adm-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: clamp(5px, 0.8vh, 9px);
+    overflow: hidden;
+}
+
+.adm-action {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: clamp(5px, 0.9vh, 10px) clamp(8px, 0.7vw, 12px);
+    border: 1px solid var(--border-grey);
+    border-radius: 9px;
+    text-decoration: none;
+    color: var(--text-dark);
+    min-width: 0;
+    transition: border-color 0.15s, background-color 0.15s, transform 0.15s;
+}
+
+.adm-action:hover {
+    border-color: var(--navy);
+    background: #FAFBFE;
+    transform: translateY(-2px);
+}
+
+.adm-action-icon {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: clamp(24px, 3.4vh, 32px);
+    height: clamp(24px, 3.4vh, 32px);
+    border-radius: 8px;
+    background: var(--light-blue-bg);
+    color: var(--navy);
+}
+
+.adm-action-icon svg { width: 55%; height: 55%; }
+
+.adm-action-text { display: flex; flex-direction: column; min-width: 0; }
+
+.adm-action-label {
+    font-size: clamp(10px, 1.35vh, 12.5px);
+    font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.adm-action-sub {
+    font-size: clamp(8.5px, 1.05vh, 10.5px);
+    color: var(--text-grey);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+@media (max-width: 1200px) {
+    .sdash-admin { height: auto; grid-template-rows: none; }
+    .adm-row-top, .adm-row-bottom { grid-template-columns: minmax(0, 1fr); }
+    .sdash-admin .sdash-card { min-height: 220px; }
+    .sdash-admin .sdash-card-body { overflow-y: visible; }
+}
+
+@media (max-width: 640px) {
+    .adm-health { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .adm-actions { grid-template-columns: minmax(0, 1fr); }
+    .adm-mix-body { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .adm-bar-fill { animation: none; }
+    .adm-generate:hover, .adm-action:hover { transform: none; }
+}
+
+/* =====================================================================
+   Hover lift — layering, globally.
+
+   Anything that rises on hover has to paint above its neighbours while it
+   is raised, or its lifted edge tucks under the next element. Raising
+   z-index only works on a positioned element, hence position: relative.
+
+   Clipping is handled separately, by the top padding on .sdash-card-body:
+   z-index cannot rescue a child from an ancestor's overflow.
+   ===================================================================== */
+
+.sdash-stat,
+.cgs-shortcut,
+.adm-action,
+.notif-row,
+.adm-generate {
+    position: relative;
+    z-index: 0;
+}
+
+.sdash-stat:hover,
+.cgs-shortcut:hover,
+.adm-action:hover,
+.notif-row:hover,
+.adm-generate:hover,
+.sdash-stat:focus-visible,
+.cgs-shortcut:focus-visible,
+.adm-action:focus-visible,
+.notif-row:focus-visible,
+.adm-generate:focus-visible {
+    z-index: 2;
+}
+
+/* =====================================================================
+   Application Overview — a card in its own right, and a legend that uses
+   the width it has.
+   ===================================================================== */
+
+/* Was a bare section separated by a hairline rule, which left it reading as
+   leftover space under the health tiles rather than as its own thing. */
+.adm-mix {
+    border-top: 0;
+    padding: clamp(7px, 1.1vh, 12px) clamp(9px, 0.9vw, 14px);
+    border: 1px solid var(--border-grey);
+    border-radius: 10px;
+    background: #FBFCFE;
+}
+
+.adm-mix-title { margin-bottom: 2px; }
+
+/* The share bar that fills what used to be a long empty gutter between the
+   module name and its count. Flexible, so it takes exactly the space left
+   over and disappears rather than overflowing when there is none. */
+.adm-share {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 6px;
+    margin: 0 4px;
+    border-radius: 3px;
+    background: #E9EDF4;
+    overflow: hidden;
+}
+
+.adm-share-fill {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    transform-origin: left center;
+    animation: adm-share-grow 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+
+@keyframes adm-share-grow {
+    from { transform: scaleX(0); }
+}
+
+/* Below ~1200px the label alone needs the room, so the bar stands down. */
+@media (max-width: 1200px) {
+    .adm-share { display: none; }
+}
+
+/* =====================================================================
+   Chart hover, everywhere.
+
+   Every chart mark carries a native <title> (SVG) or title attribute
+   (HTML) with its full figures, so the detail survives a screen too
+   narrow to show labels. These rules are the visual half: something has
+   to look hoverable for anyone to try hovering it.
+   ===================================================================== */
+
+.cgs-donut-seg,
+.sdash-gauge-fill {
+    cursor: help;
+    transition: stroke-width 0.18s ease, opacity 0.18s ease;
+}
+
+/* Thickening the hovered segment reads instantly and needs no extra
+   element. Both donuts keep enough clearance inside their viewBox for it. */
+.cgs-donut:hover .cgs-donut-seg { opacity: 0.55; }
+.cgs-donut .cgs-donut-seg:hover { opacity: 1; stroke-width: 16; }
+
+.sdash-admin .cgs-donut .cgs-donut-seg:hover { stroke-width: 15.5; }
+
+.sdash-gauge-fill:hover { stroke-width: 20; }
+
+/* Legend rows and health tiles carry the same figures as the marks, so they
+   get the same affordance. */
+.adm-mix-legend li,
+.cgs-workload-legend li,
+.sdash-legend li,
+.adm-tile,
+.adm-bar-col {
+    cursor: help;
+}
+
+.adm-mix-legend li,
+.cgs-workload-legend li {
+    padding: 2px 4px;
+    margin: 0 -4px;
+    border-radius: 6px;
+    transition: background-color 0.15s;
+}
+
+.adm-mix-legend li:hover,
+.cgs-workload-legend li:hover { background: #EEF2F9; }
+
+.adm-tile { transition: border-color 0.15s, background-color 0.15s; }
+.adm-tile:hover { border-color: var(--navy); background: #FAFBFE; }
+
+/* The bar brightens and its number goes navy, so the column you are reading
+   is unambiguous even when the axis labels have been clipped. */
+.adm-bar-col .adm-bar-fill { transition: filter 0.15s, opacity 0.15s; }
+.adm-bars:hover .adm-bar-fill { opacity: 0.55; }
+.adm-bar-col:hover .adm-bar-fill { opacity: 1; filter: brightness(1.08); }
+.adm-bar-col:hover .adm-bar-value { color: var(--navy); }
+
+@media (prefers-reduced-motion: reduce) {
+    .cgs-donut-seg,
+    .sdash-gauge-fill,
+    .adm-share-fill,
+    .adm-bar-col .adm-bar-fill { transition: none; animation: none; }
+}
+
+/* =====================================================================
+   Chart.js containers.
+
+   A Chart.js canvas sizes itself to its parent, so the parent must have a
+   real height — inside these flex/grid panels that means position:relative
+   plus an explicit box, with maintainAspectRatio:false on the chart.
+   ===================================================================== */
+
+.chart-donut-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    width: clamp(96px, 16vh, 150px);
+    aspect-ratio: 1 / 1;
+    max-height: 100%;
+}
+
+.adm-donut-wrap { width: clamp(76px, 13vh, 116px); }
+
+/* Sits in the hole of the doughnut. pointer-events:none so it never steals
+   a hover from the segment underneath it. */
+.chart-donut-centre {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    pointer-events: none;
+    text-align: center;
+}
+
+/* Shown in place of the canvas when there is nothing to plot, so the panel
+   keeps its shape instead of collapsing. */
+.chart-donut-empty {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: clamp(10px, 1.8vh, 16px) solid #EDEFF4;
+}
+
+/* An explicit, bounded height. With maintainAspectRatio:false a Chart.js
+   canvas takes whatever height its parent offers -- and a flex parent with
+   `min-height: 0` inside a scrolling body offers no ceiling, so the canvas
+   grew until it pushed the panel past the fold. */
+.chart-bars-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    width: 100%;
+    height: clamp(104px, 19vh, 220px);
+    min-height: 96px;
+}
+
+/* Belt and braces: a canvas can never exceed the box it was given. */
+.chart-bars-wrap canvas,
+.chart-donut-wrap canvas {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* Audit rows reuse the notification feed's treatment; they are the same
+   shape of content and a second list style would only add noise. */
+.audit-row { cursor: default; }
+.audit-row:hover { transform: none; border-color: var(--border-grey); box-shadow: none; }
+
+.audit-log-name {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: var(--page-bg);
+    border: 1px solid var(--border-grey);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-grey);
+}
+
+/* =====================================================================
+   Sidebar identity card.
+
+   A bordered card holding the avatar, three lines of identity and a
+   separated Sign out row — replacing the loose profile link and log-out
+   nav item that sat in the footer before.
+
+   Collapsed (64px), the text has nowhere to go: only the avatar and the
+   sign-out icon remain, both centred.
+   ===================================================================== */
+
+.sidebar-footer {
+    flex-shrink: 0;
+    border-top: 0;
+    padding: 0 12px 14px;
+}
+
+.sidebar-card {
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+    background: white;
+    overflow: hidden;
+}
+
+/* Scoped to .sidebar so it outranks Norhanis' `.sidebar a { display: block }`
+   (0,1,1), which was flattening this row and stacking the avatar above the
+   text instead of beside it. */
+.sidebar .sidebar-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    text-decoration: none;
+    color: var(--text-dark);
+    min-width: 0;
+    transition: background-color 0.15s;
+}
+
+.sidebar .sidebar-profile:hover { background: var(--light-blue-bg); }
+
+.avatar {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--navy);
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+/* The administrator's card carries the university crest instead of
+   initials, so it must not be tinted or cropped like an initials disc. */
+.avatar-crest {
+    background: white;
+    border: 1px solid var(--border-grey);
+    object-fit: contain;
+    padding: 3px;
+}
+
+.profile-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+/* All three lines truncate rather than wrap: the sidebar is a fixed width
+   and a long name must not push the card out of shape. */
+.profile-name,
+.profile-role,
+.profile-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.profile-name {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-dark);
+    line-height: 1.3;
+}
+
+.profile-role {
+    font-size: 11px;
+    color: var(--text-grey);
+    line-height: 1.3;
+}
+
+.profile-meta {
+    font-size: 10.5px;
+    color: var(--text-grey);
+    line-height: 1.3;
+}
+
+/* "Admin Access" is a standing, not a contact detail, so it is called out
+   in the brand gold rather than left as grey metadata. */
+.profile-meta.is-admin {
+    color: var(--gold);
+    font-weight: 700;
+}
+
+/* Same reason as .sidebar-profile above: the icon and label were stacking. */
+.sidebar .sidebar-signout {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-grey);
+    color: #D0342C;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.15s;
+}
+
+.sidebar .sidebar-signout:hover { background: #FDEEED; }
+
+/* Both halves red. .nav-label carries its own colour elsewhere in the
+   sidebar, so inheriting from the anchor is not enough here, and the icon
+   is stroke="currentColor" so it follows whatever this sets. */
+.sidebar .sidebar-signout,
+.sidebar .sidebar-signout .nav-label,
+.sidebar .sidebar-signout .nav-icon {
+    color: #D0342C;
+}
+
+.sidebar .sidebar-signout .nav-icon {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.sidebar-signout .nav-icon svg { width: 100%; height: 100%; }
+
+/* ---- collapsed: avatar and sign-out icon only ---- */
+
+html.sidebar-collapsed .sidebar-footer { padding: 0 8px 12px; }
+
+html.sidebar-collapsed .sidebar-card {
+    border: 0;
+    background: transparent;
+}
+
+html.sidebar-collapsed .sidebar-profile {
+    justify-content: center;
+    padding: 6px 0;
+    border-radius: 10px;
+}
+
+html.sidebar-collapsed .sidebar-profile .profile-text { display: none; }
+
+html.sidebar-collapsed .avatar { width: 34px; height: 34px; }
+
+html.sidebar-collapsed .sidebar-signout {
+    justify-content: center;
+    padding: 9px 0;
+    margin-top: 4px;
+    border-top: 0;
+    border-radius: 10px;
+}
+
+html.sidebar-collapsed .sidebar-signout .nav-label { display: none; }

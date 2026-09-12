@@ -74,7 +74,9 @@
                     <path class="sdash-gauge-fill tone-{{ $activeTone }}"
                           d="M 22 100 A 78 78 0 0 1 178 100"
                           fill="none" stroke-width="18" stroke-linecap="round"
-                          style="--arc: {{ round($arc, 2) }}; --arc-offset: {{ round($arc - $filled, 2) }};"/>
+                          style="--arc: {{ round($arc, 2) }}; --arc-offset: {{ round($arc - $filled, 2) }};">
+                        <title>Current attendance {{ $pct }}% — {{ collect($bands)->firstWhere('tone', $tone)['label'] ?? '' }}. Threshold is 80%.</title>
+                    </path>
 
                     <g class="sdash-gauge-marker" style="--mx: {{ $mx }}px; --my: {{ $my }}px;">
                         <circle cx="{{ $mx }}" cy="{{ $my }}" r="9" fill="#FFFFFF"/>
@@ -93,7 +95,7 @@
         <div class="sdash-gauge-side">
             <ul class="sdash-legend">
                 @foreach ($bands as $band)
-                    <li class="{{ $band['tone'] === $tone ? 'is-active' : '' }}">
+                    <li class="{{ $band['tone'] === $tone ? 'is-active' : '' }}" title="{{ $band['label'] }}{{ $band['tone'] === $tone ? ' — you are here' : '' }}">
                         <span class="sdash-dot tone-{{ $band['tone'] }}" aria-hidden="true"></span>
                         <span class="sdash-legend-label">{{ $band['label'] }}</span>
                         @if ($band['tone'] === $tone)

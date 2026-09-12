@@ -9,7 +9,9 @@ use App\Modules\Nureen\Models\AttendanceRecord;
 use App\Modules\Nureen\Notifications\AttendanceAtRisk;
 use App\Modules\Nureen\Support\AttendanceRiskEvaluator;
 use Illuminate\Http\Request;
+use App\Modules\Nureen\Imports\AttendanceSheetImport;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * The non-workflow half of Attendance: getting UTrace data in (as a CSV
@@ -24,38 +26,54 @@ class AttendanceController extends Controller
     }
 
     /**
-     * CSV columns: matric_no, period_end (YYYY-MM-DD), sessions_attended,
+     * Columns: matric_no, period_end (YYYY-MM-DD), sessions_attended,
      * sessions_total. One row per student per period; re-uploading a period
      * already on file updates it rather than duplicating it.
      *
-     * Not routed through DocumentStore: this file is not attached to any
-     * one student's application, it is parsed once into attendance_records
-     * and then discarded, the same way a bulk import would be anywhere else
-     * in the app.
+     * Reads through maatwebsite/excel rather than fgetcsv, because CGS
+     * exports from UTrace as .xlsx — hand-parsing CSV meant someone had to
+     * convert the file first, every time. .csv still works unchanged.
+     *
+     * Not routed through DocumentStore: this file is not attached to any one
+     * student's application, it is parsed once into attendance_records and
+     * then discarded, the same way a bulk import would be anywhere else.
      */
     public function upload(Request $request)
     {
         $request->validate([
-            'csv_file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
+            'csv_file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:5120'],
         ]);
 
-        $handle = fopen($request->file('csv_file')->getRealPath(), 'r');
-        $header = fgetcsv($handle);
-
         $expected = ['matric_no', 'period_end', 'sessions_attended', 'sessions_total'];
-        if ($header === false || array_map('strtolower', array_map('trim', $header)) !== $expected) {
-            fclose($handle);
 
-            return back()->with('error', 'CSV header must be exactly: '.implode(', ', $expected));
+        try {
+            $sheets = Excel::toArray(new AttendanceSheetImport(), $request->file('csv_file'));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'That file could not be read. Upload a .csv or .xlsx export from UTrace.');
+        }
+
+        $rows = $sheets[0] ?? [];
+        $header = array_map(fn ($h) => strtolower(trim((string) $h)), array_shift($rows) ?? []);
+
+        if (array_slice($header, 0, 4) !== $expected) {
+            return back()->with('error', 'The first row must be exactly: '.implode(', ', $expected));
         }
 
         $processed = 0;
         $skipped = 0;
         $newlyAtRisk = [];
 
-        DB::transaction(function () use ($handle, &$processed, &$skipped, &$newlyAtRisk) {
-            while (($row = fgetcsv($handle)) !== false) {
-                [$matricNo, $periodEnd, $attended, $total] = array_pad($row, 4, null);
+        DB::transaction(function () use ($rows, &$processed, &$skipped, &$newlyAtRisk) {
+            foreach ($rows as $row) {
+                [$matricNo, $periodEnd, $attended, $total] = array_pad(array_values($row), 4, null);
+
+                // A spreadsheet may hand back a date object where a CSV gave
+                // a string; normalise before it reaches the database.
+                if ($periodEnd instanceof \DateTimeInterface) {
+                    $periodEnd = $periodEnd->format('Y-m-d');
+                }
 
                 $student = User::where('matric_no', trim((string) $matricNo))
                     ->where('role', Role::STUDENT)
@@ -86,8 +104,6 @@ class AttendanceController extends Controller
                 $processed++;
             }
         });
-
-        fclose($handle);
 
         foreach ($newlyAtRisk as $record) {
             $record->student->notify(new AttendanceAtRisk($record));

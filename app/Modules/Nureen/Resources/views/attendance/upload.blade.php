@@ -20,7 +20,7 @@
             @csrf
 
             <label for="csv_file">Attendance CSV</label>
-            <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" required
+            <input type="file" name="csv_file" id="csv_file" accept=".csv,.txt,.xlsx,.xls" required
                    class="@error('csv_file') is-invalid @enderror">
             @error('csv_file') <p class="field-error">{{ $message }}</p> @enderror
 

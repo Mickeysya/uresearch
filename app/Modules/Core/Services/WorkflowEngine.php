@@ -98,6 +98,19 @@ class WorkflowEngine
             }
 
             $application->refresh();
+
+            activity('workflow')
+                ->causedBy($actor)
+                ->performedOn($application)
+                ->withProperties([
+                    'action' => $approved ? $stage->decision : 'rejected',
+                    'module' => $application->module_type,
+                    'stage' => $stage->key,
+                    'stage_label' => $stage->label,
+                    'status' => $application->status,
+                ])
+                ->log($approved ? 'Application '.$stage->decision : 'Application rejected');
+
             $application->student?->notify(new ApplicationDecided($application, $stage, $approved));
 
             return $application;

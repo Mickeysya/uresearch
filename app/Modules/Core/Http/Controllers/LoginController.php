@@ -44,6 +44,11 @@ class LoginController extends Controller
         RateLimiter::clear($key);
         $request->session()->regenerate();
 
+        activity('auth')
+            ->causedBy($request->user())
+            ->withProperties(['action' => 'signed in', 'ip' => $request->ip()])
+            ->log('Signed in');
+
         return redirect()->intended(route('dashboard'));
     }
 
