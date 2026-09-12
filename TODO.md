@@ -21,6 +21,9 @@ as the work it describes.
 | Hani — Examiner pool + Nomination | done |
 | Hani — Conflict detection T2 · Re-viva | not started |
 | CGS dashboard (5 stat cards + 5 live panels) | done |
+| Admin dashboard (5 cards + 4 panels, system health) | done |
+| Notification feed (`/notifications`) | done |
+| Audit log (`/admin/audit-logs`, spatie/activitylog) | done |
 | Jason — Hardbound Submission · Appeal · Appointment Letters | scoped, not started |
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
@@ -206,6 +209,49 @@ query; there is no placeholder data in the views.
       only hidden from the sidebar
 - [x] Shared `partials/count-up.blade.php` — the gauge, donut and stat figures
       all animate through one script
+
+### Core — admin dashboard, notifications, audit log (2026-09-12)
+
+- [x] **Admin dashboard** to `Sample/ADMIN_DASHBOARD.png` — `Services\AdminDashboard`,
+      five figures, Recent Activities, System Overview, Applications by Status,
+      Quick Actions. Same single-screen contract as CGS.
+      Two deliberate departures from the mockup, both because no scope
+      document describes them: **no Courses screen** ("course" appears in none
+      of the six scope docs, there is no `courses` table, and
+      `users.programme` is free text — the card counts distinct programmes and
+      says so), and **no separate Faculty screen** (every "Faculty" in the docs
+      is an approver role or the FOE/FSMC attribute, never a directory).
+      "Server Status" is replaced by **queue health**, which is a real signal.
+- [x] Admin oversight screens are **read-only** by design —
+      `queuesForRole('admin')` is empty, so acting on an application stays
+      with CGS. Ten `/admin/*` routes, all gated by `role:admin` as well as
+      hidden from the sidebar.
+- [x] **Notification feed** (`/notifications`) — real for every role, grouped
+      by day, filter tabs, mark-one and mark-all, pagination. Replaces the
+      placeholder. Rows are POST forms because following one marks it read.
+      Reachable from the dashboard panel too, which marks read and continues
+      to the application.
+- [x] **Audit log** (`/admin/audit-logs`) — `spatie/laravel-activitylog`.
+      Closes `docs/scope/jason.md` §1.4, which `approval_history` could not:
+      that table records decisions only, so a document *view* or *upload* left
+      no trace. Now logged from `DocumentController`, `DocumentStore`,
+      `WorkflowEngine` and `LoginController`.
+- [x] **Charts are Chart.js**, the team's documented choice — both donuts, the
+      status bars and the attendance gauge. Tooltips render as a `<div>` on
+      `<body>` so nothing can clip them, and they are positioned away from
+      what they describe. `chartjs-plugin-datalabels` prints the value above
+      each bar.
+- [x] **Attendance upload reads .xlsx** as well as .csv (`maatwebsite/excel`).
+      CGS exports xlsx from UTrace; before this someone converted every file
+      by hand.
+- [x] Sidebar identity card, per-role (student / CGS / admin); collapsed, only
+      the avatar and sign-out icon remain.
+- [x] Stylesheet split into four files — `uresearch.css` (Norhanis' original,
+      untouched), `layout.css`, `sidebar.css`, `dashboard.css`. The split is
+      lossless: the concatenation hashes identically to the single file it
+      replaced, so cascade order is unchanged. **Load order matters; do not
+      reorder the `<link>` tags.** New shared styling now goes in
+      `dashboard.css`, not `uresearch.css`.
 
 ### Docs
 - [x] `README.md`, `CLAUDE.md`, `LEGACY.md`, this file
@@ -634,9 +680,11 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       held skeleton rather than a fatal, but the clean fix is a
       `ProvidesDashboardPanels` contract. Worth doing before a second module
       wants a dashboard panel.
-- [ ] Seed attendance rows in `DatabaseSeeder` — a teammate running
-      `./setup.sh` currently gets an empty attendance gauge and no predicted
-      figure, because no seeded student has any `attendance_records`.
+- [ ] **Seed demo data in `DatabaseSeeder`.** A teammate running `./setup.sh`
+      gets 11 accounts and empty dashboards: no attendance rows, nothing in a
+      CGS queue, no notifications. Demo data was created locally during
+      development but deliberately not committed to the seeder, so it exists
+      on one machine only. Worth fixing before the FYP demo.
 - [ ] Give `/notifications`, `/calendar`, `/documents` and `/profile` real
       screens. The dashboard now links to all four and they are still
       `PageController` placeholders; the notification feed in particular has
@@ -659,9 +707,15 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       seeded account.** Either a module needs them or they should go.
 
 ### Team
-- [ ] **Admin module** — user management and role assignment. `technical.md`
-      lists System Administrators; nothing is built. Currently roles can only
-      be set in the seeder or phpMyAdmin. Somebody needs to own this.
+- [~] **Admin module** — the dashboard, sidebar and audit log are built; the
+      screens behind them are placeholders. The one that matters is **Users
+      and Roles**: roles can still only be set in the seeder or phpMyAdmin,
+      and it is the administrator's core job per `technical.md` and
+      `jason.md` §5.5. Somebody needs to own it.
+- [ ] Nine admin/CGS screens remain honest placeholders: Students,
+      Applications, Attendance (x2), Reports (x3), Users and Roles, Document
+      Repository. Each names what is missing; several need only a query and a
+      table, since the data already exists.
 - [ ] Automated tests — at minimum a feature test per chain, asserting the
       wrong role cannot advance an application.
 - [ ] Deployment: hosting, real SMTP, `APP_DEBUG=false`, `php artisan

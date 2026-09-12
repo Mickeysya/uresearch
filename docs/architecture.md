@@ -4,7 +4,7 @@
 
 | Layer | What it is here |
 |---|---|
-| Presentation | Blade templates + Norhanis' stylesheet (`public/css/uresearch.css`), Chart.js via CDN |
+| Presentation | Blade templates + four stylesheets (see below), Chart.js + chartjs-plugin-datalabels via CDN |
 | Application | Laravel controllers, one thin controller per module |
 | Shared services | `WorkflowEngine`, `ModuleRegistry`, `DocumentStore`, `EnsureRole`, notifications |
 | Data | MySQL 8.4 in Docker, accessed through Eloquent |
@@ -118,6 +118,52 @@ for Nureen's models behind a `class_exists()` guard. Replace it with a
 
 The application list itself is registry-driven, so a new module appears there
 with no edit.
+
+## Stylesheets
+
+Four files, linked in this order, and the order is load-bearing — later
+sheets override earlier ones exactly as they did when this was one file:
+
+| File | Owner | Contents |
+|---|---|---|
+| `uresearch.css` | Norhanis | her original sheet, never edited in place |
+| `layout.css` | the team | status pills, steppers, queue and page chrome |
+| `sidebar.css` | the team | the collapsible sidebar and the identity card |
+| `dashboard.css` | the team | dashboards, charts, notification feed, audit log |
+
+New shared styling goes at the bottom of `dashboard.css`. Each is
+cache-busted with `?v=<file mtime>`, so a change always reaches the browser.
+
+## Charts
+
+Chart.js, the stack document's choice, loaded once per page by
+`core::dashboard.partials.chartjs`. Three things that partial sets up which
+individual charts then rely on:
+
+- **Defaults run synchronously**, not on `DOMContentLoaded`. Charts are built
+  from scripts pushed to the end of `<body>`, which execute first — defaults
+  set in that listener would land after the charts already exist.
+- **An external tooltip.** Chart.js draws its tooltip inside the canvas, where
+  it clips at the edge and covers the chart. Ours is a `<div>` on `<body>`,
+  clipped by nothing, positioned away from what it describes: pushed outward
+  from a doughnut's centre, and above a bar's value label.
+- **`chartjs-plugin-datalabels`**, registered but `display: false` by default.
+  A chart opts in; the bar chart does, the doughnuts do not.
+
+## Audit trail
+
+Two layers, and they answer different questions:
+
+| | `approval_history` | `activity_log` |
+|---|---|---|
+| Written by | `WorkflowEngine` only | anything calling `activity()` |
+| Records | decisions on applications | sign-ins, decisions, uploads, document views |
+| Read by | the stepper, tracking page | `/admin/audit-logs` |
+
+`approval_history` is the workflow's own record and stays authoritative for
+where an application has been. `activity_log` (spatie/laravel-activitylog) is
+the administrator's view of who did what, and is the only place a document
+*view* is recorded.
 
 ## Notifications
 

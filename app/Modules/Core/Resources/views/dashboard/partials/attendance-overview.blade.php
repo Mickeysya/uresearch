@@ -1,14 +1,25 @@
 {{--
-    "Attendance Overview" — the semicircular gauge and its legend.
+    "Attendance Overview" — a semicircular gauge (a half-doughnut).
 
-    Plain SVG, no charting library: it is one arc, it has to scale with the
-    panel, and the band colours have to match the legend exactly. Both read
-    the same bands from StudentDashboard::attendanceBands(), so they cannot
-    drift apart.
+    A Chart.js chart rather than hand-drawn SVG, so it shares the same
+    external tooltip as every other chart in the portal instead of relying on
+    the browser's native <title> pop-up, which was slow, unstyled and clipped
+    at the panel edge.
+
+    Two concentric rings, which is how the band scale survives the move:
+
+      outer, thin   the three bands — Critical / Warning / Good. Replaces the
+                    notches the SVG drew, and each band is hoverable in its
+                    own right.
+      inner, thick  this student's value against the remainder.
+
+    Chart.js keeps one `labels` array per chart, not per dataset, and the two
+    rings have different segment counts — so each dataset carries its own
+    `segmentLabels` and the tooltip callback reads from that.
 
     To change where Good/Warning/Critical start, edit attendanceBands() in
-    app/Modules/Core/Services/StudentDashboard.php — the arc, the tick marks,
-    the legend and the status line below all follow.
+    app/Modules/Core/Services/StudentDashboard.php — the dial, the legend and
+    the status line below all follow.
 --}}
 @php
     use App\Modules\Core\Services\StudentDashboard;
@@ -17,33 +28,20 @@
     $tone = StudentDashboard::toneFor($pct);
     $bands = StudentDashboard::attendanceBands();
 
-    // Semicircle geometry: centre (100,100), r=78, drawn left to right.
-    $cx = 100; $cy = 100; $r = 78;
-    $arc = M_PI * $r;
-    $filled = $pct !== null ? ($pct / 100) * $arc : 0;
+    $toneColours = ['good' => '#00BF63', 'warn' => '#E9B23C', 'critical' => '#D0342C', 'none' => '#C7CEDB'];
 
-    // Position on the arc for a given percentage.
-    $pointAt = function (float $p) use ($cx, $cy, $r) {
-        $t = M_PI * (1 - ($p / 100));
-        return [round($cx + $r * cos($t), 2), round($cy - $r * sin($t), 2)];
-    };
+    // Bands are declared high-to-low; a dial reads low-to-high, left to right.
+    $ordered = collect($bands)->reverse()->values();
+    $scale = $ordered->map(fn ($band, $i) => [
+        'label' => $band['label'],
+        'span' => ($ordered[$i + 1]['from'] ?? 100.0) - $band['from'],
+        'colour' => $toneColours[$band['tone']],
+    ]);
 
-    // Notches on the track where one band gives way to the next, so the
-    // thresholds in the legend are visible on the dial itself.
-    $ticks = [];
-    foreach ($bands as $band) {
-        if ($band['from'] > 0) {
-            $t = M_PI * (1 - ($band['from'] / 100));
-            $ticks[] = [
-                round($cx + ($r - 9) * cos($t), 2), round($cy - ($r - 9) * sin($t), 2),
-                round($cx + ($r + 9) * cos($t), 2), round($cy - ($r + 9) * sin($t), 2),
-            ];
-        }
-    }
-
-    [$mx, $my] = $pct !== null ? $pointAt($pct) : [0, 0];
-    $activeTone = $tone;
+    $chartId = 'attendance-gauge-'.uniqid();
 @endphp
+
+@include('core::dashboard.partials.chartjs')
 
 <section class="sdash-card sdash-attendance">
     @if (isset($unavailable['attendance']))
@@ -56,36 +54,11 @@
     </header>
 
     <div class="sdash-card-body sdash-attendance-body">
-        <div class="sdash-gauge-wrap">
-            <svg class="sdash-gauge" viewBox="0 0 200 116" role="img"
-                 aria-label="{{ $pct !== null ? 'Current attendance '.$pct.' percent' : 'No attendance data' }}">
-                {{-- track: a real grey, not near-white, so the dial reads as a
-                     full object even when the value is low --}}
-                <path d="M 22 100 A 78 78 0 0 1 178 100" fill="none" stroke="#DFE4EE" stroke-width="18" stroke-linecap="round"/>
+        <div class="chart-gauge-wrap">
+            <canvas id="{{ $chartId }}" role="img"
+                    aria-label="{{ $pct !== null ? 'Current attendance '.$pct.' percent' : 'No attendance data' }}"></canvas>
 
-                {{-- band thresholds --}}
-                @foreach ($ticks as $tick)
-                    <line x1="{{ $tick[0] }}" y1="{{ $tick[1] }}" x2="{{ $tick[2] }}" y2="{{ $tick[3] }}" stroke="#FFFFFF" stroke-width="2.5" opacity="0.9"/>
-                @endforeach
-
-                {{-- the value itself, coloured by the band it lands in.
-                     --arc / --arc-offset drive the sweep animation in CSS. --}}
-                @if ($pct !== null)
-                    <path class="sdash-gauge-fill tone-{{ $activeTone }}"
-                          d="M 22 100 A 78 78 0 0 1 178 100"
-                          fill="none" stroke-width="18" stroke-linecap="round"
-                          style="--arc: {{ round($arc, 2) }}; --arc-offset: {{ round($arc - $filled, 2) }};">
-                        <title>Current attendance {{ $pct }}% — {{ collect($bands)->firstWhere('tone', $tone)['label'] ?? '' }}. Threshold is 80%.</title>
-                    </path>
-
-                    <g class="sdash-gauge-marker" style="--mx: {{ $mx }}px; --my: {{ $my }}px;">
-                        <circle cx="{{ $mx }}" cy="{{ $my }}" r="9" fill="#FFFFFF"/>
-                        <circle cx="{{ $mx }}" cy="{{ $my }}" r="5" fill="#23283A"/>
-                    </g>
-                @endif
-            </svg>
-
-            <div class="sdash-gauge-value tone-{{ $tone }}">
+            <div class="chart-gauge-value tone-{{ $tone }}">
                 <span class="sdash-gauge-number"
                       @if ($pct !== null) data-count-to="{{ $pct }}" data-count-decimals="1" data-count-suffix="%" data-count-duration="950" @endif>{{ $pct !== null ? rtrim(rtrim(number_format($pct, 1), '0'), '.').'%' : '—' }}</span>
                 <span class="sdash-gauge-caption">Current Attendance</span>
@@ -133,5 +106,72 @@
         </span>
     </footer>
 </section>
+
+@push('scripts')
+    <script>
+        (function () {
+            var el = document.getElementById(@json($chartId));
+            if (! el || typeof Chart === 'undefined') return;
+
+            var pct = @json($pct);
+            var toneColour = @json($toneColours[$tone]);
+
+            new Chart(el, {
+                type: 'doughnut',
+                data: {
+                    datasets: [
+                        {
+                            // Outer scale. Always the full range, so the bands
+                            // read the same whatever this student scored.
+                            label: 'Band',
+                            data: @json($scale->pluck('span')),
+                            segmentLabels: @json($scale->pluck('label')),
+                            backgroundColor: @json($scale->pluck('colour')),
+                            borderWidth: 0,
+                            weight: 1,
+                        },
+                        {
+                            label: 'Attendance',
+                            data: pct === null ? [0, 100] : [pct, 100 - pct],
+                            segmentLabels: ['Your attendance', 'Remaining'],
+                            backgroundColor: [toneColour, '#E7EBF2'],
+                            borderWidth: 0,
+                            weight: 3.4,
+                        },
+                    ],
+                },
+                options: {
+                    // A semicircle: start at nine o'clock and sweep 180 degrees.
+                    rotation: 270,
+                    circumference: 180,
+                    cutout: '56%',
+                    animation: { animateRotate: true, duration: 900 },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            filter: function (ctx) {
+                                // "Remaining" is the empty part of the dial,
+                                // not a fact about the student.
+                                return ! (ctx.datasetIndex === 1 && ctx.dataIndex === 1);
+                            },
+                            callbacks: {
+                                title: function (items) {
+                                    var c = items[0];
+                                    return c.dataset.segmentLabels[c.dataIndex];
+                                },
+                                label: function (ctx) {
+                                    if (ctx.datasetIndex === 1) {
+                                        return ' ' + ctx.parsed + '% — the threshold is 80%';
+                                    }
+                                    return ' covers ' + ctx.parsed + ' percentage points of the scale';
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+        })();
+    </script>
+@endpush
 
 @include('core::dashboard.partials.count-up')
