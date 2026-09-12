@@ -10,21 +10,6 @@ namespace App\Modules\Core\Http\Controllers;
  */
 class PageController extends Controller
 {
-    public function notifications()
-    {
-        return view('core::pages.placeholder', [
-            'title' => 'Notifications',
-            // Deliberately precise: notifications are no longer hypothetical.
-            // The `notifications` table exists and is written on every
-            // decision, and both dashboards already read it. What is missing
-            // is only this full-page feed, so the copy says exactly that
-            // rather than implying nothing has been built.
-            'description' => 'Your notifications are already being recorded — the latest few, and your '
-                .'unread count, are on your dashboard now. What is still to be built here is the full '
-                .'feed: every alert in one place, filterable, with a way to mark them read.',
-        ]);
-    }
-
     public function documents()
     {
         return view('core::pages.placeholder', [
