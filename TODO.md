@@ -101,6 +101,16 @@ being invisible to the roles that owned them. See `git log`.
 - [x] `docker-compose.yml` — MySQL 8.4, phpMyAdmin, Mailpit
 - [x] MySQL strict mode (`docker/mysql/my.cnf`) so bad data errors instead of truncating
 - [x] `setup.sh` (idempotent first-time setup) and `reset.sh`
+- [x] **Fixed: `setup.sh` destroyed data on every re-run.** Its header and the
+      README both promised it was safe to re-run, while the script ended in
+      `migrate:fresh --seed` — which drops every table. Anyone re-running it
+      to fix a container problem lost their whole database. It now runs
+      `migrate` against an existing database and seeds only on a genuine first
+      install; `./reset.sh` remains the deliberate way to start over.
+- [x] `scripts/env.sh` — helpers shared by `setup.sh` and `sync.sh`, so the
+      two cannot drift. Holds the generic "copy any key .env.example has that
+      .env lacks" backfill: `setup.sh` previously hard-coded a repair per key,
+      which is why `REDIS_HOST` was missed and took down every approval.
 - [x] `sync.sh` — run after a `git pull` or branch switch. Installs deps when
       `composer.lock` changed, copies new `.env.example` keys into your own
       git-ignored `.env`, runs pending migrations, clears Blade/config/route

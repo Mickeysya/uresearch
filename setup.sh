@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# UResearch 2.0 — one-time local setup.
-# Safe to re-run; it will not overwrite an existing .env.
+# UResearch 2.0 — first-time local setup.
+#
+# Safe to re-run: it will not overwrite your .env, and it will NOT wipe a
+# database that already has data. Re-running applies any new migrations and
+# leaves your records alone. To deliberately start over, use ./reset.sh.
 set -euo pipefail
 
 cd "$(dirname "$0")"
+
+# shellcheck source=scripts/env.sh
+. ./scripts/env.sh
 
 say()  { printf '\n\033[1;34m==>\033[0m %s\n' "$1"; }
 fail() { printf '\n\033[1;31mERROR:\033[0m %s\n' "$1" >&2; exit 1; }
@@ -58,6 +64,16 @@ if grep -q '^MAIL_HOST=127.0.0.1' .env; then
     printf '    fixed stale MAIL_HOST=127.0.0.1 in .env -> mailpit\n'
 fi
 
+# Anything else .env.example declares that this .env has not got. Generic on
+# purpose: the two repairs above had to be written by hand after each broke
+# something, and REDIS_HOST broke the same way a third time before anyone
+# added it. See scripts/env.sh.
+added=$(env_backfill)
+if [ -n "$added" ]; then
+    printf '    added missing .env settings from .env.example:\n'
+    printf '      %s\n' $added
+fi
+
 # Generated before the stack starts, not after: otherwise the app container
 # boots without an APP_KEY and every request 500s until this line runs.
 if ! grep -q '^APP_KEY=base64:' .env; then
@@ -110,8 +126,19 @@ for _ in $(seq 1 60); do
     printf '.'; sleep 2
 done
 
-say "Building the database"
-./vendor/bin/sail artisan migrate:fresh --seed
+# migrate, NOT migrate:fresh. This script used to run `migrate:fresh --seed`
+# unconditionally while its own header promised it was safe to re-run —
+# meaning a second run silently dropped every table. Seeding happens only
+# when the database has no migrations yet, i.e. a genuine first install.
+if db_is_built; then
+    say "Applying any new migrations (your data is left alone)"
+    ./vendor/bin/sail artisan migrate --force
+    printf '    to start over from scratch instead, run ./reset.sh\n'
+else
+    say "Building the database"
+    ./vendor/bin/sail artisan migrate --force
+    ./vendor/bin/sail artisan db:seed --force
+fi
 
 say "Done"
 cat <<'MSG'

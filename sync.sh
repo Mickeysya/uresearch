@@ -13,6 +13,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# shellcheck source=scripts/env.sh
+. ./scripts/env.sh
+
 CHECK_ONLY=0
 COMPOSER_MODE="install"
 
@@ -122,10 +125,8 @@ if [ ! -f .env ]; then
     fi
 fi
 
-MISSING_KEYS=()
-while IFS= read -r key; do
-    grep -q "^${key}=" .env 2>/dev/null || MISSING_KEYS+=("$key")
-done < <(grep -oE '^[A-Z][A-Z0-9_]*(?==)' .env.example 2>/dev/null || grep -oE '^[A-Z][A-Z0-9_]*=' .env.example | tr -d '=')
+# Shared with setup.sh; see scripts/env.sh for why this is generic.
+mapfile -t MISSING_KEYS < <(env_missing_keys)
 
 if [ ${#MISSING_KEYS[@]} -gt 0 ]; then
     warn "${#MISSING_KEYS[@]} setting(s) in .env.example are missing from your .env:"
@@ -134,12 +135,7 @@ if [ ${#MISSING_KEYS[@]} -gt 0 ]; then
     if [ "$CHECK_ONLY" -eq 1 ]; then
         note "copy the missing keys into .env"
     else
-        {
-            printf '\n# --- added by sync.sh on %s ---\n' "$(date '+%Y-%m-%d %H:%M')"
-            for k in "${MISSING_KEYS[@]}"; do
-                grep -m1 "^${k}=" .env.example
-            done
-        } >> .env
+        env_backfill >/dev/null
         ok "appended them to .env with the values from .env.example"
         warn "check those values are right for your machine before relying on them"
     fi
