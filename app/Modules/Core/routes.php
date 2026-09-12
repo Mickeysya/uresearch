@@ -4,6 +4,7 @@ use App\Modules\Core\Http\Controllers\ApplicationTrackingController;
 use App\Modules\Core\Http\Controllers\DashboardController;
 use App\Modules\Core\Http\Controllers\DocumentController;
 use App\Modules\Core\Http\Controllers\LoginController;
+use App\Modules\Core\Http\Controllers\NotificationController;
 use App\Modules\Core\Http\Controllers\PageController;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\Route;
@@ -26,8 +27,12 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
 
+    // The notification feed. Real, for every role -- see NotificationController.
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
+
     // Sidebar destinations with no feature behind them yet -- see PageController.
-    Route::get('/notifications', [PageController::class, 'notifications'])->name('notifications.index');
     Route::get('/documents', [PageController::class, 'documents'])->name('documents.index');
     Route::get('/calendar', [PageController::class, 'calendar'])->name('calendar.index');
     Route::get('/help', [PageController::class, 'help'])->name('help.index');
