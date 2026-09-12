@@ -349,7 +349,16 @@ knowing before anyone builds on them:
       stat cards and the at-risk task all read `attendance_records` live.
       `AttendanceRiskEvaluator` gained `project()` for the predicted figure.
 
-- [x] **GA/GRA Certification Letter**
+- [~] **GA/GRA Certification Letter**
+  - [ ] **Gap against `nureen.md` Module 4.** The scope reads "generate,
+        format, **and dispatch** the official PDF certification letter, which
+        the student can instantly download." Generation, storage and download
+        all work. Dispatch does not: the student gets the standard
+        `ApplicationDecided` mail, which announces the approval but carries no
+        attachment. Either attach the PDF in a certification-specific
+        notification, or reword the scope to "notifies the student, who
+        downloads it" — the second is defensible, but it should be a decision
+        rather than a silent difference between the report and the code.
   - [x] Field completeness check (validation), GA vs GRA declared by the
         student and checked by CGS at the `cgs_verify` stage
   - [x] Approver endorsement stage (Senior Director CGS, `senior_director`)
@@ -676,8 +685,33 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       module — and then a change in `Core`, so agree it first.
 - [ ] Pagination on queues and the tracking page; both currently `->get()`
       everything, which is fine at seed scale and not at real scale.
-- [ ] `tests/` does not exist, though `composer.json` maps `Tests\` to it.
-      Create it, or drop the `autoload-dev` entry.
+- [x] **Fixed: `tests/` did not exist**, though `composer.json` mapped `Tests\`
+      to it and required PHPUnit 11 — so `php artisan test` failed outright on
+      a missing `phpunit.xml`. There is now a working harness: SQLite in
+      memory, so it needs no Docker, no MySQL and no `.env.testing`, and can
+      never touch a developer's own data. `php artisan test` — 13 tests in
+      under a second.
+- [x] **Content-Security-Policy on every HTML response (2026-09-12).** The
+      portal previously sent none at all, so a single unescaped value reaching
+      Blade would have let an injected `<script>` simply run. Now
+      `Core\Http\Middleware\ContentSecurityPolicy`, plus `nosniff`,
+      `Referrer-Policy` and `X-Frame-Options: DENY`.
+      **No `unsafe-eval`** — nothing needs it. Chart.js 4.4.1 and
+      chartjs-plugin-datalabels 2.2.0 were both downloaded and checked for
+      `eval(` / `new Function`: zero occurrences in either, and none in this
+      repo. If a future library appears to need it, replace the library.
+      **No `unsafe-inline` for scripts** either. All 10 inline blocks carry a
+      per-request nonce via the `@cspNonce` Blade directive, and the sidebar's
+      `onclick` became an `addEventListener` — a nonce cannot allow-list an
+      event-handler attribute.
+      `style-src` *does* allow `'unsafe-inline'`, deliberately: 44 inline
+      `style="…"` attributes carry real values (the gauge's arc, the donut's
+      offset, per-card delays) and CSP has no nonce for style *attributes*.
+      Style injection cannot execute script, so the exposure is far smaller.
+      **Writing a new inline `<script>` without `@cspNonce` fails silently** —
+      the page still returns 200 and the browser just refuses to run it — so
+      `ContentSecurityPolicyTest` asserts every inline block on every screen
+      carries the nonce, and that no page reintroduces an inline handler.
 - [ ] Password reset UI — the `password_reset_tokens` table exists, no screens.
 - [ ] **Core now names a module directly, for the first time.**
       `Services\StudentDashboard` imports Nureen's `AttendanceRecord` and
