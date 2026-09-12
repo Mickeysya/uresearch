@@ -77,14 +77,23 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             </span>
             <span class="nav-label">Notification</span>
+            @if (($unreadCount ?? 0) > 0)
+                <span class="nav-badge" aria-label="{{ $unreadCount }} unread">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
+            @endif
         </a>
 
-        <a href="{{ route('documents.index') }}" class="nav-item @if(request()->routeIs('documents.index')) active @endif" title="Documents">
-            <span class="nav-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
-            </span>
-            <span class="nav-label">Documents</span>
-        </a>
+        {{-- Students and approvers get Documents here, between Notification
+             and Calendar. CGS does not: its design places Documents between
+             Students and Reports and Analytics, so sidebar-cgs-nav renders
+             its own in that position. --}}
+        @if (! auth()->user()?->isCgs())
+            <a href="{{ route('documents.index') }}" class="nav-item @if(request()->routeIs('documents.index')) active @endif" title="Documents">
+                <span class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+                </span>
+                <span class="nav-label">Documents</span>
+            </a>
+        @endif
 
         <a href="{{ route('calendar.index') }}" class="nav-item @if(request()->routeIs('calendar.*')) active @endif" title="Calendar">
             <span class="nav-icon">

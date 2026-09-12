@@ -91,6 +91,16 @@
     <span class="nav-label">Students</span>
 </a>
 
+{{-- Between Students and Reports and Analytics, where the CGS design puts
+     it. The shared shell skips its own Documents link for CGS so this is the
+     only one. --}}
+<a href="{{ route('documents.index') }}" class="nav-item @if(request()->routeIs('documents.index')) active @endif" title="Documents">
+    <span class="nav-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+    </span>
+    <span class="nav-label">Documents</span>
+</a>
+
 <a href="{{ route('cgs.reports.index') }}" class="nav-item @if(request()->routeIs('cgs.reports.*')) active @endif" title="Reports and Analytics">
     <span class="nav-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>
