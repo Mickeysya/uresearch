@@ -1,0 +1,133 @@
+/* ============================================================
+   dashboard-banner.css — the student dashboard's welcome banner
+
+   Owns <x-core::welcome-banner /> only. Every knob is a custom property
+   on the block below, so retuning colour, height or radius is one edit.
+
+   Split out of dashboard.css on 2026-09-12. The sheets are linked
+   in a fixed order by layouts/app.blade.php and concatenate back to
+   exactly what dashboard.css contained, so the cascade is unchanged.
+   Load order matters. Do not reorder the <link> tags.
+   ============================================================ */
+
+/* =====================================================================
+   Student dashboard — welcome banner (<x-core::welcome-banner />).
+
+   A NEW class, not a restyle of .welcome-banner: that one is Norhanis'
+   original (above the marker) and the approver dashboard still uses it,
+   so changing it here would have moved a screen nobody asked to change.
+
+   Every knob is a custom property on the block below. Retuning the
+   banner's colour, height or corner radius is a one-line edit; nothing
+   further down this file hardcodes them.
+   ===================================================================== */
+
+.dash-welcome {
+    --banner-from: #24406F;
+    --banner-to: #33578F;
+    --banner-text: #FFFFFF;
+    --banner-subtle: rgba(255, 255, 255, 0.82);
+    --banner-radius: 14px;
+    --banner-min-height: 144px;
+    --banner-pad-y: 26px;
+    --banner-pad-x: 34px;
+    --banner-art-height: 122px;
+    /* Horizontal space the artwork occupies: its rendered width
+       (122px tall x 240/140 aspect = 209px) plus its 26px right offset,
+       rounded up for breathing room. The text block reserves this so a
+       single-line subtitle never runs underneath the art. */
+    --banner-art-reserve: 250px;
+
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-height: var(--banner-min-height);
+    margin-bottom: 24px;
+    padding: var(--banner-pad-y) var(--banner-pad-x);
+    border-radius: var(--banner-radius);
+    background: linear-gradient(105deg, var(--banner-from) 0%, var(--banner-to) 100%);
+    color: var(--banner-text);
+}
+
+.dash-welcome-text {
+    position: relative; /* above the artwork, so long names never sit under it */
+    z-index: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: var(--banner-art-reserve);
+}
+
+.dash-welcome-title {
+    margin: 0 0 6px 0;
+    font-size: 27px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--banner-text);
+    letter-spacing: -0.2px;
+}
+
+/* Plain inline, no transform and no inline-block: it sits on the heading's
+   own baseline and the only thing separating it from the name is this
+   margin. Nothing here moves it. */
+.dash-welcome-emoji {
+    margin-left: 8px;
+    font-size: 0.85em;
+}
+
+/* Always one line. A `max-width: 52ch` cap used to live here, which is
+   what wrapped the CGS subtitle ("...postgraduate administration today."
+   is 62 characters) onto a second line. Width is now bounded by the text
+   block's reserved space instead, and an over-long subtitle truncates
+   rather than wrapping or pushing the banner sideways. */
+.dash-welcome-sub {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--banner-subtle);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Bottom-aligned and flush with the banner's lower edge, so the books and
+   pot sit ON the bottom border exactly as they do in the design reference. */
+.dash-welcome-art {
+    position: absolute;
+    right: 26px;
+    bottom: 0;
+    height: var(--banner-art-height);
+    width: auto;
+    max-width: 46%;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+/* The art is decoration, not content: below 900px there isn't room for it
+   and the greeting beside it, so it goes rather than squeezing the text. */
+@media (max-width: 900px) {
+    .dash-welcome {
+        --banner-min-height: 0;
+        --banner-pad-x: 24px;
+        --banner-art-reserve: 0px;
+    }
+
+    .dash-welcome-art {
+        display: none;
+    }
+
+    /* The artwork is gone and the column is narrow, so one line is no longer
+       possible without overflowing -- let it wrap again rather than clip. */
+    .dash-welcome-sub {
+        white-space: normal;
+        overflow: visible;
+    }
+}
+
+@media (max-width: 560px) {
+    .dash-welcome-title {
+        font-size: 22px;
+    }
+}
+

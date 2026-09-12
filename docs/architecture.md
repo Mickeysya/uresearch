@@ -128,11 +128,22 @@ sheets override earlier ones exactly as they did when this was one file:
 |---|---|---|
 | `uresearch.css` | Norhanis | her original sheet, never edited in place |
 | `layout.css` | the team | status pills, steppers, queue and page chrome |
-| `sidebar.css` | the team | the collapsible sidebar and the identity card |
-| `dashboard.css` | the team | dashboards, charts, notification feed, audit log |
+| `sidebar.css` | the team | the collapsible sidebar nav |
+| `dashboard-banner.css` | the team | the student dashboard's welcome banner |
+| `dashboard-student.css` | the team | the student dashboard's one-screen grid |
+| `dashboard-gauge.css` | the team | the attendance gauge's sweep, legend and facts |
+| `dashboard-states.css` | the team | skeletons and the hidden-scrollbar rule |
+| `dashboard-cgs.css` | the team | the CGS dashboard and its workload donut |
+| `notifications.css` | the team | the `/notifications` feed |
+| `dashboard-admin.css` | the team | the admin dashboard and Application Overview |
+| `charts.css` | the team | every Chart.js surface — containers, hover, tooltip |
+| `sidebar-identity.css` | the team | the sidebar's identity card |
 
-New shared styling goes at the bottom of `dashboard.css`. Each is
-cache-busted with `?v=<file mtime>`, so a change always reaches the browser.
+New styling goes in the sheet that owns that screen; anything shared by all
+three dashboards goes in `charts.css` or `dashboard-states.css`. The order
+is declared once in `core::partials.stylesheets` and included by both
+layouts. Each is cache-busted with `?v=<file mtime>`, so a change always
+reaches the browser.
 
 ## Charts
 

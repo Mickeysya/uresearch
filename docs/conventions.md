@@ -8,7 +8,8 @@
 | `app/Modules/<Name>/**` | that person | only them |
 | `database/migrations/**` | the team | framework tables only; put yours in your module |
 | `public/css/uresearch.css` | Norhanis | do not edit — her original sheet |
-| `public/css/dashboard.css` | the team | put new shared styling here |
+| `public/css/dashboard-*.css` | the team | one dashboard screen each |
+| `public/css/charts.css` | the team | put new shared chart styling here |
 | `routes/web.php` | nobody | it only redirects `/` — your routes go in your folder |
 
 If you need something from Core, ask. A five-minute conversation beats a
@@ -92,13 +93,17 @@ Do not commit `.env`, `vendor/`, `node_modules/`, or anything under
 - Extend `core::layouts.app` for signed-in pages, `core::layouts.guest` for auth.
 - Reuse the existing classes: `.card`, `.card-wide`, `.app-item`, `.stat-card`,
   `.status-badge`, `.empty-state`, `.stepper`. Norhanis' palette is in `:root`.
-- New shared styling goes at the bottom of **`public/css/dashboard.css`**.
-  `uresearch.css` is Norhanis' original and is not edited at all now, so it
-  stays reviewable. To override a rule she wrote, append a new one — and
-  scope it with at least two classes, because `uresearch.css` contains broad
-  element rules like `.sidebar a` (0,1,1) that outrank a single class.
-- The four sheets load in a fixed order: `uresearch` → `layout` → `sidebar` →
-  `dashboard`. Do not reorder the `<link>` tags; the cascade depends on it.
+- New styling goes in **the sheet that owns that screen** —
+  `dashboard-student.css`, `dashboard-cgs.css`, `dashboard-admin.css`,
+  `notifications.css`. Anything genuinely shared by all three dashboards goes
+  in `charts.css` (chart surfaces) or `dashboard-states.css` (skeletons,
+  scrollbars). `uresearch.css` is Norhanis' original and is not edited at all
+  now, so it stays reviewable. To override a rule she wrote, append a new one
+  — and scope it with at least two classes, because `uresearch.css` contains
+  broad element rules like `.sidebar a` (0,1,1) that outrank a single class.
+- The sheets load in a fixed order, listed once in
+  `core::partials.stylesheets` and included by both layouts. Do not reorder
+  them; the cascade depends on it. Adding a sheet is a one-line edit there.
 - Charts are Chart.js. Include `core::dashboard.partials.chartjs` and the
   shared tooltip, defaults and data-label plugin come with it.
 - Blade's directive regex is `\B`-anchored, so two directives written back to
