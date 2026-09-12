@@ -5,6 +5,7 @@ use App\Modules\Core\Http\Controllers\DashboardController;
 use App\Modules\Core\Http\Controllers\DocumentController;
 use App\Modules\Core\Http\Controllers\LoginController;
 use App\Modules\Core\Http\Controllers\PageController;
+use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -31,4 +32,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/calendar', [PageController::class, 'calendar'])->name('calendar.index');
     Route::get('/help', [PageController::class, 'help'])->name('help.index');
     Route::get('/profile', [PageController::class, 'profile'])->name('profile.show');
+    Route::get('/settings', [PageController::class, 'settings'])->name('settings.index');
+
+    // CGS-only screens. Gated by role here as well as hidden from the sidebar,
+    // because a sidebar that does not render a link is not access control.
+    Route::middleware('role:'.implode(',', Role::cgsTeam()))->group(function () {
+        Route::get('/cgs/attendance', [PageController::class, 'cgsAttendanceOverview'])->name('cgs.attendance.overview');
+        Route::get('/cgs/attendance/students', [PageController::class, 'cgsStudentList'])->name('cgs.attendance.students');
+        Route::get('/cgs/students', [PageController::class, 'cgsStudents'])->name('cgs.students.index');
+        Route::get('/cgs/reports', [PageController::class, 'cgsReports'])->name('cgs.reports.index');
+    });
 });
