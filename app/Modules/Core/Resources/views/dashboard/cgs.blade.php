@@ -4,17 +4,31 @@
 
 @section('content')
     {{--
-        CGS staff dashboard. Same single-screen grid as the student one:
-        the page itself never scrolls, panels scroll internally.
+        CGS staff dashboard — a single screen, by requirement.
 
-        Only the banner exists so far — the stat cards, Workload Overview,
-        Pending Actions, Attendance Alerts, Recent Activities and Quick
-        Shortcuts are still to come, and each will be its own partial under
-        dashboard/partials/ exactly as the student dashboard's are.
+        Four grid rows: banner, the five figures, then two panel rows. The
+        page itself never scrolls on a desktop viewport; panels that outgrow
+        their row scroll internally instead. See the .sdash-cgs block in
+        public/css/uresearch.css for how the rows are proportioned.
+
+        Every panel is its own partial, so changing one never touches another.
     --}}
     <div class="sdash sdash-cgs">
         <x-core::welcome-banner
             art="desk"
             subtitle="Here's what's happening with postgraduate administration today." />
+
+        @include('core::dashboard.partials.cgs-stat-cards')
+
+        <div class="cgs-row cgs-row-top">
+            @include('core::dashboard.partials.cgs-workload')
+            @include('core::dashboard.partials.cgs-pending-actions')
+            @include('core::dashboard.partials.cgs-attendance-alerts')
+        </div>
+
+        <div class="cgs-row cgs-row-bottom">
+            @include('core::dashboard.partials.cgs-recent-activities')
+            @include('core::dashboard.partials.cgs-shortcuts')
+        </div>
     </div>
 @endsection

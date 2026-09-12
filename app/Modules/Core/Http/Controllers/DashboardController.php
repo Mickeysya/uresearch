@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Http\Controllers;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Services\CgsDashboard;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\StudentDashboard;
 use Illuminate\Http\Request;
@@ -43,8 +44,20 @@ class DashboardController extends Controller
 
         if ($user->isCgs()) {
             // CGS gets its own screen rather than the generic approver view.
-            // Only the banner so far; the panels land here as they are built.
-            return view('core::dashboard.cgs');
+            $dash = new CgsDashboard($user);
+
+            return view('core::dashboard.cgs', [
+                'totalApplications' => $dash->totalApplications(),
+                'pendingMyAction' => $dash->pendingMyAction(),
+                'approvedCount' => $dash->approved(),
+                'rejectedCount' => $dash->rejected(),
+                'activeStudents' => $dash->activeStudents(),
+                'workload' => $dash->workload(),
+                'pendingActions' => $dash->pendingActions(),
+                'attendance' => $dash->attendanceAlerts(),
+                'activities' => $dash->recentActivities(),
+                'unavailable' => $dash->unavailable(),
+            ]);
         }
 
         $queues = $registry->queuesForRole($user->role);
