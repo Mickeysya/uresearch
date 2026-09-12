@@ -8,6 +8,16 @@
 
     Expects: $submittable, $myApplicationOpen
 --}}
+{{-- Second item, as in Sample/Student_Dashboard_UI.png. The footer profile
+     link stays: the design carries both. CGS has Settings in this slot
+     instead and no My Profile item, so this lives in the student nav. --}}
+<a href="{{ route('profile.show') }}" class="nav-item @if(request()->routeIs('profile.*')) active @endif" title="My Profile">
+    <span class="nav-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>
+    </span>
+    <span class="nav-label">My Profile</span>
+</a>
+
 <a href="{{ route('applications.index') }}" class="nav-item @if(request()->routeIs('applications.*')) active @endif" title="Track My Applications">
     <span class="nav-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>

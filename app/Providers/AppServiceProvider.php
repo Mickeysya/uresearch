@@ -36,6 +36,9 @@ class AppServiceProvider extends ServiceProvider
                 'extraLinks' => $user
                     ? app(ModuleRegistry::class)->linksFor($user)
                     : [],
+                // Drives the badge on the Notification item, as in both
+                // dashboard designs. One count query per page load.
+                'unreadCount' => $user ? $user->unreadNotifications()->count() : 0,
             ]);
         });
     }

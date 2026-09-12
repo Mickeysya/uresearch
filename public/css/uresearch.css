@@ -2389,3 +2389,22 @@ body::-webkit-scrollbar,
     .cgs-donut-seg,
     .cgs-workload-legend li { animation: none; }
 }
+
+/* Unread count on the sidebar's Notification item, as in both dashboard
+   designs. Pushed to the right edge of the row; hidden with the labels when
+   the sidebar is collapsed, since there is no room for it beside the icon. */
+.nav-badge {
+    margin-left: auto;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #D0342C;
+    color: white;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+html.sidebar-collapsed .sidebar .nav-badge { display: none; }
