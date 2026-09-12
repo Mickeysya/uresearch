@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Modules\Core\Services\ModuleRegistry;
+use App\Modules\Core\Support\Csp;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -19,6 +21,12 @@ class AppServiceProvider extends ServiceProvider
         // Catches a mass-assignment typo at development time instead of
         // silently dropping the attribute.
         Model::preventSilentlyDiscardingAttributes($this->app->isLocal());
+
+        // `<script @cspNonce>` — the Content-Security-Policy allows inline
+        // script only when it carries this request's nonce. An inline block
+        // written without it simply will not run, and the console says so.
+        // See Core\Http\Middleware\ContentSecurityPolicy.
+        Blade::directive('cspNonce', fn () => "<?php echo 'nonce=\"'.\\App\\Modules\\Core\\Support\\Csp::nonce().'\"'; ?>");
 
         // The sidebar is built from the module registry rather than a
         // hardcoded if/elseif chain, so every module's links appear for the

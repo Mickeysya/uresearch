@@ -17,7 +17,7 @@ as the work it describes.
 | Database notifications (in-app feed + unread count) | done |
 | Norhanis — Travel | done · reference implementation |
 | Norhanis — Publication · Claims · RPD | not started |
-| Nureen — GA Extension · Attendance · Supervision · Certification | done |
+| Nureen — GA Extension · Attendance · Supervision · Certification | built; 2 small scope gaps — see below |
 | Hani — Examiner pool + Nomination | done |
 | Hani — Conflict detection T2 · Re-viva | not started |
 | CGS dashboard (5 stat cards + 5 live panels) | done |
@@ -28,7 +28,7 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | none |
+| Automated tests | 18, covering the engine, the seams, the CSP and derived rules |
 | **Runs end to end** | yes — verified 2026-09-09 |
 
 ---
@@ -344,8 +344,17 @@ query; there is no placeholder data in the views.
   - [x] Attendance appeal workflow (`attendance_appeal`, single stage to
         Non-Executive CGS), reachable from a student's "My Attendance" page
 
-- [x] **Supervision** — supervisor appointment requests
+- [~] **Supervision** — supervisor appointment requests
   - [x] Request → Supervisor → CGS eligibility review
+  - [ ] **Gap against `nureen.md` Module 3.** The scope reads "Student submits
+        request *with required documentation*. System checks completeness and
+        forwards to the designated Supervisor." `SupervisionController::store()`
+        validates only `requested_supervisor_id` and `justification`; there is
+        no upload and `supervision_details` has no document. The "completeness
+        check" is currently field validation only. Add a
+        `DocumentStore::rules(required: true)` field the way GA Extension does
+        — that module is the worked example, so this is a small edit, not new
+        machinery.
   - [x] Specific feedback on rejection (the standard remarks field)
   - [x] Reminder escalation when an approval stalls
         (`supervision:remind-stalled`, scheduled daily at 08:00; tracks
@@ -367,7 +376,16 @@ query; there is no placeholder data in the views.
       stat cards and the at-risk task all read `attendance_records` live.
       `AttendanceRiskEvaluator` gained `project()` for the predicted figure.
 
-- [x] **GA/GRA Certification Letter**
+- [~] **GA/GRA Certification Letter**
+  - [ ] **Gap against `nureen.md` Module 4.** The scope reads "generate,
+        format, **and dispatch** the official PDF certification letter, which
+        the student can instantly download." Generation, storage and download
+        all work. Dispatch does not: the student gets the standard
+        `ApplicationDecided` mail, which announces the approval but carries no
+        attachment. Either attach the PDF in a certification-specific
+        notification, or reword the scope to "notifies the student, who
+        downloads it" — the second is defensible, but it should be a decision
+        rather than a silent difference between the report and the code.
   - [x] Field completeness check (validation), GA vs GRA declared by the
         student and checked by CGS at the `cgs_verify` stage
   - [x] Approver endorsement stage (Senior Director CGS, `senior_director`)
@@ -694,8 +712,33 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       module — and then a change in `Core`, so agree it first.
 - [ ] Pagination on queues and the tracking page; both currently `->get()`
       everything, which is fine at seed scale and not at real scale.
-- [ ] `tests/` does not exist, though `composer.json` maps `Tests\` to it.
-      Create it, or drop the `autoload-dev` entry.
+- [x] **Fixed: `tests/` did not exist**, though `composer.json` mapped `Tests\`
+      to it and required PHPUnit 11 — so `php artisan test` failed outright on
+      a missing `phpunit.xml`. There is now a working harness: SQLite in
+      memory, so it needs no Docker, no MySQL and no `.env.testing`, and can
+      never touch a developer's own data. `php artisan test` — 13 tests in
+      under a second.
+- [x] **Content-Security-Policy on every HTML response (2026-09-12).** The
+      portal previously sent none at all, so a single unescaped value reaching
+      Blade would have let an injected `<script>` simply run. Now
+      `Core\Http\Middleware\ContentSecurityPolicy`, plus `nosniff`,
+      `Referrer-Policy` and `X-Frame-Options: DENY`.
+      **No `unsafe-eval`** — nothing needs it. Chart.js 4.4.1 and
+      chartjs-plugin-datalabels 2.2.0 were both downloaded and checked for
+      `eval(` / `new Function`: zero occurrences in either, and none in this
+      repo. If a future library appears to need it, replace the library.
+      **No `unsafe-inline` for scripts** either. All 10 inline blocks carry a
+      per-request nonce via the `@cspNonce` Blade directive, and the sidebar's
+      `onclick` became an `addEventListener` — a nonce cannot allow-list an
+      event-handler attribute.
+      `style-src` *does* allow `'unsafe-inline'`, deliberately: 44 inline
+      `style="…"` attributes carry real values (the gauge's arc, the donut's
+      offset, per-card delays) and CSP has no nonce for style *attributes*.
+      Style injection cannot execute script, so the exposure is far smaller.
+      **Writing a new inline `<script>` without `@cspNonce` fails silently** —
+      the page still returns 200 and the browser just refuses to run it — so
+      `ContentSecurityPolicyTest` asserts every inline block on every screen
+      carries the nonce, and that no page reintroduces an inline handler.
 - [ ] Password reset UI — the `password_reset_tokens` table exists, no screens.
 - [x] **Fixed: Core named a module directly.** All three dashboard services
       imported Nureen's `AttendanceRecord` / `AttendanceRiskEvaluator` behind
@@ -756,8 +799,15 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       Applications, Attendance (x2), Reports (x3), Users and Roles, Document
       Repository. Each names what is missing; several need only a query and a
       table, since the data already exists.
-- [ ] Automated tests — at minimum a feature test per chain, asserting the
-      wrong role cannot advance an application.
+- [~] Automated tests — the harness exists and 13 tests cover the parts that
+      break quietly: both authorisation locks, approve/reject outcomes,
+      Travel's conditional routing, the `stages(null)` superset, that every
+      registered module's routes actually exist, and the attendance contract
+      including its degradation path. **Still wanted:** a feature test per
+      chain (GA Extension, Supervision, Certification, Attendance Appeal,
+      Examiner Nomination), the attendance CSV/xlsx import, and
+      `DocumentStore`'s allow-list. Each owner writing one for their own
+      module is the cheap way to get there.
 - [ ] Deployment: hosting, real SMTP, `APP_DEBUG=false`, `php artisan
       config:cache`, a queue worker running as a service.
 - [ ] UTP Single Sign-On (listed as future in `technical.md`).

@@ -182,8 +182,12 @@
                     </span>
                 </a>
 
-                <a href="{{ route('logout') }}" class="sidebar-signout" title="Sign out"
-                   onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                {{-- The click is bound in the script below, not with an inline
+                     onclick: the Content-Security-Policy admits inline script
+                     only by nonce, and a nonce cannot allow-list an event
+                     handler attribute. Signing out must be a POST, so the
+                     anchor submits the hidden form. --}}
+                <a href="{{ route('logout') }}" class="sidebar-signout" title="Sign out" data-logout>
                     <span class="nav-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                     </span>
@@ -198,7 +202,7 @@
     @endauth
 </div>
 
-<script>
+<script @cspNonce>
     // Plain <details>/<summary> can't be animated smoothly across browsers
     // (its content just snaps open/shut), so the Attendance / My Application
     // trees are a button + panel instead, with the open/closed state carried
@@ -211,5 +215,17 @@
                 trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
             });
         });
+
+        // Sign out is a POST (it changes state and carries the CSRF token),
+        // so the link submits the hidden form rather than following its href.
+        var signOut = document.querySelector('[data-logout]');
+        var form = document.getElementById('logout-form');
+
+        if (signOut && form) {
+            signOut.addEventListener('click', function (event) {
+                event.preventDefault();
+                form.submit();
+            });
+        }
     })();
 </script>

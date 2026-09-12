@@ -35,11 +35,6 @@ final class Stage
         public readonly ?string $queueTitle = null,
     ) {}
 
-    public static function make(string $key, string $label, string $role, string $decision = 'endorsed'): self
-    {
-        return new self($key, $label, $role, $decision);
-    }
-
     public function queueTitle(): string
     {
         return $this->queueTitle ?? $this->label;
