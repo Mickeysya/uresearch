@@ -85,7 +85,7 @@
 
             <div class="sdash-gauge-value tone-{{ $tone }}">
                 <span class="sdash-gauge-number"
-                      @if ($pct !== null) data-count-to="{{ $pct }}" @endif>{{ $pct !== null ? rtrim(rtrim(number_format($pct, 1), '0'), '.').'%' : '—' }}</span>
+                      @if ($pct !== null) data-count-to="{{ $pct }}" data-count-decimals="1" data-count-suffix="%" data-count-duration="950" @endif>{{ $pct !== null ? rtrim(rtrim(number_format($pct, 1), '0'), '.').'%' : '—' }}</span>
                 <span class="sdash-gauge-caption">Current Attendance</span>
             </div>
         </div>
@@ -132,37 +132,4 @@
     </footer>
 </section>
 
-@once
-    @push('scripts')
-        <script>
-            // Counts the gauge number up to its final value once, on load.
-            // The number is already rendered server-side, so if this never
-            // runs the correct figure is still on screen.
-            (function () {
-                if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-                document.querySelectorAll('.sdash-gauge-number[data-count-to]').forEach(function (el) {
-                    var target = parseFloat(el.getAttribute('data-count-to'));
-                    if (isNaN(target)) return;
-
-                    var duration = 950, started = null;
-                    var format = function (v) {
-                        return (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, '') + '%';
-                    };
-
-                    function frame(now) {
-                        if (started === null) started = now;
-                        var p = Math.min((now - started) / duration, 1);
-                        // same easing as the arc sweep, so they land together
-                        var eased = 1 - Math.pow(1 - p, 3);
-                        el.textContent = format(target * eased);
-                        if (p < 1) requestAnimationFrame(frame);
-                    }
-
-                    el.textContent = format(0);
-                    requestAnimationFrame(frame);
-                });
-            })();
-        </script>
-    @endpush
-@endonce
+@include('core::dashboard.partials.count-up')
