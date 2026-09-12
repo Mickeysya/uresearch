@@ -1,0 +1,299 @@
+/* ============================================================
+   notifications.css — the notification feed at /notifications
+
+   Filters, day groups, the row (a <button>, because following a
+   notification POSTs to mark it read), empty state and pager.
+
+   Split out of dashboard.css on 2026-09-12. The sheets are linked
+   in a fixed order by layouts/app.blade.php and concatenate back to
+   exactly what dashboard.css contained, so the cascade is unchanged.
+   Load order matters. Do not reorder the <link> tags.
+   ============================================================ */
+
+/* =====================================================================
+   Notification feed (/notifications).
+
+   Uses the same visual language as the dashboards — white cards on the
+   page ground, navy accents, the shared tone colours — but its own
+   classes, so it does not inherit the dashboards' viewport-height grid.
+   ===================================================================== */
+
+.notif-page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding-block: 4px 40px;
+}
+
+.notif-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.notif-heading h2 {
+    margin: 0 0 4px;
+    color: var(--navy);
+    font-size: 22px;
+}
+
+.notif-heading p {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--text-grey);
+}
+
+.notif-heading b { color: var(--text-dark); }
+
+.notif-readall { margin: 0; }
+
+.notif-readall button {
+    margin: 0;
+    padding: 9px 16px;
+    font-size: 13px;
+    background: white;
+    color: var(--navy);
+    border: 1px solid var(--border-grey);
+}
+
+.notif-readall button:hover {
+    background: var(--light-blue-bg);
+    border-color: var(--navy);
+}
+
+/* ---- filters ---- */
+
+.notif-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-grey);
+}
+
+.notif-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 4px;
+    margin-bottom: -1px;
+    margin-right: 16px;
+    border-bottom: 2px solid transparent;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-grey);
+    text-decoration: none;
+}
+
+.notif-filter span {
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: var(--border-grey);
+    color: var(--text-grey);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.notif-filter:hover { color: var(--navy); }
+
+.notif-filter.active {
+    color: var(--navy);
+    border-bottom-color: var(--navy);
+}
+
+.notif-filter.active span {
+    background: var(--navy);
+    color: white;
+}
+
+/* ---- day groups ---- */
+
+.notif-group { margin-bottom: 22px; }
+
+.notif-group-heading {
+    margin: 0 0 8px 2px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-grey);
+}
+
+.notif-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.notif-row-form { margin: 0; }
+
+/* The row is a <button> so that following a notification can POST. Every
+   button default is stripped back to a plain row. */
+.notif-row {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    width: 100%;
+    margin: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--border-grey);
+    border-radius: 10px;
+    background: white;
+    color: var(--text-dark);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+
+.notif-row:hover {
+    background: white;
+    border-color: var(--navy);
+    box-shadow: 0 4px 14px -8px rgba(40, 75, 128, 0.45);
+    transform: translateY(-1px);
+}
+
+/* Unread carries a navy edge and a solid title; read rows recede. */
+.notif-row.is-unread {
+    border-left: 3px solid var(--navy);
+    background: #FCFDFF;
+}
+
+.notif-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+}
+
+.notif-icon svg { width: 18px; height: 18px; }
+
+.notif-icon.tone-good     { background: #E4F6EC; color: #067A42; }
+.notif-icon.tone-info     { background: #E8F0FD; color: #2456A6; }
+.notif-icon.tone-warn     { background: #FDF1DC; color: #8A5D12; }
+.notif-icon.tone-critical { background: #FDECEA; color: #A8271C; }
+
+.notif-body {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.notif-title {
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--text-grey);
+}
+
+.notif-row.is-unread .notif-title {
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+.notif-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    font-size: 11.5px;
+    color: var(--text-grey);
+}
+
+.notif-tag {
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: var(--light-blue-bg);
+    color: var(--navy);
+    font-weight: 600;
+}
+
+.notif-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--navy);
+}
+
+/* ---- empty state ---- */
+
+.notif-empty {
+    padding: 56px 24px;
+    text-align: center;
+    background: white;
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+}
+
+.notif-empty-icon {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    background: var(--light-blue-bg);
+    color: var(--navy);
+}
+
+.notif-empty-icon svg { width: 22px; height: 22px; }
+
+.notif-empty-title {
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.notif-empty p { margin: 0; font-size: 13px; color: var(--text-grey); }
+
+/* ---- pager ---- */
+
+.notif-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 22px;
+}
+
+.notif-page-link {
+    padding: 7px 14px;
+    border: 1px solid var(--border-grey);
+    border-radius: 8px;
+    background: white;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--navy);
+    text-decoration: none;
+}
+
+.notif-page-link:hover { background: var(--light-blue-bg); border-color: var(--navy); }
+
+.notif-page-link.is-disabled {
+    color: var(--text-grey);
+    background: var(--page-bg);
+    cursor: default;
+}
+
+.notif-page-count {
+    font-size: 12px;
+    color: var(--text-grey);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+    .notif-header { flex-direction: column; }
+    .notif-readall, .notif-readall button { width: 100%; }
+    .notif-row { padding: 12px; gap: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .notif-row:hover { transform: none; }
+}
+

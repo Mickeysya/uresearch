@@ -1,0 +1,307 @@
+/* ============================================================
+   charts.css — every Chart.js surface — containers, hover, tooltip
+
+   Chart containers, the hover thickening, the tooltip (rendered as a
+   <div> on <body> so nothing can clip it) and the half-doughnut gauge.
+   Shared by all three dashboards, so it owns no screen of its own.
+
+   Split out of dashboard.css on 2026-09-12. The sheets are linked
+   in a fixed order by layouts/app.blade.php and concatenate back to
+   exactly what dashboard.css contained, so the cascade is unchanged.
+   Load order matters. Do not reorder the <link> tags.
+   ============================================================ */
+
+/* =====================================================================
+   Chart hover, everywhere.
+
+   Every chart mark carries a native <title> (SVG) or title attribute
+   (HTML) with its full figures, so the detail survives a screen too
+   narrow to show labels. These rules are the visual half: something has
+   to look hoverable for anyone to try hovering it.
+   ===================================================================== */
+
+.cgs-donut-seg,
+.sdash-gauge-fill {
+    cursor: help;
+    transition: stroke-width 0.18s ease, opacity 0.18s ease;
+}
+
+/* Thickening the hovered segment reads instantly and needs no extra
+   element. Both donuts keep enough clearance inside their viewBox for it. */
+.cgs-donut:hover .cgs-donut-seg { opacity: 0.55; }
+.cgs-donut .cgs-donut-seg:hover { opacity: 1; stroke-width: 16; }
+
+.sdash-admin .cgs-donut .cgs-donut-seg:hover { stroke-width: 15.5; }
+
+.sdash-gauge-fill:hover { stroke-width: 20; }
+
+/* Legend rows and health tiles carry the same figures as the marks, so they
+   get the same affordance. */
+.adm-mix-legend li,
+.cgs-workload-legend li,
+.sdash-legend li,
+.adm-tile,
+.adm-bar-col {
+    cursor: help;
+}
+
+.adm-mix-legend li,
+.cgs-workload-legend li {
+    padding: 2px 4px;
+    margin: 0 -4px;
+    border-radius: 6px;
+    transition: background-color 0.15s;
+}
+
+.adm-mix-legend li:hover,
+.cgs-workload-legend li:hover { background: #EEF2F9; }
+
+.adm-tile { transition: border-color 0.15s, background-color 0.15s; }
+.adm-tile:hover { border-color: var(--navy); background: #FAFBFE; }
+
+/* The bar brightens and its number goes navy, so the column you are reading
+   is unambiguous even when the axis labels have been clipped. */
+.adm-bar-col .adm-bar-fill { transition: filter 0.15s, opacity 0.15s; }
+.adm-bars:hover .adm-bar-fill { opacity: 0.55; }
+.adm-bar-col:hover .adm-bar-fill { opacity: 1; filter: brightness(1.08); }
+.adm-bar-col:hover .adm-bar-value { color: var(--navy); }
+
+@media (prefers-reduced-motion: reduce) {
+    .cgs-donut-seg,
+    .sdash-gauge-fill,
+    .adm-share-fill,
+    .adm-bar-col .adm-bar-fill { transition: none; animation: none; }
+}
+
+/* =====================================================================
+   Chart.js containers.
+
+   A Chart.js canvas sizes itself to its parent, so the parent must have a
+   real height — inside these flex/grid panels that means position:relative
+   plus an explicit box, with maintainAspectRatio:false on the chart.
+   ===================================================================== */
+
+/* No max-height here. `max-height: 100%` resolves against a flex parent
+   whose own height is content-derived, which collapsed this box to a few
+   pixels and left the doughnut as a sliver. aspect-ratio plus an explicit
+   width is what actually gives it a square to draw in. */
+.chart-donut-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    align-self: center;
+    width: clamp(96px, 16vh, 150px);
+    aspect-ratio: 1 / 1;
+}
+
+.adm-donut-wrap { width: clamp(84px, 14.5vh, 128px); }
+
+/* Sits in the hole of the doughnut. pointer-events:none so it never steals
+   a hover from the segment underneath it. */
+.chart-donut-centre {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    pointer-events: none;
+    text-align: center;
+}
+
+/* Shown in place of the canvas when there is nothing to plot, so the panel
+   keeps its shape instead of collapsing. */
+.chart-donut-empty {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: clamp(10px, 1.8vh, 16px) solid #EDEFF4;
+}
+
+/* An explicit, bounded height. With maintainAspectRatio:false a Chart.js
+   canvas takes whatever height its parent offers -- and a flex parent with
+   `min-height: 0` inside a scrolling body offers no ceiling, so the canvas
+   grew until it pushed the panel past the fold. */
+.chart-bars-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    width: 100%;
+    height: clamp(104px, 19vh, 220px);
+    min-height: 96px;
+}
+
+/* Belt and braces: a canvas can never exceed the box it was given. */
+.chart-bars-wrap canvas { display: block; max-width: 100%; max-height: 100%; }
+
+/* The doughnut canvas fills its square wrapper exactly. */
+.chart-donut-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+
+/* Audit rows reuse the notification feed's treatment; they are the same
+   shape of content and a second list style would only add noise. */
+.audit-row { cursor: default; }
+.audit-row:hover { transform: none; border-color: var(--border-grey); box-shadow: none; }
+
+.audit-log-name {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: var(--page-bg);
+    border: 1px solid var(--border-grey);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-grey);
+}
+
+/* =====================================================================
+   Chart tooltip.
+
+   Lives on <body>, not inside any panel, so nothing can clip it — a
+   Chart.js tooltip drawn on the canvas stops at the canvas edge and sits
+   on top of the chart it is describing. Positioned from JS; see
+   dashboard/partials/chartjs.blade.php.
+   ===================================================================== */
+
+.chart-tip {
+    position: absolute;
+    z-index: 9999;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 260px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    background: #23283A;
+    color: #E4E8F2;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 11.5px;
+    line-height: 1.35;
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+    /* Never intercept the pointer: the chart underneath must keep receiving
+       the hover that is producing this tooltip in the first place. */
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.chart-tip.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.chart-tip-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #FFFFFF;
+}
+
+.chart-tip-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+}
+
+.chart-tip-swatch {
+    flex-shrink: 0;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chart-tip { transition: none; }
+}
+
+/* Hovering a legend row lights it, matching the donut's own hover. */
+.adm-mix-legend li:hover { background: #EFF3FA; }
+
+/* Column headings for the legend grid — no text, just alignment: the bar
+   track and the count column line up with every row below them. */
+.adm-mix-legend .cgs-legend-label {
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+/* The dashboard's notification rows are submit buttons, not divs: following
+   one marks it read, which is a state change. Everything a <button> brings
+   with it is stripped back so the row looks exactly as it did. */
+.sdash-note-form { margin: 0; }
+
+button.sdash-note-row {
+    width: 100%;
+    margin: 0;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid #F1F3F7;
+    border-radius: 6px;
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+button.sdash-note-row:last-child { border-bottom: 0; }
+
+.sdash-note-form:last-child button.sdash-note-row { border-bottom: 0; }
+
+button.sdash-note-row:hover { background: #F6F8FC; }
+
+button.sdash-note-row:focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: -2px;
+}
+
+/* =====================================================================
+   Attendance gauge (Chart.js half-doughnut).
+
+   2:1 box, because the chart is a semicircle — a square would leave half
+   the container empty and halve the dial's drawn size.
+   ===================================================================== */
+
+.chart-gauge-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    width: clamp(150px, 24vh, 230px);
+    aspect-ratio: 2 / 1;
+    align-self: center;
+}
+
+.chart-gauge-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+
+/* Sits in the mouth of the arc. pointer-events:none so it never steals a
+   hover from the segment underneath. */
+.chart-gauge-value {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    pointer-events: none;
+}
+
+.chart-gauge-value .sdash-gauge-number {
+    font-size: clamp(20px, 2.3vw, 30px);
+    font-weight: 700;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-gauge-value.tone-good     .sdash-gauge-number { color: #00A857; }
+.chart-gauge-value.tone-warn     .sdash-gauge-number { color: #C98A12; }
+.chart-gauge-value.tone-critical .sdash-gauge-number { color: #D0342C; }
+.chart-gauge-value.tone-none     .sdash-gauge-number { color: var(--text-grey); }
+
+.chart-gauge-value .sdash-gauge-caption { font-size: 11px; color: var(--text-grey); }
+
+@media (max-width: 560px) {
+    .chart-gauge-wrap { width: 100%; max-width: 260px; margin: 0 auto; }
+}

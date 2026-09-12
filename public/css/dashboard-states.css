@@ -1,0 +1,224 @@
+/* ============================================================
+   dashboard-states.css — cross-dashboard states — scrollbars and skeletons
+
+   Three things every dashboard shares: the hidden-scrollbar rule, the
+   skeleton placeholders a held panel falls back to, and the one class
+   the CGS sidebar's nav adds. Not owned by any single screen.
+
+   Split out of dashboard.css on 2026-09-12. The sheets are linked
+   in a fixed order by layouts/app.blade.php and concatenate back to
+   exactly what dashboard.css contained, so the cascade is unchanged.
+   Load order matters. Do not reorder the <link> tags.
+   ============================================================ */
+
+/* =====================================================================
+   No scrollbars anywhere — scrolling still works, nothing draws a track.
+   Applies to the page, every panel body and the sidebar nav alike.
+   ===================================================================== */
+
+html,
+body,
+.sdash-card-body,
+.main-content,
+.sidebar-nav,
+[class*="-scroll"] {
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* legacy Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;                  /* Chrome, Safari, Edge */
+}
+
+/* Someone navigating by keyboard still needs to see where they are, and
+   hiding the bar removes the usual visual cue. */
+.sdash-card-body:focus-visible,
+.sdash-row:focus-visible,
+.sdash-action:focus-visible,
+.sdash-pill:focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sdash-gauge-fill,
+    .sdash-gauge-marker,
+    .sdash-stat,
+    .sdash-card {
+        animation: none;
+    }
+
+    .sdash-gauge-fill { stroke-dashoffset: var(--arc-offset); }
+    .sdash-stat:hover { transform: none; }
+}
+
+/* =====================================================================
+   Skeleton loading placeholders.
+
+   Two behaviours from one piece of markup (partials/skeleton.blade.php):
+
+     default    fades out shortly after paint and hands over to the panel's
+                rise-in animation. This is CSS-only on purpose -- a timed
+                animation always resolves, so the real content can never be
+                left hidden behind a placeholder if scripting fails.
+
+     .is-stuck  holds. Used when the panel's data genuinely could not be
+                read, so the student sees "couldn't load" rather than an
+                empty list that reads as "you have nothing".
+
+   This app renders server-side, so the default case is a paint-smoothing
+   flourish, not a real fetch wait -- the held case is the functional one.
+   ===================================================================== */
+
+.sdash-stat,
+.sdash-card {
+    position: relative; /* containing block for the overlay */
+}
+
+/* Rendered only when a panel's data source failed, so it simply sits there
+   -- there is no timed fade-out, because there was never a load to wait on. */
+.sdash-skeleton {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 18px;
+    background: white;
+    border-radius: inherit;
+}
+
+.skel {
+    display: block;
+    border-radius: 6px;
+    background: #E6EAF2;
+}
+
+.skel-bar    { height: 10px; }
+.skel-sm     { height: 8px; }
+.skel-lg     { height: 010px; height: 20px; }
+.skel-tall   { height: 38px; border-radius: 8px; }
+.skel-circle { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; }
+.skel-square { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; }
+.skel-pill   { height: 22px; border-radius: 6px; width: 100%; }
+.skel-tag    { width: 62px; flex-shrink: 0; }
+
+/* --- stat card variant --- */
+
+.skel-stat {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 9px;
+    height: 100%;
+}
+
+.skel-stat-top {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.skel-stat .skel-lg { align-self: center; }
+.skel-stat > .skel-bar:not(.skel-lg) { align-self: center; }
+
+/* --- row list variant --- */
+
+.skel-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 26px; /* clears the panel heading */
+}
+
+.skel-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.skel-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* --- gauge variant --- */
+
+.skel-gauge {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 20px;
+    padding-top: 26px;
+}
+
+.skel-gauge-dial {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Half-disc, matching the real dial's footprint. */
+.skel-arc {
+    width: 100%;
+    max-width: 190px;
+    aspect-ratio: 2 / 1;
+    border-radius: 999px 999px 0 0;
+    background: #E6EAF2;
+    mask: radial-gradient(circle at 50% 100%, transparent 52%, #000 52.5%);
+    -webkit-mask: radial-gradient(circle at 50% 100%, transparent 52%, #000 52.5%);
+}
+
+.skel-gauge-side {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+/* --- the "couldn't load" line on a held skeleton --- */
+
+.sdash-skeleton-msg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin: auto 0 0;
+    padding-top: 10px;
+    font-size: 11.5px;
+    color: var(--text-grey);
+    text-align: center;
+}
+
+.sdash-skeleton-msg svg { width: 14px; height: 14px; }
+
+
+
+/* =====================================================================
+   CGS sidebar — the one class its nav adds.
+   ===================================================================== */
+
+/* Shown in place of the Applications tree's children when a CGS role owns
+   no queue yet (Manager CGS and Senior Executive CGS, until the modules
+   that route to them are built). Says so plainly rather than showing an
+   empty panel that reads as broken. */
+.nav-subitem-muted {
+    display: block;
+    color: var(--text-grey);
+    font-style: italic;
+    cursor: default;
+    opacity: 0.8;
+}
+
+
+

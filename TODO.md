@@ -260,8 +260,23 @@ query; there is no placeholder data in the views.
       untouched), `layout.css`, `sidebar.css`, `dashboard.css`. The split is
       lossless: the concatenation hashes identically to the single file it
       replaced, so cascade order is unchanged. **Load order matters; do not
-      reorder the `<link>` tags.** New shared styling now goes in
-      `dashboard.css`, not `uresearch.css`.
+      reorder the `<link>` tags.**
+- [x] **`dashboard.css` split again (2026-09-12).** It had grown to 2,519
+      lines — the only file in the repo over 800 — and was carrying four
+      unrelated screens plus every shared chart rule. Now nine sheets, each
+      owning one thing: `dashboard-banner`, `dashboard-student`,
+      `dashboard-gauge`, `dashboard-states`, `dashboard-cgs`,
+      `notifications`, `dashboard-admin`, `charts`, `sidebar-identity`.
+      Largest is 526 lines.
+      Lossless the same way as before, and verified the same way: the nine
+      files concatenated in load order normalise to a byte-identical hash
+      against the original. One block moved — `sidebar-identity` now loads
+      after the chart sheets instead of between them — and that was only done
+      after confirming it shares no selector with anything it crosses.
+      The sheet list now lives once in `core::partials.stylesheets`, included
+      by both layouts, instead of being duplicated in each.
+      New styling goes in the sheet that owns that screen; anything shared by
+      all three dashboards goes in `charts.css` or `dashboard-states.css`.
 
 ### Docs
 - [x] `README.md`, `CLAUDE.md`, `LEGACY.md`, this file

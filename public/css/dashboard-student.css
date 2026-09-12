@@ -1,0 +1,526 @@
+/* ============================================================
+   dashboard-student.css — the student dashboard's one-screen grid
+
+   Stat cards, pills, the four panels, the rows inside them, and the
+   responsive reflow that releases the one-screen promise below 1100px.
+   The responsive block stays last in this file: it overrides the base
+   rules above it.
+
+   Split out of dashboard.css on 2026-09-12. The sheets are linked
+   in a fixed order by layouts/app.blade.php and concatenate back to
+   exactly what dashboard.css contained, so the cascade is unchanged.
+   Load order matters. Do not reorder the <link> tags.
+   ============================================================ */
+
+/* =====================================================================
+   Student dashboard — single-screen layout.
+
+   The PAGE never scrolls; individual panel bodies do. .sdash is a grid
+   sized to the viewport minus the fixed chrome above it, so the five
+   stat cards and the four panels always land on one screen.
+
+   --sdash-chrome is that fixed chrome: .main-content-header is 64px and
+   pulls itself up into .main-content's 32px padding with a negative
+   margin, then leaves 24px below it; 32px of padding remains at the
+   bottom. 64 + 24 + 32 = 120.
+
+   The max() floor means very short viewports scroll rather than crushing
+   every panel into illegibility -- squeezing is worse than scrolling.
+   ===================================================================== */
+
+.sdash {
+    --sdash-chrome: 120px;
+    --sdash-floor: 620px;
+    --sdash-gap: 16px;
+
+    /* Load sequence. Nothing waits on a timer: the page is server-rendered,
+       so every figure is already in the HTML at first paint and the content
+       animates straight in. --rise-start exists only as a knob; leave it at
+       0s unless you deliberately want a delay. */
+    --rise-start: 0s;
+    --rise-span: 0.42s;
+    --rise-step: 0.045s;
+
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: var(--sdash-gap);
+    height: max(var(--sdash-floor), calc(100vh - var(--sdash-chrome)));
+    min-height: 0;
+}
+
+/* dvh tracks mobile browser chrome as it hides/shows; vh above is the
+   fallback for anything that doesn't support it. */
+@supports (height: 100dvh) {
+    .sdash {
+        height: max(var(--sdash-floor), calc(100dvh - var(--sdash-chrome)));
+    }
+}
+
+.sdash .dash-welcome {
+    margin-bottom: 0; /* the grid's gap handles spacing now */
+}
+
+/* ---- the five stat cards ---- */
+
+.sdash-stats {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--sdash-gap);
+}
+
+.sdash-stat {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 2px;
+    background: white;
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+    padding: clamp(10px, 1.1vh, 16px) clamp(12px, 1vw, 18px);
+    min-width: 0;
+}
+
+.sdash-stat-top {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.sdash-stat-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: white;
+}
+
+.sdash-stat-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.sdash-stat-label {
+    font-size: clamp(11px, 0.75vw, 12.5px);
+    font-weight: 600;
+    color: var(--text-dark);
+    line-height: 1.25;
+    min-width: 0;
+}
+
+/* Centred, not left-aligned: the icon+label row sits across the top and
+   everything below it is the card's focal point, so it is centred in the
+   space that row defines. Left-aligning left a wide dead gutter to the
+   right of every number. */
+.sdash-stat-value {
+    font-size: clamp(20px, 2vw, 28px);
+    font-weight: 700;
+    color: var(--navy);
+    line-height: 1.15;
+    margin-top: 8px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.sdash-stat-note {
+    font-size: 11.5px;
+    color: var(--text-grey);
+    text-align: center;
+}
+
+/* Icon disc colours. Add a tone here and it is usable from the $cards
+   array in partials/stat-cards.blade.php with no other change. */
+.tone-green  .sdash-stat-icon { background: #00A857; }
+.tone-purple .sdash-stat-icon { background: #6B4FD8; }
+.tone-blue   .sdash-stat-icon { background: #2F6BD8; }
+.tone-orange .sdash-stat-icon { background: #F08A24; }
+.tone-teal   .sdash-stat-icon { background: #17A8B8; }
+
+/* ---- pills, shared by stat cards and application rows ---- */
+
+.sdash-pill {
+    display: inline-block;
+    margin-top: 8px;
+    align-self: stretch;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.pill-good     { background: #E4F6EC; color: #067A42; }
+.pill-info     { background: #E8F0FD; color: #2456A6; }
+.pill-warn     { background: #FDF1DC; color: #8A5D12; }
+.pill-critical { background: #FDECEA; color: #A8271C; }
+.pill-muted    { background: #F1F3F7; color: var(--text-grey); }
+
+/* ---- the four panels ---- */
+
+.sdash-panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--sdash-gap);
+    min-height: 0;
+}
+
+.sdash-col {
+    display: grid;
+    gap: var(--sdash-gap);
+    min-height: 0;
+}
+
+/* Applications get more room than notifications; attendance is sized by
+   its gauge and tasks take whatever is left. */
+.sdash-col-left  { grid-template-rows: minmax(0, 1.45fr) minmax(0, 1fr); }
+.sdash-col-right { grid-template-rows: auto minmax(0, 1fr); }
+
+.sdash-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: white;
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.sdash-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+    padding: 14px 18px 10px;
+}
+
+.sdash-card-head h3 {
+    margin: 0;
+    font-size: clamp(14px, 1.05vw, 16px);
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.sdash-action {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border: 1px solid var(--border-grey);
+    border-radius: 7px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--navy);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.sdash-action:hover {
+    background: var(--light-blue-bg);
+    border-color: var(--navy);
+}
+
+/* The only scrolling container on the page. */
+.sdash-card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    /* The 4px top is headroom, not decoration. This box clips -- overflow-y
+       here, overflow:hidden on the shortcut and quick-action grids -- so a
+       child that lifts on hover moves outside it and has its top edge cut
+       off, which reads as the tile sliding behind the panel heading. The
+       lift is 2px; 4px clears it. */
+    padding: 4px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Scrollbars are hidden everywhere -- see the global rule at the bottom
+   of this file. The panel still scrolls, it just draws no track. */
+
+/* ---- a row inside a panel ---- */
+
+.sdash-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 8px 10px 10px;
+    border: 1px solid var(--border-grey);
+    border-radius: 9px;
+    text-decoration: none;
+    color: var(--text-dark);
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.sdash-row:hover {
+    border-color: var(--navy);
+    background: #FAFBFE;
+}
+
+.sdash-row-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.sdash-row-icon svg { width: 17px; height: 17px; }
+
+.sdash-row-icon.tone-good     { background: #E4F6EC; color: #067A42; }
+.sdash-row-icon.tone-info     { background: #E8F0FD; color: #2456A6; }
+.sdash-row-icon.tone-warn     { background: #FDF1DC; color: #8A5D12; }
+.sdash-row-icon.tone-critical { background: #FDECEA; color: #A8271C; }
+
+.sdash-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sdash-row-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+/* Long references and subtitles truncate rather than wrapping the row
+   into two lines and breaking the panel's rhythm. */
+.sdash-row-sub,
+.sdash-note-text {
+    font-size: 11.5px;
+    color: var(--text-grey);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sdash-row-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.sdash-row-side .sdash-pill { margin-top: 0; align-self: auto; }
+
+.sdash-row-meta {
+    font-size: 11px;
+    color: var(--text-grey);
+    white-space: nowrap;
+}
+
+.sdash-row-meta.tone-critical { color: #A8271C; font-weight: 600; }
+.sdash-row-meta.tone-warn     { color: #8A5D12; font-weight: 600; }
+
+.sdash-row-chevron {
+    flex-shrink: 0;
+    color: #B8C0D0;
+    display: grid;
+    place-items: center;
+}
+
+.sdash-row-chevron svg { width: 15px; height: 15px; }
+
+.sdash-empty {
+    margin: auto 0;
+    padding: 14px 6px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-grey);
+}
+
+/* ---- notification rows ---- */
+
+.sdash-note-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 8px 6px;
+    border-bottom: 1px solid #F1F3F7;
+}
+
+.sdash-note-row:last-child { border-bottom: 0; }
+
+.sdash-note-bell {
+    flex-shrink: 0;
+    color: var(--text-grey);
+    display: grid;
+    place-items: center;
+}
+
+.sdash-note-bell svg { width: 16px; height: 16px; }
+
+.sdash-note-row.is-unread .sdash-note-bell { color: var(--navy); }
+.sdash-note-row.is-unread .sdash-note-text { color: var(--text-dark); font-weight: 500; }
+
+.sdash-note-text { white-space: normal; }
+
+.sdash-unread-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--navy);
+    flex-shrink: 0;
+}
+
+/* ---- attendance gauge ---- */
+
+/* Two real columns rather than a small dial floating beside a short
+   legend -- that left the right half of the card empty. */
+.sdash-attendance-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(12px, 1.6vw, 26px);
+    overflow: visible;
+    padding-top: 4px;
+}
+
+.sdash-gauge-wrap {
+    position: relative;
+    min-width: 0;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.sdash-gauge {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Sits in the mouth of the arc rather than below it. */
+.sdash-gauge-value {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 9%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.sdash-gauge-number {
+    font-size: clamp(22px, 2.3vw, 32px);
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.sdash-gauge-value.tone-good     .sdash-gauge-number { color: #00A857; }
+.sdash-gauge-value.tone-warn     .sdash-gauge-number { color: #C98A12; }
+.sdash-gauge-value.tone-critical .sdash-gauge-number { color: #D0342C; }
+.sdash-gauge-value.tone-none     .sdash-gauge-number { color: var(--text-grey); }
+
+.sdash-gauge-caption {
+    font-size: 11px;
+    color: var(--text-grey);
+}
+
+.sdash-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sdash-legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-dark);
+}
+
+.sdash-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sdash-dot.tone-good     { background: #00BF63; }
+.sdash-dot.tone-warn     { background: #E9B23C; }
+.sdash-dot.tone-critical { background: #D0342C; }
+
+.sdash-note {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-shrink: 0;
+    margin: 0 14px 14px;
+    padding: 10px 12px;
+    border-radius: 9px;
+    font-size: 12px;
+    background: #EEF3FB;
+    color: #2A3B58;
+}
+
+.sdash-note.tone-critical { background: #FDECEA; color: #8E241B; }
+.sdash-note.tone-warn     { background: #FDF1DC; color: #7A5210; }
+
+.sdash-note-icon { flex-shrink: 0; display: grid; place-items: center; }
+.sdash-note-icon svg { width: 16px; height: 16px; }
+.sdash-note a { color: inherit; font-weight: 600; }
+
+/* ---- responsive ----------------------------------------------------
+   The one-screen promise holds where there is genuinely a screen's worth
+   of room. Below that the grid reflows and the page is allowed to scroll
+   again, because five cards and four panels cannot be legible at 900px
+   wide however they are arranged.
+   -------------------------------------------------------------------*/
+
+@media (max-width: 1280px) {
+    .sdash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1100px) {
+    .sdash {
+        height: auto;
+        min-height: 0;
+    }
+
+    .sdash-panels { grid-template-columns: minmax(0, 1fr); }
+    .sdash-col-left,
+    .sdash-col-right { grid-template-rows: auto auto; }
+
+    .sdash-card-body {
+        overflow-y: visible;
+        max-height: none;
+    }
+
+    .sdash-card { min-height: 180px; }
+}
+
+@media (max-width: 820px) {
+    .sdash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+    .sdash-stats { grid-template-columns: minmax(0, 1fr); }
+
+    .sdash-attendance-body {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .sdash-gauge-wrap { width: 100%; max-width: 240px; margin: 0 auto; }
+
+    .sdash-row-side { display: none; }
+}
+
