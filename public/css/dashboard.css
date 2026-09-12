@@ -1,0 +1,2470 @@
+/* ============================================================
+   dashboard.css — Dashboards, charts, the notification feed and the audit log
+
+   Split out of the single uresearch.css on 2026-09-12. The four
+   files are linked in this order and concatenate back to exactly
+   what was there before, so cascade order is unchanged:
+       uresearch.css -> layout.css -> sidebar.css -> dashboard.css
+   Load order matters. Do not reorder the <link> tags.
+   ============================================================ */
+
+/* =====================================================================
+   Student dashboard — welcome banner (<x-core::welcome-banner />).
+
+   A NEW class, not a restyle of .welcome-banner: that one is Norhanis'
+   original (above the marker) and the approver dashboard still uses it,
+   so changing it here would have moved a screen nobody asked to change.
+
+   Every knob is a custom property on the block below. Retuning the
+   banner's colour, height or corner radius is a one-line edit; nothing
+   further down this file hardcodes them.
+   ===================================================================== */
+
+.dash-welcome {
+    --banner-from: #24406F;
+    --banner-to: #33578F;
+    --banner-text: #FFFFFF;
+    --banner-subtle: rgba(255, 255, 255, 0.82);
+    --banner-radius: 14px;
+    --banner-min-height: 144px;
+    --banner-pad-y: 26px;
+    --banner-pad-x: 34px;
+    --banner-art-height: 122px;
+    /* Horizontal space the artwork occupies: its rendered width
+       (122px tall x 240/140 aspect = 209px) plus its 26px right offset,
+       rounded up for breathing room. The text block reserves this so a
+       single-line subtitle never runs underneath the art. */
+    --banner-art-reserve: 250px;
+
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-height: var(--banner-min-height);
+    margin-bottom: 24px;
+    padding: var(--banner-pad-y) var(--banner-pad-x);
+    border-radius: var(--banner-radius);
+    background: linear-gradient(105deg, var(--banner-from) 0%, var(--banner-to) 100%);
+    color: var(--banner-text);
+}
+
+.dash-welcome-text {
+    position: relative; /* above the artwork, so long names never sit under it */
+    z-index: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: var(--banner-art-reserve);
+}
+
+.dash-welcome-title {
+    margin: 0 0 6px 0;
+    font-size: 27px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--banner-text);
+    letter-spacing: -0.2px;
+}
+
+/* Plain inline, no transform and no inline-block: it sits on the heading's
+   own baseline and the only thing separating it from the name is this
+   margin. Nothing here moves it. */
+.dash-welcome-emoji {
+    margin-left: 8px;
+    font-size: 0.85em;
+}
+
+/* Always one line. A `max-width: 52ch` cap used to live here, which is
+   what wrapped the CGS subtitle ("...postgraduate administration today."
+   is 62 characters) onto a second line. Width is now bounded by the text
+   block's reserved space instead, and an over-long subtitle truncates
+   rather than wrapping or pushing the banner sideways. */
+.dash-welcome-sub {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--banner-subtle);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Bottom-aligned and flush with the banner's lower edge, so the books and
+   pot sit ON the bottom border exactly as they do in the design reference. */
+.dash-welcome-art {
+    position: absolute;
+    right: 26px;
+    bottom: 0;
+    height: var(--banner-art-height);
+    width: auto;
+    max-width: 46%;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+/* The art is decoration, not content: below 900px there isn't room for it
+   and the greeting beside it, so it goes rather than squeezing the text. */
+@media (max-width: 900px) {
+    .dash-welcome {
+        --banner-min-height: 0;
+        --banner-pad-x: 24px;
+        --banner-art-reserve: 0px;
+    }
+
+    .dash-welcome-art {
+        display: none;
+    }
+
+    /* The artwork is gone and the column is narrow, so one line is no longer
+       possible without overflowing -- let it wrap again rather than clip. */
+    .dash-welcome-sub {
+        white-space: normal;
+        overflow: visible;
+    }
+}
+
+@media (max-width: 560px) {
+    .dash-welcome-title {
+        font-size: 22px;
+    }
+}
+
+/* =====================================================================
+   Student dashboard — single-screen layout.
+
+   The PAGE never scrolls; individual panel bodies do. .sdash is a grid
+   sized to the viewport minus the fixed chrome above it, so the five
+   stat cards and the four panels always land on one screen.
+
+   --sdash-chrome is that fixed chrome: .main-content-header is 64px and
+   pulls itself up into .main-content's 32px padding with a negative
+   margin, then leaves 24px below it; 32px of padding remains at the
+   bottom. 64 + 24 + 32 = 120.
+
+   The max() floor means very short viewports scroll rather than crushing
+   every panel into illegibility -- squeezing is worse than scrolling.
+   ===================================================================== */
+
+.sdash {
+    --sdash-chrome: 120px;
+    --sdash-floor: 620px;
+    --sdash-gap: 16px;
+
+    /* Load sequence. Nothing waits on a timer: the page is server-rendered,
+       so every figure is already in the HTML at first paint and the content
+       animates straight in. --rise-start exists only as a knob; leave it at
+       0s unless you deliberately want a delay. */
+    --rise-start: 0s;
+    --rise-span: 0.42s;
+    --rise-step: 0.045s;
+
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: var(--sdash-gap);
+    height: max(var(--sdash-floor), calc(100vh - var(--sdash-chrome)));
+    min-height: 0;
+}
+
+/* dvh tracks mobile browser chrome as it hides/shows; vh above is the
+   fallback for anything that doesn't support it. */
+@supports (height: 100dvh) {
+    .sdash {
+        height: max(var(--sdash-floor), calc(100dvh - var(--sdash-chrome)));
+    }
+}
+
+.sdash .dash-welcome {
+    margin-bottom: 0; /* the grid's gap handles spacing now */
+}
+
+/* ---- the five stat cards ---- */
+
+.sdash-stats {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--sdash-gap);
+}
+
+.sdash-stat {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 2px;
+    background: white;
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+    padding: clamp(10px, 1.1vh, 16px) clamp(12px, 1vw, 18px);
+    min-width: 0;
+}
+
+.sdash-stat-top {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+}
+
+.sdash-stat-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: white;
+}
+
+.sdash-stat-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.sdash-stat-label {
+    font-size: clamp(11px, 0.75vw, 12.5px);
+    font-weight: 600;
+    color: var(--text-dark);
+    line-height: 1.25;
+    min-width: 0;
+}
+
+/* Centred, not left-aligned: the icon+label row sits across the top and
+   everything below it is the card's focal point, so it is centred in the
+   space that row defines. Left-aligning left a wide dead gutter to the
+   right of every number. */
+.sdash-stat-value {
+    font-size: clamp(20px, 2vw, 28px);
+    font-weight: 700;
+    color: var(--navy);
+    line-height: 1.15;
+    margin-top: 8px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.sdash-stat-note {
+    font-size: 11.5px;
+    color: var(--text-grey);
+    text-align: center;
+}
+
+/* Icon disc colours. Add a tone here and it is usable from the $cards
+   array in partials/stat-cards.blade.php with no other change. */
+.tone-green  .sdash-stat-icon { background: #00A857; }
+.tone-purple .sdash-stat-icon { background: #6B4FD8; }
+.tone-blue   .sdash-stat-icon { background: #2F6BD8; }
+.tone-orange .sdash-stat-icon { background: #F08A24; }
+.tone-teal   .sdash-stat-icon { background: #17A8B8; }
+
+/* ---- pills, shared by stat cards and application rows ---- */
+
+.sdash-pill {
+    display: inline-block;
+    margin-top: 8px;
+    align-self: stretch;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.pill-good     { background: #E4F6EC; color: #067A42; }
+.pill-info     { background: #E8F0FD; color: #2456A6; }
+.pill-warn     { background: #FDF1DC; color: #8A5D12; }
+.pill-critical { background: #FDECEA; color: #A8271C; }
+.pill-muted    { background: #F1F3F7; color: var(--text-grey); }
+
+/* ---- the four panels ---- */
+
+.sdash-panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--sdash-gap);
+    min-height: 0;
+}
+
+.sdash-col {
+    display: grid;
+    gap: var(--sdash-gap);
+    min-height: 0;
+}
+
+/* Applications get more room than notifications; attendance is sized by
+   its gauge and tasks take whatever is left. */
+.sdash-col-left  { grid-template-rows: minmax(0, 1.45fr) minmax(0, 1fr); }
+.sdash-col-right { grid-template-rows: auto minmax(0, 1fr); }
+
+.sdash-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: white;
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.sdash-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+    padding: 14px 18px 10px;
+}
+
+.sdash-card-head h3 {
+    margin: 0;
+    font-size: clamp(14px, 1.05vw, 16px);
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.sdash-action {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border: 1px solid var(--border-grey);
+    border-radius: 7px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--navy);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.sdash-action:hover {
+    background: var(--light-blue-bg);
+    border-color: var(--navy);
+}
+
+/* The only scrolling container on the page. */
+.sdash-card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    /* The 4px top is headroom, not decoration. This box clips -- overflow-y
+       here, overflow:hidden on the shortcut and quick-action grids -- so a
+       child that lifts on hover moves outside it and has its top edge cut
+       off, which reads as the tile sliding behind the panel heading. The
+       lift is 2px; 4px clears it. */
+    padding: 4px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Scrollbars are hidden everywhere -- see the global rule at the bottom
+   of this file. The panel still scrolls, it just draws no track. */
+
+/* ---- a row inside a panel ---- */
+
+.sdash-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 8px 10px 10px;
+    border: 1px solid var(--border-grey);
+    border-radius: 9px;
+    text-decoration: none;
+    color: var(--text-dark);
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.sdash-row:hover {
+    border-color: var(--navy);
+    background: #FAFBFE;
+}
+
+.sdash-row-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.sdash-row-icon svg { width: 17px; height: 17px; }
+
+.sdash-row-icon.tone-good     { background: #E4F6EC; color: #067A42; }
+.sdash-row-icon.tone-info     { background: #E8F0FD; color: #2456A6; }
+.sdash-row-icon.tone-warn     { background: #FDF1DC; color: #8A5D12; }
+.sdash-row-icon.tone-critical { background: #FDECEA; color: #A8271C; }
+
+.sdash-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sdash-row-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+/* Long references and subtitles truncate rather than wrapping the row
+   into two lines and breaking the panel's rhythm. */
+.sdash-row-sub,
+.sdash-note-text {
+    font-size: 11.5px;
+    color: var(--text-grey);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sdash-row-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.sdash-row-side .sdash-pill { margin-top: 0; align-self: auto; }
+
+.sdash-row-meta {
+    font-size: 11px;
+    color: var(--text-grey);
+    white-space: nowrap;
+}
+
+.sdash-row-meta.tone-critical { color: #A8271C; font-weight: 600; }
+.sdash-row-meta.tone-warn     { color: #8A5D12; font-weight: 600; }
+
+.sdash-row-chevron {
+    flex-shrink: 0;
+    color: #B8C0D0;
+    display: grid;
+    place-items: center;
+}
+
+.sdash-row-chevron svg { width: 15px; height: 15px; }
+
+.sdash-empty {
+    margin: auto 0;
+    padding: 14px 6px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-grey);
+}
+
+/* ---- notification rows ---- */
+
+.sdash-note-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 8px 6px;
+    border-bottom: 1px solid #F1F3F7;
+}
+
+.sdash-note-row:last-child { border-bottom: 0; }
+
+.sdash-note-bell {
+    flex-shrink: 0;
+    color: var(--text-grey);
+    display: grid;
+    place-items: center;
+}
+
+.sdash-note-bell svg { width: 16px; height: 16px; }
+
+.sdash-note-row.is-unread .sdash-note-bell { color: var(--navy); }
+.sdash-note-row.is-unread .sdash-note-text { color: var(--text-dark); font-weight: 500; }
+
+.sdash-note-text { white-space: normal; }
+
+.sdash-unread-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--navy);
+    flex-shrink: 0;
+}
+
+/* ---- attendance gauge ---- */
+
+/* Two real columns rather than a small dial floating beside a short
+   legend -- that left the right half of the card empty. */
+.sdash-attendance-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(12px, 1.6vw, 26px);
+    overflow: visible;
+    padding-top: 4px;
+}
+
+.sdash-gauge-wrap {
+    position: relative;
+    min-width: 0;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.sdash-gauge {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Sits in the mouth of the arc rather than below it. */
+.sdash-gauge-value {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 9%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.sdash-gauge-number {
+    font-size: clamp(22px, 2.3vw, 32px);
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.sdash-gauge-value.tone-good     .sdash-gauge-number { color: #00A857; }
+.sdash-gauge-value.tone-warn     .sdash-gauge-number { color: #C98A12; }
+.sdash-gauge-value.tone-critical .sdash-gauge-number { color: #D0342C; }
+.sdash-gauge-value.tone-none     .sdash-gauge-number { color: var(--text-grey); }
+
+.sdash-gauge-caption {
+    font-size: 11px;
+    color: var(--text-grey);
+}
+
+.sdash-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sdash-legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-dark);
+}
+
+.sdash-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sdash-dot.tone-good     { background: #00BF63; }
+.sdash-dot.tone-warn     { background: #E9B23C; }
+.sdash-dot.tone-critical { background: #D0342C; }
+
+.sdash-note {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-shrink: 0;
+    margin: 0 14px 14px;
+    padding: 10px 12px;
+    border-radius: 9px;
+    font-size: 12px;
+    background: #EEF3FB;
+    color: #2A3B58;
+}
+
+.sdash-note.tone-critical { background: #FDECEA; color: #8E241B; }
+.sdash-note.tone-warn     { background: #FDF1DC; color: #7A5210; }
+
+.sdash-note-icon { flex-shrink: 0; display: grid; place-items: center; }
+.sdash-note-icon svg { width: 16px; height: 16px; }
+.sdash-note a { color: inherit; font-weight: 600; }
+
+/* ---- responsive ----------------------------------------------------
+   The one-screen promise holds where there is genuinely a screen's worth
+   of room. Below that the grid reflows and the page is allowed to scroll
+   again, because five cards and four panels cannot be legible at 900px
+   wide however they are arranged.
+   -------------------------------------------------------------------*/
+
+@media (max-width: 1280px) {
+    .sdash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1100px) {
+    .sdash {
+        height: auto;
+        min-height: 0;
+    }
+
+    .sdash-panels { grid-template-columns: minmax(0, 1fr); }
+    .sdash-col-left,
+    .sdash-col-right { grid-template-rows: auto auto; }
+
+    .sdash-card-body {
+        overflow-y: visible;
+        max-height: none;
+    }
+
+    .sdash-card { min-height: 180px; }
+}
+
+@media (max-width: 820px) {
+    .sdash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+    .sdash-stats { grid-template-columns: minmax(0, 1fr); }
+
+    .sdash-attendance-body {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .sdash-gauge-wrap { width: 100%; max-width: 240px; margin: 0 auto; }
+
+    .sdash-row-side { display: none; }
+}
+
+/* =====================================================================
+   Attendance gauge — animation, legend column and facts.
+   ===================================================================== */
+
+.sdash-gauge { display: block; width: 100%; height: auto; overflow: visible; }
+
+.sdash-gauge-fill.tone-good     { stroke: #00BF63; }
+.sdash-gauge-fill.tone-warn     { stroke: #E9B23C; }
+.sdash-gauge-fill.tone-critical { stroke: #D0342C; }
+.sdash-gauge-fill.tone-none     { stroke: #C7CEDB; }
+
+/* Sweeps from empty to the student's value on load. --arc and --arc-offset
+   are written onto the element by the partial, so the maths stays in one
+   place and CSS only animates between them. */
+.sdash-gauge-fill {
+    stroke-dasharray: var(--arc) var(--arc);
+    stroke-dashoffset: var(--arc);
+    animation: sdash-sweep 0.95s cubic-bezier(0.22, 0.61, 0.36, 1) var(--rise-start, 0s) backwards;
+    animation-fill-mode: forwards;
+}
+
+@keyframes sdash-sweep {
+    to { stroke-dashoffset: var(--arc-offset); }
+}
+
+/* The marker lands as the sweep finishes rather than sitting there from
+   the first frame. */
+.sdash-gauge-marker {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: sdash-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--rise-start, 0s) + 0.7s) backwards;
+}
+
+@keyframes sdash-pop {
+    from { opacity: 0; transform: scale(0.2); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.sdash-gauge-side {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.sdash-legend li {
+    padding: 4px 8px;
+    border-radius: 7px;
+    transition: background-color 0.2s;
+}
+
+/* The band the student is actually in is called out, so the legend says
+   something rather than only labelling colours. */
+.sdash-legend li.is-active {
+    background: #F2F5FA;
+    font-weight: 600;
+}
+
+.sdash-legend-label { min-width: 0; }
+
+.sdash-legend-now {
+    margin-left: auto;
+    padding: 1px 7px;
+    border-radius: 20px;
+    background: var(--navy);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+}
+
+/* Two real figures under the legend, so the right-hand column carries its
+   own weight instead of being three coloured dots in a lot of white. */
+.sdash-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px solid #EFF1F6;
+}
+
+.sdash-facts div { min-width: 0; }
+
+.sdash-facts dt {
+    margin: 0 0 2px;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-grey);
+}
+
+.sdash-facts dd {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+}
+
+.sdash-facts dd span {
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--text-grey);
+}
+
+/* Panels fade up on first paint. Cheap, runs once, and every panel is
+   fully readable at its resting state -- nothing is parked invisible. */
+.sdash-stat,
+.sdash-card {
+    animation: sdash-rise var(--rise-span) cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+
+/* Staggered off --rise-start, so retiming the whole sequence is one edit. */
+.sdash-stats .sdash-stat:nth-child(1) { animation-delay: var(--rise-start); }
+.sdash-stats .sdash-stat:nth-child(2) { animation-delay: calc(var(--rise-start) + 1 * var(--rise-step)); }
+.sdash-stats .sdash-stat:nth-child(3) { animation-delay: calc(var(--rise-start) + 2 * var(--rise-step)); }
+.sdash-stats .sdash-stat:nth-child(4) { animation-delay: calc(var(--rise-start) + 3 * var(--rise-step)); }
+.sdash-stats .sdash-stat:nth-child(5) { animation-delay: calc(var(--rise-start) + 4 * var(--rise-step)); }
+.sdash-panels .sdash-col-left  .sdash-card:nth-child(1) { animation-delay: calc(var(--rise-start) + 3 * var(--rise-step)); }
+.sdash-panels .sdash-col-right .sdash-card:nth-child(1) { animation-delay: calc(var(--rise-start) + 4 * var(--rise-step)); }
+.sdash-panels .sdash-col-left  .sdash-card:nth-child(2) { animation-delay: calc(var(--rise-start) + 5 * var(--rise-step)); }
+.sdash-panels .sdash-col-right .sdash-card:nth-child(2) { animation-delay: calc(var(--rise-start) + 6 * var(--rise-step)); }
+
+@keyframes sdash-rise {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.sdash-stat { transition: box-shadow 0.18s, transform 0.18s; }
+.sdash-stat:hover {
+    box-shadow: 0 6px 18px -10px rgba(40, 75, 128, 0.45);
+    transform: translateY(-2px);
+}
+
+/* =====================================================================
+   No scrollbars anywhere — scrolling still works, nothing draws a track.
+   Applies to the page, every panel body and the sidebar nav alike.
+   ===================================================================== */
+
+html,
+body,
+.sdash-card-body,
+.main-content,
+.sidebar-nav,
+[class*="-scroll"] {
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* legacy Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;                  /* Chrome, Safari, Edge */
+}
+
+/* Someone navigating by keyboard still needs to see where they are, and
+   hiding the bar removes the usual visual cue. */
+.sdash-card-body:focus-visible,
+.sdash-row:focus-visible,
+.sdash-action:focus-visible,
+.sdash-pill:focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sdash-gauge-fill,
+    .sdash-gauge-marker,
+    .sdash-stat,
+    .sdash-card {
+        animation: none;
+    }
+
+    .sdash-gauge-fill { stroke-dashoffset: var(--arc-offset); }
+    .sdash-stat:hover { transform: none; }
+}
+
+/* =====================================================================
+   Skeleton loading placeholders.
+
+   Two behaviours from one piece of markup (partials/skeleton.blade.php):
+
+     default    fades out shortly after paint and hands over to the panel's
+                rise-in animation. This is CSS-only on purpose -- a timed
+                animation always resolves, so the real content can never be
+                left hidden behind a placeholder if scripting fails.
+
+     .is-stuck  holds. Used when the panel's data genuinely could not be
+                read, so the student sees "couldn't load" rather than an
+                empty list that reads as "you have nothing".
+
+   This app renders server-side, so the default case is a paint-smoothing
+   flourish, not a real fetch wait -- the held case is the functional one.
+   ===================================================================== */
+
+.sdash-stat,
+.sdash-card {
+    position: relative; /* containing block for the overlay */
+}
+
+/* Rendered only when a panel's data source failed, so it simply sits there
+   -- there is no timed fade-out, because there was never a load to wait on. */
+.sdash-skeleton {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 18px;
+    background: white;
+    border-radius: inherit;
+}
+
+.skel {
+    display: block;
+    border-radius: 6px;
+    background: #E6EAF2;
+}
+
+.skel-bar    { height: 10px; }
+.skel-sm     { height: 8px; }
+.skel-lg     { height: 010px; height: 20px; }
+.skel-tall   { height: 38px; border-radius: 8px; }
+.skel-circle { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; }
+.skel-square { width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; }
+.skel-pill   { height: 22px; border-radius: 6px; width: 100%; }
+.skel-tag    { width: 62px; flex-shrink: 0; }
+
+/* --- stat card variant --- */
+
+.skel-stat {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 9px;
+    height: 100%;
+}
+
+.skel-stat-top {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.skel-stat .skel-lg { align-self: center; }
+.skel-stat > .skel-bar:not(.skel-lg) { align-self: center; }
+
+/* --- row list variant --- */
+
+.skel-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 26px; /* clears the panel heading */
+}
+
+.skel-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+}
+
+.skel-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* --- gauge variant --- */
+
+.skel-gauge {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 20px;
+    padding-top: 26px;
+}
+
+.skel-gauge-dial {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Half-disc, matching the real dial's footprint. */
+.skel-arc {
+    width: 100%;
+    max-width: 190px;
+    aspect-ratio: 2 / 1;
+    border-radius: 999px 999px 0 0;
+    background: #E6EAF2;
+    mask: radial-gradient(circle at 50% 100%, transparent 52%, #000 52.5%);
+    -webkit-mask: radial-gradient(circle at 50% 100%, transparent 52%, #000 52.5%);
+}
+
+.skel-gauge-side {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+/* --- the "couldn't load" line on a held skeleton --- */
+
+.sdash-skeleton-msg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin: auto 0 0;
+    padding-top: 10px;
+    font-size: 11.5px;
+    color: var(--text-grey);
+    text-align: center;
+}
+
+.sdash-skeleton-msg svg { width: 14px; height: 14px; }
+
+
+
+/* =====================================================================
+   CGS sidebar — the one class its nav adds.
+   ===================================================================== */
+
+/* Shown in place of the Applications tree's children when a CGS role owns
+   no queue yet (Manager CGS and Senior Executive CGS, until the modules
+   that route to them are built). Says so plainly rather than showing an
+   empty panel that reads as broken. */
+.nav-subitem-muted {
+    display: block;
+    color: var(--text-grey);
+    font-style: italic;
+    cursor: default;
+    opacity: 0.8;
+}
+
+
+
+/* =====================================================================
+   CGS dashboard — four rows on one screen.
+
+   The brief is strict: this never scrolls on a desktop viewport, at any
+   height. So unlike the student dashboard there is NO min-height floor to
+   fall back on — the rows are fractional and everything inside them is
+   sized in vh, so the whole thing compresses to fit rather than pushing
+   past the fold.
+
+   Row proportions: banner and the five figures take what they need, then
+   the two panel rows split the remainder 1 : 0.85 — the top row carries
+   the donut and two lists, the bottom row two shorter panels.
+   ===================================================================== */
+
+.sdash-cgs {
+    /* No --sdash-floor: compressing is the requirement here. */
+    grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 0.85fr);
+    height: calc(100vh - var(--sdash-chrome));
+    gap: clamp(8px, 1.1vh, 16px);
+    overflow: hidden;
+}
+
+.sdash-cgs > * { min-height: 0; min-width: 0; }
+
+@supports (height: 100dvh) {
+    .sdash-cgs {
+        height: calc(100dvh - var(--sdash-chrome));
+    }
+}
+
+/* Everything vertical shrinks with the viewport so four rows still fit on
+   a 720px-tall laptop. */
+.sdash-cgs .dash-welcome {
+    --banner-min-height: clamp(84px, 13vh, 132px);
+    --banner-pad-y: clamp(12px, 2vh, 24px);
+    --banner-art-height: clamp(76px, 12vh, 116px);
+}
+
+.sdash-cgs .dash-welcome-title { font-size: clamp(18px, 2.6vh, 26px); }
+.sdash-cgs .dash-welcome-sub   { font-size: clamp(11px, 1.5vh, 14px); }
+
+.sdash-cgs .sdash-stat  { padding: clamp(7px, 1.1vh, 14px) clamp(10px, 0.9vw, 16px); }
+.sdash-cgs .sdash-stat-value { font-size: clamp(17px, 2.7vh, 27px); }
+.sdash-cgs .sdash-stat-note  { font-size: clamp(9.5px, 1.15vh, 11.5px); }
+.sdash-cgs .sdash-stat-icon  { width: clamp(22px, 3.2vh, 30px); height: clamp(22px, 3.2vh, 30px); }
+.sdash-cgs .sdash-pill  { margin-top: clamp(4px, 0.8vh, 8px); padding: clamp(2px, 0.5vh, 4px) 10px; }
+
+.sdash-cgs .sdash-card-head { padding: clamp(8px, 1.3vh, 14px) 16px clamp(4px, 0.8vh, 10px); }
+.sdash-cgs .sdash-card-body { padding: 4px 12px clamp(8px, 1.2vh, 14px); gap: clamp(4px, 0.8vh, 8px); }
+.sdash-cgs .sdash-row       { padding: clamp(5px, 0.9vh, 10px) 8px clamp(5px, 0.9vh, 10px) 10px; }
+.sdash-cgs .sdash-note      { margin: 0 12px clamp(8px, 1.2vh, 14px); padding: clamp(6px, 1vh, 10px) 12px; }
+
+/* ---- the two panel rows ---- */
+
+.cgs-row {
+    display: grid;
+    gap: clamp(8px, 0.9vw, 16px);
+    min-height: 0;
+}
+
+/* Donut | Pending Actions | Attendance Alerts */
+.cgs-row-top    { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.1fr) minmax(0, 1fr); }
+/* Recent Activities | Quick Shortcuts */
+.cgs-row-bottom { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+
+/* ---- stat card figure + delta ---- */
+
+.sdash-stat-figure {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 7px;
+    margin-top: clamp(3px, 0.7vh, 8px);
+}
+
+.sdash-stat-figure .sdash-stat-value { margin-top: 0; }
+
+.sdash-delta {
+    font-size: clamp(9.5px, 1.2vh, 12px);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.sdash-delta.is-up   { color: #067A42; }
+.sdash-delta.is-down { color: #A8271C; }
+
+.tone-red .sdash-stat-icon { background: #D0342C; }
+
+/* ---- workload donut ---- */
+
+.cgs-workload-body {
+    flex-direction: row;
+    align-items: center;
+    gap: clamp(8px, 1.2vw, 18px);
+    overflow: visible;
+}
+
+.cgs-donut-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    width: clamp(86px, 15vh, 140px);
+}
+
+.cgs-donut { display: block; width: 100%; height: auto; }
+
+/* No transform-origin here on purpose. The segments are positioned with
+   stroke-dashoffset inside a single rotated <g>, so nothing needs a
+   per-circle origin -- and setting one made the browser apply the SVG
+   attribute's own origin a second time, rotating each segment about
+   (140,140) and throwing it outside the viewBox. */
+
+.cgs-donut-centre {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    pointer-events: none;
+}
+
+.cgs-donut-label  {
+    font-size: clamp(8px, 1.05vh, 10px);
+    color: var(--text-grey);
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.cgs-donut-number { font-size: clamp(18px, 3vh, 30px); font-weight: 700; color: var(--navy); line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+.cgs-workload-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(4px, 0.9vh, 9px);
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.cgs-workload-legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: clamp(10px, 1.4vh, 12.5px);
+    min-width: 0;
+}
+
+.cgs-legend-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-dark);
+}
+
+.cgs-legend-count {
+    flex-shrink: 0;
+    font-weight: 700;
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.cgs-legend-count span { font-weight: 500; color: var(--text-grey); }
+.cgs-legend-empty { color: var(--text-grey); font-style: italic; }
+
+/* ---- attendance band rows ---- */
+
+.cgs-band-count {
+    flex-shrink: 0;
+    font-size: clamp(12px, 1.9vh, 16px);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.cgs-band-count.tone-good     { color: #067A42; }
+.cgs-band-count.tone-warn     { color: #8A5D12; }
+.cgs-band-count.tone-critical { color: #A8271C; }
+
+/* ---- recent activities ---- */
+
+.cgs-activity {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: clamp(4px, 0.8vh, 8px) 6px;
+    border-bottom: 1px solid #F1F3F7;
+}
+
+.cgs-activity:last-child { border-bottom: 0; }
+
+.cgs-activity-icon {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: clamp(16px, 2.2vh, 20px);
+    height: clamp(16px, 2.2vh, 20px);
+    margin-top: 1px;
+}
+
+.cgs-activity-icon svg { width: 100%; height: 100%; }
+.cgs-activity-icon.tone-good     { color: #067A42; }
+.cgs-activity-icon.tone-critical { color: #A8271C; }
+.cgs-activity-icon.tone-info     { color: #2456A6; }
+
+.cgs-activity-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: clamp(10px, 1.4vh, 12.5px);
+    line-height: 1.45;
+    color: var(--text-dark);
+}
+
+.cgs-activity-time {
+    flex-shrink: 0;
+    font-size: clamp(9px, 1.15vh, 11px);
+    color: var(--text-grey);
+    white-space: nowrap;
+}
+
+/* ---- quick shortcuts ---- */
+
+.cgs-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: clamp(5px, 0.8vh, 10px);
+    overflow: hidden; /* the tiles shrink to fit rather than scrolling */
+}
+
+.cgs-shortcut {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(3px, 0.6vh, 7px);
+    padding: clamp(4px, 0.9vh, 10px) 4px;
+    border: 1px solid var(--border-grey);
+    border-radius: 9px;
+    text-decoration: none;
+    text-align: center;
+    color: var(--text-dark);
+    transition: border-color 0.15s, background-color 0.15s, transform 0.15s;
+}
+
+.cgs-shortcut:hover {
+    border-color: var(--navy);
+    background: #FAFBFE;
+    transform: translateY(-2px);
+}
+
+.cgs-shortcut-icon {
+    display: grid;
+    place-items: center;
+    width: clamp(17px, 2.6vh, 23px);
+    height: clamp(17px, 2.6vh, 23px);
+    color: var(--navy);
+}
+
+.cgs-shortcut-icon svg { width: 100%; height: 100%; }
+
+.cgs-shortcut-label {
+    font-size: clamp(8.5px, 1.15vh, 11px);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+/* ---- responsive ----------------------------------------------------
+   The one-screen rule is a DESKTOP rule. Below 1100px the columns cannot
+   hold three panels legibly however they are compressed, so the grid
+   stacks and the page is allowed to scroll again.
+   -------------------------------------------------------------------*/
+
+@media (max-width: 1400px) {
+    .cgs-row-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+@media (max-width: 1100px) {
+    .sdash-cgs {
+        height: auto;
+        grid-template-rows: none;
+    }
+
+    .cgs-row-top,
+    .cgs-row-bottom { grid-template-columns: minmax(0, 1fr); }
+
+    .sdash-cgs .sdash-card { min-height: 200px; }
+    .sdash-cgs .sdash-card-body { overflow-y: visible; }
+    .cgs-workload-body { flex-direction: column; }
+    .cgs-donut-wrap { width: 160px; }
+}
+
+@media (max-width: 640px) {
+    .cgs-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* =====================================================================
+   Workload donut — draws itself in.
+
+   Each segment grows clockwise from its own start point by animating
+   stroke-dasharray from "0 <circumference>" up to the length it was
+   rendered with. stroke-dashoffset is left alone: it is what positions
+   the segment on the ring, so animating it would slide the slice around
+   instead of growing it.
+
+   The keyframe declares only `from` — the implicit `to` is the element's
+   own stroke-dasharray attribute, so the maths stays in the Blade partial
+   and CSS never needs to know any segment's length.
+   ===================================================================== */
+
+.cgs-donut-seg {
+    animation: cgs-donut-draw 0.62s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+    animation-delay: var(--seg-delay, 0s);
+}
+
+@keyframes cgs-donut-draw {
+    from { stroke-dasharray: 0 var(--circ, 340); }
+}
+
+/* Each legend row arrives with the slice it labels. */
+.cgs-workload-legend li {
+    animation: cgs-legend-in 0.4s ease-out backwards;
+    animation-delay: calc(var(--seg-delay, 0s) + 0.12s);
+}
+
+@keyframes cgs-legend-in {
+    from { opacity: 0; transform: translateX(-6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cgs-donut-seg,
+    .cgs-workload-legend li { animation: none; }
+}
+
+/* Unread count on the sidebar's Notification item, as in both dashboard
+   designs. Pushed to the right edge of the row; hidden with the labels when
+   the sidebar is collapsed, since there is no room for it beside the icon. */
+.nav-badge {
+    margin-left: auto;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #D0342C;
+    color: white;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+html.sidebar-collapsed .sidebar .nav-badge { display: none; }
+
+/* =====================================================================
+   Notification feed (/notifications).
+
+   Uses the same visual language as the dashboards — white cards on the
+   page ground, navy accents, the shared tone colours — but its own
+   classes, so it does not inherit the dashboards' viewport-height grid.
+   ===================================================================== */
+
+.notif-page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding-block: 4px 40px;
+}
+
+.notif-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.notif-heading h2 {
+    margin: 0 0 4px;
+    color: var(--navy);
+    font-size: 22px;
+}
+
+.notif-heading p {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--text-grey);
+}
+
+.notif-heading b { color: var(--text-dark); }
+
+.notif-readall { margin: 0; }
+
+.notif-readall button {
+    margin: 0;
+    padding: 9px 16px;
+    font-size: 13px;
+    background: white;
+    color: var(--navy);
+    border: 1px solid var(--border-grey);
+}
+
+.notif-readall button:hover {
+    background: var(--light-blue-bg);
+    border-color: var(--navy);
+}
+
+/* ---- filters ---- */
+
+.notif-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-grey);
+}
+
+.notif-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 4px;
+    margin-bottom: -1px;
+    margin-right: 16px;
+    border-bottom: 2px solid transparent;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-grey);
+    text-decoration: none;
+}
+
+.notif-filter span {
+    padding: 1px 7px;
+    border-radius: 10px;
+    background: var(--border-grey);
+    color: var(--text-grey);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.notif-filter:hover { color: var(--navy); }
+
+.notif-filter.active {
+    color: var(--navy);
+    border-bottom-color: var(--navy);
+}
+
+.notif-filter.active span {
+    background: var(--navy);
+    color: white;
+}
+
+/* ---- day groups ---- */
+
+.notif-group { margin-bottom: 22px; }
+
+.notif-group-heading {
+    margin: 0 0 8px 2px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-grey);
+}
+
+.notif-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.notif-row-form { margin: 0; }
+
+/* The row is a <button> so that following a notification can POST. Every
+   button default is stripped back to a plain row. */
+.notif-row {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    width: 100%;
+    margin: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--border-grey);
+    border-radius: 10px;
+    background: white;
+    color: var(--text-dark);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+
+.notif-row:hover {
+    background: white;
+    border-color: var(--navy);
+    box-shadow: 0 4px 14px -8px rgba(40, 75, 128, 0.45);
+    transform: translateY(-1px);
+}
+
+/* Unread carries a navy edge and a solid title; read rows recede. */
+.notif-row.is-unread {
+    border-left: 3px solid var(--navy);
+    background: #FCFDFF;
+}
+
+.notif-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+}
+
+.notif-icon svg { width: 18px; height: 18px; }
+
+.notif-icon.tone-good     { background: #E4F6EC; color: #067A42; }
+.notif-icon.tone-info     { background: #E8F0FD; color: #2456A6; }
+.notif-icon.tone-warn     { background: #FDF1DC; color: #8A5D12; }
+.notif-icon.tone-critical { background: #FDECEA; color: #A8271C; }
+
+.notif-body {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.notif-title {
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--text-grey);
+}
+
+.notif-row.is-unread .notif-title {
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+.notif-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    font-size: 11.5px;
+    color: var(--text-grey);
+}
+
+.notif-tag {
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: var(--light-blue-bg);
+    color: var(--navy);
+    font-weight: 600;
+}
+
+.notif-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--navy);
+}
+
+/* ---- empty state ---- */
+
+.notif-empty {
+    padding: 56px 24px;
+    text-align: center;
+    background: white;
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+}
+
+.notif-empty-icon {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    background: var(--light-blue-bg);
+    color: var(--navy);
+}
+
+.notif-empty-icon svg { width: 22px; height: 22px; }
+
+.notif-empty-title {
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.notif-empty p { margin: 0; font-size: 13px; color: var(--text-grey); }
+
+/* ---- pager ---- */
+
+.notif-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 22px;
+}
+
+.notif-page-link {
+    padding: 7px 14px;
+    border: 1px solid var(--border-grey);
+    border-radius: 8px;
+    background: white;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--navy);
+    text-decoration: none;
+}
+
+.notif-page-link:hover { background: var(--light-blue-bg); border-color: var(--navy); }
+
+.notif-page-link.is-disabled {
+    color: var(--text-grey);
+    background: var(--page-bg);
+    cursor: default;
+}
+
+.notif-page-count {
+    font-size: 12px;
+    color: var(--text-grey);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+    .notif-header { flex-direction: column; }
+    .notif-readall, .notif-readall button { width: 100%; }
+    .notif-row { padding: 12px; gap: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .notif-row:hover { transform: none; }
+}
+
+/* =====================================================================
+   Admin dashboard — four rows on one screen, no banner.
+
+   Same compress-don't-scroll contract as the CGS dashboard: no min-height
+   floor, everything vertical in vh. The heading row replaces the banner,
+   so it is deliberately compact.
+   ===================================================================== */
+
+.sdash-admin {
+    grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 0.9fr);
+    height: calc(100vh - var(--sdash-chrome));
+    gap: clamp(8px, 1.1vh, 16px);
+    /* Belt and braces on the one-screen promise: whatever a panel does
+       internally, the grid cannot grow past the height set above and push
+       the bottom row below the fold. */
+    overflow: hidden;
+}
+
+/* Rows must be allowed to shrink below their content, or a tall panel
+   forces the row open and the next one slides off screen. */
+.sdash-admin > * { min-height: 0; min-width: 0; }
+
+@supports (height: 100dvh) {
+    .sdash-admin { height: calc(100dvh - var(--sdash-chrome)); }
+}
+
+.adm-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.adm-header h2 {
+    margin: 0 0 2px;
+    color: var(--navy);
+    font-size: clamp(17px, 2.4vh, 23px);
+}
+
+.adm-header p {
+    margin: 0;
+    font-size: clamp(11px, 1.5vh, 13.5px);
+    color: var(--text-grey);
+}
+
+.adm-generate {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding: clamp(7px, 1.1vh, 11px) clamp(12px, 1vw, 18px);
+    border-radius: 9px;
+    background: var(--navy);
+    color: white;
+    font-size: clamp(11px, 1.4vh, 13px);
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.15s, transform 0.15s;
+}
+
+.adm-generate:hover { background: var(--navy-dark); transform: translateY(-1px); }
+.adm-generate span { display: grid; place-items: center; width: 15px; height: 15px; }
+.adm-generate svg { width: 100%; height: 100%; }
+
+/* Shared vertical compression, same as the CGS dashboard. */
+.sdash-admin .sdash-stat  { padding: clamp(7px, 1.1vh, 14px) clamp(10px, 0.9vw, 16px); }
+.sdash-admin .sdash-stat-value { font-size: clamp(16px, 2.6vh, 26px); }
+.sdash-admin .sdash-stat-note  { font-size: clamp(9px, 1.1vh, 11px); }
+.sdash-admin .sdash-stat-icon  { width: clamp(22px, 3.2vh, 30px); height: clamp(22px, 3.2vh, 30px); }
+.sdash-admin .sdash-card-head  { padding: clamp(8px, 1.3vh, 14px) 16px clamp(4px, 0.8vh, 10px); }
+.sdash-admin .sdash-card-body  { padding: 4px 12px clamp(8px, 1.2vh, 14px); gap: clamp(4px, 0.8vh, 8px); }
+.sdash-admin .sdash-row        { padding: clamp(5px, 0.9vh, 9px) 8px clamp(5px, 0.9vh, 9px) 10px; }
+
+.adm-row-top    { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+.adm-row-bottom { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+
+/* Activity rows are informational, not links, so they do not lift on hover. */
+.adm-activity { cursor: default; }
+.adm-activity:hover { border-color: var(--border-grey); background: white; }
+
+/* ---- system health tiles ---- */
+
+.adm-system-body { gap: clamp(6px, 1vh, 12px) !important; }
+
+.adm-health {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(5px, 0.7vw, 9px);
+    flex-shrink: 0;
+}
+
+.adm-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: clamp(6px, 1vh, 11px) 5px;
+    border: 1px solid var(--border-grey);
+    border-radius: 9px;
+    text-align: center;
+    min-width: 0;
+}
+
+.adm-tile-icon {
+    display: grid;
+    place-items: center;
+    width: clamp(15px, 2.1vh, 19px);
+    height: clamp(15px, 2.1vh, 19px);
+    margin-bottom: 2px;
+}
+
+.adm-tile-icon svg { width: 100%; height: 100%; }
+
+.adm-tile-label {
+    font-size: clamp(8.5px, 1.05vh, 10px);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-grey);
+}
+
+.adm-tile-value {
+    font-size: clamp(11px, 1.55vh, 13.5px);
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.adm-tile-note {
+    font-size: clamp(8px, 1vh, 9.5px);
+    color: var(--text-grey);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.adm-tile.tone-good     .adm-tile-icon { color: #067A42; }
+.adm-tile.tone-info     .adm-tile-icon { color: #2456A6; }
+.adm-tile.tone-warn     .adm-tile-icon { color: #8A5D12; }
+.adm-tile.tone-critical .adm-tile-icon { color: #A8271C; }
+.adm-tile.tone-muted    .adm-tile-icon { color: var(--text-grey); }
+
+.adm-tile.tone-critical { border-color: #F3C9C4; background: #FEF7F6; }
+.adm-tile.tone-critical .adm-tile-value { color: #A8271C; }
+
+/* ---- module mix ---- */
+
+.adm-mix {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    flex: 1 1 auto;
+    padding-top: clamp(4px, 0.8vh, 9px);
+    border-top: 1px solid #EFF1F6;
+}
+
+.adm-mix-title {
+    font-size: clamp(9.5px, 1.2vh, 11.5px);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-grey);
+}
+
+.adm-mix-body {
+    display: flex;
+    align-items: center;
+    gap: clamp(14px, 1.8vw, 28px);
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+/* .adm-donut-wrap is sized once, with the chart container rules below. */
+
+.adm-mix-legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2px, 0.6vh, 6px);
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* A grid, not a flex row. With flex the share bar was `flex: 1` and ate all
+   the slack, so it started at a different x on every row depending on how
+   long that module's name happened to be. Four fixed tracks means the dots,
+   the labels, the bars and the counts each line up down a column. */
+.adm-mix-legend li {
+    display: grid;
+    grid-template-columns: 9px minmax(0, 1fr) minmax(48px, 1.1fr) auto;
+    align-items: center;
+    gap: 9px;
+    font-size: clamp(9px, 1.25vh, 11.5px);
+    min-width: 0;
+    padding: 2px 6px;
+    margin: 0 -6px;
+    border-radius: 6px;
+}
+
+/* ---- status columns ---- */
+
+.adm-chart-body { justify-content: flex-end; }
+
+.adm-bars {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: end;
+    gap: clamp(6px, 0.8vw, 14px);
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 4px;
+}
+
+.adm-bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    height: 100%;
+    justify-content: flex-end;
+}
+
+.adm-bar-value {
+    font-size: clamp(10px, 1.4vh, 13px);
+    font-weight: 700;
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+}
+
+.adm-bar-track {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: flex-end;
+}
+
+.adm-bar-fill {
+    width: 100%;
+    height: var(--h);
+    min-height: 0;
+    border-radius: 5px 5px 0 0;
+    background: var(--bar-colour);
+    animation: adm-bar-grow 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+    animation-delay: var(--bar-delay, 0s);
+}
+
+@keyframes adm-bar-grow {
+    from { height: 0; }
+}
+
+.adm-bar-label {
+    font-size: clamp(8px, 1.05vh, 10px);
+    line-height: 1.25;
+    color: var(--text-grey);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+/* ---- quick actions ---- */
+
+.adm-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    gap: clamp(5px, 0.8vh, 9px);
+    overflow: hidden;
+}
+
+.adm-action {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: clamp(5px, 0.9vh, 10px) clamp(8px, 0.7vw, 12px);
+    border: 1px solid var(--border-grey);
+    border-radius: 9px;
+    text-decoration: none;
+    color: var(--text-dark);
+    min-width: 0;
+    transition: border-color 0.15s, background-color 0.15s, transform 0.15s;
+}
+
+.adm-action:hover {
+    border-color: var(--navy);
+    background: #FAFBFE;
+    transform: translateY(-2px);
+}
+
+.adm-action-icon {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: clamp(24px, 3.4vh, 32px);
+    height: clamp(24px, 3.4vh, 32px);
+    border-radius: 8px;
+    background: var(--light-blue-bg);
+    color: var(--navy);
+}
+
+.adm-action-icon svg { width: 55%; height: 55%; }
+
+.adm-action-text { display: flex; flex-direction: column; min-width: 0; }
+
+.adm-action-label {
+    font-size: clamp(10px, 1.35vh, 12.5px);
+    font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.adm-action-sub {
+    font-size: clamp(8.5px, 1.05vh, 10.5px);
+    color: var(--text-grey);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+@media (max-width: 1200px) {
+    .sdash-admin { height: auto; grid-template-rows: none; }
+    .adm-row-top, .adm-row-bottom { grid-template-columns: minmax(0, 1fr); }
+    .sdash-admin .sdash-card { min-height: 220px; }
+    .sdash-admin .sdash-card-body { overflow-y: visible; }
+}
+
+@media (max-width: 640px) {
+    .adm-health { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .adm-actions { grid-template-columns: minmax(0, 1fr); }
+    .adm-mix-body { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .adm-bar-fill { animation: none; }
+    .adm-generate:hover, .adm-action:hover { transform: none; }
+}
+
+/* =====================================================================
+   Hover lift — layering, globally.
+
+   Anything that rises on hover has to paint above its neighbours while it
+   is raised, or its lifted edge tucks under the next element. Raising
+   z-index only works on a positioned element, hence position: relative.
+
+   Clipping is handled separately, by the top padding on .sdash-card-body:
+   z-index cannot rescue a child from an ancestor's overflow.
+   ===================================================================== */
+
+.sdash-stat,
+.cgs-shortcut,
+.adm-action,
+.notif-row,
+.adm-generate {
+    position: relative;
+    z-index: 0;
+}
+
+.sdash-stat:hover,
+.cgs-shortcut:hover,
+.adm-action:hover,
+.notif-row:hover,
+.adm-generate:hover,
+.sdash-stat:focus-visible,
+.cgs-shortcut:focus-visible,
+.adm-action:focus-visible,
+.notif-row:focus-visible,
+.adm-generate:focus-visible {
+    z-index: 2;
+}
+
+/* =====================================================================
+   Application Overview — a card in its own right, and a legend that uses
+   the width it has.
+   ===================================================================== */
+
+/* Was a bare section separated by a hairline rule, which left it reading as
+   leftover space under the health tiles rather than as its own thing. */
+.adm-mix {
+    border-top: 0;
+    padding: clamp(9px, 1.3vh, 14px) clamp(12px, 1vw, 18px);
+    border: 1px solid var(--border-grey);
+    border-radius: 10px;
+    background: #FBFCFE;
+}
+
+.adm-mix-title { margin-bottom: 7px; }
+
+/* The share bar that fills what used to be a long empty gutter between the
+   module name and its count. Flexible, so it takes exactly the space left
+   over and disappears rather than overflowing when there is none. */
+.adm-share {
+    min-width: 0;
+    height: 6px;
+    border-radius: 3px;
+    background: #E9EDF4;
+    overflow: hidden;
+}
+
+.adm-share-fill {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    transform-origin: left center;
+    animation: adm-share-grow 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+
+@keyframes adm-share-grow {
+    from { transform: scaleX(0); }
+}
+
+/* Below ~1200px the label alone needs the room, so the bar stands down. */
+@media (max-width: 1200px) {
+    .adm-share { display: none; }
+}
+
+/* =====================================================================
+   Chart hover, everywhere.
+
+   Every chart mark carries a native <title> (SVG) or title attribute
+   (HTML) with its full figures, so the detail survives a screen too
+   narrow to show labels. These rules are the visual half: something has
+   to look hoverable for anyone to try hovering it.
+   ===================================================================== */
+
+.cgs-donut-seg,
+.sdash-gauge-fill {
+    cursor: help;
+    transition: stroke-width 0.18s ease, opacity 0.18s ease;
+}
+
+/* Thickening the hovered segment reads instantly and needs no extra
+   element. Both donuts keep enough clearance inside their viewBox for it. */
+.cgs-donut:hover .cgs-donut-seg { opacity: 0.55; }
+.cgs-donut .cgs-donut-seg:hover { opacity: 1; stroke-width: 16; }
+
+.sdash-admin .cgs-donut .cgs-donut-seg:hover { stroke-width: 15.5; }
+
+.sdash-gauge-fill:hover { stroke-width: 20; }
+
+/* Legend rows and health tiles carry the same figures as the marks, so they
+   get the same affordance. */
+.adm-mix-legend li,
+.cgs-workload-legend li,
+.sdash-legend li,
+.adm-tile,
+.adm-bar-col {
+    cursor: help;
+}
+
+.adm-mix-legend li,
+.cgs-workload-legend li {
+    padding: 2px 4px;
+    margin: 0 -4px;
+    border-radius: 6px;
+    transition: background-color 0.15s;
+}
+
+.adm-mix-legend li:hover,
+.cgs-workload-legend li:hover { background: #EEF2F9; }
+
+.adm-tile { transition: border-color 0.15s, background-color 0.15s; }
+.adm-tile:hover { border-color: var(--navy); background: #FAFBFE; }
+
+/* The bar brightens and its number goes navy, so the column you are reading
+   is unambiguous even when the axis labels have been clipped. */
+.adm-bar-col .adm-bar-fill { transition: filter 0.15s, opacity 0.15s; }
+.adm-bars:hover .adm-bar-fill { opacity: 0.55; }
+.adm-bar-col:hover .adm-bar-fill { opacity: 1; filter: brightness(1.08); }
+.adm-bar-col:hover .adm-bar-value { color: var(--navy); }
+
+@media (prefers-reduced-motion: reduce) {
+    .cgs-donut-seg,
+    .sdash-gauge-fill,
+    .adm-share-fill,
+    .adm-bar-col .adm-bar-fill { transition: none; animation: none; }
+}
+
+/* =====================================================================
+   Chart.js containers.
+
+   A Chart.js canvas sizes itself to its parent, so the parent must have a
+   real height — inside these flex/grid panels that means position:relative
+   plus an explicit box, with maintainAspectRatio:false on the chart.
+   ===================================================================== */
+
+/* No max-height here. `max-height: 100%` resolves against a flex parent
+   whose own height is content-derived, which collapsed this box to a few
+   pixels and left the doughnut as a sliver. aspect-ratio plus an explicit
+   width is what actually gives it a square to draw in. */
+.chart-donut-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    align-self: center;
+    width: clamp(96px, 16vh, 150px);
+    aspect-ratio: 1 / 1;
+}
+
+.adm-donut-wrap { width: clamp(84px, 14.5vh, 128px); }
+
+/* Sits in the hole of the doughnut. pointer-events:none so it never steals
+   a hover from the segment underneath it. */
+.chart-donut-centre {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    pointer-events: none;
+    text-align: center;
+}
+
+/* Shown in place of the canvas when there is nothing to plot, so the panel
+   keeps its shape instead of collapsing. */
+.chart-donut-empty {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: clamp(10px, 1.8vh, 16px) solid #EDEFF4;
+}
+
+/* An explicit, bounded height. With maintainAspectRatio:false a Chart.js
+   canvas takes whatever height its parent offers -- and a flex parent with
+   `min-height: 0` inside a scrolling body offers no ceiling, so the canvas
+   grew until it pushed the panel past the fold. */
+.chart-bars-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    width: 100%;
+    height: clamp(104px, 19vh, 220px);
+    min-height: 96px;
+}
+
+/* Belt and braces: a canvas can never exceed the box it was given. */
+.chart-bars-wrap canvas { display: block; max-width: 100%; max-height: 100%; }
+
+/* The doughnut canvas fills its square wrapper exactly. */
+.chart-donut-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+
+/* Audit rows reuse the notification feed's treatment; they are the same
+   shape of content and a second list style would only add noise. */
+.audit-row { cursor: default; }
+.audit-row:hover { transform: none; border-color: var(--border-grey); box-shadow: none; }
+
+.audit-log-name {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: var(--page-bg);
+    border: 1px solid var(--border-grey);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-grey);
+}
+
+/* =====================================================================
+   Sidebar identity card.
+
+   A bordered card holding the avatar, three lines of identity and a
+   separated Sign out row — replacing the loose profile link and log-out
+   nav item that sat in the footer before.
+
+   Collapsed (64px), the text has nowhere to go: only the avatar and the
+   sign-out icon remain, both centred.
+   ===================================================================== */
+
+.sidebar-footer {
+    flex-shrink: 0;
+    border-top: 0;
+    padding: 0 12px 14px;
+}
+
+.sidebar-card {
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+    background: white;
+    overflow: hidden;
+}
+
+/* Scoped to .sidebar so it outranks Norhanis' `.sidebar a { display: block }`
+   (0,1,1), which was flattening this row and stacking the avatar above the
+   text instead of beside it. */
+.sidebar .sidebar-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    text-decoration: none;
+    color: var(--text-dark);
+    min-width: 0;
+    transition: background-color 0.15s;
+}
+
+.sidebar .sidebar-profile:hover { background: var(--light-blue-bg); }
+
+.avatar {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--navy);
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+/* The administrator's card carries the university crest instead of
+   initials, so it must not be tinted or cropped like an initials disc. */
+.avatar-crest {
+    background: white;
+    border: 1px solid var(--border-grey);
+    object-fit: contain;
+    padding: 3px;
+}
+
+.profile-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+/* All three lines truncate rather than wrap: the sidebar is a fixed width
+   and a long name must not push the card out of shape. */
+.profile-name,
+.profile-role,
+.profile-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.profile-name {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-dark);
+    line-height: 1.3;
+}
+
+.profile-role {
+    font-size: 11px;
+    color: var(--text-grey);
+    line-height: 1.3;
+}
+
+.profile-meta {
+    font-size: 10.5px;
+    color: var(--text-grey);
+    line-height: 1.3;
+}
+
+/* "Admin Access" is a standing, not a contact detail, so it is called out
+   in the brand gold rather than left as grey metadata. */
+.profile-meta.is-admin {
+    color: var(--gold);
+    font-weight: 700;
+}
+
+/* Same reason as .sidebar-profile above: the icon and label were stacking. */
+.sidebar .sidebar-signout {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-grey);
+    color: #D0342C;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.15s;
+}
+
+.sidebar .sidebar-signout:hover { background: #FDEEED; }
+
+/* Both halves red. .nav-label carries its own colour elsewhere in the
+   sidebar, so inheriting from the anchor is not enough here, and the icon
+   is stroke="currentColor" so it follows whatever this sets. */
+.sidebar .sidebar-signout,
+.sidebar .sidebar-signout .nav-label,
+.sidebar .sidebar-signout .nav-icon {
+    color: #D0342C;
+}
+
+.sidebar .sidebar-signout .nav-icon {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.sidebar-signout .nav-icon svg { width: 100%; height: 100%; }
+
+/* ---- collapsed: avatar and sign-out icon only ---- */
+
+html.sidebar-collapsed .sidebar-footer { padding: 0 8px 12px; }
+
+html.sidebar-collapsed .sidebar-card {
+    border: 0;
+    background: transparent;
+}
+
+html.sidebar-collapsed .sidebar-profile {
+    justify-content: center;
+    padding: 6px 0;
+    border-radius: 10px;
+}
+
+html.sidebar-collapsed .sidebar-profile .profile-text { display: none; }
+
+html.sidebar-collapsed .avatar { width: 34px; height: 34px; }
+
+html.sidebar-collapsed .sidebar-signout {
+    justify-content: center;
+    padding: 9px 0;
+    margin-top: 4px;
+    border-top: 0;
+    border-radius: 10px;
+}
+
+html.sidebar-collapsed .sidebar-signout .nav-label { display: none; }
+
+/* =====================================================================
+   Chart tooltip.
+
+   Lives on <body>, not inside any panel, so nothing can clip it — a
+   Chart.js tooltip drawn on the canvas stops at the canvas edge and sits
+   on top of the chart it is describing. Positioned from JS; see
+   dashboard/partials/chartjs.blade.php.
+   ===================================================================== */
+
+.chart-tip {
+    position: absolute;
+    z-index: 9999;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 260px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    background: #23283A;
+    color: #E4E8F2;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 11.5px;
+    line-height: 1.35;
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+    /* Never intercept the pointer: the chart underneath must keep receiving
+       the hover that is producing this tooltip in the first place. */
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.chart-tip.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.chart-tip-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #FFFFFF;
+}
+
+.chart-tip-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+}
+
+.chart-tip-swatch {
+    flex-shrink: 0;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chart-tip { transition: none; }
+}
+
+/* Hovering a legend row lights it, matching the donut's own hover. */
+.adm-mix-legend li:hover { background: #EFF3FA; }
+
+/* Column headings for the legend grid — no text, just alignment: the bar
+   track and the count column line up with every row below them. */
+.adm-mix-legend .cgs-legend-label {
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+/* The dashboard's notification rows are submit buttons, not divs: following
+   one marks it read, which is a state change. Everything a <button> brings
+   with it is stripped back so the row looks exactly as it did. */
+.sdash-note-form { margin: 0; }
+
+button.sdash-note-row {
+    width: 100%;
+    margin: 0;
+    background: none;
+    border: 0;
+    border-bottom: 1px solid #F1F3F7;
+    border-radius: 6px;
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+button.sdash-note-row:last-child { border-bottom: 0; }
+
+.sdash-note-form:last-child button.sdash-note-row { border-bottom: 0; }
+
+button.sdash-note-row:hover { background: #F6F8FC; }
+
+button.sdash-note-row:focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: -2px;
+}
