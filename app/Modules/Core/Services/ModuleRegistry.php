@@ -44,6 +44,25 @@ class ModuleRegistry
             ?? throw new InvalidArgumentException("No module registered for module_type '{$key}'.");
     }
 
+    /**
+     * The display name for a module_type, for rows read back from the
+     * database rather than handed to us by a registered module.
+     *
+     * `applications.module_type` is permanent and outlives any one module:
+     * a teammate can rename a class, hand a module over, or comment out a
+     * registration, and the rows they already created still have to render.
+     * Falling back to a readable form of the key means an unregistered
+     * module shows as "Ga extension" rather than throwing on a dashboard.
+     *
+     * Three call sites derived this separately before it lived here.
+     */
+    public function labelFor(string $key): string
+    {
+        return $this->has($key)
+            ? $this->get($key)->label()
+            : ucfirst(str_replace('_', ' ', $key));
+    }
+
     /** @return array<string, WorkflowModule> */
     public function all(): array
     {

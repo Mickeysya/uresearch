@@ -697,14 +697,29 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
 - [ ] `tests/` does not exist, though `composer.json` maps `Tests\` to it.
       Create it, or drop the `autoload-dev` entry.
 - [ ] Password reset UI — the `password_reset_tokens` table exists, no screens.
-- [ ] **Core now names a module directly, for the first time.**
-      `Services\StudentDashboard` imports Nureen's `AttendanceRecord` and
-      `AttendanceRiskEvaluator`; everywhere else Core goes through
-      `ModuleRegistry`, which is what keeps the folder system conflict-free.
-      It is guarded with `class_exists()` so a missing module degrades to a
-      held skeleton rather than a fatal, but the clean fix is a
-      `ProvidesDashboardPanels` contract. Worth doing before a second module
-      wants a dashboard panel.
+- [x] **Fixed: Core named a module directly.** All three dashboard services
+      imported Nureen's `AttendanceRecord` / `AttendanceRiskEvaluator` behind
+      a `class_exists()` guard — Core reaching into a teammate's folder, which
+      is the one thing the folder system exists to prevent.
+      Core now declares `Contracts\SuppliesAttendance` and hands out
+      `Support\AttendanceReading` (a readonly DTO, so Core never holds another
+      module's Eloquent model); Nureen implements it in
+      `Support\AttendanceProvider` and binds it from her own `ModuleProvider`.
+      `grep 'App\Modules\(Nureen\|Norhanis\|…)' app/Modules/Core` now returns
+      nothing but one explanatory comment. Degradation is unchanged: nothing
+      bound means the attendance panels hold their skeletons.
+      The same pattern is the template for the next module that wants a panel.
+- [x] **Deduplicated the three dashboard services.**
+      `safely()`, `unavailable()`, the per-request memo and `withTrend()` were
+      written out identically in `StudentDashboard`, `CgsDashboard` and
+      `AdminDashboard`, and had begun to drift — `CgsDashboard::latestRecords()`
+      and `AdminDashboard::latestAttendance()` were the same query under two
+      names. Now `Services\Concerns\BuildsPanels`. The three services lost 148
+      lines between them with every figure unchanged.
+      Also: `ModuleRegistry::labelFor()` replaces three copies of the
+      "registered module label, else prettify the key" fallback, and
+      `AttendanceRecord::latestPerStudent()` replaces three hand-built copies
+      of the same self-join (CGS dashboard, admin average, at-risk list).
 - [ ] **Seed demo data in `DatabaseSeeder`.** A teammate running `./setup.sh`
       gets 11 accounts and empty dashboards: no attendance rows, nothing in a
       CGS queue, no notifications. Demo data was created locally during

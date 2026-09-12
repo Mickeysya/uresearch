@@ -4,8 +4,9 @@ namespace App\Modules\Core\Services;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
-use App\Modules\Nureen\Models\AttendanceRecord;
-use App\Modules\Nureen\Support\AttendanceRiskEvaluator;
+use App\Modules\Core\Services\Concerns\BuildsPanels;
+use App\Modules\Core\Services\Concerns\ReadsAttendance;
+use App\Modules\Core\Support\AttendanceReading;
 use Illuminate\Support\Collection;
 
 /**
@@ -15,95 +16,58 @@ use Illuminate\Support\Collection;
  * named method you can change in isolation -- swap tasks() for a real
  * deadlines table later and no view, route or controller changes.
  *
- * ONE CROSS-MODULE REFERENCE, deliberate and guarded: attendance belongs to
- * app/Modules/Nureen, and Core otherwise never names a module directly (it
- * goes through ModuleRegistry). The dashboard needs attendance figures and
- * there is no registry hook for "panel data" yet, so this reaches for
- * Nureen's models behind hasAttendanceModule(). If that module is ever
- * removed the dashboard degrades to an empty attendance panel instead of
- * fataling. Worth replacing with a ProvidesDashboardPanels contract when a
- * second module wants a panel -- see TODO.md.
+ * NO CROSS-MODULE REFERENCES. Attendance belongs to app/Modules/Nureen, and
+ * this class used to import its Eloquent models directly behind a
+ * class_exists() guard -- the one place Core named another folder. It now
+ * asks for Core\Contracts\SuppliesAttendance, which Nureen implements and
+ * binds. If no module supplies attendance the panel holds its skeleton, the
+ * same degradation as before, with the dependency pointing the right way.
  */
 class StudentDashboard
 {
-    /**
-     * Panels whose data could not be read this request, keyed by panel name.
-     * The view renders a held skeleton for these rather than an empty state --
-     * "nothing to show" and "could not load" mean different things to a
-     * student looking at their own record.
-     *
-     * @var array<string, true>
-     */
-    protected array $failed = [];
+    /** safely(), remember(), markUnavailable(), unavailable(), withTrend(). */
+    use BuildsPanels;
 
-    /** Per-request memo, so three panels asking for attendance is one query. */
-    protected array $cache = [];
+    /** attendanceSource() — the module supplying attendance, or null. */
+    use ReadsAttendance;
 
     public function __construct(protected User $student) {}
-
-    /**
-     * Run a panel's query, and if it throws, mark the panel unavailable and
-     * fall back rather than 500-ing the whole dashboard. One dead module or
-     * one bad query should cost that panel, not the page.
-     *
-     * @template T
-     * @param  callable(): T  $fn
-     * @param  T  $fallback
-     * @return T
-     */
-    protected function safely(string $panel, callable $fn, mixed $fallback): mixed
-    {
-        try {
-            return $fn();
-        } catch (\Throwable $e) {
-            $this->failed[$panel] = true;
-            report($e);
-
-            return $fallback;
-        }
-    }
-
-    /** @return array<string, true> */
-    public function unavailable(): array
-    {
-        return $this->failed;
-    }
 
     /* ---------------------------------------------------------------
      | The five stat cards
      |---------------------------------------------------------------*/
 
     /** Latest attendance record, or null if none has been uploaded. */
-    public function attendance(): ?AttendanceRecord
+    public function attendance(): ?AttendanceReading
     {
-        // Cached: three separate panels ask for this in one request.
-        if (array_key_exists('attendance', $this->cache)) {
-            return $this->cache['attendance'];
-        }
+        // Memoised: three separate panels ask for this in one request.
+        return $this->remember('attendance', function () {
+            $source = $this->attendanceSource();
 
-        if (! $this->hasAttendanceModule()) {
-            // Not an error -- the module simply is not installed -- but the
-            // panel still has nothing real to draw, so hold the skeleton.
-            $this->failed['attendance'] = true;
+            if (! $source) {
+                // Not an error -- no module supplies attendance -- but the
+                // panel still has nothing real to draw, so hold the skeleton
+                // rather than showing an empty state.
+                $this->markUnavailable('attendance');
 
-            return $this->cache['attendance'] = null;
-        }
+                return null;
+            }
 
-        return $this->cache['attendance'] = $this->safely('attendance', fn () => AttendanceRecord::where('student_id', $this->student->id)
-            ->orderByDesc('period_end')
-            ->first(), null);
+            return $this->safely('attendance', fn () => $source->latestFor($this->student), null);
+        });
     }
 
     /** Straight-line projection of the attendance trend, or null. */
     public function predictedAttendance(): ?float
     {
-        $latest = $this->attendance();
+        $source = $this->attendanceSource();
 
-        if (! $latest) {
+        // No source, or nothing on file yet, means there is no trend to draw.
+        if (! $source || ! $this->attendance()) {
             return null;
         }
 
-        return $this->safely('attendance', fn () => AttendanceRiskEvaluator::project($latest), null);
+        return $this->safely('attendance', fn () => $source->projectionFor($this->student), null);
     }
 
     public function activeApplications(): int
@@ -237,8 +201,4 @@ class StudentDashboard
             ->exists();
     }
 
-    protected function hasAttendanceModule(): bool
-    {
-        return class_exists(AttendanceRecord::class);
-    }
 }

@@ -4,11 +4,12 @@ namespace App\Modules\Core\Services;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
+use App\Modules\Core\Contracts\SuppliesAttendance;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\Concerns\BuildsPanels;
+use App\Modules\Core\Services\Concerns\ReadsAttendance;
 use App\Modules\Core\Support\Role;
-use App\Modules\Nureen\Models\AttendanceRecord;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Everything the CGS staff dashboard puts on screen.
@@ -24,37 +25,13 @@ use Illuminate\Support\Facades\DB;
  */
 class CgsDashboard
 {
-    /** @var array<string, true> */
-    protected array $failed = [];
+    /** safely(), remember(), markUnavailable(), unavailable(), withTrend(). */
+    use BuildsPanels;
 
-    /** @var array<string, mixed> */
-    protected array $cache = [];
+    /** attendanceSource() — the module supplying attendance, or null. */
+    use ReadsAttendance;
 
     public function __construct(protected User $staff) {}
-
-    /**
-     * @template T
-     * @param  callable(): T  $fn
-     * @param  T  $fallback
-     * @return T
-     */
-    protected function safely(string $panel, callable $fn, mixed $fallback): mixed
-    {
-        try {
-            return $fn();
-        } catch (\Throwable $e) {
-            $this->failed[$panel] = true;
-            report($e);
-
-            return $fallback;
-        }
-    }
-
-    /** @return array<string, true> */
-    public function unavailable(): array
-    {
-        return $this->failed;
-    }
 
     /* ---------------------------------------------------------------
      | The five headline figures
@@ -68,7 +45,7 @@ class CgsDashboard
                 ->when($from, fn ($q) => $q->where('submitted_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('submitted_at', '<', $to))
                 ->count()
-        ), ['count' => 0, 'delta' => null]);
+        ), $this->noTrend());
     }
 
     /** @return array{count: int, delta: ?float} */
@@ -79,7 +56,7 @@ class CgsDashboard
                 ->when($from, fn ($q) => $q->where('submitted_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('submitted_at', '<', $to))
                 ->count()
-        ), ['count' => 0, 'delta' => null]);
+        ), $this->noTrend());
     }
 
     /** @return array{count: int, delta: ?float} */
@@ -103,7 +80,7 @@ class CgsDashboard
                 ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('created_at', '<', $to))
                 ->count()
-        ), ['count' => 0, 'delta' => null]);
+        ), $this->noTrend());
     }
 
     /* ---------------------------------------------------------------
@@ -179,14 +156,16 @@ class CgsDashboard
     {
         $empty = ['bands' => collect(), 'belowThreshold' => 0, 'total' => 0];
 
-        if (! class_exists(AttendanceRecord::class)) {
-            $this->failed['attendance'] = true;
+        $source = $this->attendanceSource();
+
+        if (! $source) {
+            $this->markUnavailable('attendance');
 
             return $empty;
         }
 
-        return $this->safely('attendance', function () {
-            $latest = $this->latestRecords();
+        return $this->safely('attendance', function () use ($source) {
+            $latest = $this->latestRecords($source);
 
             $bands = collect(StudentDashboard::attendanceBands())
                 ->map(fn ($band) => [
@@ -224,17 +203,13 @@ class CgsDashboard
         return $this->safely('activity', function () use ($limit) {
             $registry = app(ModuleRegistry::class);
 
-            $label = function (string $key) use ($registry) {
-                return $registry->has($key) ? $registry->get($key)->label() : ucfirst(str_replace('_', ' ', $key));
-            };
-
             $decisions = ApprovalHistory::with('application.student', 'approver')
                 ->latest('created_at')
                 ->limit($limit)
                 ->get()
                 ->filter(fn ($h) => $h->application && $h->application->student)
                 ->map(fn ($h) => [
-                    'text' => $h->application->student->name.'\'s '.$label($h->application->module_type)
+                    'text' => $h->application->student->name.'\'s '.$registry->labelFor($h->application->module_type)
                         .' application has been '.$h->decision.' by '.($h->approver->name ?? 'an approver').'.',
                     'at' => $h->created_at,
                     'tone' => $h->decision === 'rejected' ? 'critical' : 'good',
@@ -249,7 +224,7 @@ class CgsDashboard
                 ->get()
                 ->filter(fn ($a) => $a->student)
                 ->map(fn ($a) => [
-                    'text' => $a->student->name.' submitted a new '.$label($a->module_type).'.',
+                    'text' => $a->student->name.' submitted a new '.$registry->labelFor($a->module_type).'.',
                     'at' => $a->submitted_at,
                     'tone' => 'info',
                     'icon' => 'doc',
@@ -296,49 +271,16 @@ class CgsDashboard
                 ->when($from, fn ($q) => $q->where('updated_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('updated_at', '<', $to))
                 ->count()
-        ), ['count' => 0, 'delta' => null]);
+        ), $this->noTrend());
     }
 
     /**
-     * Run a count three ways: all time (the headline), this month, and last
-     * month (the "vs last month" delta).
+     * The most recent attendance reading for each student, one each.
      *
-     * Returns a null delta rather than a fake 0% when last month had nothing
-     * to compare against — a brand-new portal has no trend, and showing
-     * "↑ 0%" would imply it measured one.
-     *
-     * @param  callable(?\Illuminate\Support\Carbon, ?\Illuminate\Support\Carbon): int  $counter
-     * @return array{count: int, delta: ?float}
+     * @return Collection<int, \App\Modules\Core\Support\AttendanceReading>
      */
-    protected function withTrend(callable $counter): array
+    protected function latestRecords(SuppliesAttendance $source): Collection
     {
-        $startOfThis = now()->startOfMonth();
-        $startOfLast = now()->subMonthNoOverflow()->startOfMonth();
-
-        $total = $counter(null, null);
-        $thisMonth = $counter($startOfThis, null);
-        $lastMonth = $counter($startOfLast, $startOfThis);
-
-        $delta = $lastMonth > 0
-            ? round((($thisMonth - $lastMonth) / $lastMonth) * 100, 1)
-            : null;
-
-        return ['count' => $total, 'delta' => $delta];
-    }
-
-    /** The most recent attendance record for each student, one row each. */
-    protected function latestRecords(): Collection
-    {
-        if (array_key_exists('latestRecords', $this->cache)) {
-            return $this->cache['latestRecords'];
-        }
-
-        $newest = AttendanceRecord::select('student_id', DB::raw('MAX(period_end) as max_period_end'))
-            ->groupBy('student_id');
-
-        return $this->cache['latestRecords'] = AttendanceRecord::joinSub($newest, 'latest', function ($join) {
-            $join->on('attendance_records.student_id', '=', 'latest.student_id')
-                ->on('attendance_records.period_end', '=', 'latest.max_period_end');
-        })->get(['attendance_records.*']);
+        return $this->remember('latestRecords', fn () => $source->latestPerStudent());
     }
 }
