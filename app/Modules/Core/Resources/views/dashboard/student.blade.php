@@ -3,10 +3,8 @@
 @section('title', 'Dashboard')
 
 @section('content')
-    <div class="welcome-banner">
-        <h2>Welcome, {{ auth()->user()->name }}</h2>
-        <p>{{ auth()->user()->roleLabel() }}@if (auth()->user()->programme) &middot; {{ auth()->user()->programme }}@endif</p>
-    </div>
+    {{-- Text and artwork are both props — see the component for every knob. --}}
+    <x-core::welcome-banner />
 
     <div class="stat-cards-row">
         <div class="stat-card accent-gold">
