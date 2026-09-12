@@ -49,6 +49,31 @@ final class Role
         ];
     }
 
+    /**
+     * The Centre for Graduate Studies desk — the four roles that share the CGS
+     * sidebar and the CGS dashboard.
+     *
+     * Deliberately NOT the same as "everyone who is not a student": the Dean,
+     * the Chair, the Academic Executive and the Registry all approve things
+     * too, but they are not CGS staff and do not want CGS's screens.
+     *
+     * @return array<int, string>
+     */
+    public static function cgsTeam(): array
+    {
+        return [
+            self::NON_EXEC_CGS,
+            self::SENIOR_EXEC_CGS,
+            self::MANAGER_CGS,
+            self::SENIOR_DIRECTOR_CGS,
+        ];
+    }
+
+    public static function isCgs(string $role): bool
+    {
+        return in_array($role, self::cgsTeam(), true);
+    }
+
     public static function label(string $role): string
     {
         return match ($role) {

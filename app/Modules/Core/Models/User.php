@@ -61,6 +61,12 @@ class User extends Authenticatable
         return $this->role === Role::STUDENT;
     }
 
+    /** True for the four Centre for Graduate Studies staff roles. */
+    public function isCgs(): bool
+    {
+        return Role::isCgs($this->role);
+    }
+
     public function roleLabel(): string
     {
         return Role::label($this->role);
