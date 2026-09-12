@@ -40,6 +40,42 @@ class AttendanceRecord extends Model
     }
 
     /**
+     * Record one student's figures for one period, replacing that period if
+     * it is already on file.
+     *
+     * The lookup uses whereDate() rather than a plain equality on the raw
+     * string, and that is load-bearing: the `date` cast writes `period_end`
+     * with a zeroed time, so a bare `where('period_end', '2026-08-31')`
+     * compares "2026-08-31" against "2026-08-31 00:00:00". MySQL coerces the
+     * two and matches, which is why re-uploading appeared to work; any driver
+     * that does not coerce misses the match, tries to insert, and hits the
+     * unique(student_id, period_end) index -- a 500 that rolls back the whole
+     * upload rather than updating one row. whereDate() compiles per driver
+     * and matches on either.
+     *
+     * Lives on the model because "a period is replaced, not duplicated" is a
+     * promise about this table, and the upload screen is not the only thing
+     * that will eventually write to it.
+     */
+    public static function recordPeriod(int $studentId, string $periodEnd, int $attended, int $total): self
+    {
+        $record = static::query()
+            ->where('student_id', $studentId)
+            ->whereDate('period_end', $periodEnd)
+            ->first()
+            ?? new static(['student_id' => $studentId, 'period_end' => $periodEnd]);
+
+        // percentage is recomputed from these two by the saving hook above --
+        // never taken from the sheet.
+        $record->fill([
+            'sessions_attended' => $attended,
+            'sessions_total' => $total,
+        ])->save();
+
+        return $record;
+    }
+
+    /**
      * One row per student: their most recent period, whenever it was.
      *
      * "How is each student doing right now" is the question behind the

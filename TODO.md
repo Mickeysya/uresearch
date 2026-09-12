@@ -17,7 +17,7 @@ as the work it describes.
 | Database notifications (in-app feed + unread count) | done |
 | Norhanis — Travel | done · reference implementation |
 | Norhanis — Publication · Claims · RPD | not started |
-| Nureen — GA Extension · Attendance · Supervision · Certification | built; 2 small scope gaps — see below |
+| Nureen — GA Extension · Attendance · Supervision · Certification | done · matches `docs/scope/nureen.md` |
 | Hani — Examiner pool + Nomination | done |
 | Hani — Conflict detection T2 · Re-viva | not started |
 | CGS dashboard (5 stat cards + 5 live panels) | done |
@@ -28,7 +28,7 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | 18, covering the engine, the seams, the CSP and derived rules |
+| Automated tests | 29, covering the engine, the seams, the CSP, the import and Nureen’s chains |
 | **Runs end to end** | yes — verified 2026-09-09 |
 
 ---
@@ -341,20 +341,48 @@ query; there is no placeholder data in the views.
         queued) — fires once, on the transition into at-risk, not on every
         upload
   - [x] CGS "At-Risk" dashboard (`/attendance/at-risk`)
+  - [x] **Downloadable template** (`/attendance/template`, .xlsx or
+        `?format=csv`). The importer demands an exact header row and the only
+        way to learn that was to get it wrong; CGS now starts from a correct
+        sheet with two filled-in examples. Both formats and the importer's own
+        header check read `Support\AttendanceSheet::COLUMNS`, so the template
+        cannot drift from what upload() accepts — there is a test that
+        downloads the template and feeds it straight back.
+  - [x] **Import hardening.** `period_end` is parsed through
+        `AttendanceSheet::parseDate()`, which accepts ISO, the slashed and
+        dotted forms Excel writes when a CSV is re-saved, .xlsx date cells and
+        Excel serial numbers — and rejects `31/13/2026` rather than rolling it
+        over. Slashed dates are read day-first, matching every date the portal
+        displays. Rows are also checked for `sessions_total > 0` and
+        `sessions_attended <= sessions_total`.
+  - [x] **Skipped rows say why.** The upload used to report a bare count, so a
+        file that half-worked gave no clue which line to open. Each skipped row
+        now names its sheet line and the reason, the first five are shown, and
+        it renders as a *warning* — the good rows are saved either way.
+        Needed a new `.message-warning` (in `layout.css`; `uresearch.css` is
+        Norhanis' and is not edited in place) and a third branch in
+        `core::partials.flash`.
+  - [x] **Fixed: re-uploading a period could 500 and roll back the whole
+        upload.** `updateOrCreate` matched on the bare date string while the
+        `date` cast writes `period_end` with a zeroed time, so the match relied
+        on MySQL coercing `'2026-08-31'` to `'2026-08-31 00:00:00'`. Where that
+        coercion does not happen the lookup misses, the insert hits
+        `unique(student_id, period_end)`, and the transaction takes every good
+        row down with it. Now `AttendanceRecord::recordPeriod()`, which looks
+        up with `whereDate()` — compiled per driver. Found by the test, not in
+        production.
   - [x] Attendance appeal workflow (`attendance_appeal`, single stage to
         Non-Executive CGS), reachable from a student's "My Attendance" page
 
 - [~] **Supervision** — supervisor appointment requests
   - [x] Request → Supervisor → CGS eligibility review
-  - [ ] **Gap against `nureen.md` Module 3.** The scope reads "Student submits
-        request *with required documentation*. System checks completeness and
-        forwards to the designated Supervisor." `SupervisionController::store()`
-        validates only `requested_supervisor_id` and `justification`; there is
-        no upload and `supervision_details` has no document. The "completeness
-        check" is currently field validation only. Add a
-        `DocumentStore::rules(required: true)` field the way GA Extension does
-        — that module is the worked example, so this is a small edit, not new
-        machinery.
+  - [x] **Closed: required documentation** (`nureen.md` Module 3 asks for
+        "Student submits request *with required documentation*"). The form now
+        takes a mandatory supporting document through `DocumentStore`, so it
+        lands on the private disk under a random name and is served back only
+        by the authorised download route. No migration: uploads belong in
+        `application_documents`, not on the detail table. The supervisor's
+        queue eager-loads them, so the shared queue partial lists the file.
   - [x] Specific feedback on rejection (the standard remarks field)
   - [x] Reminder escalation when an approval stalls
         (`supervision:remind-stalled`, scheduled daily at 08:00; tracks
@@ -377,15 +405,13 @@ query; there is no placeholder data in the views.
       `AttendanceRiskEvaluator` gained `project()` for the predicted figure.
 
 - [~] **GA/GRA Certification Letter**
-  - [ ] **Gap against `nureen.md` Module 4.** The scope reads "generate,
-        format, **and dispatch** the official PDF certification letter, which
-        the student can instantly download." Generation, storage and download
-        all work. Dispatch does not: the student gets the standard
-        `ApplicationDecided` mail, which announces the approval but carries no
-        attachment. Either attach the PDF in a certification-specific
-        notification, or reword the scope to "notifies the student, who
-        downloads it" — the second is defensible, but it should be a decision
-        rather than a silent difference between the report and the code.
+  - [x] **Closed: the letter is now dispatched** (`nureen.md` Module 4 asks
+        for "generate, format, **and dispatch**"). `Notifications\CertificationIssued`
+        emails the student with the PDF attached from the private disk, and
+        also writes to the in-app feed. The letter itself stays an
+        `ApplicationDocument` behind the authorised route — the email is a
+        copy, not the record — and a missing file degrades to a mail without
+        an attachment rather than a failed job.
   - [x] Field completeness check (validation), GA vs GRA declared by the
         student and checked by CGS at the `cgs_verify` stage
   - [x] Approver endorsement stage (Senior Director CGS, `senior_director`)
@@ -739,6 +765,21 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       the page still returns 200 and the browser just refuses to run it — so
       `ContentSecurityPolicyTest` asserts every inline block on every screen
       carries the nonce, and that no page reintroduces an inline handler.
+- [x] **Chart.js and its datalabels plugin now ship from `public/js`,
+      not a CDN (2026-09-12).** Same files, same versions, minified from npm.
+      Three reasons, in order of weight:
+      **(1)** `script-src` names no origin at all now — an allow-listed CDN is
+      a standing permission to run whatever that CDN serves, and jsdelivr
+      hosts every package on npm. Nonce-only is the strict form, and it is
+      what Chrome's own CSP guidance recommends over an allow-list.
+      **(2)** The demo works on a flaky connection or none at all — worth
+      having before the FYP presentation.
+      **(3)** It ended a console warning: Chart.js's minified build points at
+      a source map, DevTools requested it, and `connect-src 'self'` correctly
+      refused. The map is 931 KB — four and a half times the library, for
+      debugging Chart.js internals — so it is not shipped; the directive is
+      stripped instead, with a note in the file saying how to restore it.
+      The portal now loads **zero** off-origin resources.
 - [ ] Password reset UI — the `password_reset_tokens` table exists, no screens.
 - [x] **Fixed: Core named a module directly.** All three dashboard services
       imported Nureen's `AttendanceRecord` / `AttendanceRiskEvaluator` behind

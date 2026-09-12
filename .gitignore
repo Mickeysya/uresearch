@@ -10,6 +10,11 @@
 # write every upload and generated PDF here.
 /storage/app/private
 /storage/framework/cache/data/*
+# maatwebsite/excel's scratch space, written while building the attendance
+# template and while reading an upload.
+/storage/framework/cache/laravel-excel/*
+# Storage::fake() in the test suite.
+/storage/framework/testing
 /storage/framework/sessions/*
 /storage/framework/views/*
 /storage/logs/*

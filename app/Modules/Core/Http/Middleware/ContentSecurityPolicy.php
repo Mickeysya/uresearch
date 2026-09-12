@@ -10,6 +10,13 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Sends the Content-Security-Policy header on every HTML response.
  *
+ * NO HOST ALLOW-LIST. script-src names no origin at all: Chart.js and its
+ * datalabels plugin are served from public/js rather than a CDN, so the only
+ * script this page will run is its own, or an inline block carrying this
+ * request's nonce. That is the "strict CSP" form -- an allow-listed CDN is a
+ * standing permission to run whatever that CDN serves, and jsdelivr hosts
+ * every package on npm.
+ *
  * The portal had no CSP at all, which meant that if a single `{!! !!}` or an
  * unescaped attribute ever slipped into a Blade file, an injected <script>
  * would simply run. Blade's escaping is the first defence; this is the one
@@ -36,9 +43,6 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ContentSecurityPolicy
 {
-    /** Where the two charting libraries are served from. */
-    protected const SCRIPT_CDN = 'https://cdn.jsdelivr.net';
-
     public function handle(Request $request, Closure $next): Response
     {
         Csp::reset();
@@ -68,11 +72,16 @@ class ContentSecurityPolicy
 
         return implode('; ', [
             "default-src 'self'",
-            "script-src 'self' {$nonce} ".self::SCRIPT_CDN,
+            // No origin named: every script is either this app's own file or
+            // an inline block carrying the nonce.
+            "script-src 'self' {$nonce}",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data:",
             "font-src 'self'",
             // The portal is server-rendered; nothing fetches cross-origin.
+            // This is also what refused DevTools' request for Chart.js's
+            // source map back when the library came from a CDN — see
+            // public/js/chart.umd.min.js for why that map is not shipped.
             "connect-src 'self'",
             // No Flash, no applets, nothing to embed.
             "object-src 'none'",

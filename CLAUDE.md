@@ -8,7 +8,7 @@ and the rest sit directly here.
 
 ## Stack
 
-Laravel 12 · PHP 8.2+ · MySQL 8.4 (Docker) · Blade · Chart.js (CDN) · Dompdf
+Laravel 12 · PHP 8.2+ · MySQL 8.4 (Docker) · Blade · Chart.js (`public/js`) · Dompdf
 
 MySQL, phpMyAdmin and Mailpit run in Docker; Laravel runs on the host via
 `php artisan serve`. `setup.sh` does first-time setup.
