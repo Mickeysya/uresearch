@@ -350,7 +350,8 @@ central lists the modules, so adding one causes no merge conflict.
 | `Nureen/` | Nureen Nellysha (22006973) | Attendance · GA Extension · Supervision · Certification |
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
 | `Jason/` | Jason | Hardbound Submission · Appeal Hardbound Submission · Appointment Letters |
-| `Chloe/` | Chloe | to be scoped |
+| `Chloe/` | Chloe Ching Qing En (22011629) | Workstation · Study Candidacy Reminder / Appeal / Dismissal |
+| `Haziq/` | Abdul Haziq bin Abdul Farouk (22007428) | GRA · GA · Stage Gates · Allowance Eligibility |
 
 `Core/` is shared. Changing it affects all six of us, so raise it with the team
 first.

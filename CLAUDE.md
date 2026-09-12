@@ -24,8 +24,9 @@ Six people share this repo, and **each owns exactly one folder** under
 | `Norhanis/` | Norhanis Erna Natasha (22006318) | Travel · Publication · Claims · RPD |
 | `Nureen/` | Nureen Nellysha (22006973) | Attendance · GA Extension · Supervision · Certification |
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
-| `Jason/` | Jason | Hardbound Submission · Appeal Hardbound Submission · Appointment Letters |
-| `Chloe/` | Chloe | to be scoped |
+| `Jason/` | Yau Jia Sheng "Jason" (22003299) | Hardbound Submission · Appeal Hardbound Submission · Appointment Letters |
+| `Chloe/` | Chloe Ching Qing En (22011629) | Workstation · Study Candidacy Reminder / Appeal / Dismissal |
+| `Haziq/` | Abdul Haziq bin Abdul Farouk (22007428) | GRA · GA · Stage Gates · Allowance Eligibility |
 
 Everything a module needs — migrations, models, controllers, routes, views —
 lives in its own folder. Nothing central lists the modules, so adding one never

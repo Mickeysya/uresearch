@@ -20,8 +20,11 @@ as the work it describes.
 | Nureen — GA Extension · Attendance · Supervision · Certification | done |
 | Hani — Examiner pool + Nomination | done |
 | Hani — Conflict detection T2 · Re-viva | not started |
+| CGS dashboard (5 stat cards + 5 live panels) | done |
 | Jason — Hardbound Submission · Appeal · Appointment Letters | scoped, not started |
-| Chloe | scope not yet defined |
+| Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
+| Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
+| **Cross-module overlaps** | **4 unresolved — see below** |
 | Automated tests | none |
 | **Runs end to end** | yes — verified 2026-09-09 |
 
@@ -174,10 +177,42 @@ knowing before anyone builds on them:
   at-risk attendance with no open appeal) because there is no deadlines table.
   Replace the body of `StudentDashboard::tasks()` and the panel keeps working.
 
+### Core — CGS dashboard (2026-09-12)
+
+Built to `Sample/CGS_TEAM_DASHBOARD.png`. Nureen's documented slice of the CGS
+dashboard — verification queues and at-risk alerts. Every figure is a live
+query; there is no placeholder data in the views.
+
+- [x] `Services\CgsDashboard` — one named method per panel, `safely()` on every
+      query so a dead source holds a skeleton instead of 500-ing the page
+- [x] Five figures with month-over-month deltas: Total Applications, Pending My
+      Action, Approved, Rejected, Active Students. A null delta renders nothing
+      rather than a fake 0% when there is no prior month to compare against.
+- [x] Workload Overview — SVG donut, segments drawn with `stroke-dashoffset`
+      inside one rotated group, animated in. Fed by
+      `ModuleRegistry::queuesForRole()`, so a new module appears by itself.
+- [x] Pending Actions, Attendance Alerts, Recent Activities, Quick Shortcuts
+- [x] Attendance Alerts reuses `StudentDashboard::attendanceBands()`, so a
+      student reading "Good" is counted as Good by CGS. The 80% figure in the
+      footer is the separate compliance threshold, deliberately not a band.
+- [x] Recent Activities merges `applications` (submissions) and
+      `approval_history` (decisions) rather than adding a third activity table
+- [x] Single-screen on desktop at any height — no min-height floor, every
+      vertical dimension in `vh`; verified fitting down to a 650px viewport
+- [x] CGS sidebar: registry-driven Applications tree (so Travel, which CGS owns
+      at `cgs_review`, cannot be forgotten), Attendance Monitoring tree
+      including the CSV upload, and five honest placeholder screens
+- [x] `Role::cgsTeam()` / `User::isCgs()`; CGS-only routes gated by role, not
+      only hidden from the sidebar
+- [x] Shared `partials/count-up.blade.php` — the gauge, donut and stat figures
+      all animate through one script
+
 ### Docs
 - [x] `README.md`, `CLAUDE.md`, `LEGACY.md`, this file
 - [x] `docs/` — architecture, adding-a-module, conventions, module-keys, migration-from-legacy
-- [x] `docs/scope/` — the four FYP documents
+- [x] `docs/scope/` — six per-person scope documents + `technical.md`.
+      `chloe.md` and `haziq.md` written 2026-09-12 from their interim-report PDFs,
+      which are kept alongside in `docs/scope/chloe/` and `docs/scope/haziq/`.
 - [x] `.claude/agents/` — module-builder, legacy-porter, core-guard, security-reviewer
 - [x] A README in every module folder
 
@@ -381,10 +416,199 @@ elsewhere in this file:
 
 ---
 
-## Chloe
+## Chloe — Workstation · Study Candidacy Reminder · Appeal · Dismissal
 
-- [ ] Define scope, then claim a `module_type` in `docs/module-keys.md`
-- [ ] Folder exists with a README and the pattern to copy
+Scope in `docs/scope/chloe.md`, summarised from her FYP I interim report.
+Requirements came from one interview with **Mr. Amirul Hariz Yunus** of CGS on
+23 June 2026. Four keys proposed in `docs/module-keys.md`, none claimed yet.
+
+**Read the overlap section before starting.** Modules 2–4 are the same three
+shapes as Norhanis' RPD reminders / appeals / dismissals, applied to study
+candidacy rather than the RPD milestone.
+
+- [ ] **Workstation Management** (`workstation`) — the odd one out: *not* an
+      approval chain, so it will not use `WorkflowEngine`. Closest existing
+      pattern is Attendance's non-workflow half.
+  - [ ] `workstations` table (seat id, location, occupant, locker key) and a
+        live seat map students pick from
+  - [ ] Concurrency: two students choosing the same seat at once — one gets a
+        confirmation, the other a rejection. Needs a unique constraint plus a
+        transaction, not a check-then-write.
+  - [ ] Locker key issue / return tracking, the thing that currently has no
+        follow-up at all
+  - [ ] CGS manual override for exceptional cases
+
+- [ ] **Study Candidacy Reminder** (`candidacy_reminder`)
+  - [ ] `candidacies` table — **the same table Norhanis' RPD module needs.**
+        Build it once, together.
+  - [ ] Daily scheduled command; reminders monthly from 3 months before expiry
+  - [ ] **Record what was sent** — the as-is process keeps no record at all,
+        and this is the one thing CGS explicitly asked for
+  - [ ] Stop conditions: appeal submitted, softbound approved, student
+        inactive or dismissed
+
+- [ ] **Study Candidacy Appeal** (`candidacy_appeal`) — Supervisor → Programme
+      Chair → CGS verification → Dean of PGR
+  - [ ] Enforce the **twelve-month maximum appeal duration** in code
+  - [ ] Recalculate the deadline on the Dean's approval
+  - [ ] **Needs the "return with comment" outcome** the engine does not have —
+        same gap as Jason's Hardbound review. One design decision covers both.
+  - [ ] Confirm whether "Programme Chair" is the existing `chair` role
+
+- [ ] **Dismiss Exceeded Study Candidacy** (`candidacy_dismissal`)
+  - [ ] Generate the candidate list from candidacy records for CGS to confirm
+  - [ ] Submission to Registry stays manual and out of scope; automate only
+        the student notification after Registry confirms
+
+- [ ] **Out of the team's stack:** her report specifies Power Automate / n8n,
+      Copilot Studio and Outlook. The scheduled checks map onto Laravel's
+      scheduler and the mail onto the existing path; **the AI Academic
+      Guidance Assistant has no home in the current stack** and needs a team
+      decision.
+
+---
+
+## Haziq — GRA · GA · Stage Gates · Allowance Eligibility
+
+Scope in `docs/scope/haziq.md`, summarised from his FYP I interim report.
+Folder `app/Modules/Haziq/` created 2026-09-12 with the standard scaffold.
+Two keys proposed in `docs/module-keys.md`, neither claimed yet.
+
+**Read the overlap section before starting** — this scope collides with
+modules Nureen has already built and shipped.
+
+- [ ] **GRA Application** (`gra_application`) — Admin/GRS Exec → Supervisor →
+      Senior Director
+  - [ ] `gra_details` table + Sections B–F (Project Details, GRA Details,
+        Academic Qualification, Working Experience, Publications)
+  - [ ] Document metadata (type, upload date, version, status) per application
+  - [ ] Reminder Engine for missing or failed documents
+  - [ ] **Two-status supervisor stage** ("In Process" → "Settled") — the
+        engine has one positive outcome per stage, so this is either two
+        `Stage`s with the same role, or a detail-table column. Two stages is
+        almost certainly right and needs no Core change.
+  - [ ] Offer Letter + Admission Letter on approval, via
+        `DocumentStore::storeGenerated()` — already exists, do not re-implement
+
+- [ ] **GA Application** (`ga_application`) — Admin/CGS eligibility →
+      Research Centre interview → Admin/CGS decision
+  - [ ] `ga_details` table + interview result (Pass/Fail + notes)
+  - [ ] **`Research Centre` is not a role yet** — add to `Support\Role`
+  - [ ] GA Offer Letter + Program Offer Letter on approval
+
+- [ ] **Stage Gate Monitoring** — *not a `WorkflowModule`.* The engine models
+      a chain of approvals that terminates; this is a recurring deadline check
+      against an already-approved record. Own tables + a scheduled command,
+      same shape as `supervision:remind-stalled`.
+  - [ ] `stage_gates` table: student, stage number, due date, completed date
+  - [ ] RPD (Stage 1) is **recoverable** — grace period, then allowance
+        suspended, then **back-paid** from the month after grace ended if the
+        milestone is eventually completed
+  - [ ] Stages 2–4 (PhD) are **not recoverable** — grace period, then
+        automatic termination, final
+  - [ ] **Stage 1 IS the RPD that Norhanis' module owns.** This is a
+        dependency, not a duplicate: the stage gate cannot know the RPD is
+        complete unless the RPD module records it. Agree the shared
+        `candidacies` / RPD-completion source before building either.
+
+- [ ] **Allowance Eligibility** (reporting only, no submissions)
+  - [ ] `allowance_payment_log` — month, student, paid/not paid, amount
+  - [ ] Daily job rebuilding the eligibility list
+  - [ ] **Back-payment restates history.** "Suspended, then back-paid from the
+        month after grace ended" means the log is rewritten retroactively, not
+        appended to. Model this explicitly before writing the job — it is the
+        subtlest rule in the portal.
+
+- [ ] **AI status chatbot** — LLM API fed live application records rather than
+      a static knowledge base. No home in the current stack; see the AI note
+      under Cross-cutting.
+
+---
+
+## Cross-module overlaps — unresolved
+
+Every scope document was cross-read on 2026-09-12. Four genuine collisions and
+two dependencies came out of it. **None is a bug today** — most of the colliding
+work is unbuilt — but each one becomes expensive the moment two people write
+code against it. Settle them as a team before the next module starts.
+
+### 1. Haziq's GRA/GA vs Nureen's shipped GA modules — the urgent one
+
+`app/Modules/Nureen` already ships and works:
+
+| Built | Key | Chain |
+|---|---|---|
+| GA Extension & VISA | `ga_extension` | Supervisor → CGS Staff → Senior Director CGS |
+| GA/GRA Certification Letter | `ga_certification` | CGS Staff → Senior Director CGS, Dompdf on approval |
+
+`haziq.md` Module 1 includes **GRA Extension** through its own chain
+(Admin/GRS Exec → Supervisor → Senior Director), and both his modules generate
+letters on approval. These are the same real-world processes described from two
+directions, and one side is already built and tested.
+
+- [ ] **Decide:** does Haziq own the GRA/GA *application* while Nureen keeps
+      *extension* and *certification*? Or does the GA/GRA lifetime move wholesale
+      to Haziq and Nureen's two modules fold into it?
+- [ ] Whatever is decided, `ga_extension` and `ga_certification` are already in
+      `applications.module_type` on real rows. Renaming either needs a data
+      migration, so prefer keeping the keys and changing the owner.
+
+### 2. Chloe's candidacy trio vs Norhanis' RPD trio
+
+Both have a reminder scheduler, a multi-stage appeal ending at the Dean, and a
+dismissal list routed to the Registry. They are genuinely **different
+deadlines** — Chloe's is overall study candidature, Norhanis' is the Research
+Proposal Defence — but the machinery is near-identical.
+
+| | Norhanis (RPD) | Chloe (Study Candidacy) |
+|---|---|---|
+| Reminders | 3 / 2 / 1 months before deadline | monthly from 3 months before expiry |
+| Appeal chain | Supervisor → Chair → Non-Exec CGS → Dean | Supervisor → Programme Chair → CGS → Dean |
+| Dismissal | Non-Exec CGS → Dean → Faculty → Registry | CGS confirms list → Registry (manual) |
+
+- [ ] **Decide:** one shared candidacy/deadline engine that both configure, or
+      two independent implementations? A shared `candidacies` table is the
+      minimum — both need programme type, start date and a computed deadline.
+- [ ] Confirm whether "Programme Chair" (Chloe) and "Chair of Department"
+      (Norhanis) are the same person, i.e. the existing `chair` role.
+
+### 3. Five people claim a CGS dashboard
+
+`nureen.md` (verification queues + at-risk alerts), `norhanis.md` (Chart.js
+bottleneck view), `hani.md` (examiner availability + re-viva progress),
+`jason.md` (§5.3 CGS Non-Exec / Senior Exec), `chloe.md` (operational
+dashboard: pending appeals, reminder status, workstation occupancy).
+
+**One CGS dashboard is now built** (2026-09-12) to Nureen's documented slice.
+It is registry-driven, so a new module's queue appears in the Applications
+tree, the Workload donut and Pending Actions automatically.
+
+- [ ] **Decide:** does everyone else add a *panel* to the existing dashboard,
+      or does each module get its own screen? Panels are the cheaper answer and
+      the layout already supports them.
+- [ ] Same question for the **Admin Dashboard**, claimed by `hani.md`,
+      `jason.md`, `norhanis.md` and `technical.md`, and built by nobody.
+
+### 4. Two AI assistants, neither in the team's stack
+
+- `chloe.md` — AI Academic Guidance Assistant (Microsoft Copilot Studio),
+  answers policy/procedure questions. Explicitly makes no decisions.
+- `haziq.md` — status chatbot (LLM API) fed the student's live records.
+
+Both sit outside Laravel · MySQL · Dompdf · SMTP.
+
+- [ ] **Decide:** one assistant with two intents, or two? And which provider —
+      this is the only part of the system with no agreed technology.
+
+### Dependencies (not collisions, but ordering constraints)
+
+- [ ] **Haziq's Stage 1 *is* Norhanis' RPD.** The stage gate cannot know the
+      milestone is complete unless the RPD module records completion. Norhanis
+      must land the RPD data model before Haziq's stage gates can work.
+- [ ] **Jason's Appointment Letters depend on Hani's examiner pool.** The
+      letter is addressed to an examiner; `examiners` is Hani's table.
+      `hani.md` records she handed Appointment Letters to Jason deliberately —
+      so this is a handoff with a data dependency, not a duplicate.
 
 ---
 
@@ -425,6 +649,14 @@ elsewhere in this file:
       building that module's review stage.
 - [ ] Seed a `senior_exec_cgs` test account — no seeded user has this role
       yet, and Jason's Hardbound Submission and Appeal chains both end there.
+- [ ] **Actors named in scope documents that are not roles yet:** `GRS Exec`
+      and `Research Centre` (Haziq), `Project Director` (Norhanis' Claims),
+      `Faculty` (Norhanis' RPD dismissal, Jason). `Programme Chair` (Chloe) is
+      probably the existing `chair`. Adding a role is one line in
+      `Support\Role` by design — the work is deciding, not typing. The table
+      in `docs/module-keys.md` tracks them.
+- [ ] **`dac` and `panel_examiner` are declared but own no stage and have no
+      seeded account.** Either a module needs them or they should go.
 
 ### Team
 - [ ] **Admin module** — user management and role assignment. `technical.md`
@@ -455,3 +687,13 @@ elsewhere in this file:
    existing roles. Settle the "return to student" engine question and seed
    the `senior_exec_cgs` account before building the Hardbound Submission
    review stage.
+9. **Before Chloe or Haziq writes any code, hold one meeting** and settle the
+   four overlaps above. Haziq's is the urgent one — it collides with modules
+   that already exist and have rows in the database.
+10. Chloe should start with **Workstation Management**. It is the only part of
+    her scope that overlaps with nobody, so it is unblocked by that meeting,
+    and it is a good first module because it is not an approval chain.
+11. The **"return with comment"** engine outcome is now needed by two people
+    (Jason's Hardbound review, Chloe's candidacy appeal). One design decision,
+    one Core change, two modules unblocked — worth doing early rather than
+    twice.
