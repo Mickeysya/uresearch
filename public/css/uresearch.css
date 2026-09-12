@@ -710,9 +710,14 @@ textarea:focus {
     outline-offset: 2px;
 }
 
+/* 40px, not larger: .sidebar-header is a fixed 64px so its bottom border
+   lines up with .main-content-header's across the sidebar/content seam.
+   .sidebar-brand adds 8px of padding top and bottom, so the icon has
+   64 - 16 = 48px to work with; 40px keeps 4px of slack either side rather
+   than sitting flush against the border. */
 .sidebar-logo-icon {
-    height: 30px;
-    width: 30px;
+    height: 40px;
+    width: 40px;
     flex-shrink: 0;
     object-fit: contain;
 }
@@ -721,7 +726,7 @@ textarea:focus {
    gold span) -- <span>U</span>Research reuses them as-is rather than
    inventing new ones, just sized down to fit the sidebar header. */
 .sidebar-logo-text {
-    font-size: 19px;
+    font-size: 22px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1066,4 +1071,18 @@ html.sidebar-collapsed .sidebar-profile {
     .sidebar-footer {
         display: none;
     }
+}
+
+/* =====================================================================
+   Larger UResearch mark. Appended, not restyled in place: .uresearch-logo
+   is defined at the top of the file in Norhanis' original stylesheet
+   (40px), which docs/conventions.md says not to edit above the marker.
+   The sidebar mark is sized where it is declared instead, since those
+   rules are already part of the Laravel-port additions.
+   ===================================================================== */
+
+/* Login-page wordmark. .top-header sizes itself from its content, so this
+   is free to grow without the 64px constraint the sidebar header has. */
+.uresearch-logo {
+    height: 52px;
 }

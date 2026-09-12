@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'UResearch 2.0') — UResearch 2.0</title>
+    <title>UResearch</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/uresearch-logo.png') }}">
     <link rel="stylesheet" href="{{ asset('css/uresearch.css') }}">
     <script>
         // Applied before the body paints, straight from localStorage, so a
