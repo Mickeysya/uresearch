@@ -1109,6 +1109,11 @@ html.sidebar-collapsed .sidebar-profile {
     --banner-pad-y: 26px;
     --banner-pad-x: 34px;
     --banner-art-height: 122px;
+    /* Horizontal space the artwork occupies: its rendered width
+       (122px tall x 240/140 aspect = 209px) plus its 26px right offset,
+       rounded up for breathing room. The text block reserves this so a
+       single-line subtitle never runs underneath the art. */
+    --banner-art-reserve: 250px;
 
     position: relative;
     overflow: hidden;
@@ -1128,6 +1133,7 @@ html.sidebar-collapsed .sidebar-profile {
     z-index: 1;
     flex: 1 1 auto;
     min-width: 0;
+    padding-right: var(--banner-art-reserve);
 }
 
 .dash-welcome-title {
@@ -1147,12 +1153,19 @@ html.sidebar-collapsed .sidebar-profile {
     font-size: 0.85em;
 }
 
+/* Always one line. A `max-width: 52ch` cap used to live here, which is
+   what wrapped the CGS subtitle ("...postgraduate administration today."
+   is 62 characters) onto a second line. Width is now bounded by the text
+   block's reserved space instead, and an over-long subtitle truncates
+   rather than wrapping or pushing the banner sideways. */
 .dash-welcome-sub {
     margin: 0;
     font-size: 14px;
     line-height: 1.5;
     color: var(--banner-subtle);
-    max-width: 52ch;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Bottom-aligned and flush with the banner's lower edge, so the books and
@@ -1174,14 +1187,18 @@ html.sidebar-collapsed .sidebar-profile {
     .dash-welcome {
         --banner-min-height: 0;
         --banner-pad-x: 24px;
+        --banner-art-reserve: 0px;
     }
 
     .dash-welcome-art {
         display: none;
     }
 
+    /* The artwork is gone and the column is narrow, so one line is no longer
+       possible without overflowing -- let it wrap again rather than clip. */
     .dash-welcome-sub {
-        max-width: none;
+        white-space: normal;
+        overflow: visible;
     }
 }
 
@@ -2041,4 +2058,16 @@ body::-webkit-scrollbar,
     font-style: italic;
     cursor: default;
     opacity: 0.8;
+}
+
+
+/* =====================================================================
+   CGS dashboard. Shares .sdash, but while it holds only the banner it
+   must not stretch to the full viewport height -- the grid's 1fr panel
+   row has nothing in it yet. Drop this rule once the panels land.
+   ===================================================================== */
+
+.sdash-cgs {
+    height: auto;
+    min-height: 0;
 }

@@ -41,6 +41,12 @@ class DashboardController extends Controller
             ]);
         }
 
+        if ($user->isCgs()) {
+            // CGS gets its own screen rather than the generic approver view.
+            // Only the banner so far; the panels land here as they are built.
+            return view('core::dashboard.cgs');
+        }
+
         $queues = $registry->queuesForRole($user->role);
 
         $chart = [];
