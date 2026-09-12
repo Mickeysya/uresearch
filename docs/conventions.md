@@ -71,6 +71,15 @@ Credentials belong in `.env`, which is git-ignored. Read them with `config()`.
 
 One branch per person: `feature/<name>-<module>`, e.g. `feature/nureen-attendance`.
 
+**After every pull or branch switch, run `./sync.sh`.** A pull can leave your
+checkout in a state the app cannot run in, and none of it is obvious:
+`composer.lock` may have changed, a teammate may have added a key to
+`.env.example` that your git-ignored `.env` does not have, there may be pending
+migrations, compiled Blade views from the previous branch are still being
+served, and `queue:work` holds the app in memory so the queue worker is still
+running pre-pull code. `./sync.sh --check` reports all of that without changing
+anything.
+
 Because you only touch your own folder, conflicts should be rare. If you hit
 one in `Core/`, stop and talk to the team rather than resolving it alone.
 
@@ -83,4 +92,9 @@ Do not commit `.env`, `vendor/`, `node_modules/`, or anything under
 - Reuse the existing classes: `.card`, `.card-wide`, `.app-item`, `.stat-card`,
   `.status-badge`, `.empty-state`, `.stepper`. Norhanis' palette is in `:root`.
 - New shared styling goes **below** the marked line at the bottom of
-  `uresearch.css`, so her original sheet stays intact and reviewable.
+  `uresearch.css`, so her original sheet stays intact and reviewable. That
+  includes overriding a rule she already wrote: append a new declaration
+  rather than editing hers in place.
+- Blade's directive regex is `\B`-anchored, so two directives written back to
+  back as `@endif@if` silently fail to compile the second one. Put a newline or
+  a non-word character between them — `}}@if` and `>@endif` are both fine.

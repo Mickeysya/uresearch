@@ -95,6 +95,37 @@ built from that, so a stage which only some applications reach (CGS and the
 Dean on international travel) is still visible to the role that owns it.
 
 
+## The student dashboard
+
+`Services\StudentDashboard` gathers every figure the student dashboard shows,
+one named method per panel, so changing a data source is a one-method edit —
+no view, route or controller changes.
+
+Two things about it are worth knowing before building on it:
+
+**It degrades instead of failing.** Every panel query runs through
+`safely()`, which catches, reports, and marks that panel unavailable. The view
+holds a skeleton placeholder for those panels rather than showing an empty
+state — "nothing to show" and "could not load" mean different things to a
+student looking at their own record — and one dead query costs that panel
+rather than the whole page.
+
+**It is the one place Core names a module directly.** Attendance belongs to
+`app/Modules/Nureen`, and Core otherwise only ever goes through
+`ModuleRegistry`. There is no registry hook for panel data yet, so this reaches
+for Nureen's models behind a `class_exists()` guard. Replace it with a
+`ProvidesDashboardPanels` contract when a second module wants a panel.
+
+The application list itself is registry-driven, so a new module appears there
+with no edit.
+
+## Notifications
+
+Two channels. `mail` goes to Mailpit locally and real SMTP in production;
+`database` writes to the `notifications` table and is what the in-app feed and
+the unread badge read. A notification opts into either by listing it in its own
+`via()`, so adding the channel to one notification does not touch any other.
+
 ## Module discovery
 
 `ModuleServiceProvider` scans `app/Modules/*` and wires up, if present:
