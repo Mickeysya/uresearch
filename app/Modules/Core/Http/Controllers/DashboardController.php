@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Http\Controllers;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Services\AdminDashboard;
 use App\Modules\Core\Services\CgsDashboard;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\StudentDashboard;
@@ -38,6 +39,23 @@ class DashboardController extends Controller
                 'tasks' => $dash->tasks(),
                 // Panels whose data could not be read; the view holds a
                 // skeleton for these instead of showing a false empty state.
+                'unavailable' => $dash->unavailable(),
+            ]);
+        }
+
+        if ($user->isAdmin()) {
+            $dash = new AdminDashboard();
+
+            return view('core::dashboard.admin', [
+                'totalStudents' => $dash->totalStudents(),
+                'programmes' => $dash->programmes(),
+                'staffMembers' => $dash->staffMembers(),
+                'averageAttendance' => $dash->averageAttendance(),
+                'activeApplications' => $dash->activeApplications(),
+                'activities' => $dash->recentActivities(),
+                'health' => $dash->systemHealth(),
+                'mix' => $dash->applicationMix(),
+                'byStatus' => $dash->applicationsByStatus(),
                 'unavailable' => $dash->unavailable(),
             ]);
         }

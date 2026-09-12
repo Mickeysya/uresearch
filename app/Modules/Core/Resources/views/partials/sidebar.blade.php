@@ -142,21 +142,54 @@
 
     @auth
         <div class="sidebar-footer">
-            <a href="{{ route('profile.show') }}" class="sidebar-profile" title="{{ $user->name }}">
-                <span class="avatar">{{ $initials }}</span>
-                <span class="profile-text">
-                    <span class="profile-name">{{ $user->name }}</span>
-                    <span class="profile-role">{{ $user->roleLabel() }}</span>
-                </span>
-            </a>
+            {{--
+                The identity card. Three lines, and what the third one says
+                depends on who is looking:
 
-            <a href="{{ route('logout') }}" class="nav-item logout-link" title="Log out"
-               onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-                <span class="nav-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                </span>
-                <span class="nav-label">Log out</span>
-            </a>
+                  student   their email
+                  CGS       their department
+                  admin     "Admin Access", and the card shows the institution
+                            rather than the person -- an administrator acts for
+                            the Centre, not as themselves.
+
+                Collapsed, only the avatar and the sign-out icon survive; the
+                text has nowhere to go at 64px wide.
+            --}}
+            @php
+                $isAdminCard = $user->isAdmin();
+
+                $cardName = $isAdminCard ? 'Universiti Teknologi PETRONAS' : $user->name;
+                $cardRole = $isAdminCard ? 'Graduate Centre of Studies' : $user->roleLabel();
+                $cardMeta = match (true) {
+                    $isAdminCard => 'Admin Access',
+                    $user->isStudent() => $user->email,
+                    default => $user->department ?: $user->email,
+                };
+            @endphp
+
+            <div class="sidebar-card">
+                <a href="{{ route('profile.show') }}" class="sidebar-profile" title="{{ $user->name }} — view profile">
+                    @if ($isAdminCard)
+                        <img src="{{ asset('images/UTP_logo.png') }}" alt="" class="avatar avatar-crest">
+                    @else
+                        <span class="avatar">{{ $initials }}</span>
+                    @endif
+
+                    <span class="profile-text">
+                        <span class="profile-name">{{ $cardName }}</span>
+                        <span class="profile-role">{{ $cardRole }}</span>
+                        <span class="profile-meta {{ $isAdminCard ? 'is-admin' : '' }}">{{ $cardMeta }}</span>
+                    </span>
+                </a>
+
+                <a href="{{ route('logout') }}" class="sidebar-signout" title="Sign out"
+                   onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                    <span class="nav-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    </span>
+                    <span class="nav-label">Sign out</span>
+                </a>
+            </div>
 
             <form id="logout-form" method="POST" action="{{ route('logout') }}" style="display:none">
                 @csrf

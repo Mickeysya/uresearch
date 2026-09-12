@@ -2,6 +2,8 @@
 
 @section('title', 'Dashboard')
 
+@include('core::dashboard.partials.chartjs')
+
 @section('content')
     <div class="welcome-banner">
         <h2>Welcome, {{ auth()->user()->name }}</h2>
@@ -56,7 +58,6 @@
 
 @push('scripts')
     @if ($total > 0)
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
         <script>
             new Chart(document.getElementById('dashboardChart'), {
                 type: 'bar',
