@@ -99,6 +99,7 @@ Also: do not commit on `main`. Branch first.
 | Doc | Covers |
 |---|---|
 | `README.md` | setup, test accounts, commands |
+| `sync.sh` | run it after any `git pull` or branch switch; `--check` to dry-run |
 | `TODO.md` | what is built, what is not, and the agreed order of work |
 | `docs/architecture.md` | layers, engine, data model |
 | `docs/adding-a-module.md` | full worked example |

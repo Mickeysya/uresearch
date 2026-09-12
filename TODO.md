@@ -13,6 +13,8 @@ as the work it describes.
 |---|---|
 | Infrastructure (Docker, setup scripts, config) | done |
 | Core (auth, RBAC, workflow engine, uploads, UI) | done |
+| Student dashboard (5 stat cards + 4 live panels) | done |
+| Database notifications (in-app feed + unread count) | done |
 | Norhanis — Travel | done · reference implementation |
 | Norhanis — Publication · Claims · RPD | not started |
 | Nureen — GA Extension · Attendance · Supervision · Certification | done |
@@ -30,8 +32,9 @@ as the work it describes.
 Run end to end on 2026-09-09 (Ubuntu 24.04 / WSL2, PHP 8.3.6, MySQL 8.4.11):
 
 - [x] `./setup.sh` completes from a clean clone and an empty volume
-- [x] All 9 migrations run; 11 accounts and 5 examiners seeded
-- [x] All 20 routes register, including every module — auto-discovery works
+- [x] All migrations run (9 at the time, 14 now); 11 accounts and 5 examiners seeded
+- [x] Every route registers, including every module — auto-discovery works
+      (20 at the time, 42 now)
 - [x] International travel routes through all four approvers; the student's
       stepper shows four steps
 - [x] Local travel shows two steps and finishes at the Chair — same form,
@@ -44,6 +47,40 @@ Run end to end on 2026-09-09 (Ubuntu 24.04 / WSL2, PHP 8.3.6, MySQL 8.4.11):
 Three defects were found and fixed in the process: a missing `bootstrap/cache`,
 `User::is()` colliding with Eloquent's `Model::is()`, and conditional stages
 being invisible to the roles that owned them. See `git log`.
+
+### Second pass — 2026-09-12
+
+- [x] **Fixed: every approve/reject returned HTTP 500.** `REDIS_HOST` was in
+      `docker-compose.yml` but in neither `.env` nor `.env.example`, and the
+      `artisan serve` HTTP worker does not inherit Compose's `environment:`
+      overrides — it falls back to `.env`, then to `config/database.php`'s
+      `127.0.0.1`, where no Redis listens. Queueing `ApplicationDecided` threw
+      `RedisException`, and because that `notify()` sits inside
+      `WorkflowEngine::decide()`'s transaction, the whole decision rolled back:
+      no history row, no stage advance, no readable error. Same failure mode
+      the team had already patched for `DB_HOST`/`MAIL_HOST` in `setup.sh`;
+      Redis arrived later and never got the same treatment.
+      `REDIS_HOST`/`REDIS_PORT` are now in `.env.example`, and `sync.sh`
+      backfills them into an existing `.env`.
+- [x] Walked a full local-travel chain end to end again after the fix:
+      submit → supervisor endorses → chair approves → `approved`, two history
+      rows, two notification emails in Mailpit.
+- [x] Re-confirmed both authorisation locks: a student POSTing to the decide
+      route gets 403, and a Chair acting on a row still at the Supervisor
+      stage is refused with the row left unmoved.
+
+- [ ] **Still open from that pass:** `WorkflowEngine::decide()` queues the
+      notification *inside* its DB transaction, so a broker outage turns a
+      valid approval into a rollback. Move the `notify()` after the commit
+      (or onto `DB::afterCommit()`) — an approval is the durable thing, the
+      email is best-effort. This is what turned a config mistake into data
+      loss, so it is worth closing regardless.
+- [ ] **Still open:** the approver dashboard's "Recent activity" table is
+      unscoped — it lists the 8 most recently updated applications for every
+      module the role owns a stage in, with no filter on student, supervisee
+      or department, so a supervisor sees other supervisors' students by name
+      and status. Same theme as the queue-scoping gap below, different file
+      (`DashboardController`).
 
 - [ ] Confirm `laravel/framework: ^12.0` in `composer.json` is still the
       version the team wants; bump if you prefer newer.
@@ -58,6 +95,12 @@ being invisible to the roles that owned them. See `git log`.
 - [x] `docker-compose.yml` — MySQL 8.4, phpMyAdmin, Mailpit
 - [x] MySQL strict mode (`docker/mysql/my.cnf`) so bad data errors instead of truncating
 - [x] `setup.sh` (idempotent first-time setup) and `reset.sh`
+- [x] `sync.sh` — run after a `git pull` or branch switch. Installs deps when
+      `composer.lock` changed, copies new `.env.example` keys into your own
+      git-ignored `.env`, runs pending migrations, clears Blade/config/route
+      caches left over from the previous branch, and restarts the queue worker
+      (`queue:work` holds the app in memory and otherwise keeps running
+      pre-pull code). `--check` reports without changing anything.
 - [x] `.env.example` matching the compose file — no configuration needed
 - [x] Laravel 12 skeleton: `artisan`, `bootstrap/`, `public/index.php`, `routes/`
 - [x] `config/` — app, auth, database, mail
@@ -80,6 +123,56 @@ being invisible to the roles that owned them. See `git log`.
 - [x] Norhanis' stylesheet carried over unchanged, additions appended below a marked line
 - [x] Seeder — 11 accounts covering every role, 5 examiners in all four states
 - [x] Module auto-discovery (`ModuleServiceProvider`)
+
+### Core — student dashboard (2026-09-12)
+
+Built to the design in `Sample/Student_Dashboard_UI.png`. Every figure is a
+live query — there is no placeholder data anywhere in the views.
+
+- [x] `Services\StudentDashboard` — one named method per panel, so swapping a
+      data source is a one-method edit with no view/route/controller change
+- [x] Five stat cards: Attendance, Predicted Attendance, Active Applications,
+      Unread Notifications, Upcoming Tasks
+- [x] "My Application Status" — driven by `ModuleRegistry`, so a teammate's new
+      module appears here the moment a student submits one, with no edit
+- [x] "Attendance Overview" — SVG gauge (no charting library) with band ticks,
+      legend and status line all reading `StudentDashboard::attendanceBands()`,
+      so the arc and the legend cannot drift apart
+- [x] "Recent Notifications" and "Upcoming Tasks"
+- [x] Single-screen layout: the page never scrolls, each panel body scrolls
+      internally; grid reflows 5→3→2→1 columns, unlocking to normal page
+      scroll below 1100px
+- [x] `Application::reference()` — derived display reference (`GAEX-2026-00012`),
+      never stored, so there is no column and nothing to keep in sync
+- [x] `notifications` table + `ApplicationDecided` on the `database` channel —
+      until now every notification was mail-only, so nothing the app sent was
+      readable back inside the app. This is why `/notifications` was a
+      placeholder. Additive: a notification opts in via its own `via()`.
+- [x] `AttendanceRiskEvaluator::project()` — straight-line projection of the
+      attendance trend, in the same "small explicit rule" spirit as
+      `isAtRisk()`. Returns null rather than inventing a number when there is
+      too little history.
+- [x] Graceful degradation: every panel query runs through
+      `StudentDashboard::safely()`, so a dead query or a missing module holds a
+      skeleton placeholder for that panel instead of 500-ing the page.
+      Verified by renaming the `notifications` table away mid-request — page
+      still 200, two panels held, everything else rendered.
+- [x] Load animation: cards rise in staggered from first paint, gauge sweeps,
+      value counts up. No artificial delay — the page is server-rendered, so
+      the data is already in the HTML.
+- [x] Stylesheet cache-busted (`?v=<mtime>`), so a CSS change always reaches
+      the browser instead of silently serving a stale cached copy
+- [x] Favicon + a fixed `UResearch` tab title on both layouts
+
+Two values on this dashboard are **derived rules, not stored facts** — worth
+knowing before anyone builds on them:
+
+- **Predicted Attendance** projects 4 periods ahead because there is no
+  semester model to count toward. The design says "End of Semester"; when an
+  intake/semester table exists, that becomes a real horizon.
+- **Upcoming Tasks** is derived from real state (rejected applications, and
+  at-risk attendance with no open appeal) because there is no deadlines table.
+  Replace the body of `StudentDashboard::tasks()` and the panel keeps working.
 
 ### Docs
 - [x] `README.md`, `CLAUDE.md`, `LEGACY.md`, this file
@@ -163,6 +256,10 @@ being invisible to the roles that owned them. See `git log`.
         `requested_supervisor_id` before delegating to the engine. This is a
         module-local patch, not a fix to the underlying queue-scoping gap —
         see "Correctness gaps in Core" below, still open for every module.
+
+- [x] **Attendance feeds the student dashboard** — the gauge, both attendance
+      stat cards and the at-risk task all read `attendance_records` live.
+      `AttendanceRiskEvaluator` gained `project()` for the predicted figure.
 
 - [x] **GA/GRA Certification Letter**
   - [x] Field completeness check (validation), GA vs GRA declared by the
@@ -305,6 +402,21 @@ elsewhere in this file:
 - [ ] `tests/` does not exist, though `composer.json` maps `Tests\` to it.
       Create it, or drop the `autoload-dev` entry.
 - [ ] Password reset UI — the `password_reset_tokens` table exists, no screens.
+- [ ] **Core now names a module directly, for the first time.**
+      `Services\StudentDashboard` imports Nureen's `AttendanceRecord` and
+      `AttendanceRiskEvaluator`; everywhere else Core goes through
+      `ModuleRegistry`, which is what keeps the folder system conflict-free.
+      It is guarded with `class_exists()` so a missing module degrades to a
+      held skeleton rather than a fatal, but the clean fix is a
+      `ProvidesDashboardPanels` contract. Worth doing before a second module
+      wants a dashboard panel.
+- [ ] Seed attendance rows in `DatabaseSeeder` — a teammate running
+      `./setup.sh` currently gets an empty attendance gauge and no predicted
+      figure, because no seeded student has any `attendance_records`.
+- [ ] Give `/notifications`, `/calendar`, `/documents` and `/profile` real
+      screens. The dashboard now links to all four and they are still
+      `PageController` placeholders; the notification feed in particular has
+      real data behind it now.
 - [ ] Profile / change-password screen.
 - [ ] A withdraw/cancel action for students on a pending application.
 - [ ] A "return to submitter, application stays open" outcome for
