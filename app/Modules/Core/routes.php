@@ -7,6 +7,7 @@ use App\Modules\Core\Http\Controllers\DocumentController;
 use App\Modules\Core\Http\Controllers\LoginController;
 use App\Modules\Core\Http\Controllers\NotificationController;
 use App\Modules\Core\Http\Controllers\PageController;
+use App\Modules\Core\Http\Controllers\ProfileController;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\Route;
 
@@ -37,7 +38,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/documents', [PageController::class, 'documents'])->name('documents.index');
     Route::get('/calendar', [PageController::class, 'calendar'])->name('calendar.index');
     Route::get('/help', [PageController::class, 'help'])->name('help.index');
-    Route::get('/profile', [PageController::class, 'profile'])->name('profile.show');
+    // The signed-in user's own record. Contact details and password are
+    // separate routes on purpose — see ProfileController.
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::patch('/profile/contact', [ProfileController::class, 'updateContact'])->name('profile.contact');
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
     Route::get('/settings', [PageController::class, 'settings'])->name('settings.index');
 
     // Administrator screens. Oversight is read-only by design: the admin owns

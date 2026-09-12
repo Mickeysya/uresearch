@@ -93,11 +93,4 @@ class PageController extends Controller
         ]);
     }
 
-    public function profile()
-    {
-        return view('core::pages.placeholder', [
-            'title' => 'Profile',
-            'description' => 'Editing your details and changing your password will be available here.',
-        ]);
-    }
 }
