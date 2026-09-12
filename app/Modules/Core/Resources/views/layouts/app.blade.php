@@ -7,7 +7,7 @@
     <title>UResearch</title>
     <link rel="icon" type="image/png" href="{{ asset('images/uresearch-logo.png') }}">
     @include('core::partials.stylesheets')
-    <script>
+    <script @cspNonce>
         // Applied before the body paints, straight from localStorage, so a
         // collapsed sidebar never flashes open-then-closed on page load --
         // this is a full page reload every navigation, not an SPA.
@@ -35,7 +35,7 @@
         </div>
     </div>
 
-    <script>
+    <script @cspNonce>
         (function () {
             var toggle = document.getElementById('sidebar-toggle');
             if (! toggle) return;

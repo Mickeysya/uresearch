@@ -413,6 +413,8 @@ Everything else is Sail:
 ./vendor/bin/sail artisan route:list       # every route, including all modules
 ./vendor/bin/sail artisan tinker           # REPL against the app
 ./vendor/bin/sail artisan optimize:clear   # clear config/route/view caches
+./vendor/bin/sail artisan test             # the test suite (SQLite in memory —
+                                           #   never touches your database)
 
 ./vendor/bin/sail logs                     # view all logs
 ./vendor/bin/sail logs mysql               # view just MySQL logs

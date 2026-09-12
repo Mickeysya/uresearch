@@ -69,7 +69,7 @@
 
 @if ($total > 0)
     @push('scripts')
-        <script>
+        <script @cspNonce>
             (function () {
                 var el = document.getElementById(@json($chartId));
                 if (! el || typeof Chart === 'undefined') return;

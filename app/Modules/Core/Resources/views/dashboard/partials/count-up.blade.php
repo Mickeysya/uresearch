@@ -19,7 +19,7 @@
 --}}
 @once
     @push('scripts')
-        <script>
+        <script @cspNonce>
             (function () {
                 if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 

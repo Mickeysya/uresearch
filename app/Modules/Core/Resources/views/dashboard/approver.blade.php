@@ -58,7 +58,7 @@
 
 @push('scripts')
     @if ($total > 0)
-        <script>
+        <script @cspNonce>
             new Chart(document.getElementById('dashboardChart'), {
                 type: 'bar',
                 data: {
