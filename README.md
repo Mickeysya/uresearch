@@ -116,6 +116,21 @@ To see what it would do without changing anything:
 
 ```bash
 ./sync.sh --check
+./sync.sh
+```
+
+`sync.sh` does everything a pull or a branch switch can require, and is safe
+to re-run: installs dependencies if `composer.lock` changed, copies across any
+new setting a teammate added to `.env.example` (your own `.env` is git-ignored,
+so a pull never updates it), runs pending migrations, clears compiled Blade
+views and config left over from the previous branch, and restarts the queue
+worker — which holds the app in memory and otherwise keeps running pre-pull
+code.
+
+To see what it would do without changing anything:
+
+```bash
+./sync.sh --check
 ```
 
 ### If the containers are too heavy on your machine
@@ -396,7 +411,7 @@ walkthrough is in [`docs/adding-a-module.md`](docs/adding-a-module.md).
 The three project scripts, all safe to re-run:
 
 ```bash
-./setup.sh                                 # first-time setup, from a clean clone (safe to re-run)
+./setup.sh                                 # first-time setup, from a clean clone
 ./sync.sh                                  # after a git pull or branch switch
 ./sync.sh --check                          # report what sync.sh would do, change nothing
 ./reset.sh                                 # wipe and reseed the database (prompts first)

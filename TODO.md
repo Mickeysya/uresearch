@@ -15,6 +15,8 @@ as the work it describes.
 | Core (auth, RBAC, workflow engine, uploads, UI) | done |
 | Student dashboard (5 stat cards + 4 live panels) | done |
 | Database notifications (in-app feed + unread count) | done |
+| Student dashboard (5 stat cards + 4 live panels) | done |
+| Database notifications (in-app feed + unread count) | done |
 | Norhanis — Travel | done · reference implementation |
 | Norhanis — Claims | done |
 | Norhanis — Publication | done |
@@ -40,6 +42,9 @@ as the work it describes.
 Run end to end on 2026-09-09 (Ubuntu 24.04 / WSL2, PHP 8.3.6, MySQL 8.4.11):
 
 - [x] `./setup.sh` completes from a clean clone and an empty volume
+- [x] All migrations run (9 at the time, 14 now); 11 accounts and 5 examiners seeded
+- [x] Every route registers, including every module — auto-discovery works
+      (20 at the time, 42 now)
 - [x] All migrations run (9 at the time, 14 now); 11 accounts and 5 examiners seeded
 - [x] Every route registers, including every module — auto-discovery works
       (20 at the time, 42 now)
@@ -90,6 +95,40 @@ being invisible to the roles that owned them. See `git log`.
       and status. Same theme as the queue-scoping gap below, different file
       (`DashboardController`).
 
+### Second pass — 2026-09-12
+
+- [x] **Fixed: every approve/reject returned HTTP 500.** `REDIS_HOST` was in
+      `docker-compose.yml` but in neither `.env` nor `.env.example`, and the
+      `artisan serve` HTTP worker does not inherit Compose's `environment:`
+      overrides — it falls back to `.env`, then to `config/database.php`'s
+      `127.0.0.1`, where no Redis listens. Queueing `ApplicationDecided` threw
+      `RedisException`, and because that `notify()` sits inside
+      `WorkflowEngine::decide()`'s transaction, the whole decision rolled back:
+      no history row, no stage advance, no readable error. Same failure mode
+      the team had already patched for `DB_HOST`/`MAIL_HOST` in `setup.sh`;
+      Redis arrived later and never got the same treatment.
+      `REDIS_HOST`/`REDIS_PORT` are now in `.env.example`, and `sync.sh`
+      backfills them into an existing `.env`.
+- [x] Walked a full local-travel chain end to end again after the fix:
+      submit → supervisor endorses → chair approves → `approved`, two history
+      rows, two notification emails in Mailpit.
+- [x] Re-confirmed both authorisation locks: a student POSTing to the decide
+      route gets 403, and a Chair acting on a row still at the Supervisor
+      stage is refused with the row left unmoved.
+
+- [ ] **Still open from that pass:** `WorkflowEngine::decide()` queues the
+      notification *inside* its DB transaction, so a broker outage turns a
+      valid approval into a rollback. Move the `notify()` after the commit
+      (or onto `DB::afterCommit()`) — an approval is the durable thing, the
+      email is best-effort. This is what turned a config mistake into data
+      loss, so it is worth closing regardless.
+- [ ] **Still open:** the approver dashboard's "Recent activity" table is
+      unscoped — it lists the 8 most recently updated applications for every
+      module the role owns a stage in, with no filter on student, supervisee
+      or department, so a supervisor sees other supervisors' students by name
+      and status. Same theme as the queue-scoping gap below, different file
+      (`DashboardController`).
+
 - [ ] Confirm `laravel/framework: ^12.0` in `composer.json` is still the
       version the team wants; bump if you prefer newer.
 - [ ] Have each teammate run `./setup.sh` on their own machine — the first run
@@ -103,16 +142,6 @@ being invisible to the roles that owned them. See `git log`.
 - [x] `docker-compose.yml` — MySQL 8.4, phpMyAdmin, Mailpit
 - [x] MySQL strict mode (`docker/mysql/my.cnf`) so bad data errors instead of truncating
 - [x] `setup.sh` (idempotent first-time setup) and `reset.sh`
-- [x] **Fixed: `setup.sh` destroyed data on every re-run.** Its header and the
-      README both promised it was safe to re-run, while the script ended in
-      `migrate:fresh --seed` — which drops every table. Anyone re-running it
-      to fix a container problem lost their whole database. It now runs
-      `migrate` against an existing database and seeds only on a genuine first
-      install; `./reset.sh` remains the deliberate way to start over.
-- [x] `scripts/env.sh` — helpers shared by `setup.sh` and `sync.sh`, so the
-      two cannot drift. Holds the generic "copy any key .env.example has that
-      .env lacks" backfill: `setup.sh` previously hard-coded a repair per key,
-      which is why `REDIS_HOST` was missed and took down every approval.
 - [x] `sync.sh` — run after a `git pull` or branch switch. Installs deps when
       `composer.lock` changed, copies new `.env.example` keys into your own
       git-ignored `.env`, runs pending migrations, clears Blade/config/route
@@ -191,94 +220,6 @@ knowing before anyone builds on them:
 - **Upcoming Tasks** is derived from real state (rejected applications, and
   at-risk attendance with no open appeal) because there is no deadlines table.
   Replace the body of `StudentDashboard::tasks()` and the panel keeps working.
-
-### Core — CGS dashboard (2026-09-12)
-
-Built to `Sample/CGS_TEAM_DASHBOARD.png`. Nureen's documented slice of the CGS
-dashboard — verification queues and at-risk alerts. Every figure is a live
-query; there is no placeholder data in the views.
-
-- [x] `Services\CgsDashboard` — one named method per panel, `safely()` on every
-      query so a dead source holds a skeleton instead of 500-ing the page
-- [x] Five figures with month-over-month deltas: Total Applications, Pending My
-      Action, Approved, Rejected, Active Students. A null delta renders nothing
-      rather than a fake 0% when there is no prior month to compare against.
-- [x] Workload Overview — SVG donut, segments drawn with `stroke-dashoffset`
-      inside one rotated group, animated in. Fed by
-      `ModuleRegistry::queuesForRole()`, so a new module appears by itself.
-- [x] Pending Actions, Attendance Alerts, Recent Activities, Quick Shortcuts
-- [x] Attendance Alerts reuses `StudentDashboard::attendanceBands()`, so a
-      student reading "Good" is counted as Good by CGS. The 80% figure in the
-      footer is the separate compliance threshold, deliberately not a band.
-- [x] Recent Activities merges `applications` (submissions) and
-      `approval_history` (decisions) rather than adding a third activity table
-- [x] Single-screen on desktop at any height — no min-height floor, every
-      vertical dimension in `vh`; verified fitting down to a 650px viewport
-- [x] CGS sidebar: registry-driven Applications tree (so Travel, which CGS owns
-      at `cgs_review`, cannot be forgotten), Attendance Monitoring tree
-      including the CSV upload, and five honest placeholder screens
-- [x] `Role::cgsTeam()` / `User::isCgs()`; CGS-only routes gated by role, not
-      only hidden from the sidebar
-- [x] Shared `partials/count-up.blade.php` — the gauge, donut and stat figures
-      all animate through one script
-
-### Core — admin dashboard, notifications, audit log (2026-09-12)
-
-- [x] **Admin dashboard** to `Sample/ADMIN_DASHBOARD.png` — `Services\AdminDashboard`,
-      five figures, Recent Activities, System Overview, Applications by Status,
-      Quick Actions. Same single-screen contract as CGS.
-      Two deliberate departures from the mockup, both because no scope
-      document describes them: **no Courses screen** ("course" appears in none
-      of the six scope docs, there is no `courses` table, and
-      `users.programme` is free text — the card counts distinct programmes and
-      says so), and **no separate Faculty screen** (every "Faculty" in the docs
-      is an approver role or the FOE/FSMC attribute, never a directory).
-      "Server Status" is replaced by **queue health**, which is a real signal.
-- [x] Admin oversight screens are **read-only** by design —
-      `queuesForRole('admin')` is empty, so acting on an application stays
-      with CGS. Ten `/admin/*` routes, all gated by `role:admin` as well as
-      hidden from the sidebar.
-- [x] **Notification feed** (`/notifications`) — real for every role, grouped
-      by day, filter tabs, mark-one and mark-all, pagination. Replaces the
-      placeholder. Rows are POST forms because following one marks it read.
-      Reachable from the dashboard panel too, which marks read and continues
-      to the application.
-- [x] **Audit log** (`/admin/audit-logs`) — `spatie/laravel-activitylog`.
-      Closes `docs/scope/jason.md` §1.4, which `approval_history` could not:
-      that table records decisions only, so a document *view* or *upload* left
-      no trace. Now logged from `DocumentController`, `DocumentStore`,
-      `WorkflowEngine` and `LoginController`.
-- [x] **Charts are Chart.js**, the team's documented choice — both donuts, the
-      status bars and the attendance gauge. Tooltips render as a `<div>` on
-      `<body>` so nothing can clip them, and they are positioned away from
-      what they describe. `chartjs-plugin-datalabels` prints the value above
-      each bar.
-- [x] **Attendance upload reads .xlsx** as well as .csv (`maatwebsite/excel`).
-      CGS exports xlsx from UTrace; before this someone converted every file
-      by hand.
-- [x] Sidebar identity card, per-role (student / CGS / admin); collapsed, only
-      the avatar and sign-out icon remain.
-- [x] Stylesheet split into four files — `uresearch.css` (Norhanis' original,
-      untouched), `layout.css`, `sidebar.css`, `dashboard.css`. The split is
-      lossless: the concatenation hashes identically to the single file it
-      replaced, so cascade order is unchanged. **Load order matters; do not
-      reorder the `<link>` tags.**
-- [x] **`dashboard.css` split again (2026-09-12).** It had grown to 2,519
-      lines — the only file in the repo over 800 — and was carrying four
-      unrelated screens plus every shared chart rule. Now nine sheets, each
-      owning one thing: `dashboard-banner`, `dashboard-student`,
-      `dashboard-gauge`, `dashboard-states`, `dashboard-cgs`,
-      `notifications`, `dashboard-admin`, `charts`, `sidebar-identity`.
-      Largest is 526 lines.
-      Lossless the same way as before, and verified the same way: the nine
-      files concatenated in load order normalise to a byte-identical hash
-      against the original. One block moved — `sidebar-identity` now loads
-      after the chart sheets instead of between them — and that was only done
-      after confirming it shares no selector with anything it crosses.
-      The sheet list now lives once in `core::partials.stylesheets`, included
-      by both layouts, instead of being duplicated in each.
-      New styling goes in the sheet that owns that screen; anything shared by
-      all three dashboards goes in `charts.css` or `dashboard-states.css`.
 
 ### Docs
 - [x] `README.md`, `CLAUDE.md`, `LEGACY.md`, this file
@@ -408,14 +349,7 @@ query; there is no placeholder data in the views.
       stat cards and the at-risk task all read `attendance_records` live.
       `AttendanceRiskEvaluator` gained `project()` for the predicted figure.
 
-- [~] **GA/GRA Certification Letter**
-  - [x] **Closed: the letter is now dispatched** (`nureen.md` Module 4 asks
-        for "generate, format, **and dispatch**"). `Notifications\CertificationIssued`
-        emails the student with the PDF attached from the private disk, and
-        also writes to the in-app feed. The letter itself stays an
-        `ApplicationDocument` behind the authorised route — the email is a
-        copy, not the record — and a missing file degrades to a mail without
-        an attachment rather than a failed job.
+- [x] **GA/GRA Certification Letter**
   - [x] Field completeness check (validation), GA vs GRA declared by the
         student and checked by CGS at the `cgs_verify` stage
   - [x] Approver endorsement stage (Senior Director CGS, `senior_director`)
@@ -742,136 +676,25 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       module — and then a change in `Core`, so agree it first.
 - [ ] Pagination on queues and the tracking page; both currently `->get()`
       everything, which is fine at seed scale and not at real scale.
-- [x] **Fixed: `tests/` did not exist**, though `composer.json` mapped `Tests\`
-      to it and required PHPUnit 11 — so `php artisan test` failed outright on
-      a missing `phpunit.xml`. There is now a working harness: SQLite in
-      memory, so it needs no Docker, no MySQL and no `.env.testing`, and can
-      never touch a developer's own data. `php artisan test` — 13 tests in
-      under a second.
-- [x] **Content-Security-Policy on every HTML response (2026-09-12).** The
-      portal previously sent none at all, so a single unescaped value reaching
-      Blade would have let an injected `<script>` simply run. Now
-      `Core\Http\Middleware\ContentSecurityPolicy`, plus `nosniff`,
-      `Referrer-Policy` and `X-Frame-Options: DENY`.
-      **No `unsafe-eval`** — nothing needs it. Chart.js 4.4.1 and
-      chartjs-plugin-datalabels 2.2.0 were both downloaded and checked for
-      `eval(` / `new Function`: zero occurrences in either, and none in this
-      repo. If a future library appears to need it, replace the library.
-      **No `unsafe-inline` for scripts** either. All 10 inline blocks carry a
-      per-request nonce via the `@cspNonce` Blade directive, and the sidebar's
-      `onclick` became an `addEventListener` — a nonce cannot allow-list an
-      event-handler attribute.
-      `style-src` *does* allow `'unsafe-inline'`, deliberately: 44 inline
-      `style="…"` attributes carry real values (the gauge's arc, the donut's
-      offset, per-card delays) and CSP has no nonce for style *attributes*.
-      Style injection cannot execute script, so the exposure is far smaller.
-      **Writing a new inline `<script>` without `@cspNonce` fails silently** —
-      the page still returns 200 and the browser just refuses to run it — so
-      `ContentSecurityPolicyTest` asserts every inline block on every screen
-      carries the nonce, and that no page reintroduces an inline handler.
-- [x] **Chart.js and its datalabels plugin now ship from `public/js`,
-      not a CDN (2026-09-12).** Same files, same versions, minified from npm.
-      Three reasons, in order of weight:
-      **(1)** `script-src` names no origin at all now — an allow-listed CDN is
-      a standing permission to run whatever that CDN serves, and jsdelivr
-      hosts every package on npm. Nonce-only is the strict form, and it is
-      what Chrome's own CSP guidance recommends over an allow-list.
-      **(2)** The demo works on a flaky connection or none at all — worth
-      having before the FYP presentation.
-      **(3)** It ended a console warning: Chart.js's minified build points at
-      a source map, DevTools requested it, and `connect-src 'self'` correctly
-      refused. The map is 931 KB — four and a half times the library, for
-      debugging Chart.js internals — so it is not shipped; the directive is
-      stripped instead, with a note in the file saying how to restore it.
-      The portal now loads **zero** off-origin resources.
-- [ ] Password reset UI ("forgot password") — the `password_reset_tokens`
-      table exists, no screens. Changing a password you already know is done;
-      see the profile screen below.
-- [x] **Fixed: Core named a module directly.** All three dashboard services
-      imported Nureen's `AttendanceRecord` / `AttendanceRiskEvaluator` behind
-      a `class_exists()` guard — Core reaching into a teammate's folder, which
-      is the one thing the folder system exists to prevent.
-      Core now declares `Contracts\SuppliesAttendance` and hands out
-      `Support\AttendanceReading` (a readonly DTO, so Core never holds another
-      module's Eloquent model); Nureen implements it in
-      `Support\AttendanceProvider` and binds it from her own `ModuleProvider`.
-      `grep 'App\Modules\(Nureen\|Norhanis\|…)' app/Modules/Core` now returns
-      nothing but one explanatory comment. Degradation is unchanged: nothing
-      bound means the attendance panels hold their skeletons.
-      The same pattern is the template for the next module that wants a panel.
-- [x] **Deduplicated the three dashboard services.**
-      `safely()`, `unavailable()`, the per-request memo and `withTrend()` were
-      written out identically in `StudentDashboard`, `CgsDashboard` and
-      `AdminDashboard`, and had begun to drift — `CgsDashboard::latestRecords()`
-      and `AdminDashboard::latestAttendance()` were the same query under two
-      names. Now `Services\Concerns\BuildsPanels`. The three services lost 148
-      lines between them with every figure unchanged.
-      Also: `ModuleRegistry::labelFor()` replaces three copies of the
-      "registered module label, else prettify the key" fallback, and
-      `AttendanceRecord::latestPerStudent()` replaces three hand-built copies
-      of the same self-join (CGS dashboard, admin average, at-risk list).
-- [ ] **Seed demo data in `DatabaseSeeder`.** A teammate running `./setup.sh`
-      gets 11 accounts and empty dashboards: no attendance rows, nothing in a
-      CGS queue, no notifications. Demo data was created locally during
-      development but deliberately not committed to the seeder, so it exists
-      on one machine only. Worth fixing before the FYP demo.
-- [ ] Give `/calendar` and `/documents` real screens. Both are still
-      `PageController` placeholders that the dashboard links to.
-      (`/notifications` and `/profile` are done — see below.)
-- [x] **Profile screen (2026-09-13)** — `/profile`, replacing the placeholder.
-      `Http\Controllers\ProfileController`, `Resources/views/profile/show`,
-      `public/css/profile.css`.
-      **Nobody owned this.** "Profile" appears in none of the six scope
-      documents; the nearest claims (`jason.md` §1.1 authentication, §5.5
-      "User Management", `technical.md` §3 "System Administrators manage user
-      roles") are all about an administrator editing *other people's*
-      accounts, never a user editing their own. Built as Core, like the
-      dashboards and the notification feed — but if the Users and Roles screen
-      goes to Jason, this belongs beside it.
-      **Almost everything is read-only, deliberately.** Name, email, matric
-      number, programme, department, faculty, role and supervisor are
-      administrative facts: a student who could edit `programme` could move
-      their own candidacy deadline, and one who could edit `supervisor_id`
-      could reassign their supervisor and redirect their own approval queue —
-      that column is set by CGS approving a Supervision request and is the
-      only thing that makes an appointment real. The screen shows them,
-      explains that CGS holds them, and lets the user edit a contact number
-      and their password. A test posts `role=admin` and `supervisor_id` at the
-      contact form and asserts neither moves.
-      Password change requires the current password, is written to the audit
-      log (never the password itself), and regenerates the session id.
-      Recent sign-ins are listed from the activity log `LoginController`
-      already writes, so an unfamiliar time or IP is visible to the account's
-      owner.
-      **Layout:** identity card left, task-grouped cards right — the shape
-      account screens converge on, where the profile card is the visual anchor
-      and everything else is grouped by what the reader came to do. No tabs:
-      with two groups, hiding one behind a tab costs a click and buys nothing.
-      The first attempt capped itself at 1080px and left a third of a wide
-      monitor empty; the identity card now takes a fixed 300px and the right
-      column takes the slack, pairing into two columns above 1280px. Below
-      1000px the card becomes a banner across the top rather than a cramped
-      rail.
-      The card carries real figures rather than a bio field nobody fills in —
-      applications, in-progress count, attendance, supervisee count — each
-      dropped when it does not apply, so CGS and admin see a short card
-      instead of a row of dashes. Attendance comes through
-      `Contracts\SuppliesAttendance`, which is the first use of that contract
-      outside the dashboards and confirms it generalises.
-- [x] **The top bar is pinned (2026-09-13).** `.main-content-header` is now
-      `position: sticky; top: 0`. The sidebar beside it was already sticky, so
-      scrolling a long page (the notification feed, the audit log, the
-      profile) slid the UTP bar away while the sidebar stayed — the content
-      boundary looked broken halfway down the page. Sticky rather than fixed:
-      fixed takes it out of flow and its 64px would have to be paid back with
-      padding every page would need to know about. `z-index: 5` clears page
-      content (0–3) and stays under the chart tooltip's 9999, so a tooltip
-      near the top of a chart still draws over the bar instead of being
-      clipped by it. Anything else made sticky must clear 64px — the profile's
-      identity card sits at `top: 80px` for exactly this reason.
-- [ ] **Password reset ("forgot password") is still missing** — this screen
-      only covers changing a password you already know. The
-      `password_reset_tokens` table has been waiting since the first migration.
+- [ ] `tests/` does not exist, though `composer.json` maps `Tests\` to it.
+      Create it, or drop the `autoload-dev` entry.
+- [ ] Password reset UI — the `password_reset_tokens` table exists, no screens.
+- [ ] **Core now names a module directly, for the first time.**
+      `Services\StudentDashboard` imports Nureen's `AttendanceRecord` and
+      `AttendanceRiskEvaluator`; everywhere else Core goes through
+      `ModuleRegistry`, which is what keeps the folder system conflict-free.
+      It is guarded with `class_exists()` so a missing module degrades to a
+      held skeleton rather than a fatal, but the clean fix is a
+      `ProvidesDashboardPanels` contract. Worth doing before a second module
+      wants a dashboard panel.
+- [ ] Seed attendance rows in `DatabaseSeeder` — a teammate running
+      `./setup.sh` currently gets an empty attendance gauge and no predicted
+      figure, because no seeded student has any `attendance_records`.
+- [ ] Give `/notifications`, `/calendar`, `/documents` and `/profile` real
+      screens. The dashboard now links to all four and they are still
+      `PageController` placeholders; the notification feed in particular has
+      real data behind it now.
+- [ ] Profile / change-password screen.
 - [ ] A withdraw/cancel action for students on a pending application.
 - [ ] A "return to submitter, application stays open" outcome for
       `WorkflowEngine::decide()` — currently only approve/reject exist.
