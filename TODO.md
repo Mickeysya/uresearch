@@ -350,15 +350,13 @@ knowing before anyone builds on them:
       `AttendanceRiskEvaluator` gained `project()` for the predicted figure.
 
 - [~] **GA/GRA Certification Letter**
-  - [ ] **Gap against `nureen.md` Module 4.** The scope reads "generate,
-        format, **and dispatch** the official PDF certification letter, which
-        the student can instantly download." Generation, storage and download
-        all work. Dispatch does not: the student gets the standard
-        `ApplicationDecided` mail, which announces the approval but carries no
-        attachment. Either attach the PDF in a certification-specific
-        notification, or reword the scope to "notifies the student, who
-        downloads it" — the second is defensible, but it should be a decision
-        rather than a silent difference between the report and the code.
+  - [x] **Closed: the letter is now dispatched** (`nureen.md` Module 4 asks
+        for "generate, format, **and dispatch**"). `Notifications\CertificationIssued`
+        emails the student with the PDF attached from the private disk, and
+        also writes to the in-app feed. The letter itself stays an
+        `ApplicationDocument` behind the authorised route — the email is a
+        copy, not the record — and a missing file degrades to a mail without
+        an attachment rather than a failed job.
   - [x] Field completeness check (validation), GA vs GRA declared by the
         student and checked by CGS at the `cgs_verify` stage
   - [x] Approver endorsement stage (Senior Director CGS, `senior_director`)
@@ -712,6 +710,21 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       the page still returns 200 and the browser just refuses to run it — so
       `ContentSecurityPolicyTest` asserts every inline block on every screen
       carries the nonce, and that no page reintroduces an inline handler.
+- [x] **Chart.js and its datalabels plugin now ship from `public/js`,
+      not a CDN (2026-09-12).** Same files, same versions, minified from npm.
+      Three reasons, in order of weight:
+      **(1)** `script-src` names no origin at all now — an allow-listed CDN is
+      a standing permission to run whatever that CDN serves, and jsdelivr
+      hosts every package on npm. Nonce-only is the strict form, and it is
+      what Chrome's own CSP guidance recommends over an allow-list.
+      **(2)** The demo works on a flaky connection or none at all — worth
+      having before the FYP presentation.
+      **(3)** It ended a console warning: Chart.js's minified build points at
+      a source map, DevTools requested it, and `connect-src 'self'` correctly
+      refused. The map is 931 KB — four and a half times the library, for
+      debugging Chart.js internals — so it is not shipped; the directive is
+      stripped instead, with a note in the file saying how to restore it.
+      The portal now loads **zero** off-origin resources.
 - [ ] Password reset UI — the `password_reset_tokens` table exists, no screens.
 - [ ] **Core now names a module directly, for the first time.**
       `Services\StudentDashboard` imports Nureen's `AttendanceRecord` and
