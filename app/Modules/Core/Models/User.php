@@ -67,6 +67,12 @@ class User extends Authenticatable
         return Role::isCgs($this->role);
     }
 
+    /** The system administrator. Owns no approval stage by design. */
+    public function isAdmin(): bool
+    {
+        return $this->role === Role::ADMIN;
+    }
+
     public function roleLabel(): string
     {
         return Role::label($this->role);

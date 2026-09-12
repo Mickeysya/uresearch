@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Core\Http\Controllers\AdminController;
 use App\Modules\Core\Http\Controllers\ApplicationTrackingController;
 use App\Modules\Core\Http\Controllers\DashboardController;
 use App\Modules\Core\Http\Controllers\DocumentController;
@@ -38,6 +39,21 @@ Route::middleware('auth')->group(function () {
     Route::get('/help', [PageController::class, 'help'])->name('help.index');
     Route::get('/profile', [PageController::class, 'profile'])->name('profile.show');
     Route::get('/settings', [PageController::class, 'settings'])->name('settings.index');
+
+    // Administrator screens. Oversight is read-only by design: the admin owns
+    // no workflow stage, so nothing here acts on an application.
+    Route::middleware('role:'.Role::ADMIN)->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/students', [AdminController::class, 'students'])->name('students.index');
+        Route::get('/applications', [AdminController::class, 'applications'])->name('applications.index');
+        Route::get('/attendance', [AdminController::class, 'attendance'])->name('attendance.overview');
+        Route::get('/attendance/at-risk', [AdminController::class, 'attendanceAtRisk'])->name('attendance.at-risk');
+        Route::get('/reports', [AdminController::class, 'reports'])->name('reports.index');
+        Route::get('/reports/approval-times', [AdminController::class, 'approvalTimes'])->name('reports.approval-times');
+        Route::get('/reports/bottlenecks', [AdminController::class, 'bottlenecks'])->name('reports.bottlenecks');
+        Route::get('/users', [AdminController::class, 'users'])->name('users.index');
+        Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('audit.index');
+        Route::get('/documents', [AdminController::class, 'documents'])->name('documents.index');
+    });
 
     // CGS-only screens. Gated by role here as well as hidden from the sidebar,
     // because a sidebar that does not render a link is not access control.
