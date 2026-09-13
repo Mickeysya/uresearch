@@ -14,7 +14,7 @@ class AppointmentDetail extends Model
 
     protected $fillable = [
         'application_id', 'examiner_name', 'examiner_institution', 'examiner_email', 'examiner_expertise',
-        'examiner_type', 'letter_ref_no', 'candidate_degree', 'candidate_programme',
+        'examiner_type', 'examiner_address', 'letter_ref_no', 'candidate_degree', 'candidate_programme',
         'supervisor_name', 'thesis_title', 'letter_prepared_at',
     ];
 

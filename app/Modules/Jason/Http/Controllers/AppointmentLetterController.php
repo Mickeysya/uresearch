@@ -133,6 +133,7 @@ class AppointmentLetterController extends Controller
 
         $data = $request->validate([
             'examiner_type' => ['required', Rule::in([AppointmentDetail::TYPE_INTERNAL, AppointmentDetail::TYPE_EXTERNAL])],
+            'examiner_address' => ['required', 'string', 'max:500'],
             'letter_ref_no' => ['required', 'string', 'max:60'],
             'candidate_degree' => ['required', 'string', 'max:150'],
             'candidate_programme' => ['required', 'string', 'max:150'],
@@ -213,9 +214,16 @@ class AppointmentLetterController extends Controller
 
         $field = $student?->department;
 
+        $type = $detail->examiner_type ?? $this->guessExaminerType($detail->examiner_institution);
+
+        // The CGS templates file the two letters under different series --
+        // PGS for external appointments, CGS for internal ones.
+        $series = $type === AppointmentDetail::TYPE_INTERNAL ? 'CGS' : 'PGS';
+
         return [
-            'examiner_type' => $detail->examiner_type ?? $this->guessExaminerType($detail->examiner_institution),
-            'letter_ref_no' => $detail->letter_ref_no ?? 'UTP/CGS/AD/'.($student?->matric_no ?? $application->id),
+            'examiner_type' => $type,
+            'examiner_address' => $detail->examiner_address ?? $detail->examiner_institution,
+            'letter_ref_no' => $detail->letter_ref_no ?? "UTP/{$series}/AD/".($student?->matric_no ?? $application->id),
             'candidate_degree' => $detail->candidate_degree ?? trim($level.($level && $field ? ' in '.$field : $field ?? '')),
             'candidate_programme' => $detail->candidate_programme ?? $field,
             'supervisor_name' => $detail->supervisor_name ?? $student?->supervisor?->name,

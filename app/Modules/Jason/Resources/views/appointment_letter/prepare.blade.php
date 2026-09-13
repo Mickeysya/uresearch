@@ -43,6 +43,15 @@
             </p>
             @error('examiner_type') <p class="field-error">{{ $message }}</p> @enderror
 
+            <label for="examiner_address">Examiner's Address</label>
+            <textarea name="examiner_address" id="examiner_address" rows="4" required
+                      class="@error('examiner_address') is-invalid @enderror">{{ old('examiner_address', $defaults['examiner_address']) }}</textarea>
+            <p class="queue-meta" style="margin-top: -8px;">
+                Printed under the examiner's name at the top of the letter, one line each —
+                department or faculty, institution, postcode and city, country.
+            </p>
+            @error('examiner_address') <p class="field-error">{{ $message }}</p> @enderror
+
             <label for="letter_ref_no">Our Ref</label>
             <input type="text" name="letter_ref_no" id="letter_ref_no" required
                    value="{{ old('letter_ref_no', $defaults['letter_ref_no']) }}"
