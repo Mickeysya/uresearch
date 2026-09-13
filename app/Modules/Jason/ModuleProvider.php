@@ -4,6 +4,8 @@ namespace App\Modules\Jason;
 
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Jason\Workflows\AppointmentLetterWorkflow;
+use App\Modules\Jason\Workflows\HardboundAppealWorkflow;
+use App\Modules\Jason\Workflows\HardboundSubmissionWorkflow;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -20,11 +22,7 @@ class ModuleProvider extends ServiceProvider
     public function boot(ModuleRegistry $registry): void
     {
         $registry->register(new AppointmentLetterWorkflow());
-
-        // Still to build -- both blocked on the open WorkflowEngine "return
-        // to student" question and the unseeded senior_exec_cgs account;
-        // see TODO.md.
-        // $registry->register(new Workflows\HardboundSubmissionWorkflow());
-        // $registry->register(new Workflows\HardboundAppealWorkflow());
+        $registry->register(new HardboundSubmissionWorkflow());
+        $registry->register(new HardboundAppealWorkflow());
     }
 }

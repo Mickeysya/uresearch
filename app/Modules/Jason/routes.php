@@ -2,15 +2,13 @@
 
 use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Http\Controllers\AppointmentLetterController;
+use App\Modules\Jason\Http\Controllers\HardboundAppealController;
+use App\Modules\Jason\Http\Controllers\HardboundSubmissionController;
 use Illuminate\Support\Facades\Route;
 
 /*
 | Jason (22003299)
-| Appointment Letter & Report Management
-|
-| Hardbound Submission and Appeal Hardbound Submission are not routed yet --
-| both are blocked on the open WorkflowEngine "return to student" question
-| and the unseeded senior_exec_cgs account. See TODO.md.
+| Hardbound Submission · Appeal Hardbound Submission · Appointment Letter
 */
 
 Route::middleware('auth')->group(function () {
@@ -48,6 +46,43 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::DEAN_PGR]))->group(function () {
         Route::get('/appointment-letter/{application}/letter', [AppointmentLetterController::class, 'previewLetter'])
             ->name('appointment-letter.letter');
+    });
+
+    // ---- Hardbound Submission ------------------------------------------
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::get('/hardbound/new', [HardboundSubmissionController::class, 'create'])
+            ->name('hardbound.create');
+        Route::post('/hardbound', [HardboundSubmissionController::class, 'store'])
+            ->name('hardbound.store');
+
+        // Replacing a returned submission. The controller re-checks that the
+        // application is this student's and is actually awaiting correction.
+        Route::get('/hardbound/{application}/resubmit', [HardboundSubmissionController::class, 'resubmitForm'])
+            ->name('hardbound.resubmit.form');
+        Route::post('/hardbound/{application}/resubmit', [HardboundSubmissionController::class, 'resubmit'])
+            ->name('hardbound.resubmit');
+    });
+
+    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::SENIOR_EXEC_CGS]))->group(function () {
+        Route::get('/hardbound/queue', [HardboundSubmissionController::class, 'queue'])
+            ->name('hardbound.queue');
+        Route::post('/hardbound/{application}/decide', [HardboundSubmissionController::class, 'decide'])
+            ->name('hardbound.decide');
+    });
+
+    // ---- Appeal Hardbound Submission ------------------------------------
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::get('/hardbound-appeal/new', [HardboundAppealController::class, 'create'])
+            ->name('hardbound-appeal.create');
+        Route::post('/hardbound-appeal', [HardboundAppealController::class, 'store'])
+            ->name('hardbound-appeal.store');
+    });
+
+    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::SENIOR_EXEC_CGS]))->group(function () {
+        Route::get('/hardbound-appeal/queue', [HardboundAppealController::class, 'queue'])
+            ->name('hardbound-appeal.queue');
+        Route::post('/hardbound-appeal/{application}/decide', [HardboundAppealController::class, 'decide'])
+            ->name('hardbound-appeal.decide');
     });
 
 });

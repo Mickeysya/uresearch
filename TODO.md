@@ -19,7 +19,7 @@ as the work it describes.
 | Hani — Examiner pool + Nomination | done |
 | Hani — Conflict detection T2 · Re-viva | not started |
 | Jason — Appointment Letter | done |
-| Jason — Hardbound Submission · Appeal Hardbound Submission | scoped, not started |
+| Jason — Hardbound Submission · Appeal Hardbound Submission | done |
 | Chloe | scope not yet defined |
 | Automated tests | none |
 | **Runs end to end** | yes — verified 2026-09-09 |
@@ -225,34 +225,55 @@ exist and already carry this shape of chain elsewhere. `senior_exec_cgs` is
 declared but unused by any built module, and unseeded — see the cross-cutting
 note below.
 
-- [ ] **Hardbound Submission** (`hardbound_submission`) — Non-Executive CGS
+- [x] **Hardbound Submission** (`hardbound_submission`) — Non-Executive CGS
       → Senior Executive CGS
-  - [ ] `hardbound_submission_details` table: thesis title, matric number,
-        programme, supervisor
-  - [ ] Thesis PDF + clearance form uploads via `DocumentStore`
-  - [ ] Non-Exec review screen — forward to Senior Exec, or return to the
+  - [x] `hardbound_submission_details` table: thesis title, matric number,
+        programme, supervisor. Captured at submission rather than read back
+        off `users`, so a candidate who later changes programme or
+        supervisor does not retroactively change what CGS reviewed.
+  - [x] Thesis PDF + clearance form uploads via `DocumentStore`
+  - [x] Non-Exec review screen — forward to Senior Exec, or return to the
         student with mandatory comments
-  - [ ] Senior Exec approve/reject, auto-email on approval
-  - [ ] Resubmission form for a returned application
-  - [ ] **Open question, resolve before building the review stage:** the
-        spec wants "return to student, application stays open," but
-        `WorkflowEngine::decide()` currently only knows approve (advance) and
-        reject (terminate, freeze `current_stage`). Decide whether "returned"
-        is a new outcome the engine needs to support, or whether a return is
-        modelled as a rejection that the resubmission form clones into a
-        fresh application. This is a `WorkflowEngine` change either way, so
-        raise it with the team first, same as any other Core change.
+  - [x] Senior Exec approve/reject, auto-email on approval — the engine's
+        `ApplicationDecided` sends the email; final approval also issues an
+        acknowledgement receipt PDF via `DocumentStore::storeGenerated()`
+  - [x] Resubmission form for a returned application
+  - [x] **Open question, resolved without a Core change:** the spec wants
+        "return to student, application stays open," which the engine has no
+        outcome for. Taken the second of the two options offered here: a
+        return is a rejection at `cgs_review`, and the resubmission form
+        clones it into a fresh application carrying `resubmission_of_id`
+        back to the returned one. That needed no `WorkflowEngine` change —
+        reject already terminates, and the cloning is module code — and it
+        keeps each attempt, its reviewer and its remarks on the record
+        instead of overwriting them. Which stage the rejection happened at
+        is what separates the two endings: returned at `cgs_review` and the
+        student resubmits, rejected at `cgs_approve` and their only route is
+        the appeal chain. A true "returned, still open" outcome is still
+        worth having in Core — see Cross-cutting — but nothing here is
+        blocked on it now.
 
-- [ ] **Appeal Hardbound Submission** (`hardbound_appeal`) — only filable
+- [x] **Appeal Hardbound Submission** (`hardbound_appeal`) — only filable
       once a Hardbound Submission has been rejected/returned
-  - [ ] `hardbound_appeal_details` table, FK'd to the originating
+  - [x] `hardbound_appeal_details` table, FK'd to the originating
         `hardbound_submission` application
-  - [ ] Appeal memo upload + written justification
-  - [ ] Non-Exec: compile the Dean PFR report (Dompdf) from the appeal memo
-        and the original submission, then forward to Senior Exec
-  - [ ] Senior Exec: ruling (accept/reject) — on accept, decide how the
-        original Hardbound Submission application gets reopened
-  - [ ] Auto-email the ruling to the student
+  - [x] Appeal memo upload + written justification
+  - [x] Non-Exec: compile the Dean PFR report (Dompdf) from the appeal memo
+        and the original submission, then forward to Senior Exec. The
+        Non-Exec's remarks are the recommendation printed in the report, so
+        they are required at that stage.
+  - [x] Senior Exec: ruling (accept/reject) — **on accept the original is
+        not rewritten.** `applications.status` belongs to WorkflowEngine and
+        the original rejection is a decision on the record, not a mistake to
+        erase, so an upheld appeal instead unlocks the resubmission form for
+        the submission it names. Only two things make a submission
+        resubmittable: CGS returned it at `cgs_review`, or an appeal against
+        it was upheld.
+  - [x] Auto-email the ruling to the student — the engine's
+        `ApplicationDecided`, same as every other chain
+  - [x] A submission may only be appealed once, and only if it has not
+        already been replaced by a resubmission — enforced in the module,
+        not by a database constraint
 
 - [x] **Appointment Letter & Report Management** (`appointment_letter`) —
       Chair of Department (the spec's "Faculty Department") → Academic
@@ -320,10 +341,17 @@ elsewhere in this file:
 - [ ] A withdraw/cancel action for students on a pending application.
 - [ ] A "return to submitter, application stays open" outcome for
       `WorkflowEngine::decide()` — currently only approve/reject exist.
-      Jason's Hardbound Submission needs this; agree the design before
-      building that module's review stage.
-- [ ] Seed a `senior_exec_cgs` test account — no seeded user has this role
-      yet, and Jason's Hardbound Submission and Appeal chains both end there.
+      No longer blocking: Hardbound Submission ships a return as a rejection
+      at the review stage plus a resubmission that clones the application,
+      which needs no Core change. Still worth having if another chain wants
+      a genuine re-open, and it would let Hardbound drop the clone.
+- [ ] Seed a `senior_exec_cgs` test account — no seeded user has this role,
+      and Jason's Hardbound Submission and Appeal chains both end there. Both
+      chains are built and were tested against an account created directly in
+      the local database, so **the seeder still needs this line** before
+      anyone else can walk either chain:
+      `$this->user('Encik Rahim Senior Exec', 'seniorexec@utp.edu.my', Role::SENIOR_EXEC_CGS, ['department' => 'CGS']);`
+      Left to whoever owns the seeder rather than edited from a module folder.
 
 ### Team
 - [ ] **Admin module** — user management and role assignment. `technical.md`
@@ -349,8 +377,7 @@ elsewhere in this file:
 6. Nureen settles the UTrace data source before starting Attendance.
 7. RPD and Re-viva last — they are the two hardest, and both need scheduled
    commands.
-8. Jason can start now, independently of the rest of the team — Hardbound
-   Submission, Appeal Hardbound Submission and Appointment Letters all reuse
-   existing roles. Settle the "return to student" engine question and seed
-   the `senior_exec_cgs` account before building the Hardbound Submission
-   review stage.
+8. Jason's three chains are built. The "return to student" engine question
+   was settled without a Core change (see his section); the
+   `senior_exec_cgs` account still needs seeding before anyone other than
+   Jason can walk the Hardbound chains.
