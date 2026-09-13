@@ -103,9 +103,147 @@ class AppointmentLetterController extends Controller
     }
 
     /**
+     * The Non-Executive CGS letter-preparation screen, sitting between the
+     * Academic Executive's endorsement and the Dean's approval.
+     *
+     * Everything the letter needs is pre-filled from records the portal
+     * already holds -- see letterDefaults() -- so in practice this screen is
+     * a confirmation, not a data-entry form.
+     */
+    public function prepare(Request $request, Application $application, WorkflowEngine $engine)
+    {
+        $detail = $this->detailAwaitingPreparation($application, $engine);
+
+        return view('jason::appointment_letter.prepare', [
+            'application' => $application,
+            'detail' => $detail,
+            'student' => $application->student,
+            'defaults' => $this->letterDefaults($application, $detail),
+        ]);
+    }
+
+    /**
+     * Saves the prepared letter and hands it to the Dean. The stage move is
+     * still the engine's to make -- this only writes the module's own detail
+     * row before calling decide().
+     */
+    public function savePreparation(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
+    {
+        $detail = $this->detailAwaitingPreparation($application, $engine);
+
+        $data = $request->validate([
+            'examiner_type' => ['required', Rule::in([AppointmentDetail::TYPE_INTERNAL, AppointmentDetail::TYPE_EXTERNAL])],
+            'letter_ref_no' => ['required', 'string', 'max:60'],
+            'candidate_degree' => ['required', 'string', 'max:150'],
+            'candidate_programme' => ['required', 'string', 'max:150'],
+            'supervisor_name' => ['required', 'string', 'max:150'],
+            'thesis_title' => ['required', 'string', 'max:500'],
+            'remarks' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        // Remarks are the decision's, not the letter's -- the engine writes
+        // them to approval_history.
+        $remarks = $data['remarks'] ?? null;
+        unset($data['remarks']);
+
+        DB::transaction(function () use ($application, $request, $engine, $detail, $data, $remarks) {
+            $detail->fill($data + ['letter_prepared_at' => now()])->save();
+
+            $engine->decide($application, $request->user(), 'approve', $remarks);
+        });
+
+        return redirect()
+            ->route('appointment-letter.queue')
+            ->with('status', "Letter for application #{$application->id} prepared and sent to the Dean for approval.");
+    }
+
+    /**
+     * The prepared letter as the examiner will receive it, rendered inline so
+     * the Dean can read it before approving rather than approving a document
+     * nobody has seen. Same PDF view the dispatch uses.
+     */
+    public function previewLetter(Request $request, Application $application)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
+
+        abort_unless($detail->isPrepared(), 404, 'This letter has not been prepared yet.');
+
+        return $this->letterPdf($application, $detail)->stream("appointment-letter-{$application->id}.pdf");
+    }
+
+    /**
+     * The application's detail row, with the guard that this really is an
+     * appointment letter sitting on the preparation stage. The engine re-checks
+     * the acting role when decide() is finally called; this stops someone
+     * opening the form for an application that is past (or short of) that point.
+     */
+    protected function detailAwaitingPreparation(Application $application, WorkflowEngine $engine): AppointmentDetail
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($engine->currentStage($application)?->key === 'cgs_prep', 403,
+            'That application is not awaiting letter preparation.');
+
+        return AppointmentDetail::where('application_id', $application->id)->firstOrFail();
+    }
+
+    /**
+     * The automation. Every field on the letter except the thesis title comes
+     * from a record the portal already holds: the candidate and their matric
+     * number, department and supervisor are all on `users`, and the date is
+     * simply now(). Only the thesis title has no source -- no built module
+     * captures one yet -- so it is the single field CGS actually types.
+     *
+     * Values already saved win, so reopening the form shows what was entered
+     * rather than recomputing over the top of it.
+     *
+     * @return array<string, string|null>
+     */
+    protected function letterDefaults(Application $application, AppointmentDetail $detail): array
+    {
+        $student = $application->student;
+        $programme = $student?->programme ?? '';
+
+        $level = match (true) {
+            str_contains(strtolower($programme), 'phd') => 'PhD',
+            str_contains(strtolower($programme), 'msc'), str_contains(strtolower($programme), 'master') => 'MSc',
+            default => '',
+        };
+
+        $field = $student?->department;
+
+        return [
+            'examiner_type' => $detail->examiner_type ?? $this->guessExaminerType($detail->examiner_institution),
+            'letter_ref_no' => $detail->letter_ref_no ?? 'UTP/CGS/AD/'.($student?->matric_no ?? $application->id),
+            'candidate_degree' => $detail->candidate_degree ?? trim($level.($level && $field ? ' in '.$field : $field ?? '')),
+            'candidate_programme' => $detail->candidate_programme ?? $field,
+            'supervisor_name' => $detail->supervisor_name ?? $student?->supervisor?->name,
+            'thesis_title' => $detail->thesis_title,
+        ];
+    }
+
+    /**
+     * A UTP-hosted examiner is internal, anyone else external -- which decides
+     * whether the letter carries the honorarium and travel entitlements.
+     */
+    protected function guessExaminerType(string $institution): string
+    {
+        $haystack = strtolower($institution);
+
+        foreach (['universiti teknologi petronas', 'utp', 'petronas'] as $needle) {
+            if (str_contains($haystack, $needle)) {
+                return AppointmentDetail::TYPE_INTERNAL;
+            }
+        }
+
+        return AppointmentDetail::TYPE_EXTERNAL;
+    }
+
+    /**
      * One bar per person holding a stage role in this chain (Academic Exec,
-     * Dean), showing how many appointment-letter nominations are currently
-     * sitting there. Stages are role-owned, not assigned to one person, so
+     * Non-Exec CGS, Dean), showing how many appointment-letter nominations are
+     * currently sitting there. Stages are role-owned, not assigned to one person, so
      * everyone sharing a role sees the same count -- this just surfaces that
      * shared backlog by name instead of only as a role-level total.
      *
@@ -148,6 +286,15 @@ class AppointmentLetterController extends Controller
         // which stage this decision was actually made at.
         $stage = $engine->currentStage($application);
 
+        // Approving out of the preparation stage has to go through the prepare
+        // form, which is what actually writes the letter. Waving it through
+        // from the queue's generic Approve button would hand the Dean -- and
+        // then the examiner -- a letter with no candidate details in it.
+        // Rejecting from the queue stays available, as at every other stage.
+        if ($data['decision'] === 'approve' && $stage?->key === 'cgs_prep') {
+            return redirect()->route('appointment-letter.prepare', $application);
+        }
+
         try {
             $application = $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
         } catch (UnauthorizedException $e) {
@@ -176,17 +323,8 @@ class AppointmentLetterController extends Controller
     protected function issueAppointmentLetter(Application $application): void
     {
         $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
-        $student = $application->student;
-        $issuedAt = now();
 
-        $pdf = Pdf::loadView('jason::appointment_letter.pdf', [
-            'application' => $application,
-            'detail' => $detail,
-            'student' => $student,
-            'issuedAt' => $issuedAt,
-        ]);
-
-        $contents = $pdf->output();
+        $contents = $this->letterPdf($application, $detail)->output();
         $filename = 'Appointment-Letter-'.Str::slug($detail->examiner_name).'-'.$application->id.'.pdf';
 
         // Same private-disk, random-path convention as DocumentStore -- this
@@ -206,5 +344,23 @@ class AppointmentLetterController extends Controller
         Mail::to($detail->examiner_email)->send(
             new AppointmentLetterMail($application, $detail, $contents, $filename)
         );
+    }
+
+    /**
+     * The letter itself. Dated from letter_prepared_at rather than now(), so
+     * the Dean's preview, the archived copy and the examiner's attachment all
+     * carry the date CGS prepared it on.
+     */
+    protected function letterPdf(Application $application, AppointmentDetail $detail): \Barryvdh\DomPDF\PDF
+    {
+        return Pdf::loadView('jason::appointment_letter.pdf', [
+            'application' => $application,
+            'detail' => $detail,
+            'student' => $application->student,
+            'issuedAt' => $detail->letter_prepared_at ?? now(),
+            // The letter goes out over the Dean's name, so it is read from the
+            // account that holds the role rather than written into the template.
+            'dean' => User::where('role', Role::DEAN_PGR)->orderBy('name')->first(),
+        ]);
     }
 }
