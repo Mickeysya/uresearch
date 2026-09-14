@@ -8,6 +8,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Nureen\Models\GaCertificationDetail;
+use App\Modules\Nureen\Notifications\CertificationIssued;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -109,11 +110,18 @@ class CertificationController extends Controller
             'endorsedBy' => $endorsedBy,
         ]);
 
-        $documents->storeGenerated(
+        $certificate = $documents->storeGenerated(
             $application,
             $pdf->output(),
             "certification-{$application->id}.pdf",
             'GA/GRA Certification Letter',
         );
+
+        // "Generate, format, and dispatch" -- this is the dispatch. The
+        // generic ApplicationDecided mail announces the approval but carries
+        // nothing, so without this the student has to go and find the
+        // download. The letter itself stays an ApplicationDocument behind the
+        // authorised route; the email is a copy, not the record.
+        $application->student?->notify(new CertificationIssued($application, $certificate));
     }
 }

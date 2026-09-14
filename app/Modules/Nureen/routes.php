@@ -62,6 +62,8 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/attendance/upload', [AttendanceController::class, 'uploadForm'])->name('attendance.upload.form');
         Route::post('/attendance/upload', [AttendanceController::class, 'upload'])->name('attendance.upload');
+        // The blank sheet to fill in. ?format=csv for CSV; .xlsx by default.
+        Route::get('/attendance/template', [AttendanceController::class, 'template'])->name('attendance.template');
         Route::get('/attendance/at-risk', [AttendanceController::class, 'atRisk'])->name('attendance.at-risk');
 
         Route::get('/attendance-appeal/queue', [AttendanceAppealController::class, 'queue'])->name('attendance-appeal.queue');

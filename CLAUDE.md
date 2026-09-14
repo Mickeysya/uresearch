@@ -8,7 +8,7 @@ and the rest sit directly here.
 
 ## Stack
 
-Laravel 12 · PHP 8.2+ · MySQL 8.4 (Docker) · Blade · Chart.js (CDN) · Dompdf
+Laravel 12 · PHP 8.2+ · MySQL 8.4 (Docker) · Blade · Chart.js (`public/js`) · Dompdf
 
 MySQL, phpMyAdmin and Mailpit run in Docker; Laravel runs on the host via
 `php artisan serve`. `setup.sh` does first-time setup.
@@ -24,8 +24,9 @@ Six people share this repo, and **each owns exactly one folder** under
 | `Norhanis/` | Norhanis Erna Natasha (22006318) | Travel · Publication · Claims · RPD |
 | `Nureen/` | Nureen Nellysha (22006973) | Attendance · GA Extension · Supervision · Certification |
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
-| `Jason/` | Jason | Hardbound Submission · Appeal Hardbound Submission · Appointment Letters |
-| `Chloe/` | Chloe | to be scoped |
+| `Jason/` | Yau Jia Sheng "Jason" (22003299) | Hardbound Submission · Appeal Hardbound Submission · Appointment Letters |
+| `Chloe/` | Chloe Ching Qing En (22011629) | Workstation · Study Candidacy Reminder / Appeal / Dismissal |
+| `Haziq/` | Abdul Haziq bin Abdul Farouk (22007428) | GRA · GA · Stage Gates · Allowance Eligibility |
 
 Everything a module needs — migrations, models, controllers, routes, views —
 lives in its own folder. Nothing central lists the modules, so adding one never
@@ -99,10 +100,11 @@ Also: do not commit on `main`. Branch first.
 | Doc | Covers |
 |---|---|
 | `README.md` | setup, test accounts, commands |
+| `sync.sh` | run it after any `git pull` or branch switch; `--check` to dry-run |
 | `TODO.md` | what is built, what is not, and the agreed order of work |
 | `docs/architecture.md` | layers, engine, data model |
 | `docs/adding-a-module.md` | full worked example |
-| `docs/conventions.md` | naming, ownership, the nine rules |
+| `docs/conventions.md` | naming, ownership, the nine rules, which stylesheet to edit |
 | `docs/module-keys.md` | claim a `module_type` here |
 | `docs/migration-from-legacy.md` | every bug the rewrite fixed |
 

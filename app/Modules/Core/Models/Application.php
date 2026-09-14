@@ -72,6 +72,31 @@ class Application extends Model
         return app(WorkflowEngine::class)->progress($this);
     }
 
+    /**
+     * Human-facing reference, e.g. "GAEX-2026-00012".
+     *
+     * Derived, never stored: the id and the module key already determine it,
+     * so there is nothing to keep in sync and no column to add. Two letters
+     * per word of the module key, capped at four -- ga_extension -> GAEX.
+     */
+    public function reference(): string
+    {
+        $abbr = collect(explode('_', $this->module_type))
+            ->map(fn (string $word) => substr($word, 0, 2))
+            ->implode('');
+
+        // A single-word key ("travel") only yields two letters that way, so
+        // fall back to the first four of the key itself -> TRAV, not TR.
+        if (strlen($abbr) < 4) {
+            $abbr = substr($this->module_type, 0, 4);
+        }
+
+        $abbr = strtoupper(substr($abbr, 0, 4));
+        $year = ($this->submitted_at ?? $this->created_at ?? now())->format('Y');
+
+        return sprintf('%s-%s-%05d', $abbr, $year, $this->id);
+    }
+
     public function isOpen(): bool
     {
         return $this->status === self::STATUS_PENDING;

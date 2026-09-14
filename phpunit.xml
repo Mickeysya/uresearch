@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <!--
+            SQLite in memory, so `php artisan test` needs no Docker, no MySQL
+            and no .env.testing, and can never touch a developer's real data.
+            Every module's migrations are discovered by ModuleServiceProvider
+            exactly as they are in the app, so the schema under test is the
+            real one.
+        -->
+        <env name="APP_ENV" value="testing"/>
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
+
+        <!-- Nothing should reach a broker, a mail server or a cache here. -->
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="SESSION_DRIVER" value="array"/>
+
+        <!-- Hashing is the slowest thing in an auth test; 4 rounds is plenty. -->
+        <env name="BCRYPT_ROUNDS" value="4"/>
+    </php>
+</phpunit>

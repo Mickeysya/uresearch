@@ -7,7 +7,9 @@
 | `app/Modules/Core/**` | the team | by agreement — it affects all six of us |
 | `app/Modules/<Name>/**` | that person | only them |
 | `database/migrations/**` | the team | framework tables only; put yours in your module |
-| `public/css/uresearch.css` | Norhanis | append below the marked line; do not restyle above it |
+| `public/css/uresearch.css` | Norhanis | do not edit — her original sheet |
+| `public/css/dashboard-*.css` | the team | one dashboard screen each |
+| `public/css/charts.css` | the team | put new shared chart styling here |
 | `routes/web.php` | nobody | it only redirects `/` — your routes go in your folder |
 
 If you need something from Core, ask. A five-minute conversation beats a
@@ -71,6 +73,15 @@ Credentials belong in `.env`, which is git-ignored. Read them with `config()`.
 
 One branch per person: `feature/<name>-<module>`, e.g. `feature/nureen-attendance`.
 
+**After every pull or branch switch, run `./sync.sh`.** A pull can leave your
+checkout in a state the app cannot run in, and none of it is obvious:
+`composer.lock` may have changed, a teammate may have added a key to
+`.env.example` that your git-ignored `.env` does not have, there may be pending
+migrations, compiled Blade views from the previous branch are still being
+served, and `queue:work` holds the app in memory so the queue worker is still
+running pre-pull code. `./sync.sh --check` reports all of that without changing
+anything.
+
 Because you only touch your own folder, conflicts should be rare. If you hit
 one in `Core/`, stop and talk to the team rather than resolving it alone.
 
@@ -82,5 +93,24 @@ Do not commit `.env`, `vendor/`, `node_modules/`, or anything under
 - Extend `core::layouts.app` for signed-in pages, `core::layouts.guest` for auth.
 - Reuse the existing classes: `.card`, `.card-wide`, `.app-item`, `.stat-card`,
   `.status-badge`, `.empty-state`, `.stepper`. Norhanis' palette is in `:root`.
-- New shared styling goes **below** the marked line at the bottom of
-  `uresearch.css`, so her original sheet stays intact and reviewable.
+- New styling goes in **the sheet that owns that screen** —
+  `dashboard-student.css`, `dashboard-cgs.css`, `dashboard-admin.css`,
+  `notifications.css`. Anything genuinely shared by all three dashboards goes
+  in `charts.css` (chart surfaces) or `dashboard-states.css` (skeletons,
+  scrollbars). `uresearch.css` is Norhanis' original and is not edited at all
+  now, so it stays reviewable. To override a rule she wrote, append a new one
+  — and scope it with at least two classes, because `uresearch.css` contains
+  broad element rules like `.sidebar a` (0,1,1) that outrank a single class.
+- The sheets load in a fixed order, listed once in
+  `core::partials.stylesheets` and included by both layouts. Do not reorder
+  them; the cascade depends on it. Adding a sheet is a one-line edit there.
+- Charts are Chart.js. Include `core::dashboard.partials.chartjs` and the
+  shared tooltip, defaults and data-label plugin come with it.
+- Blade's directive regex is `\B`-anchored, so two directives written back to
+  back as `@endif@if` silently fail to compile the second one. Put a newline or
+  a non-word character between them — `}}@if` and `>@endif` are both fine.
+- **Check tag balance after editing a Blade partial.** A single stray `</div>`
+  leaks the rest of the panel out of its card and out of its grid row, which
+  looks like a CSS bug and is not one. The same applies to CSS: removing one
+  selector from a comma-separated group takes the declaration block with it
+  and silently kills the whole rule.

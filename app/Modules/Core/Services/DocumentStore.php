@@ -44,13 +44,27 @@ class DocumentStore
         // the student's original name is kept as metadata for display.
         $path = $file->store("applications/{$application->id}", 'local');
 
-        return $application->documents()->create([
+        $document = $application->documents()->create([
             'doc_type' => $docType,
             'original_name' => $file->getClientOriginalName(),
             'path' => $path,
             'mime_type' => $file->getClientMimeType(),
             'size_bytes' => $file->getSize(),
         ]);
+
+        activity('document')
+            ->causedBy(auth()->user())
+            ->performedOn($document)
+            ->withProperties([
+                'action' => 'uploaded',
+                'doc_type' => $docType,
+                'original_name' => $file->getClientOriginalName(),
+                'size_bytes' => $file->getSize(),
+                'application_id' => $application->id,
+            ])
+            ->log('Uploaded document');
+
+        return $document;
     }
 
     /**

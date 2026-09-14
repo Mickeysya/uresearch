@@ -1,0 +1,149 @@
+/* ============================================================
+   dashboard-gauge.css — the attendance gauge — animation, legend, facts
+
+   The SVG gauge's sweep, its band legend and the two figures beneath.
+   Loads after dashboard-student.css, whose .sdash-attendance-body sizes
+   the column this sits in.
+
+   Split out of dashboard.css on 2026-09-12. The sheets are linked
+   in a fixed order by layouts/app.blade.php and concatenate back to
+   exactly what dashboard.css contained, so the cascade is unchanged.
+   Load order matters. Do not reorder the <link> tags.
+   ============================================================ */
+
+/* =====================================================================
+   Attendance gauge — animation, legend column and facts.
+   ===================================================================== */
+
+.sdash-gauge { display: block; width: 100%; height: auto; overflow: visible; }
+
+.sdash-gauge-fill.tone-good     { stroke: #00BF63; }
+.sdash-gauge-fill.tone-warn     { stroke: #E9B23C; }
+.sdash-gauge-fill.tone-critical { stroke: #D0342C; }
+.sdash-gauge-fill.tone-none     { stroke: #C7CEDB; }
+
+/* Sweeps from empty to the student's value on load. --arc and --arc-offset
+   are written onto the element by the partial, so the maths stays in one
+   place and CSS only animates between them. */
+.sdash-gauge-fill {
+    stroke-dasharray: var(--arc) var(--arc);
+    stroke-dashoffset: var(--arc);
+    animation: sdash-sweep 0.95s cubic-bezier(0.22, 0.61, 0.36, 1) var(--rise-start, 0s) backwards;
+    animation-fill-mode: forwards;
+}
+
+@keyframes sdash-sweep {
+    to { stroke-dashoffset: var(--arc-offset); }
+}
+
+/* The marker lands as the sweep finishes rather than sitting there from
+   the first frame. */
+.sdash-gauge-marker {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: sdash-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--rise-start, 0s) + 0.7s) backwards;
+}
+
+@keyframes sdash-pop {
+    from { opacity: 0; transform: scale(0.2); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.sdash-gauge-side {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.sdash-legend li {
+    padding: 4px 8px;
+    border-radius: 7px;
+    transition: background-color 0.2s;
+}
+
+/* The band the student is actually in is called out, so the legend says
+   something rather than only labelling colours. */
+.sdash-legend li.is-active {
+    background: #F2F5FA;
+    font-weight: 600;
+}
+
+.sdash-legend-label { min-width: 0; }
+
+.sdash-legend-now {
+    margin-left: auto;
+    padding: 1px 7px;
+    border-radius: 20px;
+    background: var(--navy);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+}
+
+/* Two real figures under the legend, so the right-hand column carries its
+   own weight instead of being three coloured dots in a lot of white. */
+.sdash-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px solid #EFF1F6;
+}
+
+.sdash-facts div { min-width: 0; }
+
+.sdash-facts dt {
+    margin: 0 0 2px;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-grey);
+}
+
+.sdash-facts dd {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+}
+
+.sdash-facts dd span {
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--text-grey);
+}
+
+/* Panels fade up on first paint. Cheap, runs once, and every panel is
+   fully readable at its resting state -- nothing is parked invisible. */
+.sdash-stat,
+.sdash-card {
+    animation: sdash-rise var(--rise-span) cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+
+/* Staggered off --rise-start, so retiming the whole sequence is one edit. */
+.sdash-stats .sdash-stat:nth-child(1) { animation-delay: var(--rise-start); }
+.sdash-stats .sdash-stat:nth-child(2) { animation-delay: calc(var(--rise-start) + 1 * var(--rise-step)); }
+.sdash-stats .sdash-stat:nth-child(3) { animation-delay: calc(var(--rise-start) + 2 * var(--rise-step)); }
+.sdash-stats .sdash-stat:nth-child(4) { animation-delay: calc(var(--rise-start) + 3 * var(--rise-step)); }
+.sdash-stats .sdash-stat:nth-child(5) { animation-delay: calc(var(--rise-start) + 4 * var(--rise-step)); }
+.sdash-panels .sdash-col-left  .sdash-card:nth-child(1) { animation-delay: calc(var(--rise-start) + 3 * var(--rise-step)); }
+.sdash-panels .sdash-col-right .sdash-card:nth-child(1) { animation-delay: calc(var(--rise-start) + 4 * var(--rise-step)); }
+.sdash-panels .sdash-col-left  .sdash-card:nth-child(2) { animation-delay: calc(var(--rise-start) + 5 * var(--rise-step)); }
+.sdash-panels .sdash-col-right .sdash-card:nth-child(2) { animation-delay: calc(var(--rise-start) + 6 * var(--rise-step)); }
+
+@keyframes sdash-rise {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.sdash-stat { transition: box-shadow 0.18s, transform 0.18s; }
+.sdash-stat:hover {
+    box-shadow: 0 6px 18px -10px rgba(40, 75, 128, 0.45);
+    transform: translateY(-2px);
+}
+
