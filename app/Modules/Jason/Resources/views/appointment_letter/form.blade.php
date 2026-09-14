@@ -6,10 +6,9 @@
 @php
     // Repopulate after a validation failure, otherwise start with one
     // internal and one external slot -- the smallest panel that is valid.
-    $rows = old('examiners', [
-        ['examiner_type' => 'internal'],
-        ['examiner_type' => 'external'],
-    ]);
+    $rows = old('examiners', [['pool_id' => ''], ['pool_id' => '']]);
+    $internal = $pool->filter(fn ($e) => $e->isInternal());
+    $external = $pool->reject(fn ($e) => $e->isInternal());
 @endphp
 <div class="card-container-inline">
     <div class="card card-wide">
@@ -21,14 +20,21 @@
                 There are no candidates in your department yet.<br>
                 CGS assigns students to a department before nominations can be filed.
             </div>
+        @elseif ($internal->isEmpty() || $external->isEmpty())
+            <div class="empty-state">
+                The examiner list needs at least one internal and one external examiner
+                before a panel can be nominated.<br>
+                <a href="{{ route('appointment-letter.examiners') }}"><b>Add examiners to the list &rarr;</b></a>
+            </div>
         @else
             <p class="queue-meta">
-                Nominate the full panel at once — at least one internal and one external
+                Pick the full panel at once — at least one internal and one external
                 examiner. CGS prepares an appointment letter and a thesis evaluation report
                 for each of them, and the Dean approves the whole pack.
+                Not on the list? <a href="{{ route('appointment-letter.examiners') }}">Add the examiner first</a>.
             </p>
 
-            <form method="POST" action="{{ route('appointment-letter.store') }}" id="panel-form">
+            <form method="POST" action="{{ route('appointment-letter.store') }}">
                 @csrf
 
                 <label for="student_id">Candidate</label>
@@ -47,49 +53,38 @@
 
                 <div id="examiners">
                     @foreach ($rows as $i => $row)
-                        <fieldset class="app-item examiner-row" style="margin: 16px 0; border: 1px solid var(--border, #ddd); padding: 14px;">
-                            <legend style="font-weight: 600; padding: 0 6px;">Examiner <span class="row-number">{{ $i + 1 }}</span></legend>
-
-                            <label>Type</label>
-                            <select name="examiners[{{ $i }}][examiner_type]" required>
-                                <option value="internal" @selected(($row['examiner_type'] ?? '') === 'internal')>Internal Examiner (UTP)</option>
-                                <option value="external" @selected(($row['examiner_type'] ?? '') === 'external')>External Examiner</option>
-                            </select>
-                            @error("examiners.$i.examiner_type") <p class="field-error">{{ $message }}</p> @enderror
-
-                            <label>Examiner Name</label>
-                            <input type="text" name="examiners[{{ $i }}][examiner_name]" required
-                                   value="{{ $row['examiner_name'] ?? '' }}"
-                                   class="@error("examiners.$i.examiner_name") is-invalid @enderror">
-                            @error("examiners.$i.examiner_name") <p class="field-error">{{ $message }}</p> @enderror
-
-                            <label>Institution / Faculty</label>
-                            <input type="text" name="examiners[{{ $i }}][examiner_institution]" required
-                                   value="{{ $row['examiner_institution'] ?? '' }}"
-                                   class="@error("examiners.$i.examiner_institution") is-invalid @enderror">
-                            @error("examiners.$i.examiner_institution") <p class="field-error">{{ $message }}</p> @enderror
-
-                            <label>Examiner Email</label>
-                            <input type="email" name="examiners[{{ $i }}][examiner_email]" required
-                                   value="{{ $row['examiner_email'] ?? '' }}"
-                                   class="@error("examiners.$i.examiner_email") is-invalid @enderror">
-                            @error("examiners.$i.examiner_email") <p class="field-error">{{ $message }}</p> @enderror
-
-                            <label>Area of Expertise</label>
-                            <input type="text" name="examiners[{{ $i }}][examiner_expertise]" required
-                                   value="{{ $row['examiner_expertise'] ?? '' }}"
-                                   class="@error("examiners.$i.examiner_expertise") is-invalid @enderror">
-                            @error("examiners.$i.examiner_expertise") <p class="field-error">{{ $message }}</p> @enderror
-
-                            <button type="button" class="remove-row" style="margin-top: 8px;"
-                                    @if (count($rows) <= 2) hidden @endif>Remove this examiner</button>
-                        </fieldset>
+                        <div class="examiner-row">
+                            <label>Examiner <span class="row-number">{{ $i + 1 }}</span></label>
+                            <div style="display: flex; gap: 8px; align-items: flex-start;">
+                                <select name="examiners[{{ $i }}][pool_id]" required style="flex: 1;"
+                                        class="@error("examiners.$i.pool_id") is-invalid @enderror">
+                                    <option value="">— Select an examiner —</option>
+                                    <optgroup label="Internal Examiners (UTP)">
+                                        @foreach ($internal as $e)
+                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)>
+                                                {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
+                                    <optgroup label="External Examiners">
+                                        @foreach ($external as $e)
+                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)>
+                                                {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
+                                </select>
+                                <button type="button" class="remove-row" style="padding: 8px 12px;"
+                                        @if (count($rows) <= 2) hidden @endif>Remove</button>
+                            </div>
+                            @error("examiners.$i.pool_id") <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
                     @endforeach
                 </div>
 
                 <p class="queue-meta">
-                    The appointment pack is emailed to each examiner's address once the Dean
-                    approves — double-check them before submitting.
+                    The appointment pack is emailed to each examiner's address from the list once
+                    the Dean approves.
                 </p>
 
                 <button type="button" id="add-examiner">+ Add another examiner</button>
@@ -111,21 +106,17 @@
             const rows = list.querySelectorAll('.examiner-row');
             rows.forEach((row, i) => {
                 row.querySelector('.row-number').textContent = i + 1;
-                row.querySelectorAll('[name]').forEach(el => {
-                    el.name = el.name.replace(/examiners\[\d+\]/, 'examiners[' + i + ']');
-                });
+                row.querySelector('select').name = 'examiners[' + i + '][pool_id]';
                 // The two default slots stay; anything beyond can be removed.
                 row.querySelector('.remove-row').hidden = rows.length <= 2;
             });
         }
 
         add.addEventListener('click', () => {
-            const template = list.querySelector('.examiner-row');
-            const clone = template.cloneNode(true);
-            clone.querySelectorAll('input').forEach(el => el.value = '');
+            const clone = list.querySelector('.examiner-row').cloneNode(true);
+            clone.querySelector('select').value = '';
             clone.querySelectorAll('.field-error').forEach(el => el.remove());
-            clone.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-            clone.querySelector('select').value = 'external';
+            clone.querySelector('select').classList.remove('is-invalid');
             list.appendChild(clone);
             renumber();
         });

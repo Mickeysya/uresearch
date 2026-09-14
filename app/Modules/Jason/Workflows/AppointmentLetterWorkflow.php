@@ -104,12 +104,17 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
      */
     public function links(User $user): array
     {
-        if ($user->role !== Role::CHAIR) {
-            return [];
-        }
-
-        return [
-            ['label' => 'Nominate Examiner', 'route' => 'appointment-letter.create'],
-        ];
+        return match ($user->role) {
+            Role::CHAIR => [
+                ['label' => 'Nominate Examiner Panel', 'route' => 'appointment-letter.create'],
+                ['label' => 'Examiner List', 'route' => 'appointment-letter.examiners'],
+            ],
+            // CGS keeps the list too, so a new examiner can be registered
+            // by whoever hears of them first.
+            Role::NON_EXEC_CGS => [
+                ['label' => 'Examiner List', 'route' => 'appointment-letter.examiners'],
+            ],
+            default => [],
+        };
     }
 }

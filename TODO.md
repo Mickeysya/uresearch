@@ -285,8 +285,15 @@ note below.
         external, enforced at nomination. The student it's for is
         `applications.student_id` (the candidate), same pattern as Hani's
         `examiner_nominations` — no second student FK on the detail table.
-  - [x] Chair nominates the panel (filed against the chain, not a stage of
-        it — same shape as Hani's supervisor nomination); AE endorse or
+  - [x] Chair picks the panel from an examiner list
+        (`appointment_examiner_pool`, kept by Chairs and CGS at
+        "Examiner List") the same way they pick the candidate; a new examiner
+        is registered there first. Deliberately separate from Hani's
+        `examiners` pool so a change to hers cannot break a letter here.
+        Nominations copy the chosen rows, so editing or removing a list
+        entry never rewrites a letter already issued.
+  - [x] Nomination is filed against the chain, not a stage of it — same
+        shape as Hani's supervisor nomination; AE endorse or
         reject-with-comments; Non-Exec CGS prepares the pack; Dean
         approve/reject
   - [x] CGS preparation generates **two documents per examiner** from the

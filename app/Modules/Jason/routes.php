@@ -2,6 +2,7 @@
 
 use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Http\Controllers\AppointmentLetterController;
+use App\Modules\Jason\Http\Controllers\ExaminerPoolController;
 use App\Modules\Jason\Http\Controllers\HardboundAppealController;
 use App\Modules\Jason\Http\Controllers\HardboundSubmissionController;
 use Illuminate\Support\Facades\Route;
@@ -14,6 +15,17 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth')->group(function () {
 
     // ---- Appointment Letter --------------------------------------------
+
+    // The examiner list the Chair nominates from. Chairs and CGS both keep it.
+    Route::middleware('role:'.implode(',', [Role::CHAIR, Role::NON_EXEC_CGS]))->group(function () {
+        Route::get('/appointment-letter/examiners', [ExaminerPoolController::class, 'index'])
+            ->name('appointment-letter.examiners');
+        Route::post('/appointment-letter/examiners', [ExaminerPoolController::class, 'store'])
+            ->name('appointment-letter.examiners.store');
+        Route::post('/appointment-letter/examiners/{examiner}/toggle', [ExaminerPoolController::class, 'toggle'])
+            ->name('appointment-letter.examiners.toggle');
+    });
+
     Route::middleware('role:'.Role::CHAIR)->group(function () {
         Route::get('/appointment-letter/new', [AppointmentLetterController::class, 'create'])
             ->name('appointment-letter.create');

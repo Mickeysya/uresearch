@@ -14,6 +14,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Mail\AppointmentLetterMail;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
+use App\Modules\Jason\Models\PoolExaminer;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,13 +47,12 @@ class AppointmentLetterController extends Controller
                 ->where('department', $request->user()->department)
                 ->orderBy('name')
                 ->get(),
+            'pool' => PoolExaminer::active()->orderBy('name')->get(),
         ]);
     }
 
     public function store(Request $request, WorkflowEngine $engine)
     {
-        $types = [AppointmentExaminer::TYPE_INTERNAL, AppointmentExaminer::TYPE_EXTERNAL];
-
         $data = $request->validate([
             'student_id' => [
                 'required',
@@ -61,32 +61,29 @@ class AppointmentLetterController extends Controller
                     ->where('department', $request->user()->department),
             ],
             'examiners' => ['required', 'array', 'min:2'],
-            'examiners.*.examiner_type' => ['required', Rule::in($types)],
-            'examiners.*.examiner_name' => ['required', 'string', 'max:150'],
-            'examiners.*.examiner_institution' => ['required', 'string', 'max:150'],
-            'examiners.*.examiner_email' => ['required', 'email', 'max:150'],
-            'examiners.*.examiner_expertise' => ['required', 'string', 'max:255'],
+            'examiners.*.pool_id' => [
+                'required', 'distinct',
+                Rule::exists('appointment_examiner_pool', 'id')->where('is_active', true),
+            ],
         ], [
             'student_id.exists' => 'You may only nominate examiners for candidates in your own department.',
             'examiners.min' => 'Nominate at least one internal and one external examiner.',
-            'examiners.*.examiner_name.required' => 'Every examiner needs a name.',
-            'examiners.*.examiner_institution.required' => 'Every examiner needs an institution.',
-            'examiners.*.examiner_email.required' => 'Every examiner needs an email address.',
-            'examiners.*.examiner_email.email' => 'That examiner email address is not valid.',
-            'examiners.*.examiner_expertise.required' => 'Every examiner needs an area of expertise.',
+            'examiners.*.pool_id.required' => 'Pick an examiner for every slot.',
+            'examiners.*.pool_id.distinct' => 'The same examiner is on the panel twice.',
+            'examiners.*.pool_id.exists' => 'That examiner is no longer on the list.',
         ]);
+
+        $chosen = PoolExaminer::whereIn('id', collect($data['examiners'])->pluck('pool_id'))->get();
 
         // A panel is an internal and an external examiner at minimum. Two
         // externals and no internal is not a panel.
-        $typesPresent = collect($data['examiners'])->pluck('examiner_type')->unique();
-
-        if ($typesPresent->count() < 2) {
+        if ($chosen->pluck('examiner_type')->unique()->count() < 2) {
             return back()->withInput()->withErrors([
                 'examiners' => 'The panel needs at least one internal and one external examiner.',
             ]);
         }
 
-        $application = DB::transaction(function () use ($request, $data, $engine) {
+        $application = DB::transaction(function () use ($request, $data, $engine, $chosen) {
             $application = Application::create([
                 // The candidate this appointment concerns, so it shows on
                 // their own tracking page and they receive the standard
@@ -100,8 +97,10 @@ class AppointmentLetterController extends Controller
 
             AppointmentDetail::create(['application_id' => $application->id]);
 
-            foreach ($data['examiners'] as $examiner) {
-                AppointmentExaminer::create(['application_id' => $application->id] + $examiner);
+            // Copied, not referenced: the letters must say what the examiner's
+            // details were on the day, whatever later happens to the list entry.
+            foreach ($chosen as $examiner) {
+                AppointmentExaminer::create(['application_id' => $application->id] + $examiner->toSnapshot());
             }
 
             // Hands the nomination to the Academic Executive.
@@ -110,7 +109,7 @@ class AppointmentLetterController extends Controller
 
         return redirect()
             ->route('appointment-letter.create')
-            ->with('status', "Nomination #{$application->id} with ".count($data['examiners']).' examiners submitted to the Academic Executive.');
+            ->with('status', "Nomination #{$application->id} with {$chosen->count()} examiners submitted to the Academic Executive.");
     }
 
     public function queue(Request $request, WorkflowEngine $engine, ModuleRegistry $registry)
