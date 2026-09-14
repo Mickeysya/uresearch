@@ -11,8 +11,8 @@ Add a row here in the same commit that registers the workflow.
 | `travel` | Travel | Norhanis | built |
 | `ga_extension` | GA Extension | Nureen | built |
 | `examiner_nomination` | Examiner Nomination | Hani | built |
-| `publication` | Publication | Norhanis | planned |
-| `claims_student` | Student Claims | Norhanis | planned |
+| `publication` | Publication | Norhanis | built |
+| `claims_student` | Student Claims | Norhanis | built |
 | `rpd_appeal` | RPD Appeal / Extension | Norhanis | planned |
 | `rpd_dismissal` | RPD Dismissal | Norhanis | planned |
 | `attendance_appeal` | Attendance Appeal | Nureen | built |
