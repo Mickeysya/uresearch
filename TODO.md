@@ -18,8 +18,7 @@ as the work it describes.
 | Norhanis — Travel | done · reference implementation |
 | Norhanis — Publication · Claims · RPD | not started |
 | Nureen — GA Extension · Attendance · Supervision · Certification | done · matches `docs/scope/nureen.md` |
-| Hani — Examiner pool + Nomination | done |
-| Hani — Conflict detection T2 · Re-viva | not started |
+| Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done |
 | CGS dashboard (5 stat cards + 5 live panels) | done |
 | Admin dashboard (5 cards + 4 panels, system health) | done |
 | Notification feed (`/notifications`) | done |
@@ -433,27 +432,40 @@ query; there is no placeholder data in the views.
 - [x] **Nomination** — supervisor nominates main + backup for their own
       candidates; AE approves. Touchpoint 1 enforced in the dropdown and again
       on submit.
-
-- [ ] **Close the examiner lifecycle** — *nothing currently writes
-      `assigned_until` or `last_examination_date`*. The state machine reads
-      them, so until an approved nomination sets `assigned_until` and a
-      completed evaluation sets `last_examination_date`, every examiner stays
-      Available forever. Smallest useful next task in this module.
-- [ ] **Conflict detection, touchpoint 2**
-  - [ ] CGS faculty-list compilation screen (merge department lists into FOE / FSMC)
-  - [ ] Detect the same examiner nominated by two departments
-  - [ ] Flag and surface pool availability for a manual decision — never auto-reject
-  - [ ] `examiners.faculty` and `users.faculty` already exist for this
-- [ ] **Re-viva monitoring**
-  - [ ] Formal submission timestamp on re-corrected thesis upload — the
-        6-month and 1-year deadlines both count from it
-  - [ ] Discrete stepper: Report sent → Under panel review → Report received →
-        Consolidation scheduled
-  - [ ] 5-level outcome scale; level 4 loops back into another cycle, level 5
-        is terminal. A loop is not a normal chain — think about how to model
-        it before writing code.
-- [ ] Examiner admin screen so CGS can add examiners and mark them unavailable
-      (currently seeder-only)
+- [x] **Examiner lifecycle closed** — `ExaminerNominationController::decide()`
+      overrides the trait to set `assigned_until` on both examiners when the
+      AE approves; a new "Pending Evaluation" screen (AE) marks the
+      evaluation complete, clearing `assigned_until` and stamping
+      `last_examination_date`, which starts the real 90-day gap. No migration
+      needed — both columns already existed.
+- [x] **Conflict detection, touchpoint 2** — `/examiner-nomination/conflicts`
+      (AE) compiles active nominations by the examiner's faculty and flags
+      any examiner nominated from more than one department. Read-only, never
+      auto-rejects. No migration — reused `examiners.faculty` and
+      `users.department`/`faculty`.
+- [x] **Re-viva monitoring** — `re_viva` module: CGS Staff logs the
+      re-corrected thesis once it reaches them (`/re-viva/new`, Non-Exec CGS,
+      not a student self-service upload — an eligibility-aware student picker
+      mirrors the examiner dropdown), stamping `re_viva_details.resubmission_at`
+      with the 6-month/1-year deadlines computed and stored at that moment;
+      AE advances a 4-stage stepper (Report sent → Under panel review →
+      Report received → Consolidation scheduled); AE then records the
+      5-level outcome on a separate "Re-viva Outcomes" screen, which never
+      touches `applications.status`/`current_stage`. Level 4 is not modeled
+      as a loop in the Stage graph — CGS logs a new `re_viva` application the
+      next time that student's thesis reaches them, and `ReVivaController`
+      links it to the prior cycle via `re_viva_details.previous_cycle_id`.
+      New table:
+      `re_viva_details`. Verified end to end (submit → 4-stage advance →
+      level-4 outcome → second cycle opens and links correctly → third
+      submission blocked while cycle 2 is open).
+- [x] Examiner admin screen (`/examiners`, Non-Exec CGS) — add an examiner,
+      toggle Unavailable. Redesigned to a stat-card + filter/search + paginated
+      table layout, reusing the `.sdash-stat` shell already global via
+      `partials/stylesheets.blade.php` rather than adding a new one. Marking
+      an examiner Unavailable now goes through a reason modal; the reason is
+      shown back on the list and cleared on reactivation. One migration:
+      `examiners.unavailable_reason` (nullable text).
 
 ---
 
@@ -917,10 +929,14 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
    which the queue-scoping fix then depends on.
 3. Agree the approver-scoping design and make that one Core change.
 4. Norhanis does Publication and Claims — both are quick with the engine.
-5. Hani closes the examiner lifecycle before touching re-viva.
-6. Nureen settles the UTrace data source before starting Attendance.
-7. RPD and Re-viva last — they are the two hardest, and both need scheduled
-   commands.
+5. ~~Hani closes the examiner lifecycle before touching re-viva.~~ Done —
+   see her section above.
+6. ~~Nureen settles the UTrace data source before starting Attendance.~~ Done
+   — CSV upload, see her section above.
+7. ~~RPD and Re-viva last — they are the two hardest, and both need scheduled
+   commands.~~ Re-viva is done (see Hani's section); RPD is the one large
+   piece still outstanding, and still needs a scheduled command for its
+   3/2/1-month reminders.
 8. Jason can start now, independently of the rest of the team — Hardbound
    Submission, Appeal Hardbound Submission and Appointment Letters all reuse
    existing roles. Settle the "return to student" engine question and seed

@@ -326,7 +326,7 @@ rm -rf vendor
 │   │   ├── Norhanis/    Travel · Publication · Claims · RPD
 │   │   ├── Nureen/      Attendance · GA Extension · Supervision · Certification
 │   │   ├── Hani/        Examiner Nomination · Conflict Detection · Re-viva
-│   │   ├── Jason/       Hardbound Submission · Appeal · Appointment Letters (scoped, not yet built)
+│   │   ├── Jason/       (empty)
 │   │   └── Chloe/       (empty)
 │   └── Providers/       module auto-discovery
 ├── database/migrations/ framework tables only (users, sessions, jobs, cache)
