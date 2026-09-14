@@ -96,7 +96,7 @@
     </div>
 </template>
 
-<script>
+<script @cspNonce>
     let itemIndex = 1;
     document.getElementById('add-item-btn').addEventListener('click', function () {
         const template = document.getElementById('item-row-template').innerHTML;

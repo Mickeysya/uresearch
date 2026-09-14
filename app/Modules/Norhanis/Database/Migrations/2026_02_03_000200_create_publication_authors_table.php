@@ -15,8 +15,10 @@ return new class extends Migration
             // can have many authors. See PublicationDetail::authors().
             $table->foreignId('publication_detail_id')->constrained()->cascadeOnDelete();
 
-            $table->string('name', 150);
-            $table->boolean('is_corresponding_author')->default(false);
+            $table->string('author_name', 150);
+            $table->string('designation', 150)->nullable(); // e.g. PhD Student, Co-Supervisor, External Collaborator
+            $table->string('organisation', 150)->nullable();
+            $table->string('role_contribution', 150)->nullable();
 
             $table->timestamps();
         });

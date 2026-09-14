@@ -44,7 +44,7 @@ class PublicationWorkflow implements WorkflowModule
             return 'Publication application';
         }
 
-        return $detail->publication_title.' — '.$detail->conference_or_journal_name;
+        return $detail->title_of_paper.' — '.$detail->title_of_conference_journal;
     }
 
     public function createRoute(): ?string

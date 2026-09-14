@@ -494,3 +494,32 @@ button[value="rejected"]:hover {
         grid-template-columns: 1fr;
     }
 }
+
+/* ==========================================================================
+   Shared additions go below this line — see docs/conventions.md. Append new
+   rules here rather than editing anything above, and append a new
+   declaration rather than editing one of hers in place when overriding a
+   rule she already wrote.
+   ========================================================================== */
+
+/* input[type="file"] was never styled, so it kept the browser's intrinsic
+   inline-block sizing instead of stacking like every other field — on forms
+   with several file inputs back to back (e.g. Publication), the next field's
+   label would end up wrapping right up against the previous file input, and
+   a submit button placed right after one would sit beside it on the same
+   line instead of dropping to its own row underneath. */
+input[type="file"] {
+    display: block;
+    width: 100%;
+    margin-top: 2px;
+}
+
+/* A create-application form ends in one direct-child submit button (see
+   Travel/Claims/Publication's form.blade.php) — center it under the card
+   instead of leaving it wherever the previous field's flow left off. Scoped
+   to a direct child so it does not reach the Approve/Reject buttons inside
+   x-core::decision-form's .decision-row, which are meant to sit side by side. */
+form > button[type="submit"] {
+    display: block;
+    margin: 24px auto 0;
+}

@@ -58,10 +58,6 @@
                        @checked(old('is_international'))>
                 <label for="is_international">International Travel</label>
             </div>
-            <p class="queue-meta" style="margin-top: -8px;">
-                International requests are routed on to Non-Executive CGS and the Dean of PGR
-                after your Chair endorses them.
-            </p>
 
             <label for="contact_person_name">Contact Person Name</label>
             <input type="text" name="contact_person_name" id="contact_person_name"

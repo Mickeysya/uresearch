@@ -10,17 +10,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PublicationDetail extends Model
 {
     protected $fillable = [
-        'application_id', 'conference_or_journal_name', 'publication_title',
-        'event_date', 'location', 'funding_amount_requested',
-        'requires_letter_of_undertaking',
+        'application_id', 'type_of_request', 'title_of_paper', 'title_of_conference_journal',
+        'organizer_publisher', 'conference_journal_fee', 'currency_type', 'cost_centre',
+        'wants_letter_of_undertaking', 'conference_start_date', 'conference_end_date',
     ];
 
     protected function casts(): array
     {
         return [
-            'event_date' => 'date',
-            'funding_amount_requested' => 'decimal:2',
-            'requires_letter_of_undertaking' => 'boolean',
+            'conference_journal_fee' => 'decimal:2',
+            'wants_letter_of_undertaking' => 'boolean',
+            'conference_start_date' => 'date',
+            'conference_end_date' => 'date',
         ];
     }
 
@@ -32,5 +33,14 @@ class PublicationDetail extends Model
     public function authors(): HasMany
     {
         return $this->hasMany(PublicationAuthor::class);
+    }
+
+    /** @return array<string, string> */
+    public static function requestTypes(): array
+    {
+        return [
+            'publication_conference' => 'Conference',
+            'publication_journal' => 'Journal',
+        ];
     }
 }

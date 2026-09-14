@@ -8,15 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PublicationAuthor extends Model
 {
     protected $fillable = [
-        'publication_detail_id', 'name', 'is_corresponding_author',
+        'publication_detail_id', 'author_name', 'designation', 'organisation', 'role_contribution',
     ];
-
-    protected function casts(): array
-    {
-        return [
-            'is_corresponding_author' => 'boolean',
-        ];
-    }
 
     public function publicationDetail(): BelongsTo
     {
