@@ -36,7 +36,7 @@ class Examiner extends Model
 
     protected $fillable = [
         'name', 'email', 'department', 'faculty', 'type',
-        'is_active', 'last_examination_date', 'assigned_until',
+        'is_active', 'unavailable_reason', 'last_examination_date', 'assigned_until',
     ];
 
     protected function casts(): array
@@ -74,6 +74,28 @@ class Examiner extends Model
     public function isEligible(): bool
     {
         return $this->state() === self::STATE_AVAILABLE;
+    }
+
+    /** Human label for state(), for display -- state() itself stays machine-readable. */
+    public function stateLabel(): string
+    {
+        return match ($this->state()) {
+            self::STATE_AVAILABLE => 'Available',
+            self::STATE_ON_GAP => 'On Gap',
+            self::STATE_ASSIGNED => 'Assigned',
+            self::STATE_UNAVAILABLE => 'Unavailable',
+        };
+    }
+
+    /** Which .sdash-stat tone (dashboard-student.css) and .status-badge-like colour this state reads as. */
+    public function stateTone(): string
+    {
+        return match ($this->state()) {
+            self::STATE_AVAILABLE => 'good',
+            self::STATE_ON_GAP => 'warn',
+            self::STATE_ASSIGNED => 'info',
+            self::STATE_UNAVAILABLE => 'critical',
+        };
     }
 
     /** Why this examiner cannot be nominated right now, or null if they can. */

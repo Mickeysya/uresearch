@@ -460,7 +460,12 @@ query; there is no placeholder data in the views.
       level-4 outcome → second cycle opens and links correctly → third
       submission blocked while cycle 2 is open).
 - [x] Examiner admin screen (`/examiners`, Non-Exec CGS) — add an examiner,
-      toggle Unavailable. No migration; the table already had every column.
+      toggle Unavailable. Redesigned to a stat-card + filter/search + paginated
+      table layout, reusing the `.sdash-stat` shell already global via
+      `partials/stylesheets.blade.php` rather than adding a new one. Marking
+      an examiner Unavailable now goes through a reason modal; the reason is
+      shown back on the list and cleared on reactivation. One migration:
+      `examiners.unavailable_reason` (nullable text).
 
 ---
 
