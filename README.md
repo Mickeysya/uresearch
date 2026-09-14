@@ -335,7 +335,7 @@ rm -rf vendor
 ├── database/seeders/    DatabaseSeeder (accounts) · DemoDataSeeder (demo:seed)
 ├── docs/                architecture, conventions, how to add a module
 │   └── scope/           the FYP scope documents
-├── public/css/          13 sheets — see docs/conventions.md for which to edit
+├── public/css/          tokens.css is the design system; see docs/conventions.md
 ├── public/js/           Chart.js and its datalabels plugin, served self-hosted
 ├── .claude/             agents, and the hook that stops Claude pushing
 ├── CLAUDE.md            project context loaded by Claude Code

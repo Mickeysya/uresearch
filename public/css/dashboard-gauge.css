@@ -17,10 +17,10 @@
 
 .sdash-gauge { display: block; width: 100%; height: auto; overflow: visible; }
 
-.sdash-gauge-fill.tone-good     { stroke: #00BF63; }
-.sdash-gauge-fill.tone-warn     { stroke: #E9B23C; }
-.sdash-gauge-fill.tone-critical { stroke: #D0342C; }
-.sdash-gauge-fill.tone-none     { stroke: #C7CEDB; }
+.sdash-gauge-fill.tone-good     { stroke: var(--success-fg); }
+.sdash-gauge-fill.tone-warn     { stroke: var(--warning-fg); }
+.sdash-gauge-fill.tone-critical { stroke: var(--danger-fg); }
+.sdash-gauge-fill.tone-none     { stroke: var(--border-strong); }
 
 /* Sweeps from empty to the student's value on load. --arc and --arc-offset
    are written onto the element by the partial, so the maths stays in one
@@ -65,7 +65,7 @@
 /* The band the student is actually in is called out, so the legend says
    something rather than only labelling colours. */
 .sdash-legend li.is-active {
-    background: #F2F5FA;
+    background: var(--surface-hover);
     font-weight: 600;
 }
 
@@ -76,7 +76,7 @@
     padding: 1px 7px;
     border-radius: 20px;
     background: var(--navy);
-    color: white;
+    color: var(--text-on-accent);
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.3px;
@@ -91,7 +91,7 @@
     gap: 8px;
     margin: 0;
     padding-top: 10px;
-    border-top: 1px solid #EFF1F6;
+    border-top: 1px solid var(--border-subtle);
 }
 
 .sdash-facts div { min-width: 0; }

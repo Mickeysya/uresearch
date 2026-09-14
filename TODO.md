@@ -355,6 +355,60 @@ query; there is no placeholder data in the views.
       New styling goes in the sheet that owns that screen; anything shared by
       all three dashboards goes in `charts.css` or `dashboard-states.css`.
 
+### Core — design system and dark mode (2026-09-15)
+- [x] **`public/css/tokens.css`** — the app had a brand but no system: 67
+      distinct hard-coded hex colours across thirteen sheets against eleven
+      brand variables, 47 font sizes, 16 border radii, 1002 px literals, and
+      `#D0342C` written out 27 times. The success green had already forked into
+      two values. Now one file holds the navy/gold ramps, four surface depths,
+      four text weights, three border weights, one status set (`-fg`/`-bg`/
+      `-border`, contrast-checked at WCAG AA), a 1.125 type scale, a 4px space
+      grid, and radius/elevation/motion scales.
+      Loads immediately after `uresearch.css` and redefines its eleven `:root`
+      variables, so the 286 `var()` usages already written across the other
+      sheets pick the new values up without being touched. `--navy` (UTP) and
+      `--gold` are fixed; everything else derives from them.
+- [x] **Dark mode**, toggle in the top bar. Every colour token is declared
+      twice — explicit `data-theme`, and `prefers-color-scheme` for anyone who
+      has not chosen. No stored choice means no attribute at all, so the app
+      follows the OS until someone actually presses the toggle; the choice then
+      persists in `localStorage` and is applied before first paint, the same
+      way the collapsed sidebar already was.
+      110 hard-coded declarations across ten sheets were converted to tokens to
+      make it work. The chart tooltip and the six stat-card category discs are
+      deliberately still literal — both are saturated surfaces carrying white
+      text and read correctly on either ground.
+- [x] **The shared shell redesigned** in `layout.css`: cards, the full set of
+      form controls (including the ones nobody had styled — search, tel, url,
+      time, file), three button kinds, status badges, four flash tones,
+      the stepper, two table weights, attachments, the decision trail, the top
+      bar, scrollbars and selection. **One focus ring on every control** —
+      the old sheet set `outline: none` and changed a border colour instead,
+      which is invisible to anyone tabbing through a form.
+      Module views inherit all of it: they already use `.card`,
+      `.card-container-inline` and plain `<form>`, so nothing under
+      `app/Modules/<Person>/` was edited.
+- [x] **Chart.js themed too.** Chart.js paints to a canvas, so CSS reaches
+      none of it — every gridline, tick and data label is a string handed to
+      the library, and those strings were hard-coded. On the admin dashboard
+      that left the value above each bar at `#23283A`, near-black on a dark
+      page and unreadable; the two doughnuts cut their segment gaps in
+      `#FFFFFF`, which read as white spokes across a dark card.
+      `chartjs.blade.php` now exposes `Chart.uresearchToken(name, fallback)`,
+      which reads the same custom properties `tokens.css` defines. Charts pass
+      it as a **function**, not a value: Chart.js re-resolves scriptable
+      options on `update()`, so a `MutationObserver` on `data-theme` plus a
+      `prefers-color-scheme` listener repaints every live instance with
+      `update('none')` — no animation replay, and no chart needs to know how
+      it is themed.
+- [x] Verified in both themes, headless at 1440x950: login, student dashboard,
+      CGS dashboard, admin dashboard, application tracking, travel form,
+      attendance upload, at-risk list, notification feed, profile and the
+      audit log. Every screen in the app now has been looked at, not assumed.
+- [ ] `docs/conventions.md` now has a **Design** section: the token groups,
+      why `--navy` and `--accent-solid` are separate, and the rule that no
+      other sheet may contain a colour literal.
+
 ### Docs
 - [x] `README.md`, `CLAUDE.md`, `LEGACY.md`, this file
 - [x] `docs/` — architecture, adding-a-module, conventions, module-keys,
@@ -1013,6 +1067,9 @@ are what to reach for when touching the file anyway.
       supposed to end; it survived because the wrappers were left behind after
       their bodies moved into `AttendanceRecord::latestPerStudent()`. Delete
       both and call the contract directly.
+- [x] **Half-closed by `tokens.css` (2026-09-15).** The *values* now have one
+      home, so the sheets can no longer disagree about what "the error red" or
+      "a gap" is. What is below still stands for the *selectors*.
 - [ ] **The nine-way dashboard CSS split has leaked.** Splitting by *screen*
       rather than by *component* means 25+ class names are now defined in two
       to four sheets each — `.sdash-stat` in four, `.sdash-card` in three,

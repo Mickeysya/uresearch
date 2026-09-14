@@ -81,7 +81,7 @@
     flex-direction: column;
     justify-content: space-between;
     gap: 2px;
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border-grey);
     border-radius: 12px;
     padding: clamp(10px, 1.1vh, 16px) clamp(12px, 1vw, 18px);
@@ -102,7 +102,7 @@
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    color: white;
+    color: var(--text-on-accent);
 }
 
 .sdash-stat-icon svg {
@@ -140,11 +140,11 @@
 
 /* Icon disc colours. Add a tone here and it is usable from the $cards
    array in partials/stat-cards.blade.php with no other change. */
-.tone-green  .sdash-stat-icon { background: #00A857; }
-.tone-purple .sdash-stat-icon { background: #6B4FD8; }
-.tone-blue   .sdash-stat-icon { background: #2F6BD8; }
-.tone-orange .sdash-stat-icon { background: #F08A24; }
-.tone-teal   .sdash-stat-icon { background: #17A8B8; }
+.tone-green  .sdash-stat-icon { background: var(--tone-green); }
+.tone-purple .sdash-stat-icon { background: var(--tone-purple); }
+.tone-blue   .sdash-stat-icon { background: var(--tone-blue); }
+.tone-orange .sdash-stat-icon { background: var(--tone-orange); }
+.tone-teal   .sdash-stat-icon { background: var(--tone-teal); }
 
 /* ---- pills, shared by stat cards and application rows ---- */
 
@@ -161,11 +161,11 @@
     white-space: nowrap;
 }
 
-.pill-good     { background: #E4F6EC; color: #067A42; }
-.pill-info     { background: #E8F0FD; color: #2456A6; }
-.pill-warn     { background: #FDF1DC; color: #8A5D12; }
-.pill-critical { background: #FDECEA; color: #A8271C; }
-.pill-muted    { background: #F1F3F7; color: var(--text-grey); }
+.pill-good     { background: var(--success-bg); color: var(--success-fg); }
+.pill-info     { background: var(--info-bg); color: var(--info-fg); }
+.pill-warn     { background: var(--warning-bg); color: var(--warning-fg); }
+.pill-critical { background: var(--danger-bg); color: var(--danger-fg); }
+.pill-muted    { background: var(--surface-hover); color: var(--text-grey); }
 
 /* ---- the four panels ---- */
 
@@ -186,7 +186,7 @@
 .sdash-card {
     display: flex;
     flex-direction: column;
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border-grey);
     border-radius: 12px;
     /* Clips children to the rounded corners. Safe now that nothing inside
@@ -257,7 +257,7 @@
 
 .sdash-row:hover {
     border-color: var(--navy);
-    background: #FAFBFE;
+    background: var(--surface-sunken);
 }
 
 .sdash-row-icon {
@@ -271,10 +271,10 @@
 
 .sdash-row-icon svg { width: 17px; height: 17px; }
 
-.sdash-row-icon.tone-good     { background: #E4F6EC; color: #067A42; }
-.sdash-row-icon.tone-info     { background: #E8F0FD; color: #2456A6; }
-.sdash-row-icon.tone-warn     { background: #FDF1DC; color: #8A5D12; }
-.sdash-row-icon.tone-critical { background: #FDECEA; color: #A8271C; }
+.sdash-row-icon.tone-good     { background: var(--success-bg); color: var(--success-fg); }
+.sdash-row-icon.tone-info     { background: var(--info-bg); color: var(--info-fg); }
+.sdash-row-icon.tone-warn     { background: var(--warning-bg); color: var(--warning-fg); }
+.sdash-row-icon.tone-critical { background: var(--danger-bg); color: var(--danger-fg); }
 
 .sdash-row-main {
     display: flex;
@@ -318,12 +318,12 @@
     white-space: nowrap;
 }
 
-.sdash-row-meta.tone-critical { color: #A8271C; font-weight: 600; }
-.sdash-row-meta.tone-warn     { color: #8A5D12; font-weight: 600; }
+.sdash-row-meta.tone-critical { color: var(--danger-fg); font-weight: 600; }
+.sdash-row-meta.tone-warn     { color: var(--warning-fg); font-weight: 600; }
 
 .sdash-row-chevron {
     flex-shrink: 0;
-    color: #B8C0D0;
+    color: var(--text-grey);
     display: grid;
     place-items: center;
 }
@@ -345,7 +345,7 @@
     align-items: center;
     gap: 11px;
     padding: 8px 6px;
-    border-bottom: 1px solid #F1F3F7;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .sdash-note-row:last-child { border-bottom: 0; }
@@ -417,9 +417,9 @@
     font-variant-numeric: tabular-nums;
 }
 
-.sdash-gauge-value.tone-good     .sdash-gauge-number { color: #00A857; }
-.sdash-gauge-value.tone-warn     .sdash-gauge-number { color: #C98A12; }
-.sdash-gauge-value.tone-critical .sdash-gauge-number { color: #D0342C; }
+.sdash-gauge-value.tone-good     .sdash-gauge-number { color: var(--success-fg); }
+.sdash-gauge-value.tone-warn     .sdash-gauge-number { color: var(--warning-fg); }
+.sdash-gauge-value.tone-critical .sdash-gauge-number { color: var(--danger-fg); }
 .sdash-gauge-value.tone-none     .sdash-gauge-number { color: var(--text-grey); }
 
 .sdash-gauge-caption {
@@ -453,9 +453,9 @@
     flex-shrink: 0;
 }
 
-.sdash-dot.tone-good     { background: #00BF63; }
-.sdash-dot.tone-warn     { background: #E9B23C; }
-.sdash-dot.tone-critical { background: #D0342C; }
+.sdash-dot.tone-good     { background: var(--success-fg); }
+.sdash-dot.tone-warn     { background: var(--warning-fg); }
+.sdash-dot.tone-critical { background: var(--danger-fg); }
 
 .sdash-note {
     display: flex;
@@ -466,12 +466,12 @@
     padding: 10px 12px;
     border-radius: 9px;
     font-size: 12px;
-    background: #EEF3FB;
-    color: #2A3B58;
+    background: var(--surface-hover);
+    color: var(--text-dark);
 }
 
-.sdash-note.tone-critical { background: #FDECEA; color: #8E241B; }
-.sdash-note.tone-warn     { background: #FDF1DC; color: #7A5210; }
+.sdash-note.tone-critical { background: var(--danger-bg); color: var(--danger-fg); }
+.sdash-note.tone-warn     { background: var(--warning-bg); color: var(--warning-fg); }
 
 .sdash-note-icon { flex-shrink: 0; display: grid; place-items: center; }
 .sdash-note-icon svg { width: 16px; height: 16px; }

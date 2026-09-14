@@ -1,224 +1,831 @@
 /* ============================================================
-   layout.css — Laravel-port additions: status pills, steppers, queue and page chrome
+   layout.css — the shell every screen shares
 
-   Split out of the single uresearch.css on 2026-09-12. The four
-   files are linked in this order and concatenate back to exactly
-   what was there before, so cascade order is unchanged:
-       uresearch.css -> layout.css -> sidebar.css -> dashboard.css
-   Load order matters. Do not reorder the <link> tags.
+   Loads after uresearch.css (Norhanis' original, never edited in
+   place) and tokens.css. Its job is twofold:
+
+     1. Re-point the handful of places uresearch.css hard-coded a
+        colour -- `background: white`, `#D0342C` -- at the tokens, so
+        the whole app themes. Those overrides are marked (override).
+     2. Own the shared component vocabulary: cards, forms, buttons,
+        badges, tables, flash, the stepper, the top bar.
+
+   Module views get all of this for free: they already use .card,
+   .card-container-inline and plain <form>/<table> elements, so
+   nothing under app/Modules/<Person>/ needs editing to pick it up.
+
+   Every value here is a token. If you need one that does not exist,
+   add it to tokens.css rather than writing a literal.
    ============================================================ */
 
 /* ============================================================
-   Additions for the Laravel port. Everything above this line is
-   Norhanis' original stylesheet, unchanged.
+   1 · Page frame
    ============================================================ */
 
-/* Status pill shown next to an application on the tracking page */
-.status-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 11.5px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+/* (override) uresearch.css paints a fixed UTP photograph across the
+   whole body. It reads as texture behind a light page and as grime
+   behind a dark one, so the dark theme drops it for a very slight
+   vertical lift instead -- flat near-black looks broken on an OLED
+   panel, and a 2% gradient is enough to stop that. */
+body {
+    background-color: var(--page-bg);
+    color: var(--text-dark);
+    font-family: var(--font-sans);
+    font-size: var(--text-md);
+    line-height: var(--leading-normal);
+    -webkit-font-smoothing: antialiased;
 }
 
-.status-badge.pending  { background: var(--light-gold-bg); color: #8A5F14; }
-.status-badge.approved { background: #E4F8ED; color: #07794A; }
-.status-badge.rejected { background: #FDEEED; color: #D0342C; }
-.status-badge.draft    { background: var(--border-grey); color: var(--text-grey); }
+:root[data-theme="dark"] body {
+    background-image: linear-gradient(180deg, #151923 0%, var(--page-bg) 420px);
+}
 
-/* The "who is waiting on this" line above a queue */
-.queue-meta {
-    color: var(--text-grey);
-    font-size: 13px;
-    margin: -6px 0 18px;
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) body {
+        background-image: linear-gradient(180deg, #151923 0%, var(--page-bg) 420px);
+    }
+}
+
+/* Theme changes are instant on the surfaces that matter and eased
+   everywhere else, so flipping the toggle does not strobe. Scoped to
+   the properties that actually change -- `transition: all` here would
+   fight every hover and chart animation in the app. */
+body,
+.card,
+.app-item,
+.sidebar,
+.top-header,
+.main-content-header,
+.empty-state {
+    transition: background-color var(--duration-base) var(--ease),
+                border-color var(--duration-base) var(--ease),
+                color var(--duration-base) var(--ease);
+}
+
+/* ============================================================
+   2 · Focus
+
+   One ring, every control, never removed. The old sheet set
+   `outline: none` on inputs and replaced it with a border colour
+   change, which is invisible to anyone tabbing through a form.
+   :focus-visible keeps it off mouse clicks.
+   ============================================================ */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--navy);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+   3 · Surfaces
+   ============================================================ */
+
+/* (override) white -> token, and the flat 20px shadow becomes the
+   two-layer --shadow-md, which reads as a lift rather than a blur. */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: var(--space-8);
+}
+
+.card h2 {
+    color: var(--text-dark);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semi);
+    line-height: var(--leading-tight);
+    letter-spacing: -0.01em;
+}
+
+/* The navy/gold rule under a card title — the one piece of brand
+   ornament in the shell, so it stays. */
+.card-divider {
+    height: 3px;
+    width: 56px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(to right, var(--navy) 50%, var(--gold) 50%);
+    margin-bottom: var(--space-5);
+}
+
+/* (override) an application row on a queue or the tracking page */
+.app-item {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--duration-fast) var(--ease),
+                border-color var(--duration-fast) var(--ease);
+}
+
+.app-item:hover {
+    border-color: var(--border-grey);
+    box-shadow: var(--shadow-md);
+}
+
+.app-item b {
+    color: var(--navy);
 }
 
 .app-item-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    gap: 12px;
+    gap: var(--space-3);
     flex-wrap: wrap;
 }
 
-/* Shown when a queue or the tracking page has nothing in it */
+/* (override) an action tile on the dashboard */
+.action-card {
+    background: var(--surface);
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-md);
+    color: var(--text-dark);
+    transition: border-color var(--duration-fast) var(--ease),
+                box-shadow var(--duration-fast) var(--ease),
+                transform var(--duration-fast) var(--ease);
+}
+
+.action-card:hover {
+    border-color: var(--navy);
+    color: var(--navy);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+/* Shown when a queue or the tracking page has nothing in it. Dashed,
+   because an empty state is a placeholder for content, not content. */
 .empty-state {
-    background: white;
-    border: 1px dashed var(--border-grey);
-    border-radius: 12px;
-    padding: 34px 24px;
+    background: var(--surface);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: var(--space-10) var(--space-6);
     text-align: center;
     color: var(--text-grey);
-    font-size: 14px;
+    font-size: var(--text-md);
 }
 
-/* Laravel validation errors */
+.page-wrapper h2 {
+    color: var(--navy);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semi);
+    letter-spacing: -0.01em;
+}
+
+.queue-meta {
+    color: var(--text-grey);
+    font-size: var(--text-sm);
+    margin: calc(var(--space-2) * -1) 0 var(--space-5);
+}
+
+/* ============================================================
+   4 · Forms
+   ============================================================ */
+
+label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--text-grey);
+    margin: var(--space-4) 0 var(--space-1);
+}
+
+/* (override) every control, one shape. uresearch.css styles five
+   input types by name; this adds the rest (search, tel, url, time,
+   datetime-local, file) so a field added later is not silently
+   unstyled, and points the sunken fill at a token. */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+select,
+textarea {
+    width: 100%;
+    padding: var(--space-3) var(--space-3);
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-sunken);
+    color: var(--text-dark);
+    font-family: inherit;
+    font-size: var(--text-md);
+    line-height: var(--leading-normal);
+    transition: border-color var(--duration-fast) var(--ease),
+                background-color var(--duration-fast) var(--ease),
+                box-shadow var(--duration-fast) var(--ease);
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-grey);
+    opacity: 1;            /* Firefox dims placeholders again on top of the colour */
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="date"]:focus,
+input[type="datetime-local"]:focus,
+input[type="time"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+select:focus,
+textarea:focus {
+    outline: none;         /* replaced by the ring below, not removed */
+    border-color: var(--navy);
+    background-color: var(--surface);
+    box-shadow: var(--shadow-focus);
+}
+
+textarea {
+    margin-bottom: var(--space-4);
+    resize: vertical;
+    min-height: 84px;
+}
+
+/* The native control is a light-mode bitmap in most browsers; this
+   inverts the calendar and spinner glyphs so they stay visible. */
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.65);
+}
+
+/* File inputs: the browser's intrinsic inline-block sizing does not
+   stack like the other fields, so a form with several in a row runs
+   its labels into them. */
+/* .app-form is carried here too, not because this needs the class, but
+   because uresearch.css scopes its own file-input rule that way. At 0,1,1
+   that rule out-specifies a bare `input[type="file"]` however late this
+   sheet loads, so Travel, Claims and Publication would keep the old plain
+   control while every other form in the app got this one. Matching the
+   specificity and loading later is what settles it. */
+input[type="file"],
+.app-form input[type="file"] {
+    display: block;
+    width: 100%;
+    padding: var(--space-2);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-sunken);
+    color: var(--text-grey);
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+    margin-right: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--navy);
+    font-family: inherit;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    cursor: pointer;
+}
+
+input[type="file"]::file-selector-button:hover {
+    background: var(--surface-hover);
+    border-color: var(--navy);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--accent-solid);
+    width: auto;
+}
+
+.checkbox-row label {
+    margin: 0;
+    font-size: var(--text-md);
+    color: var(--text-dark);
+    font-weight: var(--weight-normal);
+}
+
+/* Validation. The message sits tight under its field rather than in
+   the label gap, so it reads as belonging to the control above it. */
 .field-error {
-    color: #D0342C;
-    font-size: 12.5px;
-    margin: -8px 0 12px;
+    color: var(--danger-fg);
+    font-size: var(--text-sm);
+    margin: var(--space-1) 0 var(--space-3);
 }
 
-input.is-invalid, select.is-invalid, textarea.is-invalid {
-    border-color: #D0342C;
+input.is-invalid,
+select.is-invalid,
+textarea.is-invalid {
+    border-color: var(--danger-border);
+    background-color: var(--danger-bg);
 }
 
-/* Decision buttons sit side by side rather than stacking full-width */
+input.is-invalid:focus,
+select.is-invalid:focus,
+textarea.is-invalid:focus {
+    border-color: var(--danger-fg);
+    box-shadow: 0 0 0 3px var(--danger-bg);
+}
+
+/* ============================================================
+   5 · Buttons
+
+   Three: filled (the one real action), outlined (an alternative),
+   and destructive. Anything else is a link.
+   ============================================================ */
+
+/* (override) --accent-solid, not --navy: in dark mode --navy is a
+   light blue for text and would leave white-on-light-blue here. */
+button,
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    background-color: var(--accent-solid);
+    color: var(--text-on-accent);
+    border: 1px solid transparent;
+    padding: var(--space-3) var(--space-6);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: var(--text-md);
+    font-weight: var(--weight-semi);
+    line-height: 1.2;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color var(--duration-fast) var(--ease),
+                box-shadow var(--duration-fast) var(--ease),
+                transform var(--duration-fast) var(--ease);
+}
+
+button:hover,
+.btn:hover {
+    background-color: var(--accent-hover);
+    box-shadow: var(--shadow-sm);
+}
+
+button:active,
+.btn:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+button:disabled,
+.btn:disabled {
+    background-color: var(--border-grey);
+    color: var(--text-grey);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    background: var(--surface);
+    color: var(--navy);
+    border: 1px solid var(--navy);
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-md);
+    font-weight: var(--weight-semi);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn-secondary:hover {
+    background: var(--surface-hover);
+}
+
+/* (override) uresearch.css styles button[value="rejected"] with the
+   same literals; both are pointed at the danger tokens here. */
+.btn-reject,
+button[value="rejected"] {
+    background: var(--surface);
+    color: var(--danger-fg);
+    border: 1px solid var(--danger-border);
+}
+
+.btn-reject:hover,
+button[value="rejected"]:hover {
+    background: var(--danger-bg);
+    border-color: var(--danger-fg);
+}
+
+/* Approve and reject sit side by side rather than stacking. */
 .decision-row {
     display: flex;
-    gap: 10px;
-    margin-top: 12px;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    flex-wrap: wrap;
 }
 
 .decision-row button {
     width: auto;
-    padding: 9px 22px;
+    margin-top: 0;
 }
 
-.btn-reject {
-    background: white;
-    color: #D0342C;
-    border: 1px solid #D0342C;
+/* ============================================================
+   6 · Status badges
+   ============================================================ */
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
-.btn-reject:hover {
-    background: #FDEEED;
+.status-badge.pending {
+    background: var(--warning-bg);
+    color: var(--warning-fg);
+    border-color: var(--warning-border);
 }
 
-/* Attached files on an application */
+.status-badge.approved {
+    background: var(--success-bg);
+    color: var(--success-fg);
+    border-color: var(--success-border);
+}
+
+.status-badge.rejected {
+    background: var(--danger-bg);
+    color: var(--danger-fg);
+    border-color: var(--danger-border);
+}
+
+.status-badge.draft {
+    background: var(--surface-sunken);
+    color: var(--text-grey);
+    border-color: var(--border-grey);
+}
+
+/* ============================================================
+   7 · Flash messages
+
+   (override) all four point at the status tokens. The left rule is
+   what separates them at a glance for anyone who cannot rely on the
+   fill colour alone.
+   ============================================================ */
+.message-success,
+.message-error,
+.message-warning,
+.message-info {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid;
+    margin-bottom: var(--space-4);
+    font-size: var(--text-md);
+    line-height: var(--leading-normal);
+}
+
+.message-success {
+    background-color: var(--success-bg);
+    color: var(--success-fg);
+    border-left-color: var(--success-fg);
+}
+
+.message-error {
+    background-color: var(--danger-bg);
+    color: var(--danger-fg);
+    border-left-color: var(--danger-fg);
+}
+
+.message-warning {
+    background-color: var(--warning-bg);
+    color: var(--warning-fg);
+    border-left-color: var(--warning-fg);
+}
+
+.message-info {
+    background-color: var(--info-bg);
+    color: var(--info-fg);
+    border-left-color: var(--info-fg);
+}
+
+/* ============================================================
+   8 · Stepper
+   ============================================================ */
+
+/* (override) white -> token; --accent-solid for the filled current
+   step so the numeral inside stays legible in both themes. */
+.step-circle {
+    background: var(--surface);
+    border: 2px solid var(--border-strong);
+    color: var(--text-grey);
+    font-weight: var(--weight-semi);
+    transition: background-color var(--duration-base) var(--ease),
+                border-color var(--duration-base) var(--ease);
+}
+
+.step.completed .step-circle {
+    background: var(--success-fg);
+    border-color: var(--success-fg);
+    color: var(--text-on-accent);
+}
+
+.step.current .step-circle {
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--text-on-accent);
+    box-shadow: var(--shadow-focus);
+}
+
+.step.rejected .step-circle {
+    background: var(--danger-fg);
+    border-color: var(--danger-fg);
+    color: var(--text-on-accent);
+}
+
+.step-label {
+    color: var(--text-body);
+    font-size: var(--text-sm);
+}
+
+/* ============================================================
+   9 · Tables
+
+   Two kinds, deliberately different weights: .spec-table documents
+   something (quiet), .data-table lists records (legible at a scan).
+   ============================================================ */
+
+.spec-table,
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+    margin-top: var(--space-2);
+}
+
+.spec-table th,
+.data-table th {
+    text-align: left;
+    font-weight: var(--weight-semi);
+    color: var(--text-grey);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    font-size: var(--text-xs);
+    padding: var(--space-2) var(--space-3) var(--space-2) 0;
+    border-bottom: 1px solid var(--border-grey);
+    white-space: nowrap;
+}
+
+.spec-table td,
+.data-table td {
+    padding: var(--space-3) var(--space-3) var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: top;
+    line-height: var(--leading-normal);
+    color: var(--text-body);
+}
+
+.spec-table td:first-child {
+    white-space: nowrap;
+}
+
+.data-table tbody tr {
+    transition: background-color var(--duration-fast) var(--ease);
+}
+
+.data-table tbody tr:hover {
+    background-color: var(--surface-hover);
+}
+
+/* A table is the one thing allowed to be wider than the page; it
+   scrolls inside its own wrapper rather than pushing the body. */
+.table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ============================================================
+   10 · Attachments and the decision trail
+   ============================================================ */
+
 .doc-list {
     list-style: none;
     padding: 0;
-    margin: 10px 0 0;
+    margin: var(--space-3) 0 0;
 }
 
 .doc-list li {
-    font-size: 13px;
-    padding: 6px 0;
-    border-top: 1px solid var(--border-grey);
+    font-size: var(--text-sm);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--border-subtle);
 }
 
 .doc-list a {
     color: var(--navy);
     text-decoration: none;
+    font-weight: var(--weight-medium);
 }
 
 .doc-list a:hover {
     text-decoration: underline;
 }
 
-/* Decision trail under an application on the tracking page */
 .history-trail {
-    margin-top: 16px;
-    border-top: 1px solid var(--border-grey);
-    padding-top: 12px;
+    margin-top: var(--space-4);
+    border-top: 1px solid var(--border-subtle);
+    padding-top: var(--space-3);
 }
 
 .history-trail .entry {
-    font-size: 12.5px;
+    font-size: var(--text-sm);
     color: var(--text-grey);
-    padding: 4px 0;
+    padding: var(--space-1) 0;
 }
 
 .history-trail .entry b {
     color: var(--text-dark);
+    font-weight: var(--weight-semi);
 }
 
-/* Textareas inherit the input styling Norhanis defined */
-textarea {
-    width: 100%;
-    padding: 10px 12px;
+/* ============================================================
+   11 · Chrome — the top bar, its logo and the theme toggle
+   ============================================================ */
+
+/* (override) white -> token, on both layouts' bars. */
+.top-header,
+.sidebar {
+    background-color: var(--surface);
+}
+
+.top-header {
+    border-bottom: 1px solid var(--border-subtle);
+    padding: var(--space-4) var(--space-8);
+}
+
+/* .main-content-header itself is owned by sidebar.css, which sets its
+   height to match .sidebar-header's across the seam. Only the theming
+   of what sits inside it belongs here. */
+
+/* The UTP mark is a dark wordmark on transparency, so on a dark
+   surface it disappears. Inverting and pulling the lightness back
+   keeps it recognisable without shipping a second asset. */
+:root[data-theme="dark"] .utp-logo,
+:root[data-theme="dark"] .uresearch-logo {
+    filter: invert(1) hue-rotate(180deg) brightness(1.4) saturate(0.85);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .utp-logo,
+    :root:not([data-theme="light"]) .uresearch-logo {
+        filter: invert(1) hue-rotate(180deg) brightness(1.4) saturate(0.85);
+    }
+}
+
+/* The guest bar keeps its two logos at opposite ends, so the toggle joins
+   the right-hand one rather than becoming a third thing to space out. */
+.top-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    color: var(--text-grey);
     border: 1px solid var(--border-grey);
-    border-radius: 8px;
-    font-family: inherit;
-    font-size: 13.5px;
-    margin-bottom: 16px;
-    resize: vertical;
-    min-height: 74px;
-}
-
-textarea:focus {
-    outline: none;
-    border-color: var(--navy);
-}
-
-/* ---------------------------------------------------------------------
-   Flash: warning.
-
-   The third outcome, next to .message-success and .message-error in
-   uresearch.css (Norhanis' original, not edited in place — this file loads
-   after it). Used where an action mostly succeeded but part of it needs
-   attention: an attendance upload that saved its good rows and skipped some,
-   which is neither a success nor a failure and reads wrong as either.
-   --------------------------------------------------------------------- */
-.message-warning {
-    background-color: #FFF6E5;
-    color: #8A5D00;
-    padding: 12px 16px;
-    border-radius: 8px;
-    margin-bottom: 16px;
-    font-size: 14px;
-    line-height: 1.55;
-}
-
-/* ---------------------------------------------------------------------
-   Secondary button — same shape as .btn (uresearch.css), outlined rather
-   than filled. Same relationship .btn-reject has to a filled button, in the
-   portal's own navy. For an action offered alongside the real one: the
-   attendance template downloads sit next to the upload form and must not
-   compete with its submit button.
-   --------------------------------------------------------------------- */
-.btn-secondary {
-    display: inline-block;
-    background: white;
-    color: var(--navy);
-    border: 1px solid var(--navy);
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    text-decoration: none;
+    border-radius: var(--radius-full);
     cursor: pointer;
+    transition: color var(--duration-fast) var(--ease),
+                border-color var(--duration-fast) var(--ease),
+                background-color var(--duration-fast) var(--ease);
 }
 
-.btn-secondary:hover {
-    background: #F2F5FA;
+.theme-toggle:hover {
+    background: var(--surface-hover);
+    color: var(--navy);
+    border-color: var(--navy);
+    box-shadow: none;
 }
 
-/* ---------------------------------------------------------------------
-   Specification table — a small reference grid explaining the fields of
-   something, not a list of records. Used on the attendance upload page to
-   document the four columns the importer expects. Deliberately quieter than
-   .recent-activity-table: this is documentation, not data.
-   --------------------------------------------------------------------- */
-.spec-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-    margin-top: 8px;
+.theme-toggle svg {
+    width: 17px;
+    height: 17px;
+    display: block;
 }
 
-.spec-table th {
-    text-align: left;
-    font-weight: 600;
-    color: var(--text-grey, #5d6677);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 11px;
-    padding: 6px 12px 6px 0;
-    border-bottom: 1px solid #D9DFE6;
+/* One button, two glyphs: show the theme you would switch TO, which
+   is the one the button does something about. */
+.theme-toggle .icon-sun { display: none; }
+.theme-toggle .icon-moon { display: block; }
+
+:root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
 }
 
-.spec-table td {
-    padding: 8px 12px 8px 0;
-    border-bottom: 1px solid #EDF0F4;
-    vertical-align: top;
-    line-height: 1.5;
+/* ============================================================
+   11b · The rest of uresearch.css
+
+   Norhanis' sheet is never edited in place, so every remaining rule
+   in it that hard-codes a colour is re-pointed here instead. Without
+   these five the app themes correctly everywhere except the surfaces
+   below, which stay white on a dark page.
+   ============================================================ */
+
+/* The red banner under a rejected application on the tracking page. */
+.rejection-note {
+    background-color: var(--danger-bg);
+    color: var(--danger-fg);
+    border-left: 3px solid var(--danger-fg);
+    border-radius: var(--radius-sm);
 }
 
-.spec-table td:first-child {
-    white-space: nowrap;
+.chart-card,
+.stat-card,
+.recent-activity-table {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+}
+
+.sidebar .logout-link {
+    color: var(--danger-fg);
+}
+
+/* Inputs sit just below the card in dark mode rather than far below it,
+   and lean on their border instead of the fill to read as editable --
+   a near-black field on a dark card looks like a hole, not a control. */
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea {
+    border-color: var(--border-strong);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) input,
+    :root:not([data-theme="light"]) select,
+    :root:not([data-theme="light"]) textarea {
+        border-color: var(--border-strong);
+    }
+}
+
+/* ============================================================
+   12 · Scrollbars
+
+   A default light scrollbar against a dark page is the single most
+   obvious tell that a dark theme was bolted on.
+   ============================================================ */
+* {
+    scrollbar-color: var(--border-strong) transparent;
+    scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-grey);
+    background-clip: content-box;
+}
+
+/* Selection picks up the brand rather than the browser's default. */
+::selection {
+    background: var(--accent-subtle);
+    color: var(--text-dark);
 }

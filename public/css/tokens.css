@@ -1,0 +1,309 @@
+/* ============================================================
+   tokens.css — the design system
+
+   Loaded immediately after uresearch.css, which is Norhanis' original
+   and is never edited in place. This sheet REDEFINES the eleven
+   variables that file declares, so every one of the 286 var() usages
+   already written across the other twelve sheets picks up the values
+   below -- and, because they are redefined again under a dark theme,
+   gets dark mode without being touched.
+
+   Nothing here is a selector except :root. Components live in
+   layout.css. If you are adding a colour, a size or a shadow anywhere
+   in this app, add it here first and use the token -- before this
+   file there were 67 distinct hard-coded hex colours, 47 font sizes
+   and 16 border radii across thirteen sheets, and #D0342C alone was
+   written out 27 times.
+
+   WHAT IS FIXED: --navy and --gold are UTP's, from the team's Canva
+   design. Everything else is derived from them.
+   ============================================================ */
+
+:root {
+    /* --------------------------------------------------------------
+       Brand ramps. Theme-independent: these are the paint, not the
+       roles. Never used directly by a component -- the semantic
+       tokens further down point at them, so a theme can repoint.
+       -------------------------------------------------------------- */
+    --navy-50:  #F2F5FA;
+    --navy-100: #E2EAFA;
+    --navy-200: #C6D5EE;
+    --navy-300: #9DB4DC;
+    --navy-400: #6C8CC4;
+    --navy-500: #4169A6;
+    --navy-600: #284B80;   /* UTP navy — brand */
+    --navy-700: #1F3C68;
+    --navy-800: #1A3660;
+    --navy-900: #132747;
+
+    --gold-50:  #FDF8EF;
+    --gold-100: #FFEEC9;
+    --gold-200: #F2DCA8;
+    --gold-300: #E3C078;
+    --gold-400: #D2A557;
+    --gold-500: #C28E40;   /* UTP gold — brand */
+    --gold-600: #A5762F;
+    --gold-700: #8A5D12;
+    --gold-800: #6B4710;
+
+    --grey-0:   #FFFFFF;
+    --grey-25:  #FAFBFD;
+    --grey-50:  #F5F6FA;
+    --grey-100: #EDF0F4;
+    --grey-200: #E0E3EA;
+    --grey-300: #CBD1DB;
+    --grey-400: #A7AFBE;
+    --grey-500: #8A94A6;
+    --grey-600: #656E7E;
+    --grey-700: #49505C;
+    --grey-800: #2A2A2A;
+    --grey-900: #16181D;
+
+    /* --------------------------------------------------------------
+       Surfaces. Four depths, and that is the whole vocabulary:
+       sunken (wells, inputs) < page < surface (cards) < raised
+       (menus, popovers, anything floating above a card).
+       -------------------------------------------------------------- */
+    --page-bg:        var(--grey-50);
+    --surface:        var(--grey-0);
+    --surface-raised: var(--grey-0);
+    --surface-sunken: #F8F9FB;
+    --surface-hover:  var(--navy-50);
+
+    /* Text. Three weights carry the whole app; -on-accent is for
+       anything sitting on a filled brand colour. */
+    --text-dark:      var(--grey-800);
+    --text-body:      var(--grey-700);
+    --text-grey:      var(--grey-500);
+    --text-on-accent: #FFFFFF;
+
+    /* Borders. -subtle divides rows inside a card, the default
+       outlines a control, -strong is for a focused or hovered one. */
+    --border-subtle: var(--grey-100);
+    --border-grey:   var(--grey-200);
+    --border-strong: var(--grey-300);
+
+    /* Accent. --navy is the text/border accent; --accent-solid is the
+       fill behind --text-on-accent. They are different colours in dark
+       mode, which is exactly why they are separate tokens. */
+    --navy:          var(--navy-600);
+    --navy-dark:     var(--navy-800);
+    --accent-solid:  var(--navy-600);
+    --accent-hover:  var(--navy-700);
+    --accent-subtle: var(--navy-100);
+    --gold:          var(--gold-500);
+
+    /* Legacy tint names, kept so existing rules keep working. */
+    --light-blue-bg:   var(--navy-100);
+    --light-gold-bg:   var(--gold-100);
+    --light-purple-bg: #EAE3FF;
+    --success-green:   #07734A;
+
+    /* --------------------------------------------------------------
+       Status. One set, four states, three roles each. Before this
+       there were two different greens and #D0342C written 27 times.
+       Every -fg is checked at or above WCAG AA 4.5:1 on its own -bg.
+       -------------------------------------------------------------- */
+    --success-fg: #07734A;  --success-bg: #E4F8ED;  --success-border: #A8E3C4;
+    --warning-fg: #8A5D12;  --warning-bg: #FFF6E5;  --warning-border: #F0D9A3;
+    --danger-fg:  #B32D22;  --danger-bg:  #FDEEED;  --danger-border:  #F3C4C0;
+    --info-fg:    #2456A6;  --info-bg:    #E8F0FC;  --info-border:    #BFD4F2;
+
+    /* --------------------------------------------------------------
+       Category tones. NOT status -- these colour the icon disc on a
+       stat card purely to tell one card from the next, and each
+       carries a white glyph. Saturated enough to hold up on either
+       ground, so they do not change between themes. Add one here and
+       it is usable from the $cards array in stat-cards.blade.php.
+       -------------------------------------------------------------- */
+    --tone-green:  #00A857;
+    --tone-purple: #6B4FD8;
+    --tone-blue:   #2F6BD8;
+    --tone-orange: #F08A24;
+    --tone-teal:   #17A8B8;
+    --tone-red:    #D0342C;
+
+    /* --------------------------------------------------------------
+       Type. One scale, because there were 47 sizes. 1.125 ratio from
+       a 14px base -- tight enough that a table and a form beside it
+       read as the same document.
+       -------------------------------------------------------------- */
+    --font-sans: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+    --text-2xs: 10.5px;
+    --text-xs:  11.5px;
+    --text-sm:  12.5px;
+    --text-md:  14px;      /* body */
+    --text-lg:  16px;
+    --text-xl:  18px;
+    --text-2xl: 22px;
+    --text-3xl: 27px;
+
+    --leading-tight:  1.25;
+    --leading-normal: 1.55;
+
+    --weight-normal: 400;
+    --weight-medium: 500;
+    --weight-semi:   600;
+    --weight-bold:   700;
+
+    /* Uppercase micro-labels: table headers, section labels, badges. */
+    --tracking-caps: 0.055em;
+
+    /* --------------------------------------------------------------
+       Space. A 4px grid. Every margin and padding in the shell is one
+       of these, which is what stops a form and the card around it
+       disagreeing about what "a gap" means.
+       -------------------------------------------------------------- */
+    --space-1:  4px;
+    --space-2:  8px;
+    --space-3:  12px;
+    --space-4:  16px;
+    --space-5:  20px;
+    --space-6:  24px;
+    --space-8:  32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    /* Radius. Controls, cards, and fully round. Three, not sixteen. */
+    --radius-sm:   6px;
+    --radius-md:   10px;
+    --radius-lg:   14px;
+    --radius-full: 999px;
+
+    /* --------------------------------------------------------------
+       Elevation. Light mode lifts with shadow; dark mode cannot (a
+       shadow on a dark ground is invisible), so there the same tokens
+       resolve to a lighter surface plus a border. Components ask for
+       an elevation and get whichever the theme uses.
+       -------------------------------------------------------------- */
+    --shadow-sm: 0 1px 2px rgba(19, 39, 71, 0.06), 0 1px 3px rgba(19, 39, 71, 0.05);
+    --shadow-md: 0 2px 4px rgba(19, 39, 71, 0.05), 0 4px 12px rgba(19, 39, 71, 0.07);
+    --shadow-lg: 0 8px 28px rgba(19, 39, 71, 0.11);
+    --shadow-focus: 0 0 0 3px rgba(40, 75, 128, 0.18);
+
+    /* Motion. Two durations and one easing. Anything longer than
+       --duration-slow on a page transition reads as lag, not polish. */
+    --duration-fast: 120ms;
+    --duration-base: 200ms;
+    --duration-slow: 320ms;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Layering, named. Anything not on this list does not get a
+       z-index -- the top bar at 5 must stay under a chart tooltip. */
+    --z-content: 1;
+    --z-sticky:  5;
+    --z-sidebar: 10;
+    --z-overlay: 100;
+    --z-tooltip: 9999;
+
+    color-scheme: light;
+}
+
+/* ================================================================
+   Dark theme.
+
+   Declared twice on purpose: once for an explicit choice (the toggle
+   writes data-theme), once for the system preference when no choice
+   has been made. The :not([data-theme="light"]) guard is what lets
+   someone on a dark OS still pick light and have it stick.
+
+   Surfaces get lighter as they come forward -- the opposite of the
+   light theme, where they stay white and the shadow does the work.
+   ================================================================ */
+:root[data-theme="dark"] {
+    --page-bg:        #12151C;
+    --surface:        #1A1F29;
+    --surface-raised: #222835;
+    --surface-sunken: #141A24;
+    --surface-hover:  #242C3A;
+
+    --text-dark:      #E6E9EF;
+    --text-body:      #C3CAD7;
+    --text-grey:      #8E99AC;
+    --text-on-accent: #FFFFFF;
+
+    --border-subtle: #242B37;
+    --border-grey:   #2F3846;
+    --border-strong: #3E4859;
+
+    /* Accent splits: text needs to be light on a dark ground, a fill
+       needs to stay dark enough to carry white text. */
+    --navy:          #8AB0EE;
+    --navy-dark:     #A9C6F5;
+    --accent-solid:  #3A63A8;
+    --accent-hover:  #4A76BF;
+    --accent-subtle: #1E2A3F;
+    --gold:          #D9A85A;
+
+    --light-blue-bg:   #1E2A3F;
+    --light-gold-bg:   #3A2E14;
+    --light-purple-bg: #2A2440;
+    --success-green:   #5FD9A0;
+
+    --success-fg: #5FD9A0;  --success-bg: #12301F;  --success-border: #1F6B4A;
+    --warning-fg: #E8BC6B;  --warning-bg: #322611;  --warning-border: #7A5B1E;
+    --danger-fg:  #F19A92;  --danger-bg:  #351A17;  --danger-border:  #8A3A32;
+    --info-fg:    #8FB6F0;  --info-bg:    #17233A;  --info-border:    #2F5390;
+
+    /* Shadows go nearly flat and the border carries the edge instead. */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.40);
+    --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.50);
+    --shadow-focus: 0 0 0 3px rgba(138, 176, 238, 0.28);
+
+    color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --page-bg:        #12151C;
+        --surface:        #1A1F29;
+        --surface-raised: #222835;
+        --surface-sunken: #141A24;
+        --surface-hover:  #242C3A;
+
+        --text-dark:      #E6E9EF;
+        --text-body:      #C3CAD7;
+        --text-grey:      #8E99AC;
+        --text-on-accent: #FFFFFF;
+
+        --border-subtle: #242B37;
+        --border-grey:   #2F3846;
+        --border-strong: #3E4859;
+
+        --navy:          #8AB0EE;
+        --navy-dark:     #A9C6F5;
+        --accent-solid:  #3A63A8;
+        --accent-hover:  #4A76BF;
+        --accent-subtle: #1E2A3F;
+        --gold:          #D9A85A;
+
+        --light-blue-bg:   #1E2A3F;
+        --light-gold-bg:   #3A2E14;
+        --light-purple-bg: #2A2440;
+        --success-green:   #5FD9A0;
+
+        --success-fg: #5FD9A0;  --success-bg: #12301F;  --success-border: #1F6B4A;
+        --warning-fg: #E8BC6B;  --warning-bg: #322611;  --warning-border: #7A5B1E;
+        --danger-fg:  #F19A92;  --danger-bg:  #351A17;  --danger-border:  #8A3A32;
+        --info-fg:    #8FB6F0;  --info-bg:    #17233A;  --info-border:    #2F5390;
+
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+        --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.40);
+        --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.50);
+        --shadow-focus: 0 0 0 3px rgba(138, 176, 238, 0.28);
+
+        color-scheme: dark;
+    }
+}
+
+/* Someone who has asked their OS to stop animating things means it. */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --duration-fast: 0ms;
+        --duration-base: 0ms;
+        --duration-slow: 0ms;
+    }
+}

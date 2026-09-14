@@ -91,14 +91,14 @@
     flex-direction: column;
     gap: 10px;
     padding: 16px 18px;
-    background: white;
+    background: var(--surface);
     border-radius: inherit;
 }
 
 .skel {
     display: block;
     border-radius: 6px;
-    background: #E6EAF2;
+    background: var(--border-grey);
 }
 
 .skel-bar    { height: 10px; }
@@ -175,7 +175,7 @@
     max-width: 190px;
     aspect-ratio: 2 / 1;
     border-radius: 999px 999px 0 0;
-    background: #E6EAF2;
+    background: var(--border-grey);
     mask: radial-gradient(circle at 50% 100%, transparent 52%, #000 52.5%);
     -webkit-mask: radial-gradient(circle at 50% 100%, transparent 52%, #000 52.5%);
 }

@@ -54,7 +54,7 @@
     padding: clamp(7px, 1.1vh, 11px) clamp(12px, 1vw, 18px);
     border-radius: 9px;
     background: var(--navy);
-    color: white;
+    color: var(--text-on-accent);
     font-size: clamp(11px, 1.4vh, 13px);
     font-weight: 600;
     text-decoration: none;
@@ -79,7 +79,7 @@
 
 /* Activity rows are informational, not links, so they do not lift on hover. */
 .adm-activity { cursor: default; }
-.adm-activity:hover { border-color: var(--border-grey); background: white; }
+.adm-activity:hover { border-color: var(--border-grey); background: var(--surface); }
 
 /* ---- system health tiles ---- */
 
@@ -136,14 +136,14 @@
     max-width: 100%;
 }
 
-.adm-tile.tone-good     .adm-tile-icon { color: #067A42; }
-.adm-tile.tone-info     .adm-tile-icon { color: #2456A6; }
-.adm-tile.tone-warn     .adm-tile-icon { color: #8A5D12; }
-.adm-tile.tone-critical .adm-tile-icon { color: #A8271C; }
+.adm-tile.tone-good     .adm-tile-icon { color: var(--success-fg); }
+.adm-tile.tone-info     .adm-tile-icon { color: var(--info-fg); }
+.adm-tile.tone-warn     .adm-tile-icon { color: var(--warning-fg); }
+.adm-tile.tone-critical .adm-tile-icon { color: var(--danger-fg); }
 .adm-tile.tone-muted    .adm-tile-icon { color: var(--text-grey); }
 
-.adm-tile.tone-critical { border-color: #F3C9C4; background: #FEF7F6; }
-.adm-tile.tone-critical .adm-tile-value { color: #A8271C; }
+.adm-tile.tone-critical { border-color: var(--danger-border); background: var(--danger-bg); }
+.adm-tile.tone-critical .adm-tile-value { color: var(--danger-fg); }
 
 /* ---- module mix ---- */
 
@@ -154,7 +154,7 @@
     min-height: 0;
     flex: 1 1 auto;
     padding-top: clamp(4px, 0.8vh, 9px);
-    border-top: 1px solid #EFF1F6;
+    border-top: 1px solid var(--border-subtle);
 }
 
 .adm-mix-title {
@@ -292,7 +292,7 @@
 
 .adm-action:hover {
     border-color: var(--navy);
-    background: #FAFBFE;
+    background: var(--surface-sunken);
     transform: translateY(-2px);
 }
 
@@ -384,7 +384,7 @@
     padding: clamp(9px, 1.3vh, 14px) clamp(12px, 1vw, 18px);
     border: 1px solid var(--border-grey);
     border-radius: 10px;
-    background: #FBFCFE;
+    background: var(--surface-sunken);
 }
 
 .adm-mix-title { margin-bottom: 7px; }
@@ -396,7 +396,7 @@
     min-width: 0;
     height: 6px;
     border-radius: 3px;
-    background: #E9EDF4;
+    background: var(--border-grey);
     overflow: hidden;
 }
 

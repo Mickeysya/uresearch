@@ -83,7 +83,9 @@
                             data: @json($workload->pluck('count')),
                             backgroundColor: @json(collect($workload)->keys()->map(fn ($i) => $palette[$i % count($palette)])),
                             borderWidth: 2,
-                            borderColor: '#FFFFFF',
+                            // The gap between segments is a cut down to
+                            // the card, so it has to BE the card colour.
+                            borderColor: function () { return Chart.uresearchToken('--surface', '#FFFFFF'); },
                             hoverOffset: 6,
                         }],
                     },

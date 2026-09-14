@@ -77,7 +77,9 @@
                         y: {
                             beginAtZero: true,
                             border: { display: false },
-                            grid: { color: '#F1F3F7' },
+                            // Functions, not values: re-resolved on every
+                            // update() so a theme flip repaints them.
+                            grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } },
                             ticks: { precision: 0, maxTicksLimit: 5 },
                         },
                     },
@@ -91,7 +93,7 @@
                             anchor: 'end',
                             align: 'top',
                             offset: 2,
-                            color: '#23283A',
+                            color: function () { return Chart.uresearchToken('--text-body', '#23283A'); },
                             font: { size: 11, weight: '700' },
                             formatter: function (value) { return value; },
                         },

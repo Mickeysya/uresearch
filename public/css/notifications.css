@@ -53,7 +53,7 @@
     margin: 0;
     padding: 9px 16px;
     font-size: 13px;
-    background: white;
+    background: var(--surface);
     color: var(--navy);
     border: 1px solid var(--border-grey);
 }
@@ -104,7 +104,7 @@
 
 .notif-filter.active span {
     background: var(--navy);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 /* ---- day groups ---- */
@@ -139,7 +139,7 @@
     padding: 14px 16px;
     border: 1px solid var(--border-grey);
     border-radius: 10px;
-    background: white;
+    background: var(--surface);
     color: var(--text-dark);
     font: inherit;
     text-align: left;
@@ -148,7 +148,7 @@
 }
 
 .notif-row:hover {
-    background: white;
+    background: var(--surface);
     border-color: var(--navy);
     box-shadow: 0 4px 14px -8px rgba(40, 75, 128, 0.45);
     transform: translateY(-1px);
@@ -157,7 +157,7 @@
 /* Unread carries a navy edge and a solid title; read rows recede. */
 .notif-row.is-unread {
     border-left: 3px solid var(--navy);
-    background: #FCFDFF;
+    background: var(--surface-sunken);
 }
 
 .notif-icon {
@@ -171,10 +171,10 @@
 
 .notif-icon svg { width: 18px; height: 18px; }
 
-.notif-icon.tone-good     { background: #E4F6EC; color: #067A42; }
-.notif-icon.tone-info     { background: #E8F0FD; color: #2456A6; }
-.notif-icon.tone-warn     { background: #FDF1DC; color: #8A5D12; }
-.notif-icon.tone-critical { background: #FDECEA; color: #A8271C; }
+.notif-icon.tone-good     { background: var(--success-bg); color: var(--success-fg); }
+.notif-icon.tone-info     { background: var(--info-bg); color: var(--info-fg); }
+.notif-icon.tone-warn     { background: var(--warning-bg); color: var(--warning-fg); }
+.notif-icon.tone-critical { background: var(--danger-bg); color: var(--danger-fg); }
 
 .notif-body {
     display: flex;
@@ -225,7 +225,7 @@
 .notif-empty {
     padding: 56px 24px;
     text-align: center;
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border-grey);
     border-radius: 12px;
 }
@@ -266,7 +266,7 @@
     padding: 7px 14px;
     border: 1px solid var(--border-grey);
     border-radius: 8px;
-    background: white;
+    background: var(--surface);
     font-size: 12.5px;
     font-weight: 600;
     color: var(--navy);

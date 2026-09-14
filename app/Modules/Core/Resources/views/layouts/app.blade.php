@@ -7,6 +7,7 @@
     <title>UResearch</title>
     <link rel="icon" type="image/png" href="{{ asset('images/uresearch-logo.png') }}">
     @include('core::partials.stylesheets')
+    @include('core::partials.theme-init')
     <script @cspNonce>
         // Applied before the body paints, straight from localStorage, so a
         // collapsed sidebar never flashes open-then-closed on page load --
@@ -27,6 +28,7 @@
 
         <div class="main-content">
             <div class="main-content-header">
+                @include('core::partials.theme-toggle')
                 <img src="{{ asset('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS" class="utp-logo">
             </div>
 

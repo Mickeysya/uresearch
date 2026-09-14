@@ -6,11 +6,15 @@
     <title>UResearch</title>
     <link rel="icon" type="image/png" href="{{ asset('images/uresearch-logo.png') }}">
     @include('core::partials.stylesheets')
+    @include('core::partials.theme-init')
 </head>
 <body>
     <div class="top-header">
         <img src="{{ asset('images/UResearch_logo-text.png') }}" alt="UResearch 2.0" class="uresearch-logo">
-        <img src="{{ asset('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS" class="utp-logo">
+        <div class="top-header-actions">
+            @include('core::partials.theme-toggle')
+            <img src="{{ asset('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS" class="utp-logo">
+        </div>
     </div>
 
     @yield('content')

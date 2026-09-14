@@ -134,7 +134,14 @@
                             label: 'Attendance',
                             data: pct === null ? [0, 100] : [pct, 100 - pct],
                             segmentLabels: ['Your attendance', 'Remaining'],
-                            backgroundColor: [toneColour, '#E7EBF2'],
+                            // Index 0 is the reading itself and keeps its
+                            // tone colour; index 1 is the empty remainder,
+                            // which is track, not data.
+                            backgroundColor: function (ctx) {
+                                return ctx.dataIndex === 0
+                                    ? toneColour
+                                    : Chart.uresearchToken('--border-grey', '#E7EBF2');
+                            },
                             borderWidth: 0,
                             weight: 3.4,
                         },

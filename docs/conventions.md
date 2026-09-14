@@ -8,6 +8,8 @@
 | `app/Modules/<Name>/**` | that person | only them |
 | `database/migrations/**` | the team | framework tables only; put yours in your module |
 | `public/css/uresearch.css` | Norhanis | do not edit — her original sheet |
+| `public/css/tokens.css` | the team | the design system — add a token, never a literal |
+| `public/css/layout.css` | the team | the shared shell: cards, forms, buttons, tables |
 | `public/css/dashboard-*.css` | the team | one dashboard screen each |
 | `public/css/charts.css` | the team | put new shared chart styling here |
 | `routes/web.php` | nobody | it only redirects `/` — your routes go in your folder |
@@ -107,6 +109,57 @@ a second person actually needs them.
 server-side from what a form posted, and anything read before `validate()`.
 A test that would have passed before your fix is not a test of your fix —
 re-introduce the bug once and watch it fail.
+
+## Design
+
+`public/css/tokens.css` is the system. **Never write a colour, a font size, a
+radius or a spacing literal in any other sheet** — add a token here and use it.
+Before it existed there were 67 distinct hex colours, 47 font sizes and 16
+border radii across thirteen sheets, and `#D0342C` alone was written out 27
+times.
+
+```css
+/* no  */  color: #D0342C;  padding: 13px;  font-size: 12.5px;
+/* yes */  color: var(--danger-fg);  padding: var(--space-3);  font-size: var(--text-sm);
+```
+
+**The load order is load-bearing.** `uresearch.css` declares eleven `:root`
+variables; `tokens.css` redefines them, so it must load immediately after, and
+everything else after that. `partials/stylesheets.blade.php` has the list and
+the reason.
+
+| Group | Use |
+|---|---|
+| `--navy` `--gold` | UTP brand. Fixed. |
+| `--navy-50..900` `--gold-50..800` `--grey-0..900` | the ramps everything derives from |
+| `--surface` `--surface-raised` `--surface-sunken` `--page-bg` | the four depths — that is the whole vocabulary |
+| `--text-dark` `--text-body` `--text-grey` `--text-on-accent` | four text weights |
+| `--border-subtle` `--border-grey` `--border-strong` | row divider / control outline / focused |
+| `--success-*` `--warning-*` `--danger-*` `--info-*` | status, each with `-fg` `-bg` `-border` |
+| `--tone-green` … `--tone-red` | category colour on a stat-card icon — **not** status |
+| `--text-2xs..3xl` | one type scale, 1.125 from a 14px base |
+| `--space-1..12` | a 4px grid |
+| `--radius-sm/md/full` `--shadow-sm/md/lg` `--duration-*` `--ease` | shape, lift, motion |
+
+**Both themes, always.** Every colour token is declared twice — once on
+`:root`, once under `:root[data-theme="dark"]` *and* the
+`prefers-color-scheme` media block (the `:not([data-theme="light"])` guard is
+what lets someone on a dark OS still choose light). Use a token and you get
+dark mode free; write a literal and you have made a white box on a dark page.
+Check both before you push: the toggle is in the top bar.
+
+Two tokens exist because one would not do the job: `--navy` is the *text and
+border* accent, `--accent-solid` is the *fill* behind `--text-on-accent`. In
+dark mode they are different colours. Filling with `--navy` puts white text on
+pale blue.
+
+Status colours are paired — `--danger-fg` is contrast-checked against
+`--danger-bg` at WCAG AA, so use them together and the result is legible in
+both themes. Mixing a `-fg` with an arbitrary background is not covered.
+
+Module views inherit the shell. `.card`, `.card-container-inline`, a plain
+`<form>`, `<table class="data-table">` and `.status-badge` are already styled —
+if you are writing CSS for a form, check you actually need it first.
 
 ## Git
 
