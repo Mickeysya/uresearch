@@ -29,8 +29,9 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | 42, covering the engine, the seams, the CSP, the import, Nureen’s chains and the profile |
-| **Runs end to end** | yes — verified 2026-09-09 |
+| Automated tests | 53, covering the engine, the seams, the CSP, the import, the profile, and Nureen’s, Norhanis’ and Hani’s chains |
+| **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12 |
+| Last reviewed | 2026-09-15 — Hani's and Norhanis' merges, see third pass |
 
 ---
 
@@ -39,9 +40,9 @@ as the work it describes.
 Run end to end on 2026-09-09 (Ubuntu 24.04 / WSL2, PHP 8.3.6, MySQL 8.4.11):
 
 - [x] `./setup.sh` completes from a clean clone and an empty volume
-- [x] All migrations run (9 at the time, 14 now); 11 accounts and 5 examiners seeded
+- [x] All migrations run (9 at the time, 18 now); 11 accounts and 5 examiners seeded
 - [x] Every route registers, including every module — auto-discovery works
-      (20 at the time, 42 now)
+      (20 at the time, 85 now)
 - [x] International travel routes through all four approvers; the student's
       stepper shows four steps
 - [x] Local travel shows two steps and finishes at the Chair — same form,
@@ -88,6 +89,74 @@ being invisible to the roles that owned them. See `git log`.
       or department, so a supervisor sees other supervisors' students by name
       and status. Same theme as the queue-scoping gap below, different file
       (`DashboardController`).
+
+### Third pass — 2026-09-15 (post-merge review)
+
+Three merges landed on `develop`: Hani's Re-viva, examiner pool admin and
+conflict detection (`f9bb220`), Norhanis' Claims and Publication (`6a0b711`),
+and `b9ceb5c` joining the two. ~2,800 lines. Both were read against the hard
+rules and **both pass**: no writes to `status`/`current_stage` outside the
+engine, no columns on shared tables, no `{!! !!}`, every upload through
+`DocumentStore`, every route behind `role:` middleware, all three new inline
+scripts carry `@cspNonce`, no `Core/` or cross-teammate edits, both sides of
+the `docs/module-keys.md` conflict resolved correctly, no files lost in the
+merge, and `route:list` boots clean. What the review did turn up:
+
+- [x] **Fixed: the whole test suite was broken by a migration.** All 38
+      non-trivial tests failed with `no such column: "conference_or_journal_name"`,
+      thrown out of
+      `2026_09_14_231801_fix_publication_details_and_authors_columns.php`.
+      That migration drops the columns the *original* publication create
+      migrations made — but those create migrations had already been edited
+      to the final column set, so on any database built from scratch the
+      columns it tries to drop have never existed. It was only ever valid on
+      a machine that had run the old create migrations first.
+      **It therefore broke every fresh migrate**, not just the tests:
+      `./setup.sh` on a clean clone, `./reset.sh`, `migrate:fresh`, and
+      `./sync.sh` for anyone who had not already migrated. Deleted — the
+      create migrations already carry the right shape, and Laravel ignores a
+      `migrations` row whose file is gone, so a machine that already ran it
+      needs nothing. **42 tests pass again** (48 with the two new files below).
+- [ ] Run the suite through Sail (`./vendor/bin/sail artisan test`), which is
+      what the README documents — the app container ships `pdo_sqlite`. A bare
+      `php artisan test` on an Ubuntu host fails with `could not find driver
+      (sqlite)` until `sudo apt install php8.3-sqlite3`; that is a host
+      convenience, not a project requirement.
+- [x] **Tests added for both merges** — `tests/Feature/NorhanisModulesTest.php`
+      (the claims money path and Publication's pre-validation author read) and
+      `tests/Feature/HaniModulesTest.php`. Both were confirmed to fail against
+      the unfixed code before the fixes went in.
+- [ ] **`PublicationController.php:61` — 500 instead of a validation error.**
+      `count($request->input('authors', []))` runs *before* `validate()`, so a
+      posted `authors=foo` throws an unhandled `TypeError` and the student gets
+      a blank 500. Fix is one cast: `count((array) $request->input('authors', []))`.
+      (Norhanis)
+- [ ] **`ClaimsController.php:73` — `claim_balance` can go negative.**
+      `less_cash_advance` is validated `min:0` but never against the summed
+      total, so an advance larger than the claim stores a negative balance and
+      walks it through all four approvers. (Norhanis)
+- [ ] **`ExaminerNominationController::tieUpExaminers()` fires on any approval,
+      not the final one.** Harmless while the chain has one stage — but
+      `ExaminerNominationWorkflow`'s own docblock plans a second stage for
+      touchpoint 2, and the day it lands both examiners get tied up for 180
+      days at the *first* approval. Guard it with
+      `$application->refresh()->status === Application::STATUS_APPROVED`. (Hani)
+- [ ] **`ReVivaController.php:34` — N+1 on the create form.** `latestCycle()`
+      runs one query per student, so `/re-viva/new` costs one query per
+      postgraduate in the system. One `whereIn` keyed by student replaces the
+      loop. (Hani)
+- [ ] **`public/css/uresearch.css:504,515` — two unscoped element selectors.**
+      `form > button[type="submit"]` now centres the login button and the
+      submit on all five of Nureen's module forms; `input[type="file"]`
+      restyles every file input in the app. `conventions.md` asks for at least
+      two classes on anything added to a shared sheet. (Norhanis)
+- [x] **Done: the publication "fix" migration is deleted** — see the first
+      item in this list. It was not the tidiness problem it looked like; it
+      was fatal on every database built from scratch. (Norhanis)
+- [ ] Minor: `items` and `authors` are validated `array|min:1` with no `max`,
+      so a crafted post can insert unbounded rows. `ExaminerAdminController`
+      pulls the whole examiner pool into memory and filters in PHP — fine at
+      FYP scale, worth knowing.
 
 - [ ] Confirm `laravel/framework: ^12.0` in `composer.json` is still the
       version the team wants; bump if you prefer newer.
@@ -281,7 +350,9 @@ query; there is no placeholder data in the views.
 
 ### Docs
 - [x] `README.md`, `CLAUDE.md`, `LEGACY.md`, this file
-- [x] `docs/` — architecture, adding-a-module, conventions, module-keys, migration-from-legacy
+- [x] `docs/` — architecture, adding-a-module, conventions, module-keys,
+      migration-from-legacy, email-service-integration,
+      tech-stack-and-architecture-report
 - [x] `docs/scope/` — six per-person scope documents + `technical.md`.
       `chloe.md` and `haziq.md` written 2026-09-12 from their interim-report PDFs,
       which are kept alongside in `docs/scope/chloe/` and `docs/scope/haziq/`.
@@ -758,8 +829,9 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       to it and required PHPUnit 11 — so `php artisan test` failed outright on
       a missing `phpunit.xml`. There is now a working harness: SQLite in
       memory, so it needs no Docker, no MySQL and no `.env.testing`, and can
-      never touch a developer's own data. `php artisan test` — 13 tests in
-      under a second.
+      never touch a developer's own data. `php artisan test` — 13 tests at the
+      time, 53 now, in under two seconds. Run it through Sail; see the third
+      pass below.
 - [x] **Content-Security-Policy on every HTML response (2026-09-12).** The
       portal previously sent none at all, so a single unescaped value reaching
       Blade would have let an injected `<script>` simply run. Now
@@ -822,11 +894,18 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       "registered module label, else prettify the key" fallback, and
       `AttendanceRecord::latestPerStudent()` replaces three hand-built copies
       of the same self-join (CGS dashboard, admin average, at-risk list).
-- [ ] **Seed demo data in `DatabaseSeeder`.** A teammate running `./setup.sh`
-      gets 11 accounts and empty dashboards: no attendance rows, nothing in a
-      CGS queue, no notifications. Demo data was created locally during
-      development but deliberately not committed to the seeder, so it exists
-      on one machine only. Worth fixing before the FYP demo.
+- [x] **Demo data is seeded (2026-09-14).** A teammate running `./setup.sh`
+      used to get 11 accounts and empty dashboards: no attendance rows,
+      nothing in a CGS queue, no notifications. `database/seeders/DemoDataSeeder.php`
+      now fills every figure on all three dashboards, and
+      `php artisan demo:seed [scenario]` (`--list` for the names) runs it.
+      Deliberately **not** part of `DatabaseSeeder`, so `setup.sh` stays the
+      fast, minimal, one-account-per-role path and the demo data is opt-in.
+      **One caveat:** `DemoDataSeeder` imports models from Hani's, Norhanis'
+      and Nureen's folders, which makes it the only central file that names
+      individual modules. Jason, Chloe and Haziq will all want to edit it —
+      expect conflicts there, and consider a per-module `demoData()` hook
+      before three people edit it in the same week.
 - [ ] Give `/calendar` and `/documents` real screens. Both are still
       `PageController` placeholders that the dashboard links to.
       (`/notifications` and `/profile` are done — see below.)
@@ -900,6 +979,58 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
 - [ ] **`dac` and `panel_examiner` are declared but own no stage and have no
       seeded account.** Either a module needs them or they should go.
 
+### Over-engineering worth cutting (audit 2026-09-15)
+
+Whole-repo pass for complexity only — correctness and security findings live
+in the third pass above. Ranked by size of cut. None of these are urgent; they
+are what to reach for when touching the file anyway.
+
+- [ ] **`Core\Http\Controllers\PageController` — 8 methods, one shape.**
+      Every one returns `view('core::pages.placeholder', [...])` with a title
+      and a description; nothing else differs. A `const PAGES = [slug => [title,
+      description]]` and one `show(string $page)` method behind a single
+      `/{page}` route does the same job in about a third of the 96 lines, and
+      deleting a placeholder becomes deleting one array entry instead of a
+      method plus a route. Do it when the first of these gets a real screen.
+- [ ] **`recentActivities()` is written twice**, ~40 lines each in
+      `CgsDashboard` and `AdminDashboard`. The three queries behind them are
+      identical (`ApprovalHistory` latest-N, `Application` latest-N submitted,
+      and — admin only — `User` latest-N students); only the row text and
+      whether enrolments are included differ. A shared `activityFeed()` in
+      `Concerns\BuildsPanels` taking the mapping closures per source would cut
+      ~35 lines and stop the two feeds drifting the way the last pair did.
+- [ ] **`CgsDashboard::latestRecords()` and `AdminDashboard::latestAttendance()`
+      are the same one-line wrapper under two names** — both
+      `remember(<key>, fn () => $source->latestPerStudent())`, differing only in
+      the memo key. This is the exact duplication the 2026-09-12 dedup pass was
+      supposed to end; it survived because the wrappers were left behind after
+      their bodies moved into `AttendanceRecord::latestPerStudent()`. Delete
+      both and call the contract directly.
+- [ ] **The nine-way dashboard CSS split has leaked.** Splitting by *screen*
+      rather than by *component* means 25+ class names are now defined in two
+      to four sheets each — `.sdash-stat` in four, `.sdash-card` in three,
+      `.sdash-legend`, `.adm-tile`, `.cgs-donut`, `.notif-row` in two — so
+      which rule wins depends on the include order in
+      `partials/stylesheets.blade.php`, which is why `conventions.md` has to
+      say "do not reorder". A component-shaped split (or moving the shared
+      `.sdash-*` shell into one sheet the screen sheets only extend) removes
+      the ordering dependency. Not worth a big-bang rewrite; worth doing for
+      `.sdash-stat` alone, which four sheets touch.
+- [ ] **`Support\Role::DAC` and `Role::PANEL_EXAMINER` are declared and never
+      used** — no stage, no seeded account, no reference anywhere in `app/`.
+      Delete them or give them a module. (Also noted under Core gaps below.)
+- [ ] **17 `.gitkeep` files in Jason's, Chloe's and Haziq's empty module
+      folders.** `ModuleServiceProvider` discovers directories that exist, so
+      it creates nothing and needs nothing pre-made; the folders appear when
+      the first real file lands. The `ModuleProvider.php` and `routes.php`
+      stubs *are* worth keeping — they claim the folder so six people don't
+      collide — but the empty-directory markers under them buy nothing.
+- [ ] `Console\Commands\SeedDemoData` re-implements scenario lookup and
+      validation that `DemoDataSeeder::SCENARIOS` could answer itself. The
+      command earns its place for `--list` and for not having to type
+      `--class=`; the 20 lines of hand-rolled `array_key_exists` + error
+      formatting in the middle of it do not.
+
 ### Team
 - [~] **Admin module** — the dashboard, sidebar and audit log are built; the
       screens behind them are placeholders. The one that matters is **Users
@@ -910,7 +1041,7 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       Applications, Attendance (x2), Reports (x3), Users and Roles, Document
       Repository. Each names what is missing; several need only a query and a
       table, since the data already exists.
-- [~] Automated tests — the harness exists and 13 tests cover the parts that
+- [~] Automated tests — the harness exists and 53 tests cover the parts that
       break quietly: both authorisation locks, approve/reject outcomes,
       Travel's conditional routing, the `stages(null)` superset, that every
       registered module's routes actually exist, and the attendance contract
@@ -932,7 +1063,8 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
 2. Nureen builds Supervision early — it populates `users.supervisor_id`,
    which the queue-scoping fix then depends on.
 3. Agree the approver-scoping design and make that one Core change.
-4. Norhanis does Publication and Claims — both are quick with the engine.
+4. ~~Norhanis does Publication and Claims — both are quick with the engine.~~
+   Done 2026-09-15 — see her section above. RPD is all that remains of her scope.
 5. ~~Hani closes the examiner lifecycle before touching re-viva.~~ Done —
    see her section above.
 6. ~~Nureen settles the UTrace data source before starting Attendance.~~ Done

@@ -326,13 +326,17 @@ rm -rf vendor
 │   │   ├── Norhanis/    Travel · Publication · Claims · RPD
 │   │   ├── Nureen/      Attendance · GA Extension · Supervision · Certification
 │   │   ├── Hani/        Examiner Nomination · Conflict Detection · Re-viva
-│   │   ├── Jason/       (empty)
-│   │   └── Chloe/       (empty)
+│   │   ├── Jason/       (scaffold only — Hardbound · Appeal · Appointment Letters)
+│   │   ├── Chloe/       (scaffold only — Workstation · Candidacy)
+│   │   └── Haziq/       (scaffold only — GRA · GA · Stage Gates · Allowance)
+│   ├── Console/         artisan commands (demo:seed)
 │   └── Providers/       module auto-discovery
-├── database/migrations/ framework tables only (users, sessions, jobs, cache)
+├── database/migrations/ framework tables (users, sessions, jobs, cache) + activity log
+├── database/seeders/    DatabaseSeeder (accounts) · DemoDataSeeder (demo:seed)
 ├── docs/                architecture, conventions, how to add a module
 │   └── scope/           the FYP scope documents
-├── public/css/          Norhanis' stylesheet
+├── public/css/          13 sheets — see docs/conventions.md for which to edit
+├── public/js/           Chart.js and its datalabels plugin, served self-hosted
 ├── .claude/             agents, and the hook that stops Claude pushing
 ├── CLAUDE.md            project context loaded by Claude Code
 ├── TODO.md              status: done / not done / next
@@ -415,6 +419,11 @@ Everything else is Sail:
 ./vendor/bin/sail artisan optimize:clear   # clear config/route/view caches
 ./vendor/bin/sail artisan test             # the test suite (SQLite in memory —
                                            #   never touches your database)
+                                           #   Run it through Sail: the app
+                                           #   container ships pdo_sqlite. A bare
+                                           #   `php artisan test` on the host
+                                           #   needs it installed there too
+                                           #   (sudo apt install php8.3-sqlite3)
 
 ./vendor/bin/sail logs                     # view all logs
 ./vendor/bin/sail logs mysql               # view just MySQL logs
@@ -432,6 +441,8 @@ Everything else is Sail:
 | [`docs/conventions.md`](docs/conventions.md) | naming, ownership, the nine rules |
 | [`docs/module-keys.md`](docs/module-keys.md) | the `module_type` registry — claim yours |
 | [`docs/migration-from-legacy.md`](docs/migration-from-legacy.md) | what changed from the raw-PHP version and why |
+| [`docs/email-service-integration.md`](docs/email-service-integration.md) | Mailpit in development, and what real SMTP needs |
+| [`docs/tech-stack-and-architecture-report.md`](docs/tech-stack-and-architecture-report.md) | the stack and architecture write-up for the FYP report |
 | [`docs/scope/`](docs/scope/) | the FYP scope documents |
 | [`LEGACY.md`](LEGACY.md) | the archived pre-rewrite app, and how to restore it |
 
