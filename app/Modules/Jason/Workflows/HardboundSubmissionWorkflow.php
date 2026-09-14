@@ -2,8 +2,10 @@
 
 namespace App\Modules\Jason\Workflows;
 
+use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
@@ -27,7 +29,7 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
  * `cgs_review` and the student can resubmit, rejected at `cgs_approve` and
  * their only route is Appeal Hardbound Submission.
  */
-class HardboundSubmissionWorkflow implements WorkflowModule
+class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
 {
     public function key(): string
     {
@@ -59,6 +61,11 @@ class HardboundSubmissionWorkflow implements WorkflowModule
         ];
     }
 
+    /**
+     * Shown on the student's tracking page under the status badge. The badge
+     * says "rejected" for both endings, so this is where the student learns
+     * which one they got and what they can do about it.
+     */
     public function summary(Application $application): string
     {
         $detail = HardboundSubmissionDetail::where('application_id', $application->id)->first();
@@ -67,9 +74,25 @@ class HardboundSubmissionWorkflow implements WorkflowModule
             return 'Hardbound thesis submission';
         }
 
-        return $detail->thesis_title.($detail->isResubmission()
-            ? ' (resubmission of #'.$detail->resubmission_of_id.')'
-            : '');
+        $summary = $detail->thesis_title;
+
+        if ($detail->isResubmission()) {
+            $summary .= ' (resubmission of #'.$detail->resubmission_of_id.')';
+        }
+
+        if ($application->status === Application::STATUS_REJECTED) {
+            $replaced = HardboundSubmissionDetail::where('resubmission_of_id', $application->id)->exists();
+
+            $summary .= match (true) {
+                $replaced => ' — replaced by a resubmission',
+                $application->current_stage === 'cgs_review' => ' — returned for correction; resubmit from the sidebar',
+                HardboundSubmissionDetail::resubmittableFor($application->student_id)->whereKey($application->id)->exists()
+                    => ' — appeal upheld; resubmit from the sidebar',
+                default => ' — rejected; an appeal may be filed from the sidebar',
+            };
+        }
+
+        return $summary;
     }
 
     public function createRoute(): ?string
@@ -80,5 +103,26 @@ class HardboundSubmissionWorkflow implements WorkflowModule
     public function queueRoute(): string
     {
         return 'hardbound.queue';
+    }
+
+    /**
+     * One "Resubmit" link per submission the student is currently allowed to
+     * replace. The tracking page is Core's and takes no module actions, so
+     * the sidebar is where a module puts a per-application action.
+     */
+    public function links(User $user): array
+    {
+        if ($user->role !== Role::STUDENT) {
+            return [];
+        }
+
+        return HardboundSubmissionDetail::resubmittableFor($user->id)
+            ->get(['id'])
+            ->map(fn (Application $application) => [
+                'label' => "Resubmit Hardbound #{$application->id}",
+                'route' => 'hardbound.resubmit.form',
+                'params' => ['application' => $application->id],
+            ])
+            ->all();
     }
 }

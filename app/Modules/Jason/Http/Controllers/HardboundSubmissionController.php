@@ -7,7 +7,6 @@ use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
-use App\Modules\Jason\Models\HardboundAppealDetail;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -190,12 +189,9 @@ class HardboundSubmissionController extends Controller
 
     /**
      * The detail row of an application this student is allowed to resubmit.
-     *
-     * Two routes qualify, and nothing else: CGS returned it at the review
-     * stage, or the Senior Executive rejected it outright and an appeal
-     * against that rejection has since been approved. The second is how an
-     * upheld appeal reopens a submission -- the original row is never
-     * rewritten, because only WorkflowEngine writes status.
+     * The rule itself lives in HardboundSubmissionDetail::resubmittableFor(),
+     * shared with the sidebar link and the tracking summary; the checks
+     * before it only exist to give a specific reason when it fails.
      */
     protected function resubmittableDetail(Request $request, Application $application): HardboundSubmissionDetail
     {
@@ -207,26 +203,19 @@ class HardboundSubmissionController extends Controller
         abort_unless($application->status === Application::STATUS_REJECTED, 403,
             'That submission is not awaiting correction.');
 
-        $returned = $application->current_stage === self::REVIEW_STAGE;
-
-        abort_unless($returned || $this->hasApprovedAppeal($application), 403,
-            'CGS rejected this submission. File an appeal before resubmitting.');
-
-        // A submission may only be replaced once.
         abort_if(
             HardboundSubmissionDetail::where('resubmission_of_id', $application->id)->exists(),
             403,
             'You have already resubmitted this submission.'
         );
 
-        return HardboundSubmissionDetail::where('application_id', $application->id)->firstOrFail();
-    }
+        abort_unless(
+            HardboundSubmissionDetail::resubmittableFor($request->user()->id)->whereKey($application->id)->exists(),
+            403,
+            'CGS rejected this submission. File an appeal before resubmitting.'
+        );
 
-    protected function hasApprovedAppeal(Application $application): bool
-    {
-        return HardboundAppealDetail::where('hardbound_application_id', $application->id)
-            ->whereHas('application', fn ($q) => $q->where('status', Application::STATUS_APPROVED))
-            ->exists();
+        return HardboundSubmissionDetail::where('application_id', $application->id)->firstOrFail();
     }
 
     /**
