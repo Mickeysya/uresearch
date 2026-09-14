@@ -13,24 +13,26 @@
    ============================================================ */
 
 /* =====================================================================
-   Student dashboard — single-screen layout.
+   Student dashboard — natural-height layout, the page scrolls.
 
-   The PAGE never scrolls; individual panel bodies do. .sdash is a grid
-   sized to the viewport minus the fixed chrome above it, so the five
-   stat cards and the four panels always land on one screen.
+   Used to size .sdash to the viewport and force everything to fit on one
+   screen without the page scrolling. That meant every panel's content had
+   to either fit the share of the height the grid gave it or get clipped --
+   and there is no viewport size where "gauge + legend + facts + a footer
+   note" and "every application in the list" both reliably fit a fixed
+   budget. Any panel with more to show than usual (a long queue, a tall
+   card, a browser with devtools eating half the viewport) either scrolled
+   inside a cramped box or, worse, overflowed and painted on top of its own
+   footer.
 
-   --sdash-chrome is that fixed chrome: .main-content-header is 64px and
-   pulls itself up into .main-content's 32px padding with a negative
-   margin, then leaves 24px below it; 32px of padding remains at the
-   bottom. 64 + 24 + 32 = 120.
-
-   The max() floor means very short viewports scroll rather than crushing
-   every panel into illegibility -- squeezing is worse than scrolling.
+   Every row here is auto-height now: a card is exactly as tall as its
+   content, the grid is exactly as tall as its tallest row, and the page
+   scrolls if that adds up to more than one screen. Nothing is ever
+   clipped or squeezed to fit a number that was only ever a guess at "the
+   viewport minus the header."
    ===================================================================== */
 
 .sdash {
-    --sdash-chrome: 120px;
-    --sdash-floor: 620px;
     --sdash-gap: 16px;
 
     /* Load sequence. Nothing waits on a timer: the page is server-rendered,
@@ -42,18 +44,8 @@
     --rise-step: 0.045s;
 
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
     gap: var(--sdash-gap);
-    height: max(var(--sdash-floor), calc(100vh - var(--sdash-chrome)));
-    min-height: 0;
-}
-
-/* dvh tracks mobile browser chrome as it hides/shows; vh above is the
-   fallback for anything that doesn't support it. */
-@supports (height: 100dvh) {
-    .sdash {
-        height: max(var(--sdash-floor), calc(100dvh - var(--sdash-chrome)));
-    }
 }
 
 .sdash .dash-welcome {
@@ -62,14 +54,30 @@
 
 /* ---- the five stat cards ---- */
 
+/* flex-wrap, not a fixed grid: five cards is not evenly divisible by 2, 3
+   or 4, so any fixed column count leaves an empty slot in the last row the
+   moment the cards wrap (three on row one, two on row two, one dead cell
+   where a sixth card would sit). Flex items on a wrapped line share out
+   whatever width that line has, so a two-card leftover row fills itself
+   completely instead of leaving a gap -- and it costs no breakpoints,
+   because it adapts to any card count without editing this file.
+
+   justify-content: center matters only when a row doesn't fill: a full row
+   consumes all the space there is (grow leaves nothing to centre), but a
+   lone card left over after wrapping is capped by max-width below and
+   would otherwise hug the left edge -- centred, it reads as a deliberate
+   layout instead of a stretched leftover. */
 .sdash-stats {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: var(--sdash-gap);
 }
 
 .sdash-stat {
     display: flex;
+    flex: 1 1 190px;
+    max-width: 340px;
     flex-direction: column;
     justify-content: space-between;
     gap: 2px;
@@ -77,7 +85,7 @@
     border: 1px solid var(--border-grey);
     border-radius: 12px;
     padding: clamp(10px, 1.1vh, 16px) clamp(12px, 1vw, 18px);
-    min-width: 0;
+    min-width: 190px;
 }
 
 .sdash-stat-top {
@@ -165,27 +173,25 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: var(--sdash-gap);
-    min-height: 0;
 }
 
 .sdash-col {
     display: grid;
     gap: var(--sdash-gap);
-    min-height: 0;
+    /* Each card is exactly as tall as its own content -- see the note on
+       .sdash above. */
+    grid-template-rows: auto auto;
 }
-
-/* Applications get more room than notifications; attendance is sized by
-   its gauge and tasks take whatever is left. */
-.sdash-col-left  { grid-template-rows: minmax(0, 1.45fr) minmax(0, 1fr); }
-.sdash-col-right { grid-template-rows: auto minmax(0, 1fr); }
 
 .sdash-card {
     display: flex;
     flex-direction: column;
-    min-height: 0;
     background: white;
     border: 1px solid var(--border-grey);
     border-radius: 12px;
+    /* Clips children to the rounded corners. Safe now that nothing inside
+       is ever forced shorter than its content -- there is nothing left to
+       clip in the ordinary case. */
     overflow: hidden;
 }
 
@@ -222,24 +228,18 @@
     border-color: var(--navy);
 }
 
-/* The only scrolling container on the page. */
+/* The page scrolls; this does not -- it is exactly as tall as its rows. */
 .sdash-card-body {
     flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    /* The 4px top is headroom, not decoration. This box clips -- overflow-y
-       here, overflow:hidden on the shortcut and quick-action grids -- so a
-       child that lifts on hover moves outside it and has its top edge cut
-       off, which reads as the tile sliding behind the panel heading. The
-       lift is 2px; 4px clears it. */
+    /* The 4px top is headroom, not decoration. A child that lifts on hover
+       moves outside its own box and has its top edge cut off otherwise,
+       which reads as the tile sliding behind the panel heading. The lift
+       is 2px; 4px clears it. */
     padding: 4px 14px 14px;
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
-
-/* Scrollbars are hidden everywhere -- see the global rule at the bottom
-   of this file. The panel still scrolls, it just draws no track. */
 
 /* ---- a row inside a panel ---- */
 
@@ -381,7 +381,6 @@
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
     align-items: center;
     gap: clamp(12px, 1.6vw, 26px);
-    overflow: visible;
     padding-top: 4px;
 }
 
@@ -479,41 +478,17 @@
 .sdash-note a { color: inherit; font-weight: 600; }
 
 /* ---- responsive ----------------------------------------------------
-   The one-screen promise holds where there is genuinely a screen's worth
-   of room. Below that the grid reflows and the page is allowed to scroll
-   again, because five cards and four panels cannot be legible at 900px
-   wide however they are arranged.
+   Everything above is already natural-height, so there is nothing to
+   release at a breakpoint -- what is left is purely about width: two
+   panels side by side stop being legible once neither has more than
+   about 400px, so below 1100px they stack into one column instead.
    -------------------------------------------------------------------*/
 
-@media (max-width: 1280px) {
-    .sdash-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
 @media (max-width: 1100px) {
-    .sdash {
-        height: auto;
-        min-height: 0;
-    }
-
     .sdash-panels { grid-template-columns: minmax(0, 1fr); }
-    .sdash-col-left,
-    .sdash-col-right { grid-template-rows: auto auto; }
-
-    .sdash-card-body {
-        overflow-y: visible;
-        max-height: none;
-    }
-
-    .sdash-card { min-height: 180px; }
-}
-
-@media (max-width: 820px) {
-    .sdash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 560px) {
-    .sdash-stats { grid-template-columns: minmax(0, 1fr); }
-
     .sdash-attendance-body {
         flex-direction: column;
         align-items: stretch;

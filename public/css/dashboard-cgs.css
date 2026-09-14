@@ -12,34 +12,23 @@
    ============================================================ */
 
 /* =====================================================================
-   CGS dashboard — four rows on one screen.
+   CGS dashboard — natural height, same as the student dashboard.
 
-   The brief is strict: this never scrolls on a desktop viewport, at any
-   height. So unlike the student dashboard there is NO min-height floor to
-   fall back on — the rows are fractional and everything inside them is
-   sized in vh, so the whole thing compresses to fit rather than pushing
-   past the fold.
-
-   Row proportions: banner and the five figures take what they need, then
-   the two panel rows split the remainder 1 : 0.85 — the top row carries
-   the donut and two lists, the bottom row two shorter panels.
+   Used to compress everything to fit one screen at any height, with no
+   fallback -- the whole grid was overflow: hidden, so a queue or a list
+   longer than usual was silently cut off rather than scrolled. Now every
+   row is auto-height: the grid is as tall as its content, and the page
+   scrolls if that runs past one screen. The clamp(...vh...) sizing left
+   on individual pieces below is harmless without a fixed budget to hit --
+   it now just settles near its own maximum.
    ===================================================================== */
 
 .sdash-cgs {
-    /* No --sdash-floor: compressing is the requirement here. */
-    grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 0.85fr);
-    height: calc(100vh - var(--sdash-chrome));
+    grid-template-rows: auto auto auto auto;
     gap: clamp(8px, 1.1vh, 16px);
-    overflow: hidden;
 }
 
-.sdash-cgs > * { min-height: 0; min-width: 0; }
-
-@supports (height: 100dvh) {
-    .sdash-cgs {
-        height: calc(100dvh - var(--sdash-chrome));
-    }
-}
+.sdash-cgs > * { min-width: 0; }
 
 /* Everything vertical shrinks with the viewport so four rows still fit on
    a 720px-tall laptop. */
@@ -284,9 +273,8 @@
 }
 
 /* ---- responsive ----------------------------------------------------
-   The one-screen rule is a DESKTOP rule. Below 1100px the columns cannot
-   hold three panels legibly however they are compressed, so the grid
-   stacks and the page is allowed to scroll again.
+   Purely about width now: three (or two) panels side by side stop being
+   legible below 1100px, so the grid stacks to one column.
    -------------------------------------------------------------------*/
 
 @media (max-width: 1400px) {
@@ -294,16 +282,10 @@
 }
 
 @media (max-width: 1100px) {
-    .sdash-cgs {
-        height: auto;
-        grid-template-rows: none;
-    }
-
     .cgs-row-top,
     .cgs-row-bottom { grid-template-columns: minmax(0, 1fr); }
 
     .sdash-cgs .sdash-card { min-height: 200px; }
-    .sdash-cgs .sdash-card-body { overflow-y: visible; }
     .cgs-workload-body { flex-direction: column; }
     .cgs-donut-wrap { width: 160px; }
 }

@@ -12,30 +12,19 @@
    ============================================================ */
 
 /* =====================================================================
-   Admin dashboard — four rows on one screen, no banner.
-
-   Same compress-don't-scroll contract as the CGS dashboard: no min-height
-   floor, everything vertical in vh. The heading row replaces the banner,
-   so it is deliberately compact.
+   Admin dashboard — natural height, same as the student and CGS
+   dashboards. Four rows, each exactly as tall as its own content; the
+   page scrolls if that runs past one screen instead of the grid clipping
+   whatever didn't fit. The heading row replaces the banner, so it is
+   deliberately compact regardless.
    ===================================================================== */
 
 .sdash-admin {
-    grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 0.9fr);
-    height: calc(100vh - var(--sdash-chrome));
+    grid-template-rows: auto auto auto auto;
     gap: clamp(8px, 1.1vh, 16px);
-    /* Belt and braces on the one-screen promise: whatever a panel does
-       internally, the grid cannot grow past the height set above and push
-       the bottom row below the fold. */
-    overflow: hidden;
 }
 
-/* Rows must be allowed to shrink below their content, or a tall panel
-   forces the row open and the next one slides off screen. */
-.sdash-admin > * { min-height: 0; min-width: 0; }
-
-@supports (height: 100dvh) {
-    .sdash-admin { height: calc(100dvh - var(--sdash-chrome)); }
-}
+.sdash-admin > * { min-width: 0; }
 
 .adm-header {
     display: flex;
@@ -335,10 +324,8 @@
 }
 
 @media (max-width: 1200px) {
-    .sdash-admin { height: auto; grid-template-rows: none; }
     .adm-row-top, .adm-row-bottom { grid-template-columns: minmax(0, 1fr); }
     .sdash-admin .sdash-card { min-height: 220px; }
-    .sdash-admin .sdash-card-body { overflow-y: visible; }
 }
 
 @media (max-width: 640px) {
