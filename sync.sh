@@ -154,7 +154,14 @@ if ! grep -q '^APP_KEY=base64:' .env 2>/dev/null; then
         note "generate APP_KEY"
     else
         composer_run >/dev/null 2>&1 || true
-        php artisan key:generate 2>/dev/null || docker run --rm \
+        # >/dev/null 2>&1, not just 2>/dev/null: the host PHP here is often
+        # older than what the vendor tree needs (the ort merge that added
+        # maatwebsite/excel needs typed class constants, PHP 8.3+), and a
+        # parse error at boot can land on stdout instead of stderr depending
+        # on the local php.ini's display_errors setting -- 2>/dev/null alone
+        # let it leak through even though this failure is expected and the
+        # docker fallback below handles it.
+        php artisan key:generate >/dev/null 2>&1 || docker run --rm \
             -u "$(id -u):$(id -g)" -v "$(pwd):/var/www/html" -w /var/www/html \
             laravelsail/php83-composer:latest php artisan key:generate
         ok "generated APP_KEY"
