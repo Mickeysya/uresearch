@@ -24,8 +24,14 @@ env_missing_keys() {
 # env_backfill — appends any missing keys, with .env.example's values.
 # Echoes what it added so the caller can report it.
 env_backfill() {
-    local missing
-    mapfile -t missing < <(env_missing_keys)
+    # mapfile/readarray needs bash 4+; macOS ships bash 3.2 as /bin/bash
+    # (GPLv3-avoidance freeze), where it doesn't exist at all. This loop
+    # works on both.
+    local -a missing=()
+    local key
+    while IFS= read -r key; do
+        missing+=("$key")
+    done < <(env_missing_keys)
     [ ${#missing[@]} -eq 0 ] && return 0
 
     {
