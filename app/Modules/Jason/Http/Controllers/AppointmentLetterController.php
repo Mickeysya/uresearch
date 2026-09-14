@@ -16,6 +16,7 @@ use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
 use App\Modules\Jason\Models\PoolExaminer;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -211,10 +212,29 @@ class AppointmentLetterController extends Controller
     protected function detailAwaitingPreparation(Application $application, WorkflowEngine $engine): AppointmentDetail
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
-        abort_unless($engine->currentStage($application)?->key === 'cgs_prep', 403,
-            'That application is not awaiting letter preparation.');
 
-        return AppointmentDetail::where('application_id', $application->id)->firstOrFail();
+        $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
+
+        if ($engine->currentStage($application)?->key === 'cgs_prep') {
+            return $detail;
+        }
+
+        // The usual way here is the browser's Back button right after a
+        // successful submit, so say what actually happened rather than 403.
+        $message = match (true) {
+            $detail->isPrepared() && $application->status === Application::STATUS_PENDING
+                => "Application #{$application->id} has already been prepared and is with the Dean.",
+            $detail->isPrepared()
+                => "Application #{$application->id} has already been prepared and decided ({$application->status}).",
+            $application->status === Application::STATUS_PENDING
+                => "Application #{$application->id} has not reached CGS yet — it is still with the Academic Executive.",
+            default
+                => "Application #{$application->id} is {$application->status}; there is nothing to prepare.",
+        };
+
+        throw new HttpResponseException(
+            redirect()->route('appointment-letter.queue')->with('status', $message)
+        );
     }
 
     /**
