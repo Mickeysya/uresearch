@@ -8,7 +8,7 @@
         <h2>Travel Application</h2>
         <div class="card-divider"></div>
 
-        <form method="POST" action="{{ route('travel.store') }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ route('travel.store') }}" enctype="multipart/form-data" class="app-form">
             @csrf
 
             <label for="type_of_request">Type of Request</label>

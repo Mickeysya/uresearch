@@ -8,7 +8,7 @@
         <h2>Student Claims Application</h2>
         <div class="card-divider"></div>
 
-        <form method="POST" action="{{ route('claims.store') }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ route('claims.store') }}" enctype="multipart/form-data" class="app-form">
             @csrf
 
             <label for="purpose_of_claim">Purpose of Claim</label>
@@ -70,7 +70,7 @@
                    class="@error('receipt') is-invalid @enderror">
             @error('receipt') <p class="field-error">{{ $message }}</p> @enderror
 
-            <button type="submit" style="margin-top: 20px;">Submit Application</button>
+            <button type="submit">Submit Application</button>
         </form>
     </div>
 </div>

@@ -58,7 +58,11 @@ class PublicationController extends Controller
         // TravelController derives duration_days instead of trusting the
         // client, this can't be a client-side-only rule since the rows come
         // from a JS-managed repeating section the student's browser controls.
-        $authorCount = count($request->input('authors', []));
+        // Because it runs first, `authors` is still whatever was posted: the
+        // (array) cast is what stops a scalar (`authors=foo`) throwing a
+        // TypeError out of count() and returning a blank 500. Cast, it
+        // becomes a one-element array and fails the `array` rule properly.
+        $authorCount = count((array) $request->input('authors', []));
         $requiresAuthorshipContribution = $authorCount > self::AUTHORSHIP_CONTRIBUTION_THRESHOLD;
 
         $data = $request->validate([
@@ -72,7 +76,7 @@ class PublicationController extends Controller
             'wants_letter_of_undertaking' => ['nullable', 'boolean'],
             'conference_start_date' => ['required', 'date'],
             'conference_end_date' => ['required', 'date', 'after_or_equal:conference_start_date'],
-            'authors' => ['required', 'array', 'min:1'],
+            'authors' => ['required', 'array', 'min:1', 'max:50'],
             'authors.*.author_name' => ['required', 'string', 'max:150'],
             'authors.*.designation' => ['nullable', 'string', 'max:150'],
             'authors.*.organisation' => ['nullable', 'string', 'max:150'],
@@ -91,6 +95,7 @@ class PublicationController extends Controller
         ], [
             'conference_end_date.after_or_equal' => 'The end date must fall on or after the start date.',
             'authors.required' => 'Add at least one author.',
+            'authors.max' => 'A publication cannot list more than 50 authors.',
             'authorship_contribution_form.required' => 'The Authorship Contribution Form is required when more than '.self::AUTHORSHIP_CONTRIBUTION_THRESHOLD.' authors are listed.',
         ]);
 

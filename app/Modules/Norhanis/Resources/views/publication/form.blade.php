@@ -8,7 +8,7 @@
         <h2>Publication Funding Application</h2>
         <div class="card-divider"></div>
 
-        <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data" class="app-form">
             @csrf
 
             <h3 style="margin-bottom: 4px;">Paper Presentation Details</h3>
@@ -154,7 +154,7 @@
             <input type="file" name="paper_evaluation_sheet" id="paper_evaluation_sheet" class="@error('paper_evaluation_sheet') is-invalid @enderror">
             @error('paper_evaluation_sheet') <p class="field-error">{{ $message }}</p> @enderror
 
-            <button type="submit" style="margin-top: 20px;">Submit Application</button>
+            <button type="submit">Submit Application</button>
         </form>
     </div>
 </div>

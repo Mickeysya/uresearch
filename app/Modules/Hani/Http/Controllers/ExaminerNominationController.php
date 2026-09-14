@@ -131,7 +131,14 @@ class ExaminerNominationController extends Controller
             return back()->with('error', 'That application has already been decided.');
         }
 
-        if ($data['decision'] === 'approve') {
+        // Tie the examiners up only when the chain has actually *finished*,
+        // not merely when this approver said yes. Today those are the same
+        // thing -- ExaminerNominationWorkflow has one stage -- but that
+        // workflow's own docblock plans a second stage for touchpoint 2, and
+        // on the day it lands `decision === 'approve'` would fire this at the
+        // first approval and tie both examiners up for 180 days too early.
+        // Asking the application what it is now survives that change.
+        if ($application->refresh()->status === Application::STATUS_APPROVED) {
             $this->tieUpExaminers($application);
         }
 
