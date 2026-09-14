@@ -17,8 +17,17 @@
         @if ($examiners->isEmpty())
             <div class="empty-state">No examiners yet. Add the first one below.</div>
         @else
-            <table class="recent-activity-table" style="margin-bottom: 24px;">
-                <thead>
+            <p class="queue-meta">
+                {{ $examiners->where('is_active', true)->count() }} on the list
+                ({{ $examiners->where('examiner_type', 'internal')->where('is_active', true)->count() }} internal,
+                {{ $examiners->where('examiner_type', 'external')->where('is_active', true)->count() }} external).
+            </p>
+
+            {{-- The list only grows, so it scrolls inside a fixed box rather
+                 than pushing the add-examiner form off the bottom of the page. --}}
+            <div style="max-height: 340px; overflow-y: auto; border: 1px solid var(--border, #ddd); margin-bottom: 24px;">
+            <table class="recent-activity-table" style="margin: 0;">
+                <thead style="position: sticky; top: 0; background: #fff; z-index: 1;">
                     <tr><th>Name</th><th>Type</th><th>Institution</th><th>Expertise</th><th>Email</th><th></th></tr>
                 </thead>
                 <tbody>
@@ -41,6 +50,7 @@
                     @endforeach
                 </tbody>
             </table>
+            </div>
         @endif
 
         <h3>Add an Examiner</h3>
