@@ -1,55 +1,29 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\Nureen;
 
-use App\Modules\Core\Models\Application;
-use App\Modules\Core\Models\User;
-use App\Modules\Core\Services\WorkflowEngine;
-use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Models\AttendanceRecord;
-use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Notifications\AttendanceAtRisk;
-use App\Modules\Nureen\Notifications\CertificationIssued;
 use App\Modules\Nureen\Support\AttendanceSheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
+use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
- * Nureen's four modules, against docs/scope/nureen.md.
+ * Attendance ingestion — `docs/scope/nureen.md` Module 2.
  *
- * Concentrated on the three things that were either missing or fragile: the
- * attendance import (which handles a file a human filled in by hand, so it is
- * the most likely thing in the portal to be fed something unexpected),
- * Supervision's required documentation, and the certificate actually being
- * dispatched rather than merely generated.
+ * The most exposed surface in the portal: a spreadsheet a human filled in by
+ * hand, so it is the thing most likely to be fed something unexpected. The
+ * template and the importer are tested together on purpose — they read the
+ * same AttendanceSheet::COLUMNS, and the round-trip test below is what stops
+ * them drifting apart.
  */
-class NureenModulesTest extends TestCase
+class AttendanceTest extends TestCase
 {
+    use MakesUsers;
     use RefreshDatabase;
-
-    protected function student(string $matric = '22001001', string $email = 'student@test.my'): User
-    {
-        return User::create([
-            'name' => 'Ahmad Danial',
-            'email' => $email,
-            'password' => 'password',
-            'role' => Role::STUDENT,
-            'matric_no' => $matric,
-        ]);
-    }
-
-    protected function cgs(): User
-    {
-        return User::create([
-            'name' => 'Puan Waheeda',
-            'email' => 'cgs@test.my',
-            'password' => 'password',
-            'role' => Role::NON_EXEC_CGS,
-        ]);
-    }
 
     protected function sheet(array $rows, string $name = 'attendance.csv'): UploadedFile
     {
@@ -66,7 +40,7 @@ class NureenModulesTest extends TestCase
     }
 
     /* -----------------------------------------------------------------
-     | Module 1 — Attendance: the template and the import
+     | The template CGS starts from
      |------------------------------------------------------------------*/
 
     public function test_cgs_can_download_the_template_in_both_formats(): void
@@ -115,6 +89,10 @@ class NureenModulesTest extends TestCase
         // 18/20 — derived, never read from the sheet.
         $this->assertSame('90.00', AttendanceRecord::orderBy('id')->first()->percentage);
     }
+
+    /* -----------------------------------------------------------------
+     | The import itself
+     |------------------------------------------------------------------*/
 
     public function test_a_bad_row_is_skipped_with_a_reason_and_the_good_rows_still_save(): void
     {
@@ -191,15 +169,15 @@ class NureenModulesTest extends TestCase
         $this->assertSame('90.00', AttendanceRecord::first()->percentage);
     }
 
+    /* -----------------------------------------------------------------
+     | The early warning the module exists for
+     |------------------------------------------------------------------*/
+
     public function test_falling_below_the_threshold_alerts_the_student_and_supervisor(): void
     {
         Notification::fake();
 
-        $supervisor = User::create([
-            'name' => 'Dr Aisyah', 'email' => 'sup@test.my',
-            'password' => 'password', 'role' => Role::SUPERVISOR,
-        ]);
-
+        $supervisor = $this->supervisor();
         $student = $this->student();
         $student->update(['supervisor_id' => $supervisor->id]);
 
@@ -211,105 +189,5 @@ class NureenModulesTest extends TestCase
         $this->assertTrue(AttendanceRecord::first()->at_risk);
         Notification::assertSentTo($student, AttendanceAtRisk::class);
         Notification::assertSentTo($supervisor, AttendanceAtRisk::class);
-    }
-
-    /* -----------------------------------------------------------------
-     | Module 3 — Supervision: the documentation the scope asks for
-     |------------------------------------------------------------------*/
-
-    public function test_a_supervision_request_requires_a_document(): void
-    {
-        $supervisor = User::create([
-            'name' => 'Dr Aisyah', 'email' => 'sup@test.my',
-            'password' => 'password', 'role' => Role::SUPERVISOR,
-        ]);
-
-        $this->actingAs($this->student());
-
-        $this->post(route('supervision.store'), [
-            'requested_supervisor_id' => $supervisor->id,
-            'justification' => 'We share a research interest in reservoir simulation and modelling.',
-        ])->assertSessionHasErrors('supporting_document');
-
-        $this->assertSame(0, Application::where('module_type', 'supervision')->count());
-    }
-
-    public function test_a_supervision_request_with_a_document_is_submitted_and_the_file_attached(): void
-    {
-        Storage::fake('local');
-
-        $supervisor = User::create([
-            'name' => 'Dr Aisyah', 'email' => 'sup@test.my',
-            'password' => 'password', 'role' => Role::SUPERVISOR,
-        ]);
-
-        $this->actingAs($this->student());
-
-        $this->post(route('supervision.store'), [
-            'requested_supervisor_id' => $supervisor->id,
-            'justification' => 'We share a research interest in reservoir simulation and modelling.',
-            'supporting_document' => UploadedFile::fake()->create('proposal.pdf', 120, 'application/pdf'),
-        ])->assertRedirect(route('applications.index'));
-
-        $application = Application::where('module_type', 'supervision')->sole();
-
-        $this->assertSame(Application::STATUS_PENDING, $application->status);
-        $this->assertSame('supervisor', $application->current_stage);
-
-        $document = $application->documents()->sole();
-        $this->assertSame('proposal.pdf', $document->original_name);
-        // Private disk, random name -- never under public/.
-        $this->assertStringStartsWith("applications/{$application->id}/", $document->path);
-        $this->assertStringNotContainsString('proposal', $document->path);
-    }
-
-    /* -----------------------------------------------------------------
-     | Module 4 — Certification: generate, format, AND dispatch
-     |------------------------------------------------------------------*/
-
-    public function test_final_approval_generates_the_letter_and_dispatches_it(): void
-    {
-        Notification::fake();
-
-        $student = $this->student();
-        $director = User::create([
-            'name' => 'En Zulkifly', 'email' => 'director@test.my',
-            'password' => 'password', 'role' => Role::SENIOR_DIRECTOR_CGS,
-        ]);
-
-        $application = Application::create([
-            'student_id' => $student->id,
-            'submitted_by_id' => $student->id,
-            'module_type' => 'ga_certification',
-            'status' => Application::STATUS_DRAFT,
-        ]);
-
-        GaCertificationDetail::create([
-            'application_id' => $application->id,
-            'appointment_type' => 'GA',
-            'period_start' => now()->subYear(),
-            'period_end' => now(),
-            'purpose' => 'Scholarship application',
-        ]);
-
-        app(WorkflowEngine::class)->submit($application);
-
-        // Clear the first stage so the Senior Director's decision is final.
-        app(WorkflowEngine::class)->decide($application, $this->cgs(), 'approve');
-
-        $this->actingAs($director)
-            ->post(route('ga-certification.decide', $application), ['decision' => 'approve'])
-            ->assertRedirect();
-
-        $application->refresh();
-        $this->assertSame(Application::STATUS_APPROVED, $application->status);
-
-        // Generated, stored as a real document behind the authorised route...
-        $certificate = $application->documents()->sole();
-        $this->assertSame('GA/GRA Certification Letter', $certificate->doc_type);
-
-        // ...and actually sent, which is the half the scope asked for and the
-        // generic decision email did not do.
-        Notification::assertSentTo($student, CertificationIssued::class);
     }
 }

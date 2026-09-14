@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\Core;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;

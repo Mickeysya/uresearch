@@ -438,7 +438,7 @@ Everything else is Sail:
 | [`TODO.md`](TODO.md) | what's done, what isn't, and what to do next |
 | [`docs/architecture.md`](docs/architecture.md) | layers, the engine, the data model |
 | [`docs/adding-a-module.md`](docs/adding-a-module.md) | step-by-step, with code |
-| [`docs/conventions.md`](docs/conventions.md) | naming, ownership, the nine rules |
+| [`docs/conventions.md`](docs/conventions.md) | naming, ownership, the nine rules, where tests go |
 | [`docs/module-keys.md`](docs/module-keys.md) | the `module_type` registry — claim yours |
 | [`docs/migration-from-legacy.md`](docs/migration-from-legacy.md) | what changed from the raw-PHP version and why |
 | [`docs/email-service-integration.md`](docs/email-service-integration.md) | Mailpit in development, and what real SMTP needs |

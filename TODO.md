@@ -122,10 +122,17 @@ merge, and `route:list` boots clean. What the review did turn up:
       `php artisan test` on an Ubuntu host fails with `could not find driver
       (sqlite)` until `sudo apt install php8.3-sqlite3`; that is a host
       convenience, not a project requirement.
-- [x] **Tests added for both merges** — `tests/Feature/NorhanisModulesTest.php`
-      (the claims money path and Publication's pre-validation author read) and
-      `tests/Feature/HaniModulesTest.php`. Both were confirmed to fail against
-      the unfixed code before the fixes went in.
+- [x] **Tests added for both merges** — the claims money path, Publication's
+      pre-validation author read, the examiner tie-up and re-viva's
+      one-open-cycle rule. Each was confirmed to fail against the unfixed code
+      before the fix went in.
+- [x] **`tests/` reorganised by owner, one file per feature.** It was four
+      flat `<Person>ModulesTest` files that would only ever grow, and six
+      people adding chains to them means six people editing the same files.
+      Now `tests/Feature/<Person>/<Feature>Test.php`, so a new module is a new
+      file in your own folder — the same property `app/Modules/` has. Shared
+      cast in `Tests\Support\MakesUsers`. Same 53 tests, same 268 assertions.
+      See `docs/conventions.md`.
 - [ ] **`PublicationController.php:61` — 500 instead of a validation error.**
       `count($request->input('authors', []))` runs *before* `validate()`, so a
       posted `authors=foo` throws an unhandled `TypeError` and the student gets
@@ -1045,11 +1052,13 @@ are what to reach for when touching the file anyway.
       break quietly: both authorisation locks, approve/reject outcomes,
       Travel's conditional routing, the `stages(null)` superset, that every
       registered module's routes actually exist, and the attendance contract
-      including its degradation path. **Still wanted:** a feature test per
-      chain (GA Extension, Supervision, Certification, Attendance Appeal,
-      Examiner Nomination), the attendance CSV/xlsx import, and
+      including its degradation path, plus Attendance's import, Supervision,
+      Certification, Claims, Publication, Examiner Nomination and Re-viva.
+      **Still wanted:** Travel, GA Extension, Attendance Appeal and Conflict
+      Detection have no feature test of their own, and neither does
       `DocumentStore`'s allow-list. Each owner writing one for their own
-      module is the cheap way to get there.
+      module is the cheap way to get there — `tests/Feature/<You>/` is where
+      it goes.
 - [ ] Deployment: hosting, real SMTP, `APP_DEBUG=false`, `php artisan
       config:cache`, a queue worker running as a service.
 - [ ] UTP Single Sign-On (listed as future in `technical.md`).

@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\Core;
 
 use App\Modules\Core\Contracts\SuppliesAttendance;
 use App\Modules\Core\Contracts\WorkflowModule;

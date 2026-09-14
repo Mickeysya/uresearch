@@ -27,6 +27,7 @@ merge conflict across six branches.
 | Route names | `<module>.<action>` | `travel.queue` |
 | Detail table | `<module>_details` | `travel_details` |
 | Detail partial | leading underscore | `_detail.blade.php` |
+| Test file | `tests/Feature/<You>/<Feature>Test.php` | `tests/Feature/Nureen/AttendanceTest.php` |
 
 `module_type` and `Stage::key` end up in database rows. Renaming one later
 means writing a migration to rewrite existing data. Labels are display-only
@@ -68,6 +69,44 @@ Never `move_uploaded_file()`, never write under `public/`.
 
 **9. No secrets in code.**
 Credentials belong in `.env`, which is git-ignored. Read them with `config()`.
+
+## Tests
+
+`php artisan test` — or `./vendor/bin/sail artisan test` if your host has no
+`pdo_sqlite`. SQLite in memory, so it needs no Docker and can never touch your
+own database.
+
+```
+tests/
+  Support/        helpers shared across files — MakesUsers is the cast
+  Feature/
+    Core/         the engine, the seams, CSP, the profile — the team's
+    Norhanis/     ClaimsTest.php, PublicationTest.php
+    Nureen/       AttendanceTest.php, SupervisionTest.php, CertificationTest.php
+    Hani/         ExaminerNominationTest.php, ReVivaTest.php
+    Jason/ Chloe/ Haziq/     — when you write your first one
+  Unit/           pure functions, no database
+```
+
+**One folder per person, one file per feature, mirroring `app/Modules/`.**
+A new module is a new file in your own folder, so nobody edits a file someone
+else is also editing. Namespace follows the path: `Tests\Feature\Nureen`.
+
+`use Tests\Support\MakesUsers` for `student()`, `supervisor()`, `cgs()`,
+`academicExec()`, `seniorDirector()`, `chair()` — names and emails match
+`DatabaseSeeder`, so a failure names the same person you would see logging in.
+Need a role that isn't there? Add it to the trait. Need a user with extra
+fields? `$this->student(attributes: ['programme' => 'MSc Full-Time'])`, or
+override `student()` in your own class and call `$this->user()`.
+
+Fixtures only your own module needs — a CSV builder, an examiner row — stay a
+`protected` method on your test class. They only move to `Tests\Support` once
+a second person actually needs them.
+
+**Test what breaks quietly**, not every method: authorisation, anything derived
+server-side from what a form posted, and anything read before `validate()`.
+A test that would have passed before your fix is not a test of your fix —
+re-introduce the bug once and watch it fail.
 
 ## Git
 

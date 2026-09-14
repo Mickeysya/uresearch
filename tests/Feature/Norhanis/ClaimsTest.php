@@ -1,38 +1,26 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\Norhanis;
 
-use App\Modules\Core\Models\User;
-use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
- * Norhanis' Claims and Publication modules.
+ * Student Claims — `docs/scope/norhanis.md`.
  *
- * Narrow on purpose: the two things a student's browser can lie about. Claims
- * computes money from a repeating section the page's own JavaScript builds,
- * and Publication reads that section's size *before* validate() runs to
- * decide whether the Authorship Contribution Form is mandatory. Both are
- * places where a hand-rolled POST reaches code that has not been checked yet.
+ * The money path. Both the total and the balance are derived from a repeating
+ * expense section the page's own JavaScript builds, so every figure stored
+ * here has to be recomputed server-side from the items -- a hand-rolled POST
+ * reaches this controller just as easily as the form does.
  */
-class NorhanisModulesTest extends TestCase
+class ClaimsTest extends TestCase
 {
+    use MakesUsers;
     use RefreshDatabase;
 
-    protected function student(): User
-    {
-        return User::create([
-            'name' => 'Ahmad Danial',
-            'email' => 'student@test.my',
-            'password' => 'password',
-            'role' => Role::STUDENT,
-            'matric_no' => '22001001',
-        ]);
-    }
-
-    /** A valid claim: four items summing to RM 900. */
+    /** A valid claim: one item totalling RM 900. */
     protected function claim(array $overrides = []): array
     {
         return array_replace([
@@ -49,10 +37,6 @@ class NorhanisModulesTest extends TestCase
             ]],
         ], $overrides);
     }
-
-    /* -----------------------------------------------------------------
-     | Claims — the money path
-     |------------------------------------------------------------------*/
 
     public function test_the_total_and_balance_are_summed_server_side(): void
     {
@@ -100,28 +84,5 @@ class NorhanisModulesTest extends TestCase
         $this->actingAs($this->student())
             ->post(route('claims.store'), $this->claim(['items' => $items]))
             ->assertSessionHasErrors('items');
-    }
-
-    /* -----------------------------------------------------------------
-     | Publication — input read before validate()
-     |------------------------------------------------------------------*/
-
-    public function test_a_scalar_author_list_is_a_validation_error_not_a_server_error(): void
-    {
-        // count() on a string is a TypeError in PHP 8, and this field is read
-        // before validate() to decide whether the Authorship Contribution
-        // Form is required -- so an unvalidated scalar used to 500.
-        $response = $this->actingAs($this->student())
-            ->post(route('publication.store'), ['authors' => 'not-an-array']);
-
-        $response->assertStatus(302);
-        $response->assertSessionHasErrors('authors');
-    }
-
-    public function test_a_missing_author_list_is_a_validation_error(): void
-    {
-        $this->actingAs($this->student())
-            ->post(route('publication.store'), [])
-            ->assertSessionHasErrors('authors');
     }
 }
