@@ -26,8 +26,8 @@
 
     <p>
         The Centre for Graduate Studies acknowledges receipt and acceptance of the
-        hardbound thesis detailed below. This receipt is issued on the final approval
-        of the Senior Executive, CGS.
+        hardbound thesis detailed below. This receipt is issued on the approval of the
+        Centre for Graduate Studies.
     </p>
 
     <table class="details">
@@ -58,7 +58,7 @@
 
     <div class="sig-line"></div>
     <p>
-        Senior Executive<br>
+        Non-Executive Officer<br>
         Centre for Graduate Studies<br>
         Universiti Teknologi PETRONAS
     </p>

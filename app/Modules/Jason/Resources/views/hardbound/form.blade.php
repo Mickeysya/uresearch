@@ -8,6 +8,26 @@
         <h2>{{ $returned ? 'Resubmit Hardbound Thesis' : 'Hardbound Thesis Submission' }}</h2>
         <div class="card-divider"></div>
 
+        @if ($awaiting->isNotEmpty())
+            <div class="app-item" style="margin-bottom: 18px; border-left: 4px solid #A86A12;">
+                <p><b>CGS returned {{ $awaiting->count() === 1 ? 'a submission' : $awaiting->count().' submissions' }} to you for correction</b></p>
+                <ul class="doc-list">
+                    @foreach ($awaiting as $app)
+                        @php($last = $app->history->last())
+                        <li>
+                            <a href="{{ route('hardbound.resubmit.form', $app) }}"><b>Resubmit #{{ $app->id }}</b></a>
+                            — {{ $awaitingDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
+                            @if ($last?->remarks) <br><span style="color: var(--text-grey);">CGS: “{{ $last->remarks }}”</span> @endif
+                        </li>
+                    @endforeach
+                </ul>
+                <p class="queue-meta" style="margin: 6px 0 0;">
+                    Or, if you disagree with the return, file an appeal from the sidebar. The form
+                    below starts a brand-new submission instead.
+                </p>
+            </div>
+        @endif
+
         <div class="app-item" style="margin-bottom: 18px;">
             <p><b>Two forms to complete</b></p>
             <p class="queue-meta" style="margin: 4px 0 8px;">

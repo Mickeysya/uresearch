@@ -13,21 +13,23 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
 /**
  * Final hardbound thesis submission.
  *
- * The candidate submits the bound thesis and its clearance forms, the
- * Non-Executive CGS checks the pack is complete, and the Senior Executive
- * CGS gives final approval, which issues the acknowledgement receipt.
+ * The candidate submits the two completed CGS forms and the Non-Executive
+ * CGS checks the pack is complete. That check is the whole chain: approving
+ * it issues the acknowledgement receipt. The spec's second stage, a Senior
+ * Executive sign-off, was dropped -- a completeness check does not need two
+ * signatures, and no senior_exec_cgs account is seeded, so it only stalled
+ * every submission for everyone but one machine.
  *
- * The spec asks for a third outcome at the review stage -- "return to the
- * student, application stays open" -- which the engine does not have; it
- * knows approve (advance) and reject (terminate). Rather than change Core,
- * a return is a rejection at `cgs_review`, and the student's resubmission is
- * a fresh application carrying `resubmission_of_id` back to it. That keeps
- * the returned application, its reviewer and its remarks intact on the
- * record instead of overwriting them on each attempt, and it is the option
- * TODO.md offers as the alternative to an engine change. Which stage the
- * rejection happened at is what separates the two endings: returned at
- * `cgs_review` and the student can resubmit, rejected at `cgs_approve` and
- * their only route is Appeal Hardbound Submission.
+ * The spec asks for a "return to the student, application stays open"
+ * outcome, which the engine does not have; it knows approve (advance) and
+ * reject (terminate). Rather than change Core, a return is a rejection at
+ * `cgs_review`, and the student's resubmission is a fresh application
+ * carrying `resubmission_of_id` back to it. That keeps the returned
+ * application, its reviewer and its remarks intact on the record instead of
+ * overwriting them on each attempt, and it is the option TODO.md offers as
+ * the alternative to an engine change. With one stage there is no separate
+ * "rejected outright" ending: every rejection is a return, and the student
+ * may either resubmit or take it to Appeal Hardbound Submission.
  */
 class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
 {
@@ -48,15 +50,8 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
                 key: 'cgs_review',
                 label: 'Non-Executive CGS',
                 role: Role::NON_EXEC_CGS,
-                decision: 'reviewed',
-                queueTitle: 'Submissions to Review',
-            ),
-            new Stage(
-                key: 'cgs_approve',
-                label: 'Senior Executive CGS',
-                role: Role::SENIOR_EXEC_CGS,
                 decision: 'approved',
-                queueTitle: 'Pending Final Approval',
+                queueTitle: 'Submissions to Review',
             ),
         ];
     }
@@ -83,13 +78,9 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
         if ($application->status === Application::STATUS_REJECTED) {
             $replaced = HardboundSubmissionDetail::where('resubmission_of_id', $application->id)->exists();
 
-            $summary .= match (true) {
-                $replaced => ' — replaced by a resubmission',
-                $application->current_stage === 'cgs_review' => ' — returned for correction; resubmit from the sidebar',
-                HardboundSubmissionDetail::resubmittableFor($application->student_id)->whereKey($application->id)->exists()
-                    => ' — appeal upheld; resubmit from the sidebar',
-                default => ' — rejected; an appeal may be filed from the sidebar',
-            };
+            $summary .= $replaced
+                ? ' — replaced by a resubmission'
+                : ' — returned for correction; resubmit from the Hardbound Submission page, or appeal';
         }
 
         return $summary;
@@ -107,8 +98,10 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
 
     /**
      * One "Resubmit" link per submission the student is currently allowed to
-     * replace. The tracking page is Core's and takes no module actions, so
-     * the sidebar is where a module puts a per-application action.
+     * replace. Core's student sidebar does not currently render module links
+     * (its student partial is not passed $extraLinks), so the Hardbound
+     * Submission page shows the same list itself; this stays so the links
+     * appear the moment the sidebar does render them.
      */
     public function links(User $user): array
     {

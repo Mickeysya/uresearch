@@ -75,7 +75,7 @@ Route::middleware('auth')->group(function () {
             ->name('hardbound.resubmit');
     });
 
-    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::SENIOR_EXEC_CGS]))->group(function () {
+    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/hardbound/queue', [HardboundSubmissionController::class, 'queue'])
             ->name('hardbound.queue');
         Route::post('/hardbound/{application}/decide', [HardboundSubmissionController::class, 'decide'])

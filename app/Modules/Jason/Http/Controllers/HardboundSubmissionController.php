@@ -18,7 +18,7 @@ class HardboundSubmissionController extends Controller
 {
     use ApprovesApplications;
 
-    /** The stage a rejection at which means "returned for correction". */
+    /** The one stage: a rejection here means "returned for correction", an approval issues the receipt. */
     protected const REVIEW_STAGE = 'cgs_review';
 
     protected function moduleKey(): string
@@ -57,10 +57,18 @@ class HardboundSubmissionController extends Controller
 
     public function create(Request $request)
     {
+        // Submissions CGS has returned and the student has not yet replaced,
+        // surfaced here because this is the one student page the module
+        // owns: Core's student sidebar does not render module links.
+        $awaiting = HardboundSubmissionDetail::resubmittableFor($request->user()->id)->get();
+
         return view('jason::hardbound.form', [
             'student' => $request->user(),
             'returned' => null,
             'detail' => null,
+            'awaiting' => $awaiting,
+            'awaitingDetails' => HardboundSubmissionDetail::whereIn('application_id', $awaiting->pluck('id'))
+                ->get()->keyBy('application_id'),
         ]);
     }
 
@@ -87,6 +95,8 @@ class HardboundSubmissionController extends Controller
             'student' => $request->user(),
             'returned' => $application,
             'detail' => $detail,
+            'awaiting' => collect(),
+            'awaitingDetails' => collect(),
         ]);
     }
 
@@ -116,9 +126,9 @@ class HardboundSubmissionController extends Controller
 
     /**
      * Overrides the trait's decide() for two module-specific rules: a return
-     * has to carry comments explaining what to fix, and a final approval
-     * issues the acknowledgement receipt. Authorisation and the stage move
-     * remain the engine's.
+     * has to carry comments explaining what to fix, and an approval issues
+     * the acknowledgement receipt. Authorisation and the stage move remain
+     * the engine's.
      */
     public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
     {
@@ -145,7 +155,7 @@ class HardboundSubmissionController extends Controller
             return back()->with('error', 'That application has already been decided.');
         }
 
-        if ($data['decision'] === 'approve' && $stage?->key === 'cgs_approve') {
+        if ($data['decision'] === 'approve' && $stage?->key === self::REVIEW_STAGE) {
             $this->issueAcknowledgement($application);
         }
 
@@ -258,8 +268,8 @@ class HardboundSubmissionController extends Controller
     }
 
     /**
-     * The acknowledgement receipt the spec calls for on final approval --
-     * the student's proof that CGS accepted the bound thesis. Archived as an
+     * The acknowledgement receipt the spec calls for on approval -- the
+     * student's proof that CGS accepted the bound thesis. Archived as an
      * ApplicationDocument so the existing download route and its permission
      * check apply; the approval email itself is the engine's usual
      * ApplicationDecided notification.

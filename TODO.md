@@ -472,7 +472,10 @@ declared but unused by any built module, and unseeded — see the cross-cutting
 note below.
 
 - [x] **Hardbound Submission** (`hardbound_submission`) — Non-Executive CGS
-      → Senior Executive CGS
+      only. The spec's second stage (Senior Executive sign-off) was dropped
+      on 2026-09-14: a completeness check does not need two signatures, and
+      with no `senior_exec_cgs` account seeded it stalled every submission
+      for everyone but one machine.
   - [x] `hardbound_submission_details` table: thesis title, matric number,
         programme, supervisor. Captured at submission rather than read back
         off `users`, so a candidate who later changes programme or
@@ -484,8 +487,8 @@ note below.
         placeholders until the official CGS forms are dropped in.
   - [x] Non-Exec review screen — forward to Senior Exec, or return to the
         student with mandatory comments
-  - [x] Senior Exec approve/reject, auto-email on approval — the engine's
-        `ApplicationDecided` sends the email; final approval also issues an
+  - [x] Non-Exec approve/reject, auto-email on approval — the engine's
+        `ApplicationDecided` sends the email; approval also issues an
         acknowledgement receipt PDF via `DocumentStore::storeGenerated()`
   - [x] Resubmission form for a returned application
   - [x] **Open question, resolved without a Core change:** the spec wants
@@ -786,6 +789,13 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
 ## Cross-cutting
 
 ### Correctness gaps in Core worth closing
+- [ ] **The student sidebar drops module links.** `sidebar.blade.php` passes
+      `$extraLinks` to the CGS and approver partials but not to
+      `sidebar-student-nav`, so anything a module returns from
+      `ProvidesLinks::links()` for a student is never rendered. Jason's
+      "Resubmit Hardbound #N" links hit this after the 2026-09-13 merge and
+      now live on the Hardbound Submission page instead. One-line fix:
+      hand the student partial `$extraLinks` too.
 - [ ] **Scope approver queues to the right people.** A supervisor currently
       sees every application at the supervisor stage, not only their own
       supervisees. `users.supervisor_id` exists but `WorkflowEngine::queue()`
@@ -932,11 +942,12 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
       which needs no Core change. Still worth having if another chain wants
       a genuine re-open (Chloe's candidacy appeal), and it would let
       Hardbound drop the clone.
-- [ ] Seed a `senior_exec_cgs` test account — no seeded user has this role,
-      and Jason's Hardbound Submission and Appeal chains both end there. Both
-      chains are built and were tested against an account created directly in
-      the local database, so **the seeder still needs this line** before
-      anyone else can walk either chain:
+- [ ] Seed a `senior_exec_cgs` test account — no seeded user has this role.
+      Only Jason's Appeal Hardbound Submission ends there now (Hardbound
+      Submission itself was collapsed to the Non-Exec alone). The appeal was
+      tested against an account created directly in the local database, so
+      **the seeder still needs this line** before anyone else can rule on an
+      appeal — or the ruling stage could move to `dean_pgr`, who is seeded:
       `$this->user('Encik Rahim Senior Exec', 'seniorexec@utp.edu.my', Role::SENIOR_EXEC_CGS, ['department' => 'CGS']);`
       Left to whoever owns the seeder rather than edited from a module folder.
 - [ ] **Actors named in scope documents that are not roles yet:** `GRS Exec`
