@@ -4,9 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'UResearch 2.0') — UResearch 2.0</title>
-    <link rel="stylesheet" href="{{ asset('css/uresearch.css') }}">
-    <script>
+    <title>UResearch</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/uresearch-logo.png') }}">
+    @include('core::partials.stylesheets')
+    <script @cspNonce>
         // Applied before the body paints, straight from localStorage, so a
         // collapsed sidebar never flashes open-then-closed on page load --
         // this is a full page reload every navigation, not an SPA.
@@ -34,7 +35,7 @@
         </div>
     </div>
 
-    <script>
+    <script @cspNonce>
         (function () {
             var toggle = document.getElementById('sidebar-toggle');
             if (! toggle) return;

@@ -3,7 +3,7 @@
 Centralized postgraduate administrative portal for the **Centre for Graduate
 Studies (CGS)**, Universiti Teknologi PETRONAS.
 
-Laravel 12 · PHP 8.3 · MySQL 8.4 (Docker) · Blade · Chart.js
+Laravel 12 · PHP 8.3 · MySQL 8.4 (Docker) · Blade · Chart.js · Dompdf
 
 Final Year Project · six-member team
 Supervisor: Dr. Savita K. Sugathan · Examiner: Dr. Helmi B Mohd Rais
@@ -64,7 +64,10 @@ application image and downloading Composer packages. It:
 5. starts all five containers and waits for MySQL to accept connections
 6. runs every migration and seeds the test accounts
 
-It is safe to re-run at any time. It will not overwrite an existing `.env`.
+It is safe to re-run at any time: it will not overwrite an existing `.env`,
+and it will not wipe a database that already has data — a re-run applies any
+new migrations and leaves your records alone. Use `./reset.sh` when you
+actually want to start over.
 
 ### 3. Start the app
 
@@ -98,8 +101,21 @@ Pulling teammates' work:
 
 ```bash
 git pull
-./vendor/bin/sail composer install         # if composer.json changed
-./vendor/bin/sail artisan migrate          # if anyone added a migration
+./sync.sh
+```
+
+`sync.sh` does everything a pull or a branch switch can require, and is safe
+to re-run: installs dependencies if `composer.lock` changed, copies across any
+new setting a teammate added to `.env.example` (your own `.env` is git-ignored,
+so a pull never updates it), runs pending migrations, clears compiled Blade
+views and config left over from the previous branch, and restarts the queue
+worker — which holds the app in memory and otherwise keeps running pre-pull
+code.
+
+To see what it would do without changing anything:
+
+```bash
+./sync.sh --check
 ```
 
 ### If the containers are too heavy on your machine
@@ -336,8 +352,9 @@ central lists the modules, so adding one causes no merge conflict.
 | `Norhanis/` | Norhanis Erna Natasha (22006318) | Travel · Publication · Claims · RPD |
 | `Nureen/` | Nureen Nellysha (22006973) | Attendance · GA Extension · Supervision · Certification |
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
-| `Jason/` | Jason | to be scoped |
-| `Chloe/` | Chloe | to be scoped |
+| `Jason/` | Jason | Hardbound Submission · Appeal Hardbound Submission · Appointment Letters |
+| `Chloe/` | Chloe Ching Qing En (22011629) | Workstation · Study Candidacy Reminder / Appeal / Dismissal |
+| `Haziq/` | Abdul Haziq bin Abdul Farouk (22007428) | GRA · GA · Stage Gates · Allowance Eligibility |
 
 `Core/` is shared. Changing it affects all six of us, so raise it with the team
 first.
@@ -376,6 +393,17 @@ walkthrough is in [`docs/adding-a-module.md`](docs/adding-a-module.md).
 
 ## Commands
 
+The three project scripts, all safe to re-run:
+
+```bash
+./setup.sh                                 # first-time setup, from a clean clone (safe to re-run)
+./sync.sh                                  # after a git pull or branch switch
+./sync.sh --check                          # report what sync.sh would do, change nothing
+./reset.sh                                 # wipe and reseed the database (prompts first)
+```
+
+Everything else is Sail:
+
 ```bash
 ./vendor/bin/sail up -d                    # start everything in background
 ./vendor/bin/sail down                     # stop everything
@@ -385,6 +413,8 @@ walkthrough is in [`docs/adding-a-module.md`](docs/adding-a-module.md).
 ./vendor/bin/sail artisan route:list       # every route, including all modules
 ./vendor/bin/sail artisan tinker           # REPL against the app
 ./vendor/bin/sail artisan optimize:clear   # clear config/route/view caches
+./vendor/bin/sail artisan test             # the test suite (SQLite in memory —
+                                           #   never touches your database)
 
 ./vendor/bin/sail logs                     # view all logs
 ./vendor/bin/sail logs mysql               # view just MySQL logs

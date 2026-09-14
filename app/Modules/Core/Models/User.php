@@ -61,6 +61,18 @@ class User extends Authenticatable
         return $this->role === Role::STUDENT;
     }
 
+    /** True for the four Centre for Graduate Studies staff roles. */
+    public function isCgs(): bool
+    {
+        return Role::isCgs($this->role);
+    }
+
+    /** The system administrator. Owns no approval stage by design. */
+    public function isAdmin(): bool
+    {
+        return $this->role === Role::ADMIN;
+    }
+
     public function roleLabel(): string
     {
         return Role::label($this->role);

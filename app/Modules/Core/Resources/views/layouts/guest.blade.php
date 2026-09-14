@@ -3,8 +3,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('title', 'Log In') — UResearch 2.0</title>
-    <link rel="stylesheet" href="{{ asset('css/uresearch.css') }}">
+    <title>UResearch</title>
+    <link rel="icon" type="image/png" href="{{ asset('images/uresearch-logo.png') }}">
+    @include('core::partials.stylesheets')
 </head>
 <body>
     <div class="top-header">

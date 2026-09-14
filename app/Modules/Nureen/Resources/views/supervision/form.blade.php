@@ -8,7 +8,7 @@
         <h2>Supervisor Appointment Request</h2>
         <div class="card-divider"></div>
 
-        <form method="POST" action="{{ route('supervision.store') }}">
+        <form method="POST" action="{{ route('supervision.store') }}" enctype="multipart/form-data">
             @csrf
 
             <label for="requested_supervisor_id">Requested Supervisor</label>
@@ -31,6 +31,17 @@
                 research interest or a prior working relationship.
             </p>
             @error('justification') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="supporting_document">Supporting Document <span style="color: var(--text-grey)">(required)</span></label>
+            <input type="file" name="supporting_document" id="supporting_document" required
+                   class="@error('supporting_document') is-invalid @enderror">
+            @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
+            <p class="queue-meta" style="margin-top: -8px;">
+                Your research proposal, or whatever your department asks for with a
+                supervision request. PDF, image or Office document, up to 10&nbsp;MB.
+                The request is checked for completeness here rather than after it
+                reaches your prospective supervisor.
+            </p>
 
             <button type="submit">Submit Request</button>
         </form>
