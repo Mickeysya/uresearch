@@ -477,7 +477,11 @@ note below.
         programme, supervisor. Captured at submission rather than read back
         off `users`, so a candidate who later changes programme or
         supervisor does not retroactively change what CGS reviewed.
-  - [x] Thesis PDF + clearance form uploads via `DocumentStore`
+  - [x] Two completed CGS forms uploaded via `DocumentStore` — the Hardbound
+        Thesis Submission form and the Confirmation of Correction to Thesis.
+        Blank copies are downloadable from the submission page, served from
+        `app/Modules/Jason/Resources/templates/` — the two PDFs there are
+        placeholders until the official CGS forms are dropped in.
   - [x] Non-Exec review screen — forward to Senior Exec, or return to the
         student with mandatory comments
   - [x] Senior Exec approve/reject, auto-email on approval — the engine's

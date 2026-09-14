@@ -26,6 +26,35 @@ class HardboundSubmissionController extends Controller
         return 'hardbound_submission';
     }
 
+    public const DOC_SUBMISSION_FORM = 'Hardbound Thesis Submission Form';
+
+    public const DOC_CORRECTION_FORM = 'Confirmation of Correction to Thesis';
+
+    /**
+     * The two CGS forms a student downloads, completes and uploads back.
+     * Keyed by the slug used in the download URL.
+     */
+    public const TEMPLATES = [
+        'submission' => ['file' => 'hardbound-thesis-submission-form.pdf', 'label' => self::DOC_SUBMISSION_FORM],
+        'correction' => ['file' => 'confirmation-of-correction-to-thesis.pdf', 'label' => self::DOC_CORRECTION_FORM],
+    ];
+
+    /**
+     * Serves a blank form from the module's own templates folder. Nothing is
+     * generated: whatever PDF sits at that path is what the student gets, so
+     * replacing the file replaces the form.
+     */
+    public function template(string $form)
+    {
+        abort_unless(isset(self::TEMPLATES[$form]), 404);
+
+        $path = __DIR__.'/../../Resources/templates/'.self::TEMPLATES[$form]['file'];
+
+        abort_unless(is_file($path), 404, 'That form has not been uploaded to the portal yet.');
+
+        return response()->download($path, self::TEMPLATES[$form]['file']);
+    }
+
     public function create(Request $request)
     {
         return view('jason::hardbound.form', [
@@ -136,12 +165,20 @@ class HardboundSubmissionController extends Controller
             'thesis_title' => ['required', 'string', 'max:500'],
             'programme' => ['required', 'string', 'max:150'],
             'supervisor_name' => ['required', 'string', 'max:150'],
-            'thesis_document' => DocumentStore::rules(required: true),
-            'clearance_form' => DocumentStore::rules(required: ! $resubmission),
+            // Both forms on a first submission; on a resubmission the student
+            // re-uploads whichever CGS asked them to correct, but not nothing.
+            'submission_form' => $resubmission
+                ? array_merge(['required_without:correction_form'], DocumentStore::rules())
+                : DocumentStore::rules(required: true),
+            'correction_form' => $resubmission
+                ? array_merge(['required_without:submission_form'], DocumentStore::rules())
+                : DocumentStore::rules(required: true),
             'response_to_comments' => [$resubmission ? 'required' : 'nullable', 'string', 'max:2000'],
         ], [
-            'thesis_document.required' => 'Attach the final hardbound thesis PDF.',
-            'clearance_form.required' => 'Attach the completed clearance form.',
+            'submission_form.required' => 'Attach the completed Hardbound Thesis Submission form.',
+            'correction_form.required' => 'Attach the completed Confirmation of Correction to Thesis.',
+            'submission_form.required_without' => 'Attach at least one corrected form.',
+            'correction_form.required_without' => 'Attach at least one corrected form.',
             'response_to_comments.required' => 'Explain what you changed in response to the CGS comments.',
         ]);
     }
@@ -177,10 +214,12 @@ class HardboundSubmissionController extends Controller
                 'response_to_comments' => $data['response_to_comments'] ?? null,
             ]);
 
-            $documents->attach($application, $request->file('thesis_document'), 'Hardbound Thesis');
+            if ($request->hasFile('submission_form')) {
+                $documents->attach($application, $request->file('submission_form'), self::DOC_SUBMISSION_FORM);
+            }
 
-            if ($request->hasFile('clearance_form')) {
-                $documents->attach($application, $request->file('clearance_form'), 'Clearance Form');
+            if ($request->hasFile('correction_form')) {
+                $documents->attach($application, $request->file('correction_form'), self::DOC_CORRECTION_FORM);
             }
 
             return $engine->submit($application);

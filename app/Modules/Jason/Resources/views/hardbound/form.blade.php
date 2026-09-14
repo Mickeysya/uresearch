@@ -8,6 +8,17 @@
         <h2>{{ $returned ? 'Resubmit Hardbound Thesis' : 'Hardbound Thesis Submission' }}</h2>
         <div class="card-divider"></div>
 
+        <div class="app-item" style="margin-bottom: 18px;">
+            <p><b>Two forms to complete</b></p>
+            <p class="queue-meta" style="margin: 4px 0 8px;">
+                Download each form, complete and sign it, then upload it below.
+            </p>
+            <ul class="doc-list">
+                <li><a href="{{ route('hardbound.template', 'submission') }}">Download — Hardbound Thesis Submission form (PDF)</a></li>
+                <li><a href="{{ route('hardbound.template', 'correction') }}">Download — Confirmation of Correction to Thesis (PDF)</a></li>
+            </ul>
+        </div>
+
         @if ($returned)
             <p class="queue-meta">
                 Replacing submission #{{ $returned->id }}. Upload the corrected thesis and
@@ -57,20 +68,24 @@
                 @error('response_to_comments') <p class="field-error">{{ $message }}</p> @enderror
             @endif
 
-            <label for="thesis_document">Final Hardbound Thesis (PDF)</label>
-            <input type="file" name="thesis_document" id="thesis_document" required
-                   class="@error('thesis_document') is-invalid @enderror">
-            @error('thesis_document') <p class="field-error">{{ $message }}</p> @enderror
-
-            <label for="clearance_form">
-                Clearance Form
-                @if ($returned) <span style="color: var(--text-grey);">(optional if unchanged)</span> @endif
+            <label for="submission_form">
+                Hardbound Thesis Submission form (completed)
+                @if ($returned) <span style="color: var(--text-grey);">(re-upload only if corrected)</span> @endif
             </label>
-            <input type="file" name="clearance_form" id="clearance_form" @unless ($returned) required @endunless
-                   class="@error('clearance_form') is-invalid @enderror">
-            @error('clearance_form') <p class="field-error">{{ $message }}</p> @enderror
+            <input type="file" name="submission_form" id="submission_form" @unless ($returned) required @endunless
+                   class="@error('submission_form') is-invalid @enderror">
+            @error('submission_form') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="correction_form">
+                Confirmation of Correction to Thesis (completed)
+                @if ($returned) <span style="color: var(--text-grey);">(re-upload only if corrected)</span> @endif
+            </label>
+            <input type="file" name="correction_form" id="correction_form" @unless ($returned) required @endunless
+                   class="@error('correction_form') is-invalid @enderror">
+            @error('correction_form') <p class="field-error">{{ $message }}</p> @enderror
             <p class="queue-meta" style="margin-top: -8px;">
                 PDF, Word, Excel or an image, up to 10 MB each.
+                @if ($returned) At least one corrected form is required. @endif
             </p>
 
             <button type="submit">{{ $returned ? 'Resubmit to CGS' : 'Submit to CGS' }}</button>

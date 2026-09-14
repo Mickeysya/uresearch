@@ -57,6 +57,11 @@ Route::middleware('auth')->group(function () {
 
     // ---- Hardbound Submission ------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
+        // The blank CGS forms the student downloads, completes and uploads back.
+        Route::get('/hardbound/templates/{form}', [HardboundSubmissionController::class, 'template'])
+            ->where('form', 'submission|correction')
+            ->name('hardbound.template');
+
         Route::get('/hardbound/new', [HardboundSubmissionController::class, 'create'])
             ->name('hardbound.create');
         Route::post('/hardbound', [HardboundSubmissionController::class, 'store'])
