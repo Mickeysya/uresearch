@@ -126,7 +126,13 @@ if [ ! -f .env ]; then
 fi
 
 # Shared with setup.sh; see scripts/env.sh for why this is generic.
-mapfile -t MISSING_KEYS < <(env_missing_keys)
+# mapfile/readarray needs bash 4+; macOS ships bash 3.2 as /bin/bash
+# (GPLv3-avoidance freeze), where it doesn't exist at all. This loop works
+# on both.
+MISSING_KEYS=()
+while IFS= read -r key; do
+    MISSING_KEYS+=("$key")
+done < <(env_missing_keys)
 
 if [ ${#MISSING_KEYS[@]} -gt 0 ]; then
     warn "${#MISSING_KEYS[@]} setting(s) in .env.example are missing from your .env:"
