@@ -8,21 +8,24 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
-use App\Modules\Jason\Models\AppointmentDetail;
+use App\Modules\Jason\Models\AppointmentExaminer;
 
 /**
  * Examiner appointment letters.
  *
- * The Chair of Department nominates an external/internal examiner for one of
- * the department's candidates. The Academic Executive endorses (or rejects
- * with comments), the Non-Executive CGS then prepares the letter body -- the
- * candidate's degree, programme, supervisor and thesis title, auto-filled
- * from the candidate's own record wherever one exists -- and the Dean of PGR
- * gives final approval. On the Dean's approval the controller generates the
- * Appointment Letter PDF and emails it straight to the examiner -- who has no
- * account in this system at all, so that dispatch happens outside the
+ * The Chair of Department nominates an examiner panel -- at least one
+ * internal and one external examiner -- for one of the department's
+ * candidates. The Academic Executive endorses (or rejects with comments).
+ * The Non-Executive CGS then prepares the pack: the candidate's degree,
+ * programme, supervisor and thesis title, auto-filled from the candidate's
+ * own record wherever one exists, plus each examiner's address and reference
+ * number. Preparing generates two documents per examiner -- the appointment
+ * letter and the thesis evaluation report form -- and archives them, so the
+ * Dean of PGR approves documents that already exist. On the Dean's approval
+ * each examiner is emailed their own two documents. Examiners have no
+ * account in this system, so that dispatch happens outside the
  * WorkflowEngine/ApplicationDecided path.
- * See AppointmentLetterController::issueAppointmentLetter().
+ * See AppointmentLetterController::generatePack() and dispatchPacks().
  *
  * A straight linear chain, no conditional routing -- the closest analogue is
  * Hani's ExaminerNominationWorkflow, not Norhanis' branching TravelWorkflow.
@@ -68,13 +71,17 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
 
     public function summary(Application $application): string
     {
-        $detail = AppointmentDetail::where('application_id', $application->id)->first();
+        $examiners = AppointmentExaminer::where('application_id', $application->id)
+            ->orderByRaw("FIELD(examiner_type, 'internal', 'external')")
+            ->get();
 
-        if (! $detail) {
-            return 'Appointment letter nomination';
+        if ($examiners->isEmpty()) {
+            return 'Examiner panel nomination';
         }
 
-        return 'Examiner: '.$detail->examiner_name.' ('.$detail->examiner_institution.')';
+        return $examiners
+            ->map(fn ($e) => $e->examiner_name.' ('.$e->examiner_type.')')
+            ->implode(', ');
     }
 
     public function createRoute(): ?string

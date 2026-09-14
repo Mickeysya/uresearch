@@ -278,17 +278,24 @@ note below.
 - [x] **Appointment Letter & Report Management** (`appointment_letter`) —
       Chair of Department (the spec's "Faculty Department") → Academic
       Executive (the spec's "Faculty Academic") → Dean of PGR
-  - [x] `appointment_details` table: examiner name, institution, email,
-        expertise. The student it's for is `applications.student_id`
-        (the candidate), same pattern as Hani's `examiner_nominations` — no
-        second student FK on the detail table.
-  - [x] Chair nomination form (filed against the chain, not a stage of it —
-        same shape as Hani's supervisor nomination); AE endorse or
-        reject-with-comments; Dean approve/reject
-  - [x] On Dean approval: generate the Appointment Letter PDF (a
-        letterhead-style formal letter designed for this module — no
-        existing Appendix B template file was found in the repo — via
-        Dompdf) and email it to the examiner
+  - [x] A nomination is the candidate's **examiner panel**, not one
+        examiner: `appointment_details` holds the candidate side (degree,
+        programme, supervisor, thesis title) and `appointment_examiners`
+        holds one row per panel member — at least one internal and one
+        external, enforced at nomination. The student it's for is
+        `applications.student_id` (the candidate), same pattern as Hani's
+        `examiner_nominations` — no second student FK on the detail table.
+  - [x] Chair nominates the panel (filed against the chain, not a stage of
+        it — same shape as Hani's supervisor nomination); AE endorse or
+        reject-with-comments; Non-Exec CGS prepares the pack; Dean
+        approve/reject
+  - [x] CGS preparation generates **two documents per examiner** from the
+        CGS templates — the Appointment Letter (internal and external
+        variants, with acknowledgement slip, conflict-of-interest declaration
+        and thesis receipt confirmation) and the Thesis Evaluation Report
+        form (UTP/PPS/024) — and archives them, so the Dean approves
+        documents that already exist. On Dean approval each examiner is
+        emailed their own two.
   - [x] **Open question, resolved:** every other module's notification goes
         to the student, a system user with an account. This one's final
         recipient is an external examiner with no login, so the PDF is sent

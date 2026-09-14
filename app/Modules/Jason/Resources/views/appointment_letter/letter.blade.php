@@ -10,7 +10,7 @@
      * on the slip and the conflict rows -- so each difference is marked
      * against $internal rather than kept as two near-identical files.
      */
-    $internal = $detail->isInternal();
+    $internal = $examiner->isInternal();
     $role = $internal ? 'Internal' : 'External';
     $deanName = $dean?->name ?? 'Dean, Postgraduate and Research';
 
@@ -19,7 +19,7 @@
 
     // Letters prepared before the address was captured fall back to the single
     // institution line the nomination has always carried.
-    $address = trim((string) $detail->examiner_address) ?: (string) $detail->examiner_institution;
+    $address = trim((string) $examiner->examiner_address) ?: (string) $examiner->examiner_institution;
     $addressLines = array_filter(preg_split('/\r\n|\r|\n/', $address) ?: []);
 
     $terms = [
@@ -129,19 +129,19 @@
     </div>
 
     <p>
-        Our {{ $internal ? 'ref' : 'Ref' }}: {{ $detail->letter_ref_no }}
+        Our {{ $internal ? 'ref' : 'Ref' }}: {{ $examiner->letter_ref_no }}
     </p>
 
     <p>{{ $issuedAt->format('jS F Y') }}</p>
 
     <p>
-        {{ $detail->examiner_name }}<br>
+        {{ $examiner->examiner_name }}<br>
         @foreach ($addressLines as $line)
             {{ $line }}<br>
         @endforeach
     </p>
 
-    <p>Dear {{ $internal ? 'Sir/Madam' : $detail->examiner_name }},</p>
+    <p>Dear {{ $internal ? 'Sir/Madam' : $examiner->examiner_name }},</p>
 
     <p class="subject">APPOINTMENT AS {{ $internal ? 'INTERNAL EXAMINER' : 'THESIS EXTERNAL EXAMINER' }}</p>
 
@@ -293,11 +293,11 @@
     </table>
 
     <p>
-        I, {{ $detail->examiner_name }}, I.C./Passport Number{{ $internal ? ':' : '' }}
+        I, {{ $examiner->examiner_name }}, I.C./Passport Number{{ $internal ? ':' : '' }}
         <span class="fill"></span> hereby accept / reject
         {{ $internal ? '*' : ' *' }} your nomination for the appointment as
         {{ $internal ? 'an Internal Examiner' : 'an external examiner for the above candidate' }}
-        according to the terms of reference stated in your letter {{ $detail->letter_ref_no }}
+        according to the terms of reference stated in your letter {{ $examiner->letter_ref_no }}
         dated {{ $issuedAt->format('jS F Y') }}.
     </p>
 
@@ -322,7 +322,7 @@
         <tr>
             <td class="label">Name</td><td class="sep">:</td>
             <td>
-                {{ $detail->examiner_name }}
+                {{ $examiner->examiner_name }}
                 @unless ($internal)
                     @foreach ($addressLines as $line)
                         <br>{{ $line }}
@@ -333,7 +333,7 @@
         <tr><td class="label">Date</td><td class="sep">:</td><td></td></tr>
         @unless ($internal)
             <tr><td class="label">Tel No</td><td class="sep">:</td><td></td></tr>
-            <tr><td class="label">E-mail</td><td class="sep">:</td><td>{{ $detail->examiner_email }}</td></tr>
+            <tr><td class="label">E-mail</td><td class="sep">:</td><td>{{ $examiner->examiner_email }}</td></tr>
             <tr><td class="label">Bank Name</td><td class="sep">:</td><td></td></tr>
             <tr><td class="label">Account No</td><td class="sep">:</td><td></td></tr>
         @endunless
@@ -383,7 +383,7 @@
     <div class="sig-line"></div>
 
     <table class="details">
-        <tr><td class="label">Name</td><td class="sep">:</td><td>{{ $detail->examiner_name }}</td></tr>
+        <tr><td class="label">Name</td><td class="sep">:</td><td>{{ $examiner->examiner_name }}</td></tr>
         <tr><td class="label">Date</td><td class="sep">:</td><td></td></tr>
     </table>
 </div>
@@ -407,7 +407,7 @@
     </table>
 
     <p>
-        I, <b>{{ $detail->examiner_name }}</b>
+        I, <b>{{ $examiner->examiner_name }}</b>
         {{ $internal ? 'confirm' : 'hereby confirms' }} that I have received a copy of the
         candidate's thesis in good condition.
     </p>
@@ -420,7 +420,7 @@
     <div class="sig-line"></div>
 
     <table class="details">
-        <tr><td class="label">Name</td><td class="sep">:</td><td>{{ $detail->examiner_name }}</td></tr>
+        <tr><td class="label">Name</td><td class="sep">:</td><td>{{ $examiner->examiner_name }}</td></tr>
         <tr><td class="label">Date</td><td class="sep">:</td><td></td></tr>
     </table>
 </div>

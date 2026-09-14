@@ -31,21 +31,16 @@ Route::middleware('auth')->group(function () {
             ->name('appointment-letter.decide');
     });
 
-    // Letter preparation, the Non-Executive CGS's stage. Approving out of that
+    // Pack preparation, the Non-Executive CGS's stage. Approving out of that
     // stage happens here rather than through the generic decide() button,
-    // because this is what writes the letter the Dean then approves.
+    // because this is what writes and generates the documents the Dean then
+    // approves. The Dean reads them through the queue's document list --
+    // they are ordinary ApplicationDocuments, served by Core's download route.
     Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/appointment-letter/{application}/prepare', [AppointmentLetterController::class, 'prepare'])
             ->name('appointment-letter.prepare');
         Route::post('/appointment-letter/{application}/prepare', [AppointmentLetterController::class, 'savePreparation'])
             ->name('appointment-letter.prepare.store');
-    });
-
-    // The Dean reads the prepared letter before approving it; CGS re-reads
-    // what they prepared. Both are stages of this chain.
-    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::DEAN_PGR]))->group(function () {
-        Route::get('/appointment-letter/{application}/letter', [AppointmentLetterController::class, 'previewLetter'])
-            ->name('appointment-letter.letter');
     });
 
     // ---- Hardbound Submission ------------------------------------------

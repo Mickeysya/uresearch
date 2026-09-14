@@ -1,15 +1,20 @@
 @component('mail::message')
-# Appointment as Examiner
+# Appointment as {{ $examinerRole }}
 
 Dear {{ $examinerName }},
 
 On behalf of the Centre for Graduate Studies (CGS), Universiti Teknologi
-PETRONAS, we are pleased to confirm your appointment as an examiner.
+PETRONAS, we are pleased to confirm your appointment as {{ $examinerRole }}.
 
-Your formal appointment letter is attached to this email as a PDF, and sets
-out the full details of the appointment.
+Two documents are attached:
 
-If anything in the attached letter looks incorrect, please contact the
+- **Appointment Letter** — the terms of your appointment, with the
+  acknowledgement slip, conflict of interest declaration and thesis receipt
+  confirmation to be returned to our office.
+- **Thesis Evaluation Report** — the report form to be completed and
+  returned once you have examined the thesis.
+
+If anything in the attached documents looks incorrect, please contact the
 Centre for Graduate Studies directly rather than replying to this address.
 
 Thank you,<br>

@@ -5,16 +5,17 @@ namespace App\Modules\Jason\Models;
 use App\Modules\Core\Models\Application;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * The candidate side of an examiner nomination: what the letters say about
+ * the thesis being examined. The examiners themselves are AppointmentExaminer
+ * rows, one per panel member.
+ */
 class AppointmentDetail extends Model
 {
-    public const TYPE_INTERNAL = 'internal';
-
-    public const TYPE_EXTERNAL = 'external';
-
     protected $fillable = [
-        'application_id', 'examiner_name', 'examiner_institution', 'examiner_email', 'examiner_expertise',
-        'examiner_type', 'examiner_address', 'letter_ref_no', 'candidate_degree', 'candidate_programme',
+        'application_id', 'candidate_degree', 'candidate_programme',
         'supervisor_name', 'thesis_title', 'letter_prepared_at',
     ];
 
@@ -28,13 +29,15 @@ class AppointmentDetail extends Model
         return $this->belongsTo(Application::class);
     }
 
+    public function examiners(): HasMany
+    {
+        return $this->hasMany(AppointmentExaminer::class, 'application_id', 'application_id')
+            ->orderByRaw("FIELD(examiner_type, 'internal', 'external')")
+            ->orderBy('id');
+    }
+
     public function isPrepared(): bool
     {
         return $this->letter_prepared_at !== null;
-    }
-
-    public function isInternal(): bool
-    {
-        return $this->examiner_type === self::TYPE_INTERNAL;
     }
 }
