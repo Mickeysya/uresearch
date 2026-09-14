@@ -15,6 +15,8 @@ use App\Modules\Jason\Mail\AppointmentLetterMail;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
 use App\Modules\Jason\Models\PoolExaminer;
+use App\Modules\Jason\Notifications\ExaminerPanelNominated;
+use App\Modules\Jason\Notifications\ExaminersAppointed;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
@@ -107,6 +109,15 @@ class AppointmentLetterController extends Controller
             // Hands the nomination to the Academic Executive.
             return $engine->submit($application);
         });
+
+        // The engine announces decisions, not submissions -- every other
+        // chain is started by the student, who needs no telling. This one
+        // is filed on the candidate's behalf, so tell them.
+        $application->student?->notify(new ExaminerPanelNominated(
+            $application,
+            $request->user()->name,
+            $this->examinerLines($chosen),
+        ));
 
         return redirect()
             ->route('appointment-letter.create')
@@ -351,11 +362,31 @@ class AppointmentLetterController extends Controller
 
         if ($approved && $stage?->key === 'dean') {
             $this->dispatchPacks($application);
+
+            $application->student?->notify(new ExaminersAppointed(
+                $application,
+                $this->examinerLines(AppointmentExaminer::where('application_id', $application->id)->get()),
+            ));
         }
 
         $verb = $approved ? 'approved' : 'rejected';
 
         return back()->with('status', "Application #{$application->id} {$verb}.");
+    }
+
+    /**
+     * "Name (internal)" per examiner, internal first, for the candidate's notices.
+     *
+     * @param  \Illuminate\Support\Collection<int, PoolExaminer|AppointmentExaminer>  $examiners
+     * @return array<int, string>
+     */
+    protected function examinerLines($examiners): array
+    {
+        return $examiners
+            ->sortBy(fn ($e) => $e->isInternal() ? 0 : 1)
+            ->map(fn ($e) => ($e->name ?? $e->examiner_name).' ('.$e->examiner_type.')')
+            ->values()
+            ->all();
     }
 
     /**
