@@ -40,6 +40,11 @@ class DatabaseSeeder extends Seeder
             'department' => 'Computer & Information Sciences',
             'faculty' => 'FSMC',
         ]);
+        // Faculty signs off an RPD dismissal between the Dean's endorsement
+        // and the Registry's termination email -- see RpdDismissalWorkflow.
+        $this->user('Faculty Office', 'faculty@utp.edu.my', Role::FACULTY, [
+            'department' => 'Faculty of Engineering', 'faculty' => 'FOE',
+        ]);
         $this->user('Registry Officer', 'registry@utp.edu.my', Role::REGISTRY, ['department' => 'Registry']);
         $this->user('System Admin', 'admin@utp.edu.my', Role::ADMIN);
 

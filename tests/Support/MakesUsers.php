@@ -62,4 +62,20 @@ trait MakesUsers
     {
         return $this->user(Role::SENIOR_DIRECTOR_CGS, ['name' => 'En Zulkifly', 'email' => 'director@test.my']);
     }
+
+    protected function dean(): User
+    {
+        return $this->user(Role::DEAN_PGR, ['name' => 'Prof. Dr. Hafiz Osman', 'email' => 'dean@test.my']);
+    }
+
+    /** Final approver on an RPD dismissal, between the Dean and the Registry. */
+    protected function faculty(): User
+    {
+        return $this->user(Role::FACULTY, ['name' => 'Faculty Office', 'email' => 'faculty@test.my']);
+    }
+
+    protected function registry(): User
+    {
+        return $this->user(Role::REGISTRY, ['name' => 'Registry Officer', 'email' => 'registry@test.my']);
+    }
 }

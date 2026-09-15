@@ -31,7 +31,11 @@
             @error('other_request_specify') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="travel_start_date">Start Date</label>
+            {{-- min mirrors the controller's after_or_equal:today. Without it
+                 the wizard's checkValidity() gate waves a past date through and
+                 the student only finds out on submit. --}}
             <input type="date" name="travel_start_date" id="travel_start_date" required
+                   min="{{ now()->toDateString() }}"
                    value="{{ old('travel_start_date') }}"
                    class="@error('travel_start_date') is-invalid @enderror">
             @error('travel_start_date') <p class="field-error">{{ $message }}</p> @enderror

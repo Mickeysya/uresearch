@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Norhanis\Models\Candidacy;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
@@ -154,6 +155,7 @@ class DemoDataSeeder extends Seeder
         $students = $this->students();
 
         $this->attendance($students);
+        $this->candidacies($students);
         $applications = $this->applications($students);
 
         Date::setTestNow(); // belt and braces -- nothing after this may run on fake time
@@ -280,6 +282,44 @@ class DemoDataSeeder extends Seeder
      | all three bands so the gauge, the CGS bands and the admin average
      | all have something other than a single flat number to show.
      |---------------------------------------------------------------*/
+
+    /**
+     * RPD candidacies — the masterlist Norhanis' three flows read from.
+     *
+     * Spread deliberately across the four tones the masterlist paints, so the
+     * demo shows a list worth filtering rather than fifteen identical green
+     * rows: a couple already overdue (which is what makes "Open a Dismissal"
+     * reachable), a couple inside the one-month warning, several in the
+     * three-month notice window, and the rest comfortable.
+     */
+    protected function candidacies(Collection $students): void
+    {
+        // Days until the RPD deadline, cycled across the cohort.
+        $offsets = [-42, -11, 9, 26, 55, 78, 96, 124, 168, 203];
+
+        $students->values()->each(function (User $student, int $i) use ($offsets) {
+            $type = ['phd_ft', 'msc_ft', 'phd_pt', 'msc_pt'][$i % 4];
+            $days = $offsets[$i % count($offsets)];
+
+            $deadline = Carbon::today()->addDays($days);
+            $start = $deadline->copy()->subMonthsNoOverflow(Candidacy::WINDOW_MONTHS[$type]);
+
+            // Every fourth student has already taken an extension, so the
+            // "Extended" status and a non-zero ceiling both appear in the list.
+            $used = $i % 4 === 2 ? 3 : 0;
+
+            Candidacy::updateOrCreate(
+                ['student_id' => $student->id],
+                [
+                    'programme_type' => $type,
+                    'candidature_start_date' => $start,
+                    'rpd_deadline' => $deadline,
+                    'status' => $used > 0 ? Candidacy::STATUS_EXTENDED : Candidacy::STATUS_ACTIVE,
+                    'extension_months_used' => $used,
+                ]
+            );
+        });
+    }
 
     protected function attendance(Collection $students): void
     {

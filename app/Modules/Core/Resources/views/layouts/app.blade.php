@@ -55,6 +55,12 @@
             toggle.setAttribute('aria-expanded', document.documentElement.classList.contains('sidebar-collapsed') ? 'false' : 'true');
         })();
     </script>
+    {{-- A calendar panel over every <input type="date">. Included once, at
+         the layout level, so a module gets it without knowing it exists --
+         see the partial for why it enhances the native input rather than
+         replacing it. --}}
+    @include('core::partials.date-picker')
+
     @stack('scripts')
 </body>
 </html>

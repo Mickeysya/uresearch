@@ -12,8 +12,8 @@
         </form>
         @include('core::partials.form-stepper')
 
-    Everything else -- the progress rail, Back/Continue, the review step,
-    moving your submit button to the end -- is built here.
+    Everything else -- the layout, the progress rail, Back/Continue, the
+    review step, moving your submit button and your heading -- is built here.
 
     WHY CLIENT-SIDE. The form still POSTs once, to the same route, with the
     same fields. No session state, no partial validation, no resume logic,
@@ -28,8 +28,7 @@
 
     THE REVIEW STEP IS GENERATED, not authored. It reads the filled
     controls back out of the form, so it cannot drift from the fields and
-    no module has to write or maintain one. A student sees what they are
-    about to send to four approvers before it goes.
+    no module has to write or maintain one.
 --}}
 @once
     @push('scripts')
@@ -42,6 +41,7 @@
             if (! steps.length) return;
 
             var REVIEW = 'Review';
+            var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
             /* ---- review step ------------------------------------------
                Built from the form's own controls. A control is described
@@ -80,7 +80,7 @@
             function buildReview(into) {
                 into.innerHTML = '';
 
-                steps.forEach(function (step) {
+                steps.forEach(function (step, stepIndex) {
                     if (step.dataset.label === REVIEW) return;
 
                     var rows = [];
@@ -101,6 +101,16 @@
 
                     var heading = document.createElement('h4');
                     heading.textContent = step.dataset.label || '';
+
+                    // An edit link per group, so a wrong answer on step 1 does
+                    // not mean clicking Back three times to reach it.
+                    var edit = document.createElement('button');
+                    edit.type = 'button';
+                    edit.className = 'freview-edit';
+                    edit.textContent = 'Edit';
+                    edit.addEventListener('click', function () { show(stepIndex, true); });
+                    heading.appendChild(edit);
+
                     block.appendChild(heading);
 
                     var list = document.createElement('dl');
@@ -136,7 +146,48 @@
 
             var reviewBody = review.querySelector('.freview');
 
-            /* ---- progress rail --------------------------------------- */
+            /* ---- layout ----------------------------------------------
+               The form starts life inside a .card with the page heading
+               above it. That is the right shape for a short form and the
+               wrong one for a wizard: the heading repeats what the rail
+               already says, and a 680px card wastes most of a desktop
+               screen on a form with two columns' worth of fields.
+
+               So the card is re-cast here: the heading moves into a band
+               at the top with the step counter beside it, the rail
+               becomes a left-hand column, and the step content gets the
+               rest. Done in script rather than in nine Blade files
+               because the markup contract stays `data-stepper` + .fstep
+               -- a module that adopts the wizard gets the new layout
+               without editing its view.
+               --------------------------------------------------------- */
+            var card = form.closest('.card') || form.parentElement;
+            card.classList.add('is-wizard');
+
+            var container = card.closest('.card-container-inline');
+            if (container) container.classList.add('is-wizard-container');
+
+            var heading = card.querySelector('h2');
+            var divider = card.querySelector('.card-divider');
+            if (divider) divider.remove();
+
+            var head = document.createElement('div');
+            head.className = 'wizard-head';
+
+            var counter = document.createElement('p');
+            counter.className = 'wizard-counter';
+
+            if (heading) {
+                head.appendChild(heading);
+            }
+            head.appendChild(counter);
+            card.insertBefore(head, card.firstChild);
+
+            // Rail and content live side by side below the head.
+            var body = document.createElement('div');
+            body.className = 'wizard-body';
+            card.appendChild(body);
+
             var rail = document.createElement('ol');
             rail.className = 'form-steps';
             rail.setAttribute('aria-label', 'Form progress');
@@ -150,7 +201,12 @@
                 rail.appendChild(li);
             });
 
-            form.insertBefore(rail, form.firstChild);
+            var pane = document.createElement('div');
+            pane.className = 'wizard-pane';
+
+            body.appendChild(rail);
+            body.appendChild(pane);
+            pane.appendChild(form);
 
             /* ---- navigation ------------------------------------------
                The form's own submit button is MOVED here rather than
@@ -182,11 +238,23 @@
             var index = 0;
 
             function show(i, focus) {
-                index = Math.max(0, Math.min(i, steps.length - 1));
+                var target = Math.max(0, Math.min(i, steps.length - 1));
+                var forward = target > index;
+                index = target;
 
                 steps.forEach(function (step, n) {
                     step.hidden = n !== index;
                 });
+
+                // Re-triggering the animation needs the class off, a reflow,
+                // then the class on -- otherwise the browser sees no change
+                // and skips it on every step after the first.
+                if (! reduceMotion) {
+                    var active = steps[index];
+                    active.classList.remove('is-entering-fwd', 'is-entering-back');
+                    void active.offsetWidth;
+                    active.classList.add(forward ? 'is-entering-fwd' : 'is-entering-back');
+                }
 
                 Array.prototype.forEach.call(rail.children, function (li, n) {
                     li.classList.toggle('is-current', n === index);
@@ -198,15 +266,17 @@
                 next.hidden = last;
                 if (submit) submit.hidden = ! last;
 
+                counter.textContent = 'Step ' + (index + 1) + ' of ' + steps.length;
+
                 if (last) buildReview(reviewBody);
 
                 // Moving focus is what makes this usable from a keyboard --
                 // without it, tabbing after Continue resumes from the button
                 // rather than from the step that just appeared.
                 if (focus) {
-                    var target = steps[index].querySelector('input, select, textarea') || steps[index];
-                    if (target.focus) target.focus({ preventScroll: true });
-                    rail.scrollIntoView({ block: 'nearest' });
+                    var first = steps[index].querySelector('input, select, textarea') || steps[index];
+                    if (first.focus) first.focus({ preventScroll: true });
+                    card.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
                 }
             }
 
@@ -236,6 +306,14 @@
 
             back.addEventListener('click', function () {
                 show(index - 1, true);
+            });
+
+            // A finished step is clickable in the rail -- the same shortcut the
+            // review's Edit links give, for people who navigate by the rail.
+            Array.prototype.forEach.call(rail.children, function (li, n) {
+                li.addEventListener('click', function () {
+                    if (n < index) show(n, true);
+                });
             });
 
             /* ---- open on the step the server complained about ---------

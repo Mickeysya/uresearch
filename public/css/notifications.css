@@ -65,11 +65,31 @@
 
 /* ---- filters ---- */
 
+/* Pinned under .main-content-header so the tabs and the unread counts
+   stay reachable however far down the feed you are -- scrolling a long
+   list used to carry them off the top and the only way back to "Unread"
+   was to scroll all the way up again.
+
+   top: 64px is .main-content-header's height; anything made sticky in
+   this app has to clear it (the profile's identity card sits at 80px for
+   the same reason). z-index 4 keeps it above the rows and below that
+   header's 5, so it slides under the UTP bar rather than over it.
+
+   The background is opaque and the padding/negative margins widen it to
+   the full column: a transparent sticky bar lets the rows scroll through
+   it, which reads as a rendering fault. */
 .notif-filters {
     display: flex;
     gap: 8px;
     margin-bottom: 20px;
     border-bottom: 1px solid var(--border-grey);
+    position: sticky;
+    top: 64px;
+    z-index: 4;
+    background: var(--page-bg);
+    margin-inline: -12px;
+    padding-inline: 12px;
+    padding-top: 8px;
 }
 
 .notif-filter {

@@ -18,7 +18,7 @@ as the work it describes.
 | Norhanis — Travel | done · reference implementation |
 | Norhanis — Claims | done |
 | Norhanis — Publication | done |
-| Norhanis — RPD | not started |
+| Norhanis — RPD (reminders · appeals · dismissals) | done |
 | Nureen — GA Extension · Attendance · Supervision · Certification | done · matches `docs/scope/nureen.md` |
 | Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done |
 | CGS dashboard (5 stat cards + 5 live panels) | done |
@@ -29,7 +29,7 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | 53, covering the engine, the seams, the CSP, the import, the profile, and Nureen’s, Norhanis’ and Hani’s chains |
+| Automated tests | 71, covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12 |
 | Last reviewed | 2026-09-15 — Hani's and Norhanis' merges, see third pass |
 
@@ -408,6 +408,57 @@ query; there is no placeholder data in the views.
       | GA Certification | 4 | Request details · Review |
       | Attendance Appeal | 3 | Appeal details · Review |
 
+- [x] **The wizard re-laid out (2026-09-15).** The first cut kept the form in
+      a 680px card with the rail stacked under the page heading, which wasted
+      most of a desktop screen and repeated the title above a rail that
+      already said where you were. Now `core::partials.form-stepper` re-casts
+      the card it finds: heading into a band at the top with the step counter
+      beside it, rail into a **left-hand column**, fields into the rest at up
+      to 1080px. Done in the script rather
+      than in nine Blade files — the markup contract is still `data-stepper`
+      + `.fstep`, so a module gets the new layout without editing its view.
+      Steps now slide in **from the side you came from**, so the motion says
+      which way you are travelling; `prefers-reduced-motion` turns it off in
+      both the script and the CSS. Each review group gained an **Edit** link
+      and finished steps in the rail are clickable, so a wrong answer on step
+      one is one click away instead of three Backs.
+- [x] **Fixed same day: the wizard's two-column field grid.** It filed every
+      label into column one and every control into column two with no row gap
+      between them, because a step is a plain run of siblings — nothing pairs
+      a label to its control, so the grid had no single field to place.
+      Removed rather than repaired: two columns need a wrapper per field in
+      nine Blade files across four people's folders, which is more churn than
+      a second column of inputs is worth. Fields now run one per row with
+      `--space-6` between them and a ~34em measure cap, so a text input stops
+      stretching the full pane width and looking like a textarea.
+- [x] **A date picker, after all (2026-09-15).** The earlier entry below
+      argued against one and that argument still holds for the usual version —
+      a widget that *replaces* the native input and re-implements typing,
+      locale, mobile and screen-reader support. This is the other kind:
+      `core::partials.date-picker` leaves `<input type="date">` in place as the
+      value, the thing the form posts and the thing validation reads, and only
+      draws a panel over it. Coarse pointers are skipped entirely (the OS wheel
+      beats any panel on a phone), typing is never intercepted, and with the
+      script gone the field is exactly what it was. All arithmetic is UTC —
+      going through local time is how a picker lands a day out west of the
+      server. Included once at the layout level, so every module's date fields
+      get it without knowing it exists; `data-no-picker` opts out.
+      **Month and year are dropdowns**, not a label between two arrows: most
+      dates here are weeks away and arrows reach those fine, but a part-time
+      PhD's `candidature_start_date` is years back, and thirty-six clicks on
+      an arrow is a penalty, not a picker. The year list is driven by the
+      field's own `min`/`max` — a travel date carries `min=today` and offers
+      forward years, a candidature start carries `max=today` and offers back
+      ones — falling back to ten years either side, and always widened to
+      include whatever value is already in the field.
+- [x] **Navigation stopped flashing (2026-09-15).** Every navigation is still a
+      full page load — this is Blade, not an SPA — but the white flash between
+      documents is gone: `@view-transition { navigation: auto; }` in
+      `layout.css` cross-fades old to new. One at-rule, no JavaScript, no
+      dependency, no client-side router to keep in sync. The sidebar and the
+      UTP header are given `view-transition-name`s so they sit out the fade
+      and stay visually fixed, which is what stops it reading as a reload.
+      Firefox navigates exactly as it does today.
 - [ ] **The four short forms gained the least.** Three or four fields behind a
       two-step wizard is an extra click for a review of something already on
       screen; the three long ones are where the win is. Kept for consistency
@@ -509,16 +560,50 @@ query; there is no placeholder data in the views.
   - [x] Server-side total / balance calculation — never trust the posted total
   - [x] Receipt uploads via `DocumentStore`
 
-- [ ] **RPD Candidacy** — the largest remaining piece, three separate flows
-  - [ ] `candidacies` table: programme type, start date, computed deadline
-        (8 months FT, 12 months PT), current status
-  - [ ] **Reminders** at 3 / 2 / 1 months — an artisan command scheduled from
-        `routes/console.php`, which already has the hook. Record what was sent
-        so a reminder never fires twice.
-  - [ ] **Appeals** — Supervisor → Chair → Non-Exec CGS → Dean; on the Dean's
-        approval, recalculate the deadline and update the masterlist
-  - [ ] **Dismissals** — initiated by Non-Exec CGS → Dean → Faculty → Registry
-  - [ ] The `registry` role already exists in `Support\Role`
+- [x] **RPD Candidacy (2026-09-15)** — all three flows, off one masterlist.
+  - [x] `candidacies`: one row per student, unique on `student_id`. The
+        deadline is **stored, not recomputed** — 8 months FT / 12 PT seeds it,
+        and after that an approved appeal owns it. Recomputing on read would
+        silently erase every extension ever granted.
+  - [x] **Reminders** — `rpd:remind`, scheduled daily at 07:00. Fires at the
+        3/2/1-month marks to the student *and* their supervisor.
+        Firing once is the whole problem: the command runs daily, so the guard
+        is `rpd_reminder_logs` with a unique index on
+        `(candidacy_id, milestone)`, and the log row is written **before** the
+        send so a duplicate key skips it rather than a check-then-write race
+        letting two runs both through. Milestones are not cumulative — a
+        candidacy entered six weeks out gets the 1-month reminder, not a
+        backlog of the two it already missed.
+  - [x] **Appeals** (`rpd_appeal`) — Supervisor → Chair → Non-Exec CGS → Dean.
+        On the Dean's approval `RpdAppealController::grantExtension()` moves the
+        masterlist, banks the months against the ceiling, writes `new_deadline`
+        onto the appeal, and **clears the reminder log** — those rows record
+        sends against the *old* deadline, so leaving them means the new one is
+        never reminded about. All inside the engine's own transaction.
+  - [x] Twelve-month extension ceiling, enforced server-side, with `max:` on
+        the validator set to what is *left* rather than the constant.
+        `norhanis.md` names no ceiling; twelve matches `chloe.md`'s parallel
+        study-candidacy appeal so the two agree by default —
+        `Candidacy::MAX_EXTENSION_MONTHS` is the one place to change it.
+  - [x] **Dismissals** (`rpd_dismissal`) — CGS opens, then Dean → Faculty →
+        Registry. CGS is deliberately **not a stage**: they author the case,
+        the same shape as Hani's `re_viva`. Registry approval closes the
+        candidacy and stamps `terminated_at`.
+  - [x] `Role::FACULTY` added — `docs/module-keys.md` had it as undecided.
+        One line in `Support\Role`, seeded as `faculty@utp.edu.my`. Jason's
+        modules can reuse it. **This is a Core change** — raise it at the next
+        team sync.
+  - [x] Masterlist at `/candidacies` (CGS, filterable) and `/my-candidacy`
+        (the student's own clock), both declared through `ProvidesLinks`.
+  - [x] 12 tests: the window arithmetic including month-end clamping, the
+        reminder firing exactly once, late entry not replaying missed
+        milestones, the ceiling, the deadline actually moving on the Dean's
+        approval, an intermediate rejection leaving it alone, and the
+        dismissal chain end to end.
+  - [ ] **Open:** the dismissal's termination email is not written yet. The
+        Registry stage closes the candidacy and timestamps it, but the actual
+        notification to the student is still to do — `RpdDeadlineApproaching`
+        is the pattern to copy.
 
 ---
 

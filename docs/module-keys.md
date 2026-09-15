@@ -13,8 +13,8 @@ Add a row here in the same commit that registers the workflow.
 | `examiner_nomination` | Examiner Nomination | Hani | built |
 | `publication` | Publication | Norhanis | built |
 | `claims_student` | Student Claims | Norhanis | built |
-| `rpd_appeal` | RPD Appeal / Extension | Norhanis | planned |
-| `rpd_dismissal` | RPD Dismissal | Norhanis | planned |
+| `rpd_appeal` | RPD Appeal / Extension | Norhanis | built |
+| `rpd_dismissal` | RPD Dismissal | Norhanis | built |
 | `attendance_appeal` | Attendance Appeal | Nureen | built |
 | `supervision` | Supervisor Appointment | Nureen | built |
 | `ga_certification` | GA/GRA Certification Letter | Nureen | built |
@@ -51,6 +51,8 @@ across modules is fine and desirable — it keeps the vocabulary consistent.
 | `manager` | Manager CGS | `manager_cgs` |
 | `academic_exec` | Academic Executive | `academic_exec` |
 | `cgs_approve` | Senior Executive CGS | `senior_exec_cgs` |
+| `faculty` | Faculty | `faculty` |
+| `registry` | Registry | `registry` |
 
 ## Actors named in scope documents that are not yet roles
 
@@ -63,4 +65,8 @@ first whether an existing role already means the same person.
 | Research Centre | `haziq.md` | new role — conducts GA interviews |
 | Programme Chair | `chloe.md` | probably the existing `chair` — confirm with CGS |
 | Project Director | `norhanis.md` | may be a post-approval export, not a stage |
-| Faculty | `norhanis.md`, `jason.md` | final approver on RPD dismissal — undecided |
+
+**Resolved.** `Faculty` is now a role (`App\Modules\Core\Support\Role::FACULTY`),
+claimed by `RpdDismissalWorkflow` as the final approver between the Dean's
+endorsement and the Registry's termination email. Jason's modules may reuse it.
+Seeded as `faculty@utp.edu.my`.

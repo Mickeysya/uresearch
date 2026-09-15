@@ -26,7 +26,18 @@
    whole body. The light sketch reads as grime behind a dark page, so
    the dark theme swaps in the dark plate instead. Only the image is
    swapped -- size/position/attachment/repeat are already set on body
-   by uresearch.css and carry over, so the two stay in register. */
+   by uresearch.css and carry over, so the two stay in register.
+
+   The dark plate is a high-contrast line drawing, far stronger than the
+   washed-out light one, and at full strength it competed with the text
+   in front of it -- pale line work reading as bright as body copy. It is
+   laid under a flat scrim of --page-bg so it settles back into texture.
+   The scrim is a gradient layer in the same background-image, not a
+   separate element, so it inherits cover/center/fixed from body and
+   needs no stacking context of its own.
+
+   0.86 is the knob. Lower it to let more of the drawing through; the
+   text in front stops being comfortable somewhere around 0.7. */
 body {
     background-color: var(--page-bg);
     color: var(--text-dark);
@@ -37,12 +48,16 @@ body {
 }
 
 :root[data-theme="dark"] body {
-    background-image: url('../images/background_utp_dark.jpeg');
+    background-image:
+        linear-gradient(rgba(18, 21, 28, 0.86), rgba(18, 21, 28, 0.86)),
+        url('../images/background_utp_dark.jpeg');
 }
 
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) body {
-        background-image: url('../images/background_utp_dark.jpeg');
+        background-image:
+            linear-gradient(rgba(18, 21, 28, 0.86), rgba(18, 21, 28, 0.86)),
+            url('../images/background_utp_dark.jpeg');
     }
 }
 
@@ -861,44 +876,104 @@ button[value="rejected"]:hover {
 /* ============================================================
    10b · Multi-step forms
 
-   Built by core::partials.form-stepper. Everything here is inert until
-   that script runs -- .fstep has no `display: none`, so a form with
-   JavaScript off is still one long page with one submit button.
+   Built by core::partials.form-stepper, which re-casts the .card it
+   finds the form in: heading into a band at the top, rail into a left
+   column, step content into the rest.
+
+   Everything here is inert until that script runs -- .fstep has no
+   `display: none`, so a form with JavaScript off is still one long page
+   with one submit button.
    ============================================================ */
 
-/* ---- the progress rail ---- */
-.form-steps {
-    display: flex;
-    list-style: none;
-    margin: 0 0 var(--space-8);
-    padding: 0 0 var(--space-2);
-    counter-reset: fstep;
-    overflow-x: auto;
-    scrollbar-width: none;
+/* The wizard wants the width the page has, not the 480/680px a short
+   card is capped at. The container stops centring a narrow box and the
+   card grows to a real working width. */
+.card-container-inline.is-wizard-container {
+    display: block;
+    padding: 0 0 var(--space-10);
 }
 
-.form-steps::-webkit-scrollbar { display: none; }
+.card.is-wizard {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* ---- the head band: title, and the only step counter ---- */
+.wizard-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    padding: var(--space-6) var(--space-8);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--surface-sunken);
+}
+
+/* The heading is the page title now -- the rail says which step you are
+   on, so nothing below repeats it. */
+.card.is-wizard .wizard-head h2 {
+    margin: 0;
+    font-size: var(--text-2xl);
+}
+
+.wizard-counter {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    color: var(--text-grey);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- rail beside content ---- */
+.wizard-body {
+    display: grid;
+    grid-template-columns: minmax(0, 232px) minmax(0, 1fr);
+    align-items: start;
+}
+
+.wizard-pane {
+    padding: var(--space-8);
+    min-width: 0;
+    /* Clips the sliding step to the pane instead of letting it paint over
+       the rail on its way in. */
+    overflow: hidden;
+}
+
+/* ---- the progress rail ----
+   Vertical on desktop: a column of steps reads as a list of what is
+   still to come, and it leaves the full content width for the fields. */
+.form-steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    list-style: none;
+    margin: 0;
+    padding: var(--space-8) var(--space-5) var(--space-8) var(--space-8);
+    border-right: 1px solid var(--border-subtle);
+    align-self: stretch;
+}
 
 .form-step {
     position: relative;
-    flex: 1 1 0;
-    min-width: 96px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
     align-items: center;
-    gap: var(--space-2);
-    text-align: center;
+    gap: var(--space-3);
+    text-align: left;
 }
 
-/* The connector is drawn by each step except the first, reaching back
-   to the one before it -- so it never overhangs either end of the rail. */
+/* The connector runs from each step up to the one before it, so it never
+   overhangs either end of the rail. */
 .form-step + .form-step::before {
     content: '';
     position: absolute;
-    top: 15px;
-    right: 50%;
-    left: -50%;
-    height: 2px;
+    left: 14px;
+    bottom: 100%;
+    height: var(--space-5);
+    width: 2px;
     background: var(--border-grey);
     z-index: 0;
 }
@@ -967,6 +1042,16 @@ button[value="rejected"]:hover {
     color: var(--text-body);
 }
 
+/* A finished step is a shortcut back to itself; an unvisited one is not,
+   and must not look like it is. */
+.form-step.is-done {
+    cursor: pointer;
+}
+
+.form-step.is-done:hover .form-step-label {
+    color: var(--accent-solid);
+}
+
 /* ---- a step ---- */
 .fstep {
     border: 0;
@@ -980,7 +1065,100 @@ button[value="rejected"]:hover {
 .fstep-hint {
     color: var(--text-grey);
     font-size: var(--text-sm);
-    margin: 0 0 var(--space-5);
+    margin: 0 0 var(--space-6);
+    max-width: 62ch;
+}
+
+/* ---- step transition ----
+   Slides in from the side you came from, so the motion says which way
+   you are travelling rather than just that something changed. Applied
+   by the script, which removes and re-adds the class to retrigger it.
+   Guarded by prefers-reduced-motion in the script AND here: the script
+   check stops the class being added, this one stops the animation if a
+   class survives a cached page. */
+@keyframes fstep-in-fwd {
+    from { opacity: 0; transform: translateX(18px); }
+    to   { opacity: 1; transform: none; }
+}
+
+@keyframes fstep-in-back {
+    from { opacity: 0; transform: translateX(-18px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.fstep.is-entering-fwd  { animation: fstep-in-fwd var(--duration-base) var(--ease) both; }
+.fstep.is-entering-back { animation: fstep-in-back var(--duration-base) var(--ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+    .fstep.is-entering-fwd,
+    .fstep.is-entering-back { animation: none; }
+}
+
+/* ---- field rhythm ----
+   A step is a plain run of siblings: label, control, label, control, with
+   no wrapper around each pair. Vertical rhythm therefore comes from the
+   label's own top margin (see the base `label` rule), and this only opens
+   that gap up -- a wizard step has room to breathe that a cramped 480px
+   card did not.
+
+   There was a two-column grid here briefly. It could not work: with no
+   element pairing a label to its control, the grid took them as separate
+   items and filed every label into column one and every control into
+   column two, with no row gap between them. Two columns need a wrapper
+   per field in nine Blade files across four people's folders -- more
+   markup churn than a second column of inputs is worth.
+
+   The measure cap is the other half of the fix. Stretching a text input
+   across the full 800px pane makes it look like a textarea and gives the
+   eye no anchor; ~34em is about as wide as a single-line field stays
+   comfortable. */
+.card.is-wizard .fstep > label {
+    margin-top: var(--space-8);
+}
+
+/* The first label in a step sits under the hint, which already carries
+   its own bottom margin. */
+.card.is-wizard .fstep > .fstep-hint + label {
+    margin-top: 0;
+}
+
+/* The 4px under a label is deliberate and stays: a label belongs to the
+   control below it, so it sits close to that one and far from the one
+   above. All the breathing room goes above the label, never between the
+   label and its own field. */
+.card.is-wizard .fstep > .field-error {
+    margin-top: var(--space-2);
+}
+
+/* .dp-wrap is in this list because the date picker wraps every
+   input[type="date"] at runtime, which takes it out of `.fstep > input`.
+   Without it a date field is the only one on the form still stretching
+   the full pane width -- the wrapper has to carry the cap the input can
+   no longer receive. */
+.card.is-wizard .fstep > input,
+.card.is-wizard .fstep > select,
+.card.is-wizard .fstep > textarea,
+.card.is-wizard .fstep > .dp-wrap,
+.card.is-wizard .fstep > .field-error,
+.card.is-wizard .fstep > .field-hint {
+    max-width: 34em;
+}
+
+/* A textarea is meant to be wide -- it is holding a paragraph, not a
+   name -- so it keeps more of the measure. */
+.card.is-wizard .fstep > textarea {
+    max-width: 52em;
+}
+
+.card.is-wizard .fstep > .checkbox-row {
+    margin-top: var(--space-8);
+}
+
+/* A run of repeated rows (claim items, publication authors) is a group,
+   not a field: it gets the gap above it and its own internal rhythm. */
+.card.is-wizard .fstep > h3,
+.card.is-wizard .fstep > [id$="-container"] {
+    margin-top: var(--space-8);
 }
 
 /* ---- Back / Continue / Submit ---- */
@@ -1015,6 +1193,10 @@ button[value="rejected"]:hover {
 }
 
 .freview-group h4 {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
     margin: 0 0 var(--space-3);
     font-size: var(--text-xs);
     font-weight: var(--weight-semi);
@@ -1023,9 +1205,27 @@ button[value="rejected"]:hover {
     color: var(--text-grey);
 }
 
+.freview-edit {
+    margin: 0;
+    padding: 2px 8px;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--accent-solid);
+    background: transparent;
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-sm);
+}
+
+.freview-edit:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent-solid);
+}
+
 .freview-list {
     display: grid;
-    grid-template-columns: minmax(120px, 34%) 1fr;
+    grid-template-columns: minmax(120px, 30%) 1fr;
     gap: var(--space-2) var(--space-4);
     margin: 0;
 }
@@ -1043,17 +1243,59 @@ button[value="rejected"]:hover {
     overflow-wrap: anywhere;
 }
 
-@media (max-width: 640px) {
-    /* Labels stop being readable once four of them share a phone's width,
-       so below this the rail is dots only and the step's own heading in
-       the card says where you are. */
+/* ---- narrow: rail goes back on top, horizontal ---- */
+@media (max-width: 860px) {
+    .wizard-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .form-steps {
+        flex-direction: row;
+        gap: 0;
+        padding: var(--space-6) var(--space-6) var(--space-2);
+        border-right: 0;
+        border-bottom: 1px solid var(--border-subtle);
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .form-steps::-webkit-scrollbar { display: none; }
+
+    .form-step {
+        flex: 1 1 0;
+        min-width: 84px;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+        gap: var(--space-2);
+        text-align: center;
+    }
+
+    /* Horizontal connector again, reaching back to the previous step. */
+    .form-step + .form-step::before {
+        left: -50%;
+        right: 50%;
+        bottom: auto;
+        top: 15px;
+        width: auto;
+        height: 2px;
+    }
+
+    .wizard-pane { padding: var(--space-6); }
+
+    .wizard-head { padding: var(--space-5) var(--space-6); }
+}
+
+@media (max-width: 560px) {
+    /* Labels stop being readable once four share a phone's width, so
+       below this the rail is dots only and the counter says where you
+       are. */
     .form-step-label { display: none; }
 
     .form-step { min-width: 0; }
 
     .freview-list {
         grid-template-columns: 1fr;
-        gap: 0 0;
+        gap: 0;
     }
 
     .freview-list dd { margin-bottom: var(--space-3); }
@@ -1141,3 +1383,451 @@ button[value="rejected"]:hover {
     background: var(--accent-subtle);
     color: var(--text-dark);
 }
+
+/* ============================================================
+   10c · The date picker panel
+
+   Drawn by core::partials.date-picker over a native <input type="date">,
+   which keeps the value and stays the thing the form posts. Everything
+   here is decoration on top of a control that already worked.
+   ============================================================ */
+
+.dp-wrap {
+    position: relative;
+    display: block;
+}
+
+/* The wrapper takes over the input's bottom margin so wrapping a field
+   does not change the rhythm of the form around it. */
+.dp-wrap > input[type="date"] {
+    margin-bottom: 0;
+    width: 100%;
+    /* Room for our own trigger on the right. */
+    padding-right: var(--space-10);
+}
+
+/* The platform glyph is replaced, not restyled: it still opens the OS
+   panel, which is the thing we are here to avoid. Kept clickable but
+   invisible and pinned under our own button, because removing it
+   entirely also removes the field's own keyboard shortcut in some
+   browsers. */
+.dp-wrap > input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0;
+    position: absolute;
+    right: 0;
+    width: 40px;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.dp-trigger {
+    position: absolute;
+    top: 50%;
+    right: var(--space-2);
+    transform: translateY(-50%);
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-grey);
+    cursor: pointer;
+    transition: color var(--duration-fast) var(--ease),
+                background-color var(--duration-fast) var(--ease);
+}
+
+.dp-trigger svg { width: 17px; height: 17px; }
+
+.dp-trigger:hover {
+    color: var(--accent-solid);
+    background: var(--surface-hover);
+}
+
+/* ---- the panel ---- */
+.dp-panel {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 6px);
+    left: 0;
+    width: 306px;
+    max-width: calc(100vw - var(--space-8));
+    padding: var(--space-4);
+    background: var(--surface-raised);
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    animation: dp-in var(--duration-fast) var(--ease) both;
+}
+
+/* Flipped by the script when there is no room below the field. */
+.dp-panel.is-above {
+    top: auto;
+    bottom: calc(100% + 6px);
+}
+
+@keyframes dp-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dp-panel { animation: none; }
+}
+
+.dp-head {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) 30px;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+/* Month and year dropdowns, so a date years away is one gesture rather
+   than thirty-six taps on the arrow. They are real <select>s, which is
+   why they need trimming back here: the global select rule sets width
+   100% and 40px of right padding for the chevron, both far too generous
+   inside a 300px panel. */
+.dp-month {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    min-width: 0;
+}
+
+.dp-select {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 3px var(--space-6) 3px var(--space-2);
+    background-color: transparent;
+    background-position: right var(--space-1) center;
+    background-size: 14px 14px;
+    border-color: transparent;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    color: var(--text-dark);
+    text-align: left;
+    cursor: pointer;
+}
+
+.dp-select:hover {
+    background-color: var(--surface-hover);
+    border-color: var(--border-grey);
+}
+
+.dp-select-month { flex: 0 1 auto; }
+
+/* Digits only, so it needs no more room than four of them plus the
+   chevron -- and tabular figures stop the panel twitching as the year
+   changes. */
+.dp-select-year {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.dp-nav {
+    margin: 0;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    line-height: 1;
+    background: transparent;
+    color: var(--text-grey);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+}
+
+.dp-nav:hover {
+    background: var(--surface-hover);
+    color: var(--accent-solid);
+    border-color: var(--border-grey);
+}
+
+.dp-week,
+.dp-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+}
+
+.dp-week {
+    margin-bottom: var(--space-1);
+}
+
+.dp-week span {
+    text-align: center;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    letter-spacing: var(--tracking-caps);
+    color: var(--text-grey);
+    padding-bottom: var(--space-1);
+}
+
+.dp-day {
+    margin: 0;
+    padding: 0;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+    background: transparent;
+    color: var(--text-body);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease),
+                color var(--duration-fast) var(--ease);
+}
+
+.dp-day:hover:not(:disabled) {
+    background: var(--surface-hover);
+    color: var(--text-dark);
+}
+
+/* Days spilling in from the neighbouring months stay visible but read as
+   context rather than as choices -- hiding them would make the grid jump
+   between months. */
+.dp-day.is-outside { color: var(--text-grey); opacity: 0.5; }
+
+.dp-day.is-today:not(.is-selected) {
+    border-color: var(--accent-solid);
+    color: var(--accent-solid);
+    font-weight: var(--weight-semi);
+}
+
+.dp-day.is-selected {
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--text-on-accent);
+    font-weight: var(--weight-semi);
+}
+
+.dp-day:disabled {
+    color: var(--text-grey);
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.dp-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.dp-text-btn {
+    margin: 0;
+    padding: 4px 10px;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    background: transparent;
+    color: var(--accent-solid);
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-sm);
+}
+
+.dp-text-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent-solid);
+}
+
+/* ============================================================
+   12 · Page transitions
+
+   Every navigation here is a full page load -- this is a Blade app, not
+   an SPA, and making it one would be a rewrite. What made it FEEL like a
+   reload was the white flash between documents, and that is what the
+   native View Transitions API removes: the browser holds the old frame,
+   fetches the new document, and cross-fades between them.
+
+   One at-rule, no JavaScript, no dependency. Chrome, Edge and Safari
+   animate; Firefox navigates exactly as it does today, which is the
+   current behaviour and not a regression.
+
+   The navigation still happens -- the server still renders, the URL
+   still changes, the back button still works, and nothing here has to
+   be kept in sync with a client-side router.
+   ============================================================ */
+
+@view-transition {
+    navigation: auto;
+}
+
+@keyframes page-fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+}
+
+@keyframes page-fade-out {
+    from { opacity: 1; transform: none; }
+    to   { opacity: 0; transform: translateY(-4px); }
+}
+
+::view-transition-old(root) {
+    animation: page-fade-out 140ms var(--ease) both;
+}
+
+::view-transition-new(root) {
+    animation: page-fade-in 200ms var(--ease) both;
+}
+
+/* The shell does not move between pages, so it should not be part of the
+   cross-fade -- animating it makes the whole window look like it reloaded,
+   which is the thing being fixed. Giving each a name takes it out of the
+   root snapshot and leaves it visually fixed across the navigation. */
+.sidebar { view-transition-name: app-sidebar; }
+.main-content-header { view-transition-name: app-header; }
+
+::view-transition-group(app-sidebar),
+::view-transition-group(app-header) {
+    animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+        animation: none;
+    }
+}
+
+/* ============================================================
+   13 · RPD candidacy
+
+   Norhanis' masterlist, the facts panel both the student and the appeal
+   form show, and the long free-text blocks in the approval queues.
+   ============================================================ */
+
+.rpd-page {
+    max-width: 1180px;
+    margin: 0 auto;
+}
+
+.rpd-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-5);
+}
+
+.rpd-header h2 { margin: 0 0 var(--space-1); }
+
+/* ---- the facts panel ----
+   Three or four figures stated before anything asks a question. Not
+   cards: they are one reading of one record, so they share a surface
+   and are separated by rules rather than by gaps. */
+.rpd-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    margin: 0 0 var(--space-6);
+    padding: 0;
+    background: var(--border-subtle);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.rpd-facts > div {
+    background: var(--surface-sunken);
+    padding: var(--space-4) var(--space-5);
+}
+
+.rpd-facts dt {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--text-grey);
+}
+
+.rpd-facts dd {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semi);
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Tone on a figure recolours the figure only -- the label above it stays
+   neutral, so a row of them still reads as one set. */
+.rpd-facts dd.tone-good     { color: var(--success-fg); }
+.rpd-facts dd.tone-info     { color: var(--info-fg); }
+.rpd-facts dd.tone-warn     { color: var(--warning-fg); }
+.rpd-facts dd.tone-critical { color: var(--danger-fg); }
+
+/* ---- masterlist table ---- */
+.rpd-num {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.rpd-num.tone-good     { color: var(--success-fg); }
+.rpd-num.tone-info     { color: var(--info-fg); }
+.rpd-num.tone-warn     { color: var(--warning-fg); font-weight: var(--weight-semi); }
+.rpd-num.tone-critical { color: var(--danger-fg); font-weight: var(--weight-semi); }
+
+.rpd-actions {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    white-space: nowrap;
+}
+
+.rpd-inline-form { margin: 0; }
+
+.rpd-inline-form button {
+    margin: 0;
+    padding: 5px 12px;
+    font-size: var(--text-xs);
+}
+
+/* ---- justification / grounds in a queue card ----
+   Free text the approver is expected to actually read, so it gets a
+   surface and a measure rather than running the full card width. */
+.rpd-justification {
+    margin-top: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    max-width: 78ch;
+    background: var(--surface-sunken);
+    border-left: 3px solid var(--border-strong);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--text-body);
+    white-space: pre-line;
+}
+
+/* A short note under a field: quieter than a label, louder than nothing.
+   It belongs to the control ABOVE it, so it sits close to that one -- the
+   next label's own top margin provides the separation from what follows. */
+.field-hint {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+}
+
+.field-hint b {
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Candidacy statuses reuse the badge shell; only the four tones differ. */
+.status-badge.status-active   { background: var(--info-bg); color: var(--info-fg); }
+.status-badge.status-extended { background: var(--warning-bg); color: var(--warning-fg); }
+.status-badge.status-defended { background: var(--success-bg); color: var(--success-fg); }
+.status-badge.status-dismissed { background: var(--danger-bg); color: var(--danger-fg); }

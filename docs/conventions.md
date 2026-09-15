@@ -172,10 +172,22 @@ select can carry no pseudo-element to mask one onto — so its colour is baked
 in and there is a light rule and a dark rule. Those hex values are
 `--text-grey` in each theme; change one in `tokens.css` and change them here.
 
-The `option` list and the date picker panel are drawn by the operating
-system and cannot be styled at all. They follow the theme because
-`tokens.css` declares `color-scheme` on `:root` — that is what that property
-is for, and it is why there is no custom date-picker widget in this project.
+The `option` list is drawn by the operating system and cannot be styled at
+all. It follows the theme because `tokens.css` declares `color-scheme` on
+`:root` — that is what that property is for.
+
+**Date fields get a panel** from `core::partials.date-picker`, included once
+at the layout level, so you get it by writing `<input type="date">` and
+nothing else. It **enhances** the native input rather than replacing it: the
+input keeps the value, posts the form, and accepts typing exactly as before,
+and the panel is skipped entirely on touch devices where the OS wheel is
+better. Add `data-no-picker` to opt a field out.
+
+**Set `min` / `max` on your date inputs.** They do double duty: they bound the
+native validation the wizard's step gate reads, *and* they set the year range
+the picker's dropdown offers. A field with neither gets ten years either side,
+which works but is looser than it needs to be. `max="{{ now()->toDateString() }}"`
+for a date that must be in the past, `min` for one that must be ahead.
 
 ### Forms
 
@@ -197,9 +209,16 @@ scroll. Add `data-stepper` to the `<form>`, wrap each section in a
 @include('core::partials.form-stepper')
 ```
 
-That is the whole API. The progress rail, Back/Continue, and a **generated
-review step** are built by `core::partials.form-stepper`. Your submit button
-is moved into the step nav and shown only on the last step.
+That is the whole API. The partial re-casts the `.card` it finds the form in:
+your `<h2>` moves into a band at the top with the step counter beside it, the
+rail becomes a left-hand column, and the fields get the rest (below 860px the
+rail goes back on top, horizontal). The progress rail,
+Back/Continue, and a **generated review step** are all built for you, and your
+submit button is moved into the step nav and shown only on the last step.
+
+**Do not add your own page heading or step counter.** The partial supplies
+both from the `<h2>` already in your card. A second one is the thing this
+layout exists to remove.
 
 **Nothing changes on the server.** The form still POSTs once, to the same
 route, with the same fields — `$request->validate()` is untouched. A
