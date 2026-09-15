@@ -14,8 +14,11 @@
                 CGS assigns supervisees before nominations can be filed.
             </div>
         @else
-            <form method="POST" action="{{ route('examiner-nomination.store') }}">
+            <form method="POST" action="{{ route('examiner-nomination.store') }}" data-stepper>
                 @csrf
+
+                <fieldset class="fstep" data-label="Candidate">
+                <p class="fstep-hint">Which of your supervisees this nomination is for, and the thesis being examined.</p>
 
                 <label for="student_id">Candidate</label>
                 <select name="student_id" id="student_id" required
@@ -34,6 +37,11 @@
                        value="{{ old('thesis_title') }}"
                        class="@error('thesis_title') is-invalid @enderror">
                 @error('thesis_title') <p class="field-error">{{ $message }}</p> @enderror
+                </fieldset>
+
+                <fieldset class="fstep" data-label="Examiners">
+                <p class="fstep-hint">Only eligible examiners can be picked. Anyone assigned, unavailable, or inside the
+                   {{ \App\Modules\Hani\Models\Examiner::GAP_DAYS }}-day cooling-off period is greyed out here and re-checked on submit.</p>
 
                 <label for="main_examiner_id">Main Examiner</label>
                 <select name="main_examiner_id" id="main_examiner_id" required
@@ -71,14 +79,14 @@
                 </select>
                 @error('backup_examiner_id') <p class="field-error">{{ $message }}</p> @enderror
 
-                <p class="queue-meta">
-                    Examiners who are assigned, unavailable, or still inside the
-                    {{ \App\Modules\Hani\Models\Examiner::GAP_DAYS }}-day cooling-off period cannot be selected.
-                    Eligibility is re-checked when you submit.
-                </p>
+                </fieldset>
 
-                <label for="notes">Notes <span style="color: var(--text-grey)">(optional)</span></label>
-                <textarea name="notes" id="notes" rows="3">{{ old('notes') }}</textarea>
+                <fieldset class="fstep" data-label="Notes">
+                <p class="fstep-hint">Anything the Academic Executive should know when reviewing this nomination. Optional.</p>
+
+                <label for="notes">Notes</label>
+                <textarea name="notes" id="notes" rows="4">{{ old('notes') }}</textarea>
+                </fieldset>
 
                 <button type="submit">Submit Nomination</button>
             </form>
@@ -111,4 +119,6 @@
         @endforeach
     </tbody>
 </table>
+
+@include('core::partials.form-stepper')
 @endsection

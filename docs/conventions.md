@@ -189,6 +189,37 @@ the picker's dropdown offers. A field with neither gets ten years either side,
 which works but is looser than it needs to be. `max="{{ now()->toDateString() }}"`
 for a date that must be in the past, `min` for one that must be ahead.
 
+### Putting dates on the calendar
+
+`/calendar` is a Core screen but owns no dates. If your module has a deadline
+worth showing, implement `SuppliesCalendarEvents` on a workflow class you
+already register — `ModuleRegistry` finds it the same way it finds
+`ProvidesLinks`, so there is no wiring:
+
+```php
+class MyWorkflow implements WorkflowModule, SuppliesCalendarEvents
+{
+    public function calendarEvents(User $user, CarbonInterface $from, CarbonInterface $to): array
+    {
+        return [[
+            'date' => $detail->due_on,     // required
+            'title' => 'Thesis due',       // required
+            'tone' => 'warn',              // good | info | warn | critical
+            'meta' => 'Cycle 2',
+            'url' => route('applications.show', $application),
+        ]];
+    }
+}
+```
+
+**Scope your own query.** Core cannot know which rows this user may see, so the
+supplier decides — a student gets their own, staff get what their role covers,
+and `[]` is always a valid answer. A supplier that throws is skipped and
+reported rather than blanking the calendar for everyone.
+
+**Do not add an events table.** Every date on that page is already recorded
+somewhere; a second copy is only a second thing to keep in sync.
+
 ### Forms
 
 A form past about eight fields should be a wizard rather than one long

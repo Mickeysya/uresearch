@@ -10,23 +10,6 @@ namespace App\Modules\Core\Http\Controllers;
  */
 class PageController extends Controller
 {
-    public function documents()
-    {
-        return view('core::pages.placeholder', [
-            'title' => 'Documents',
-            'description' => 'Every file you have uploaded or been issued, in one place, will appear here. '
-                .'For now, documents attached to a specific application can be found on that application\'s tracking page.',
-        ]);
-    }
-
-    public function calendar()
-    {
-        return view('core::pages.placeholder', [
-            'title' => 'Calendar',
-            'description' => 'Upcoming deadlines — RPD milestones, appeal windows, reminders — will appear here.',
-        ]);
-    }
-
     public function help()
     {
         return view('core::pages.placeholder', [

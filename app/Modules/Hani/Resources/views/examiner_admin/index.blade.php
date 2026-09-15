@@ -10,20 +10,68 @@
      what doesn't already exist anywhere: a 4-column stat grid, the status
      badge, the avatar circle, the filter bar and the reason modal. --}}
 <style>
-    .examiner-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 20px; }
+    /* Scoped to this page -- nothing here touches a Core/shared stylesheet.
+       The .sdash-* classes borrowed below (stat card shell, tone colours) and
+       .data-table are already global via partials/stylesheets.blade.php; this
+       block only adds what does not exist anywhere else.
+
+       The page used to sit in a .card.card-wide, which caps at 680px. A pool
+       screen is a dashboard -- four figures, a filter bar and a seven-column
+       table -- and 680px is why the fourth stat card wrapped onto its own row
+       and the table scrolled sideways on a 1900px monitor. It is a full-width
+       page now, capped only where a table stops being readable. */
+    .exam-page { max-width: 1320px; margin: 0 auto; }
+
+    .exam-header {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
+    }
+    .exam-header h2 { margin: 0 0 4px; }
+
+    /* auto-fit, not a fixed 4: the cards share out whatever the row has, so
+       they stay even at every width instead of leaving a 3+1 orphan. */
+    .examiner-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 14px;
+        margin-bottom: 20px;
+    }
+    .examiner-stats .sdash-stat { max-width: none; }
     .examiner-stats .sdash-pill.is-active-filter { box-shadow: inset 0 0 0 1.5px currentColor; }
 
+    /* The filter bar is its own surface, so it reads as a control strip over
+       the table rather than as more page content. */
     .examiner-filters {
-        display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;
-        margin-bottom: 16px;
+        display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+        margin-bottom: 16px; padding: 14px 16px;
+        background: var(--surface); border: 1px solid var(--border-subtle);
+        border-radius: 12px;
     }
-    .examiner-filters .field { display: flex; flex-direction: column; gap: 4px; }
-    .examiner-filters label { font-size: 11.5px; color: var(--text-grey); font-weight: 600; }
-    .examiner-filters select, .examiner-filters input[type="text"] {
-        padding: 7px 10px; border: 1px solid var(--border-grey); border-radius: 8px; font-size: 13px;
+    .examiner-filters .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .examiner-filters label { font-size: 11.5px; color: var(--text-grey); font-weight: 600; margin: 0; }
+    .examiner-filters select,
+    .examiner-filters input[type="text"] {
+        margin: 0; padding: 8px 10px; font-size: 13px; min-width: 170px;
     }
-    .examiner-filters .search-field { flex: 1 1 220px; }
+    .examiner-filters .search-field { flex: 1 1 260px; }
+    .examiner-filters .search-field input { min-width: 0; width: 100%; }
+    .examiner-filters button { margin: 0; padding: 9px 18px; }
     .examiner-filters .clear-link { align-self: center; font-size: 12.5px; color: var(--text-grey); }
+
+    .exam-table-wrap {
+        background: var(--surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 4px 16px 16px;
+        overflow-x: auto;
+    }
+
+    .exam-table { width: 100%; }
+    .exam-table th, .exam-table td { vertical-align: middle; }
+    /* The two date-ish columns and the action never need to wrap. */
+    .exam-table td:nth-child(6), .exam-table th:nth-child(6) { white-space: nowrap; }
+    .exam-table td:last-child { text-align: right; white-space: nowrap; }
+    .exam-table td:last-child button { margin: 0; padding: 6px 12px; font-size: 12px; }
 
     .examiner-avatar {
         display: inline-flex; align-items: center; justify-content: center;
@@ -31,16 +79,18 @@
         background: var(--light-blue-bg); color: var(--navy);
         font-size: 12px; font-weight: 700;
     }
-    .examiner-name-cell { display: flex; align-items: center; gap: 10px; }
+    .examiner-name-cell { display: flex; align-items: center; gap: 10px; min-width: 190px; }
 
     .examiner-state-badge {
         display: inline-block; padding: 3px 10px; border-radius: 999px;
         font-size: 11.5px; font-weight: 600; white-space: nowrap;
     }
-    .examiner-state-badge.tone-good     { background: #E4F6EC; color: #067A42; }
-    .examiner-state-badge.tone-warn     { background: #FDF1DC; color: #8A5D12; }
-    .examiner-state-badge.tone-info     { background: #E8F0FD; color: #2456A6; }
-    .examiner-state-badge.tone-critical { background: #FDECEA; color: #A8271C; }
+    /* Tokens, not the literals this block used to carry -- the old hexes were
+       light-mode values and stayed light on the dark theme. */
+    .examiner-state-badge.tone-good     { background: var(--success-bg); color: var(--success-fg); }
+    .examiner-state-badge.tone-warn     { background: var(--warning-bg); color: var(--warning-fg); }
+    .examiner-state-badge.tone-info     { background: var(--info-bg); color: var(--info-fg); }
+    .examiner-state-badge.tone-critical { background: var(--danger-bg); color: var(--danger-fg); }
 
     .examiner-reason { display: block; font-size: 11px; color: var(--text-grey); margin-top: 2px; max-width: 220px; }
 
@@ -48,24 +98,37 @@
     .examiner-pagination a, .examiner-pagination span {
         padding: 6px 11px; border-radius: 8px; font-size: 12.5px; border: 1px solid var(--border-grey);
     }
-    .examiner-pagination a { color: var(--navy); }
-    .examiner-pagination .is-current { background: var(--navy); color: white; border-color: var(--navy); }
+    .examiner-pagination a { color: var(--navy); text-decoration: none; }
+    .examiner-pagination a:hover { background: var(--surface-hover); border-color: var(--navy); }
+    .examiner-pagination .is-current { background: var(--navy); color: var(--text-on-accent); border-color: var(--navy); }
     .examiner-pagination .is-disabled { color: var(--text-grey); }
 
     .reason-modal { border: none; border-radius: 14px; padding: 0; max-width: 420px; width: 90vw; }
     .reason-modal::backdrop { background: rgba(20, 25, 40, 0.45); }
-    .reason-modal .card { border: none; box-shadow: none; margin: 0; }
+    .reason-modal .card { border: none; box-shadow: none; margin: 0; max-width: none; }
     .reason-modal-head { display: flex; justify-content: space-between; align-items: center; }
     .reason-modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--text-grey); }
     .reason-modal textarea { width: 100%; }
+
+    @media (max-width: 720px) {
+        .examiner-filters select, .examiner-filters input[type="text"] { min-width: 0; width: 100%; }
+        .examiner-filters .field { flex: 1 1 100%; }
+    }
 </style>
 
-<div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Examiner Pool</h2>
-        <div class="card-divider"></div>
+<div class="exam-page">
+    <header class="exam-header">
+        <div>
+            <h2>Examiner Pool</h2>
+            <p class="queue-meta">
+                {{ $examiners->total() }} {{ Str::plural('examiner', $examiners->total()) }} on record.
+                State is derived, so anyone on gap becomes available again on their own.
+            </p>
+        </div>
+        <a href="{{ route('examiner-admin.create') }}" class="sdash-action">+ Add an examiner</a>
+    </header>
 
-        <div class="sdash-stats examiner-stats">
+    <div class="sdash-stats examiner-stats">
             @php
                 $cards = [
                     ['tone' => 'green',  'pillTone' => 'good',     'icon' => 'check',  'label' => 'Available',   'state' => \App\Modules\Hani\Models\Examiner::STATE_AVAILABLE],
@@ -135,11 +198,8 @@
             @endif
         </form>
 
-        <p class="queue-meta">
-            <a href="{{ route('examiner-admin.create') }}">+ Add an examiner</a>
-        </p>
-
-        <table class="recent-activity-table">
+    <div class="exam-table-wrap">
+        <table class="data-table exam-table">
             <thead>
                 <tr>
                     <th>Name</th><th>Department</th><th>Faculty</th><th>Type</th>

@@ -2,12 +2,15 @@
 
 namespace App\Modules\Nureen\Workflows;
 
+use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use Illuminate\Support\Str;
+use App\Modules\Core\Models\User;
+use Carbon\CarbonInterface;
 
 /**
  * Graduate Assistantship extension requests.
@@ -22,7 +25,7 @@ use Illuminate\Support\Str;
  * stuck on step 1. Declaring the chain here puts it on the same footing as
  * everything else.
  */
-class GaExtensionWorkflow implements WorkflowModule
+class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents
 {
     public function key(): string
     {
@@ -81,5 +84,49 @@ class GaExtensionWorkflow implements WorkflowModule
     public function queueRoute(): string
     {
         return 'ga-extension.queue';
+    }
+
+    /**
+     * When the student's assistantship actually runs out.
+     *
+     * The requested new end date is shown only once it has been approved --
+     * before that it is a request, not a date, and putting it on a calendar
+     * would tell the student they have an extension they have not been given.
+     */
+    public function calendarEvents(User $user, CarbonInterface $from, CarbonInterface $to): array
+    {
+        if ($user->role !== Role::STUDENT) {
+            return [];
+        }
+
+        $applications = Application::query()
+            ->where('module_type', $this->key())
+            ->where('student_id', $user->id)
+            ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED])
+            ->get()
+            ->keyBy('id');
+
+        $details = GaExtensionDetail::whereIn('application_id', $applications->keys())->get();
+
+        $events = [];
+
+        foreach ($details as $detail) {
+            $approved = $applications[$detail->application_id]->status === Application::STATUS_APPROVED;
+            $date = $approved ? $detail->requested_new_end_date : $detail->current_end_date;
+
+            if (! $date?->betweenIncluded($from, $to)) {
+                continue;
+            }
+
+            $events[] = [
+                'date' => $date,
+                'title' => $approved ? 'GA appointment ends (extended)' : 'GA appointment ends',
+                'tone' => 'warn',
+                'meta' => $approved ? null : 'Extension still under review',
+                'url' => route('applications.show', $detail->application_id),
+            ];
+        }
+
+        return $events;
     }
 }

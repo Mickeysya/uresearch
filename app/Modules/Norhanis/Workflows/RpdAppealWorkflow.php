@@ -3,12 +3,15 @@
 namespace App\Modules\Norhanis\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Norhanis\Models\Candidacy;
 use App\Modules\Norhanis\Models\RpdAppealDetail;
+use Carbon\CarbonInterface;
 
 /**
  * RPD extension appeal — Supervisor → Chair → Non-Exec CGS → Dean of PGR.
@@ -21,7 +24,7 @@ use App\Modules\Norhanis\Models\RpdAppealDetail;
  * moves the masterlist deadline on the Dean's approval. This class only says
  * who signs.
  */
-class RpdAppealWorkflow implements WorkflowModule, ProvidesLinks
+class RpdAppealWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
 {
     public function key(): string
     {
@@ -96,5 +99,70 @@ class RpdAppealWorkflow implements WorkflowModule, ProvidesLinks
             ],
             default => [],
         };
+    }
+
+    /**
+     * The RPD deadline, plus the two reminder marks ahead of it.
+     *
+     * The milestones are not stored anywhere -- rpd_reminder_logs records what
+     * was SENT, not what is due -- so they are derived the same way the
+     * command derives them. Showing them matters: a student who can see the
+     * 3-month mark coming files an appeal instead of missing the deadline.
+     */
+    public function calendarEvents(User $user, CarbonInterface $from, CarbonInterface $to): array
+    {
+        $candidacies = Candidacy::with('student')
+            ->whereIn('status', [Candidacy::STATUS_ACTIVE, Candidacy::STATUS_EXTENDED])
+            ->when(
+                $user->role === Role::STUDENT,
+                fn ($q) => $q->where('student_id', $user->id),
+                // Staff see the cohort; anyone without a stake sees nothing.
+                fn ($q) => $q->when(
+                    ! in_array($user->role, [Role::NON_EXEC_CGS, Role::MANAGER_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR], true),
+                    fn ($inner) => $inner->whereRaw('1 = 0')
+                )
+            )
+            ->get();
+
+        $isStudent = $user->role === Role::STUDENT;
+        $events = [];
+
+        foreach ($candidacies as $candidacy) {
+            $who = $isStudent ? '' : $candidacy->student?->name.' — ';
+
+            if ($candidacy->rpd_deadline->betweenIncluded($from, $to)) {
+                $events[] = [
+                    'date' => $candidacy->rpd_deadline,
+                    'title' => $who.'RPD deadline',
+                    'tone' => $candidacy->isOverdue() ? 'critical' : 'warn',
+                    'meta' => Candidacy::programmeTypes()[$candidacy->programme_type] ?? null,
+                    'url' => $isStudent ? route('candidacies.mine') : route('candidacies.index'),
+                ];
+            }
+
+            // Only the student is warned ahead of time; staff have the
+            // masterlist for that and do not want three rows per student.
+            if (! $isStudent) {
+                continue;
+            }
+
+            foreach ([3, 2, 1] as $milestone) {
+                $mark = $candidacy->rpd_deadline->copy()->subMonthsNoOverflow($milestone);
+
+                if (! $mark->betweenIncluded($from, $to) || $mark->isPast()) {
+                    continue;
+                }
+
+                $events[] = [
+                    'date' => $mark,
+                    'title' => $milestone.'-month RPD reminder',
+                    'tone' => 'info',
+                    'meta' => 'Deadline '.$candidacy->rpd_deadline->format('j M Y'),
+                    'url' => $candidacy->canAppeal() ? route('rpd-appeal.create') : route('candidacies.mine'),
+                ];
+            }
+        }
+
+        return $events;
     }
 }

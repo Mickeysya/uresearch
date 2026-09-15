@@ -3,7 +3,9 @@
 use App\Modules\Core\Http\Controllers\AdminController;
 use App\Modules\Core\Http\Controllers\ApplicationTrackingController;
 use App\Modules\Core\Http\Controllers\DashboardController;
+use App\Modules\Core\Http\Controllers\CalendarController;
 use App\Modules\Core\Http\Controllers\DocumentController;
+use App\Modules\Core\Http\Controllers\DocumentLibraryController;
 use App\Modules\Core\Http\Controllers\LoginController;
 use App\Modules\Core\Http\Controllers\NotificationController;
 use App\Modules\Core\Http\Controllers\PageController;
@@ -34,9 +36,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
 
+    // Every file this user may see, in one list. Reads application_documents
+    // through the same visibility rule documents.show enforces.
+    Route::get('/documents', [DocumentLibraryController::class, 'index'])->name('documents.index');
+
+    // A month grid over dates the modules already own -- no events table.
+    Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar.index');
+
     // Sidebar destinations with no feature behind them yet -- see PageController.
-    Route::get('/documents', [PageController::class, 'documents'])->name('documents.index');
-    Route::get('/calendar', [PageController::class, 'calendar'])->name('calendar.index');
     Route::get('/help', [PageController::class, 'help'])->name('help.index');
     // The signed-in user's own record. Contact details and password are
     // separate routes on purpose — see ProfileController.

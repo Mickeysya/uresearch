@@ -408,6 +408,50 @@ query; there is no placeholder data in the views.
       | GA Certification | 4 | Request details · Review |
       | Attendance Appeal | 3 | Appeal details · Review |
 
+- [x] **Documents and Calendar are real pages now (2026-09-15).** Both were
+      `PageController` placeholders.
+      **Documents** (`/documents`) lists `application_documents` — no new table,
+      no new storage; the files were always there, just only reachable through
+      whichever application they hung off. Filterable by module, searchable by
+      name/type/reference/student. The visibility rule moved out of
+      `DocumentController::show()` onto `ApplicationDocument::visibleTo()` and a
+      matching `scopeVisibleTo()`, because **two copies of an access rule is how
+      a list ends up naming files the download route then refuses** — or worse,
+      the other way round. One definition, two callers, and a test asserting a
+      student sees only their own.
+      **Calendar** (`/calendar`) is a month grid over dates the modules already
+      own, plus a "Coming up" list that looks a year ahead — a month view alone
+      never answers "what is next": open it in March and December's deadline is
+      invisible. New optional contract `SuppliesCalendarEvents`, discovered by
+      `ModuleRegistry` exactly like `ProvidesLinks`, so **Core names no
+      teammate's class**. Suppliers: RPD deadlines + the 3/2/1 reminder marks
+      (Norhanis), travel windows, conference dates, GA appointment end
+      (Nureen), re-viva correction/hardbound deadlines (Hani). A supplier that
+      throws is skipped and reported rather than blanking the page for
+      everyone. There is deliberately **no `events` table** — a second copy of
+      dates already recorded is only a second thing to keep in sync.
+- [x] **Stepper sweep (2026-09-15).** Checked every form in the repo; **two**
+      warranted it and the rest do not:
+      **Attendance upload** — its headings already read "1.", "2.", "3.", so it
+      was a three-step procedure written as one scroll. Steps 1 and 2 carry no
+      fields, which the stepper handles: the gate passes trivially and the
+      generated review skips a step with nothing filled in.
+      **Examiner nomination** — Candidate / Examiners / Notes were three
+      distinct decisions on one page.
+      **Left alone, on purpose:** the profile page (two *independent* forms —
+      a wizard would break both), login (2 fields), the queue decision forms
+      (inline per-row actions), the documents search, and "Add an examiner"
+      (5 fields that are all one question, "who is this person"). A wizard
+      around a single coherent group is an extra click for nothing.
+- [x] **Examiner Pool made a real dashboard (2026-09-15).** It sat in a
+      `.card.card-wide`, which caps at 680px — that is why the fourth stat card
+      wrapped onto its own row and a seven-column table scrolled sideways on a
+      1900px monitor. Full-width page now (1320px cap), stat cards on
+      `auto-fit` so they stay even at any width instead of leaving a 3+1
+      orphan, the filter bar as its own surface, the table on `.data-table` in
+      a bordered well. Also fixed while there: the state badges carried
+      hard-coded light-mode hexes and stayed light on the dark theme — they use
+      the status tokens now.
 - [x] **The wizard re-laid out (2026-09-15).** The first cut kept the form in
       a 680px card with the rail stacked under the page heading, which wasted
       most of a desktop screen and repeated the title above a rail that

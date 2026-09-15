@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Services;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use InvalidArgumentException;
 
@@ -96,6 +97,46 @@ class ModuleRegistry
         }
 
         return $links;
+    }
+
+    /**
+     * Dated things every module wants on this user's calendar.
+     *
+     * Same shape as linksFor(): ask each module, merge, let Core lay out the
+     * result. A module that owns no dates implements nothing and costs
+     * nothing. Each supplier scopes its own rows -- Core cannot know whose
+     * travel window this user is allowed to see.
+     *
+     * A supplier that throws is skipped rather than taking the page down
+     * with it: one teammate's half-finished query should not blank the
+     * calendar for everyone.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function calendarEventsFor(
+        \App\Modules\Core\Models\User $user,
+        \Carbon\CarbonInterface $from,
+        \Carbon\CarbonInterface $to
+    ): array {
+        $events = [];
+
+        foreach ($this->modules as $key => $module) {
+            if (! $module instanceof SuppliesCalendarEvents) {
+                continue;
+            }
+
+            try {
+                foreach ($module->calendarEvents($user, $from, $to) as $event) {
+                    $events[] = $event + ['module' => $module->label(), 'module_key' => $key];
+                }
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        usort($events, fn ($a, $b) => $a['date'] <=> $b['date']);
+
+        return $events;
     }
 
     /**
