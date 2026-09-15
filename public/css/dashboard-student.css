@@ -499,3 +499,78 @@
     .sdash-row-side { display: none; }
 }
 
+
+/* ---- one screen at desktop size -------------------------------------
+   Shared by all three .sdash dashboards (student, CGS, admin).
+
+   Everything above is natural-height: the page grows and scrolls. Above
+   1200px wide and 700px tall -- a maximised desktop window, which is
+   also where the panels sit side by side rather than stacked -- the grid
+   is pinned to the viewport instead and the panel bodies scroll inside
+   themselves.
+
+   This is NOT the fixed-budget layout that was reverted. That one put
+   the grid at overflow: hidden with no internal scroll, so a panel with
+   more rows than usual was silently cut off. The difference is the last
+   rule in this block: .sdash-card-body scrolls. A panel that outgrows
+   its share gets a scrollbar, never a cut edge -- which is what makes
+   pinning the height safe this time.
+
+   Below either threshold the query stops applying and the page goes
+   back to natural height. That is the right answer on a laptop in a
+   split window or a phone: no layout fits four panels into 500px and
+   stays readable.
+
+   --sdash-chrome is the calibration knob: the 64px sticky header, its
+   24px margin-bottom, and .main-content's 32px bottom padding. Change
+   any of those three and change this with them.
+   -------------------------------------------------------------------- */
+
+@media (min-width: 1201px) and (min-height: 700px) {
+    .sdash {
+        --sdash-chrome: 120px;
+        height: calc(100dvh - var(--sdash-chrome));
+    }
+
+    /* The panel rows take whatever the banner and stat cards leave.
+       minmax(0, 1fr) rather than 1fr: a grid row's default minimum is
+       auto, which lets a tall panel push the grid past the viewport and
+       brings the page scrollbar straight back. */
+    .sdash             { grid-template-rows: auto auto minmax(0, 1fr); }
+
+    .sdash.sdash-cgs,
+    .sdash.sdash-admin { grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 1fr); }
+
+    .sdash-panels { min-height: 0; }
+
+    .sdash-col {
+        min-height: 0;
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    /* Attendance Overview carries a gauge, a three-band legend, two
+       figures and a footer note; Upcoming Tasks carries a handful of
+       rows and then stops. An even split starved the first and left the
+       second half empty, so the right column is weighted rather than
+       halved. */
+    .sdash-col.sdash-col-right {
+        grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr);
+    }
+
+    .sdash-card { min-height: 0; }
+
+    /* The rule that makes all of the above safe: a panel with more rows
+       than its share scrolls instead of being cut off.
+
+       The bar itself is hidden -- same two-line pattern as .form-steps
+       in layout.css. scrollbar-width covers Firefox, ::-webkit-scrollbar
+       covers Chrome and Safari; the content still scrolls by wheel,
+       trackpad, touch and keyboard, there is just nothing drawn. */
+    .sdash-card-body {
+        min-height: 0;
+        overflow-y: auto;
+        scrollbar-width: none;
+    }
+
+    .sdash-card-body::-webkit-scrollbar { display: none; }
+}

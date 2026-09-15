@@ -8,8 +8,11 @@
         <h2>GA/GRA Certification Letter Request</h2>
         <div class="card-divider"></div>
 
-        <form method="POST" action="{{ route('ga-certification.store') }}">
+        <form method="POST" action="{{ route('ga-certification.store') }}" data-stepper>
             @csrf
+
+            <fieldset class="fstep" data-label="Request details">
+            <p class="fstep-hint">The appointment the letter should certify, and what you need it for.</p>
 
             <label for="appointment_type">Appointment Type</label>
             <select name="appointment_type" id="appointment_type" required
@@ -38,9 +41,11 @@
                    value="{{ old('purpose') }}"
                    class="@error('purpose') is-invalid @enderror">
             @error('purpose') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
             <button type="submit">Submit Request</button>
         </form>
     </div>
 </div>
+@include('core::partials.form-stepper')
 @endsection

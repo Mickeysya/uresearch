@@ -8,8 +8,11 @@
         <h2>Student Claims Application</h2>
         <div class="card-divider"></div>
 
-        <form method="POST" action="{{ route('claims.store') }}" enctype="multipart/form-data" class="app-form">
+        <form method="POST" action="{{ route('claims.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
+
+            <fieldset class="fstep" data-label="Claim details">
+            <p class="fstep-hint">What the claim is for and where the money should go. The total is added up from your expense items on the next step — there is no field for it.</p>
 
             <label for="purpose_of_claim">Purpose of Claim</label>
             <input type="text" name="purpose_of_claim" id="purpose_of_claim" required
@@ -30,7 +33,11 @@
             {{-- Total claim amount and balance are computed server-side from the
                  items below, so there is no input field for them here. --}}
 
-            <h3 style="margin-top: 24px; margin-bottom: 4px;">Expense Items</h3>
+            </fieldset>
+
+            <fieldset class="fstep" data-label="Expenses">
+            <p class="fstep-hint">One row per expense. The total and the balance after any cash advance are worked out server-side from these.</p>
+
             @error('items') <p class="field-error">{{ $message }}</p> @enderror
 
             <div id="items-container">
@@ -69,11 +76,14 @@
             <input type="file" name="receipt" id="receipt"
                    class="@error('receipt') is-invalid @enderror">
             @error('receipt') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
             <button type="submit">Submit Application</button>
         </form>
     </div>
 </div>
+
+@include('core::partials.form-stepper')
 
 <template id="item-row-template">
     <div class="claim-item-row" data-index="__INDEX__">

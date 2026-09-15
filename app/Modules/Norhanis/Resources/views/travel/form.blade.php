@@ -8,8 +8,12 @@
         <h2>Travel Application</h2>
         <div class="card-divider"></div>
 
-        <form method="POST" action="{{ route('travel.store') }}" enctype="multipart/form-data" class="app-form">
+        <form method="POST" action="{{ route('travel.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
+
+            <fieldset class="fstep" data-label="Trip details">
+            <p class="fstep-hint">Where you are going, when, and why. The
+               duration is worked out from the dates.</p>
 
             <label for="type_of_request">Type of Request</label>
             <select name="type_of_request" id="type_of_request" required
@@ -58,6 +62,15 @@
                        @checked(old('is_international'))>
                 <label for="is_international">International Travel</label>
             </div>
+            </fieldset>
+
+            {{-- International travel routes through CGS and the Dean as well,
+                 so which of these two steps you are on does not change the
+                 chain -- TravelWorkflow::stages() decides that from
+                 is_international on submit. --}}
+            <fieldset class="fstep" data-label="Contact &amp; documents">
+            <p class="fstep-hint">Who to reach if something goes wrong while
+               you are away, and anything supporting the request.</p>
 
             <label for="contact_person_name">Contact Person Name</label>
             <input type="text" name="contact_person_name" id="contact_person_name"
@@ -71,9 +84,12 @@
             <input type="file" name="supporting_document" id="supporting_document"
                    class="@error('supporting_document') is-invalid @enderror">
             @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
             <button type="submit">Submit Application</button>
         </form>
     </div>
 </div>
+
+@include('core::partials.form-stepper')
 @endsection

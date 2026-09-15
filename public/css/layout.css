@@ -23,10 +23,10 @@
    ============================================================ */
 
 /* (override) uresearch.css paints a fixed UTP photograph across the
-   whole body. It reads as texture behind a light page and as grime
-   behind a dark one, so the dark theme drops it for a very slight
-   vertical lift instead -- flat near-black looks broken on an OLED
-   panel, and a 2% gradient is enough to stop that. */
+   whole body. The light sketch reads as grime behind a dark page, so
+   the dark theme swaps in the dark plate instead. Only the image is
+   swapped -- size/position/attachment/repeat are already set on body
+   by uresearch.css and carry over, so the two stay in register. */
 body {
     background-color: var(--page-bg);
     color: var(--text-dark);
@@ -37,12 +37,12 @@ body {
 }
 
 :root[data-theme="dark"] body {
-    background-image: linear-gradient(180deg, #151923 0%, var(--page-bg) 420px);
+    background-image: url('../images/background_utp_dark.jpeg');
 }
 
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) body {
-        background-image: linear-gradient(180deg, #151923 0%, var(--page-bg) 420px);
+        background-image: url('../images/background_utp_dark.jpeg');
     }
 }
 
@@ -60,6 +60,15 @@ body,
     transition: background-color var(--duration-base) var(--ease),
                 border-color var(--duration-base) var(--ease),
                 color var(--duration-base) var(--ease);
+}
+
+/* Any author rule that sets `display` beats the UA sheet's
+   [hidden] { display: none } no matter how specific it is -- so once
+   `button` here declares display, el.hidden silently stops working.
+   This is the one place !important earns its keep: `hidden` must mean
+   hidden, everywhere, whatever else a component declares. */
+[hidden] {
+    display: none !important;
 }
 
 /* ============================================================
@@ -255,12 +264,114 @@ textarea {
     min-height: 84px;
 }
 
-/* The native control is a light-mode bitmap in most browsers; this
-   inverts the calendar and spinner glyphs so they stay visible. */
+/* ---- select ------------------------------------------------------
+   The native arrow is a different shape, size and colour on every
+   platform, which is why a row of selects never quite matches the
+   text inputs above it. appearance:none drops it and a chevron is
+   drawn in its place, on the same grid as everything else.
+
+   The chevron is a background data: URI, so its colour has to be
+   baked in -- a data: URI cannot read a custom property, and a select
+   cannot carry a pseudo-element to mask one onto. Hence two rules.
+   Both values ARE the token values (--text-grey light / dark); if you
+   change those in tokens.css, change these with them.
+
+   Not applied to a multiple/size select: those render as a list box
+   with no arrow to replace, and the padding would just indent them.
+   ------------------------------------------------------------------ */
+select:not([multiple]):not([size]) {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: var(--space-10);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A94A6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--space-3) center;
+    background-size: 16px 16px;
+    cursor: pointer;
+}
+
+:root[data-theme="dark"] select:not([multiple]):not([size]) {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238E99AC' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) select:not([multiple]):not([size]) {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238E99AC' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    }
+}
+
+/* The chevron turns navy on focus, matching the border. */
+select:not([multiple]):not([size]):focus {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23284B80' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+:root[data-theme="dark"] select:not([multiple]):not([size]):focus {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238AB0EE' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+/* The option LIST is drawn by the operating system and cannot be
+   styled -- but `color-scheme` on :root (tokens.css) is what tells it
+   to draw dark, so it already follows the theme. That is the whole
+   reason color-scheme is declared there rather than assumed. */
+
+/* ---- date and time ----------------------------------------------
+   The picker panel is browser chrome and follows `color-scheme` the
+   same way. What IS styleable is the indicator that opens it: it is
+   given the field's full height so the whole right edge is the hit
+   target rather than a 12px glyph, and dimmed until hover.
+   ------------------------------------------------------------------ */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"],
+input[type="week"] {
+    cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="week"]::-webkit-calendar-picker-indicator {
+    padding: var(--space-2);
+    margin-right: calc(var(--space-2) * -1);
+    border-radius: var(--radius-sm);
+    opacity: 0.55;
+    cursor: pointer;
+    transition: opacity var(--duration-fast) var(--ease),
+                background-color var(--duration-fast) var(--ease);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    background-color: var(--surface-hover);
+}
+
+/* An empty date field shows mm/dd/yyyy at full text weight, which
+   reads as a filled value. Dim it to placeholder weight until there
+   is something real in it. */
+input[type="date"]:not(:focus):invalid,
+input[type="date"]:not(:focus):placeholder-shown {
+    color: var(--text-grey);
+}
+
+/* The native glyph is a dark bitmap in most browsers, so it vanishes
+   on a dark field. Invert only -- the dimming is done by `opacity`
+   below, and doing it here as well would multiply the two. */
 :root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
 :root[data-theme="dark"] input[type="datetime-local"]::-webkit-calendar-picker-indicator,
 :root[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(1) opacity(0.65);
+    filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) input[type="date"]::-webkit-calendar-picker-indicator,
+    :root:not([data-theme="light"]) input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+    :root:not([data-theme="light"]) input[type="time"]::-webkit-calendar-picker-indicator {
+        filter: invert(1);
+    }
 }
 
 /* File inputs: the browser's intrinsic inline-block sizing does not
@@ -745,6 +856,207 @@ button[value="rejected"]:hover {
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
     :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+}
+
+/* ============================================================
+   10b · Multi-step forms
+
+   Built by core::partials.form-stepper. Everything here is inert until
+   that script runs -- .fstep has no `display: none`, so a form with
+   JavaScript off is still one long page with one submit button.
+   ============================================================ */
+
+/* ---- the progress rail ---- */
+.form-steps {
+    display: flex;
+    list-style: none;
+    margin: 0 0 var(--space-8);
+    padding: 0 0 var(--space-2);
+    counter-reset: fstep;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.form-steps::-webkit-scrollbar { display: none; }
+
+.form-step {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    text-align: center;
+}
+
+/* The connector is drawn by each step except the first, reaching back
+   to the one before it -- so it never overhangs either end of the rail. */
+.form-step + .form-step::before {
+    content: '';
+    position: absolute;
+    top: 15px;
+    right: 50%;
+    left: -50%;
+    height: 2px;
+    background: var(--border-grey);
+    z-index: 0;
+}
+
+.form-step.is-current + .form-step::before,
+.form-step.is-done::before,
+.form-step.is-done + .form-step::before {
+    background: var(--accent-solid);
+}
+
+.form-step-dot {
+    position: relative;
+    z-index: 1;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    border: 2px solid var(--border-strong);
+    color: var(--text-grey);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    transition: background-color var(--duration-base) var(--ease),
+                border-color var(--duration-base) var(--ease),
+                color var(--duration-base) var(--ease);
+}
+
+.form-step.is-current .form-step-dot {
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--text-on-accent);
+    box-shadow: var(--shadow-focus);
+}
+
+/* A finished step swaps its number for a tick: the number has done its
+   job once you are past it, and the tick says "this one is fine". */
+.form-step.is-done .form-step-dot {
+    background: var(--success-fg);
+    border-color: var(--success-fg);
+    color: transparent;
+}
+
+.form-step.is-done .form-step-dot::after {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 10px;
+    border: solid var(--text-on-accent);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.form-step-label {
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+    line-height: var(--leading-tight);
+}
+
+.form-step.is-current .form-step-label {
+    color: var(--text-dark);
+    font-weight: var(--weight-semi);
+}
+
+.form-step.is-done .form-step-label {
+    color: var(--text-body);
+}
+
+/* ---- a step ---- */
+.fstep {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;        /* a fieldset will not shrink below its content without this */
+}
+
+.fstep[hidden] { display: none; }
+
+.fstep-hint {
+    color: var(--text-grey);
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-5);
+}
+
+/* ---- Back / Continue / Submit ---- */
+.fstep-nav {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    margin-top: var(--space-8);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--border-subtle);
+}
+
+/* Back sits hard left, the forward action hard right, so the primary
+   action is always in the same place whichever step you are on. */
+.fstep-nav .btn-secondary { margin-right: auto; }
+
+.fstep-nav [hidden] { display: none; }
+
+/* Overrides uresearch.css's .app-form > button centring, which assumed
+   the submit was a direct child of the form. It now lives in here. */
+.fstep-nav button[type="submit"] {
+    display: inline-flex;
+    margin: 0;
+}
+
+/* ---- the generated review ---- */
+.freview-group + .freview-group {
+    margin-top: var(--space-6);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.freview-group h4 {
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--text-grey);
+}
+
+.freview-list {
+    display: grid;
+    grid-template-columns: minmax(120px, 34%) 1fr;
+    gap: var(--space-2) var(--space-4);
+    margin: 0;
+}
+
+.freview-list dt {
+    color: var(--text-grey);
+    font-size: var(--text-sm);
+}
+
+.freview-list dd {
+    margin: 0;
+    color: var(--text-dark);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+    /* Labels stop being readable once four of them share a phone's width,
+       so below this the rail is dots only and the step's own heading in
+       the card says where you are. */
+    .form-step-label { display: none; }
+
+    .form-step { min-width: 0; }
+
+    .freview-list {
+        grid-template-columns: 1fr;
+        gap: 0 0;
+    }
+
+    .freview-list dd { margin-bottom: var(--space-3); }
 }
 
 /* ============================================================

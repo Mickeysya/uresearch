@@ -157,6 +157,68 @@ Status colours are paired — `--danger-fg` is contrast-checked against
 `--danger-bg` at WCAG AA, so use them together and the result is legible in
 both themes. Mixing a `-fg` with an arbitrary background is not covered.
 
+### Icons and controls
+
+**Every UI icon is `stroke="currentColor"`** — `dashboard/partials/icon.blade.php`
+and the three sidebar navs. That is what makes them theme for free: set a
+colour on the container and the icon follows. Never put a `fill` or `stroke`
+hex on an interface icon. The only exceptions are the two banner
+illustrations, which are artwork on a navy banner that is navy in both themes.
+
+`select` drops the native arrow and draws its own chevron, so a row of
+selects lines up with the text inputs above it. The chevron is a
+`background-image` data: URI, which **cannot read a custom property** — a
+select can carry no pseudo-element to mask one onto — so its colour is baked
+in and there is a light rule and a dark rule. Those hex values are
+`--text-grey` in each theme; change one in `tokens.css` and change them here.
+
+The `option` list and the date picker panel are drawn by the operating
+system and cannot be styled at all. They follow the theme because
+`tokens.css` declares `color-scheme` on `:root` — that is what that property
+is for, and it is why there is no custom date-picker widget in this project.
+
+### Forms
+
+A form past about eight fields should be a wizard rather than one long
+scroll. Add `data-stepper` to the `<form>`, wrap each section in a
+`<fieldset class="fstep" data-label="...">`, and include the partial:
+
+```blade
+<form method="POST" action="..." enctype="multipart/form-data" data-stepper>
+    @csrf
+    <fieldset class="fstep" data-label="Trip details">
+        <p class="fstep-hint">One line saying what this step is for.</p>
+        ...fields...
+    </fieldset>
+    <fieldset class="fstep" data-label="Documents">...fields...</fieldset>
+    <button type="submit">Submit Application</button>
+</form>
+
+@include('core::partials.form-stepper')
+```
+
+That is the whole API. The progress rail, Back/Continue, and a **generated
+review step** are built by `core::partials.form-stepper`. Your submit button
+is moved into the step nav and shown only on the last step.
+
+**Nothing changes on the server.** The form still POSTs once, to the same
+route, with the same fields — `$request->validate()` is untouched. A
+server-side wizard would need session state, partial validation and resume
+logic, and a student cannot tell the difference.
+
+**Do not write a review step.** It is generated from the form's own controls,
+so it cannot drift from the fields and no module maintains one.
+
+**It degrades.** Nothing has `display: none` until the script runs, so with
+JavaScript off the form is exactly what it was: one page, one submit. The
+per-step gate is `checkValidity()` only — the server re-checks everything, so
+the gate is a courtesy, never a control.
+
+**A rejected submission reopens on the failing step**, found via
+`.is-invalid` / `.field-error`. Keep rendering those in your fields
+(`@error(...) <p class="field-error">` and the `is-invalid` class) or a
+student lands on step 1 while the error sits on step 3.
+
 Module views inherit the shell. `.card`, `.card-container-inline`, a plain
 `<form>`, `<table class="data-table">` and `.status-badge` are already styled —
 if you are writing CSS for a form, check you actually need it first.

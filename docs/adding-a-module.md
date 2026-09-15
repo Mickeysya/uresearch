@@ -178,6 +178,32 @@ Three files under `app/Modules/<You>/Resources/views/conference/`:
 
 **`form.blade.php`** — extend `core::layouts.app`, use `.card.card-wide`.
 
+If it runs past about eight fields, make it a wizard. Two edits, no
+controller change — see the Forms section in `docs/conventions.md`:
+
+```blade
+<form method="POST" action="{{ route('conference.store') }}"
+      enctype="multipart/form-data" data-stepper>
+    @csrf
+
+    <fieldset class="fstep" data-label="Conference">
+        <p class="fstep-hint">Which conference, and when.</p>
+        ...fields...
+    </fieldset>
+
+    <fieldset class="fstep" data-label="Documents">
+        ...fields...
+    </fieldset>
+
+    <button type="submit">Submit Application</button>
+</form>
+
+@include('core::partials.form-stepper')
+```
+
+The progress rail, Back/Continue, and a generated review step are all built
+for you. The form still POSTs once, to the same route, with the same fields.
+
 **`queue.blade.php`** — the whole file:
 
 ```blade

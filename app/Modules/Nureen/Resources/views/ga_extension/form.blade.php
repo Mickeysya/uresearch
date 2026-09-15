@@ -8,8 +8,11 @@
         <h2>GA Extension Application</h2>
         <div class="card-divider"></div>
 
-        <form method="POST" action="{{ route('ga-extension.store') }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ route('ga-extension.store') }}" enctype="multipart/form-data" data-stepper>
             @csrf
+
+            <fieldset class="fstep" data-label="Extension details">
+            <p class="fstep-hint">Your current end date, the date you are asking for, and why.</p>
 
             <label for="current_end_date">Current GA End Date</label>
             <input type="date" name="current_end_date" id="current_end_date" required
@@ -28,7 +31,12 @@
                       class="@error('reason_for_extension') is-invalid @enderror">{{ old('reason_for_extension') }}</textarea>
             @error('reason_for_extension') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="supporting_document">Supporting Document <span style="color: var(--text-grey)">(required)</span></label>
+            </fieldset>
+
+            <fieldset class="fstep" data-label="Supporting document">
+            <p class="fstep-hint">Required. An application without it is rejected here rather than reaching CGS.</p>
+
+            <label for="supporting_document"> <span style="color: var(--text-grey)">(required)</span></label>
             <input type="file" name="supporting_document" id="supporting_document" required
                    class="@error('supporting_document') is-invalid @enderror">
             @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
@@ -36,9 +44,11 @@
                 PDF, image or Office document, up to 10&nbsp;MB. Incomplete applications
                 are rejected here rather than reaching CGS.
             </p>
+            </fieldset>
 
             <button type="submit">Submit Application</button>
         </form>
     </div>
 </div>
+@include('core::partials.form-stepper')
 @endsection

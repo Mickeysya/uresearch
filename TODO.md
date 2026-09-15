@@ -378,6 +378,74 @@ query; there is no placeholder data in the views.
       make it work. The chart tooltip and the six stat-card category discs are
       deliberately still literal — both are saturated surfaces carrying white
       text and read correctly on either ground.
+- [x] **All seven student application forms are now wizards (2026-09-15).**
+      Publication was 29 fields on one scroll, Claims 18, Travel 10 — the
+      complaint was that "My Applications" forms were one long messy form.
+      `core::partials.form-stepper` turns a form into a stepped one from two
+      edits: `data-stepper` on the `<form>`, and each section wrapped in
+      `<fieldset class="fstep" data-label="...">`. It builds the progress
+      rail, Back/Continue, and a **generated review step** — read back out of
+      the form's own controls, so it cannot drift from the fields and no
+      module has to write one.
+      **Client-side on purpose.** The form still POSTs once, to the same
+      route, with the same fields; no controller and no `validate()` call
+      changed. A server-side wizard needs session state, partial validation
+      and resume logic, and a student cannot tell the difference.
+      **It degrades**: nothing is hidden until the script runs, so with
+      JavaScript off each form is exactly what it was. The per-step gate is
+      `checkValidity()` only; the server re-checks everything.
+      **A rejected submission reopens on the failing step**, found via
+      `.is-invalid`/`.field-error` — landing on step 1 when the error is on
+      step 3 is the classic way a wizard wastes someone's time.
+
+      | Form | Fields | Steps |
+      |---|---|---|
+      | Publication | 29 | Paper · Cost · Authors · Documents · Review |
+      | Claims | 18 | Claim details · Expenses · Review |
+      | Travel | 10 | Trip details · Contact & documents · Review |
+      | GA Extension | 4 | Extension details · Supporting document · Review |
+      | Supervision | 3 | Supervisor · Supporting document · Review |
+      | GA Certification | 4 | Request details · Review |
+      | Attendance Appeal | 3 | Appeal details · Review |
+
+- [ ] **The four short forms gained the least.** Three or four fields behind a
+      two-step wizard is an extra click for a review of something already on
+      screen; the three long ones are where the win is. Kept for consistency
+      and because a confirmation before something goes to four approvers is
+      defensible — but if the team dislikes it, reverting one is deleting its
+      `<fieldset class="fstep">` wrapper and the include. Worth asking the
+      other five what they think after a demo.
+- [x] **Fixed while building it: `el.hidden` had silently stopped working on
+      buttons.** `layout.css` gives `button` a `display`, and an author rule
+      beats the UA sheet's `[hidden] { display: none }` at any specificity —
+      so both "Continue" and "Submit" rendered on every step. There is now one
+      global `[hidden] { display: none !important }`, which is the one place
+      `!important` earns it: `hidden` has to mean hidden whatever a component
+      declares.
+- [x] **Controls polished (2026-09-15).** `select` drops the native arrow for
+      a chevron on the same grid as everything else, so a row of selects
+      finally lines up with the text inputs above it; the chevron turns navy
+      on focus with the border. Date/time fields get a full-height picker
+      target, dimmed until hover, and an empty one shows `mm/dd/yyyy` at
+      placeholder weight rather than as if it were filled in.
+      Icons needed no work — they were already `stroke="currentColor"`
+      throughout, which is why they themed correctly from the start.
+- [ ] **No custom date picker, deliberately.** The panel is browser chrome and
+      already follows the theme through `color-scheme`. Replacing it means
+      300-odd lines of JavaScript plus keyboard, locale and screen-reader
+      handling, to land somewhere worse than the native control on a phone.
+      Revisit only if CGS actually asks for something the native one cannot
+      do, like disabling weekends or marking deadlines.
+- [x] **Dark background plate** — `public/images/background_utp_dark.jpeg`,
+      supplied by Sharvin, replaces the gradient the dark theme started with.
+      Only `background-image` is swapped; size, position, attachment and
+      repeat are already set on `body` by `uresearch.css` and carry over, so
+      the two plates stay in register.
+- [ ] **That plate is 2.7 MB against the light one's 138 KB** — 20x, on every
+      dark-mode page load. It is 2400x1792 for a `background-size: cover`
+      layer, so it can be resized and recompressed well under 300 KB with no
+      visible loss (GD is available in the app container). Worth doing before
+      the FYP demo, especially on conference wifi.
 - [x] **The shared shell redesigned** in `layout.css`: cards, the full set of
       form controls (including the ones nobody had styled — search, tel, url,
       time, file), three button kinds, status badges, four flash tones,
