@@ -19,9 +19,9 @@ Add a row here in the same commit that registers the workflow.
 | `supervision` | Supervisor Appointment | Nureen | built |
 | `ga_certification` | GA/GRA Certification Letter | Nureen | built |
 | `re_viva` | Re-examination Monitoring | Hani | built |
-| `hardbound_submission` | Hardbound Submission | Jason | planned |
-| `hardbound_appeal` | Appeal Hardbound Submission | Jason | planned |
-| `appointment_letter` | Appointment Letter & Report Management | Jason | planned |
+| `hardbound_submission` | Hardbound Submission | Jason | built |
+| `hardbound_appeal` | Appeal Hardbound Submission | Jason | built |
+| `appointment_letter` | Appointment Letter & Report Management | Jason | built |
 | `workstation` | Workstation Management | Chloe | planned |
 | `candidacy_reminder` | Study Candidacy Reminder | Chloe | planned · see overlap note |
 | `candidacy_appeal` | Study Candidacy Appeal | Chloe | planned · see overlap note |

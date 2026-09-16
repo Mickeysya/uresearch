@@ -25,7 +25,7 @@ as the work it describes.
 | Admin dashboard (5 cards + 4 panels, system health) | done |
 | Notification feed (`/notifications`) | done |
 | Audit log (`/admin/audit-logs`, spatie/activitylog) | done |
-| Jason — Hardbound Submission · Appeal · Appointment Letters | scoped, not started |
+| Jason — Hardbound Submission · Appeal · Appointment Letters | done |
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
@@ -816,51 +816,123 @@ exist and already carry this shape of chain elsewhere. `senior_exec_cgs` is
 declared but unused by any built module, and unseeded — see the cross-cutting
 note below.
 
-- [ ] **Hardbound Submission** (`hardbound_submission`) — Non-Executive CGS
-      → Senior Executive CGS
-  - [ ] `hardbound_submission_details` table: thesis title, matric number,
-        programme, supervisor
-  - [ ] Thesis PDF + clearance form uploads via `DocumentStore`
-  - [ ] Non-Exec review screen — forward to Senior Exec, or return to the
+- [x] **Hardbound Submission** (`hardbound_submission`) — Supervisor →
+      Chairman of the Viva Voce Examination (the `chair` role) → Non-Executive
+      CGS. The first two *sign* the Confirmation of Correction to Thesis as
+      they approve (below). The
+      spec's Senior Executive sign-off was dropped on 2026-09-14: a
+      completeness check does not need it, and with no `senior_exec_cgs`
+      account seeded it stalled every submission for everyone but one machine.
+  - [x] `hardbound_submission_details` table: thesis title, matric number,
+        programme, supervisor. Captured at submission rather than read back
+        off `users`, so a candidate who later changes programme or
+        supervisor does not retroactively change what CGS reviewed.
+  - [x] Both CGS forms are reproduced from the issued originals. The
+        **Hardbound Thesis Submission (UTP/CGS/021)**, ORIGINAL and STUDENT'S
+        COPY, is generated pre-filled with the student's name, matric and
+        programme for them to complete, sign and upload — the student signs
+        this one themselves. The **Confirmation of Correction to Thesis
+        (UTP/CGS/017A)** is generated from the details the student supplies
+        (programme, viva date, supervisor, co-supervisor, title) and carried
+        through the chain.
+  - [x] **Electronic signatures on the Confirmation.** 017A's signatories
+        are the Supervisor, the Internal/External Examiner and the Chairman
+        of the Viva Voce Examination. The Supervisor and the Chairman
+        (`chair`) each upload a signature image once at "My Signature"
+        (`hardbound_signatures`, private disk); every approval regenerates
+        the Confirmation with that approver's signature and the approval date
+        stamped into their block, replacing the archived copy, so the
+        application always carries one current version. Approving at those
+        two stages without a signature on file redirects to the upload page;
+        rejecting needs none. The signature and date come from the
+        `approval_history` row the engine wrote, so the stamped form and the
+        audit trail cannot disagree. **The Examiner block is left for a
+        physical signature and official stamp** — examiners have no login.
+        CGS has no block on 017A; its signature belongs on paper in 021's
+        office block.
+  - [x] Non-Exec review screen — forward to Senior Exec, or return to the
         student with mandatory comments
-  - [ ] Senior Exec approve/reject, auto-email on approval
-  - [ ] Resubmission form for a returned application
-  - [ ] **Open question, resolve before building the review stage:** the
-        spec wants "return to student, application stays open," but
-        `WorkflowEngine::decide()` currently only knows approve (advance) and
-        reject (terminate, freeze `current_stage`). Decide whether "returned"
-        is a new outcome the engine needs to support, or whether a return is
-        modelled as a rejection that the resubmission form clones into a
-        fresh application. This is a `WorkflowEngine` change either way, so
-        raise it with the team first, same as any other Core change.
+  - [x] Every stage's approve/reject emails the student (the engine's
+        `ApplicationDecided`); CGS's approval also issues an acknowledgement
+        receipt PDF via `DocumentStore::storeGenerated()`
+  - [x] Resubmission form for a returned application
+  - [x] **Open question, resolved without a Core change:** the spec wants
+        "return to student, application stays open," which the engine has no
+        outcome for. Taken the second of the two options offered here: a
+        return is a rejection at `cgs_review`, and the resubmission form
+        clones it into a fresh application carrying `resubmission_of_id`
+        back to the returned one. That needed no `WorkflowEngine` change —
+        reject already terminates, and the cloning is module code — and it
+        keeps each attempt, its reviewer and its remarks on the record
+        instead of overwriting them. Which stage the rejection happened at
+        is what separates the two endings: returned at `cgs_review` and the
+        student resubmits, rejected at `cgs_approve` and their only route is
+        the appeal chain. A true "returned, still open" outcome is still
+        worth having in Core — see Cross-cutting — but nothing here is
+        blocked on it now.
 
-- [ ] **Appeal Hardbound Submission** (`hardbound_appeal`) — only filable
+- [x] **Appeal Hardbound Submission** (`hardbound_appeal`) — only filable
       once a Hardbound Submission has been rejected/returned
-  - [ ] `hardbound_appeal_details` table, FK'd to the originating
+  - [x] `hardbound_appeal_details` table, FK'd to the originating
         `hardbound_submission` application
-  - [ ] Appeal memo upload + written justification
-  - [ ] Non-Exec: compile the Dean PFR report (Dompdf) from the appeal memo
-        and the original submission, then forward to Senior Exec
-  - [ ] Senior Exec: ruling (accept/reject) — on accept, decide how the
-        original Hardbound Submission application gets reopened
-  - [ ] Auto-email the ruling to the student
+  - [x] Appeal memo upload + written justification
+  - [x] Non-Exec: compile the Dean PFR report (Dompdf) from the appeal memo
+        and the original submission, then forward to Senior Exec. The
+        Non-Exec's remarks are the recommendation printed in the report, so
+        they are required at that stage.
+  - [x] Senior Exec: ruling (accept/reject) — **on accept the original is
+        not rewritten.** `applications.status` belongs to WorkflowEngine and
+        the original rejection is a decision on the record, not a mistake to
+        erase, so an upheld appeal instead unlocks the resubmission form for
+        the submission it names. Only two things make a submission
+        resubmittable: CGS returned it at `cgs_review`, or an appeal against
+        it was upheld.
+  - [x] Auto-email the ruling to the student — the engine's
+        `ApplicationDecided`, same as every other chain
+  - [x] A submission may only be appealed once, and only if it has not
+        already been replaced by a resubmission — enforced in the module,
+        not by a database constraint
 
-- [ ] **Appointment Letter & Report Management** (`appointment_letter`) —
+- [x] **Appointment Letter & Report Management** (`appointment_letter`) —
       Chair of Department (the spec's "Faculty Department") → Academic
       Executive (the spec's "Faculty Academic") → Dean of PGR
-  - [ ] `appointment_details` table: examiner name, institution, email,
-        expertise, the student it's for
-  - [ ] Chair nomination form; AE endorse or reject-with-comments; Dean
+  - [x] A nomination is the candidate's **examiner panel**, not one
+        examiner: `appointment_details` holds the candidate side (degree,
+        programme, supervisor, thesis title) and `appointment_examiners`
+        holds one row per panel member — at least one internal and one
+        external, enforced at nomination. The student it's for is
+        `applications.student_id` (the candidate), same pattern as Hani's
+        `examiner_nominations` — no second student FK on the detail table.
+  - [x] Chair picks the panel from an examiner list
+        (`appointment_examiner_pool`, kept by Chairs and CGS at
+        "Examiner List") the same way they pick the candidate; a new examiner
+        is registered there first. Deliberately separate from Hani's
+        `examiners` pool so a change to hers cannot break a letter here.
+        Nominations copy the chosen rows, so editing or removing a list
+        entry never rewrites a letter already issued.
+  - [x] Nomination is filed against the chain, not a stage of it — same
+        shape as Hani's supervisor nomination; AE endorse or
+        reject-with-comments; Non-Exec CGS prepares the pack; Dean
         approve/reject
-  - [ ] On Dean approval: generate the Appointment Letter PDF (Appendix B
-        template, Dompdf) and email it to the examiner
-  - [ ] **Open question:** every other module's notification goes to the
-        student, a system user with an account. This one's final recipient
-        is an external examiner with no login — that's a plain `Mail`, not
-        the `ApplicationDecided` notification path the rest of the engine
-        uses.
-  - [ ] Archive the generated letter as an `ApplicationDocument` so the
-        existing download route and permission check apply
+  - [x] CGS preparation generates **two documents per examiner** from the
+        CGS templates — the Appointment Letter (internal and external
+        variants, with acknowledgement slip, conflict-of-interest declaration
+        and thesis receipt confirmation) and the Thesis Evaluation Report
+        form (UTP/PPS/024) — and archives them, so the Dean approves
+        documents that already exist. On Dean approval each examiner is
+        emailed their own two.
+  - [x] **Open question, resolved:** every other module's notification goes
+        to the student, a system user with an account. This one's final
+        recipient is an external examiner with no login, so the PDF is sent
+        with a plain `Mail\AppointmentLetterMail`, not the
+        `ApplicationDecided` notification path. The engine's built-in
+        `ApplicationDecided` still fires to the candidate only on every
+        decision, same as the trait's default — the Chair (the nomination's
+        filer, who owns no stage in the chain) is not separately notified.
+  - [x] Archive the generated letter as an `ApplicationDocument` (written
+        directly to the private disk — `DocumentStore::attach()` only takes
+        an already-uploaded file, not generated bytes) so the existing
+        download route and permission check apply
 
 Not Jason's to (re)build — already exists in Core, or already tracked
 elsewhere in this file:
@@ -911,8 +983,10 @@ candidacy rather than the RPD milestone.
       Chair → CGS verification → Dean of PGR
   - [ ] Enforce the **twelve-month maximum appeal duration** in code
   - [ ] Recalculate the deadline on the Dean's approval
-  - [ ] **Needs the "return with comment" outcome** the engine does not have —
-        same gap as Jason's Hardbound review. One design decision covers both.
+  - [ ] **Needs the "return with comment" outcome** the engine does not have.
+        Jason's Hardbound review had the same gap and shipped around it — a
+        return is a rejection plus a cloned resubmission (see his section) —
+        so this is now the one chain waiting on the Core change.
   - [ ] Confirm whether "Programme Chair" is the existing `chair` role
 
 - [ ] **Dismiss Exceeded Study Candidacy** (`candidacy_dismissal`)
@@ -1065,16 +1139,28 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
 - [ ] **Haziq's Stage 1 *is* Norhanis' RPD.** The stage gate cannot know the
       milestone is complete unless the RPD module records completion. Norhanis
       must land the RPD data model before Haziq's stage gates can work.
-- [ ] **Jason's Appointment Letters depend on Hani's examiner pool.** The
-      letter is addressed to an examiner; `examiners` is Hani's table.
-      `hani.md` records she handed Appointment Letters to Jason deliberately —
-      so this is a handoff with a data dependency, not a duplicate.
+- [x] **Jason's Appointment Letters and Hani's examiner pool — resolved as
+      two lists on purpose.** Appointment Letters has its own
+      `appointment_examiner_pool` (kept at "Examiner List" by Chairs and CGS)
+      rather than reading Hani's `examiners`: hers serves her nomination and
+      conflict-detection chain, and a column change there must not be able
+      to break a letter. Nominations snapshot the chosen rows, so neither
+      list can rewrite a letter already issued. If the team later wants one
+      shared list, the snapshot means Jason's side can switch source without
+      a data migration.
 
 ---
 
 ## Cross-cutting
 
 ### Correctness gaps in Core worth closing
+- [ ] **The student sidebar drops module links.** `sidebar.blade.php` passes
+      `$extraLinks` to the CGS and approver partials but not to
+      `sidebar-student-nav`, so anything a module returns from
+      `ProvidesLinks::links()` for a student is never rendered. Jason's
+      "Resubmit Hardbound #N" links hit this after the 2026-09-13 merge and
+      now live on the Hardbound Submission page instead. One-line fix:
+      hand the student partial `$extraLinks` too.
 - [ ] **Scope approver queues to the right people.** A supervisor currently
       sees every application at the supervisor stage, not only their own
       supervisees. `users.supervisor_id` exists but `WorkflowEngine::queue()`
@@ -1224,10 +1310,19 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
 - [ ] A withdraw/cancel action for students on a pending application.
 - [ ] A "return to submitter, application stays open" outcome for
       `WorkflowEngine::decide()` — currently only approve/reject exist.
-      Jason's Hardbound Submission needs this; agree the design before
-      building that module's review stage.
-- [ ] Seed a `senior_exec_cgs` test account — no seeded user has this role
-      yet, and Jason's Hardbound Submission and Appeal chains both end there.
+      No longer blocking: Hardbound Submission ships a return as a rejection
+      at the review stage plus a resubmission that clones the application,
+      which needs no Core change. Still worth having if another chain wants
+      a genuine re-open (Chloe's candidacy appeal), and it would let
+      Hardbound drop the clone.
+- [ ] Seed a `senior_exec_cgs` test account — no seeded user has this role.
+      Only Jason's Appeal Hardbound Submission ends there now (Hardbound
+      Submission itself was collapsed to the Non-Exec alone). The appeal was
+      tested against an account created directly in the local database, so
+      **the seeder still needs this line** before anyone else can rule on an
+      appeal — or the ruling stage could move to `dean_pgr`, who is seeded:
+      `$this->user('Encik Rahim Senior Exec', 'seniorexec@utp.edu.my', Role::SENIOR_EXEC_CGS, ['department' => 'CGS']);`
+      Left to whoever owns the seeder rather than edited from a module folder.
 - [ ] **Actors named in scope documents that are not roles yet:** `GRS Exec`
       and `Research Centre` (Haziq), `Project Director` (Norhanis' Claims),
       `Faculty` (Norhanis' RPD dismissal, Jason). `Programme Chair` (Chloe) is
@@ -1336,18 +1431,17 @@ are what to reach for when touching the file anyway.
    commands.~~ Re-viva is done (see Hani's section); RPD is the one large
    piece still outstanding, and still needs a scheduled command for its
    3/2/1-month reminders.
-8. Jason can start now, independently of the rest of the team — Hardbound
-   Submission, Appeal Hardbound Submission and Appointment Letters all reuse
-   existing roles. Settle the "return to student" engine question and seed
-   the `senior_exec_cgs` account before building the Hardbound Submission
-   review stage.
+8. Jason's three chains are built. The "return to student" engine question
+   was settled without a Core change (see his section); the
+   `senior_exec_cgs` account still needs seeding before anyone other than
+   Jason can walk the Hardbound chains.
 9. **Before Chloe or Haziq writes any code, hold one meeting** and settle the
    four overlaps above. Haziq's is the urgent one — it collides with modules
    that already exist and have rows in the database.
 10. Chloe should start with **Workstation Management**. It is the only part of
     her scope that overlaps with nobody, so it is unblocked by that meeting,
     and it is a good first module because it is not an approval chain.
-11. The **"return with comment"** engine outcome is now needed by two people
-    (Jason's Hardbound review, Chloe's candidacy appeal). One design decision,
-    one Core change, two modules unblocked — worth doing early rather than
-    twice.
+11. The **"return with comment"** engine outcome is now needed by Chloe's
+    candidacy appeal. Jason's Hardbound review shipped without it — a return
+    is a rejection plus a cloned resubmission (see his section) — and could
+    drop the clone once it exists. One design decision, one Core change.
