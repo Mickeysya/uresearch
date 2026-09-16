@@ -30,19 +30,9 @@ class SeedDemoData extends Command
             return self::SUCCESS;
         }
 
-        $scenario = $this->argument('scenario') ?? 'default';
-
-        if (! array_key_exists($scenario, DemoDataSeeder::SCENARIOS)) {
-            $this->error(sprintf(
-                "No scenario '%s'. Available: %s (or run with --list).",
-                $scenario,
-                implode(', ', array_keys(DemoDataSeeder::SCENARIOS))
-            ));
-
-            return self::FAILURE;
-        }
-
-        (new DemoDataSeeder())->setContainer(app())->setCommand($this)->run($scenario);
+        // No scenario check here -- run() already does it, and doing it twice
+        // is how the two messages drift apart.
+        (new DemoDataSeeder())->setContainer(app())->setCommand($this)->run($this->argument('scenario'));
 
         return self::SUCCESS;
     }

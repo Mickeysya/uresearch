@@ -350,6 +350,9 @@
    z-index cannot rescue a child from an ancestor's overflow.
    ===================================================================== */
 
+/* .sdash-stat is already position: relative in dashboard-states.css, which
+   needs it as the skeleton overlay's containing block. Only the z-index
+   belongs here. */
 .sdash-stat,
 .cgs-shortcut,
 .adm-action,

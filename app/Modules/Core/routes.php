@@ -44,13 +44,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar.index');
 
     // Sidebar destinations with no feature behind them yet -- see PageController.
-    Route::get('/help', [PageController::class, 'help'])->name('help.index');
+    Route::get('/help', [PageController::class, 'show'])->name('help.index')->defaults('page', 'help');
     // The signed-in user's own record. Contact details and password are
     // separate routes on purpose — see ProfileController.
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::patch('/profile/contact', [ProfileController::class, 'updateContact'])->name('profile.contact');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
-    Route::get('/settings', [PageController::class, 'settings'])->name('settings.index');
+    Route::get('/settings', [PageController::class, 'show'])->name('settings.index')->defaults('page', 'settings');
 
     // Administrator screens. Oversight is read-only by design: the admin owns
     // no workflow stage, so nothing here acts on an application.
@@ -70,9 +70,9 @@ Route::middleware('auth')->group(function () {
     // CGS-only screens. Gated by role here as well as hidden from the sidebar,
     // because a sidebar that does not render a link is not access control.
     Route::middleware('role:'.implode(',', Role::cgsTeam()))->group(function () {
-        Route::get('/cgs/attendance', [PageController::class, 'cgsAttendanceOverview'])->name('cgs.attendance.overview');
-        Route::get('/cgs/attendance/students', [PageController::class, 'cgsStudentList'])->name('cgs.attendance.students');
-        Route::get('/cgs/students', [PageController::class, 'cgsStudents'])->name('cgs.students.index');
-        Route::get('/cgs/reports', [PageController::class, 'cgsReports'])->name('cgs.reports.index');
+        Route::get('/cgs/attendance', [PageController::class, 'show'])->name('cgs.attendance.overview')->defaults('page', 'cgs-attendance');
+        Route::get('/cgs/attendance/students', [PageController::class, 'show'])->name('cgs.attendance.students')->defaults('page', 'cgs-student-list');
+        Route::get('/cgs/students', [PageController::class, 'show'])->name('cgs.students.index')->defaults('page', 'cgs-students');
+        Route::get('/cgs/reports', [PageController::class, 'show'])->name('cgs.reports.index')->defaults('page', 'cgs-reports');
     });
 });

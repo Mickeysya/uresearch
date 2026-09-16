@@ -29,7 +29,7 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | 75, covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains — none for Jason's |
+| Automated tests | 77, covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains — none for Jason's |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12 |
 | Last reviewed | 2026-09-17 — Jason's merge, plus a per-owner outstanding-issues audit in each section below |
 
@@ -1453,54 +1453,88 @@ Whole-repo pass for complexity only — correctness and security findings live
 in the third pass above. Ranked by size of cut. None of these are urgent; they
 are what to reach for when touching the file anyway.
 
-- [ ] **`Core\Http\Controllers\PageController` — 8 methods, one shape.**
-      Every one returns `view('core::pages.placeholder', [...])` with a title
-      and a description; nothing else differs. A `const PAGES = [slug => [title,
-      description]]` and one `show(string $page)` method behind a single
-      `/{page}` route does the same job in about a third of the 96 lines, and
-      deleting a placeholder becomes deleting one array entry instead of a
-      method plus a route. Do it when the first of these gets a real screen.
-- [ ] **`recentActivities()` is written twice**, ~40 lines each in
-      `CgsDashboard` and `AdminDashboard`. The three queries behind them are
-      identical (`ApprovalHistory` latest-N, `Application` latest-N submitted,
-      and — admin only — `User` latest-N students); only the row text and
-      whether enrolments are included differ. A shared `activityFeed()` in
-      `Concerns\BuildsPanels` taking the mapping closures per source would cut
-      ~35 lines and stop the two feeds drifting the way the last pair did.
-- [ ] **`CgsDashboard::latestRecords()` and `AdminDashboard::latestAttendance()`
-      are the same one-line wrapper under two names** — both
-      `remember(<key>, fn () => $source->latestPerStudent())`, differing only in
-      the memo key. This is the exact duplication the 2026-09-12 dedup pass was
-      supposed to end; it survived because the wrappers were left behind after
-      their bodies moved into `AttendanceRecord::latestPerStudent()`. Delete
-      both and call the contract directly.
+- [x] **Done 2026-09-17. `PageController` is a `const PAGES` and one
+      `show()`.** The six methods each returned the same view with different
+      strings. The routes keep their own paths, names and middleware — a
+      single `/{page}` route was not on, because the CGS four sit behind a
+      role gate the other two must not inherit — so each route passes its key
+      with `->defaults('page', ...)` instead. Adding a placeholder is now an
+      array entry plus a route line; replacing one with a real screen is
+      deleting both.
+- [x] **Done 2026-09-17.** The three queries moved into
+      `Concerns\BuildsPanels` as `recentDecisions()`, `recentSubmissions()` and
+      `recentEnrolments()`, plus a `mergeFeed()` that interleaves any number of
+      already-mapped feeds newest-first. Each dashboard now only says how its
+      own rows read — which is the part that legitimately differs. Named
+      methods rather than the closure-keyed `activityFeed()` sketched here:
+      six people have to grep this, and three obvious methods beat one clever
+      dispatch table. Smaller than the ~35 lines estimated (about 20), but the
+      drift it prevents was over *which rows appear at all*, which is the part
+      that actually bit last time.
+- [x] **Done 2026-09-17.** Both wrappers deleted. The survivor is
+      `Concerns\ReadsAttendance::latestPerStudent()`, which is where it
+      belonged — beside `attendanceSource()`, the other half of how Core
+      reaches attendance — under one memo key instead of two.
 - [x] **Half-closed by `tokens.css` (2026-09-15).** The *values* now have one
       home, so the sheets can no longer disagree about what "the error red" or
       "a gap" is. What is below still stands for the *selectors*.
-- [ ] **The nine-way dashboard CSS split has leaked.** Splitting by *screen*
-      rather than by *component* means 25+ class names are now defined in two
-      to four sheets each — `.sdash-stat` in four, `.sdash-card` in three,
-      `.sdash-legend`, `.adm-tile`, `.cgs-donut`, `.notif-row` in two — so
-      which rule wins depends on the include order in
-      `partials/stylesheets.blade.php`, which is why `conventions.md` has to
-      say "do not reorder". A component-shaped split (or moving the shared
-      `.sdash-*` shell into one sheet the screen sheets only extend) removes
-      the ordering dependency. Not worth a big-bang rewrite; worth doing for
-      `.sdash-stat` alone, which four sheets touch.
-- [ ] **`Support\Role::DAC` and `Role::PANEL_EXAMINER` are declared and never
-      used** — no stage, no seeded account, no reference anywhere in `app/`.
-      Delete them or give them a module. (Also noted under Core gaps below.)
-- [ ] **17 `.gitkeep` files in Jason's, Chloe's and Haziq's empty module
-      folders.** `ModuleServiceProvider` discovers directories that exist, so
-      it creates nothing and needs nothing pre-made; the folders appear when
-      the first real file lands. The `ModuleProvider.php` and `routes.php`
-      stubs *are* worth keeping — they claim the folder so six people don't
-      collide — but the empty-directory markers under them buy nothing.
-- [ ] `Console\Commands\SeedDemoData` re-implements scenario lookup and
-      validation that `DemoDataSeeder::SCENARIOS` could answer itself. The
-      command earns its place for `--list` and for not having to type
-      `--class=`; the 20 lines of hand-rolled `array_key_exists` + error
-      formatting in the middle of it do not.
+- [~] **Mostly withdrawn on inspection, 2026-09-17.** Counting selectors
+      made this look worse than it is. `.sdash-stat` appears in four sheets
+      and `.sdash-card` in three, but they are not competing definitions of the
+      same properties — they are different *aspects* layered on one class:
+      `dashboard-student.css` owns the box, `dashboard-gauge.css` adds the rise
+      animation and hover transition, `dashboard-states.css` adds
+      `position: relative` for the skeleton overlay, `dashboard-admin.css` adds
+      hover z-index. That is ordinary CSS layering, and the split is closer to
+      component-shaped than the name of each file suggests. **What does stand:**
+      `dashboard-states.css:79` and `dashboard-admin.css:353` both set
+      `position: relative` on `.sdash-stat`. That one is *not* deletable
+      either — the admin rule sets it on five selectors and only `.sdash-stat`
+      is covered elsewhere, so removing it would break the other four. It now
+      carries a comment saying so. The load-order dependency in
+      `partials/stylesheets.blade.php` is real either way. No restructure
+      warranted; a big-bang rewrite here would risk visual regressions nothing
+      in the test suite would catch.
+- [x] **Done 2026-09-17.** Both deleted, along with their entries in `all()`
+      and `label()`. Nothing referenced either one. Whoever needs a DAC or a
+      panel examiner adds the line back in the commit that uses it.
+- [x] **Done 2026-09-17.** All 17 deleted. Verified first that every path in
+      `ModuleServiceProvider` is guarded by `File::isDirectory()` or
+      `File::exists()`, so a missing `Workflows/` or `Models/` is a no-op, not
+      a warning. Chloe's and Haziq's folders stay claimed in git by their
+      `ModuleProvider.php`, `routes.php` and `README.md` — the sub-folders
+      appear when their first real file does.
+- [x] **Done 2026-09-17 — the custom date picker is gone, −647 lines.**
+      `core::partials.date-picker` was 380 lines of JS drawing a calendar panel
+      over the native `<input type="date">`, plus 267 lines of `.dp-*` CSS in
+      `layout.css` §10c. Its own header gave the reason: "on the dark theme
+      that panel arrives as a bright rectangle". That stopped being true when
+      `tokens.css` started declaring `color-scheme: dark` (lines 256 and 298) —
+      the browser's own picker now matches the theme for free. What was left
+      was restyling a 12px glyph. The native input was always the source of
+      truth, so deleting the layer changes nothing that posts, validates or
+      degrades.
+- [ ] **`maatwebsite/excel` costs 7.9MB** (1.2M plus 6.7M of phpoffice) and is
+      used by three files, for reading .xlsx uploads and writing the .xlsx
+      template. `fgetcsv`/`fputcsv` cover the CSV path, which
+      `nureen.md` describes as the real ingestion route. **Not cut — this
+      removes a feature, not just complexity.** CGS works in Excel, and
+      dropping .xlsx is Nureen's call, not an audit's.
+- [ ] **`laravel/tinker` sits in `require`, not `require-dev`.** One line in
+      `composer.json` — but moving a package between the two sections
+      regenerates `composer.lock`, which is a wide blast radius for a REPL
+      nobody ships. Worth doing in the same commit as the deployment work
+      (`composer install --no-dev`), not before.
+- [x] **Done 2026-09-17.** `Console\Commands\SeedDemoData` re-implemented a
+      scenario check `DemoDataSeeder::run()` was already doing — the same
+      `array_key_exists` and a near-identical message, eleven lines apart from
+      their original. Deleted the copy. The surviving one now calls
+      `$this->command->fail()` instead of `error()` + `return`, so a bad
+      scenario aborts with a non-zero exit code down *both* entry points;
+      `db:seed --class=DemoDataSeeder` used to print the complaint and then
+      report success. `--list` and the `--class=` shortcut are why the command
+      exists and both stay. Net −9 lines, and `Core\DemoSeedCommandTest` keeps
+      the exit code from quietly regressing.
 
 ### Team
 - [~] **Admin module** — the dashboard, sidebar and audit log are built; the
@@ -1512,14 +1546,14 @@ are what to reach for when touching the file anyway.
       Applications, Attendance (x2), Reports (x3), Users and Roles, Document
       Repository. Each names what is missing; several need only a query and a
       table, since the data already exists.
-- [~] Automated tests — the harness exists and **75 pass** (71 feature, 4
+- [~] Automated tests — the harness exists and **77 pass** (73 feature, 4
       unit), covering the parts that break quietly: both authorisation locks,
       approve/reject outcomes, Travel's conditional routing, the
       `stages(null)` superset, that every registered module's routes actually
       exist, and the attendance contract including its degradation path, plus
       Attendance's import, Supervision, Certification, Claims, Publication,
       Examiner Nomination, Re-viva and RPD's three flows.
-      Per owner: Core 31 · Norhanis 24 · Nureen 11 · Hani 5 · **Jason 0**.
+      Per owner: Core 33 · Norhanis 24 · Nureen 11 · Hani 5 · **Jason 0**.
       **Still wanted (re-checked 2026-09-17):** Jason's three chains, GA
       Extension, Attendance Appeal and Conflict Detection have no feature test
       of their own, and neither does `DocumentStore`'s allow-list. Travel is

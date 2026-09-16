@@ -131,13 +131,14 @@ class DemoDataSeeder extends Seeder
         $scenario ??= 'default';
 
         if (! array_key_exists($scenario, self::SCENARIOS)) {
-            $this->command->error(sprintf(
-                "No scenario '%s'. Available: %s",
+            // fail() rather than error()+return: it aborts with a non-zero
+            // exit code, so `demo:seed bogus` fails a script instead of
+            // printing a complaint and reporting success.
+            $this->command->fail(sprintf(
+                "No scenario '%s'. Available: %s (or run with --list).",
                 $scenario,
                 implode(', ', array_keys(self::SCENARIOS))
             ));
-
-            return;
         }
 
         $this->scenario = self::SCENARIOS[$scenario];

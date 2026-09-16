@@ -2,6 +2,12 @@
 
 namespace App\Modules\Core\Services\Concerns;
 
+use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\ApprovalHistory;
+use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Role;
+use Illuminate\Support\Collection;
+
 /**
  * The scaffolding every dashboard service shares.
  *
@@ -11,7 +17,8 @@ namespace App\Modules\Core\Services\Concerns;
  * express a figure as "total, and how it moved since last month". Those four
  * behaviours were written out three times, identically, and had already begun
  * to drift -- CgsDashboard::latestRecords() and
- * AdminDashboard::latestAttendance() were the same query under two names.
+ * AdminDashboard::latestAttendance() were the same query under two names
+ * (both now gone; the survivor is ReadsAttendance::latestPerStudent()).
  *
  * Adding a fourth dashboard should mean writing its panels, not re-deriving
  * how a panel holds itself together.
@@ -128,5 +135,53 @@ trait BuildsPanels
     protected function noTrend(): array
     {
         return ['count' => 0, 'delta' => null];
+    }
+
+    /* -----------------------------------------------------------------
+     | Activity feed sources.
+     |
+     | The CGS and admin feeds draw the same rows and phrase them
+     | differently -- which is why the queries live here and the wording
+     | stays in each dashboard. When they drifted before, it was over which
+     | rows appeared at all, not over how they read.
+     |------------------------------------------------------------------*/
+
+    /** @return Collection<int, ApprovalHistory> */
+    protected function recentDecisions(int $limit): Collection
+    {
+        return ApprovalHistory::with('application.student', 'approver')
+            ->latest('created_at')->limit($limit)->get()
+            ->filter(fn ($h) => $h->application && $h->application->student);
+    }
+
+    /** @return Collection<int, Application> */
+    protected function recentSubmissions(int $limit): Collection
+    {
+        return Application::with('student')
+            ->whereNotNull('submitted_at')
+            ->latest('submitted_at')->limit($limit)->get()
+            ->filter(fn ($a) => $a->student);
+    }
+
+    /** @return Collection<int, User> */
+    protected function recentEnrolments(int $limit): Collection
+    {
+        return User::where('role', Role::STUDENT)
+            ->latest('created_at')->limit($limit)->get();
+    }
+
+    /**
+     * Interleave any number of already-mapped feeds, newest first.
+     *
+     * @param  Collection<int, array{at: mixed}>  ...$feeds
+     * @return Collection<int, array<string, mixed>>
+     */
+    protected function mergeFeed(int $limit, Collection ...$feeds): Collection
+    {
+        return collect($feeds)
+            ->reduce(fn (Collection $all, Collection $f) => $all->concat($f), collect())
+            ->sortByDesc(fn ($row) => $row['at'])
+            ->take($limit)
+            ->values();
     }
 }

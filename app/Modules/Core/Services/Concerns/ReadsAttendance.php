@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Services\Concerns;
 
 use App\Modules\Core\Contracts\SuppliesAttendance;
+use Illuminate\Support\Collection;
 
 /**
  * How a Core dashboard reaches attendance without naming the module that
@@ -20,5 +21,18 @@ trait ReadsAttendance
         return app()->bound(SuppliesAttendance::class)
             ? app(SuppliesAttendance::class)
             : null;
+    }
+
+    /**
+     * The most recent reading for every student, one each, memoised for the
+     * request. Both the CGS bands and the admin average want this, and they
+     * each used to wrap it in a one-line method under their own name -- which
+     * is how the same query ends up memoised under two keys.
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Modules\Core\Support\AttendanceReading>
+     */
+    protected function latestPerStudent(SuppliesAttendance $source): Collection
+    {
+        return $this->remember('attendance.latestPerStudent', fn () => $source->latestPerStudent());
     }
 }

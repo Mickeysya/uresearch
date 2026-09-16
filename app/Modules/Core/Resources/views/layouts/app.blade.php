@@ -59,7 +59,6 @@
          the layout level, so a module gets it without knowing it exists --
          see the partial for why it enhances the native input rather than
          replacing it. --}}
-    @include('core::partials.date-picker')
 
     @stack('scripts')
 </body>

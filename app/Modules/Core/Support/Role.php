@@ -33,8 +33,6 @@ final class Role
      * endorsement and the Registry's termination email.
      */
     public const FACULTY = 'faculty';
-    public const DAC = 'dac';
-    public const PANEL_EXAMINER = 'panel_examiner';
     public const REGISTRY = 'registry';
     public const ADMIN = 'admin';
 
@@ -52,8 +50,6 @@ final class Role
             self::DEAN_PGR,
             self::ACADEMIC_EXEC,
             self::FACULTY,
-            self::DAC,
-            self::PANEL_EXAMINER,
             self::REGISTRY,
             self::ADMIN,
         ];
@@ -94,8 +90,6 @@ final class Role
             self::DEAN_PGR => 'Dean of PGR',
             self::ACADEMIC_EXEC => 'Academic Executive',
             self::FACULTY => 'Faculty',
-            self::DAC => 'DAC',
-            self::PANEL_EXAMINER => 'Panel Examiner',
             default => ucwords(str_replace('_', ' ', $role)),
         };
     }

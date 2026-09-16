@@ -4,7 +4,6 @@ namespace App\Modules\Core\Services;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
-use App\Modules\Core\Contracts\SuppliesAttendance;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\Concerns\BuildsPanels;
 use App\Modules\Core\Services\Concerns\ReadsAttendance;
@@ -97,7 +96,7 @@ class AdminDashboard
         }
 
         return $this->safely('attendance', function () use ($source) {
-            $latest = $this->latestAttendance($source);
+            $latest = $this->latestPerStudent($source);
 
             return $latest->isEmpty() ? null : round($latest->avg('percentage'), 1);
         }, null);
@@ -130,43 +129,30 @@ class AdminDashboard
         return $this->safely('activity', function () use ($limit) {
             $registry = app(ModuleRegistry::class);
 
-            $enrolments = User::where('role', Role::STUDENT)
-                ->latest('created_at')->limit($limit)->get()
-                ->map(fn ($u) => [
+            return $this->mergeFeed(
+                $limit,
+                $this->recentEnrolments($limit)->map(fn ($u) => [
                     'text' => 'New student enrolled',
                     'sub' => $u->name.($u->programme ? ' · '.$u->programme : ''),
                     'at' => $u->created_at,
                     'tone' => 'info',
                     'icon' => 'people',
-                ]);
-
-            $submissions = Application::with('student')
-                ->whereNotNull('submitted_at')
-                ->latest('submitted_at')->limit($limit)->get()
-                ->filter(fn ($a) => $a->student)
-                ->map(fn ($a) => [
+                ]),
+                $this->recentSubmissions($limit)->map(fn ($a) => [
                     'text' => $registry->labelFor($a->module_type).' submitted',
                     'sub' => $a->student->name.' · '.$a->reference(),
                     'at' => $a->submitted_at,
                     'tone' => 'info',
                     'icon' => 'doc',
-                ]);
-
-            $decisions = ApprovalHistory::with('application.student', 'approver')
-                ->latest('created_at')->limit($limit)->get()
-                ->filter(fn ($h) => $h->application && $h->application->student)
-                ->map(fn ($h) => [
+                ]),
+                $this->recentDecisions($limit)->map(fn ($h) => [
                     'text' => $registry->labelFor($h->application->module_type).' '.$h->decision,
                     'sub' => $h->application->student->name.' · by '.($h->approver->name ?? 'an approver'),
                     'at' => $h->created_at,
                     'tone' => $h->decision === 'rejected' ? 'critical' : 'good',
                     'icon' => $h->decision === 'rejected' ? 'cross' : 'check',
-                ]);
-
-            return $enrolments->concat($submissions)->concat($decisions)
-                ->sortByDesc(fn ($r) => $r['at'])
-                ->take($limit)
-                ->values();
+                ]),
+            );
         }, collect());
     }
 
@@ -358,9 +344,4 @@ class AdminDashboard
         return round($b, 1).' PB';
     }
 
-    /** @return Collection<int, \App\Modules\Core\Support\AttendanceReading> */
-    protected function latestAttendance(SuppliesAttendance $source): Collection
-    {
-        return $this->remember('latestAttendance', fn () => $source->latestPerStudent());
-    }
 }
