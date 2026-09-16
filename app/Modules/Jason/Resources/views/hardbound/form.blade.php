@@ -29,16 +29,17 @@
         @endif
 
         <div class="app-item" style="margin-bottom: 18px;">
-            <p><b>What this submission produces</b></p>
+            <p><b>The two CGS forms</b></p>
             <ul class="doc-list">
                 <li>
-                    <a href="{{ route('hardbound.template', 'submission') }}">Download — Hardbound Thesis Submission form (PDF)</a>
-                    <span style="color: var(--text-grey);">— complete, sign it yourself, and upload it below.</span>
+                    <a href="{{ route('hardbound.template', 'submission') }}">Download — Hardbound Thesis Submission (UTP/CGS/021), pre-filled</a>
+                    <span style="color: var(--text-grey);">— your name, matric number and programme are already on it.
+                    Complete the rest, sign and date it, and upload it below.</span>
                 </li>
                 <li>
-                    <b>Confirmation of Correction to Thesis</b>
-                    <span style="color: var(--text-grey);">— generated from your declaration below. Your supervisor,
-                    the Chair and CGS sign it electronically as they approve; you do not upload this one.</span>
+                    <b>Confirmation of Correction to Thesis (UTP/CGS/017A)</b>
+                    <span style="color: var(--text-grey);">— generated from the details below. Your supervisor and the
+                    viva chairman sign it electronically as they approve; you do not upload this one.</span>
                 </li>
             </ul>
         </div>
@@ -64,7 +65,7 @@
               enctype="multipart/form-data">
             @csrf
 
-            <label for="thesis_title">Thesis Title</label>
+            <label for="thesis_title">Title of Thesis <span style="color: var(--text-grey);">(not more than 15 words)</span></label>
             <textarea name="thesis_title" id="thesis_title" rows="3" required
                       class="@error('thesis_title') is-invalid @enderror">{{ old('thesis_title', $detail?->thesis_title) }}</textarea>
             @error('thesis_title') <p class="field-error">{{ $message }}</p> @enderror
@@ -94,24 +95,17 @@
 
             <h3 style="margin-top: 22px;">Confirmation of Correction to Thesis</h3>
 
-            <label for="corrections_made">Corrections made to the thesis</label>
-            <textarea name="corrections_made" id="corrections_made" rows="7" required
-                      placeholder="List each correction required by the examiners and what you changed, e.g.&#10;1. Chapter 3 — methodology rewritten to state the sampling frame (Examiner 1, item 2.7)&#10;2. Figures 4.2–4.6 relabelled with units (Examiner 2, section 3)"
-                      class="@error('corrections_made') is-invalid @enderror">{{ old('corrections_made', $detail?->corrections_made) }}</textarea>
-            <p class="queue-meta" style="margin-top: -8px;">
-                Printed on the Confirmation exactly as written — this is what your supervisor signs off.
-            </p>
-            @error('corrections_made') <p class="field-error">{{ $message }}</p> @enderror
+            <label for="viva_date">Viva Date</label>
+            <input type="date" name="viva_date" id="viva_date" required max="{{ now()->toDateString() }}"
+                   value="{{ old('viva_date', $detail?->viva_date?->toDateString()) }}"
+                   class="@error('viva_date') is-invalid @enderror">
+            @error('viva_date') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label style="display: flex; gap: 10px; align-items: flex-start; font-weight: normal;">
-                <input type="checkbox" name="declaration" id="declaration" value="1" required
-                       style="margin-top: 4px;" @checked(old('declaration'))>
-                <span>
-                    I confirm that the corrections required by the examiners have been made to the
-                    thesis as listed above, and that the hardbound copy submitted incorporates all of them.
-                </span>
-            </label>
-            @error('declaration') <p class="field-error">{{ $message }}</p> @enderror
+            <label for="co_supervisor_name">Co-Supervisor <span style="color: var(--text-grey);">(optional)</span></label>
+            <input type="text" name="co_supervisor_name" id="co_supervisor_name"
+                   value="{{ old('co_supervisor_name', $detail?->co_supervisor_name) }}"
+                   class="@error('co_supervisor_name') is-invalid @enderror">
+            @error('co_supervisor_name') <p class="field-error">{{ $message }}</p> @enderror
 
             <h3 style="margin-top: 22px;">Hardbound Thesis Submission form</h3>
 

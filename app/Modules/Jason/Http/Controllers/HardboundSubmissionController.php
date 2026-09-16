@@ -24,6 +24,9 @@ class HardboundSubmissionController extends Controller
     /** The last stage: approval here accepts the pack and issues the receipt. */
     protected const FINAL_STAGE = 'cgs_review';
 
+    /** Stages with a signature block on the Confirmation of Correction (UTP/CGS/017A). */
+    protected const SIGNING_STAGES = ['supervisor', 'chair'];
+
     protected function moduleKey(): string
     {
         return 'hardbound_submission';
@@ -34,28 +37,18 @@ class HardboundSubmissionController extends Controller
     public const DOC_CORRECTION_FORM = 'Confirmation of Correction to Thesis';
 
     /**
-     * The CGS form a student downloads, signs and uploads back. The
-     * Confirmation of Correction is not here: the portal generates it from
-     * the student's declaration and the approvers sign it electronically.
+     * The Hardbound Thesis Submission form (UTP/CGS/021), ORIGINAL and
+     * STUDENT'S COPY, pre-filled with the student's name, matric number and
+     * programme. They complete the rest, sign it, and upload it. The
+     * Confirmation of Correction is not downloaded: the portal generates it
+     * and the approvers sign it electronically.
      */
-    public const TEMPLATES = [
-        'submission' => ['file' => 'hardbound-thesis-submission-form.pdf', 'label' => self::DOC_SUBMISSION_FORM],
-    ];
-
-    /**
-     * Serves a blank form from the module's own templates folder. Nothing is
-     * generated: whatever PDF sits at that path is what the student gets, so
-     * replacing the file replaces the form.
-     */
-    public function template(string $form)
+    public function template(Request $request, string $form)
     {
-        abort_unless(isset(self::TEMPLATES[$form]), 404);
+        abort_unless($form === 'submission', 404);
 
-        $path = __DIR__.'/../../Resources/templates/'.self::TEMPLATES[$form]['file'];
-
-        abort_unless(is_file($path), 404, 'That form has not been uploaded to the portal yet.');
-
-        return response()->download($path, self::TEMPLATES[$form]['file']);
+        return Pdf::loadView('jason::hardbound.submission_form', ['student' => $request->user()])
+            ->download('Hardbound-Thesis-Submission-'.($request->user()->matric_no ?: $request->user()->id).'.pdf');
     }
 
     /**
@@ -198,9 +191,11 @@ class HardboundSubmissionController extends Controller
             'remarks.required' => 'Tell the student what to correct before returning the submission.',
         ]);
 
-        // Approving stamps the approver's signature onto the Confirmation, so
-        // there has to be one to stamp. Rejecting signs nothing.
-        if (! $returning && $stage && ! HardboundSignature::forUser($request->user()->id)) {
+        // Approving as Supervisor or Chairman stamps a signature onto the
+        // Confirmation, so there has to be one to stamp. CGS has no block on
+        // that form, and rejecting signs nothing.
+        if (! $returning && $stage && in_array($stage->key, self::SIGNING_STAGES, true)
+            && ! HardboundSignature::forUser($request->user()->id)) {
             return redirect()->route('hardbound.signature')
                 ->with('error', 'Upload your signature first — approving stamps it onto the Confirmation of Correction to Thesis.');
         }
@@ -213,13 +208,13 @@ class HardboundSubmissionController extends Controller
             return back()->with('error', 'That application has already been decided.');
         }
 
-        if (! $returning) {
+        if (! $returning && in_array($stage?->key, self::SIGNING_STAGES, true)) {
             // Re-issue the Confirmation with this approver's signature added.
             $this->issueConfirmation($application);
+        }
 
-            if ($stage?->key === self::FINAL_STAGE) {
-                $this->issueAcknowledgement($application);
-            }
+        if (! $returning && $stage?->key === self::FINAL_STAGE) {
+            $this->issueAcknowledgement($application);
         }
 
         return back()->with('status', $returning
@@ -236,18 +231,18 @@ class HardboundSubmissionController extends Controller
             'thesis_title' => ['required', 'string', 'max:500'],
             'programme' => ['required', 'string', 'max:150'],
             'supervisor_name' => ['required', 'string', 'max:150'],
-            // The Confirmation of Correction is generated from this; the student
-            // signs by declaring, the approvers sign as it moves.
-            'corrections_made' => ['required', 'string', 'max:4000'],
-            'declaration' => ['accepted'],
+            // The Confirmation of Correction (UTP/CGS/017A) is generated from
+            // these; the approvers sign it as it moves.
+            'viva_date' => ['required', 'date', 'before_or_equal:today'],
+            'co_supervisor_name' => ['nullable', 'string', 'max:150'],
             // The Hardbound Thesis Submission form is signed by the student
             // themselves, so it is still downloaded, signed and uploaded. On a
             // resubmission it is re-uploaded only if it changed.
             'submission_form' => DocumentStore::rules(required: ! $resubmission),
             'response_to_comments' => [$resubmission ? 'required' : 'nullable', 'string', 'max:2000'],
         ], [
-            'corrections_made.required' => 'List the corrections made to the thesis.',
-            'declaration.accepted' => 'Confirm the declaration to submit.',
+            'viva_date.required' => 'Enter the date of your viva voce examination.',
+            'viva_date.before_or_equal' => 'The viva date cannot be in the future.',
             'submission_form.required' => 'Attach the signed Hardbound Thesis Submission form.',
             'response_to_comments.required' => 'Explain what you changed in response to the comments.',
         ]);
@@ -280,7 +275,8 @@ class HardboundSubmissionController extends Controller
                 'matric_no' => $student->matric_no ?? '',
                 'programme' => $data['programme'],
                 'supervisor_name' => $data['supervisor_name'],
-                'corrections_made' => $data['corrections_made'],
+                'viva_date' => $data['viva_date'],
+                'co_supervisor_name' => $data['co_supervisor_name'] ?? null,
                 'resubmission_of_id' => $replaces?->id,
                 'response_to_comments' => $data['response_to_comments'] ?? null,
             ]);

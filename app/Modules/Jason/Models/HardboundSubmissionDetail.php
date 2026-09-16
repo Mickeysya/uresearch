@@ -11,8 +11,13 @@ class HardboundSubmissionDetail extends Model
 {
     protected $fillable = [
         'application_id', 'thesis_title', 'matric_no', 'programme',
-        'supervisor_name', 'corrections_made', 'resubmission_of_id', 'response_to_comments',
+        'supervisor_name', 'viva_date', 'co_supervisor_name', 'resubmission_of_id', 'response_to_comments',
     ];
+
+    protected function casts(): array
+    {
+        return ['viva_date' => 'date'];
+    }
 
     public function application(): BelongsTo
     {

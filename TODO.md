@@ -472,8 +472,9 @@ declared but unused by any built module, and unseeded — see the cross-cutting
 note below.
 
 - [x] **Hardbound Submission** (`hardbound_submission`) — Supervisor →
-      Chair of Department → Non-Executive CGS, each of whom *signs* the
-      Confirmation of Correction to Thesis as they approve (below). The
+      Chairman of the Viva Voce Examination (the `chair` role) → Non-Executive
+      CGS. The first two *sign* the Confirmation of Correction to Thesis as
+      they approve (below). The
       spec's Senior Executive sign-off was dropped on 2026-09-14: a
       completeness check does not need it, and with no `senior_exec_cgs`
       account seeded it stalled every submission for everyone but one machine.
@@ -481,23 +482,29 @@ note below.
         programme, supervisor. Captured at submission rather than read back
         off `users`, so a candidate who later changes programme or
         supervisor does not retroactively change what CGS reviewed.
-  - [x] The student downloads, signs and uploads the Hardbound Thesis
-        Submission form (blank copy served from
-        `app/Modules/Jason/Resources/templates/` — a placeholder until the
-        official CGS form is dropped in) and *declares* the corrections made,
-        from which the portal generates the **Confirmation of Correction to
-        Thesis**.
-  - [x] **Electronic signatures on the Confirmation.** Supervisor, Chair and
-        CGS each upload a signature image once at "My Signature"
-        (`hardbound_signatures`, private disk). Every approval regenerates
+  - [x] Both CGS forms are reproduced from the issued originals. The
+        **Hardbound Thesis Submission (UTP/CGS/021)**, ORIGINAL and STUDENT'S
+        COPY, is generated pre-filled with the student's name, matric and
+        programme for them to complete, sign and upload — the student signs
+        this one themselves. The **Confirmation of Correction to Thesis
+        (UTP/CGS/017A)** is generated from the details the student supplies
+        (programme, viva date, supervisor, co-supervisor, title) and carried
+        through the chain.
+  - [x] **Electronic signatures on the Confirmation.** 017A's signatories
+        are the Supervisor, the Internal/External Examiner and the Chairman
+        of the Viva Voce Examination. The Supervisor and the Chairman
+        (`chair`) each upload a signature image once at "My Signature"
+        (`hardbound_signatures`, private disk); every approval regenerates
         the Confirmation with that approver's signature and the approval date
         stamped into their block, replacing the archived copy, so the
-        application always carries one current version and CGS's approval
-        leaves it fully signed. Approving without a signature on file
-        redirects to the upload page; rejecting needs none. The signature
-        and date come from the `approval_history` row the engine wrote, so
-        the stamped form and the audit trail cannot disagree.
-        The layout is the portal's own until the official form is supplied.
+        application always carries one current version. Approving at those
+        two stages without a signature on file redirects to the upload page;
+        rejecting needs none. The signature and date come from the
+        `approval_history` row the engine wrote, so the stamped form and the
+        audit trail cannot disagree. **The Examiner block is left for a
+        physical signature and official stamp** — examiners have no login.
+        CGS has no block on 017A; its signature belongs on paper in 021's
+        office block.
   - [x] Non-Exec review screen — forward to Senior Exec, or return to the
         student with mandatory comments
   - [x] Every stage's approve/reject emails the student (the engine's

@@ -9,9 +9,9 @@
         <div class="card-divider"></div>
 
         <p class="queue-meta">
-            When you approve a Hardbound Submission, this image is stamped onto the
-            Confirmation of Correction to Thesis together with that day's date, in the block
-            for your role. Upload it once; replace it any time.
+            When you approve a Hardbound Submission as Supervisor or as Chairman of the Viva Voce
+            Examination, this image is stamped into your block on the Confirmation of Correction to
+            Thesis (UTP/CGS/017A) together with that day's date. Upload it once; replace it any time.
         </p>
 
         @if ($signature)

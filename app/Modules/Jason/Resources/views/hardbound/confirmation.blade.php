@@ -1,20 +1,28 @@
 @php
     /**
-     * Confirmation of Correction to Thesis, generated from what the student
-     * declared and regenerated at every approval so that each approver's
-     * signature and date are stamped in as the form moves up the chain.
+     * Confirmation of Correction to Thesis, UTP/CGS/017A (REV: June 2015),
+     * generated from the student's details and re-issued at every approval
+     * so each signatory's uploaded signature and the date are stamped into
+     * their block as the form moves.
      *
-     * $signatures is keyed by stage key: ['supervisor' => [
-     *     'name' => ..., 'date' => Carbon|null, 'image' => data-uri|null ], ...]
-     * A stage that has not signed yet has no entry.
-     *
-     * Layout is the portal's own until the official CGS form is supplied;
-     * the data and the signature blocks are what the office needs either way.
+     * $signatures is keyed by stage key ('supervisor', 'chair'); a stage
+     * that has not signed yet has no entry. The Examiner block is always
+     * left for a physical signature and official stamp -- examiners have
+     * no login.
      */
-    $blocks = [
-        'supervisor' => ['title' => 'Confirmation by Supervisor', 'text' => 'I confirm that the corrections listed above have been made to my satisfaction and that the thesis is ready for hardbound submission.'],
-        'chair'      => ['title' => 'Endorsement by Chair of Department', 'text' => 'I endorse the supervisor\'s confirmation on behalf of the Department.'],
-        'cgs_review' => ['title' => 'Accepted by Centre for Graduate Studies', 'text' => 'The corrected hardbound thesis and this confirmation have been received and accepted.'],
+    $boxes = function (?string $text, int $perRow, int $rows = 1): array {
+        $chars = preg_split('//u', strtoupper((string) $text), -1, PREG_SPLIT_NO_EMPTY);
+        $chars = array_slice($chars, 0, $perRow * $rows);
+        return array_chunk(array_pad($chars, $perRow * $rows, ''), $perRow);
+    };
+
+    $nameRows = $boxes($student?->name, 27, 2);
+    $matricRow = $boxes($detail->matric_no, 7)[0];
+
+    $signatories = [
+        'supervisor' => 'SUPERVISOR:',
+        'examiner'   => 'INTERNAL / EXTERNAL EXAMINER:',
+        'chair'      => 'CHAIRMAN, VIVA VOCE EXAMINATION',
     ];
 @endphp
 <!DOCTYPE html>
@@ -23,87 +31,125 @@
     <meta charset="utf-8">
     <title>Confirmation of Correction to Thesis — #{{ $application->id }}</title>
     <style>
-        @page { margin: 16mm 20mm; }
-        body { font-family: 'DejaVu Sans', sans-serif; font-size: 11px; color: #000; line-height: 1.5; }
-        .code { text-align: right; font-size: 9.5px; color: #333; }
-        .logo { text-align: center; margin: 0 0 10px; }
-        .logo img { height: 56px; }
-        h1 { font-size: 12.5px; text-transform: uppercase; text-align: center; border: 1px solid #000; padding: 6px; margin: 0 0 18px; }
-        h2 { font-size: 11px; text-transform: uppercase; margin: 16px 0 6px; border-bottom: 1px solid #000; padding-bottom: 3px; }
-        table.details { border-collapse: collapse; width: 100%; margin: 4px 0 8px; }
-        table.details td { padding: 3px 4px; vertical-align: top; }
-        table.details td.label { width: 160px; }
-        table.details td.sep { width: 8px; }
-        .box { border: 1px solid #000; padding: 8px 10px; min-height: 90px; margin: 4px 0 6px; white-space: pre-wrap; }
-        table.sig { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        table.sig td { border: 1px solid #000; vertical-align: top; padding: 8px 10px; width: 33.33%; }
-        table.sig .title { font-weight: bold; font-size: 10.5px; margin-bottom: 4px; }
-        table.sig .text { font-size: 9.5px; color: #222; min-height: 52px; }
-        .sig-area { height: 58px; margin: 8px 0 4px; border-bottom: 1px solid #000; position: relative; }
-        .sig-area img { max-height: 54px; max-width: 100%; position: absolute; bottom: 2px; left: 0; }
-        .sig-meta { font-size: 9.5px; }
-        .sig-meta .pending { color: #777; font-style: italic; }
-        .footer { margin-top: 22px; font-size: 8.5px; color: #555; border-top: 1px solid #ccc; padding-top: 6px; }
+        @page { margin: 12mm 14mm; }
+        body { font-family: 'DejaVu Sans', sans-serif; font-size: 10.5px; color: #000; line-height: 1.45; }
+        table.top { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        table.top td { padding: 0; vertical-align: bottom; }
+        table.top .green { font-size: 10px; }
+        table.top .code { border: 1px solid #000; padding: 3px 12px; text-align: center; font-size: 9.5px; line-height: 1.3; display: inline-block; }
+        .frame { border: 3px double #000; padding: 22px 26px 40px; }
+        table.hdr { width: 100%; border-collapse: collapse; margin-bottom: 26px; }
+        table.hdr td { vertical-align: middle; padding: 0; }
+        table.hdr td.logo { width: 90px; }
+        table.hdr img { height: 82px; }
+        table.hdr .u { font-size: 17px; font-weight: bold; text-align: center; white-space: nowrap; }
+        table.hdr .c { font-size: 13px; font-weight: bold; text-align: center; }
+        table.hdr .t { font-size: 13.5px; text-align: center; letter-spacing: 0.3px; margin-top: 4px; }
+        h2 { font-size: 12px; font-weight: bold; margin: 0 0 10px; }
+        table.det { border-collapse: collapse; width: 100%; }
+        table.det td { padding: 5px 0; vertical-align: bottom; }
+        table.det td.l { width: 96px; padding-right: 6px; }
+        table.det td.line { border-bottom: 1px solid #000; }
+        table.grid { border-collapse: collapse; }
+        table.grid td { border: 1px solid #000; width: 19px; height: 20px; text-align: center; font-size: 10.5px; padding: 0; }
+        .hint { font-style: italic; font-size: 9.5px; }
+        .cert { margin: 16px 0 14px; }
+        .cert .h { text-decoration: underline; margin-bottom: 4px; }
+        table.sig { width: 100%; border-collapse: collapse; margin-top: 4px; }
+        table.sig td { vertical-align: top; padding: 0; }
+        table.sig .who { text-decoration: underline; }
+        table.sig .lbl { display: block; }
+        .sigline { position: relative; height: 46px; border-bottom: 1px solid #000; margin-top: 4px; }
+        .sigline img { position: absolute; left: 4px; bottom: 2px; max-height: 44px; max-width: 95%; }
+        .dateline { position: relative; height: 46px; border-bottom: 1px solid #000; margin-top: 4px; }
+        .dateline span { position: absolute; left: 4px; bottom: 4px; }
+        .foot { margin-top: 10px; font-size: 7.5px; color: #555; }
     </style>
 </head>
 <body>
-    <div class="code">UTP/CGS — Confirmation of Correction to Thesis</div>
-    <div class="logo"><img src="{{ public_path('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS"></div>
-
-    <h1>Confirmation of Correction to Thesis</h1>
-
-    <h2>1. Candidate</h2>
-    <table class="details">
-        <tr><td class="label">Candidate's Name</td><td class="sep">:</td><td>{{ $student?->name ?? '—' }}</td></tr>
-        <tr><td class="label">Matric Number</td><td class="sep">:</td><td>{{ $detail->matric_no ?: '—' }}</td></tr>
-        <tr><td class="label">Programme</td><td class="sep">:</td><td>{{ $detail->programme }}</td></tr>
-        <tr><td class="label">Supervisor</td><td class="sep">:</td><td>{{ $detail->supervisor_name }}</td></tr>
-        <tr><td class="label">Title of the Thesis</td><td class="sep">:</td><td><b>{{ $detail->thesis_title }}</b></td></tr>
-        <tr><td class="label">Submitted</td><td class="sep">:</td><td>{{ $application->submitted_at?->format('j F Y') ?? '—' }}@if ($detail->isResubmission()) (resubmission of #{{ $detail->resubmission_of_id }})@endif</td></tr>
-    </table>
-
-    <h2>2. Declaration by Candidate</h2>
-    <p>
-        I confirm that the corrections required by the examiners have been made to the thesis
-        as detailed below, and that the hardbound copy submitted incorporates all of them.
-    </p>
-    <div class="box">{{ $detail->corrections_made }}</div>
-    <table class="details">
-        <tr><td class="label">Name</td><td class="sep">:</td><td>{{ $student?->name ?? '—' }}</td></tr>
-        <tr><td class="label">Date</td><td class="sep">:</td><td>{{ $application->submitted_at?->format('j F Y') ?? '—' }}</td></tr>
-    </table>
-
-    <h2>3. Confirmation and Endorsement</h2>
-    <table class="sig">
+    <table class="top">
         <tr>
-            @foreach ($blocks as $key => $block)
-                @php($sig = $signatures[$key] ?? null)
-                <td>
-                    <div class="title">{{ $block['title'] }}</div>
-                    <div class="text">{{ $block['text'] }}</div>
-                    <div class="sig-area">
-                        @if ($sig && $sig['image'])
-                            <img src="{{ $sig['image'] }}" alt="Signature of {{ $sig['name'] }}">
-                        @endif
-                    </div>
-                    <div class="sig-meta">
-                        @if ($sig)
-                            Name: {{ $sig['name'] }}<br>
-                            Date: {{ $sig['date']?->format('j F Y') }}
-                        @else
-                            <span class="pending">Name:</span><br>
-                            <span class="pending">Date:</span>
-                        @endif
-                    </div>
-                </td>
-            @endforeach
+            <td class="green">* PRINT ON GREEN PAPER</td>
+            <td style="text-align: right;"><span class="code">UTP/CGS/017A<br>REV: June 2015</span></td>
         </tr>
     </table>
 
-    <div class="footer">
-        Generated by UResearch 2.0 on {{ $issuedAt->format('j F Y, g:ia') }} against Application
-        #{{ $application->id }}. Signatures are applied electronically by each approver's own
-        account at the moment of approval and are recorded in the application's decision history.
+    <div class="frame">
+        <table class="hdr">
+            <tr>
+                <td class="logo"><img src="{{ public_path('images/UTP_logo.png') }}" alt="UTP"></td>
+                <td>
+                    <div class="u">UNIVERSITI TEKNOLOGI PETRONAS</div>
+                    <div class="c">CENTRE FOR GRADUATE STUDIES</div>
+                    <div class="t">CONFIRMATION OF CORRECTION TO THESIS</div>
+                </td>
+            </tr>
+        </table>
+
+        <h2>STUDENT'S DETAILS</h2>
+
+        <table class="det">
+            <tr>
+                <td class="l">Full Name :</td>
+                <td>
+                    <table class="grid">
+                        @foreach ($nameRows as $row)
+                            <tr>@foreach ($row as $ch)<td>{{ $ch }}</td>@endforeach</tr>
+                        @endforeach
+                    </table>
+                </td>
+            </tr>
+            <tr><td colspan="2" style="height: 10px;"></td></tr>
+            <tr>
+                <td class="l">Matrix No:</td>
+                <td>
+                    <table class="grid"><tr>@foreach ($matricRow as $ch)<td>{{ $ch }}</td>@endforeach</tr></table>
+                </td>
+            </tr>
+            <tr><td class="l">Programme:</td><td class="line">{{ $detail->programme }}</td></tr>
+            <tr><td class="l">Viva Date :</td><td class="line">{{ $detail->viva_date?->format('j F Y') }}</td></tr>
+            <tr><td class="l">Supervisor :</td><td class="line">{{ $detail->supervisor_name }}</td></tr>
+            <tr><td class="l">Co-Supervisor :</td><td class="line">{{ $detail->co_supervisor_name }}</td></tr>
+            <tr><td class="l">Title of Thesis</td><td class="line">{{ $detail->thesis_title }}</td></tr>
+            <tr><td class="l hint">(Not more than</td><td class="line"></td></tr>
+            <tr><td class="l hint">15 words)</td><td class="line"></td></tr>
+        </table>
+
+        <div class="cert">
+            <div class="h">CONFIRMATION OF CORRECTION TO THESIS</div>
+            We hereby certify that we have reviewed the above thesis and therefore verify that the thesis has
+            been corrected/amended as required.
+        </div>
+
+        @foreach ($signatories as $key => $who)
+            @php($sig = $signatures[$key] ?? null)
+            <table class="sig" style="margin-bottom: 14px;">
+                <tr>
+                    <td style="width: 60%; padding-right: 30px;">
+                        <span class="who">{{ $who }}</span>
+                        <span class="lbl">Signature and Official Stamp:</span>
+                        <div class="sigline">
+                            @if ($sig && $sig['image'])
+                                <img src="{{ $sig['image'] }}" alt="Signature of {{ $sig['name'] }}">
+                            @endif
+                        </div>
+                    </td>
+                    <td>
+                        <span class="lbl">&nbsp;</span>
+                        <span class="lbl">Dated:</span>
+                        <div class="dateline">
+                            @if ($sig)<span>{{ $sig['date']?->format('j F Y') }}</span>@endif
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        @endforeach
+    </div>
+
+    <div class="foot">
+        Generated by UResearch 2.0 on {{ $issuedAt->format('j F Y, g:ia') }} against Application #{{ $application->id }}.
+        Supervisor and Chairman signatures are applied electronically by each approver's own account at the moment of
+        approval and are recorded in the application's decision history. The Examiner block is for a physical signature.
     </div>
 </body>
 </html>

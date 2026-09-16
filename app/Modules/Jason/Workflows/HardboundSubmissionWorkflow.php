@@ -13,14 +13,16 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
 /**
  * Final hardbound thesis submission.
  *
- * The candidate fills in the Confirmation of Correction to Thesis -- what
- * was corrected in response to the examiners -- and uploads the Hardbound
- * Thesis Submission form they signed themselves. The Confirmation is then a
- * document the portal generates and carries through the chain: the
- * Supervisor confirms the corrections, the Chair endorses, and the
- * Non-Executive CGS accepts the pack. Each approval stamps that approver's
- * uploaded signature and the date onto the Confirmation, so by the time
- * CGS accepts it the form is fully signed without anyone printing it.
+ * The candidate supplies the details for the Confirmation of Correction to
+ * Thesis (UTP/CGS/017A) and uploads the Hardbound Thesis Submission form
+ * (UTP/CGS/021) they signed themselves. The Confirmation is a document the
+ * portal generates and carries through the chain. Its signatories are the
+ * form's: the Supervisor, the Internal/External Examiner, and the Chairman
+ * of the Viva Voce Examination. The Supervisor and the Chairman (the `chair`
+ * role here) sign electronically -- each approval stamps their uploaded
+ * signature and the date into their block. Examiners have no login, so the
+ * Examiner block is left for a physical signature and official stamp. The
+ * Non-Executive CGS then accepts the pack; CGS signs nothing on this form.
  *
  * The spec asks for a "return to the student, application stays open"
  * outcome, which the engine does not have; it knows approve (advance) and
@@ -56,10 +58,10 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
             ),
             new Stage(
                 key: 'chair',
-                label: 'Chair of Department',
+                label: 'Chairman, Viva Voce Examination',
                 role: Role::CHAIR,
-                decision: 'endorsed',
-                queueTitle: 'Corrections to Endorse',
+                decision: 'certified',
+                queueTitle: 'Corrections to Certify',
             ),
             new Stage(
                 key: 'cgs_review',
