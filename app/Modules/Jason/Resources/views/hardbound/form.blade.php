@@ -29,20 +29,24 @@
         @endif
 
         <div class="app-item" style="margin-bottom: 18px;">
-            <p><b>Two forms to complete</b></p>
-            <p class="queue-meta" style="margin: 4px 0 8px;">
-                Download each form, complete and sign it, then upload it below.
-            </p>
+            <p><b>What this submission produces</b></p>
             <ul class="doc-list">
-                <li><a href="{{ route('hardbound.template', 'submission') }}">Download — Hardbound Thesis Submission form (PDF)</a></li>
-                <li><a href="{{ route('hardbound.template', 'correction') }}">Download — Confirmation of Correction to Thesis (PDF)</a></li>
+                <li>
+                    <a href="{{ route('hardbound.template', 'submission') }}">Download — Hardbound Thesis Submission form (PDF)</a>
+                    <span style="color: var(--text-grey);">— complete, sign it yourself, and upload it below.</span>
+                </li>
+                <li>
+                    <b>Confirmation of Correction to Thesis</b>
+                    <span style="color: var(--text-grey);">— generated from your declaration below. Your supervisor,
+                    the Chair and CGS sign it electronically as they approve; you do not upload this one.</span>
+                </li>
             </ul>
         </div>
 
         @if ($returned)
             <p class="queue-meta">
-                Replacing submission #{{ $returned->id }}. Upload the corrected thesis and
-                say what you changed — CGS sees your response next to their own comments.
+                Replacing submission #{{ $returned->id }}. Fix what was asked and say what
+                you changed — the reviewer sees your response next to their own comments.
             </p>
 
             @php($lastRemark = $returned->history->last())
@@ -88,27 +92,39 @@
                 @error('response_to_comments') <p class="field-error">{{ $message }}</p> @enderror
             @endif
 
+            <h3 style="margin-top: 22px;">Confirmation of Correction to Thesis</h3>
+
+            <label for="corrections_made">Corrections made to the thesis</label>
+            <textarea name="corrections_made" id="corrections_made" rows="7" required
+                      placeholder="List each correction required by the examiners and what you changed, e.g.&#10;1. Chapter 3 — methodology rewritten to state the sampling frame (Examiner 1, item 2.7)&#10;2. Figures 4.2–4.6 relabelled with units (Examiner 2, section 3)"
+                      class="@error('corrections_made') is-invalid @enderror">{{ old('corrections_made', $detail?->corrections_made) }}</textarea>
+            <p class="queue-meta" style="margin-top: -8px;">
+                Printed on the Confirmation exactly as written — this is what your supervisor signs off.
+            </p>
+            @error('corrections_made') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label style="display: flex; gap: 10px; align-items: flex-start; font-weight: normal;">
+                <input type="checkbox" name="declaration" id="declaration" value="1" required
+                       style="margin-top: 4px;" @checked(old('declaration'))>
+                <span>
+                    I confirm that the corrections required by the examiners have been made to the
+                    thesis as listed above, and that the hardbound copy submitted incorporates all of them.
+                </span>
+            </label>
+            @error('declaration') <p class="field-error">{{ $message }}</p> @enderror
+
+            <h3 style="margin-top: 22px;">Hardbound Thesis Submission form</h3>
+
             <label for="submission_form">
-                Hardbound Thesis Submission form (completed)
-                @if ($returned) <span style="color: var(--text-grey);">(re-upload only if corrected)</span> @endif
+                Signed Hardbound Thesis Submission form
+                @if ($returned) <span style="color: var(--text-grey);">(re-upload only if it changed)</span> @endif
             </label>
             <input type="file" name="submission_form" id="submission_form" @unless ($returned) required @endunless
                    class="@error('submission_form') is-invalid @enderror">
             @error('submission_form') <p class="field-error">{{ $message }}</p> @enderror
+            <p class="queue-meta" style="margin-top: -8px;">PDF, Word, Excel or an image, up to 10 MB.</p>
 
-            <label for="correction_form">
-                Confirmation of Correction to Thesis (completed)
-                @if ($returned) <span style="color: var(--text-grey);">(re-upload only if corrected)</span> @endif
-            </label>
-            <input type="file" name="correction_form" id="correction_form" @unless ($returned) required @endunless
-                   class="@error('correction_form') is-invalid @enderror">
-            @error('correction_form') <p class="field-error">{{ $message }}</p> @enderror
-            <p class="queue-meta" style="margin-top: -8px;">
-                PDF, Word, Excel or an image, up to 10 MB each.
-                @if ($returned) At least one corrected form is required. @endif
-            </p>
-
-            <button type="submit">{{ $returned ? 'Resubmit to CGS' : 'Submit to CGS' }}</button>
+            <button type="submit">{{ $returned ? 'Resubmit for Confirmation' : 'Submit for Confirmation' }}</button>
         </form>
     </div>
 </div>

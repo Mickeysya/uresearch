@@ -471,25 +471,38 @@ exist and already carry this shape of chain elsewhere. `senior_exec_cgs` is
 declared but unused by any built module, and unseeded — see the cross-cutting
 note below.
 
-- [x] **Hardbound Submission** (`hardbound_submission`) — Non-Executive CGS
-      only. The spec's second stage (Senior Executive sign-off) was dropped
-      on 2026-09-14: a completeness check does not need two signatures, and
-      with no `senior_exec_cgs` account seeded it stalled every submission
-      for everyone but one machine.
+- [x] **Hardbound Submission** (`hardbound_submission`) — Supervisor →
+      Chair of Department → Non-Executive CGS, each of whom *signs* the
+      Confirmation of Correction to Thesis as they approve (below). The
+      spec's Senior Executive sign-off was dropped on 2026-09-14: a
+      completeness check does not need it, and with no `senior_exec_cgs`
+      account seeded it stalled every submission for everyone but one machine.
   - [x] `hardbound_submission_details` table: thesis title, matric number,
         programme, supervisor. Captured at submission rather than read back
         off `users`, so a candidate who later changes programme or
         supervisor does not retroactively change what CGS reviewed.
-  - [x] Two completed CGS forms uploaded via `DocumentStore` — the Hardbound
-        Thesis Submission form and the Confirmation of Correction to Thesis.
-        Blank copies are downloadable from the submission page, served from
-        `app/Modules/Jason/Resources/templates/` — the two PDFs there are
-        placeholders until the official CGS forms are dropped in.
+  - [x] The student downloads, signs and uploads the Hardbound Thesis
+        Submission form (blank copy served from
+        `app/Modules/Jason/Resources/templates/` — a placeholder until the
+        official CGS form is dropped in) and *declares* the corrections made,
+        from which the portal generates the **Confirmation of Correction to
+        Thesis**.
+  - [x] **Electronic signatures on the Confirmation.** Supervisor, Chair and
+        CGS each upload a signature image once at "My Signature"
+        (`hardbound_signatures`, private disk). Every approval regenerates
+        the Confirmation with that approver's signature and the approval date
+        stamped into their block, replacing the archived copy, so the
+        application always carries one current version and CGS's approval
+        leaves it fully signed. Approving without a signature on file
+        redirects to the upload page; rejecting needs none. The signature
+        and date come from the `approval_history` row the engine wrote, so
+        the stamped form and the audit trail cannot disagree.
+        The layout is the portal's own until the official form is supplied.
   - [x] Non-Exec review screen — forward to Senior Exec, or return to the
         student with mandatory comments
-  - [x] Non-Exec approve/reject, auto-email on approval — the engine's
-        `ApplicationDecided` sends the email; approval also issues an
-        acknowledgement receipt PDF via `DocumentStore::storeGenerated()`
+  - [x] Every stage's approve/reject emails the student (the engine's
+        `ApplicationDecided`); CGS's approval also issues an acknowledgement
+        receipt PDF via `DocumentStore::storeGenerated()`
   - [x] Resubmission form for a returned application
   - [x] **Open question, resolved without a Core change:** the spec wants
         "return to student, application stays open," which the engine has no

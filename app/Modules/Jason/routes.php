@@ -59,7 +59,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         // The blank CGS forms the student downloads, completes and uploads back.
         Route::get('/hardbound/templates/{form}', [HardboundSubmissionController::class, 'template'])
-            ->where('form', 'submission|correction')
+            ->where('form', 'submission')
             ->name('hardbound.template');
 
         Route::get('/hardbound/new', [HardboundSubmissionController::class, 'create'])
@@ -75,11 +75,22 @@ Route::middleware('auth')->group(function () {
             ->name('hardbound.resubmit');
     });
 
-    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+    // Every role that signs the Confirmation of Correction: the Supervisor
+    // confirms, the Chair endorses, CGS accepts. Same queue screen, ?stage=
+    // selects which; the engine re-checks the role against the stage.
+    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS]))->group(function () {
         Route::get('/hardbound/queue', [HardboundSubmissionController::class, 'queue'])
             ->name('hardbound.queue');
         Route::post('/hardbound/{application}/decide', [HardboundSubmissionController::class, 'decide'])
             ->name('hardbound.decide');
+
+        // The signature each of them stamps onto the Confirmation on approval.
+        Route::get('/hardbound/signature', [HardboundSubmissionController::class, 'signature'])
+            ->name('hardbound.signature');
+        Route::post('/hardbound/signature', [HardboundSubmissionController::class, 'storeSignature'])
+            ->name('hardbound.signature.store');
+        Route::get('/hardbound/signature/image', [HardboundSubmissionController::class, 'signatureImage'])
+            ->name('hardbound.signature.image');
     });
 
     // ---- Appeal Hardbound Submission ------------------------------------

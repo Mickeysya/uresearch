@@ -7,19 +7,22 @@ use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Models\ApplicationDocument;
+use App\Modules\Jason\Models\HardboundSignature;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\UnauthorizedException;
 
 class HardboundSubmissionController extends Controller
 {
     use ApprovesApplications;
 
-    /** The one stage: a rejection here means "returned for correction", an approval issues the receipt. */
-    protected const REVIEW_STAGE = 'cgs_review';
+    /** The last stage: approval here accepts the pack and issues the receipt. */
+    protected const FINAL_STAGE = 'cgs_review';
 
     protected function moduleKey(): string
     {
@@ -31,12 +34,12 @@ class HardboundSubmissionController extends Controller
     public const DOC_CORRECTION_FORM = 'Confirmation of Correction to Thesis';
 
     /**
-     * The two CGS forms a student downloads, completes and uploads back.
-     * Keyed by the slug used in the download URL.
+     * The CGS form a student downloads, signs and uploads back. The
+     * Confirmation of Correction is not here: the portal generates it from
+     * the student's declaration and the approvers sign it electronically.
      */
     public const TEMPLATES = [
         'submission' => ['file' => 'hardbound-thesis-submission-form.pdf', 'label' => self::DOC_SUBMISSION_FORM],
-        'correction' => ['file' => 'confirmation-of-correction-to-thesis.pdf', 'label' => self::DOC_CORRECTION_FORM],
     ];
 
     /**
@@ -53,6 +56,55 @@ class HardboundSubmissionController extends Controller
         abort_unless(is_file($path), 404, 'That form has not been uploaded to the portal yet.');
 
         return response()->download($path, self::TEMPLATES[$form]['file']);
+    }
+
+    /**
+     * Where a Supervisor, Chair or CGS officer keeps the signature image
+     * that is stamped onto the Confirmation of Correction when they approve.
+     */
+    public function signature(Request $request)
+    {
+        return view('jason::hardbound.signature', [
+            'signature' => HardboundSignature::forUser($request->user()->id),
+        ]);
+    }
+
+    public function storeSignature(Request $request): RedirectResponse
+    {
+        $request->validate(['signature' => HardboundSignature::rules()], [
+            'signature.mimes' => 'Upload the signature as a PNG or JPG image.',
+            'signature.max' => 'Keep the signature image under 1 MB.',
+        ]);
+
+        $file = $request->file('signature');
+        $existing = HardboundSignature::forUser($request->user()->id);
+
+        // Private disk, random name -- the same footing as every upload in
+        // the portal, just not attached to an application.
+        $path = $file->store(HardboundSignature::DIRECTORY, 'local');
+
+        HardboundSignature::updateOrCreate(['user_id' => $request->user()->id], [
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getClientMimeType(),
+        ]);
+
+        if ($existing && $existing->path !== $path) {
+            Storage::disk('local')->delete($existing->path);
+        }
+
+        return redirect()->route('hardbound.signature')
+            ->with('status', 'Signature saved. It will be stamped onto every Confirmation you approve from now on.');
+    }
+
+    /** The signature image, shown back to its owner only. */
+    public function signatureImage(Request $request)
+    {
+        $signature = HardboundSignature::forUser($request->user()->id);
+
+        abort_unless($signature, 404);
+
+        return response($signature->contents(), 200, ['Content-Type' => $signature->mime_type]);
     }
 
     public function create(Request $request)
@@ -80,7 +132,7 @@ class HardboundSubmissionController extends Controller
 
         return redirect()
             ->route('applications.index')
-            ->with('status', "Hardbound submission #{$application->id} sent to CGS for review.");
+            ->with('status', "Hardbound submission #{$application->id} sent to your supervisor to confirm the corrections.");
     }
 
     /**
@@ -110,7 +162,7 @@ class HardboundSubmissionController extends Controller
 
         return redirect()
             ->route('applications.index')
-            ->with('status', "Resubmission #{$fresh->id} sent to CGS, replacing #{$application->id}.");
+            ->with('status', "Resubmission #{$fresh->id} sent to your supervisor, replacing #{$application->id}.");
     }
 
     public function queue(Request $request, WorkflowEngine $engine)
@@ -135,17 +187,23 @@ class HardboundSubmissionController extends Controller
         abort_unless($application->module_type === $this->moduleKey(), 404);
 
         $stage = $engine->currentStage($application);
-        $returning = $request->input('decision') === 'reject' && $stage?->key === self::REVIEW_STAGE;
+        $returning = $request->input('decision') === 'reject';
 
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],
-            // The spec makes comments mandatory when returning a submission:
-            // "corrected documents and a response to the CGS comments" is
-            // impossible to write against an empty remark.
+            // A rejection at any stage is a return to the student, and a return
+            // without comments gives them nothing to correct.
             'remarks' => [$returning ? 'required' : 'nullable', 'string', 'max:2000'],
         ], [
             'remarks.required' => 'Tell the student what to correct before returning the submission.',
         ]);
+
+        // Approving stamps the approver's signature onto the Confirmation, so
+        // there has to be one to stamp. Rejecting signs nothing.
+        if (! $returning && $stage && ! HardboundSignature::forUser($request->user()->id)) {
+            return redirect()->route('hardbound.signature')
+                ->with('error', 'Upload your signature first — approving stamps it onto the Confirmation of Correction to Thesis.');
+        }
 
         try {
             $application = $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
@@ -155,15 +213,18 @@ class HardboundSubmissionController extends Controller
             return back()->with('error', 'That application has already been decided.');
         }
 
-        if ($data['decision'] === 'approve' && $stage?->key === self::REVIEW_STAGE) {
-            $this->issueAcknowledgement($application);
+        if (! $returning) {
+            // Re-issue the Confirmation with this approver's signature added.
+            $this->issueConfirmation($application);
+
+            if ($stage?->key === self::FINAL_STAGE) {
+                $this->issueAcknowledgement($application);
+            }
         }
 
-        return back()->with('status', match (true) {
-            $returning => "Submission #{$application->id} returned to the student.",
-            $data['decision'] === 'approve' => "Submission #{$application->id} approved.",
-            default => "Submission #{$application->id} rejected.",
-        });
+        return back()->with('status', $returning
+            ? "Submission #{$application->id} returned to the student."
+            : "Submission #{$application->id} {$stage?->decision} and signed.");
     }
 
     /**
@@ -175,21 +236,20 @@ class HardboundSubmissionController extends Controller
             'thesis_title' => ['required', 'string', 'max:500'],
             'programme' => ['required', 'string', 'max:150'],
             'supervisor_name' => ['required', 'string', 'max:150'],
-            // Both forms on a first submission; on a resubmission the student
-            // re-uploads whichever CGS asked them to correct, but not nothing.
-            'submission_form' => $resubmission
-                ? array_merge(['required_without:correction_form'], DocumentStore::rules())
-                : DocumentStore::rules(required: true),
-            'correction_form' => $resubmission
-                ? array_merge(['required_without:submission_form'], DocumentStore::rules())
-                : DocumentStore::rules(required: true),
+            // The Confirmation of Correction is generated from this; the student
+            // signs by declaring, the approvers sign as it moves.
+            'corrections_made' => ['required', 'string', 'max:4000'],
+            'declaration' => ['accepted'],
+            // The Hardbound Thesis Submission form is signed by the student
+            // themselves, so it is still downloaded, signed and uploaded. On a
+            // resubmission it is re-uploaded only if it changed.
+            'submission_form' => DocumentStore::rules(required: ! $resubmission),
             'response_to_comments' => [$resubmission ? 'required' : 'nullable', 'string', 'max:2000'],
         ], [
-            'submission_form.required' => 'Attach the completed Hardbound Thesis Submission form.',
-            'correction_form.required' => 'Attach the completed Confirmation of Correction to Thesis.',
-            'submission_form.required_without' => 'Attach at least one corrected form.',
-            'correction_form.required_without' => 'Attach at least one corrected form.',
-            'response_to_comments.required' => 'Explain what you changed in response to the CGS comments.',
+            'corrections_made.required' => 'List the corrections made to the thesis.',
+            'declaration.accepted' => 'Confirm the declaration to submit.',
+            'submission_form.required' => 'Attach the signed Hardbound Thesis Submission form.',
+            'response_to_comments.required' => 'Explain what you changed in response to the comments.',
         ]);
     }
 
@@ -220,6 +280,7 @@ class HardboundSubmissionController extends Controller
                 'matric_no' => $student->matric_no ?? '',
                 'programme' => $data['programme'],
                 'supervisor_name' => $data['supervisor_name'],
+                'corrections_made' => $data['corrections_made'],
                 'resubmission_of_id' => $replaces?->id,
                 'response_to_comments' => $data['response_to_comments'] ?? null,
             ]);
@@ -228,11 +289,13 @@ class HardboundSubmissionController extends Controller
                 $documents->attach($application, $request->file('submission_form'), self::DOC_SUBMISSION_FORM);
             }
 
-            if ($request->hasFile('correction_form')) {
-                $documents->attach($application, $request->file('correction_form'), self::DOC_CORRECTION_FORM);
-            }
+            $application = $engine->submit($application);
 
-            return $engine->submit($application);
+            // The unsigned Confirmation, so the Supervisor reads what they are
+            // being asked to sign. Re-issued with a signature at each approval.
+            $this->issueConfirmation($application);
+
+            return $application;
         });
     }
 
@@ -265,6 +328,53 @@ class HardboundSubmissionController extends Controller
         );
 
         return HardboundSubmissionDetail::where('application_id', $application->id)->firstOrFail();
+    }
+
+    /**
+     * Generates the Confirmation of Correction to Thesis with every
+     * signature collected so far and archives it, replacing the previous
+     * copy so the application always carries exactly one, current version.
+     * Each approval's signature and date come from the approval_history row
+     * the engine wrote and the approver's own uploaded signature.
+     */
+    protected function issueConfirmation(Application $application): void
+    {
+        $detail = HardboundSubmissionDetail::where('application_id', $application->id)->firstOrFail();
+
+        $signatures = [];
+
+        foreach ($application->history()->with('approver')->orderBy('id')->get() as $row) {
+            if ($row->decision === 'rejected') {
+                continue;
+            }
+
+            $signatures[$row->stage_key] = [
+                'name' => $row->approver?->name ?? '—',
+                'date' => $row->created_at,
+                'image' => ($row->approver_id ? HardboundSignature::forUser($row->approver_id)?->dataUri() : null),
+            ];
+        }
+
+        $pdf = Pdf::loadView('jason::hardbound.confirmation', [
+            'application' => $application,
+            'detail' => $detail,
+            'student' => $application->student,
+            'signatures' => $signatures,
+            'issuedAt' => now(),
+        ]);
+
+        foreach (ApplicationDocument::where('application_id', $application->id)
+            ->where('doc_type', self::DOC_CORRECTION_FORM)->get() as $previous) {
+            Storage::disk('local')->delete($previous->path);
+            $previous->delete();
+        }
+
+        app(DocumentStore::class)->storeGenerated(
+            $application,
+            $pdf->output(),
+            "Confirmation-of-Correction-{$application->id}.pdf",
+            self::DOC_CORRECTION_FORM,
+        );
     }
 
     /**

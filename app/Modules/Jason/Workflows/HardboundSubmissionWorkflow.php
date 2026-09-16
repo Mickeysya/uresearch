@@ -13,23 +13,24 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
 /**
  * Final hardbound thesis submission.
  *
- * The candidate submits the two completed CGS forms and the Non-Executive
- * CGS checks the pack is complete. That check is the whole chain: approving
- * it issues the acknowledgement receipt. The spec's second stage, a Senior
- * Executive sign-off, was dropped -- a completeness check does not need two
- * signatures, and no senior_exec_cgs account is seeded, so it only stalled
- * every submission for everyone but one machine.
+ * The candidate fills in the Confirmation of Correction to Thesis -- what
+ * was corrected in response to the examiners -- and uploads the Hardbound
+ * Thesis Submission form they signed themselves. The Confirmation is then a
+ * document the portal generates and carries through the chain: the
+ * Supervisor confirms the corrections, the Chair endorses, and the
+ * Non-Executive CGS accepts the pack. Each approval stamps that approver's
+ * uploaded signature and the date onto the Confirmation, so by the time
+ * CGS accepts it the form is fully signed without anyone printing it.
  *
  * The spec asks for a "return to the student, application stays open"
  * outcome, which the engine does not have; it knows approve (advance) and
- * reject (terminate). Rather than change Core, a return is a rejection at
- * `cgs_review`, and the student's resubmission is a fresh application
- * carrying `resubmission_of_id` back to it. That keeps the returned
- * application, its reviewer and its remarks intact on the record instead of
- * overwriting them on each attempt, and it is the option TODO.md offers as
- * the alternative to an engine change. With one stage there is no separate
- * "rejected outright" ending: every rejection is a return, and the student
- * may either resubmit or take it to Appeal Hardbound Submission.
+ * reject (terminate). Rather than change Core, a rejection at any stage is
+ * a return, and the student's resubmission is a fresh application carrying
+ * `resubmission_of_id` back to it. That keeps the returned application, its
+ * reviewer and its remarks intact on the record instead of overwriting them
+ * on each attempt, and it is the option TODO.md offers as the alternative
+ * to an engine change. There is no separate "rejected outright" ending: the
+ * student may either resubmit or take it to Appeal Hardbound Submission.
  */
 class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
 {
@@ -46,6 +47,20 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
     public function stages(?Application $application = null): array
     {
         return [
+            new Stage(
+                key: 'supervisor',
+                label: 'Supervisor',
+                role: Role::SUPERVISOR,
+                decision: 'confirmed',
+                queueTitle: 'Corrections to Confirm',
+            ),
+            new Stage(
+                key: 'chair',
+                label: 'Chair of Department',
+                role: Role::CHAIR,
+                decision: 'endorsed',
+                queueTitle: 'Corrections to Endorse',
+            ),
             new Stage(
                 key: 'cgs_review',
                 label: 'Non-Executive CGS',
@@ -97,25 +112,32 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
     }
 
     /**
-     * One "Resubmit" link per submission the student is currently allowed to
+     * Students: one "Resubmit" link per submission they may currently
      * replace. Core's student sidebar does not currently render module links
      * (its student partial is not passed $extraLinks), so the Hardbound
      * Submission page shows the same list itself; this stays so the links
      * appear the moment the sidebar does render them.
+     *
+     * Approvers in this chain: "My Signature", where they upload the image
+     * that gets stamped onto the Confirmation when they approve.
      */
     public function links(User $user): array
     {
-        if ($user->role !== Role::STUDENT) {
-            return [];
+        if ($user->role === Role::STUDENT) {
+            return HardboundSubmissionDetail::resubmittableFor($user->id)
+                ->get(['id'])
+                ->map(fn (Application $application) => [
+                    'label' => "Resubmit Hardbound #{$application->id}",
+                    'route' => 'hardbound.resubmit.form',
+                    'params' => ['application' => $application->id],
+                ])
+                ->all();
         }
 
-        return HardboundSubmissionDetail::resubmittableFor($user->id)
-            ->get(['id'])
-            ->map(fn (Application $application) => [
-                'label' => "Resubmit Hardbound #{$application->id}",
-                'route' => 'hardbound.resubmit.form',
-                'params' => ['application' => $application->id],
-            ])
-            ->all();
+        $signingRoles = array_map(fn (Stage $s) => $s->role, $this->stages());
+
+        return in_array($user->role, $signingRoles, true)
+            ? [['label' => 'My Signature', 'route' => 'hardbound.signature']]
+            : [];
     }
 }
