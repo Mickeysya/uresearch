@@ -29,9 +29,9 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | 71, covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains |
+| Automated tests | 75, covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains — none for Jason's |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12 |
-| Last reviewed | 2026-09-15 — Hani's and Norhanis' merges, see third pass |
+| Last reviewed | 2026-09-17 — Jason's merge, plus a per-owner outstanding-issues audit in each section below |
 
 ---
 
@@ -644,10 +644,26 @@ query; there is no placeholder data in the views.
         milestones, the ceiling, the deadline actually moving on the Dean's
         approval, an intermediate rejection leaving it alone, and the
         dismissal chain end to end.
-  - [ ] **Open:** the dismissal's termination email is not written yet. The
-        Registry stage closes the candidacy and timestamps it, but the actual
-        notification to the student is still to do — `RpdDeadlineApproaching`
-        is the pattern to copy.
+
+**Outstanding — audited 2026-09-17.** Her four modules are the most complete
+in the repo and all four carry tests (Travel 6, Publication 2, Claims 4,
+RPD 12). One thing is genuinely unfinished:
+
+- [ ] **The dismissal's termination email is not written.** The Registry stage
+      closes the candidacy and stamps `terminated_at`
+      (`RpdDismissalController.php:174`) and stops there — the student is
+      never told. `norhanis.md` Module 4.3 makes "Registry sends termination
+      email" the *point* of that stage, so the chain is one notification short
+      of doing what it says on the box. `Notifications\RpdDeadlineApproaching`
+      is the pattern to copy.
+
+Checked and clear: `rpd:remind` is registered and due daily at 07:00; an
+approved appeal moves the deadline, banks the months against the ceiling and
+clears the reminder log inside the engine's own transaction. Deliberately not
+built, and correctly so: Claims' Project Director payment step (manual,
+outside the app, agreed with the AE) and her own Chart.js bottleneck view —
+the shared CGS workload donut already answers that question, pending
+overlap #3.
 
 ---
 
@@ -756,6 +772,31 @@ query; there is no placeholder data in the views.
         and permission check apply unchanged — verified a second student
         cannot fetch another's certificate (403)
 
+
+**Outstanding — audited 2026-09-17.** Every sub-item above is closed and all
+four chains work end to end. What is left is coverage and two stale markers:
+
+- [ ] **GA Extension has no feature test.** The oldest of her four chains and
+      the only one with nothing guarding it. Its automated document-
+      completeness rule — the thing `nureen.md` Module 2 calls the point of
+      the module — is exactly the kind that breaks quietly.
+- [ ] **Attendance Appeal has no feature test.** `AttendanceTest` covers the
+      import, the risk rule, the template round-trip and the alerts, but not
+      the single-stage appeal chain a student files from "My Attendance".
+- [ ] **Decide whether Supervision and Certification are still `[~]`.** Every
+      bullet under both is `[x]`, so the tildes now say less than the lines
+      under them. Certification looks done outright. Supervision's is
+      arguably still right — its queue scoping is a module-local patch in
+      `SupervisionController`, not a fix to the Core gap every other module
+      still has. If that is what the tilde means, say so on the line;
+      otherwise close both.
+
+Checked and clear: `supervision:remind-stalled` is registered and due daily at
+08:00; `AttendanceAtRisk`, `SupervisionRequestStalled` and
+`CertificationIssued` all implement `ShouldQueue`, and both the `queue` worker
+and Redis are up in Compose — so none of them silently no-op the way a queued
+notification does on a box with no worker.
+
 ---
 
 ## Hani — Examiner Nomination · Conflict Detection · Re-viva
@@ -799,6 +840,42 @@ query; there is no placeholder data in the views.
       an examiner Unavailable now goes through a reason modal; the reason is
       shown back on the list and cleared on reactivation. One migration:
       `examiners.unavailable_reason` (nullable text).
+
+
+**Outstanding — audited 2026-09-17.** The examiner lifecycle and the re-viva
+stepper are solid. Five things are open, and the first is the one that
+matters:
+
+- [ ] **Level 5 does nothing.** `ReVivaController::recordOutcome()` validates
+      `between:1,5`, writes the level and the remarks, and that is the end of
+      it. `hani.md` calls level 5 "Dismissal (Terminal state)" — but nobody is
+      notified, no candidacy is closed, and nothing hands off to Norhanis'
+      `rpd_dismissal` chain, which is the machinery built for exactly this
+      ending. Decide which of the two modules owns a failed re-viva before
+      either of you builds anything.
+- [ ] **Levels 1–3 record a number, not corrections.** `hani.md` asks for
+      "pass with varying degrees of correction tracking"; the table holds
+      `outcome_level` plus a free-text `outcome_remarks`. Either that is
+      enough for the report — say so here — or levels 1–3 need a correction
+      deadline of their own, the way `re_viva_details` already stores the
+      6-month and 1-year ones.
+- [ ] **Conflict detection has no feature test.** Touchpoint 1 is covered by
+      `ExaminerNominationTest`; touchpoint 2
+      (`/examiner-nomination/conflicts`) has none, and it is much the harder
+      query of the two — cross-department duplicates across active
+      nominations.
+- [ ] **Touchpoint 2 is built for a different actor than the scope names.**
+      `hani.md` puts it at the "CGS Management Compilation Stage", with the
+      Dean or CGS Management deciding the substitution; the screen is gated to
+      the Academic Executive. One of the two is stale — confirm with CGS and
+      correct whichever it is.
+- [ ] **Re-appointment letters were left behind in the pivot.** `hani.md` §3
+      lists re-appointment letters and evaluation-report PDFs for external
+      panel examiners. Jason's `appointment_letter` generates both, but only
+      for a *first* appointment; nothing generates them for a re-viva panel.
+      Either re-viva reuses his CGS preparation step or it needs its own —
+      and that is a conversation with Jason, not a change in either folder
+      alone.
 
 ---
 
@@ -945,6 +1022,44 @@ elsewhere in this file:
   this module folder.
 - The Admin Dashboard (`jason.md` §5.5) — already listed, unowned, under
   "Team" below.
+
+
+**Outstanding — audited 2026-09-17.** All three chains are built, registered
+and routable — 23 routes, 3 workflows, 9 migrations, 20 views, everything
+compiles. Four things are not done:
+
+- [ ] **The appeal chain cannot be finished: no `senior_exec_cgs` account
+      exists.** `HardboundAppealWorkflow`'s last stage is `cgs_approve` /
+      `Role::SENIOR_EXEC_CGS`, and no seeder creates anyone with that role —
+      the live count is 0, against 1 `non_exec_cgs`, 2 `academic_exec` and 1
+      `dean_pgr`. An appeal can be filed and compiled by CGS and then sits
+      forever with nobody able to rule on it. The fix is one line in
+      `database/seeders/DatabaseSeeder.php`, but that is a shared file, so
+      raise it at the next sync rather than just adding it.
+- [ ] **No feature tests at all.** Core 31, Norhanis 24, Nureen 11, Hani 5,
+      Jason 0 — he is the only owner with none. The signature gate on
+      approval, the resubmit guard and the appeal's once-only rule are the
+      three worth writing first; `tests/Feature/Jason/` is where they go.
+- [ ] **The appeal chain earns the student nothing.**
+      `HardboundSubmissionDetail::resubmittableFor()` returns *any* rejected
+      submission not yet replaced, so a rejected student can simply resubmit
+      — appealing buys them nothing they did not already have. The paragraph
+      above claiming "only two things make a submission resubmittable: CGS
+      returned it at `cgs_review`, or an appeal against it was upheld"
+      describes a stricter design than the code implements, and names
+      `cgs_approve` as a stage of a chain that has not had one since the
+      Senior Exec sign-off was dropped on 2026-09-14. Either tighten
+      `resubmittableFor()` or rewrite the paragraph — they cannot both stand.
+- [ ] **`cgs_prep` is missing from the stage-key table** in
+      `docs/module-keys.md`. `AppointmentLetterWorkflow` uses it; the registry
+      that is supposed to list every stage key in use does not have it.
+
+Known and tracked elsewhere: the student sidebar drops his "Resubmit #N"
+links (Core gap below; worked around by putting them on the Hardbound page).
+Deliberately out of scope and correctly so: the Senior Exec sign-off on
+Hardbound (dropped 2026-09-14), the audit viewer covering views and uploads
+(§1.4, Core), the Admin Dashboard (§5.5, unowned) and the CGS Lifecycle
+Monitor (§5.3, blocked on overlap #3).
 
 ---
 
@@ -1397,17 +1512,20 @@ are what to reach for when touching the file anyway.
       Applications, Attendance (x2), Reports (x3), Users and Roles, Document
       Repository. Each names what is missing; several need only a query and a
       table, since the data already exists.
-- [~] Automated tests — the harness exists and 53 tests cover the parts that
-      break quietly: both authorisation locks, approve/reject outcomes,
-      Travel's conditional routing, the `stages(null)` superset, that every
-      registered module's routes actually exist, and the attendance contract
-      including its degradation path, plus Attendance's import, Supervision,
-      Certification, Claims, Publication, Examiner Nomination and Re-viva.
-      **Still wanted:** Travel, GA Extension, Attendance Appeal and Conflict
-      Detection have no feature test of their own, and neither does
-      `DocumentStore`'s allow-list. Each owner writing one for their own
-      module is the cheap way to get there — `tests/Feature/<You>/` is where
-      it goes.
+- [~] Automated tests — the harness exists and **75 pass** (71 feature, 4
+      unit), covering the parts that break quietly: both authorisation locks,
+      approve/reject outcomes, Travel's conditional routing, the
+      `stages(null)` superset, that every registered module's routes actually
+      exist, and the attendance contract including its degradation path, plus
+      Attendance's import, Supervision, Certification, Claims, Publication,
+      Examiner Nomination, Re-viva and RPD's three flows.
+      Per owner: Core 31 · Norhanis 24 · Nureen 11 · Hani 5 · **Jason 0**.
+      **Still wanted (re-checked 2026-09-17):** Jason's three chains, GA
+      Extension, Attendance Appeal and Conflict Detection have no feature test
+      of their own, and neither does `DocumentStore`'s allow-list. Travel is
+      no longer on this list — `TravelTest` covers it with six. Each owner
+      writing one for their own module is the cheap way to get there —
+      `tests/Feature/<You>/` is where it goes.
 - [ ] Deployment: hosting, real SMTP, `APP_DEBUG=false`, `php artisan
       config:cache`, a queue worker running as a service.
 - [ ] UTP Single Sign-On (listed as future in `technical.md`).
