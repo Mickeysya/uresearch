@@ -38,17 +38,17 @@ class RpdDeadlineApproaching extends Notification implements ShouldQueue
         $months = $this->milestone === 1 ? '1 month' : "{$this->milestone} months";
 
         $mail = (new MailMessage)
-            ->subject("Research Proposal Defence due in {$months}".($isStudent ? '' : ' — '.$student->name))
+            ->subject("Research Proposal Defence due in {$months}".($isStudent ? '' : ': '.$student->name))
             ->greeting('Hi '.$notifiable->name.',');
 
         $mail = $isStudent
-            ? $mail->line("Your Research Proposal Defence deadline is {$deadline} — {$months} from now.")
-            : $mail->line("{$student->name}'s Research Proposal Defence deadline is {$deadline} — {$months} from now.");
+            ? $mail->line("Your Research Proposal Defence deadline is {$deadline}, {$months} from now.")
+            : $mail->line("{$student->name}'s Research Proposal Defence deadline is {$deadline}, {$months} from now.");
 
         $mail->line('Programme: '.(Candidacy::programmeTypes()[$this->candidacy->programme_type] ?? $this->candidacy->programme_type));
 
         if ($isStudent) {
-            $mail->line('If you need more time, you can file an extension appeal. It is endorsed by your supervisor and the Chair, reviewed by CGS, and decided by the Dean of PGR — so file early rather than close to the deadline.');
+            $mail->line('If you need more time, you can file an extension appeal. It is endorsed by your supervisor and the Chair, reviewed by CGS, and decided by the Dean of PGR, so file early rather than close to the deadline.');
 
             if ($this->candidacy->canAppeal()) {
                 $mail->action('File an extension appeal', route('rpd-appeal.create'));

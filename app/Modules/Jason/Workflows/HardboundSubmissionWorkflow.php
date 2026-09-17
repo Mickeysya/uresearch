@@ -96,8 +96,8 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
             $replaced = HardboundSubmissionDetail::where('resubmission_of_id', $application->id)->exists();
 
             $summary .= $replaced
-                ? ' — replaced by a resubmission'
-                : ' — returned for correction; resubmit from the Hardbound Submission page, or appeal';
+                ? ' (replaced by a resubmission)'
+                : ' (returned for correction). Resubmit from the Hardbound Submission page, or appeal';
         }
 
         return $summary;

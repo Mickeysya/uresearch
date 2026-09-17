@@ -24,7 +24,7 @@
         @if ($application->documents->isNotEmpty())
             <ul class="doc-list">
                 @foreach ($application->documents as $doc)
-                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }} — {{ $doc->original_name }}</a></li>
+                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
                 @endforeach
             </ul>
         @endif
@@ -32,10 +32,10 @@
         <div class="history-trail">
             @forelse ($application->history as $entry)
                 <div class="entry">
-                    <b>{{ $entry->stage_label }}</b> — {{ $entry->decision }}
+                    <b>{{ $entry->stage_label }}</b>: {{ $entry->decision }}
                     by {{ $entry->approver->name }}
                     on {{ $entry->created_at->format('j M Y, g:ia') }}
-                    @if ($entry->remarks) — "{{ $entry->remarks }}" @endif
+                    @if ($entry->remarks) "{{ $entry->remarks }}" @endif
                 </div>
             @empty
                 <div class="entry">No decisions recorded yet.</div>

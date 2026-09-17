@@ -16,7 +16,7 @@
                         @php($last = $app->history->last())
                         <li>
                             <a href="{{ route('hardbound.resubmit.form', $app) }}"><b>Resubmit #{{ $app->id }}</b></a>
-                            — {{ $awaitingDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
+                            {{ $awaitingDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
                             @if ($last?->remarks) <br><span style="color: var(--text-grey);">CGS: “{{ $last->remarks }}”</span> @endif
                         </li>
                     @endforeach
@@ -28,32 +28,16 @@
             </div>
         @endif
 
-        <div class="app-item" style="margin-bottom: 18px;">
-            <p><b>The two CGS forms</b></p>
-            <ul class="doc-list">
-                <li>
-                    <a href="{{ route('hardbound.template', 'submission') }}">Download — Hardbound Thesis Submission (UTP/CGS/021), pre-filled</a>
-                    <span style="color: var(--text-grey);">— your name, matric number and programme are already on it.
-                    Complete the rest, sign and date it, and upload it below.</span>
-                </li>
-                <li>
-                    <b>Confirmation of Correction to Thesis (UTP/CGS/017A)</b>
-                    <span style="color: var(--text-grey);">— generated from the details below. Your supervisor and the
-                    viva chairman sign it electronically as they approve; you do not upload this one.</span>
-                </li>
-            </ul>
-        </div>
-
         @if ($returned)
             <p class="queue-meta">
                 Replacing submission #{{ $returned->id }}. Fix what was asked and say what
-                you changed — the reviewer sees your response next to their own comments.
+                you changed. The reviewer sees your response next to their own comments.
             </p>
 
             @php($lastRemark = $returned->history->last())
             @if ($lastRemark?->remarks)
                 <div class="app-item" style="margin-bottom: 18px;">
-                    <p><b>CGS comments</b> — {{ $lastRemark->stage_label }},
+                    <p><b>CGS comments</b>: {{ $lastRemark->stage_label }},
                         {{ $lastRemark->created_at?->format('j M Y') }}</p>
                     <p>{{ $lastRemark->remarks }}</p>
                 </div>
@@ -62,8 +46,33 @@
 
         <form method="POST"
               action="{{ $returned ? route('hardbound.resubmit', $returned) : route('hardbound.store') }}"
-              enctype="multipart/form-data">
+              enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
+
+            <fieldset class="fstep" data-label="Get the form">
+            <p class="fstep-hint">
+                Start here. The Hardbound Thesis Submission form (UTP/CGS/021) comes
+                pre-filled with your name, matric number and programme. Complete the
+                rest, sign and date it, and upload it on the last step.
+            </p>
+
+            <p>
+                <a href="{{ route('hardbound.template', 'submission') }}" class="btn-secondary">
+                    Download the submission form (UTP/CGS/021)
+                </a>
+            </p>
+
+            <p class="field-hint">
+                There is a second CGS form, the Confirmation of Correction to Thesis
+                (UTP/CGS/017A). You do not download that one: the portal generates it
+                from what you enter next, and your supervisor and the viva chairman
+                sign it electronically as they approve.
+            </p>
+            </fieldset>
+
+            <fieldset class="fstep" data-label="Thesis &amp; candidate">
+            <p class="fstep-hint">What goes on both CGS forms. Your matric number
+               comes from your student record and cannot be edited here.</p>
 
             <label for="thesis_title">Title of Thesis <span style="color: var(--text-grey);">(not more than 15 words)</span></label>
             <textarea name="thesis_title" id="thesis_title" rows="3" required
@@ -92,8 +101,12 @@
                           class="@error('response_to_comments') is-invalid @enderror">{{ old('response_to_comments') }}</textarea>
                 @error('response_to_comments') <p class="field-error">{{ $message }}</p> @enderror
             @endif
+            </fieldset>
 
-            <h3 style="margin-top: 22px;">Confirmation of Correction to Thesis</h3>
+            <fieldset class="fstep" data-label="Confirmation of Correction">
+            <p class="fstep-hint">Fills UTP/CGS/017A. Your supervisor and the viva
+               chairman sign this one electronically as they approve, so you do not
+               upload it.</p>
 
             <label for="viva_date">Viva Date</label>
             <input type="date" name="viva_date" id="viva_date" required max="{{ now()->toDateString() }}"
@@ -107,7 +120,11 @@
                    class="@error('co_supervisor_name') is-invalid @enderror">
             @error('co_supervisor_name') <p class="field-error">{{ $message }}</p> @enderror
 
-            <h3 style="margin-top: 22px;">Hardbound Thesis Submission form</h3>
+            </fieldset>
+
+            <fieldset class="fstep" data-label="Signed UTP/CGS/021">
+            <p class="fstep-hint">The form you downloaded above, completed, signed
+               and dated.</p>
 
             <label for="submission_form">
                 Signed Hardbound Thesis Submission form
@@ -117,9 +134,12 @@
                    class="@error('submission_form') is-invalid @enderror">
             @error('submission_form') <p class="field-error">{{ $message }}</p> @enderror
             <p class="queue-meta" style="margin-top: -8px;">PDF, Word, Excel or an image, up to 10 MB.</p>
+            </fieldset>
 
             <button type="submit">{{ $returned ? 'Resubmit for Confirmation' : 'Submit for Confirmation' }}</button>
         </form>
     </div>
 </div>
+
+@include('core::partials.form-stepper')
 @endsection

@@ -16,7 +16,7 @@
 
         @if ($signature)
             <div class="app-item" style="margin-bottom: 18px;">
-                <p><b>Signature on file</b> — {{ $signature->original_name }},
+                <p><b>Signature on file</b>: {{ $signature->original_name }},
                     uploaded {{ $signature->updated_at->format('j M Y, g:ia') }}</p>
                 <div style="border: 1px solid var(--border, #ddd); background: #fff; padding: 12px; display: inline-block;">
                     <img src="{{ route('hardbound.signature.image') }}?v={{ $signature->updated_at->timestamp }}"
@@ -39,7 +39,7 @@
             @error('signature') <p class="field-error">{{ $message }}</p> @enderror
             <p class="queue-meta" style="margin-top: -8px;">
                 PNG or JPG, under 1 MB. Sign on white paper and photograph or scan it, or export
-                from a signature app — a transparent PNG looks best on the form.
+                from a signature app. A transparent PNG looks best on the form.
             </p>
 
             <button type="submit">Save Signature</button>

@@ -8,10 +8,10 @@ PETRONAS, we are pleased to confirm your appointment as {{ $examinerRole }}.
 
 Two documents are attached:
 
-- **Appointment Letter** — the terms of your appointment, with the
+- **Appointment Letter**, the terms of your appointment, with the
   acknowledgement slip, conflict of interest declaration and thesis receipt
   confirmation to be returned to our office.
-- **Thesis Evaluation Report** — the report form to be completed and
+- **Thesis Evaluation Report**, the report form to be completed and
   returned once you have examined the thesis.
 
 If anything in the attached documents looks incorrect, please contact the
@@ -21,5 +21,5 @@ Thank you,<br>
 Centre for Graduate Studies<br>
 Universiti Teknologi PETRONAS
 
-<small style="color: #888;">Reference: Appointment Letter — Application #{{ $applicationId }}</small>
+<small style="color: #888;">Reference: Appointment Letter, Application #{{ $applicationId }}</small>
 @endcomponent

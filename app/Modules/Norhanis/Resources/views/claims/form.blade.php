@@ -12,7 +12,7 @@
             @csrf
 
             <fieldset class="fstep" data-label="Claim details">
-            <p class="fstep-hint">What the claim is for and where the money should go. The total is added up from your expense items on the next step — there is no field for it.</p>
+            <p class="fstep-hint">What the claim is for and where the money should go. The total is added up from your expense items on the next step, so there is no field for it.</p>
 
             <label for="purpose_of_claim">Purpose of Claim</label>
             <input type="text" name="purpose_of_claim" id="purpose_of_claim" required

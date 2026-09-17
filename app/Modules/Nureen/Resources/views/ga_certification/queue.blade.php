@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'GA/GRA Certification — ' . $stage->queueTitle())
+@section('title', 'GA/GRA Certification: ' . $stage->queueTitle())
 
 @section('content')
     @include('core::partials.queue', [

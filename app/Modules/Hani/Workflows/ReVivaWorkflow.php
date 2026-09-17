@@ -69,7 +69,7 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
             return 'Re-viva monitoring';
         }
 
-        return "Cycle {$detail->cycle_number} — resubmitted ".$detail->resubmission_at->format('j M Y');
+        return "Cycle {$detail->cycle_number}, resubmitted ".$detail->resubmission_at->format('j M Y');
     }
 
     public function createRoute(): ?string

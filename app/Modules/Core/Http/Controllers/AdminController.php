@@ -40,7 +40,7 @@ class AdminController extends Controller
     public function students()
     {
         return $this->page('Students',
-            'A read-only roster of every postgraduate — programme, department, supervisor, '
+            'A read-only roster of every postgraduate, with programme, department, supervisor, '
             .'candidacy status and application history. Read-only on purpose: the administrator '
             .'oversees, CGS acts. Account creation and role changes live under Users and Roles.');
     }
@@ -58,7 +58,7 @@ class AdminController extends Controller
 
         return $this->page($label,
             'Every application across every module, filterable by status and module, for oversight only. '
-            .'The data is already there — `applications` plus each module\'s detail table — so this is a '
+            .'The data is already there, in `applications` plus each module\'s detail table, so this is a '
             .'listing screen, not new machinery. Deciding on an application stays with the role that owns '
             .'its current stage.');
     }
@@ -90,7 +90,7 @@ class AdminController extends Controller
     {
         return $this->page('Approval Times',
             'How long each stage takes, per module and per approver. Computable today from '
-            .'`approval_history` — every decision already carries who made it and when — so this '
+            .'`approval_history`, since every decision already carries who made it and when, so this '
             .'needs a query and a chart, not a schema change.');
     }
 
@@ -105,7 +105,7 @@ class AdminController extends Controller
     public function users()
     {
         return $this->page('Users and Roles',
-            'Create and edit accounts and assign roles — the administrator\'s core job per '
+            'Create and edit accounts and assign roles. This is the administrator\'s core job per '
             .'technical.md and jason.md §5.5, and the one piece of this dashboard nothing else covers. '
             .'Roles can currently only be set in the seeder or phpMyAdmin. The 13 roles are listed in '
             .'App\\Modules\\Core\\Support\\Role; staff accounts are filtered from here rather than '
@@ -142,7 +142,7 @@ class AdminController extends Controller
     public function documents()
     {
         return $this->page('Document Repository',
-            'The central file vault from jason.md §1.5 — every uploaded and generated document with '
+            'The central file vault from jason.md §1.5, holding every uploaded and generated document with '
             .'version history. Files already go through `DocumentStore` onto the private disk and are '
             .'streamed back through an authorised controller, so the storage half exists; what is '
             .'missing is the browse-and-search screen and version tracking.');

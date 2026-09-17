@@ -26,7 +26,7 @@
             <p class="fstep-hint">
                 Export attendance from UTrace, then bring it here. The first row has to
                 match exactly, so it is easier to fill in a blank sheet than to reshape
-                an export by hand — both files already contain the header row and two
+                an export by hand. Both files already contain the header row and two
                 filled-in examples.
             </p>
 
@@ -83,8 +83,8 @@
             </div>
 
             <p class="field-hint">
-                The percentage is worked out from the two session counts on every save —
-                there is no column for it, and a figure typed into the sheet is ignored.
+                The percentage is worked out from the two session counts on every save.
+                There is no column for it, and a figure typed into the sheet is ignored.
             </p>
             </fieldset>
 
@@ -102,8 +102,8 @@
 
             <p class="field-hint">
                 Good rows are saved even when others are skipped, and anything skipped is
-                listed back with the row number and the reason — so a partly-wrong file is
-                worth uploading and correcting, not starting over.
+                listed back with the row number and the reason, so a partly-wrong file is
+                worth uploading and correcting rather than starting over.
             </p>
             </fieldset>
 

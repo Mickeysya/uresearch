@@ -18,12 +18,12 @@
                 @csrf
 
                 <fieldset class="fstep" data-label="Student">
-                <p class="fstep-hint">Only students without a candidacy already on record are listed — the clock is one per student.</p>
+                <p class="fstep-hint">Only students without a candidacy already on record are listed. The clock is one per student.</p>
 
                 <label for="student_id">Student</label>
                 <select name="student_id" id="student_id" required
                         class="@error('student_id') is-invalid @enderror">
-                    <option value="">— Select a student —</option>
+                    <option value="">Select a student</option>
                     @foreach ($students as $student)
                         <option value="{{ $student->id }}" @selected(old('student_id') == $student->id)>
                             {{ $student->name }}@if ($student->matric_no) ({{ $student->matric_no }})@endif

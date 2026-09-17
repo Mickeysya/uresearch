@@ -112,7 +112,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Thesis Evaluation Report — {{ $examiner->examiner_name }}</title>
+    <title>Thesis Evaluation Report: {{ $examiner->examiner_name }}</title>
     <style>
         @page { margin: 14mm 18mm 12mm; }
         body { font-family: 'DejaVu Sans', sans-serif; font-size: 9.5px; color: #000; line-height: 1.35; }

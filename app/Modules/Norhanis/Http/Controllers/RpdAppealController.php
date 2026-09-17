@@ -77,7 +77,7 @@ class RpdAppealController extends Controller
             'supporting_document' => DocumentStore::rules(),
         ], [
             'requested_months.max' => 'You have '.$candidacy->extensionMonthsRemaining().' month(s) of extension left under the '.Candidacy::MAX_EXTENSION_MONTHS.'-month ceiling.',
-            'justification.min' => 'Please give the Dean enough detail to decide on — a sentence or two at minimum.',
+            'justification.min' => 'Please give the Dean enough detail to decide on. A sentence or two at minimum.',
         ]);
 
         $application = DB::transaction(function () use ($request, $data, $candidacy, $engine, $documents) {

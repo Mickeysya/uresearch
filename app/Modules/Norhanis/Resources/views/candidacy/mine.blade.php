@@ -44,7 +44,7 @@
                 <p class="message-error">
                     Your deadline has passed. CGS may open a dismissal for exceeded candidacy.
                     @if ($candidacy->canAppeal())
-                        Filing an extension appeal now is still the fastest route —
+                        Filing an extension appeal now is still the fastest route:
                         <a href="{{ route('rpd-appeal.create') }}">file one</a>.
                     @endif
                 </p>
@@ -74,7 +74,7 @@
                         <p>Requested {{ $detail->requested_months }} {{ Str::plural('month', $detail->requested_months) }}
                            against a deadline of {{ $detail->deadline_at_filing->format('j M Y') }}.</p>
                         @if ($detail->new_deadline)
-                            <p class="tone-good">Granted — deadline moved to {{ $detail->new_deadline->format('j M Y') }}.</p>
+                            <p class="tone-good">Granted. Deadline moved to {{ $detail->new_deadline->format('j M Y') }}.</p>
                         @endif
                     @endif
                     <p class="queue-meta"><a href="{{ route('applications.show', $appeal) }}">Track this appeal</a></p>

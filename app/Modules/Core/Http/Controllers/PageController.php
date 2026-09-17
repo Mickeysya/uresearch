@@ -25,14 +25,14 @@ class PageController extends Controller
         'settings' => [
             'Settings',
             'Notification preferences, attendance thresholds and workflow reminder '
-                .'timings will be configurable here. They are currently constants in code — '
+                .'timings will be configurable here. They are currently constants in code: '
                 .'AttendanceRiskEvaluator::THRESHOLD and the schedule in routes/console.php.',
         ],
         'cgs-attendance' => [
             'Attendance Overview',
-            'A CGS-wide view of attendance across every postgraduate student — '
+            'A CGS-wide view of attendance across every postgraduate student will appear here: '
                 .'cohort averages, the distribution against the 80% threshold, and period-on-period '
-                .'movement — will appear here. The per-student figures behind it already exist; what '
+                .'movement. The per-student figures behind it already exist; what '
                 .'is missing is the aggregate. For now, "At-Risk Students" lists everyone currently flagged.',
         ],
         'cgs-student-list' => [
@@ -43,14 +43,14 @@ class PageController extends Controller
         ],
         'cgs-students' => [
             'Students',
-            'The postgraduate directory — programme, department, supervisor, candidacy '
+            'The postgraduate directory, holding programme, department, supervisor, candidacy '
                 .'status and every application a student has filed, in one record. This is the '
                 .'"holistic view of a student\'s administrative status" the scope document asks for.',
         ],
         'cgs-reports' => [
             'Reports and Analytics',
-            'Bottleneck analysis — how many applications are sitting at each stage, '
-                .'how long they have been there, and where the queue is backing up — plus exportable '
+            'Bottleneck analysis: how many applications are sitting at each stage, '
+                .'how long they have been there, and where the queue is backing up, plus exportable '
                 .'summaries for CGS reporting. Note this overlaps scope documented by other team '
                 .'members; agree ownership before building it.',
         ],

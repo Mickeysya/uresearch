@@ -23,7 +23,7 @@
                 <label for="student_id">Candidate</label>
                 <select name="student_id" id="student_id" required
                         class="@error('student_id') is-invalid @enderror">
-                    <option value="">— Select your candidate —</option>
+                    <option value="">Select your candidate</option>
                     @foreach ($candidates as $candidate)
                         <option value="{{ $candidate->id }}" @selected(old('student_id') == $candidate->id)>
                             {{ $candidate->name }} @if ($candidate->matric_no)({{ $candidate->matric_no }})@endif
@@ -46,15 +46,15 @@
                 <label for="main_examiner_id">Main Examiner</label>
                 <select name="main_examiner_id" id="main_examiner_id" required
                         class="@error('main_examiner_id') is-invalid @enderror">
-                    <option value="">— Select —</option>
+                    <option value="">Select</option>
                     @foreach ($examiners as $examiner)
                         <option value="{{ $examiner->id }}"
                                 @selected(old('main_examiner_id') == $examiner->id)
                                 @disabled(! $examiner->isEligible())>
-                            {{ $examiner->name }} — {{ $examiner->department }}
+                            {{ $examiner->name }}, {{ $examiner->department }}
                             ({{ ucfirst($examiner->type) }})
                             @unless ($examiner->isEligible())
-                                — {{ str_replace('_', ' ', $examiner->state()) }}
+                                {{ str_replace('_', ' ', $examiner->state()) }}
                             @endunless
                         </option>
                     @endforeach
@@ -64,15 +64,15 @@
                 <label for="backup_examiner_id">Backup Examiner <span style="color: var(--text-grey)">(optional)</span></label>
                 <select name="backup_examiner_id" id="backup_examiner_id"
                         class="@error('backup_examiner_id') is-invalid @enderror">
-                    <option value="">— None —</option>
+                    <option value="">None</option>
                     @foreach ($examiners as $examiner)
                         <option value="{{ $examiner->id }}"
                                 @selected(old('backup_examiner_id') == $examiner->id)
                                 @disabled(! $examiner->isEligible())>
-                            {{ $examiner->name }} — {{ $examiner->department }}
+                            {{ $examiner->name }}, {{ $examiner->department }}
                             ({{ ucfirst($examiner->type) }})
                             @unless ($examiner->isEligible())
-                                — {{ str_replace('_', ' ', $examiner->state()) }}
+                                {{ str_replace('_', ' ', $examiner->state()) }}
                             @endunless
                         </option>
                     @endforeach

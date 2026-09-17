@@ -31,7 +31,7 @@ class AttendanceAtRisk extends Notification implements ShouldQueue
         $isStudent = $notifiable->is($student);
 
         $mail = (new MailMessage)
-            ->subject('Attendance Early Warning'.($isStudent ? '' : ' — '.$student->name))
+            ->subject('Attendance Early Warning'.($isStudent ? '' : ': '.$student->name))
             ->greeting('Hi '.$notifiable->name.',');
 
         $mail = $isStudent

@@ -1,32 +1,35 @@
 @extends('core::layouts.app')
 
-@section('title', 'Prepare Appointment Pack — Application #' . $application->id)
+@section('title', 'Prepare Appointment Pack: Application #' . $application->id)
 
 @section('content')
 @php($c = $defaults['candidate'])
 <div class="card-container-inline">
     <div class="card card-wide">
-        <h2>Prepare Appointment Pack — Application #{{ $application->id }}</h2>
+        <h2>Prepare Appointment Pack: Application #{{ $application->id }}</h2>
         <div class="card-divider"></div>
 
         <p class="queue-meta">
             Endorsed by the Academic Executive. The candidate's details below are filled
-            in automatically from {{ $student?->name ?? 'the candidate' }}'s record — check
+            in automatically from {{ $student?->name ?? 'the candidate' }}'s record. Check
             them and add the thesis title. Submitting generates
-            <b>{{ $examiners->count() * 2 }} documents</b> — an appointment letter and a
-            thesis evaluation report for each of the {{ $examiners->count() }} examiners —
+            <b>{{ $examiners->count() * 2 }} documents</b>: an appointment letter and a
+            thesis evaluation report for each of the {{ $examiners->count() }} examiners,
             and sends the pack to the Dean.
         </p>
 
-        <form method="POST" action="{{ route('appointment-letter.prepare.store', $application) }}">
+        <form method="POST" action="{{ route('appointment-letter.prepare.store', $application) }}"
+              class="app-form" data-stepper>
             @csrf
 
-            <h3 style="margin-top: 18px;">Candidate</h3>
+            <fieldset class="fstep" data-label="Candidate">
+            <p class="fstep-hint">Pre-filled from the candidate's record. Correct
+               anything the record has wrong, because this is what the letters print.</p>
 
             <table class="recent-activity-table" style="margin-bottom: 14px;">
                 <tbody>
                     <tr><th style="width: 180px;">Candidate</th><td>{{ $student?->name ?? '—' }}@if ($student?->matric_no) ({{ $student->matric_no }})@endif</td></tr>
-                    <tr><th>Letter date</th><td>{{ now()->format('j F Y') }} <span style="color: var(--text-grey);">— set when you submit this form</span></td></tr>
+                    <tr><th>Letter date</th><td>{{ now()->format('j F Y') }} <span style="color: var(--text-grey);">(set when you submit this form)</span></td></tr>
                 </tbody>
             </table>
 
@@ -56,11 +59,14 @@
             <textarea name="thesis_title" id="thesis_title" rows="3" required
                       class="@error('thesis_title') is-invalid @enderror">{{ old('thesis_title', $c['thesis_title']) }}</textarea>
             <p class="queue-meta" style="margin-top: -8px;">
-                The one field with no record to draw on — no module captures thesis titles yet.
+                The one field with no record to draw on: no module captures thesis titles yet.
             </p>
             @error('thesis_title') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
-            <h3 style="margin-top: 24px;">Examiners</h3>
+            <fieldset class="fstep" data-label="Examiners">
+            <p class="fstep-hint">One appointment letter and one evaluation report
+               per examiner. The address and reference number print on the letter.</p>
 
             @foreach ($examiners as $i => $examiner)
                 @php($d = $defaults['examiners'][$examiner->id])
@@ -79,10 +85,10 @@
                     <label>Appointment Type</label>
                     <select name="examiners[{{ $i }}][examiner_type]" required>
                         <option value="internal" @selected(old("examiners.$i.examiner_type", $d['examiner_type']) === 'internal')>
-                            Internal Examiner — no entitlements attachment
+                            Internal Examiner: no entitlements attachment
                         </option>
                         <option value="external" @selected(old("examiners.$i.examiner_type", $d['examiner_type']) === 'external')>
-                            External Examiner — letter includes honorarium and travel entitlements
+                            External Examiner: letter includes honorarium and travel entitlements
                         </option>
                     </select>
                     <p class="queue-meta" style="margin-top: -8px;">As nominated by the Chair. Change it here if the Chair got it wrong.</p>
@@ -91,7 +97,7 @@
                     <textarea name="examiners[{{ $i }}][examiner_address]" rows="4" required
                               class="@error("examiners.$i.examiner_address") is-invalid @enderror">{{ old("examiners.$i.examiner_address", $d['examiner_address']) }}</textarea>
                     <p class="queue-meta" style="margin-top: -8px;">
-                        Printed under the examiner's name at the top of the letter, one line each —
+                        Printed under the examiner's name at the top of the letter, one line each:
                         department or faculty, institution, postcode and city, country.
                     </p>
                     @error("examiners.$i.examiner_address") <p class="field-error">{{ $message }}</p> @enderror
@@ -101,19 +107,28 @@
                            value="{{ old("examiners.$i.letter_ref_no", $d['letter_ref_no']) }}"
                            class="@error("examiners.$i.letter_ref_no") is-invalid @enderror">
                     <p class="queue-meta" style="margin-top: -8px;">
-                        Built from the candidate's matric number — PGS series for external, CGS for internal.
+                        Built from the candidate's matric number. PGS series for external, CGS for internal.
                     </p>
                     @error("examiners.$i.letter_ref_no") <p class="field-error">{{ $message }}</p> @enderror
                 </fieldset>
             @endforeach
 
+            </fieldset>
+
+            <fieldset class="fstep" data-label="Send to the Dean">
+            <p class="fstep-hint">Submitting generates the pack and moves the
+               application to the Dean's queue.</p>
+
             <label for="remarks">Remarks for the Dean <span style="color: var(--text-grey);">(optional)</span></label>
             <textarea name="remarks" id="remarks" rows="2"
                       class="@error('remarks') is-invalid @enderror">{{ old('remarks') }}</textarea>
             @error('remarks') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
             <button type="submit">Generate {{ $examiners->count() * 2 }} Documents &amp; Send to Dean</button>
         </form>
     </div>
 </div>
+
+@include('core::partials.form-stepper')
 @endsection

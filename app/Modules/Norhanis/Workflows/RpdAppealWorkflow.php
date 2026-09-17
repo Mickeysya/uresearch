@@ -62,7 +62,7 @@ class RpdAppealWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalend
 
         $to = $detail->new_deadline ?? $detail->deadline_at_filing->copy()->addMonthsNoOverflow($detail->requested_months);
 
-        return $detail->requested_months.'-month extension — '
+        return $detail->requested_months.'-month extension, '
             .$detail->deadline_at_filing->format('j M Y').' → '.$to->format('j M Y');
     }
 
@@ -128,7 +128,7 @@ class RpdAppealWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalend
         $events = [];
 
         foreach ($candidacies as $candidacy) {
-            $who = $isStudent ? '' : $candidacy->student?->name.' — ';
+            $who = $isStudent ? '' : $candidacy->student?->name.': ';
 
             if ($candidacy->rpd_deadline->betweenIncluded($from, $to)) {
                 $events[] = [

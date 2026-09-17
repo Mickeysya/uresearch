@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'RPD Dismissals — ' . $stage->queueTitle())
+@section('title', 'RPD Dismissals: ' . $stage->queueTitle())
 
 @section('content')
     @include('core::partials.queue', [

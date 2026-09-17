@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'Calendar — ' . $month->format('F Y'))
+@section('title', 'Calendar: ' . $month->format('F Y'))
 
 @section('content')
 <div class="rpd-page">
@@ -8,7 +8,7 @@
         <div>
             <h2>Calendar</h2>
             <p class="queue-meta">
-                Deadlines and dates from your applications. Nothing is entered here —
+                Deadlines and dates from your applications. Nothing is entered here:
                 every date comes from a record that already exists.
             </p>
         </div>
@@ -49,7 +49,7 @@
                             @php($tone = $event['tone'] ?? 'info')
                             @if (($event['url'] ?? null))
                                 <a href="{{ $event['url'] }}" class="cal-event tone-{{ $tone }}"
-                                   title="{{ $event['title'] }}@if(!empty($event['meta'])) — {{ $event['meta'] }}@endif">
+                                   title="{{ $event['title'] }}@if(!empty($event['meta'])), {{ $event['meta'] }}@endif">
                                     {{ $event['title'] }}
                                 </a>
                             @else

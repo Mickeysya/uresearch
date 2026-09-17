@@ -60,7 +60,7 @@ Route::middleware('auth')->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | RPD Candidacy — three flows off one masterlist
+    | RPD Candidacy: three flows off one masterlist
     |
     |   reminders  a scheduled command, no routes (see rpd:remind)
     |   appeals    student files, Supervisor -> Chair -> CGS -> Dean

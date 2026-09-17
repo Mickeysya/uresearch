@@ -33,7 +33,7 @@
             <h2>Audit Logs</h2>
             <p>
                 @if ($total > 0)
-                    <b>{{ number_format($total) }}</b> recorded {{ Str::plural('action', $total) }} — sign-ins, decisions, uploads and document views.
+                    <b>{{ number_format($total) }}</b> recorded {{ Str::plural('action', $total) }}: sign-ins, decisions, uploads and document views.
                 @else
                     Nothing has been recorded yet.
                 @endif

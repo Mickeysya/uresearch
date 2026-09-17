@@ -10,7 +10,7 @@
 
         <p class="queue-meta">
             The examiners a Chair can put on a panel. Add a new examiner here first; they
-            then appear on the nomination form. Removing one keeps past nominations intact —
+            then appear on the nomination form. Removing one keeps past nominations intact, because
             each nomination holds its own copy of the details.
         </p>
 

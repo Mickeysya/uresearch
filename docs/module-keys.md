@@ -51,8 +51,21 @@ across modules is fine and desirable — it keeps the vocabulary consistent.
 | `manager` | Manager CGS | `manager_cgs` |
 | `academic_exec` | Academic Executive | `academic_exec` |
 | `cgs_approve` | Senior Executive CGS | `senior_exec_cgs` |
+| `cgs_prep` | Non-Executive CGS (prepares the appointment pack) | `non_exec_cgs` |
 | `faculty` | Faculty | `faculty` |
 | `registry` | Registry | `registry` |
+| `report_sent` | Report Sent | `academic_exec` |
+| `under_panel_review` | Under Panel Review | `academic_exec` |
+| `report_received` | Report Received | `academic_exec` |
+| `consolidation_scheduled` | Consolidation Scheduled | `academic_exec` |
+
+The last four are Hani's re-viva monitoring stepper. They read as statuses
+rather than approvers because that is what they are: one actor advancing a
+case through four states, expressed as a chain so the engine still owns the
+position.
+
+Checked against `grep` over every `Workflows/*.php` on 2026-09-17, so this
+table is the full set, not a sample.
 
 ## Actors named in scope documents that are not yet roles
 

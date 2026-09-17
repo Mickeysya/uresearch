@@ -33,6 +33,30 @@ piece. Then:
 
 Run `php artisan migrate` and your links appear in the sidebar by themselves.
 
+## Forms
+
+Every screen here that a human fills in is a stepper: the form carries
+`data-stepper`, each group of fields is a `<fieldset class="fstep"
+data-label="...">`, and `@include('core::partials.form-stepper')` goes after
+the form. That is the whole contract. The rail, the Back/Continue buttons,
+the counter and the generated review step are all built by the partial, and
+no controller knows about any of it: the form still posts once, to the same
+route, with the same fields.
+
+Converted 2026-09-17: Hardbound Submission (3 steps), Appeal (3), Panel
+Nomination (2), CGS Pack Preparation (3).
+
+Two things to keep in mind when you add a field:
+
+- Give every control an `id` and its label a matching `for`. The review step
+  reads labels off the form, and a control without one is listed by its raw
+  `name` attribute.
+- Any inline `<script>` must be `<script @cspNonce>`, and anything it loads
+  must come from `public/js`, never a CDN. `script-src` is `'self'` plus a
+  nonce with no `unsafe-inline`, so a bare tag is silently refused and the
+  page still returns 200. `ContentSecurityPolicyTest` scans every Blade file
+  for this now.
+
 ## The three rules
 
 1. **Only edit files inside this folder.** If you think you need to change

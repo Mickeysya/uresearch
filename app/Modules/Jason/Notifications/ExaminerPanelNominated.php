@@ -53,7 +53,7 @@ class ExaminerPanelNominated extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject("Examiner panel nominated — Application #{$this->application->id}")
+            ->subject("Examiner panel nominated for Application #{$this->application->id}")
             ->greeting("Dear {$notifiable->name},")
             ->line("{$this->chairName}, Chair of Department, has nominated an examiner panel for your thesis:");
 

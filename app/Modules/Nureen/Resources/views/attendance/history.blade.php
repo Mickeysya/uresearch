@@ -17,7 +17,7 @@
                     </span>
                 </div>
                 <p>{{ $record->percentage }}%
-                    @if ($record->at_risk) <span style="color: var(--red, #c0392b);">— at risk</span> @endif
+                    @if ($record->at_risk) <span style="color: var(--red, #c0392b);">at risk</span> @endif
                 </p>
             </div>
         @empty

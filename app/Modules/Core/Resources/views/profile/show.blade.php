@@ -114,7 +114,7 @@
                     </span>
                     <span>
                         These are your official records and cannot be edited here.
-                        If something is wrong, contact CGS — changing a programme or
+                        If something is wrong, contact CGS. Changing a programme or
                         supervisor affects deadlines and approval routing, so it goes
                         through them.
                     </span>

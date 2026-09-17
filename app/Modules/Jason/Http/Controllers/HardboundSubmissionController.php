@@ -197,7 +197,7 @@ class HardboundSubmissionController extends Controller
         if (! $returning && $stage && in_array($stage->key, self::SIGNING_STAGES, true)
             && ! HardboundSignature::forUser($request->user()->id)) {
             return redirect()->route('hardbound.signature')
-                ->with('error', 'Upload your signature first — approving stamps it onto the Confirmation of Correction to Thesis.');
+                ->with('error', 'Upload your signature first. Approving stamps it onto the Confirmation of Correction to Thesis.');
         }
 
         try {

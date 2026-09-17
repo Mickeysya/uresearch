@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'Publication — ' . $stage->queueTitle())
+@section('title', 'Publication: ' . $stage->queueTitle())
 
 @section('content')
     @include('core::partials.queue', [

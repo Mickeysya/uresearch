@@ -73,7 +73,7 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents
         }
 
         return 'Extend to '.$detail->requested_new_end_date->format('j M Y')
-            .' — '.Str::limit($detail->reason_for_extension, 70);
+            .', '.Str::limit($detail->reason_for_extension, 70);
     }
 
     public function createRoute(): ?string

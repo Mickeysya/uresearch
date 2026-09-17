@@ -23,13 +23,13 @@
             </select>
             @error('appointment_type') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="period_start">Appointment Period — Start</label>
+            <label for="period_start">Appointment period starts</label>
             <input type="date" name="period_start" id="period_start" required
                    value="{{ old('period_start') }}"
                    class="@error('period_start') is-invalid @enderror">
             @error('period_start') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="period_end">Appointment Period — End</label>
+            <label for="period_end">Appointment period ends</label>
             <input type="date" name="period_end" id="period_end" required
                    value="{{ old('period_end') }}"
                    class="@error('period_end') is-invalid @enderror">

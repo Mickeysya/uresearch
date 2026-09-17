@@ -20,7 +20,7 @@ as the work it describes.
 | Norhanis — Publication | done |
 | Norhanis — RPD (reminders · appeals · dismissals) | done |
 | Nureen — GA Extension · Attendance · Supervision · Certification | done · matches `docs/scope/nureen.md` |
-| Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done · internal/external pool split on `feature/hani-remaining-modules`, unmerged |
+| Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done · internal/external pool split merged 2026-09-17 |
 | CGS dashboard (5 stat cards + 5 live panels) | done |
 | Admin dashboard (5 cards + 4 panels, system health) | done |
 | Notification feed (`/notifications`) | done |
@@ -29,7 +29,7 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | 88 on `develop`, 97 once `feature/hani-remaining-modules` merges (+9 `ExaminerPoolTest`) — covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains — none for Jason's |
+| Automated tests | **102**, all green — covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains — none for Jason's |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12 |
 | Last reviewed | 2026-09-17 — Jason's merge, plus a per-owner outstanding-issues audit in each section below |
 
@@ -195,8 +195,7 @@ merge, and `route:list` boots clean. What the review did turn up:
       (`queue:work` holds the app in memory and otherwise keeps running
       pre-pull code). `--check` reports without changing anything.
 - [x] **Fixed: `sync.sh` reported "MySQL is not running" at a healthy MySQL**
-      (2026-09-17, on `feature/hani-remaining-modules` — commit `524e9ec`,
-      not yet in `develop`). Six checks in the script grepped
+(2026-09-17). Six checks in the script grepped
       `docker compose ps --status running` for a container name. That needs
       three things to line up at once: a Compose new enough to know
       `--status` (2.6+), a working directory resolving to the same project
@@ -581,9 +580,7 @@ query; there is no placeholder data in the views.
       `prefers-color-scheme` listener repaints every live instance with
       `update('none')` — no animation replay, and no chart needs to know how
       it is themed.
-- [x] **The type scale is fluid** (2026-09-17, on
-      `feature/hani-remaining-modules` — commit `e99cc11`, not yet in
-      `develop`). No second scale was added: `--text-md` became
+- [x] **The type scale is fluid** (2026-09-17, merged to `develop`). No second scale was added: `--text-md` became
       `clamp(13px, 0.66rem + 0.24vw, 14px)` and the other seven sizes are
       ratios of it, so the whole scale shrinks as one instead of each page
       picking its own numbers. It resolves to exactly the old px at ≥1440px
@@ -900,9 +897,7 @@ notification does on a box with no worker.
       an examiner Unavailable now goes through a reason modal; the reason is
       shown back on the list and cleared on reactivation. One migration:
       `examiners.unavailable_reason` (nullable text).
-- [x] **Internal and external are two different records now** (2026-09-17,
-      on `feature/hani-remaining-modules` — commit `e99cc11`, not yet in
-      `develop`). CGS keeps two spreadsheets, and the external one carries
+- [x] **Internal and external are two different records now** (2026-09-17, merged to `develop`). CGS keeps two spreadsheets, and the external one carries
       nine columns the internal one has no equivalent of. `/examiners` grew a
       tab strip (All / Internal / External, each with its count) and the
       table's columns follow the tab; the stat cards and the department
@@ -925,11 +920,7 @@ notification does on a box with no worker.
       `tests/Feature/Hani/ExaminerPoolTest.php`, 9 cases covering each tab's
       columns, tab-scoped counts, the derived student column, the strip and
       the validation.
-      **On merge:** `app/Modules/Hani/README.md` still describes the pool
-      before the split, and it was left that way deliberately — a module
-      README sits beside its code, and on `develop` that code does not exist
-      yet. Update it in the merge commit, the way `app/Modules/Nureen/README.md`
-      now carries a Tests table.
+      `app/Modules/Hani/README.md` was updated once the branch merged.
 - [x] **Tab switching stopped looking like a page reload** (same commit).
       Every tab is a real GET — the portal is server-rendered and
       `layout.css` already cross-fades navigations via the native View
@@ -1126,35 +1117,79 @@ elsewhere in this file:
   "Team" below.
 
 
-**Outstanding — audited 2026-09-17.** All three chains are built, registered
-and routable — 23 routes, 3 workflows, 9 migrations, 20 views, everything
-compiles. Four things are not done:
+**Re-audited 2026-09-17 (second pass).** All three chains are built,
+registered and routable: 23 routes, 3 workflows, 9 migrations, 20 views. The
+first pass found four things. Five more turned up on this pass, four of them
+defects that no test could have caught because there were no tests. Six are
+now fixed; three need a decision from Jason.
+
+Fixed on this pass:
+
+- [x] **His module could not be tested at all.** Three queries ordered by
+      `FIELD(examiner_type, 'internal', 'external')`, which is a MySQL
+      extension with no SQLite equivalent, and the suite runs on SQLite in
+      memory by design. Every screen touching `appointment_examiners` threw
+      `no such function: FIELD` the moment a test rendered it. Replaced with
+      a portable `CASE WHEN examiner_type = 'internal' THEN 0 ELSE 1 END` in
+      `ExaminerPoolController`, `AppointmentLetterWorkflow::summary()` and
+      `AppointmentDetail`. Same class of bug as the `whereDate()` one in
+      `AttendanceRecord::recordPeriod()`: SQL that happens to work on one
+      driver.
+- [x] **"Add another examiner" never worked.** The nomination form's script
+      was written as a bare `<script>`. `script-src` is `'self'` plus the
+      request nonce with no `unsafe-inline`, so the browser refused to run
+      it: Add and Remove did nothing, and the page reported no error. Now
+      `<script @cspNonce>`.
+- [x] **The queue's workload chart never drew.** It pulled Chart.js from
+      `cdn.jsdelivr.net`, and `script-src` allow-lists no external host, then
+      ran an un-nonced inline block. Now `@include('core::dashboard.partials.chartjs')`
+      (self-hosted from `public/js`, as the report documents) with a nonced
+      init, and the bar colour reads `--navy` through `Chart.uresearchToken()`
+      so it survives the dark theme.
+- [x] **None of his four fill-in screens used the shared stepper.** Norhanis,
+      Nureen and Hani all use `core::partials.form-stepper`; Jason's were the
+      only long forms still rendering as one scroll. Converted: Hardbound
+      Submission (3 steps), Appeal (3), Panel Nomination (2), CGS Pack
+      Preparation (3). Hardbound's first step is the UTP/CGS/021 download,
+      lifted out of a bulleted list above the form and made a real
+      `btn-secondary` button, because a link sitting above a long form is
+      exactly what a student scrolls past. Same shape as the attendance
+      upload's "Get the template" step. No controller changed. The form still posts once to
+      the same route with the same fields, `$request->validate()` is
+      untouched, and without JavaScript every step is visible and it degrades
+      to the single page it was. The generated review step now names each
+      examiner row properly, because the rows carry `id`/`for` pairs that the
+      renumbering JS keeps in step.
+- [x] **He has tests now**, though not the ones the first pass asked for:
+      `tests/Feature/Jason/FormsTest.php`, 4 cases covering the stepper
+      contract on all four forms and the chart no longer coming from a CDN.
+      Render tests, deliberately: the stepper is client-side, so what breaks
+      server-side is the markup contract, and a missing `data-stepper` or an
+      unclosed step renders perfectly and produces no wizard.
+- [x] **`cgs_prep` added to the stage-key table** in `docs/module-keys.md`.
+
+Still open, and all three want Jason:
 
 - [ ] **The appeal chain cannot be finished: no `senior_exec_cgs` account
       exists.** `HardboundAppealWorkflow`'s last stage is `cgs_approve` /
-      `Role::SENIOR_EXEC_CGS`, and no seeder creates anyone with that role —
-      the live count is 0, against 1 `non_exec_cgs`, 2 `academic_exec` and 1
-      `dean_pgr`. An appeal can be filed and compiled by CGS and then sits
-      forever with nobody able to rule on it. The fix is one line in
+      `Role::SENIOR_EXEC_CGS`, and no seeder creates anyone with that role.
+      An appeal can be filed and compiled by CGS and then sits forever with
+      nobody able to rule on it. The fix is one line in
       `database/seeders/DatabaseSeeder.php`, but that is a shared file, so
       raise it at the next sync rather than just adding it.
-- [ ] **No feature tests at all.** Core 31, Norhanis 24, Nureen 11, Hani 5,
-      Jason 0 — he is the only owner with none. The signature gate on
-      approval, the resubmit guard and the appeal's once-only rule are the
-      three worth writing first; `tests/Feature/Jason/` is where they go.
-- [ ] **The appeal chain earns the student nothing.**
-      `HardboundSubmissionDetail::resubmittableFor()` returns *any* rejected
+- [ ] **The appeal chain still earns the student nothing.**
+      `HardboundSubmissionDetail::resubmittableFor()` returns any rejected
       submission not yet replaced, so a rejected student can simply resubmit
-      — appealing buys them nothing they did not already have. The paragraph
-      above claiming "only two things make a submission resubmittable: CGS
-      returned it at `cgs_review`, or an appeal against it was upheld"
-      describes a stricter design than the code implements, and names
-      `cgs_approve` as a stage of a chain that has not had one since the
-      Senior Exec sign-off was dropped on 2026-09-14. Either tighten
-      `resubmittableFor()` or rewrite the paragraph — they cannot both stand.
-- [ ] **`cgs_prep` is missing from the stage-key table** in
-      `docs/module-keys.md`. `AppointmentLetterWorkflow` uses it; the registry
-      that is supposed to list every stage key in use does not have it.
+      and appealing buys them nothing. The paragraph above describes a
+      stricter design than the code implements, and names `cgs_approve` as a
+      stage of a chain that has not had one since the Senior Exec sign-off
+      was dropped on 2026-09-14. Either tighten `resubmittableFor()` or
+      rewrite the paragraph. They cannot both stand.
+- [ ] **The three behaviour tests the first pass asked for are still
+      missing:** the signature gate on approval, the resubmit guard, and the
+      appeal's once-only rule. `FormsTest` covers how his screens render, not
+      what his rules enforce, and those three rules are the ones that fail
+      quietly.
 
 Known and tracked elsewhere: the student sidebar drops his "Resubmit #N"
 links (Core gap below; worked around by putting them on the Hardbound page).
@@ -1664,19 +1699,19 @@ are what to reach for when touching the file anyway.
       Applications, Attendance (x2), Reports (x3), Users and Roles, Document
       Repository. Each names what is missing; several need only a query and a
       table, since the data already exists.
-- [~] Automated tests — the harness exists and **88 pass** (84 feature, 4
+- [~] Automated tests — the harness exists and **102 pass** (98 feature, 4
       unit), covering the parts that break quietly: both authorisation locks,
       approve/reject outcomes, Travel's conditional routing, the
       `stages(null)` superset, that every registered module's routes actually
       exist, and the attendance contract including its degradation path, plus
       Attendance's import, Supervision, Certification, Claims, Publication,
       Examiner Nomination, Re-viva and RPD's three flows.
-      Per owner: Core 33 · Norhanis 24 · Nureen 22 · Hani 5 · **Jason 0**
-      — Hani reaches 14 once `feature/hani-remaining-modules` merges
-      (`ExaminerPoolTest`, 9).
-      **Still wanted (re-checked 2026-09-17):** Jason's three chains and
-      Conflict Detection have no feature test of their own, and neither does
-      `DocumentStore`'s allow-list. GA Extension and Attendance Appeal came
+      Per owner: Core 34 · Norhanis 24 · Nureen 22 · Hani 14 · Jason 4.
+      **Still wanted (re-checked 2026-09-17):** Conflict Detection has no
+      feature test of its own, and neither does `DocumentStore`'s allow-list.
+      Jason is no longer at zero, but his 4 are render tests of his forms:
+      the signature gate, the resubmit guard and the appeal's once-only rule
+      are still unguarded. GA Extension and Attendance Appeal came
       off this list the same day — `GaExtensionTest` (6) and
       `AttendanceAppealTest` (5) — which is what took Nureen from 11 to 22. Travel is
       no longer on this list — `TravelTest` covers it with six. Each owner

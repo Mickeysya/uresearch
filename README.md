@@ -54,7 +54,7 @@ cd uresearch
 ./setup.sh
 ```
 
-That takes a few minutes the first time — mostly pulling images, building the
+That takes a few minutes the first time, mostly pulling images, building the
 application image and downloading Composer packages. It:
 
 1. checks that Docker is installed and running
@@ -65,13 +65,13 @@ application image and downloading Composer packages. It:
 6. runs every migration and seeds the test accounts
 
 It is safe to re-run at any time: it will not overwrite an existing `.env`,
-and it will not wipe a database that already has data — a re-run applies any
+and it will not wipe a database that already has data. A re-run applies any
 new migrations and leaves your records alone. Use `./reset.sh` when you
 actually want to start over.
 
 ### 3. Start the app
 
-There is nothing to start — `./setup.sh` already brought the containers up in
+There is nothing to start. `./setup.sh` already brought the containers up in
 the background, the web server and the queue worker included.
 
 Open **http://localhost:8000** and log in as `student@utp.edu.my` with the
@@ -109,7 +109,7 @@ to re-run: installs dependencies if `composer.lock` changed, copies across any
 new setting a teammate added to `.env.example` (your own `.env` is git-ignored,
 so a pull never updates it), runs pending migrations, clears compiled Blade
 views and config left over from the previous branch, and restarts the queue
-worker — which holds the app in memory and otherwise keeps running pre-pull
+worker, which holds the app in memory and otherwise keeps running pre-pull
 code.
 
 To see what it would do without changing anything:
@@ -133,7 +133,7 @@ php artisan queue:work                          # terminal 2, for emails
 ```
 
 That path needs PHP 8.3 plus the `pdo_mysql`, `mbstring`, `openssl`,
-`tokenizer`, `xml`, `ctype`, `fileinfo` and `curl` extensions and Composer —
+`tokenizer`, `xml`, `ctype`, `fileinfo` and `curl` extensions and Composer,
 which is exactly the install everyone used to do, and exactly why the
 containerised path is the default now. Pick one or the other; running both at
 once means two things fighting over port 8000.
@@ -142,7 +142,7 @@ once means two things fighting over port 8000.
 
 ## Every password and port
 
-Nothing here is a secret — it is all local-only development configuration,
+Nothing here is a secret. It is all local-only development configuration,
 which is exactly why it can live in `.env.example` and be committed.
 
 ### Logging into the app
@@ -158,7 +158,7 @@ which is exactly why it can live in `.env.example` and be committed.
 |---|---|---|
 | **The app** | http://localhost:8000 | any account below · password `password` |
 | **phpMyAdmin** | http://localhost:8080 | user `root` · password `secret` |
-| **Mailpit** — every email the app sends | http://localhost:8025 | none |
+| **Mailpit**, every email the app sends | http://localhost:8025 | none |
 
 ### Database
 
@@ -200,13 +200,13 @@ Created by the seeder. **Every one uses the password `password`.**
 | `student@utp.edu.my` | Student | submit Travel and GA Extension applications, track them |
 | `student2@utp.edu.my` | Student | a second candidate, for examiner nominations |
 | `supervisor@utp.edu.my` | Supervisor | first endorsement on every chain; files examiner nominations |
-| `chair@utp.edu.my` | Chair of Department | second endorsement — **final approval for local travel** |
+| `chair@utp.edu.my` | Chair of Department | second endorsement, and **final approval for local travel** |
 | `cgs@utp.edu.my` | Non-Executive CGS | reviews international travel, verifies GA extensions |
 | `dean@utp.edu.my` | Dean of PGR | **final approval for international travel** |
 | `director@utp.edu.my` | Senior Director CGS | final approval for GA extensions |
 | `ae@utp.edu.my` | Academic Executive | approves examiner nominations |
-| `manager@utp.edu.my` | Manager CGS | Claims — module not built yet |
-| `registry@utp.edu.my` | Registry | RPD dismissals — module not built yet |
+| `manager@utp.edu.my` | Manager CGS | Claims, module not built yet |
+| `registry@utp.edu.my` | Registry | RPD dismissals, module not built yet |
 | `admin@utp.edu.my` | Admin | no admin screens exist yet |
 
 Both students are supervised by `supervisor@utp.edu.my`, so the supervisee
@@ -224,14 +224,14 @@ To get back to a clean database at any time:
 ## Try it in five minutes
 
 This walks the conditional routing, which is the most interesting part of the
-system — the same form produces a different approval chain depending on what
+system: the same form produces a different approval chain depending on what
 the student ticks.
 
 **1. Submit an international trip.** Log in as `student@utp.edu.my` →
 *New Application → Travel*. Fill it in and **tick "International Travel"**.
 Submit.
 
-**2. Look at the tracker.** *Track My Applications* — the stepper shows
+**2. Look at the tracker.** *Track My Applications*. The stepper shows
 **four** steps: Supervisor → Chair → Non-Executive CGS → Dean of PGR.
 
 **3. Walk the chain.** Log out and back in as each of these, click Travel in
@@ -239,15 +239,15 @@ the sidebar, and approve:
 
 `supervisor@utp.edu.my` → `chair@utp.edu.my` → `cgs@utp.edu.my` → `dean@utp.edu.my`
 
-**4. Back as the student** — every step is green and the badge reads
+**4. Back as the student.** Every step is green and the badge reads
 *approved*.
 
 **5. Now do a local trip.** Same form, **leave "International Travel"
 unticked**. The stepper now shows only **two** steps, and `chair@utp.edu.my`
-gives final approval — CGS and the Dean are never involved.
+gives final approval. CGS and the Dean are never involved.
 
-**6. Check the email.** http://localhost:8025 — a notification for every
-decision. (The `queue` container sends them — `./vendor/bin/sail logs queue`
+**6. Check the email.** http://localhost:8025 has a notification for every
+decision. (The `queue` container sends them; `./vendor/bin/sail logs queue`
 if they have not appeared.)
 
 Also worth trying: as `supervisor@utp.edu.my`, use *Nominate Examiners*. The
@@ -259,12 +259,12 @@ dropdown disables examiners who are assigned, unavailable, or still inside the
 ## Troubleshooting
 
 **`missing PHP extension` when running host PHP**
-Only applies if you chose the host fallback above — `./setup.sh` needs no PHP
+Only applies if you chose the host fallback above. `./setup.sh` needs no PHP
 at all. apt enables extensions a moment after the install command returns, so
 wait a few seconds and try again.
 
 **`dependency failed to start: container uresearch-mysql exited (137)`**
-137 means the kernel killed MySQL — almost always memory, on a first run while
+137 means the kernel killed MySQL, almost always memory, on a first run while
 Docker is still extracting image layers. `./setup.sh` now pulls images first
 and retries once, so try it again. If it keeps happening, give WSL2 more
 memory: create `C:\Users\<you>\.wslconfig` with
@@ -283,7 +283,7 @@ mkdir -p bootstrap/cache && chmod -R 775 bootstrap/cache storage
 ```
 
 **`SQLSTATE[HY000] [2002] Connection refused`**
-MySQL is not up yet. `./vendor/bin/sail ps` — wait for `uresearch-mysql` to read
+MySQL is not up yet. Run `./vendor/bin/sail ps` and wait for `uresearch-mysql` to read
 `(healthy)`, then retry. First start takes ~15 seconds while it builds the
 data directory.
 
@@ -322,13 +322,13 @@ rm -rf vendor
 .
 ├── app/
 │   ├── Modules/
-│   │   ├── Core/        shared foundation — auth, workflow engine, UI, models
+│   │   ├── Core/        shared foundation: auth, engine, UI, models
 │   │   ├── Norhanis/    Travel · Publication · Claims · RPD
 │   │   ├── Nureen/      Attendance · GA Extension · Supervision · Certification
 │   │   ├── Hani/        Examiner Nomination · Conflict Detection · Re-viva
-│   │   ├── Jason/       (scaffold only — Hardbound · Appeal · Appointment Letters)
-│   │   ├── Chloe/       (scaffold only — Workstation · Candidacy)
-│   │   └── Haziq/       (scaffold only — GRA · GA · Stage Gates · Allowance)
+│   │   ├── Jason/       Hardbound · Appeal Hardbound · Appointment Letters
+│   │   ├── Chloe/       (scaffold only: Workstation · Candidacy)
+│   │   └── Haziq/       (scaffold only: GRA · GA · Stage Gates · Allowance)
 │   ├── Console/         artisan commands (demo:seed)
 │   └── Providers/       module auto-discovery
 ├── database/migrations/ framework tables (users, sessions, jobs, cache) + activity log
@@ -347,12 +347,12 @@ rm -rf vendor
 ## Who owns what
 
 **Everyone owns exactly one folder under `app/Modules/`.** You build entirely
-inside it — your own migrations, models, controllers, routes and views. Nothing
+inside it: your own migrations, models, controllers, routes and views. Nothing
 central lists the modules, so adding one causes no merge conflict.
 
 | Folder | Owner | Modules |
 |---|---|---|
-| `Core/` | the team | shared foundation — changes by agreement |
+| `Core/` | the team | shared foundation, changes by agreement |
 | `Norhanis/` | Norhanis Erna Natasha (22006318) | Travel · Publication · Claims · RPD |
 | `Nureen/` | Nureen Nellysha (22006973) | Attendance · GA Extension · Supervision · Certification |
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
@@ -382,7 +382,7 @@ for every stage, authorisation, the student's progress stepper, the tracking
 page row, the notification email, and the sidebar links.
 
 Because `stages()` receives the application, conditional routing is just an
-`if` — see `Norhanis\Workflows\TravelWorkflow`, where international travel
+`if`. See `Norhanis\Workflows\TravelWorkflow`, where international travel
 returns a four-stage chain and local travel a two-stage one. When it is called
 with `null` it must return the **superset**: every stage the module can ever
 use, which is what the sidebar and the approval queues are built from.
@@ -392,7 +392,7 @@ use, which is what the sidebar and the approval queues are built from.
 
 ## Adding your module
 
-Copy `app/Modules/Norhanis` — it is a complete worked example. The full
+Copy `app/Modules/Norhanis`. It is a complete worked example, and the full
 walkthrough is in [`docs/adding-a-module.md`](docs/adding-a-module.md).
 
 ## Commands
@@ -415,12 +415,12 @@ Everything else is Sail:
 ./vendor/bin/sail shell                    # a shell inside the app container
 ./vendor/bin/sail artisan migrate          # apply new migrations
 ./vendor/bin/sail artisan route:list       # every route, including all modules
-./vendor/bin/sail artisan tinker           # REPL against the app (dev only —
+./vendor/bin/sail artisan tinker           # REPL against the app (dev only,
                                            #   laravel/tinker is in require-dev,
                                            #   so it is absent after a
                                            #   `composer install --no-dev`)
 ./vendor/bin/sail artisan optimize:clear   # clear config/route/view caches
-./vendor/bin/sail artisan test             # the test suite (SQLite in memory —
+./vendor/bin/sail artisan test             # the test suite (SQLite in memory,
                                            #   never touches your database)
                                            #   Run it through Sail: the app
                                            #   container ships pdo_sqlite. A bare
@@ -442,7 +442,7 @@ Everything else is Sail:
 | [`docs/architecture.md`](docs/architecture.md) | layers, the engine, the data model |
 | [`docs/adding-a-module.md`](docs/adding-a-module.md) | step-by-step, with code |
 | [`docs/conventions.md`](docs/conventions.md) | naming, ownership, the nine rules, where tests go |
-| [`docs/module-keys.md`](docs/module-keys.md) | the `module_type` registry — claim yours |
+| [`docs/module-keys.md`](docs/module-keys.md) | the `module_type` registry, claim yours |
 | [`docs/migration-from-legacy.md`](docs/migration-from-legacy.md) | what changed from the raw-PHP version and why |
 | [`docs/email-service-integration.md`](docs/email-service-integration.md) | Mailpit in development, and what real SMTP needs |
 | [`docs/tech-stack-and-architecture-report.md`](docs/tech-stack-and-architecture-report.md) | the stack and architecture write-up for the FYP report |
@@ -457,7 +457,7 @@ Everything else is Sail:
 |---|---|
 | `module-builder` | scaffolding a new module in your folder |
 | `legacy-porter` | moving an old raw-PHP page onto the module pattern |
-| `core-guard` | checking a change before you commit — ownership and workflow rules |
+| `core-guard` | checking a change before you commit: ownership and workflow rules |
 | `security-reviewer` | auditing for the vulnerability classes the legacy app had |
 
 Claude cannot push to GitHub on this repo.

@@ -46,8 +46,8 @@
 
             <label for="type">Type</label>
             <select name="type" id="type" required class="@error('type') is-invalid @enderror">
-                <option value="internal" @selected(old('type', 'internal') == 'internal')>Internal — UTP staff</option>
-                <option value="external" @selected(old('type') == 'external')>External — from outside UTP</option>
+                <option value="internal" @selected(old('type', 'internal') == 'internal')>Internal: UTP staff</option>
+                <option value="external" @selected(old('type') == 'external')>External: from outside UTP</option>
             </select>
             @error('type') <p class="field-error">{{ $message }}</p> @enderror
 

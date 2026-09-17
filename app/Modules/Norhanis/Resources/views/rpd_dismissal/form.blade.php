@@ -11,7 +11,7 @@
         <p class="queue-meta">
             Opens a dismissal against a student whose RPD deadline passed without an
             approved extension. It is endorsed by the Dean of PGR, approved by Faculty,
-            and the Registry sends the termination. You are the author, not an approver —
+            and the Registry sends the termination. You are the author, not an approver, so
             you will not see this again in a queue.
         </p>
 
@@ -31,11 +31,11 @@
                 <label for="candidacy_id">Student</label>
                 <select name="candidacy_id" id="candidacy_id" required
                         class="@error('candidacy_id') is-invalid @enderror">
-                    <option value="">— Select a student —</option>
+                    <option value="">Select a student</option>
                     @foreach ($eligible as $candidacy)
                         <option value="{{ $candidacy->id }}" @selected(old('candidacy_id') == $candidacy->id)>
                             {{ $candidacy->student->name }}@if ($candidacy->student->matric_no) ({{ $candidacy->student->matric_no }})@endif
-                            — deadline {{ $candidacy->rpd_deadline->format('j M Y') }},
+                            deadline {{ $candidacy->rpd_deadline->format('j M Y') }},
                             {{ abs($candidacy->daysRemaining()) }} days overdue
                         </option>
                     @endforeach

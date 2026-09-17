@@ -71,7 +71,7 @@ class TravelWorkflow implements WorkflowModule, SuppliesCalendarEvents
             return 'Travel application';
         }
 
-        return $detail->reason_for_travel.' — '.$detail->destination_address;
+        return $detail->reason_for_travel.', '.$detail->destination_address;
     }
 
     public function createRoute(): ?string
@@ -138,7 +138,7 @@ class TravelWorkflow implements WorkflowModule, SuppliesCalendarEvents
 
                 $events[] = [
                     'date' => $detail->$field,
-                    'title' => $label.' — '.$verb,
+                    'title' => $label.': '.$verb,
                     'tone' => 'info',
                     'meta' => $detail->destination_address,
                     'url' => route('applications.show', $detail->application_id),

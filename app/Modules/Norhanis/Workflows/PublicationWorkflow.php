@@ -47,7 +47,7 @@ class PublicationWorkflow implements WorkflowModule, SuppliesCalendarEvents
             return 'Publication application';
         }
 
-        return $detail->title_of_paper.' — '.$detail->title_of_conference_journal;
+        return $detail->title_of_paper.', '.$detail->title_of_conference_journal;
     }
 
     public function createRoute(): ?string

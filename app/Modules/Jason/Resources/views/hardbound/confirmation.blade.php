@@ -29,7 +29,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Confirmation of Correction to Thesis — #{{ $application->id }}</title>
+    <title>Confirmation of Correction to Thesis: #{{ $application->id }}</title>
     <style>
         @page { margin: 12mm 14mm; }
         body { font-family: 'DejaVu Sans', sans-serif; font-size: 10.5px; color: #000; line-height: 1.45; }

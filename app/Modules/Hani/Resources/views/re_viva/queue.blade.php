@@ -1,11 +1,11 @@
 @extends('core::layouts.app')
 
-@section('title', 'Re-viva — ' . $stage->queueTitle())
+@section('title', 'Re-viva: ' . $stage->queueTitle())
 
 @section('content')
 <div class="card-container-inline">
     <div class="card card-wide">
-        <h2>Re-viva Monitoring — {{ $stage->queueTitle() }}</h2>
+        <h2>Re-viva Monitoring: {{ $stage->queueTitle() }}</h2>
         <div class="card-divider"></div>
         <p class="queue-meta">
             {{ $applications->count() }} {{ Str::plural('cycle', $applications->count()) }} at this step.
@@ -16,7 +16,7 @@
             <div class="app-item">
                 <div class="app-item-header">
                     <p><b>Application #{{ $application->id }}</b>
-                        @if ($detail) — Cycle {{ $detail->cycle_number }} @endif
+                        @if ($detail) Cycle {{ $detail->cycle_number }} @endif
                     </p>
                     <span style="color: var(--text-grey); font-size: 12.5px;">
                         Submitted {{ $application->submitted_at?->diffForHumans() }}
@@ -28,13 +28,13 @@
                 @if ($detail)
                     <p>Resubmitted: {{ $detail->resubmission_at->format('j M Y') }}</p>
                     <p>Correction deadline: {{ $detail->correction_deadline->format('j M Y') }}
-                        — Hardbound deadline: {{ $detail->hardbound_deadline->format('j M Y') }}</p>
+                        Hardbound deadline: {{ $detail->hardbound_deadline->format('j M Y') }}</p>
                 @endif
 
                 @if ($application->documents->isNotEmpty())
                     <ul class="doc-list">
                         @foreach ($application->documents as $doc)
-                            <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }} — {{ $doc->original_name }}</a></li>
+                            <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
                         @endforeach
                     </ul>
                 @endif

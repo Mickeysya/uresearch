@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Dean PFR Report — Appeal #{{ $application->id }}</title>
+    <title>Dean PFR Report: Appeal #{{ $application->id }}</title>
     <style>
         body { font-family: 'DejaVu Sans', sans-serif; font-size: 11px; color: #000; line-height: 1.5; }
         .logo { text-align: center; margin-bottom: 16px; }
@@ -28,7 +28,7 @@
         <img src="{{ public_path('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS">
     </div>
 
-    <h1>Dean PFR Report — Hardbound Submission Appeal</h1>
+    <h1>Dean PFR Report: Hardbound Submission Appeal</h1>
     <p class="subtitle">
         Compiled by the Centre for Graduate Studies for the ruling of the Senior Executive, CGS
     </p>

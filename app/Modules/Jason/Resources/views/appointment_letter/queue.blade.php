@@ -1,9 +1,10 @@
 @extends('core::layouts.app')
 
-@section('title', 'Appointment Letter — ' . $stage->queueTitle())
+@section('title', 'Appointment Letter: ' . $stage->queueTitle())
 
 @section('content')
     @if (collect($workload)->sum('count') > 0)
+        @include('core::dashboard.partials.chartjs')
         <div class="chart-card" style="margin-bottom: 20px;">
             <h3>Pending Nominations by Approver</h3>
             <canvas id="workloadChart"></canvas>
@@ -19,24 +20,33 @@
 
 @push('scripts')
     @if (collect($workload)->sum('count') > 0)
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-        <script>
-            new Chart(document.getElementById('workloadChart'), {
-                type: 'bar',
-                data: {
-                    labels: @json(array_column($workload, 'label')),
-                    datasets: [{
-                        label: 'Pending',
-                        data: @json(array_column($workload, 'count')),
-                        backgroundColor: '#284B80',
-                        borderRadius: 6,
-                    }],
-                },
-                options: {
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } },
-                    plugins: { legend: { display: false } },
-                },
-            });
+        {{-- Chart.js comes from core::dashboard.partials.chartjs (public/js), not
+             a CDN: script-src names no external origin, so the CDN copy was
+             blocked and this chart never drew. The nonce is required for the
+             same reason, and the bar colour reads a token so it survives the
+             dark theme. --}}
+        <script @cspNonce>
+            (function () {
+                var el = document.getElementById('workloadChart');
+                if (! el || typeof Chart === 'undefined') return;
+
+                new Chart(el, {
+                    type: 'bar',
+                    data: {
+                        labels: @json(array_column($workload, 'label')),
+                        datasets: [{
+                            label: 'Pending',
+                            data: @json(array_column($workload, 'count')),
+                            backgroundColor: function () { return Chart.uresearchToken('--navy', '#284B80'); },
+                            borderRadius: 6,
+                        }],
+                    },
+                    options: {
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } },
+                        plugins: { legend: { display: false } },
+                    },
+                });
+            })();
         </script>
     @endif
 @endpush

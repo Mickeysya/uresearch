@@ -32,7 +32,7 @@
 
         <div class="adm-health">
             @foreach ($health as $tile)
-                <div class="adm-tile tone-{{ $tile['tone'] }}" title="{{ $tile['label'] }}: {{ $tile['value'] }} — {{ $tile['note'] }}">
+                <div class="adm-tile tone-{{ $tile['tone'] }}" title="{{ $tile['label'] }}: {{ $tile['value'] }}, {{ $tile['note'] }}">
                     <span class="adm-tile-icon" aria-hidden="true">
                         @include('core::dashboard.partials.icon', ['name' => $tile['icon']])
                     </span>

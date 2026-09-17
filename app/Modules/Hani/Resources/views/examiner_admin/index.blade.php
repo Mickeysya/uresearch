@@ -213,8 +213,9 @@
             External examiners carry the faculty approval, institution, expertise and
             supervision record CGS keeps for anyone appointed from outside UTP.
         @elseif ($isInternal)
-            Internal examiners are UTP staff — name, department, availability and the
-            students they are holding. No external paperwork applies.
+            Internal examiners are UTP staff. The list shows name, department,
+            availability and the students they are holding. No external paperwork
+            applies.
         @else
             Both lists, showing only the columns they have in common. Open a list to
             see everything kept for it.
@@ -253,7 +254,7 @@
             <input type="hidden" name="type" value="{{ $type }}">
             <div class="field">
                 <label for="f-department">Department</label>
-                <select name="department" id="f-department" onchange="this.form.submit()">
+                <select name="department" id="f-department" data-autosubmit>
                     <option value="">All Departments</option>
                     @foreach ($departments as $dept)
                         <option value="{{ $dept }}" @selected(($filters['department'] ?? null) === $dept)>{{ $dept }}</option>
@@ -262,7 +263,7 @@
             </div>
             <div class="field">
                 <label for="f-status">Status</label>
-                <select name="status" id="f-status" onchange="this.form.submit()">
+                <select name="status" id="f-status" data-autosubmit>
                     <option value="">All Status</option>
                     @foreach ([
                         \App\Modules\Hani\Models\Examiner::STATE_AVAILABLE => 'Available',
@@ -375,7 +376,8 @@
                         <td>
                             @if ($examiner->is_active)
                                 <button type="button" class="btn-reject"
-                                        onclick="openUnavailableModal({{ $examiner->id }}, '{{ addslashes($examiner->name) }}')">
+                                        data-unavailable="{{ $examiner->id }}"
+                                        data-examiner-name="{{ $examiner->name }}">
                                     Mark Unavailable
                                 </button>
                             @else
@@ -426,7 +428,7 @@
     <div class="card">
         <div class="reason-modal-head">
             <h3 style="margin: 0;">Mark as Unavailable</h3>
-            <button type="button" class="reason-modal-close" onclick="document.getElementById('unavailable-modal').close()">&times;</button>
+            <button type="button" class="reason-modal-close" data-close-modal>&times;</button>
         </div>
         <div class="card-divider"></div>
         <form method="POST" id="unavailable-form">
@@ -438,21 +440,40 @@
                       placeholder="Please provide a reason for marking this examiner as unavailable..."></textarea>
 
             <div class="decision-row">
-                <button type="button" onclick="document.getElementById('unavailable-modal').close()">Cancel</button>
+                <button type="button" data-close-modal>Cancel</button>
                 <button type="submit" class="btn-reject">Confirm</button>
             </div>
         </form>
     </div>
 </dialog>
 
+{{-- Bound here with addEventListener, not with handler attributes. script-src is
+     'self' plus this request's nonce with no unsafe-inline, and a nonce cannot
+     cover an inline handler attribute -- the browser refuses to run it. As
+     written before, the two filters did not auto-submit and the modal never
+     opened. --}}
 <script @cspNonce>
-    function openUnavailableModal(examinerId, name) {
+    (function () {
         var modal = document.getElementById('unavailable-modal');
         var form = document.getElementById('unavailable-form');
-        form.action = '/examiners/' + examinerId + '/toggle-active';
-        document.getElementById('unavailable-modal-name').textContent = 'Examiner: ' + name;
-        document.getElementById('unavailable_reason').value = '';
-        modal.showModal();
-    }
+
+        document.querySelectorAll('[data-autosubmit]').forEach(function (field) {
+            field.addEventListener('change', function () { field.form.submit(); });
+        });
+
+        document.querySelectorAll('[data-unavailable]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                form.action = '/examiners/' + button.dataset.unavailable + '/toggle-active';
+                document.getElementById('unavailable-modal-name').textContent =
+                    'Examiner: ' + button.dataset.examinerName;
+                document.getElementById('unavailable_reason').value = '';
+                modal.showModal();
+            });
+        });
+
+        document.querySelectorAll('[data-close-modal]').forEach(function (button) {
+            button.addEventListener('click', function () { modal.close(); });
+        });
+    })();
 </script>
 @endsection

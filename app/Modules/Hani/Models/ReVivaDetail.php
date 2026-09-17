@@ -62,11 +62,11 @@ class ReVivaDetail extends Model
     public function outcomeLabel(): ?string
     {
         return match ($this->outcome_level) {
-            1 => 'Level 1 — Pass, minor corrections',
-            2 => 'Level 2 — Pass, moderate corrections',
-            3 => 'Level 3 — Pass, major corrections',
-            4 => 'Level 4 — Fail, loop back to another re-viva cycle',
-            5 => 'Level 5 — Dismissed',
+            1 => 'Level 1: Pass, minor corrections',
+            2 => 'Level 2: Pass, moderate corrections',
+            3 => 'Level 3: Pass, major corrections',
+            4 => 'Level 4: Fail, loop back to another re-viva cycle',
+            5 => 'Level 5: Dismissed',
             default => null,
         };
     }

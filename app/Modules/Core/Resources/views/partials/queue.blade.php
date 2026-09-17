@@ -6,7 +6,7 @@
 
     Expects: $stage, $applications, $moduleLabel, $decideRoute, $detailView
 --}}
-<h2>{{ $moduleLabel }} — {{ $stage->queueTitle() }}</h2>
+<h2>{{ $moduleLabel }}: {{ $stage->queueTitle() }}</h2>
 <p class="queue-meta">
     {{ $applications->count() }} {{ Str::plural('application', $applications->count()) }} awaiting your decision.
 </p>
@@ -27,7 +27,7 @@
         @if ($application->documents->isNotEmpty())
             <ul class="doc-list">
                 @foreach ($application->documents as $doc)
-                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }} — {{ $doc->original_name }}</a></li>
+                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
                 @endforeach
             </ul>
         @endif

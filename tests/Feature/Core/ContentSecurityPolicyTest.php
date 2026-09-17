@@ -172,4 +172,67 @@ class ContentSecurityPolicyTest extends TestCase
             }
         }
     }
+
+    /**
+     * The same two rules, read off the Blade source instead of a rendered
+     * page.
+     *
+     * The test above can only check screens it knows how to reach, and it
+     * knows four. Jason's appointment-letter views were never among them, so
+     * both of these shipped unnoticed: an un-nonced inline script behind the
+     * "Add another examiner" button, and Chart.js pulled from jsdelivr on the
+     * queue. Neither is an error anywhere -- the page returns 200 and the
+     * browser quietly refuses to run the script -- so the only reliable check
+     * is over every view in the repo, whether or not a test renders it.
+     */
+    public function test_no_blade_view_writes_a_script_the_policy_would_refuse(): void
+    {
+        $views = glob(base_path('app/Modules/*/Resources/views/**/*.blade.php'), GLOB_BRACE)
+            + glob(base_path('app/Modules/*/Resources/views/*.blade.php'));
+
+        $this->assertNotEmpty($views, 'Found no Blade views to scan — the glob is wrong.');
+
+        foreach ($views as $view) {
+            $source = file_get_contents($view);
+            $name = str_replace(base_path().'/', '', $view);
+
+            // Inline blocks: everything without a src= needs the nonce.
+            preg_match_all('/<script\b(?![^>]*\bsrc=)[^>]*>/', $source, $inline);
+
+            foreach ($inline[0] as $tag) {
+                $this->assertStringContainsString(
+                    '@cspNonce',
+                    $tag,
+                    "{$name} has an inline <script> without @cspNonce. script-src is "
+                    ."'self' plus a nonce, with no unsafe-inline, so the browser will "
+                    ."refuse to run it and whatever it powers will silently do nothing."
+                );
+            }
+
+            // Loaded blocks: script-src names no external origin at all, so a
+            // CDN tag is refused. Self-host it in public/js instead.
+            preg_match_all('/<script\b[^>]*\bsrc=["\']([^"\']+)["\']/', $source, $loaded);
+
+            foreach ($loaded[1] as $src) {
+                $this->assertDoesNotMatchRegularExpression(
+                    '#^(https?:)?//#',
+                    $src,
+                    "{$name} loads a script from an external origin ({$src}). script-src "
+                    .'allow-lists no host, so it is blocked — serve it from public/js, the '
+                    .'way core::dashboard.partials.chartjs serves Chart.js.'
+                );
+            }
+
+            // A nonce cannot cover a handler attribute, so these are refused
+            // however the page is served. Hani's examiner pool shipped five:
+            // the two filters did not auto-submit and the modal never opened.
+            $this->assertDoesNotMatchRegularExpression(
+                '/\son(click|change|submit|input|load)\s*=/i',
+                $source,
+                "{$name} binds an event with an inline handler attribute. A nonce cannot "
+                .'allow-list one, so it never runs — bind it with addEventListener inside '
+                .'a nonced <script> instead.'
+            );
+        }
+    }
 }

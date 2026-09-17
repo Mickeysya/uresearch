@@ -5,12 +5,12 @@
 @section('content')
 <div class="card-container-inline">
     <div class="card card-wide">
-        <h2>Conflict Detection — Faculty Compilation</h2>
+        <h2>Conflict Detection: Faculty Compilation</h2>
         <div class="card-divider"></div>
         <p class="queue-meta">
             Department nomination lists merged by faculty. An examiner flagged in red is
-            nominated by more than one department at once — nothing here is auto-rejected;
-            decide on a substitution manually using the pool state shown.
+            nominated by more than one department at once. Nothing here is auto-rejected.
+            Decide on a substitution manually, using the pool state shown.
         </p>
 
         @forelse ($byFaculty as $faculty => $rows)

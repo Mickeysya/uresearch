@@ -43,7 +43,7 @@ class CertificationIssued extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject('Your GA/GRA Certification Letter — '.$this->application->reference())
+            ->subject('Your GA/GRA Certification Letter: '.$this->application->reference())
             ->greeting('Hi '.$notifiable->name.',')
             ->line('Your certification letter has been endorsed and is attached to this email.')
             ->line('Reference: '.$this->application->reference())

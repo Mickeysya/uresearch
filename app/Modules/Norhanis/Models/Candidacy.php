@@ -74,10 +74,10 @@ class Candidacy extends Model
     public static function programmeTypes(): array
     {
         return [
-            'msc_ft' => 'MSc — Full Time (8 months)',
-            'msc_pt' => 'MSc — Part Time (12 months)',
-            'phd_ft' => 'PhD — Full Time (8 months)',
-            'phd_pt' => 'PhD — Part Time (12 months)',
+            'msc_ft' => 'MSc Full Time (8 months)',
+            'msc_pt' => 'MSc Part Time (12 months)',
+            'phd_ft' => 'PhD Full Time (8 months)',
+            'phd_pt' => 'PhD Part Time (12 months)',
         ];
     }
 

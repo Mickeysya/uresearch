@@ -45,7 +45,7 @@ class ExaminersAppointed extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject("Examiners appointed — Application #{$this->application->id}")
+            ->subject("Examiners appointed for Application #{$this->application->id}")
             ->greeting("Dear {$notifiable->name},")
             ->line('The Dean of Postgraduate and Research has approved the examiner panel for your thesis:');
 

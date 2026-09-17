@@ -130,7 +130,7 @@
                 });
 
                 if (! into.children.length) {
-                    into.innerHTML = '<p class="queue-meta">Nothing filled in yet — go back and complete the form.</p>';
+                    into.innerHTML = '<p class="queue-meta">Nothing filled in yet. Go back and complete the form.</p>';
                 }
             }
 

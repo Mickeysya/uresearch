@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'Appeal Hardbound Submission — ' . $stage->queueTitle())
+@section('title', 'Appeal Hardbound Submission: ' . $stage->queueTitle())
 
 @section('content')
     @if ($stage->key === 'cgs_review')

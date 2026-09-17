@@ -19,7 +19,7 @@ class ExaminerPoolController extends Controller
     {
         return view('jason::examiner_pool.index', [
             'examiners' => PoolExaminer::query()
-                ->orderByRaw("FIELD(examiner_type, 'internal', 'external')")
+                ->orderByRaw("CASE WHEN examiner_type = 'internal' THEN 0 ELSE 1 END")
                 ->orderByDesc('is_active')
                 ->orderBy('name')
                 ->get(),

@@ -238,7 +238,7 @@ class AppointmentLetterController extends Controller
             $detail->isPrepared()
                 => "Application #{$application->id} has already been prepared and decided ({$application->status}).",
             $application->status === Application::STATUS_PENDING
-                => "Application #{$application->id} has not reached CGS yet — it is still with the Academic Executive.",
+                => "Application #{$application->id} has not reached CGS yet. It is still with the Academic Executive.",
             default
                 => "Application #{$application->id} is {$application->status}; there is nothing to prepare.",
         };

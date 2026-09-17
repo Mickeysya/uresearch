@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'Hardbound Submission — ' . $stage->queueTitle())
+@section('title', 'Hardbound Submission: ' . $stage->queueTitle())
 
 @section('content')
     <p class="queue-meta">
