@@ -597,11 +597,18 @@ note below.
         appointed** (`PoolExaminer::COOLDOWN_MONTHS`). The cooldown starts at
         the Dean's approval — the point the appointment becomes real — which
         the nomination records as `appointment_examiners.appointed_at`.
-        Unavailable examiners are greyed out on the nomination form with the
-        date they come free, shown as such on the Examiner List, and refused
-        by `store()` even when the form is bypassed; a disabled `<option>` is
-        only a courtesy. Nothing reinstates them: the cooldown lapses on its
-        own. `appointed_at` is the timestamp to move if examiner *acceptance*
+        Unavailable examiners are **left out of the nomination dropdown**
+        entirely — with the list at 100 people, names that cannot be picked
+        are noise. The form says how many are hidden and links to the
+        Examiner List, which shows all 100 with each one's availability and
+        the date they come free, so a Chair looking for a particular name
+        still finds out why it is gone rather than assuming the list is
+        broken. If every internal (or external) examiner is on an
+        appointment, the form says so up front with the earliest free date
+        instead of offering an empty group. `store()` refuses an unavailable
+        examiner even when the form is bypassed — hiding an `<option>` is
+        only a courtesy. Nothing reinstates anyone: the cooldown lapses on
+        its own. `appointed_at` is the timestamp to move if examiner *acceptance*
         is ever tracked — that is the more accurate start, and it needs
         Report Management (below) to exist first.
   - [x] **A pack counts as sent only when the mail transport accepts it.**
@@ -619,6 +626,15 @@ note below.
         nomination with each pack's delivery state and resends the ones that
         never went. A resend posts the same archived bytes the Dean
         approved, so it can never differ from the original.
+  - [x] `Database\Seeders\ExaminerPoolSeeder` — 100 fictional examiners, 50
+        internal across UTP's departments and 50 external across Malaysian
+        public universities, the private and branch campuses, and regional
+        and international institutions. Matched on email, so it adds only
+        what is missing and never disturbs an examiner who already has
+        appointment history. Run it with
+        `php artisan db:seed --class="App\Modules\Jason\Database\Seeders\ExaminerPoolSeeder"`.
+        Deliberately not called from Core's `DatabaseSeeder` — that file
+        belongs to the whole team, and 100 examiners are only useful here.
   - [x] Covered by `tests/Feature/JasonAppointmentLetterTest.php` — the
         cooldown, the bypassed-form POST, the delivery listener (including
         that it ignores every other module's mail), and both screens.

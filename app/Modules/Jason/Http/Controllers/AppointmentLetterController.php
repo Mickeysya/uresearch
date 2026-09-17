@@ -43,6 +43,11 @@ class AppointmentLetterController extends Controller
 
     public function create(Request $request)
     {
+        // `appointments` is eager-loaded so the availability check on each
+        // examiner is a read from memory, not a query per person -- the list
+        // is a hundred people and grows.
+        $pool = PoolExaminer::active()->with('appointments')->orderBy('name')->get();
+
         return view('jason::appointment_letter.form', [
             // Scoped to the Chair's own department -- the same "an approver
             // only sees rows that are theirs" rule the queues already enforce.
@@ -50,9 +55,12 @@ class AppointmentLetterController extends Controller
                 ->where('department', $request->user()->department)
                 ->orderBy('name')
                 ->get(),
-            // `appointments` is eager-loaded so the availability check on
-            // each option is a read from memory, not a query per examiner.
-            'pool' => PoolExaminer::active()->with('appointments')->orderBy('name')->get(),
+            // Only the pickable ones reach the dropdown. At this size, listing
+            // people who cannot be chosen is noise; the count of who is left
+            // out goes on the page, and the Examiner List says who and until
+            // when, so nobody has to wonder where a name went.
+            'pool' => $pool->filter->isAvailable(),
+            'unavailable' => $pool->reject->isAvailable(),
         ]);
     }
 

@@ -7,8 +7,13 @@
     // Repopulate after a validation failure, otherwise start with one
     // internal and one external slot -- the smallest panel that is valid.
     $rows = old('examiners', [['pool_id' => ''], ['pool_id' => '']]);
+
+    // $pool holds only the examiners who can actually be picked today;
+    // $unavailable is everyone on a cooldown, counted but not listed.
     $internal = $pool->filter(fn ($e) => $e->isInternal());
     $external = $pool->reject(fn ($e) => $e->isInternal());
+    $busyInternal = $unavailable->filter(fn ($e) => $e->isInternal());
+    $busyExternal = $unavailable->reject(fn ($e) => $e->isInternal());
 @endphp
 <div class="card-container-inline">
     <div class="card card-wide">
@@ -21,10 +26,33 @@
                 CGS assigns students to a department before nominations can be filed.
             </div>
         @elseif ($internal->isEmpty() || $external->isEmpty())
+            @php
+                // Two different problems with the same symptom: nobody of that
+                // kind is on the list at all, or everybody of that kind is on
+                // an appointment. They need different answers.
+                $missing = collect([
+                    'internal' => ['available' => $internal, 'busy' => $busyInternal],
+                    'external' => ['available' => $external, 'busy' => $busyExternal],
+                ])->filter(fn ($side) => $side['available']->isEmpty());
+            @endphp
             <div class="empty-state">
-                The examiner list needs at least one internal and one external examiner
-                before a panel can be nominated.<br>
-                <a href="{{ route('appointment-letter.examiners') }}"><b>Add examiners to the list &rarr;</b></a>
+                @foreach ($missing as $type => $side)
+                    @if ($side['busy']->isEmpty())
+                        <p>There is no {{ $type }} examiner on the list, and a panel needs at least one.</p>
+                    @elseif ($side['busy']->count() === 1)
+                        <p>
+                            The only {{ $type }} examiner on the list is on an appointment until
+                            <b>{{ $side['busy']->first()->availableFrom()->format('j M Y') }}</b>.
+                        </p>
+                    @else
+                        <p>
+                            All {{ $side['busy']->count() }} {{ $type }} examiners on the list are on an
+                            appointment. The earliest comes free on
+                            <b>{{ $side['busy']->map->availableFrom()->min()->format('j M Y') }}</b>.
+                        </p>
+                    @endif
+                @endforeach
+                <a href="{{ route('appointment-letter.examiners') }}"><b>Add an examiner to the list &rarr;</b></a>
             </div>
         @else
             <p class="queue-meta">
@@ -34,13 +62,19 @@
                 Not on the list? <a href="{{ route('appointment-letter.examiners') }}">Add the examiner first</a>.
             </p>
 
-            @if ($pool->reject->isAvailable()->isNotEmpty())
-                <p class="queue-meta">
-                    Greyed-out names are already on an appointment. An examiner is free again
-                    {{ \App\Modules\Jason\Models\PoolExaminer::COOLDOWN_MONTHS }} months after
-                    the Dean appoints them.
-                </p>
-            @endif
+            <p class="queue-meta">
+                {{ $internal->count() }} internal and {{ $external->count() }} external examiners
+                are free to take a panel today.
+                @if ($unavailable->isNotEmpty())
+                    Another {{ $unavailable->count() }}
+                    {{ Str::plural('examiner', $unavailable->count()) }}
+                    {{ $unavailable->count() === 1 ? 'is' : 'are' }} on an appointment and
+                    {{ $unavailable->count() === 1 ? 'is' : 'are' }} not listed below — an examiner
+                    is free again {{ \App\Modules\Jason\Models\PoolExaminer::COOLDOWN_MONTHS }}
+                    months after the Dean appoints them.
+                    <a href="{{ route('appointment-letter.examiners') }}">See who, and until when</a>.
+                @endif
+            </p>
 
             <form method="POST" action="{{ route('appointment-letter.store') }}">
                 @csrf
@@ -69,19 +103,15 @@
                                     <option value="">— Select an examiner —</option>
                                     <optgroup label="Internal Examiners (UTP)">
                                         @foreach ($internal as $e)
-                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)
-                                                    @disabled(! $e->isAvailable())>
+                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)>
                                                 {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
-                                                @unless ($e->isAvailable()) — not available, {{ $e->unavailableLabel() }} @endunless
                                             </option>
                                         @endforeach
                                     </optgroup>
                                     <optgroup label="External Examiners">
                                         @foreach ($external as $e)
-                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)
-                                                    @disabled(! $e->isAvailable())>
+                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)>
                                                 {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
-                                                @unless ($e->isAvailable()) — not available, {{ $e->unavailableLabel() }} @endunless
                                             </option>
                                         @endforeach
                                     </optgroup>
