@@ -893,8 +893,13 @@ button[value="rejected"]:hover {
     padding: 0 0 var(--space-10);
 }
 
+/* 1080px left a ~476px form column sitting in a ~780px pane, so every step
+   had a third of the card empty down its right-hand side, worst on a step
+   that is prose and one button. Sized to what a form column actually needs
+   now: the 232px rail, the pane's padding, and a 584px field column the
+   fields are allowed to fill. */
 .card.is-wizard {
-    max-width: 1080px;
+    max-width: 880px;
     margin: 0 auto;
     padding: 0;
     overflow: hidden;
@@ -1066,7 +1071,10 @@ button[value="rejected"]:hover {
     color: var(--text-grey);
     font-size: var(--text-sm);
     margin: 0 0 var(--space-6);
-    max-width: 62ch;
+    /* Still a measure -- a line that runs the full width of a wide card is
+       hard to track back from -- just not one that stops short of the fields
+       under it. */
+    max-width: 74ch;
 }
 
 /* ---- step transition ----
@@ -1108,10 +1116,14 @@ button[value="rejected"]:hover {
    per field in nine Blade files across four people's folders -- more
    markup churn than a second column of inputs is worth.
 
-   The measure cap is the other half of the fix. Stretching a text input
-   across the full 800px pane makes it look like a textarea and gives the
-   eye no anchor; ~34em is about as wide as a single-line field stays
-   comfortable. */
+   The measure cap was the other half of that fix: stretching a text input
+   across the full 800px pane made it look like a textarea and gave the eye
+   no anchor, so fields were capped at ~34em. That cap is gone as of
+   2026-09-17, because the card it was defending against is gone too. The
+   card is 880px now rather than 1080px, which leaves a 584px field column,
+   and 584px is inside the range the cap existed to protect. Capping as well
+   would only move the empty third of the card inside the pane, which is the
+   problem that was reported. */
 .card.is-wizard .fstep > label {
     margin-top: var(--space-8);
 }
@@ -1130,18 +1142,14 @@ button[value="rejected"]:hover {
     margin-top: var(--space-2);
 }
 
+/* Fields fill the column. See the note above .fstep > label for why the
+   34em cap that used to live here went with the 1080px card. */
 .card.is-wizard .fstep > input,
 .card.is-wizard .fstep > select,
 .card.is-wizard .fstep > textarea,
 .card.is-wizard .fstep > .field-error,
 .card.is-wizard .fstep > .field-hint {
-    max-width: 34em;
-}
-
-/* A textarea is meant to be wide -- it is holding a paragraph, not a
-   name -- so it keeps more of the measure. */
-.card.is-wizard .fstep > textarea {
-    max-width: 52em;
+    max-width: 100%;
 }
 
 .card.is-wizard .fstep > .checkbox-row {
