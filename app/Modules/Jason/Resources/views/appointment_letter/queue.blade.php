@@ -3,6 +3,18 @@
 @section('title', 'Appointment Letter — ' . $stage->queueTitle())
 
 @section('content')
+    @if ($errors->any())
+        {{-- Core's layout flashes session messages but never renders the
+             validation error bag, and the shared queue partial has no slot for
+             it, so a failed rule would bounce the reviewer back to an unchanged
+             page with no explanation. --}}
+        <div class="message-error">
+            @foreach ($errors->all() as $message)
+                <p style="margin: 0;">{{ $message }}</p>
+            @endforeach
+        </div>
+    @endif
+
     @if (collect($workload)->sum('count') > 0)
         <div class="chart-card" style="margin-bottom: 20px;">
             <h3>Pending Nominations by Approver</h3>

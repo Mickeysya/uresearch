@@ -809,6 +809,15 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
 ## Cross-cutting
 
 ### Correctness gaps in Core worth closing
+- [ ] **Validation errors are invisible.** `core::partials.flash` renders
+      `session('status'|'warning'|'error')` but never `$errors`, and no page
+      layout renders the bag either — so any `$request->validate()` failure
+      bounces the user back to an unchanged page with no explanation. This
+      made Hardbound Submission's Reject button look broken for three roles
+      (remarks are required on a return, the shared decision form labels them
+      "(optional)"). Jason's two queue views now render `$errors` themselves;
+      the real fix is one `@if ($errors->any())` block in `partials/flash`,
+      which would cover every module at once.
 - [ ] **The student sidebar drops module links.** `sidebar.blade.php` passes
       `$extraLinks` to the CGS and approver partials but not to
       `sidebar-student-nav`, so anything a module returns from

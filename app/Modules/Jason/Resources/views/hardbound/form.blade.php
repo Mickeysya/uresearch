@@ -10,20 +10,27 @@
 
         @if ($awaiting->isNotEmpty())
             <div class="app-item" style="margin-bottom: 18px; border-left: 4px solid #A86A12;">
-                <p><b>CGS returned {{ $awaiting->count() === 1 ? 'a submission' : $awaiting->count().' submissions' }} to you for correction</b></p>
+                <p><b>{{ $awaiting->count() === 1 ? 'A submission was' : $awaiting->count().' submissions were' }} returned to you for correction</b></p>
                 <ul class="doc-list">
                     @foreach ($awaiting as $app)
                         @php($last = $app->history->last())
                         <li>
-                            <a href="{{ route('hardbound.resubmit.form', $app) }}"><b>Resubmit #{{ $app->id }}</b></a>
-                            — {{ $awaitingDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
-                            @if ($last?->remarks) <br><span style="color: var(--text-grey);">CGS: “{{ $last->remarks }}”</span> @endif
+                            <b>#{{ $app->id }}</b> — {{ $awaitingDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
+                            @if ($last)
+                                <br><span style="color: var(--text-grey);">
+                                    {{ $last->stage_label }}@if ($last->remarks): “{{ $last->remarks }}”@endif
+                                </span>
+                            @endif
+                            <br>
+                            <a href="{{ route('hardbound.resubmit.form', $app) }}"><b>Resubmit it</b></a>
+                            &nbsp;·&nbsp;
+                            <a href="{{ route('hardbound-appeal.create') }}">Appeal the decision</a>
                         </li>
                     @endforeach
                 </ul>
                 <p class="queue-meta" style="margin: 6px 0 0;">
-                    Or, if you disagree with the return, file an appeal from the sidebar. The form
-                    below starts a brand-new submission instead.
+                    Correct what was asked and resubmit, or appeal if you disagree — you can do one or
+                    the other, not both. The form below starts a brand-new submission instead.
                 </p>
             </div>
         @endif

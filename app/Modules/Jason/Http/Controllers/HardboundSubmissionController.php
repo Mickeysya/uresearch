@@ -184,12 +184,19 @@ class HardboundSubmissionController extends Controller
 
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],
-            // A rejection at any stage is a return to the student, and a return
-            // without comments gives them nothing to correct.
-            'remarks' => [$returning ? 'required' : 'nullable', 'string', 'max:2000'],
-        ], [
-            'remarks.required' => 'Tell the student what to correct before returning the submission.',
+            'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // A return without comments gives the student nothing to act on. This
+        // is checked here rather than as a validation rule because the shared
+        // decision form labels remarks "(optional)" and nothing renders the
+        // validation error bag -- a failed rule would just bounce the reviewer
+        // back to an unchanged page with no explanation. A flashed error is
+        // rendered by the layout.
+        if ($returning && blank($data['remarks'] ?? null)) {
+            return back()->with('error',
+                'Returning a submission needs remarks — tell the student what to correct, then press Reject again.');
+        }
 
         // Approving as Supervisor or Chairman stamps a signature onto the
         // Confirmation, so there has to be one to stamp. CGS has no block on

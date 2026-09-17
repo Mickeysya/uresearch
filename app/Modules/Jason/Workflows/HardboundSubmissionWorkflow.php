@@ -97,7 +97,7 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
 
             $summary .= $replaced
                 ? ' — replaced by a resubmission'
-                : ' — returned for correction; resubmit from the Hardbound Submission page, or appeal';
+                : ' — returned for correction; resubmit or appeal from the Hardbound Submission page';
         }
 
         return $summary;
