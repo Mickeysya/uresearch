@@ -216,4 +216,44 @@ class ExaminerPoolTest extends TestCase
     {
         $this->assertNull($this->internal()->experienceSummary());
     }
+
+    /**
+     * The external sheet took this form to thirteen fields, past the eight
+     * `docs/conventions.md` puts the wizard line at. A render test, because
+     * the stepper is client-side: what breaks server-side is the markup
+     * contract, and a missing `data-stepper` renders perfectly and produces
+     * no wizard at all.
+     */
+    public function test_the_add_examiner_form_is_a_stepper(): void
+    {
+        $html = $this->actingAs($this->cgs())
+            ->get(route('examiner-admin.create'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-stepper', $html, 'The form is not marked as a stepper.');
+        $this->assertSame(2, substr_count($html, 'class="fstep"'), 'Expected two steps: the examiner, then the external record.');
+        $this->assertStringContainsString('form[data-stepper]', $html, 'core::partials.form-stepper was not included.');
+
+        // Nothing here files an application, so the generated review must not
+        // claim it goes to an approver.
+        $this->assertStringNotContainsString('it goes to the first approver', $html);
+    }
+
+    /**
+     * Internal is the default, and the external block is disabled as well as
+     * hidden for it — a disabled fieldset submits none of its controls, so a
+     * half-typed external record cannot reach the controller at all, and the
+     * wizard's generated review cannot list values that are not going to be
+     * saved. `Arr::except` in the controller stays as the real guard.
+     */
+    public function test_the_external_record_is_disabled_for_an_internal_examiner(): void
+    {
+        $html = $this->actingAs($this->cgs())
+            ->get(route('examiner-admin.create'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('/id="external-fields"[^>]*hidden disabled/s', $html);
+    }
 }

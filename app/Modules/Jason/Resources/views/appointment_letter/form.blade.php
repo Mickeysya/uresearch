@@ -24,14 +24,17 @@
             <div class="empty-state">
                 The examiner list needs at least one internal and one external examiner
                 before a panel can be nominated.<br>
-                <a href="{{ route('appointment-letter.examiners') }}"><b>Add examiners to the list &rarr;</b></a>
+                <a href="{{ route('appointment-letter.examiners', ['return' => 'nominate']) }}"><b>Add examiners to the list &rarr;</b></a>
             </div>
         @else
             <p class="queue-meta">
                 Pick the full panel at once, with at least one internal and one external
                 examiner. CGS prepares an appointment letter and a thesis evaluation report
                 for each of them, and the Dean approves the whole pack.
-                Not on the list? <a href="{{ route('appointment-letter.examiners') }}">Add the examiner first</a>.
+                Not on the list?
+                <a href="{{ route('appointment-letter.examiners', ['return' => 'nominate']) }}"
+                   data-keep-panel>Add the examiner first</a> — you come back here with
+                the panel as you left it.
             </p>
 
             <form method="POST" action="{{ route('appointment-letter.store') }}"
@@ -148,6 +151,61 @@
         });
 
         renumber();
+
+        /* ---- surviving a trip to the Examiner List -------------------
+           "Add the examiner first" is a real navigation, so without this
+           the candidate and every row already picked are gone by the time
+           you get back -- which is what made two sidebar entries feel like
+           one job done twice. Saved on the way out, restored once on the
+           way in, then dropped.
+
+           sessionStorage rather than the server: a half-filled panel is
+           not worth a drafts table, a session key or a resume route, and
+           it is the same call the wizard itself makes. Wrapped because
+           storage throws outright in a locked-down browser, and losing
+           Add/Remove with it would be a worse bug than the one this
+           fixes. */
+        const KEY = 'appointment-letter.panel';
+        const form = list.closest('form');
+
+        function readPanel() {
+            return {
+                student_id: form.student_id.value,
+                examiners: [...list.querySelectorAll('select')].map(s => s.value),
+            };
+        }
+
+        document.querySelectorAll('[data-keep-panel]').forEach(link => {
+            link.addEventListener('click', () => {
+                try {
+                    sessionStorage.setItem(KEY, JSON.stringify(readPanel()));
+                } catch (e) { /* no storage: the trip just costs the panel, as before */ }
+            });
+        });
+
+        try {
+            const saved = sessionStorage.getItem(KEY);
+
+            if (saved) {
+                // Once only. Coming back a second time should start clean.
+                sessionStorage.removeItem(KEY);
+
+                const panel = JSON.parse(saved);
+                const picked = Array.isArray(panel.examiners) ? panel.examiners : [];
+
+                // An option that has since been removed from the list sets
+                // the select back to blank, which is the honest answer.
+                form.student_id.value = panel.student_id || '';
+
+                while (list.querySelectorAll('.examiner-row').length < picked.length) {
+                    add.click();
+                }
+
+                list.querySelectorAll('select').forEach((select, i) => {
+                    if (picked[i]) select.value = picked[i];
+                });
+            }
+        } catch (e) { /* stale or unreadable: leave the form as rendered */ }
     })();
 </script>
 @endpush

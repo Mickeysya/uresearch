@@ -50,7 +50,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::patch('/profile/contact', [ProfileController::class, 'updateContact'])->name('profile.contact');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
-    Route::get('/settings', [PageController::class, 'show'])->name('settings.index')->defaults('page', 'settings');
+    // Gated to the roles the sidebar actually offers it to. Everything the
+    // page describes (notification preferences, the attendance threshold,
+    // reminder timings) is system-wide configuration, and it was reachable
+    // by any signed-in account, including a student, purely because no
+    // role middleware was on it.
+    Route::middleware('role:'.implode(',', [...Role::cgsTeam(), Role::ADMIN]))
+        ->get('/settings', [PageController::class, 'show'])->name('settings.index')->defaults('page', 'settings');
 
     // Administrator screens. Oversight is read-only by design: the admin owns
     // no workflow stage, so nothing here acts on an application.

@@ -131,6 +131,68 @@ class FormsTest extends TestCase
     }
 
     /**
+     * The Examiner List is the one screen here where the wizard needed the
+     * page moved around it: the partial re-casts the whole `.card` it finds
+     * the form in, so with the table still in that card you got the page
+     * heading and "Step 1 of 3" hoisted above the full list, and the wizard
+     * appended below it.
+     */
+    public function test_the_examiner_list_add_form_is_a_stepper_in_its_own_card(): void
+    {
+        PoolExaminer::create([
+            'examiner_type' => 'internal', 'name' => 'Dr. Internal', 'institution' => 'UTP',
+            'email' => 'internal@utp.edu.my', 'expertise' => 'Structures', 'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->chair())->get(route('appointment-letter.examiners'));
+
+        $this->assertIsStepper($response, 2);
+
+        $html = $response->getContent();
+
+        $this->assertSame(
+            2,
+            substr_count($html, 'card card-wide pool-card'),
+            'The list and the add form have to be two cards, or the stepper swallows the table.'
+        );
+
+        // Nothing here files an application, so the generated review must not
+        // claim it goes to an approver.
+        $this->assertStringContainsString('data-stepper-review=', $html);
+        $this->assertStringNotContainsString('it goes to the first approver', $html);
+    }
+
+    /**
+     * "Add the examiner first" used to be a one-way trip: you landed back on
+     * the list, and the panel you had half-picked was gone.
+     */
+    public function test_adding_an_examiner_from_the_nomination_form_goes_back_to_it(): void
+    {
+        $examiner = [
+            'examiner_type' => 'external',
+            'name' => 'Dr. External',
+            'institution' => 'Universiti Sains Malaysia',
+            'expertise' => 'Geotechnics',
+        ];
+
+        $this->actingAs($this->chair())
+            ->post(route('appointment-letter.examiners.store'), $examiner + [
+                'email' => 'first@usm.edu.my',
+                'return' => 'nominate',
+            ])
+            ->assertRedirect(route('appointment-letter.create'));
+
+        // CGS keeps the same list but cannot open the Chair's nomination
+        // form, so the flag must not bounce them into a 403 after a good save.
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.examiners.store'), $examiner + [
+                'email' => 'second@usm.edu.my',
+                'return' => 'nominate',
+            ])
+            ->assertRedirect(route('appointment-letter.examiners'));
+    }
+
+    /**
      * The workload chart used to load Chart.js from jsdelivr and run an
      * un-nonced inline script — both refused by `script-src 'self' <nonce>`,
      * so the chart silently never drew.

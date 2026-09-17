@@ -204,6 +204,11 @@ controller change — see the Forms section in `docs/conventions.md`:
 The progress rail, Back/Continue, and a generated review step are all built
 for you. The form still POSTs once, to the same route, with the same fields.
 
+The review step signs off with "Once submitted it goes to the first approver
+and you cannot edit it" — correct here, and on every form that files an
+application. A form that does something else (keeps a list, stores a file)
+says what it does instead with `data-stepper-review="..."` on the `<form>`.
+
 **`queue.blade.php`** — the whole file:
 
 ```blade

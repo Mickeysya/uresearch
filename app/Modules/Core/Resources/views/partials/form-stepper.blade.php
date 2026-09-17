@@ -28,7 +28,9 @@
 
     THE REVIEW STEP IS GENERATED, not authored. It reads the filled
     controls back out of the form, so it cannot drift from the fields and
-    no module has to write or maintain one.
+    no module has to write or maintain one. Its one line of prose says the
+    form goes to an approver; a form that keeps a list or stores a file
+    instead overrides it with data-stepper-review="..." on the <form>.
 --}}
 @once
     @push('scripts')
@@ -49,6 +51,11 @@
                to the name attribute. Empty, hidden, disabled and
                unchecked controls are skipped: a review that lists forty
                blanks is not a review.
+
+               ":disabled" rather than .disabled, because .disabled is the
+               control's own attribute only -- a control switched off by a
+               <fieldset disabled> around it reads back false, and the
+               review would list values the browser is not going to submit.
                --------------------------------------------------------- */
             function labelFor(field) {
                 var byFor = field.id && form.querySelector('label[for="' + CSS.escape(field.id) + '"]');
@@ -86,7 +93,7 @@
                     var rows = [];
 
                     step.querySelectorAll('input, select, textarea').forEach(function (field) {
-                        if (field.disabled || field.type === 'hidden' || field.name === '_token') return;
+                        if (field.matches(':disabled') || field.type === 'hidden' || field.name === '_token') return;
 
                         var value = valueOf(field);
                         if (! value) return;
@@ -134,17 +141,31 @@
                 }
             }
 
-            /* ---- append the review step ------------------------------ */
+            /* ---- append the review step ------------------------------
+               The line above the review assumes the form files an
+               application for approval, which most of them do. The ones
+               that do not -- a list a module keeps for itself, an image
+               uploaded once -- say so with data-stepper-review="..." on
+               the <form>. The default is unchanged, so no existing form
+               moves; textContent, so the override cannot inject markup.
+               --------------------------------------------------------- */
             var review = document.createElement('fieldset');
             review.className = 'fstep';
             review.dataset.label = REVIEW;
-            review.innerHTML = '<p class="fstep-hint">Check everything below, then submit. '
-                + 'Once submitted it goes to the first approver and you cannot edit it.</p>'
-                + '<div class="freview"></div>';
+
+            var reviewHint = document.createElement('p');
+            reviewHint.className = 'fstep-hint';
+            reviewHint.textContent = form.dataset.stepperReview
+                || 'Check everything below, then submit. Once submitted it goes to '
+                    + 'the first approver and you cannot edit it.';
+
+            var reviewBody = document.createElement('div');
+            reviewBody.className = 'freview';
+
+            review.appendChild(reviewHint);
+            review.appendChild(reviewBody);
             form.appendChild(review);
             steps.push(review);
-
-            var reviewBody = review.querySelector('.freview');
 
             /* ---- layout ----------------------------------------------
                The form starts life inside a .card with the page heading

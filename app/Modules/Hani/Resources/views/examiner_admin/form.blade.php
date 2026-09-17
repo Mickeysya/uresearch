@@ -21,8 +21,20 @@
         <h2>Add Examiner</h2>
         <div class="card-divider"></div>
 
-        <form method="POST" action="{{ route('examiner-admin.store') }}">
+        {{-- A wizard because the external sheet pushed this form to thirteen
+             fields, past the eight `docs/conventions.md` puts the line at. The
+             split is the one the two CGS sheets already make: who the person
+             is, then the record kept only for someone from outside UTP.
+
+             data-stepper-review because the generated review's default line
+             says the form goes to an approver. This one does not go anywhere
+             -- it writes a row into the pool. --}}
+        <form method="POST" action="{{ route('examiner-admin.store') }}" data-stepper
+              data-stepper-review="Check the details, then add the examiner. Nothing here is submitted for approval — the examiner simply joins the pool and becomes available to nominate.">
             @csrf
+
+            <fieldset class="fstep" data-label="Examiner">
+            <p class="fstep-hint">Who this person is. The same five fields for internal and external.</p>
 
             <label for="name">Name</label>
             <input type="text" name="name" id="name" required value="{{ old('name') }}"
@@ -50,12 +62,30 @@
                 <option value="external" @selected(old('type') == 'external')>External: from outside UTP</option>
             </select>
             @error('type') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
-            {{-- Shown only for an external examiner: these are the columns CGS
-                 keeps on the external sheet and does not keep for internal
-                 staff. The controller strips them if an internal examiner is
-                 saved anyway, so hiding them is a convenience, not the guard. --}}
-            <fieldset id="external-fields" class="external-fields" @if (old('type') !== 'external') hidden @endif>
+            {{-- Step two is the external sheet. It stays a step for an internal
+                 examiner rather than disappearing: the stepper's rail is built
+                 once, and a step count that changes under you as you pick a
+                 type is worse than a step that says it does not apply. --}}
+            <fieldset class="fstep" data-label="External record">
+            <p class="fstep-hint" id="external-hint-external" @if (old('type') !== 'external') hidden @endif>
+                The columns CGS keeps on the external sheet. All optional except
+                the institution.
+            </p>
+            <p class="fstep-hint" id="external-hint-internal" @if (old('type') === 'external') hidden @endif>
+                Nothing to record here. Internal examiners are UTP staff and carry
+                no external paperwork — continue to the review.
+            </p>
+
+            {{-- Hidden *and* disabled together, both driven by Type. Hidden is
+                 the convenience; disabled is what makes it true -- a disabled
+                 fieldset submits none of its controls, so an external record
+                 half-typed and then switched to internal cannot reach the
+                 controller at all. The controller's Arr::except stays as the
+                 guard that does not depend on the browser. --}}
+            <fieldset id="external-fields" class="external-fields"
+                      @if (old('type') !== 'external') hidden disabled @endif>
                 <legend>External examiner record</legend>
 
                 <label for="institution">University / Industry</label>
@@ -110,22 +140,31 @@
                     </div>
                 </div>
             </fieldset>
+            </fieldset>
 
             <button type="submit">Add Examiner</button>
         </form>
+
+        @include('core::partials.form-stepper')
     </div>
 </div>
 
 <script @cspNonce>
-    // The fieldset is hidden, not disabled, so a half-filled external record
-    // survives a validation bounce; the server is what decides whether the
-    // values are kept.
     (function () {
         var type = document.getElementById('type');
         var fields = document.getElementById('external-fields');
+        var hints = {
+            external: document.getElementById('external-hint-external'),
+            internal: document.getElementById('external-hint-internal'),
+        };
 
         type.addEventListener('change', function () {
-            fields.hidden = type.value !== 'external';
+            var external = type.value === 'external';
+
+            fields.hidden = ! external;
+            fields.disabled = ! external;
+            hints.external.hidden = ! external;
+            hints.internal.hidden = external;
         });
     })();
 </script>

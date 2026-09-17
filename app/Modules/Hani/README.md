@@ -29,7 +29,15 @@
   date. All nullable, all external only. `institution` is required for an
   external examiner, and `store()` strips `Examiner::EXTERNAL_FIELDS` when an
   internal one is saved, so an internal row can never hold half an external
-  record. Three columns on the CGS sheets are deliberately *not* stored:
+  record. The add form is a **two-step wizard** (Examiner / External record)
+  — the external columns took it to thirteen fields, past the eight
+  `docs/conventions.md` puts the line at. For an internal examiner the
+  external block is `hidden` **and** `disabled`: a disabled fieldset submits
+  none of its controls, so a half-typed external record cannot reach the
+  controller at all, and the generated review cannot list values that are not
+  going to be saved. `Arr::except` in `store()` stays as the guard that does
+  not depend on the browser.
+  Three columns on the CGS sheets are deliberately *not* stored:
   "Date 2nd" is `last_examination_date`, which already drives the 90-day gap;
   "Student Name" is derived from `examiner_nominations`; and "Remark" is what
   `unavailable_reason` already shows.
@@ -56,12 +64,12 @@ follow-up, not currently tracked as required:
 
 ## Tests
 
-`tests/Feature/Hani/` — 14 cases.
+`tests/Feature/Hani/` — 16 cases.
 
 | File | Guards |
 |---|---|
 | `ExaminerNominationTest` | that a final approval ties up both nominees, and that a rejection leaves the pool untouched |
-| `ExaminerPoolTest` | the internal/external split: which columns each list shows, tab-scoped counts, the derived student column, the external-field strip on an internal save, and `institution` being required for an external examiner |
+| `ExaminerPoolTest` | the internal/external split: which columns each list shows, tab-scoped counts, the derived student column, the external-field strip on an internal save, `institution` being required for an external examiner, and the add form's stepper contract (two steps, external block disabled for an internal examiner) |
 | `ReVivaTest` | the four-stage stepper and the level-based outcome |
 
 Run them with `./vendor/bin/sail artisan test --filter=Hani`.

@@ -249,6 +249,12 @@ rail goes back on top, horizontal). The progress rail,
 Back/Continue, and a **generated review step** are all built for you, and your
 submit button is moved into the step nav and shown only on the last step.
 
+The review step's one line of prose says the form goes to the first approver,
+which is true of every application form. If yours does not file an application
+— a list a module keeps for itself, an image uploaded once — say what it does
+instead with `data-stepper-review="..."` on the `<form>`. Text only; it is set
+with `textContent`.
+
 **Do not add your own page heading or step counter.** The partial supplies
 both from the `<h2>` already in your card. A second one is the thing this
 layout exists to remove.

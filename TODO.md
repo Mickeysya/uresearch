@@ -459,6 +459,8 @@ query; there is no placeholder data in the views.
       (inline per-row actions), the documents search, and "Add an examiner"
       (5 fields that are all one question, "who is this person"). A wizard
       around a single coherent group is an extra click for nothing.
+      **Both "Add an examiner" screens revisited on 2026-09-17** — see the
+      entry below; one outgrew the rule, the other was asked for.
 - [x] **Examiner Pool made a real dashboard (2026-09-15).** It sat in a
       `.card.card-wide`, which caps at 680px — that is why the fourth stat card
       wrapped onto its own row and a seven-column table scrolled sideways on a
@@ -919,7 +921,8 @@ notification does on a box with no worker.
       internal row can never hold half an external record. New:
       `tests/Feature/Hani/ExaminerPoolTest.php`, 9 cases covering each tab's
       columns, tab-scoped counts, the derived student column, the strip and
-      the validation.
+      the validation. (11 as of 2026-09-17 — the add form's stepper contract
+      and the disabled external block.)
       `app/Modules/Hani/README.md` was updated once the branch merged.
 - [x] **Tab switching stopped looking like a page reload** (same commit).
       Every tab is a real GET — the portal is server-rendered and
@@ -1163,12 +1166,28 @@ Fixed on this pass:
 - [x] **He has tests now**, though not the ones the first pass asked for:
       `tests/Feature/Jason/FormsTest.php`, 4 cases covering the stepper
       contract on all four forms and the chart no longer coming from a CDN.
+      (6 as of 2026-09-17 — the Examiner List wizard in its own card, and
+      the return trip out of the nomination form.)
       Render tests, deliberately: the stepper is client-side, so what breaks
       server-side is the markup contract, and a missing `data-stepper` or an
       unclosed step renders perfectly and produces no wizard.
 - [x] **`cgs_prep` added to the stage-key table** in `docs/module-keys.md`.
 
 Still open, and all three want Jason:
+
+- [ ] **A Chair cannot see a nomination once they have filed it.**
+      `jason.md` §4.2 says the Academic Executive's rejection "routes back to
+      Faculty Dept with comments". It does not route anywhere the Chair can
+      look: `/appointment-letter/queue` is gated to
+      `academic_exec, non_exec_cgs, dean_pgr`, `/applications` is
+      student-only, and `AppointmentLetterController` notifies the candidate
+      rather than the filer (recorded as a resolved open question above, but
+      it is what leaves this hole). So a Chair submits a panel and it
+      disappears: no list, no status, no rejection comments. Found auditing
+      the Chair's sidebar on 2026-09-17 — everything a Chair *can* reach is
+      linked, and this is the one thing they should be able to reach and
+      cannot. Wants a "My Nominations" screen for the filer, or the
+      `ApplicationDecided` notification extended to whoever submitted.
 
 - [ ] **The appeal chain cannot be finished: no `senior_exec_cgs` account
       exists.** `HardboundAppealWorkflow`'s last stage is `cgs_approve` /
@@ -1404,6 +1423,92 @@ Both sit outside Laravel · MySQL · Dompdf · SMTP.
 ---
 
 ## Cross-cutting
+
+### Sidebar completeness, audited per role (2026-09-17)
+
+Checked by listing every GET route each role passes the middleware for and
+diffing it against what the sidebar actually renders. The Chair was the one
+audited in full; the rest fell out of the same query.
+
+- [x] **The Chair's sidebar is complete.** Five queues (Travel, Student
+      Claims, Publication, RPD Extension Appeal, Hardbound Submission), three
+      actions (Nominate Examiner Panel, Examiner List, My Signature), plus
+      Dashboard, Notification, Documents, Calendar, Help and Support and the
+      profile footer. That is every screen a Chair can open. The queues come
+      from `Role::CHAIR` stages in five workflows and the actions from two
+      `ProvidesLinks` implementations, so none of it is hardcoded and Chloe's
+      candidacy appeal will appear on its own if she uses `Role::CHAIR` (see
+      her overlap note, `chloe.md:58`).
+- [x] **Queues collapse into a tree at four or more** (`sidebar-approver-nav`).
+      The spread is fixed by the modules, not by preference: supervisor 7,
+      academic_exec 6, chair 5, dean_pgr 4, senior_director_cgs 3, and
+      manager_cgs, senior_exec_cgs, faculty and registry 1 each. A flat seven
+      pushed Notification and Calendar off the fold; a tree around a single
+      queue is a click in front of one link. The tree opens itself when you
+      are on one of its pages. Actions stay flat at every count: two or three
+      unrelated tools are not a list. Non-Exec CGS owns 11 queues and 8
+      actions and does not use this partial at all — `sidebar-cgs-nav` has
+      its own trees.
+- [x] **`/settings` was reachable by anyone signed in.** It is offered in the
+      sidebar to CGS and the administrator only, and everything it describes
+      (notification preferences, the attendance threshold, reminder timings)
+      is system-wide configuration, but the route carried no role middleware,
+      so a student could open it by URL. Now gated to `Role::cgsTeam()` plus
+      `ADMIN`, matching who is offered it, with a test.
+- [ ] **One thing a Chair should be able to reach and cannot:** their own
+      filed nominations. Tracked in Jason's section above.
+- [x] **The Chair's two examiner entries are not redundant — the round trip
+      between them was (2026-09-17).** Asked whether *Nominate Examiner Panel*
+      and *Examiner List* are the same job listed twice. They are not: the
+      list is the only screen that can add, remove or reinstate a
+      `PoolExaminer`, and dropping it from the sidebar would leave removal
+      with nowhere to live. What was actually wrong is that "Add the examiner
+      first" was a one-way trip — a plain link off the nomination form, and
+      `ExaminerPoolController::store()` then redirected to the *list*, so the
+      Chair lost the candidate and every row already picked and had to
+      re-enter the lot. Now the link carries `?return=nominate`, `store()`
+      honours it (re-checking the role, because CGS keeps the same list and
+      cannot open a Chair-only route), and the panel is saved to
+      `sessionStorage` on the way out and restored once on the way in. No
+      drafts table, no session key, no resume route.
+      **The real duplication is one level down and already settled:** two
+      examiner lists exist — Hani's `examiners` with its 90-day gap state
+      machine, and Jason's `appointment_examiner_pool` — see the dependency
+      note above. Worth naming the price out loud, though: an examiner added
+      for a panel gets **no eligibility check at all**. Hani's on-gap /
+      assigned / unavailable states do not reach Jason's list.
+- [x] **Two forms became wizards, one did not (2026-09-17).**
+      **Hani's Add Examiner** (`examiner_admin/form.blade.php`) is now two
+      steps — the external-details migration landed the same day and took it
+      to thirteen fields, past the eight `docs/conventions.md` puts the line
+      at. The external block is `hidden` **and** `disabled` for an internal
+      examiner now: a disabled fieldset submits none of its controls, so a
+      half-typed external record cannot reach the controller, and the
+      generated review cannot list values that will not be saved.
+      **Jason's Add an Examiner** is two steps as well — 6 fields, so below
+      the line and left alone by the 2026-09-15 sweep, but asked for. It
+      needed the page restructured first: `form-stepper` re-casts the whole
+      `.card` it finds the form in, so with the table still in that card the
+      page heading and "Step 1 of 3" ended up hoisted above the full list
+      with the wizard appended underneath. List and form are two cards now.
+      **My Signature was left alone.** One file input; a wizard would make it
+      "Step 1 of 2" where step 2 reviews a filename, under a line claiming it
+      goes to an approver — which the page itself contradicts ("Upload it
+      once; replace it any time").
+- [x] **`form-stepper` gained one option, in `Core` (2026-09-17).** The
+      generated review's line of prose was hardcoded to "Once submitted it
+      goes to the first approver and you cannot edit it", which is true of
+      every application form and false on the two screens above — neither
+      files anything. `data-stepper-review="..."` on the `<form>` overrides
+      it; the default is unchanged, so no existing form moves, and it is set
+      with `textContent`, so an override cannot inject markup. Second line in
+      the same file: the review skipped `field.disabled`, which is the
+      control's *own* attribute only — a control switched off by a
+      `<fieldset disabled>` reads back `false`. Now `:disabled`, which is a
+      strict superset, so again nothing existing changes.
+      **Both are Core edits and affect all six people**, which is why they
+      are recorded here rather than buried in a module. Reverting either is a
+      one-expression deletion.
 
 ### Correctness gaps in Core worth closing
 - [ ] **The student sidebar drops module links.** `sidebar.blade.php` passes

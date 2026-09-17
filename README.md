@@ -254,6 +254,14 @@ Also worth trying: as `supervisor@utp.edu.my`, use *Nominate Examiners*. The
 dropdown disables examiners who are assigned, unavailable, or still inside the
 90-day cooling-off period, and tells you when each becomes eligible again.
 
+And as `chair@utp.edu.my`, *Nominate Examiner Panel* → "Add the examiner
+first". You land on *Examiner List*, add someone, and come back to the
+nomination with the candidate and the rows you had already picked still
+there. Note these are **two different examiner lists**: the Chair's panel
+list (`appointment_examiner_pool`) is not the pool the supervisor nominates
+from (`examiners`), which is the one with the 90-day gap. Two lists on
+purpose — see the "Dependencies" note in `TODO.md`.
+
 ---
 
 ## Troubleshooting

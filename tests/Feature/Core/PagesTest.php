@@ -81,4 +81,43 @@ class PagesTest extends TestCase
             $this->actingAs($user)->get(route('calendar.index'))->assertOk();
         }
     }
+
+    /**
+     * The queue list collapses into a tree once a role owns four or more
+     * queues, and stays flat below that. Both halves matter: a flat list of
+     * seven pushes Notification and Calendar off the fold, and a tree around
+     * one queue is a click in front of a single link.
+     */
+    public function test_the_queue_list_collapses_only_for_roles_with_several_queues(): void
+    {
+        // The trigger carries the title; the flat list is a section label.
+        // (The class name itself is no good as a marker -- the sidebar's own
+        // script mentions it on every page.)
+
+        // Chair owns five: travel, claims, publication, RPD appeal, hardbound.
+        $this->actingAs($this->chair())->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('title="Pending My Action"', false);
+
+        // Registry owns one, so it keeps the plain list.
+        $this->actingAs($this->registry())->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('nav-section-label', false)
+            ->assertSee('Pending My Action')
+            ->assertDontSee('title="Pending My Action"', false);
+    }
+
+    /**
+     * Settings is offered in the sidebar to CGS and the administrator only,
+     * and everything it describes is system-wide configuration. It carried
+     * no role middleware, so any signed-in account could open it by URL.
+     */
+    public function test_settings_is_reachable_only_by_the_roles_it_is_offered_to(): void
+    {
+        $this->actingAs($this->cgs())->get(route('settings.index'))->assertOk();
+
+        foreach ([$this->student(), $this->supervisor(), $this->chair(), $this->dean()] as $user) {
+            $this->actingAs($user)->get(route('settings.index'))->assertForbidden();
+        }
+    }
 }
