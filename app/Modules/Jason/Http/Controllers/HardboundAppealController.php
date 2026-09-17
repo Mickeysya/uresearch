@@ -102,12 +102,19 @@ class HardboundAppealController extends Controller
 
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],
-            // The report is the thing the Senior Executive rules on, so the
-            // recommendation that fills it cannot be blank.
-            'remarks' => [$compiling ? 'required' : 'nullable', 'string', 'max:2000'],
-        ], [
-            'remarks.required' => 'Write the recommendation that goes into the Dean PFR report.',
+            'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // The recommendation is what the Dean PFR report is built around, so
+        // it cannot be blank. Checked here rather than as a validation rule
+        // because the shared decision form labels remarks "(optional)" and
+        // nothing renders the validation error bag -- a failed rule would just
+        // bounce the reviewer back to an unchanged page with no explanation.
+        // A flashed error is rendered by the layout.
+        if ($compiling && blank($data['remarks'] ?? null)) {
+            return back()->with('error',
+                'Forwarding an appeal needs a recommendation — it is printed in the Dean PFR report. Write it in Remarks, then press Approve again.');
+        }
 
         $detail = HardboundAppealDetail::where('application_id', $application->id)->firstOrFail();
 
