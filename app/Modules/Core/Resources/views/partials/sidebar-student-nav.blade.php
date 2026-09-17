@@ -48,7 +48,7 @@
     <div class="nav-tree-panel">
         <div class="nav-tree-items">
             @foreach ($submittable as $module)
-                <a href="{{ route($module->createRoute()) }}" class="nav-subitem @if(request()->routeIs($module->createRoute())) active @endif">{{ $module->label() }}</a>
+                <a href="{{ route($module->createRoute()) }}" title="{{ $module->label() }}" class="nav-subitem @if(request()->routeIs($module->createRoute())) active @endif">{{ $module->label() }}</a>
             @endforeach
         </div>
     </div>

@@ -131,14 +131,20 @@
     --font-sans: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
     --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
-    --text-2xs: 10.5px;
-    --text-xs:  11.5px;
-    --text-sm:  12.5px;
-    --text-md:  14px;      /* body */
-    --text-lg:  16px;
-    --text-xl:  18px;
-    --text-2xl: 22px;
-    --text-3xl: 27px;
+    /* Fluid. --text-md is the only measured value; the rest are its ratios,
+       so the scale shrinks as one on a narrow screen instead of a page
+       picking its own sizes. It resolves to exactly the old px at >=1440px
+       and bottoms out at 13px, so nothing here got smaller than readable.
+       The rem in the middle term is what keeps browser zoom working -- a
+       size in pure vw shrinks as the user zooms in. */
+    --text-md:  clamp(13px, 0.66rem + 0.24vw, 14px);   /* body */
+    --text-2xs: calc(var(--text-md) * 0.75);
+    --text-xs:  calc(var(--text-md) * 0.82);
+    --text-sm:  calc(var(--text-md) * 0.89);
+    --text-lg:  calc(var(--text-md) * 1.14);
+    --text-xl:  calc(var(--text-md) * 1.29);
+    --text-2xl: calc(var(--text-md) * 1.57);
+    --text-3xl: calc(var(--text-md) * 1.93);
 
     --leading-tight:  1.25;
     --leading-normal: 1.55;
@@ -165,6 +171,11 @@
     --space-8:  32px;
     --space-10: 40px;
     --space-12: 48px;
+
+    /* Page width, fluid. A wide page fills a 1600px monitor instead of
+       stopping at whatever number was picked on a laptop, and never gets
+       wider than a seven-column table stays readable. */
+    --page-max: clamp(880px, 92vw, 1320px);
 
     /* Radius. Controls, cards, and fully round. Three, not sixteen. */
     --radius-sm:   6px;

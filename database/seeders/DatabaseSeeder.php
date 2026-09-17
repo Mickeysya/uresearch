@@ -85,24 +85,53 @@ class DatabaseSeeder extends Seeder
         ], $extra));
     }
 
-    /** One examiner in each of the four states, so the rules are visible. */
+    /**
+     * One examiner in each of the four states, so the rules are visible --
+     * and both lists, so the internal/external split on the pool screen has
+     * something to show. The external rows carry the extra record CGS keeps
+     * for anyone from outside UTP; the internal ones deliberately do not.
+     */
     protected function examiners(): void
     {
         $rows = [
             // Available: never examined, no assignment.
-            ['Prof. Dr. Rosli Hamid', 'rosli@utp.edu.my', 'Petroleum Engineering', 'FOE', 'internal', true, null, null],
+            ['Prof. Dr. Rosli Hamid', 'rosli@utp.edu.my', 'Petroleum Engineering', 'FOE', 'internal', true, null, null, []],
             // Available: last examined well beyond the 90-day gap.
-            ['Dr. Chandra Segaran', 'chandra@utp.edu.my', 'Civil Engineering', 'FOE', 'internal', true, '-200 days', null],
+            ['Dr. Chandra Segaran', 'chandra@utp.edu.my', 'Civil Engineering', 'FOE', 'internal', true, '-200 days', null, []],
             // On gap: examined 30 days ago.
-            ['Prof. Madya Dr. Nabila Yusof', 'nabila@um.edu.my', 'Computer Science', null, 'external', true, '-30 days', null],
+            ['Prof. Madya Dr. Nabila Yusof', 'nabila@um.edu.my', 'Computer & Information Sciences', null, 'external', true, '-30 days', null, [
+                'institution' => 'Universiti Malaya (UM)',
+                'sector' => 'research',
+                'faculty_approval' => '2.2023',
+                'utp_cluster' => 'Intelligent Systems',
+                'expertise' => '1. Machine Learning'."\n".'2. Computer Vision',
+                'years_experience' => 18,
+                'msc_graduated' => 12,
+                'phd_graduated' => 6,
+                'first_examination_date' => '-2 years',
+            ]],
             // Assigned: tied to an active case.
-            ['Dr. Tan Boon Keat', 'tan@usm.edu.my', 'Software Engineering', null, 'external', true, null, '+45 days'],
+            ['Dr. Tan Boon Keat', 'tan@usm.edu.my', 'Computer & Information Sciences', null, 'external', true, null, '+45 days', [
+                'institution' => 'Universiti Sains Malaysia (USM)',
+                'sector' => 'technical',
+                'faculty_approval' => '1.2024',
+                'utp_cluster' => 'Software Engineering',
+                'expertise' => '1. Software Verification',
+                'years_experience' => 11,
+                'msc_graduated' => 5,
+                'phd_graduated' => 5,
+                'first_examination_date' => '-14 months',
+            ]],
             // Unavailable: retired.
-            ['Prof. Dr. Ismail Bakar', 'ismail@utp.edu.my', 'Chemical Engineering', 'FOE', 'internal', false, null, null],
+            ['Prof. Dr. Ismail Bakar', 'ismail@utp.edu.my', 'Chemical Engineering', 'FOE', 'internal', false, null, null, []],
         ];
 
-        foreach ($rows as [$name, $email, $dept, $faculty, $type, $active, $lastExam, $assigned]) {
-            Examiner::updateOrCreate(['email' => $email], [
+        foreach ($rows as [$name, $email, $dept, $faculty, $type, $active, $lastExam, $assigned, $external]) {
+            if (isset($external['first_examination_date'])) {
+                $external['first_examination_date'] = now()->modify($external['first_examination_date']);
+            }
+
+            Examiner::updateOrCreate(['email' => $email], $external + [
                 'name' => $name,
                 'department' => $dept,
                 'faculty' => $faculty,
