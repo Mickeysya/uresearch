@@ -10,6 +10,7 @@ use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Models\ApplicationDocument;
 use App\Modules\Jason\Models\HardboundSignature;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
+use App\Modules\Jason\Notifications\HardboundSubmissionRejected;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -222,6 +223,18 @@ class HardboundSubmissionController extends Controller
 
         if (! $returning && $stage?->key === self::FINAL_STAGE) {
             $this->issueAcknowledgement($application);
+        }
+
+        if ($returning && $stage) {
+            // The engine's own notice says only "not approved ... contact your
+            // supervisor", which is wrong here -- this chain closes the
+            // application and offers two ways forward.
+            $application->student?->notify(new HardboundSubmissionRejected(
+                $application,
+                $stage,
+                $request->user()->name,
+                $data['remarks'] ?? null,
+            ));
         }
 
         return back()->with('status', $returning

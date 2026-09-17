@@ -510,6 +510,11 @@ note below.
   - [x] Every stage's approve/reject emails the student (the engine's
         `ApplicationDecided`); CGS's approval also issues an acknowledgement
         receipt PDF via `DocumentStore::storeGenerated()`
+  - [x] A rejection at any stage additionally sends the module's own
+        `HardboundSubmissionRejected` (mail + in-app): it names the stage and
+        the person, quotes their remarks, states that the application is
+        closed, and gives the two ways forward. The engine's generic notice
+        says "contact your supervisor", which is wrong for this chain.
   - [x] Resubmission form for a returned application
   - [x] **Open question, resolved without a Core change:** the spec wants
         "return to student, application stays open," which the engine has no
