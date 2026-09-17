@@ -20,7 +20,7 @@
                 <option value="">Select a supervisor&hellip;</option>
                 @foreach ($supervisors as $supervisor)
                     <option value="{{ $supervisor->id }}" @selected(old('requested_supervisor_id') == $supervisor->id)>
-                        {{ $supervisor->name }}@if ($supervisor->department) &mdash; {{ $supervisor->department }}@endif
+                        {{ $supervisor->name }}@if ($supervisor->department) &middot; {{ $supervisor->department }}@endif
                     </option>
                 @endforeach
             </select>

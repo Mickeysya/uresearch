@@ -22,9 +22,10 @@
             </div>
         @elseif ($internal->isEmpty() || $external->isEmpty())
             <div class="empty-state">
-                The examiner list needs at least one internal and one external examiner
-                before a panel can be nominated.<br>
-                <a href="{{ route('appointment-letter.examiners', ['return' => 'nominate']) }}"><b>Add examiners to the list &rarr;</b></a>
+                <p>The examiner list needs at least one internal and one external
+                   examiner before a panel can be nominated.</p>
+                <a href="{{ route('appointment-letter.examiners.create', ['return' => 'nominate']) }}"
+                   class="btn">Add an examiner</a>
             </div>
         @else
             <p class="queue-meta">
@@ -32,9 +33,9 @@
                 examiner. CGS prepares an appointment letter and a thesis evaluation report
                 for each of them, and the Dean approves the whole pack.
                 Not on the list?
-                <a href="{{ route('appointment-letter.examiners', ['return' => 'nominate']) }}"
-                   data-keep-panel>Add the examiner first</a> — you come back here with
-                the panel as you left it.
+                <a href="{{ route('appointment-letter.examiners.create', ['return' => 'nominate']) }}"
+                   data-keep-panel>Add the examiner first</a>. You come back here
+                with the panel as you left it.
             </p>
 
             <form method="POST" action="{{ route('appointment-letter.store') }}"

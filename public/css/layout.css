@@ -194,6 +194,16 @@ textarea:focus-visible,
     font-size: var(--text-md);
 }
 
+/* An empty state's one way forward is a button, not a sentence with a
+   hyperlink in it -- see the note above the button block: filled is the
+   one real action, outlined is an alternative, anything else is a link.
+   This only spaces it off the text above; .btn / .btn-secondary already
+   carry everything else, including working on an <a>. */
+.empty-state .btn,
+.empty-state .btn-secondary {
+    margin-top: var(--space-4);
+}
+
 .page-wrapper h2 {
     color: var(--navy);
     font-size: var(--text-2xl);

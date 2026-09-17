@@ -1490,7 +1490,34 @@ audited in full; the rest fell out of the same query.
       needed the page restructured first: `form-stepper` re-casts the whole
       `.card` it finds the form in, so with the table still in that card the
       page heading and "Step 1 of 3" ended up hoisted above the full list
-      with the wizard appended underneath. List and form are two cards now.
+      with the wizard appended underneath.
+- [x] **Examiner List split into two pages (2026-09-17).** Asked whether it
+      should be tabs (list / add) or a list with an Add button to its own
+      page. **Two pages**, `appointment-letter.examiners` and
+      `…examiners.create`, which is what Hani's examiner pool already does
+      (`/examiners`, `/examiners/new`). Adding is an action, not a second
+      view of the list, so a tab strip labels it wrong; a tab holding a form
+      throws away your typing the moment you look at the list; and one
+      stacked page is the layout problem above. It also makes the return trip
+      better — "Add the examiner first" now points at the *form*, because by
+      the time you click it you already know they are not on the list.
+      The list became a real list screen while it was open: full width rather
+      than a 680px card, `.data-table` in a bordered well, `.status-badge` for
+      Internal / External / Removed, initials avatars, and the counts as one
+      quiet line instead of four stat cards — this is a handful of rows, not
+      a dashboard.
+- [x] **My Signature got a layout pass, not a wizard (2026-09-17).** The old
+      page had the hint paragraph sitting on top of the file input (a `-8px`
+      margin meant for a different context) and a bare `<input type="file">`.
+      Now: a full-width drop target (a `<label>` wrapping a hidden input, so
+      it still works with script off), and a picked file previews on the same
+      white plate the Confirmation prints it onto — you can see the scan is
+      the right way up before saving rather than after. The plate stays white
+      in dark mode on purpose; black ink on a dark surface disappears.
+      **The preview reads as a `data:` URI, not a `blob:` one.**
+      `ContentSecurityPolicy` sets `img-src 'self' data:`, so
+      `URL.createObjectURL` would have been refused and the preview would
+      have silently never appeared. `FormsTest` guards this.
       **My Signature was left alone.** One file input; a wizard would make it
       "Step 1 of 2" where step 2 reviews a filename, under a line claiming it
       goes to an approver — which the page itself contradicts ("Upload it
@@ -1509,6 +1536,43 @@ audited in full; the rest fell out of the same query.
       **Both are Core edits and affect all six people**, which is why they
       are recorded here rather than buried in a module. Reverting either is a
       one-expression deletion.
+
+### House style, applied across every folder (2026-09-17)
+
+- [x] **An empty state's way forward is a button now, not a hyperlink.**
+      `.btn` was already defined in `layout.css` as an anchor styled like the
+      primary button, with `text-decoration: none`, the hover, active and
+      disabled states, the lot. **Nothing in the repo used it.** So seven
+      empty-state links became buttons with no new CSS: filled `.btn` for the
+      one real action (Add an examiner, on the Examiner List and on the panel
+      nomination), outlined `.btn-secondary` for an alternative (Clear the
+      filters, Back to the masterlist, Track this appeal, See the overdue
+      list, File an appeal). A link inside a sentence stays a link — the rule
+      already written above the button block in `layout.css`.
+      One rule added to `Core`: `.empty-state .btn { margin-top }`, so the
+      button is not flush against the text above it. That is the only CSS
+      change; everything else is a class on an existing anchor.
+      **Touches four people's folders** (`Core`, `Norhanis`, `Nureen`,
+      `Jason`) because the ask was explicitly global. Each edit is one line
+      and reverting one is deleting a class attribute.
+- [x] **No em dash as a sentence connector, anywhere that renders.** Six
+      places, all written during this session's work. A comma, a semicolon or
+      a full stop says the same thing without reading as machine-written, and
+      this is a project supervisors mark. Also swapped one `&mdash;`
+      separating a supervisor's name from their department for `&middot;`,
+      which is what the hardbound detail view already uses.
+      **Deliberately not touched:** the en dash in a range (`75% – 84%`,
+      `Jan – Mar`) and the bare em dash standing in for an empty table cell
+      (`{{ $x ?? '—' }}`). Both are ordinary typography, and about 35 of the
+      latter exist across four folders. Say the word if you want them as
+      "N/A" or blank instead.
+      **Also not touched: code comments.** They do not render, and sweeping
+      them is a diff across every file in the repo. Worth doing as its own
+      pass if anyone is reading the source.
+      Guarded by `tests/Feature/Core/ProseTest.php`, which scans every Blade
+      view in the repo — same shape as `ContentSecurityPolicyTest`'s scanner,
+      and for the same reason: the screens a test happens to render are not
+      all the screens there are.
 
 ### Correctness gaps in Core worth closing
 - [ ] **The student sidebar drops module links.** `sidebar.blade.php` passes

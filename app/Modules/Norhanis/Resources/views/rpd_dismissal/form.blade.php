@@ -18,8 +18,8 @@
         @if ($eligible->isEmpty())
             <div class="empty-state">
                 <p>No candidacy is currently eligible for dismissal.</p>
-                <p class="queue-meta">Only students past their deadline with no dismissal already open appear here.
-                   <a href="{{ route('candidacies.index', ['filter' => 'overdue']) }}">See the overdue list.</a></p>
+                <p class="queue-meta">Only students past their deadline with no dismissal already open appear here.</p>
+                <a href="{{ route('candidacies.index', ['filter' => 'overdue']) }}" class="btn-secondary">See the overdue list</a>
             </div>
         @else
             <form method="POST" action="{{ route('rpd-dismissal.store') }}" class="app-form" data-stepper>

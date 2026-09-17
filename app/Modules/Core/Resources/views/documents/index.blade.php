@@ -43,7 +43,7 @@
         <div class="empty-state">
             @if ($search !== '' || $module !== 'all')
                 <p>No document matches that.</p>
-                <p class="queue-meta"><a href="{{ route('documents.index') }}">Clear the filters</a></p>
+                <a href="{{ route('documents.index') }}" class="btn-secondary">Clear the filters</a>
             @else
                 <p>Nothing here yet.</p>
                 <p class="queue-meta">

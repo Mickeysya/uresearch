@@ -30,7 +30,7 @@
              says the form goes to an approver. This one does not go anywhere
              -- it writes a row into the pool. --}}
         <form method="POST" action="{{ route('examiner-admin.store') }}" data-stepper
-              data-stepper-review="Check the details, then add the examiner. Nothing here is submitted for approval — the examiner simply joins the pool and becomes available to nominate.">
+              data-stepper-review="Check the details, then add the examiner. Nothing here is submitted for approval. The examiner simply joins the pool and becomes available to nominate.">
             @csrf
 
             <fieldset class="fstep" data-label="Examiner">
@@ -75,7 +75,7 @@
             </p>
             <p class="fstep-hint" id="external-hint-internal" @if (old('type') === 'external') hidden @endif>
                 Nothing to record here. Internal examiners are UTP staff and carry
-                no external paperwork — continue to the review.
+                no external paperwork, so continue to the review.
             </p>
 
             {{-- Hidden *and* disabled together, both driven by Type. Hidden is

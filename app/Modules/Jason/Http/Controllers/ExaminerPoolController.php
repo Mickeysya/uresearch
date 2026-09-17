@@ -42,6 +42,13 @@ class ExaminerPoolController extends Controller
             && $request->user()->role === Role::CHAIR;
     }
 
+    public function create(Request $request)
+    {
+        return view('jason::examiner_pool.form', [
+            'returnToNomination' => $this->returningToNomination($request),
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([

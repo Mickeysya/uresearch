@@ -11,7 +11,7 @@
         @if ($students->isEmpty())
             <div class="empty-state">
                 <p>Every student already has a candidacy on record.</p>
-                <p class="queue-meta"><a href="{{ route('candidacies.index') }}">Back to the masterlist</a></p>
+                <a href="{{ route('candidacies.index') }}" class="btn-secondary">Back to the masterlist</a>
             </div>
         @else
             <form method="POST" action="{{ route('candidacies.store') }}" class="app-form" data-stepper>

@@ -131,35 +131,53 @@ class FormsTest extends TestCase
     }
 
     /**
-     * The Examiner List is the one screen here where the wizard needed the
-     * page moved around it: the partial re-casts the whole `.card` it finds
-     * the form in, so with the table still in that card you got the page
-     * heading and "Step 1 of 3" hoisted above the full list, and the wizard
-     * appended below it.
+     * The list and the add form are two pages. They were one, briefly, and it
+     * did not work: `form-stepper` re-casts the whole `.card` it finds the
+     * form in, so the page heading and "Step 1 of 3" ended up hoisted above
+     * the full examiner table with the wizard appended underneath it.
      */
-    public function test_the_examiner_list_add_form_is_a_stepper_in_its_own_card(): void
+    public function test_the_examiner_list_and_the_add_form_are_separate_pages(): void
     {
         PoolExaminer::create([
             'examiner_type' => 'internal', 'name' => 'Dr. Internal', 'institution' => 'UTP',
             'email' => 'internal@utp.edu.my', 'expertise' => 'Structures', 'is_active' => true,
         ]);
 
-        $response = $this->actingAs($this->chair())->get(route('appointment-letter.examiners'));
+        $chair = $this->chair();
+
+        // The list is a list: no form on it beyond the per-row Remove button.
+        $this->actingAs($chair)->get(route('appointment-letter.examiners'))
+            ->assertOk()
+            ->assertSee('Dr. Internal')
+            ->assertSee(route('appointment-letter.examiners.create'), false)
+            ->assertDontSee('data-stepper', false);
+
+        $response = $this->actingAs($chair)->get(route('appointment-letter.examiners.create'));
 
         $this->assertIsStepper($response, 2);
 
-        $html = $response->getContent();
-
-        $this->assertSame(
-            2,
-            substr_count($html, 'card card-wide pool-card'),
-            'The list and the add form have to be two cards, or the stepper swallows the table.'
-        );
-
         // Nothing here files an application, so the generated review must not
         // claim it goes to an approver.
+        $html = $response->getContent();
         $this->assertStringContainsString('data-stepper-review=', $html);
         $this->assertStringNotContainsString('it goes to the first approver', $html);
+    }
+
+    /**
+     * The preview of a picked signature has to be a data: URI. `img-src` is
+     * "'self' data:" with no blob:, so URL.createObjectURL would be refused
+     * by the CSP and the preview would silently never appear.
+     */
+    public function test_the_signature_preview_stays_inside_the_content_security_policy(): void
+    {
+        $html = $this->actingAs($this->chair())
+            ->get(route('hardbound.signature'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('readAsDataURL(', $html);
+        // The call, not the word -- the comment above it names the API it avoids.
+        $this->assertStringNotContainsString('createObjectURL(', $html);
     }
 
     /**

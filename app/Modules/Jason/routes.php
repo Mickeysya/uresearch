@@ -17,9 +17,15 @@ Route::middleware('auth')->group(function () {
     // ---- Appointment Letter --------------------------------------------
 
     // The examiner list the Chair nominates from. Chairs and CGS both keep it.
+    // The list and the add form are two pages, not one: adding is an action,
+    // not a second view of the list, and the wizard wants a card of its own
+    // (core::partials.form-stepper re-casts whatever .card it finds the form
+    // in). Same shape as Hani's examiner pool, /examiners and /examiners/new.
     Route::middleware('role:'.implode(',', [Role::CHAIR, Role::NON_EXEC_CGS]))->group(function () {
         Route::get('/appointment-letter/examiners', [ExaminerPoolController::class, 'index'])
             ->name('appointment-letter.examiners');
+        Route::get('/appointment-letter/examiners/new', [ExaminerPoolController::class, 'create'])
+            ->name('appointment-letter.examiners.create');
         Route::post('/appointment-letter/examiners', [ExaminerPoolController::class, 'store'])
             ->name('appointment-letter.examiners.store');
         Route::post('/appointment-letter/examiners/{examiner}/toggle', [ExaminerPoolController::class, 'toggle'])

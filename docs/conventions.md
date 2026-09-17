@@ -222,6 +222,40 @@ reported rather than blanking the calendar for everyone.
 **Do not add an events table.** Every date on that page is already recorded
 somewhere; a second copy is only a second thing to keep in sync.
 
+### Empty states
+
+An empty state's one way forward is a **button**, not a sentence with a
+hyperlink in it. `.btn` (filled, the one real action) and `.btn-secondary`
+(outlined, an alternative) both already work on an `<a>` and need no new CSS:
+
+```blade
+<div class="empty-state">
+    <p>No examiners yet.</p>
+    <p class="queue-meta">Add the first one and they appear on the nomination form.</p>
+    <a href="{{ route('appointment-letter.examiners.create') }}" class="btn">Add an examiner</a>
+</div>
+```
+
+A link that sits inside a sentence stays a link. The rule is the one already
+written above the button block in `layout.css`: filled is the one real
+action, outlined is an alternative, destructive is destructive, and anything
+else is a link.
+
+### Words on the screen
+
+**No em dash as a sentence connector.** "We did X — it means Y" is the most
+recognisable tell that a sentence was not typed by a person, and this project
+gets read by supervisors. Use a comma, a semicolon, a colon or a full stop.
+
+Two things this does *not* ban, both of which are ordinary typography:
+
+- The **en dash** in a range: `75% – 84%`, `Jan – Mar`.
+- A bare **em dash standing in for an empty cell**: `{{ $x ?? '—' }}`.
+
+`tests/Feature/Core/ProseTest.php` scans every Blade view in the repo for the
+spaced em dash and `&mdash;`, ignoring Blade comments, `@php` blocks, `<style>`,
+`<script>` and code comments. It fails with the file and line.
+
 ### Forms
 
 A form past about eight fields should be a wizard rather than one long

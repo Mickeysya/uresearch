@@ -16,8 +16,8 @@
         @elseif ($openAppeal)
             <div class="empty-state">
                 <p>Appeal #{{ $openAppeal->id }} is already under review.</p>
-                <p class="queue-meta">Wait for its outcome before filing another.
-                   <a href="{{ route('applications.show', $openAppeal) }}">Track it here.</a></p>
+                <p class="queue-meta">Wait for its outcome before filing another.</p>
+                <a href="{{ route('applications.show', $openAppeal) }}" class="btn-secondary">Track this appeal</a>
             </div>
         @elseif (! $candidacy->canAppeal())
             <div class="empty-state">
