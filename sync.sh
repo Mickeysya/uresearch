@@ -50,10 +50,31 @@ command -v docker >/dev/null || fail "docker not found. Start Docker Desktop (se
 docker info >/dev/null 2>&1  || fail "the Docker daemon is not reachable. Start Docker Desktop."
 ok "Docker is running"
 
+# Is a container up? Asked of Docker directly, by the name docker-compose.yml
+# pins, instead of grepping `docker compose ps --status running`.
+#
+# That ps form needs three things to line up at once: a Compose new enough to
+# know --status (2.6+), a working directory that resolves to the same project
+# that owns the containers, and a table shape the grep still matches. Where
+# any one of them differs -- it showed up on a Mac -- every check in this
+# script reports "not running" while MySQL has been healthy for an hour.
+# `docker inspect` on a pinned container_name needs none of the three.
+#
+# A container that declares a healthcheck (mysql, mailpit) has to be HEALTHY,
+# not merely running: migrations fired at a MySQL still starting up fail in a
+# way that reads like a schema problem. Containers without one (app, queue)
+# fall back to the plain state.
+container_up() {
+    case "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$1" 2>/dev/null)" in
+        healthy|running) return 0 ;;
+        *)               return 1 ;;
+    esac
+}
+
 # vendor/ may be missing entirely on a fresh branch; Sail lives inside it, so
 # fall back to a throwaway Composer container exactly as setup.sh does.
 composer_run() {
-    if [ -x ./vendor/bin/sail ] && docker compose ps --status running 2>/dev/null | grep -q uresearch-app; then
+    if [ -x ./vendor/bin/sail ] && container_up uresearch-app; then
         ./vendor/bin/sail composer "$@"
     else
         docker run --rm \
@@ -171,7 +192,7 @@ fi
 # ---------------------------------------------------------------------------
 say "Containers"
 # ---------------------------------------------------------------------------
-if docker compose ps --status running 2>/dev/null | grep -q uresearch-app; then
+if container_up uresearch-app; then
     ok "already running"
 else
     warn "not running"
@@ -185,14 +206,14 @@ else
 fi
 
 # Everything past here needs a live database.
-if [ "$CHECK_ONLY" -eq 0 ] && ! docker compose ps --status running 2>/dev/null | grep -q uresearch-mysql; then
+if [ "$CHECK_ONLY" -eq 0 ] && ! container_up uresearch-mysql; then
     fail "MySQL is not running. Try ./setup.sh, or './vendor/bin/sail logs mysql' to see why."
 fi
 
 # ---------------------------------------------------------------------------
 say "Database migrations"
 # ---------------------------------------------------------------------------
-if [ -x ./vendor/bin/sail ] && docker compose ps --status running 2>/dev/null | grep -q uresearch-mysql; then
+if [ -x ./vendor/bin/sail ] && container_up uresearch-mysql; then
     STATUS="$(artisan migrate:status 2>&1 || true)"
 
     if printf '%s' "$STATUS" | grep -q "Pending"; then
@@ -227,7 +248,7 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
     warn "would clear compiled views, config and route caches"
     info "(Blade templates compiled on the previous branch are still being served)"
 else
-    if [ -x ./vendor/bin/sail ] && docker compose ps --status running 2>/dev/null | grep -q uresearch-app; then
+    if [ -x ./vendor/bin/sail ] && container_up uresearch-app; then
         artisan view:clear   >/dev/null 2>&1 && ok "compiled views cleared"
         artisan config:clear >/dev/null 2>&1 && ok "config cache cleared"
         artisan route:clear  >/dev/null 2>&1 && ok "route cache cleared"
@@ -248,7 +269,7 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
     warn "would restart the queue worker"
     info "(queue:work holds the app in memory, so it still runs pre-pull code)"
 else
-    if docker compose ps --status running 2>/dev/null | grep -q uresearch-queue; then
+    if container_up uresearch-queue; then
         artisan queue:restart >/dev/null 2>&1 || true
         docker restart uresearch-queue >/dev/null 2>&1 && ok "queue worker restarted"
     else

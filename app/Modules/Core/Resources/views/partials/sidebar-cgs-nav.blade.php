@@ -47,6 +47,7 @@
         <div class="nav-tree-items">
             @forelse ($queues as $queue)
                 <a href="{{ route($queue['module']->queueRoute(), ['stage' => $queue['stage']->key]) }}"
+                   title="{{ $queue['module']->label() }}"
                    class="nav-subitem @if(request()->routeIs($queue['module']->queueRoute()) && request()->query('stage', $queue['stage']->key) === $queue['stage']->key) active @endif">
                     {{ $queue['module']->label() }}
                 </a>

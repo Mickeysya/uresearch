@@ -272,7 +272,12 @@
     font-size: 13.5px;
     color: var(--text-dark);
     text-decoration: none;
+    /* nowrap on its own only moved the clipping to the sidebar's edge --
+       "Appeal Hardbound Submission" ran out of the panel mid-word with no
+       sign there was more. Ellipsis here, full text in the title. */
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sidebar a.nav-subitem:hover {
@@ -285,8 +290,11 @@
     font-weight: 600;
 }
 
+/* No icon, so the label has to take the icon's place rather than start at
+   the panel edge -- 24px padding + a 20px icon + the 12px gap. Without this
+   every link under "Actions" sits 32px left of every other nav label. */
 .sidebar .nav-item-flat {
-    padding-left: 24px;
+    padding-left: 56px;
 }
 
 .sidebar .nav-section-label {
