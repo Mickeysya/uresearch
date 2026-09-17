@@ -111,23 +111,34 @@ Dean on international travel) is still visible to the role that owns it.
 
 ## The dashboards
 
-There are six: student, CGS, admin, **Chair**, **Supervisor**, and the generic
-approver screen every other approving role still falls through to. Five are a
-service plus a view of partials, one named method per panel, so changing a
-data source is a one-method edit with no view, route or controller change.
+There are six: student, CGS, admin, **Chair**, **Supervisor**, and the shared
+**approver** screen every other approving role lands on. Each is a service
+plus a view of partials, one named method per panel, so changing a data source
+is a one-method edit with no view, route or controller change.
 
-`ChairDashboard` and `SupervisorDashboard` both extend
-`Services\ApproverDashboard`, which holds the half they share — the queues,
-the longest wait, the triage list, the blocking alerts. What each subclass
-adds is the part that makes it a different screen rather than the same one
-retitled: a Chair files examiner panels, a Supervisor is accountable for
-**named students**.
+`ChairDashboard`, `SupervisorDashboard` and `GeneralApproverDashboard` all
+extend `Services\ApproverDashboard`, which holds everything they share — the
+queues, the longest wait, the overdue count, the ageing profile, the triage
+list, the decision trail, the blocking alerts. What a subclass adds is the
+part that makes it a different screen rather than the same one retitled: a
+Chair files examiner panels, a Supervisor is accountable for **named
+students**, and `GeneralApproverDashboard` adds nothing at all, which is the
+point of it.
 
-Both exist because the generic approver view builds one stat card per queue. A
-Chair owns five stages and a Supervisor seven, so that screen rendered six and
-eight cards, most reading zero, over a chart of mostly-empty categories — and
-never showed the figure either of them is actually measured on. That screen is
-the last one still on the pre-`.sdash` markup and is tracked in `TODO.md`.
+**Who lands where.** Student, admin and CGS have their own branches. Then
+Chair, then Supervisor. Everyone else who approves anything — the Dean of PGR,
+the Academic Executive, the Registry, the Faculty office, the Senior Executive
+— gets the shared approver screen, because what each of them owns is a set of
+stages and `ApproverDashboard` derives a whole dashboard from that. The
+Academic Executive's examiner conflicts and pending evaluations live in
+`app/Modules/Hani`, which Core cannot read; they reach that screen anyway as
+Quick actions, because the module declares them through `ProvidesLinks`.
+
+All of them exist because the old approver view built one stat card per queue.
+A Chair owns five stages, a Supervisor seven and the Academic Executive six, so
+it rendered six, eight and seven cards — most reading zero — over a chart of
+mostly-empty categories, and never showed the figure any of them is actually
+measured on. Every dashboard is on `.sdash` now; that was the last one.
 
 **They draw different charts on purpose.** The Chair's asks how long work has
 been sitting (four ordered bands — a bar); the Supervisor's asks whether the

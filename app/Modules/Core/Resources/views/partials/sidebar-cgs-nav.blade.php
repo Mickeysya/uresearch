@@ -45,15 +45,14 @@
     </button>
     <div class="nav-tree-panel">
         <div class="nav-tree-items">
-            @forelse ($queues as $queue)
-                <a href="{{ route($queue['module']->queueRoute(), ['stage' => $queue['stage']->key]) }}"
-                   title="{{ $queue['module']->label() }}"
-                   class="nav-subitem @if(request()->routeIs($queue['module']->queueRoute()) && request()->query('stage', $queue['stage']->key) === $queue['stage']->key) active @endif">
-                    {{ $queue['module']->label() }}
-                </a>
-            @empty
+            @if (empty($queues))
                 <span class="nav-subitem nav-subitem-muted">No queues assigned yet</span>
-            @endforelse
+            @else
+                {{-- Grouped by module: a module owning more than one stage
+                     for this role gets a tree rather than repeating its own
+                     name once per stage. --}}
+                @include('core::partials.queue-links', ['queues' => $queues])
+            @endif
         </div>
     </div>
 </div>

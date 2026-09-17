@@ -204,6 +204,62 @@ abstract class ApproverDashboard
     }
 
     /**
+     * How many applications ENDED at a decision of theirs.
+     *
+     * The figure that means most to a final approver: the Dean is the last
+     * stage on international travel and on an RPD appeal, so their approval
+     * is the one that finishes the thing. Mid-chain it is mostly their
+     * rejections, which is also worth knowing -- either way it is "the buck
+     * stopped with me", and it is the same figure for every role rather than
+     * a card that only appears for one.
+     *
+     * "Latest history row is mine, and the application is no longer pending."
+     * MAX(id) per application rather than a timestamp: two decisions can
+     * share a second, and the id is what actually orders them.
+     */
+    public function finalisedByMe(): int
+    {
+        return $this->safely('decided', function () {
+            $latest = ApprovalHistory::query()
+                ->selectRaw('MAX(id)')
+                ->groupBy('application_id');
+
+            return ApprovalHistory::query()
+                ->whereIn('id', $latest)
+                ->where('approver_id', $this->user->id)
+                ->whereHas('application', fn ($q) => $q->whereIn('status', [
+                    Application::STATUS_APPROVED,
+                    Application::STATUS_REJECTED,
+                ]))
+                ->count();
+        }, 0);
+    }
+
+    /**
+     * This person's own decision trail, newest first.
+     *
+     * Every other panel looks forward at what is waiting. This is the only
+     * one that looks back, which is what an approver is asked about when
+     * someone queries an outcome -- and the Dean, who signs the last stage
+     * of several chains, is asked most.
+     *
+     * Scoped to their own rows: this is not an audit screen.
+     *
+     * @return Collection<int, ApprovalHistory>
+     */
+    public function myRecentDecisions(int $limit = 6): Collection
+    {
+        return $this->safely('decisions', fn () => ApprovalHistory::query()
+            ->where('approver_id', $this->user->id)
+            ->with('application.student')
+            ->latest('id')
+            ->limit($limit)
+            ->get()
+            ->filter(fn (ApprovalHistory $h) => $h->application !== null)
+            ->values(), collect());
+    }
+
+    /**
      * Anything blocking this person, declared by the modules themselves --
      * Core cannot know that approving a hardbound thesis needs a signature on
      * file. See Contracts\ProvidesDashboardAlerts.

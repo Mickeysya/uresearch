@@ -325,6 +325,19 @@ Three older names still resolve to the page header so nothing breaks
 mid-branch: `.rpd-header`, `.notif-header` and the `.rpd-page` / `.notif-page`
 wrappers. They are deprecated. Do not write new ones.
 
+### The sidebar's queue list
+
+Nothing to do: the nav builds itself from the stages your module declares.
+One thing worth knowing, because it decides how your module reads there —
+**a module owning more than one stage for the same role gets a group of its
+own**, labelled with your module name, whose items are your **stage** labels
+(`core::partials.queue-links`). A module with one stage for that role stays a
+plain link.
+
+So a stage label is user-facing in two places, not one: the queue page's title
+and the sidebar. `Stage::$label` is display-only and safe to reword;
+`Stage::$key` is stored in `applications.current_stage` and is not.
+
 ### Dashboard panels
 
 A dashboard is locked to one viewport on a desktop (`dashboard-student.css`,

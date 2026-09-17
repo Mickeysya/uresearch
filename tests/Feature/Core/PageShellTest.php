@@ -34,8 +34,8 @@ class PageShellTest extends TestCase
         // carries the person's name and role. A page header above it would
         // be the title said twice.
         'app/Modules/Core/Resources/views/dashboard/admin.blade.php',
-        'app/Modules/Core/Resources/views/dashboard/chair.blade.php',
         'app/Modules/Core/Resources/views/dashboard/approver.blade.php',
+        'app/Modules/Core/Resources/views/dashboard/chair.blade.php',
         'app/Modules/Core/Resources/views/dashboard/cgs.blade.php',
         'app/Modules/Core/Resources/views/dashboard/student.blade.php',
         'app/Modules/Core/Resources/views/dashboard/supervisor.blade.php',
@@ -171,9 +171,8 @@ class PageShellTest extends TestCase
     {
         $offenders = [];
 
-        // The approver dashboard is the one screen still on the pre-.sdash
-        // markup; it is tracked in TODO.md and stays capped until rebuilt.
-        $pending = ['approver'];
+        // Every dashboard is on .sdash now.
+        $pending = [];
 
         foreach (glob(base_path('app/Modules/Core/Resources/views/dashboard/*.blade.php')) as $view) {
             $name = basename($view, '.blade.php');

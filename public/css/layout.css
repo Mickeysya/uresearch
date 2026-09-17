@@ -2256,7 +2256,8 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
    `.sdash-card-body` is `flex: 1 1 auto` and shrinks to nothing when its
    parent is. (0,2,0) beats (0,1,0) whatever the sheet order. */
 .sdash.sdash-chair,
-.sdash.sdash-supervisor {
+.sdash.sdash-supervisor,
+.sdash.sdash-approver {
     display: flex;
     flex-direction: column;
     gap: var(--sdash-gap, 16px);
@@ -2284,7 +2285,8 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     /* Two classes (0,2,0) so it beats `.sdash` (0,1,0) whatever the sheet
        order; --sdash-chrome is inherited from that same media query. */
     .sdash.sdash-chair,
-    .sdash.sdash-supervisor {
+    .sdash.sdash-supervisor,
+    .sdash.sdash-approver {
         height: calc(100dvh - var(--sdash-chrome, 120px));
     }
 
@@ -2292,7 +2294,8 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
        item's default minimum is its content, which is what lets a tall panel
        push the page past the viewport and bring the scrollbar back. */
     .sdash-chair > .approver-row,
-    .sdash-supervisor > .approver-row {
+    .sdash-supervisor > .approver-row,
+    .sdash-approver > .approver-row {
         flex: 1 1 0;
         min-height: 0;
     }

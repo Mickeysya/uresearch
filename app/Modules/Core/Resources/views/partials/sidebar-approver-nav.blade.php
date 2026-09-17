@@ -27,8 +27,12 @@
     $queueRoutes = collect($queues)->map(fn ($q) => $q['module']->queueRoute())->unique();
     $queuesOpen = $queueRoutes->contains(fn ($r) => request()->routeIs($r));
 
-    // Four is where the list stops being scannable at a glance.
-    $collapse = count($queues) >= 4;
+    // Four is where the list stops being scannable at a glance -- counted in
+    // MODULES, not stages. A module that owns four consecutive stages for
+    // this role is one entry with its own tree inside (see
+    // core::partials.queue-links), so counting stages would collapse a
+    // sidebar that reads as two items.
+    $collapse = collect($queues)->unique(fn ($q) => $q['module']->key())->count() >= 4;
 @endphp
 
 @if (! empty($queues))
@@ -46,23 +50,14 @@
             </button>
             <div class="nav-tree-panel">
                 <div class="nav-tree-items">
-                    @foreach ($queues as $queue)
-                        <a href="{{ route($queue['module']->queueRoute(), ['stage' => $queue['stage']->key]) }}"
-                           title="{{ $queue['module']->label() }}"
-                           class="nav-subitem @if(request()->routeIs($queue['module']->queueRoute()) && request()->query('stage', $queue['stage']->key) === $queue['stage']->key) active @endif">
-                            {{ $queue['module']->label() }}
-                        </a>
-                    @endforeach
+                    @include('core::partials.queue-links', ['queues' => $queues])
                 </div>
             </div>
         </div>
     @else
         <div class="nav-section-label"><span class="nav-label">Pending My Action</span></div>
-        @foreach ($queues as $queue)
-            <a href="{{ route($queue['module']->queueRoute(), ['stage' => $queue['stage']->key]) }}"
-               class="nav-item nav-item-flat" title="{{ $queue['module']->label() }}">
-                <span class="nav-label">{{ $queue['module']->label() }}</span>
-            </a>
-        @endforeach
+        <div class="nav-flat-queues">
+            @include('core::partials.queue-links', ['queues' => $queues])
+        </div>
     @endif
 @endif

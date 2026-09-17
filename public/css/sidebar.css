@@ -484,3 +484,68 @@ html.sidebar-collapsed .sidebar-profile {
 .uresearch-logo {
     height: 52px;
 }
+
+/* ============================================================
+   A tree inside a tree
+
+   A module that owns more than one stage for a role gets its own group
+   rather than repeating its name once per stage -- Hani's re-viva has
+   four consecutive Academic Executive stages, which read as four
+   identical "Re-viva Monitoring" links you could not choose between.
+   See core::partials.queue-links.
+
+   Everything here is the nested case only. The outer tree, the panel
+   animation and the toggle script are all unchanged: the script uses
+   closest('.nav-tree'), so a nested trigger toggles its own group and
+   not its parent.
+   ============================================================ */
+
+/* The trigger sits where a sub-item sits, so the group lines up with the
+   links around it rather than with the top-level items. */
+.sidebar .nav-tree-nested > .nav-tree-trigger {
+    padding: 9px 16px 9px 56px;
+    font-size: 13.5px;
+    font-weight: 500;
+}
+
+/* The nested items step in once more, and the guide line goes UNDER THE
+   GROUP IT BELONGS TO rather than staying at the outer depth -- a line at
+   the parent list's position reads as though these items belong to that
+   list, which is the opposite of what the group is saying.
+
+   56px is where the trigger's label starts, so the line runs directly
+   beneath the first letter of the module name and the items hang off it. */
+.sidebar .nav-tree-nested a.nav-subitem {
+    padding-left: 76px;
+    font-size: 13px;
+}
+
+.sidebar .nav-tree-nested > .nav-tree-panel > .nav-tree-items::before {
+    left: 58px;
+}
+
+/* How many stages are behind the group, so the count is visible without
+   opening it. */
+.sidebar .nav-count {
+    margin-left: auto;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--border-subtle);
+    color: var(--text-grey);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.sidebar .nav-tree-nested > .nav-tree-trigger .nav-chevron { margin-left: 6px; }
+
+/* A queue group in the FLAT branch (three modules or fewer) has no outer
+   tree around it, so its links need the indent the outer panel would
+   otherwise have given them.
+
+   DIRECT children only. As a descendant selector this also matched the
+   items inside a nested group, at equal specificity and later in the file,
+   so it silently undid the nesting above: the sub-items sat at the outer
+   indent and the guide line with them. The child combinator is what keeps
+   this rule about the flat list it is named for. */
+.sidebar .nav-flat-queues > a.nav-subitem { padding-left: 56px; }

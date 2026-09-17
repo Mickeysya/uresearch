@@ -1819,6 +1819,47 @@ audited in full; the rest fell out of the same query.
       is the last one not on `.sdash` — same entry as below. Rebuilding it
       gets it the full screen for free.
 
+### Four identical sidebar links (2026-09-17)
+
+- [x] **The Academic Executive's sidebar said "Re-viva Monitoring" four
+      times.** A module contributes one queue per stage it owns for a role,
+      and the nav printed the MODULE's label for each — so Hani's four
+      consecutive AE stages became four links with nothing to tell them
+      apart. Not a re-viva problem: any module with two stages on one role
+      did it, and the CGS nav had the same code.
+      Now `core::partials.queue-links`, shared by both navs: one link per
+      module as before, **unless** a module owns more than one stage for this
+      role, in which case it gets a tree of its own and the items are the
+      **stage** names — Report Sent, Under Panel Review, Report Received,
+      Consolidation Scheduled. Data-driven, so nothing in Core names re-viva,
+      and a module with one stage is untouched.
+      The group opens itself when you are on one of its stages, so the extra
+      click is only paid coming in from elsewhere, and carries a count so the
+      number of stages is visible while closed.
+- [x] **The guide line was at the wrong depth**, which made the group read as
+      though its items belonged to the list above it rather than to the
+      module. It sits under the group's own label now (58px, where the
+      trigger's text starts), with the stage links hanging off it at 76px.
+      **The cause was a rule of mine leaking.** `.sidebar .nav-flat-queues
+      .nav-tree-items::before`, written for the flat branch, is a *descendant*
+      selector — so it also matched the items inside a nested group, at equal
+      specificity and later in the file, and silently undid the nesting. The
+      child combinator is what keeps a rule about the thing it is named for.
+      Second cascade bug of this shape this session, after the single-class
+      `.sdash-*` overrides; both were a rule that looked right in isolation
+      and lost or won somewhere its author never looked.
+- [x] **Flat-or-collapsed now counts modules, not stages.** The approver nav
+      collapses into "Pending My Action" at four or more, and it was counting
+      stages: the AE's six stages across three modules would have collapsed a
+      sidebar that reads as three items.
+- [x] **A bug no test could see**, because every one of the four links
+      resolved to a real route and rendered perfectly. `SidebarQueuesTest`
+      asserts the module name appears once as the group, each stage appears
+      by its own name, a single-stage module stays a plain link, and the
+      flat/tree decision counts modules. It also asserts re-viva still *has*
+      several AE stages, so if that changes the test fails rather than
+      quietly proving nothing.
+
 ### The Chair gets its own dashboard (2026-09-17)
 
 - [x] **Built.** `Services\ChairDashboard` + `dashboard/chair.blade.php` and
@@ -1847,11 +1888,32 @@ audited in full; the rest fell out of the same query.
       module declares the alert and Core lays it out. Raised only for an
       approver who actually has something waiting, so it is not permanent
       furniture. One edit in `Jason/`, to `HardboundSubmissionWorkflow`.
-- [ ] **The generic approver dashboard still needs the same treatment.** It
-      now serves the Dean, the Academic Executive, the Registry and Faculty,
-      and it is the last screen on the old `.stat-cards-row` / `.dashboard-grid`
-      markup rather than `.sdash`. Its per-queue stat cards have the same
-      problem for the AE (six queues) that they had for the Chair.
+- [x] **The approver dashboard was rebuilt (2026-09-17)**, which is what the
+      Dean and the Academic Executive asked for and closes this item. It was
+      the last screen on the old `.stat-cards-row` / `.dashboard-grid` markup,
+      and its per-queue stat cards had the same problem for the AE (six
+      queues) that they had for the Chair.
+      **One screen for all of them**, not two more bespoke ones: the Dean,
+      the Academic Executive, the Registry, the Faculty office and the Senior
+      Executive each own nothing but a set of stages, and `ApproverDashboard`
+      already derives a whole dashboard from that. `GeneralApproverDashboard`
+      extends it and adds nothing, which is the point.
+      **The AE's examiner screens still reach it** — Pending Evaluation,
+      Conflict Detection, Re-viva Outcomes — because Hani's module declares
+      them through `ProvidesLinks` and they land in Quick actions. Core
+      building its own panel for data it cannot read would be the wrong arrow.
+- [x] **Two figures added for them, both Core-only and both uniform.**
+      **Finalised by you** — applications that ENDED at a decision of theirs —
+      is the fifth card, and it is what matters most to a final approver: the
+      Dean is the last stage on international travel and on an RPD appeal.
+      Computed as "latest `approval_history` row is mine and the application
+      is no longer pending", keyed on `MAX(id)` rather than a timestamp
+      because two decisions can share a second.
+      **Your recent decisions** is the only panel on any of these screens that
+      looks backwards. Everything else asks what is waiting; this answers what
+      an approver actually gets asked — what did you decide about mine, and
+      when. Scoped to their own rows: it is not an audit screen, the
+      administrator has one of those.
 - [x] **Deliberately not on it:** anything department-wide. `WorkflowEngine::queue()`
       does not scope by department yet — it is the open team decision in this
       file — so a figure called "my department" would quietly be portal-wide.

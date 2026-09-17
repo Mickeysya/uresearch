@@ -260,8 +260,10 @@ applications; `cgs@utp.edu.my` sees the portal-wide desk; `chair@utp.edu.my`
 and `supervisor@utp.edu.my` get approver screens built around *how long things
 have been waiting*, and they deliberately draw different charts — the Chair's
 is a bar over four age bands, the Supervisor's a doughnut of their candidates'
-attendance. On a desktop these fit one screen and the panels scroll, not the
-page.
+attendance. `dean@utp.edu.my` and `ae@utp.edu.my` share one approver screen
+with the Registry and Faculty, since what each of them owns is a set of
+stages. On a desktop all of these fit one screen and the panels scroll, not
+the page.
 
 And as `chair@utp.edu.my`, *Nominate Examiner Panel* → "Add the examiner
 first". You land on the add-examiner form, fill it in, and come back to the

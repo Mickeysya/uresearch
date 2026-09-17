@@ -6,6 +6,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\AdminDashboard;
 use App\Modules\Core\Services\CgsDashboard;
 use App\Modules\Core\Services\ChairDashboard;
+use App\Modules\Core\Services\GeneralApproverDashboard;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\StudentDashboard;
 use App\Modules\Core\Services\SupervisorDashboard;
@@ -136,36 +137,27 @@ class DashboardController extends Controller
             ]);
         }
 
-        $queues = $registry->queuesForRole($user->role);
-
-        $chart = [];
-        $total = 0;
-
-        foreach ($queues as $q) {
-            $count = Application::query()
-                ->where('module_type', $q['module']->key())
-                ->where('current_stage', $q['stage']->key)
-                ->where('status', Application::STATUS_PENDING)
-                ->count();
-
-            $chart[] = [
-                'label' => $q['module']->label(),
-                'count' => $count,
-                'url' => route($q['module']->queueRoute(), ['stage' => $q['stage']->key]),
-            ];
-
-            $total += $count;
-        }
+        // Every other approving role: the Dean of PGR, the Academic
+        // Executive, the Registry, the Faculty office, the Senior Executive.
+        // One screen, because what each of them owns is a set of stages and
+        // ApproverDashboard derives the whole dashboard from that.
+        $dash = new GeneralApproverDashboard($user, $registry);
 
         return view('core::dashboard.approver', [
-            'chart' => $chart,
-            'total' => $total,
-            'recent' => Application::query()
-                ->whereIn('module_type', array_map(fn ($q) => $q['module']->key(), $queues))
-                ->with('student')
-                ->latest('updated_at')
-                ->limit(8)
-                ->get(),
+            'queues' => $dash->queues(),
+            'ageing' => $dash->ageingProfile(),
+            'overdue' => $dash->overdueCount(),
+            'awaitingMe' => $dash->awaitingMe(),
+            'longestWait' => $dash->longestWait(),
+            'decided' => $dash->decidedRecently(),
+            'finalised' => $dash->finalisedByMe(),
+            'busiestRoute' => $dash->busiestQueueRoute(),
+            'longestWaitRoute' => $dash->longestWaitRoute(),
+            'oldest' => $dash->oldestWaiting(),
+            'decisions' => $dash->myRecentDecisions(),
+            'alerts' => $dash->alerts(),
+            'shortcuts' => $registry->linksFor($user),
+            'unavailable' => $dash->unavailable(),
         ]);
     }
 }
