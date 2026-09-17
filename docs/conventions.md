@@ -264,11 +264,28 @@ Every screen is the same shape and the same width. Wrap the page in
 </div>
 ```
 
-`.card-container-inline` is `max-width: var(--page-max)`, which is
-`clamp(880px, 92vw, 1320px)` — it grows with the viewport instead of holding a
-laptop-era number, and a `.card` inside it fills it. There used to be five
-page widths (480, 680, 880, `--page-max`, and whatever the dashboard grid came
-to), which is why two tabs in a row looked like two different products.
+**The width is the layout's job, not yours.** `layouts/app.blade.php` wraps
+every screen in `.page-shell`, which is `max-width: var(--page-max)` —
+`clamp(880px, 92vw, 1320px)`, so it grows with the viewport instead of holding
+a laptop-era number. There used to be five page widths (480, 680, 880,
+`--page-max`, and whatever the dashboard grid came to), and then a sixth
+problem on top: a queue page wrapped itself in nothing and so ran the full
+width of the content area while every card page sat centred. Putting the cap
+in the layout means a view cannot forget it. `.card-container-inline` is now
+only a bottom spacer.
+
+**A queue's guidance goes *into* the partial.** `core::partials.queue` renders
+the page header, so anything a module prints above the include lands above the
+page title and the screen reads as though it has no heading. Pass `'intro' =>
+'...'` instead. `PageShellTest` fails the build on markup above the include.
+
+**A dashboard takes the whole screen.** The cap is right for one kind of page
+and wrong for the other. A page of prose or a form is *read*, left to right,
+and a 1900px line is hard to track back to the start of — that is what
+`--page-max` defends. A dashboard is *scanned*: it is tiles, and tiles want
+room. `layout.css` releases the cap with `.page-shell:has(> .sdash)`, so root
+your dashboard in `.sdash` and it fills the screen with no view change.
+Everything else stays capped.
 
 **The page is full width; the text inside it is not.** A subtitle caps at
 68ch and a form's own fields cap at 46rem, because a 1320px line is

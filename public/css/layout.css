@@ -2126,11 +2126,39 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
    means changes every one of them at once, with no module edited.
    ============================================================ */
 
-.card-container-inline {
-    display: block;
+/* The shell itself. One element, in layouts/app.blade.php, wrapping every
+   screen -- so a page is the same width whether or not its view remembered
+   to wrap itself in anything. .main-content keeps its own 32px padding
+   around this. */
+.page-shell {
     width: 100%;
     max-width: var(--page-max);
     margin-inline: auto;
+}
+
+/* ...EXCEPT a dashboard, which takes the whole screen.
+   These are two different kinds of page and the cap is only right for one
+   of them. A page of prose or a form is READ, left to right, and a 1900px
+   line is genuinely hard to track back to the start of -- that is what
+   --page-max is defending. A dashboard is SCANNED: it is tiles, and tiles
+   only want room. Capping one at 1320px on a 1920px monitor throws away a
+   third of the screen and squeezes panels that have data to show.
+
+   Keyed off .sdash, which every dashboard already uses as its root, so no
+   view changed. :has() has been in every modern browser since 2023; where
+   it is not supported the dashboard stays capped, which is merely the
+   previous behaviour rather than a broken one. */
+.page-shell:has(> .sdash) {
+    max-width: none;
+}
+
+/* Now only a spacer. The width lives on .page-shell above; leaving a cap
+   here as well would centre a second box inside the first one. */
+.card-container-inline {
+    display: block;
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
     padding: 0 0 var(--space-10);
 }
 
@@ -2220,7 +2248,11 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 
 .sdash-chair { display: flex; flex-direction: column; gap: var(--space-5); }
 
-.chair-stats { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+/* auto-fit with a fluid minimum: the cards share out whatever the row has
+   at any width, so this needs no breakpoints of its own. clamp() rather
+   than a fixed 210px so the floor grows a little on a big screen instead
+   of leaving four narrow cards marooned in a very wide row. */
+.chair-stats { grid-template-columns: repeat(auto-fit, minmax(clamp(210px, 18vw, 320px), 1fr)); }
 
 /* ---- blocking alerts ----
    Rendered only when something is actually in the way, so this is
@@ -2249,9 +2281,13 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 /* ---- the two panel rows ----
    auto-fit rather than a fixed two, so the pair sits side by side on a
    desktop and stacks on a tablet without a breakpoint of its own. */
+/* Two panels side by side on a desktop, stacked on a tablet, and on a very
+   wide screen still two rather than four -- the row has two children, so
+   auto-fit collapses the tracks they do not fill and they split the width
+   evenly however wide it gets. The minimum is what decides when they stack. */
 .chair-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
     gap: var(--space-5);
     align-items: start;
 }
@@ -2331,3 +2367,13 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 .chair-shortcut:hover { background: var(--light-blue-bg); border-color: var(--navy); }
 .chair-shortcut-icon { display: inline-flex; color: var(--text-grey); }
 .chair-shortcut-icon svg { width: 16px; height: 16px; }
+
+/* The line of guidance a queue can carry, under the page header and above
+   the toolbar. Capped at a measure like every other run of prose. */
+.queue-intro {
+    max-width: 78ch;
+    margin: calc(var(--space-4) * -1) 0 var(--space-5);
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+}
+.queue-intro b { color: var(--text-dark); }

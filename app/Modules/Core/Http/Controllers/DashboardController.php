@@ -94,6 +94,8 @@ class DashboardController extends Controller
                 'awaitingMe' => $dash->awaitingMe(),
                 'longestWait' => $dash->longestWait(),
                 'decided' => $dash->decidedRecently(),
+                'busiestRoute' => $dash->busiestQueueRoute(),
+                'longestWaitRoute' => $dash->longestWaitRoute(),
                 'oldest' => $dash->oldestWaiting(),
                 'nominations' => $nominations,
                 'stageLabels' => $dash->stageLabels($nominations, app(WorkflowEngine::class)),

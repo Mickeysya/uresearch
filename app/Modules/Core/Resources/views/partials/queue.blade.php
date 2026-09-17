@@ -6,6 +6,9 @@
 
     Expects: $stage, $module, $applications, $filters, $moduleLabel,
              $decideRoute, $detailView
+    Optional: $intro -- a line of guidance about what deciding here means.
+              Pass it in rather than writing it above the include, or it
+              renders ABOVE the page title and the screen reads headless.
 
     WHAT CHANGED, AND WHY (2026-09-17)
 
@@ -46,6 +49,10 @@
 @endphp
 
 <x-core::page-header :title="$moduleLabel.': '.$stage->queueTitle()" :subtitle="$subtitle" />
+
+@isset ($intro)
+    <p class="queue-intro">{!! $intro !!}</p>
+@endisset
 
 @if ($total > 0 || $filters['q'] !== '')
     {{-- Sort submits on change; search needs the button, because submitting

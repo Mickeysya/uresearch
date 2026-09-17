@@ -166,6 +166,31 @@ class ChairDashboardTest extends TestCase
             ->assertSee('Academic Executive');
     }
 
+    /**
+     * A figure you cannot act on is a poster. Every other dashboard's cards
+     * end in a pill that goes somewhere; these did not.
+     */
+    public function test_the_stat_cards_link_somewhere(): void
+    {
+        $student = $this->student();
+        $this->travelAwaitingChair($student, 20);
+
+        $html = $this->actingAs($this->chair())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Open the queue')
+            ->assertSee('Go to the oldest')
+            ->assertSee('Nominate a panel')
+            ->getContent();
+
+        // The two queue pills point at the queue holding the row, not at a
+        // dead '#'.
+        $this->assertStringContainsString(
+            'href="'.route('travel.queue', ['stage' => 'chair']).'" class="sdash-pill',
+            $html
+        );
+    }
+
     /** One dead panel must cost that panel, not the page. */
     public function test_a_dashboard_panel_that_throws_does_not_take_the_page_down(): void
     {

@@ -3,19 +3,21 @@
 @section('title', 'Appointment Letter: ' . $stage->queueTitle())
 
 @section('content')
-    @if (collect($workload)->sum('count') > 0)
-        @include('core::dashboard.partials.chartjs')
-        <div class="chart-card" style="margin-bottom: 20px;">
-            <h3>Pending Nominations by Approver</h3>
-            <canvas id="workloadChart"></canvas>
-        </div>
-    @endif
-
     @include('core::partials.queue', [
         'moduleLabel' => 'Appointment Letter',
         'decideRoute' => 'appointment-letter.decide',
         'detailView' => 'jason::appointment_letter._detail',
     ])
+
+    {{-- Below the list, not above the page title. It is context on the
+         queue, so it reads after the queue. --}}
+    @if (collect($workload)->sum('count') > 0)
+        @include('core::dashboard.partials.chartjs')
+        <div class="chart-card" style="margin-top: var(--space-6);">
+            <h3>Pending Nominations by Approver</h3>
+            <canvas id="workloadChart"></canvas>
+        </div>
+    @endif
 @endsection
 
 @push('scripts')

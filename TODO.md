@@ -1537,6 +1537,54 @@ audited in full; the rest fell out of the same query.
       are recorded here rather than buried in a module. Reverting either is a
       one-expression deletion.
 
+### Two things the shell missed, found on the Chair's login (2026-09-17)
+
+- [x] **Queue pages were not in the shell at all.** Redefining
+      `.card-container-inline` standardised every screen that wrapped itself
+      in one — and a queue page wraps itself in nothing, so it kept running
+      the full width of the content area while every card page sat centred at
+      `--page-max`. Two different pages side by side in the same app. Fixed
+      where it cannot be forgotten: `layouts/app.blade.php` wraps
+      `@yield('content')` in `.page-shell`, which now carries the cap, and
+      `.card-container-inline` is only a bottom spacer. Guarded.
+- [x] **Three queue views printed their guidance above the page title.** The
+      partial renders the header, so a `<p>` written above the include lands
+      above the heading and the screen reads headless — which is what "it's
+      like cut off" was. `core::partials.queue` takes an optional `intro`
+      now, rendered under the header. Hardbound and the Appeal moved their
+      text in (their Blade conditionals became `match()`, since an argument
+      has to be one value); Appointment Letter's workload chart moved *below*
+      the list, where context on a queue belongs. Guarded.
+- [x] **The Chair's stat cards did nothing.** Every other dashboard's cards
+      end in a pill that goes somewhere and these were four dead figures.
+      "Awaiting your decision" opens the fullest queue, "Longest wait" opens
+      the queue holding the oldest row, "Panels you filed" goes to the
+      nomination form. "Decided by you" renders a flat pill, because there is
+      genuinely no screen for it yet — the same shape CGS and student cards
+      already use for that case.
+
+### Dashboards take the whole screen (2026-09-17)
+
+- [x] **The cap is right for a document and wrong for a dashboard.** Asked
+      whether the left/right gap is a good idea: it is two different
+      questions. A page of prose or a form is *read*, and a 1900px line is
+      genuinely hard to track back to the start of — `--page-max` exists for
+      that. A dashboard is *scanned*; it is tiles, and capping it at 1320px on
+      a 1920px monitor throws away a third of the screen and squeezes panels
+      that have data in them. So: reading pages keep the gap, dashboards do
+      not. One rule, `.page-shell:has(> .sdash)`, keyed off the root class
+      every dashboard already has, so **no view changed**. `:has()` has been
+      in every modern browser since 2023 and where it is missing the
+      dashboard merely stays capped, which is the previous behaviour.
+- [x] **The Chair's grids made properly fluid.** Stat cards on
+      `minmax(clamp(210px, 18vw, 320px), 1fr)` so the floor grows on a wide
+      screen instead of leaving four narrow cards marooned in a long row, and
+      the panel rows on `minmax(min(100%, 26rem), 1fr)` so two panels split
+      whatever width they get and stack cleanly on a tablet. No breakpoints.
+- [ ] **The approver dashboard is the last screen still capped**, because it
+      is the last one not on `.sdash` — same entry as below. Rebuilding it
+      gets it the full screen for free.
+
 ### The Chair gets its own dashboard (2026-09-17)
 
 - [x] **Built.** `Services\ChairDashboard` + `dashboard/chair.blade.php` and

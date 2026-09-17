@@ -201,6 +201,31 @@ class ChairDashboard
             ->all(), []);
     }
 
+    /**
+     * The queue with the most on it, for the headline card to point at.
+     * Null when every queue is empty, and the card then shows a flat pill
+     * rather than a link to nothing.
+     */
+    public function busiestQueueRoute(): ?string
+    {
+        return $this->queues()->firstWhere('count', '>', 0)['route'] ?? null;
+    }
+
+    /**
+     * The queue holding the longest-waiting row, sorted so that row is at the
+     * top when you land. This is the one card whose link does real work: it
+     * takes a Chair straight to the thing that has waited longest.
+     */
+    public function longestWaitRoute(): ?string
+    {
+        $queue = $this->queues()
+            ->filter(fn ($q) => $q['oldest'] !== null)
+            ->sortByDesc('oldest')
+            ->first();
+
+        return $queue['route'] ?? null;
+    }
+
     /** The tone a waiting time should be shown in. Shared with the queue screen. */
     public static function toneFor(?int $days): string
     {

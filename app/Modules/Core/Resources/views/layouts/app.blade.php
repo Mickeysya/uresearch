@@ -32,8 +32,16 @@
                 <img src="{{ asset('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS" class="utp-logo">
             </div>
 
-            @include('core::partials.flash')
-            @yield('content')
+            {{-- THE PAGE SHELL. Every screen is capped and centred here, not
+                 in each view: a queue page did not wrap itself in
+                 .card-container-inline and so ran the full width of the
+                 content area while every card page sat at --page-max, which
+                 is two different pages side by side in the same app. Doing it
+                 in the layout means a view cannot forget. --}}
+            <div class="page-shell">
+                @include('core::partials.flash')
+                @yield('content')
+            </div>
         </div>
     </div>
 

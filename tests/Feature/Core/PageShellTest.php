@@ -105,6 +105,96 @@ class PageShellTest extends TestCase
     }
 
     /**
+     * The shell is one element in the layout, so a view cannot forget it.
+     * Before this, a queue page wrapped itself in nothing and ran the full
+     * width of the content area while every card page sat centred at
+     * --page-max: two different pages side by side in the same app.
+     */
+    public function test_the_layout_wraps_every_screen_in_the_page_shell(): void
+    {
+        $this->assertStringContainsString(
+            'class="page-shell"',
+            file_get_contents(base_path('app/Modules/Core/Resources/views/layouts/app.blade.php')),
+            'layouts/app.blade.php must wrap @yield(\'content\') in the page shell.'
+        );
+    }
+
+    /**
+     * A queue view that prints its own guidance above the include lands it
+     * ABOVE the page title, and the screen reads as though it has no
+     * heading. The partial takes an `intro` for exactly this.
+     */
+    public function test_no_queue_view_prints_anything_above_the_page_header(): void
+    {
+        $offenders = [];
+
+        foreach (glob(base_path('app/Modules/*/Resources/views/**/queue.blade.php'), GLOB_BRACE) as $view) {
+            $source = file_get_contents($view);
+
+            if (! str_contains($source, 'core::partials.queue')) {
+                continue;
+            }
+
+            $between = substr(
+                $source,
+                strpos($source, "@section('content')"),
+                strpos($source, 'core::partials.queue') - strpos($source, "@section('content')")
+            );
+
+            // Blade comments and @php blocks emit nothing; markup does.
+            $between = preg_replace('/\{\{--.*?--\}\}/s', '', $between);
+            $between = preg_replace('/@php\b.*?@endphp/s', '', $between);
+
+            if (preg_match('/<(p|div|h[1-6]|section|table|ul)\b/', $between)) {
+                $offenders[] = str_replace(base_path().'/', '', $view);
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "These queue views render markup above the page header. Pass it to "
+            ."the partial as 'intro' instead:\n  ".implode("\n  ", $offenders)
+        );
+    }
+
+    /**
+     * A dashboard takes the whole screen; a page of prose does not.
+     *
+     * The release is `.page-shell:has(> .sdash)` in layout.css, so what makes
+     * a dashboard full width is having `.sdash` as its root. A dashboard that
+     * loses that class silently goes back to being capped at 1320px, which is
+     * a third of a monitor thrown away and nothing in the page to explain it.
+     */
+    public function test_every_dashboard_roots_in_sdash_so_it_gets_the_full_screen(): void
+    {
+        $offenders = [];
+
+        // The approver dashboard is the one screen still on the pre-.sdash
+        // markup; it is tracked in TODO.md and stays capped until rebuilt.
+        $pending = ['approver'];
+
+        foreach (glob(base_path('app/Modules/Core/Resources/views/dashboard/*.blade.php')) as $view) {
+            $name = basename($view, '.blade.php');
+
+            if (in_array($name, $pending, true)) {
+                continue;
+            }
+
+            if (! preg_match('/<div class="sdash[ "]/', file_get_contents($view))) {
+                $offenders[] = $name;
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "These dashboards do not root in .sdash, so layout.css cannot release "
+            ."the width cap for them:\n  ".implode("\n  ", $offenders)
+        );
+    }
+
+    /**
      * The widths that used to exist. A module writing its own page cap is how
      * the five widths happened in the first place; --page-max is the only one.
      */
