@@ -68,6 +68,11 @@ class QueueTest extends TestCase
         // 20 a page, so the 25th row is on page two and there are page links.
         $this->assertSame(20, substr_count($html, 'name="ids[]"'), 'Expected one page of rows.');
         $this->assertStringContainsString('class="pager"', $html);
+
+        // How long each row has waited, as whole days. Carbon 3's diffInDays
+        // returns a float, so without a cast this reads "24.000000002049d".
+        $this->assertMatchesRegularExpression('/queue-row-age[^>]*>\s*(today|\d+d)\s*</', $html);
+        $this->assertDoesNotMatchRegularExpression('/\d+\.\d+d</', $html);
     }
 
     public function test_an_approver_can_find_one_row_among_many(): void

@@ -222,6 +222,32 @@ reported rather than blanking the calendar for everyone.
 **Do not add an events table.** Every date on that page is already recorded
 somewhere; a second copy is only a second thing to keep in sync.
 
+### Blocking alerts on a dashboard
+
+If your module has a rule that **stops** someone doing something, say so with
+`ProvidesDashboardAlerts` alongside `WorkflowModule`, the same way
+`ProvidesLinks` declares a sidebar link:
+
+```php
+public function alerts(User $user): array
+{
+    return HardboundSignature::forUser($user->id) ? [] : [[
+        'tone' => 'critical',
+        'title' => 'No signature on file',
+        'body' => 'You cannot approve a Hardbound Submission until you upload one.',
+        'action' => ['label' => 'Upload my signature', 'route' => 'hardbound.signature'],
+    ]];
+}
+```
+
+Core lays it out; Core never names your module or your models. Return `[]`
+when nothing is in the way, which should be the normal case.
+
+**Only for things that block.** A count, a reminder or a nice-to-know belongs
+in a panel. An alert strip that is usually on is one nobody reads by the
+second week — so raise it only for someone who is actually about to hit the
+rule (the signature alert stays quiet for an approver with an empty queue).
+
 ### The page shell
 
 Every screen is the same shape and the same width. Wrap the page in

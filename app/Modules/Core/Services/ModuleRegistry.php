@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Services;
 
+use App\Modules\Core\Contracts\ProvidesDashboardAlerts;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
@@ -97,6 +98,29 @@ class ModuleRegistry
         }
 
         return $links;
+    }
+
+    /**
+     * Anything standing between this user and work they are about to try.
+     *
+     * Same shape as linksFor(): ask each module, merge, let Core lay the
+     * result out. Core cannot know that a Chair needs a signature on file
+     * before approving a hardbound thesis -- that rule, and the model behind
+     * it, belong to the module that owns the form.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function alertsFor(\App\Modules\Core\Models\User $user): array
+    {
+        $alerts = [];
+
+        foreach ($this->modules as $module) {
+            if ($module instanceof ProvidesDashboardAlerts) {
+                $alerts = array_merge($alerts, $module->alerts($user));
+            }
+        }
+
+        return $alerts;
     }
 
     /**

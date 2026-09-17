@@ -115,7 +115,9 @@
 
         @foreach ($applications as $application)
             @php
-                $waiting = $application->submitted_at?->diffInDays() ?? 0;
+                // (int), because Carbon 3 returns a FLOAT here -- 41.000000002049
+                // for a row submitted 41 days ago, which renders verbatim.
+                $waiting = (int) ($application->submitted_at?->diffInDays() ?? 0);
                 $tone = match (true) {
                     $waiting >= $criticalAfter => 'critical',
                     $waiting >= $overdueAfter => 'warn',

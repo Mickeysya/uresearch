@@ -1537,6 +1537,50 @@ audited in full; the rest fell out of the same query.
       are recorded here rather than buried in a module. Reverting either is a
       one-expression deletion.
 
+### The Chair gets its own dashboard (2026-09-17)
+
+- [x] **Built.** `Services\ChairDashboard` + `dashboard/chair.blade.php` and
+      five partials, in the `.sdash` vocabulary the student, CGS and admin
+      screens already share, with `BuildsPanels` so a dead panel costs that
+      panel rather than the page.
+      **What it replaced:** the generic approver screen renders one stat card
+      per queue, and a Chair owns five stages — six cards with five zeros,
+      over a five-category bar chart with one bar in it, and nowhere at all
+      for the figure a Chair is actually measured on.
+      **Now:** four fixed figures (awaiting you · **longest wait** · decided
+      by you in 30 days · panels you filed), a blocking-alert strip, the
+      queues as a linked list in place of the chart, the five rows waiting
+      longest, the panels this Chair filed, and quick actions read from
+      `linksFor()` so a teammate's new Chair screen appears without Core
+      being edited.
+- [x] **This closes "a Chair cannot see a nomination once they have filed
+      it"** (Jason's section). A filed panel left their hands completely: not
+      their queue, and `/applications` is students only. "Panels you filed"
+      shows each one with the stage it is sitting on.
+- [x] **`ProvidesDashboardAlerts`**, an optional companion to
+      `WorkflowModule`, same shape as `ProvidesLinks`. Approving a hardbound
+      thesis without a signature on file bounces you to the upload page, and
+      nothing said so until you tried. That rule and `HardboundSignature`
+      both live in Jason's folder and **Core must not import them**, so the
+      module declares the alert and Core lays it out. Raised only for an
+      approver who actually has something waiting, so it is not permanent
+      furniture. One edit in `Jason/`, to `HardboundSubmissionWorkflow`.
+- [ ] **The generic approver dashboard still needs the same treatment.** It
+      now serves the Dean, the Academic Executive, the Registry and Faculty,
+      and it is the last screen on the old `.stat-cards-row` / `.dashboard-grid`
+      markup rather than `.sdash`. Its per-queue stat cards have the same
+      problem for the AE (six queues) that they had for the Chair.
+- [x] **Deliberately not on it:** anything department-wide. `WorkflowEngine::queue()`
+      does not scope by department yet — it is the open team decision in this
+      file — so a figure called "my department" would quietly be portal-wide.
+      Better absent than wrong; that is where the department panels go once
+      scoping lands.
+- [x] **Two Carbon 3 bugs found while building it.** `diffInDays` is **signed
+      and returns a float** there: `now()->diffInDays($past)` is *negative*,
+      so the first cut of the "longest wait" tone read every wait as fine;
+      and `$date->diffInDays()` is `41.000000002049`, which the queue row
+      rendered verbatim as `41.000000002049d`. Both fixed, both guarded.
+
 ### The approval queue, rebuilt for a real backlog (2026-09-17)
 
 - [x] **Queues are paged, searchable and sortable.** They were a plain

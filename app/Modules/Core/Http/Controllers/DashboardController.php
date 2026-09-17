@@ -5,8 +5,11 @@ namespace App\Modules\Core\Http\Controllers;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\AdminDashboard;
 use App\Modules\Core\Services\CgsDashboard;
+use App\Modules\Core\Services\ChairDashboard;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\StudentDashboard;
+use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Role;
 use Illuminate\Http\Request;
 
 /**
@@ -74,6 +77,30 @@ class DashboardController extends Controller
                 'pendingActions' => $dash->pendingActions(),
                 'attendance' => $dash->attendanceAlerts(),
                 'activities' => $dash->recentActivities(),
+                'unavailable' => $dash->unavailable(),
+            ]);
+        }
+
+        if ($user->role === Role::CHAIR) {
+            // A Chair owns five stages, and the generic approver view below
+            // renders one stat card per stage -- six cards, five of them
+            // normally zero, over a chart of five categories with one bar in
+            // it. See Services\ChairDashboard for what replaced it.
+            $dash = new ChairDashboard($user, $registry);
+            $nominations = $dash->myNominations();
+
+            return view('core::dashboard.chair', [
+                'queues' => $dash->queues(),
+                'awaitingMe' => $dash->awaitingMe(),
+                'longestWait' => $dash->longestWait(),
+                'decided' => $dash->decidedRecently(),
+                'oldest' => $dash->oldestWaiting(),
+                'nominations' => $nominations,
+                'stageLabels' => $dash->stageLabels($nominations, app(WorkflowEngine::class)),
+                'alerts' => $dash->alerts(),
+                // The same module-declared links the sidebar builds from, so
+                // a teammate's new Chair-facing screen appears here too.
+                'shortcuts' => $registry->linksFor($user),
                 'unavailable' => $dash->unavailable(),
             ]);
         }

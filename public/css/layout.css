@@ -2207,3 +2207,127 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     color: var(--text-grey);
     font-variant-numeric: tabular-nums;
 }
+
+/* ============================================================
+   N+2 · Chair of Department dashboard
+
+   Reuses the .sdash vocabulary the student, CGS and admin screens
+   share -- .sdash-stats, .sdash-stat, .sdash-card -- and adds only
+   the three things a Chair's screen has that theirs do not: the
+   blocking-alert strip, the queue list that replaced the bar chart,
+   and the two feeds.
+   ============================================================ */
+
+.sdash-chair { display: flex; flex-direction: column; gap: var(--space-5); }
+
+.chair-stats { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+
+/* ---- blocking alerts ----
+   Rendered only when something is actually in the way, so this is
+   allowed to be loud. */
+.chair-alerts { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.chair-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    flex-wrap: wrap;
+    padding: var(--space-4) var(--space-5);
+    border-radius: var(--radius-md);
+    border: 1px solid;
+}
+.chair-alert-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 24rem; }
+.chair-alert-text b { font-size: var(--text-md); }
+.chair-alert-text span { font-size: var(--text-sm); }
+.chair-alert .btn { flex-shrink: 0; }
+
+.chair-alert.tone-critical { background: var(--danger-bg); color: var(--danger-fg); border-color: var(--danger-border); }
+.chair-alert.tone-warn     { background: var(--warning-bg); color: var(--warning-fg); border-color: var(--warning-border); }
+.chair-alert.tone-info     { background: var(--info-bg); color: var(--info-fg); border-color: var(--info-border); }
+
+/* ---- the two panel rows ----
+   auto-fit rather than a fixed two, so the pair sits side by side on a
+   desktop and stacks on a tablet without a breakpoint of its own. */
+.chair-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+    gap: var(--space-5);
+    align-items: start;
+}
+
+.chair-panel { min-width: 0; }
+
+/* ---- queues, in place of the bar chart ---- */
+.chair-queue-list { list-style: none; margin: 0; padding: 0; }
+
+.chair-queue-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    border-bottom: 1px solid var(--border-subtle);
+    text-decoration: none;
+    color: var(--text-dark);
+}
+.chair-queue-list li:last-child .chair-queue-row { border-bottom: none; }
+.chair-queue-row:hover { background: var(--surface-hover); }
+
+/* A queue with nothing in it is still worth listing -- it says the
+   stage exists -- but it should not compete with one that has work. */
+.chair-queue-row.is-clear { color: var(--text-grey); }
+
+.chair-queue-label { flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); }
+
+.chair-queue-count {
+    flex-shrink: 0;
+    min-width: 2ch;
+    text-align: right;
+    font-weight: var(--weight-bold);
+    font-variant-numeric: tabular-nums;
+}
+
+.chair-queue-age {
+    flex-shrink: 0;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    font-variant-numeric: tabular-nums;
+}
+.chair-queue-age.tone-quiet    { color: var(--text-grey); }
+.chair-queue-age.tone-warn     { color: var(--warning-fg); }
+.chair-queue-age.tone-critical { color: var(--danger-fg); }
+
+/* ---- the two feeds ---- */
+.chair-feed { list-style: none; margin: 0; padding: 0; }
+
+.chair-feed-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    border-bottom: 1px solid var(--border-subtle);
+}
+.chair-feed-row:last-child { border-bottom: none; }
+
+.chair-feed-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--text-sm); }
+.chair-feed-sub { font-size: var(--text-xs); color: var(--text-grey); }
+
+/* ---- quick actions ---- */
+.chair-shortcut-list { list-style: none; margin: 0; padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+
+.chair-shortcut {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--navy);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+}
+.chair-shortcut:hover { background: var(--light-blue-bg); border-color: var(--navy); }
+.chair-shortcut-icon { display: inline-flex; color: var(--text-grey); }
+.chair-shortcut-icon svg { width: 16px; height: 16px; }

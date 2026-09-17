@@ -30,10 +30,11 @@ class PageShellTest extends TestCase
         // page, not a full-width admin screen.
         'app/Modules/Core/Resources/views/auth/login.blade.php',
 
-        // The four dashboards open with the welcome banner, which is a hero
-        // and carries the person's name and role. A page header above it
-        // would be the title said twice.
+        // The dashboards open with the welcome banner, which is a hero and
+        // carries the person's name and role. A page header above it would
+        // be the title said twice.
         'app/Modules/Core/Resources/views/dashboard/admin.blade.php',
+        'app/Modules/Core/Resources/views/dashboard/chair.blade.php',
         'app/Modules/Core/Resources/views/dashboard/approver.blade.php',
         'app/Modules/Core/Resources/views/dashboard/cgs.blade.php',
         'app/Modules/Core/Resources/views/dashboard/student.blade.php',
