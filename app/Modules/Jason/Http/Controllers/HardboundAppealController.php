@@ -126,7 +126,9 @@ class HardboundAppealController extends Controller
 
         return back()->with('status', match (true) {
             $compiling => "Dean PFR report compiled for appeal #{$application->id} and sent for ruling.",
-            $data['decision'] === 'approve' => "Appeal #{$application->id} upheld. The student may now resubmit.",
+            // Not "may now resubmit" -- they always could. What the ruling
+            // produces is the ruling, emailed by the engine.
+            $data['decision'] === 'approve' => "Appeal #{$application->id} upheld. The ruling has been emailed to the student.",
             default => "Appeal #{$application->id} dismissed.",
         });
     }

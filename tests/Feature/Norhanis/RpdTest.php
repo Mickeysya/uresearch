@@ -6,7 +6,9 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Norhanis\Console\Commands\SendRpdReminders;
 use App\Modules\Norhanis\Models\Candidacy;
 use App\Modules\Norhanis\Models\RpdAppealDetail;
+use App\Modules\Norhanis\Models\RpdDismissalDetail;
 use App\Modules\Norhanis\Models\RpdReminderLog;
+use App\Modules\Norhanis\Notifications\CandidacyTerminated;
 use App\Modules\Norhanis\Notifications\RpdDeadlineApproaching;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -187,8 +189,10 @@ class RpdTest extends TestCase
         $this->assertSame(0, Application::where('module_type', 'rpd_dismissal')->count());
     }
 
-    public function test_registry_approval_closes_the_candidacy(): void
+    public function test_registry_approval_closes_the_candidacy_and_emails_the_student(): void
     {
+        Notification::fake();
+
         $candidacy = $this->candidacy(deadlineInDays: -30);
 
         $this->actingAs($this->cgs())
@@ -214,6 +218,26 @@ class RpdTest extends TestCase
         $this->assertSame(Candidacy::STATUS_DISMISSED, $candidacy->status);
         $this->assertNotNull($candidacy->student->applications()
             ->where('module_type', 'rpd_dismissal')->sole()->id);
+
+        $detail = RpdDismissalDetail::where('application_id', $application->id)->sole();
+        $this->assertNotNull($detail->terminated_at);
+
+        // norhanis.md 4.3 makes the email the point of the Registry stage, so
+        // a closed candidacy with no email is a half-done dismissal. The
+        // closure renders the mail for real -- asserting only that something
+        // was sent would pass with a toMail() that throws.
+        Notification::assertSentTo(
+            $candidacy->student,
+            CandidacyTerminated::class,
+            function ($notification) use ($candidacy) {
+                $mail = $notification->toMail($candidacy->student);
+
+                return $mail->subject === 'Termination of Candidature'
+                    && collect($mail->introLines)->contains(
+                        fn ($line) => str_contains($line, 'has been terminated')
+                    );
+            }
+        );
     }
 
     /* ---------------- the screens render ---------------- */

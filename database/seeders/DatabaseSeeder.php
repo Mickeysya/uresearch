@@ -33,6 +33,10 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->user('Puan Waheeda', 'cgs@utp.edu.my', Role::NON_EXEC_CGS, ['department' => 'CGS']);
+        // Rules on a hardbound appeal after the Non-Executive compiles the
+        // Dean PFR report -- the last stage of HardboundAppealWorkflow, which
+        // had nobody able to act on it until this account existed.
+        $this->user('Puan Hasnah', 'seniorexec@utp.edu.my', Role::SENIOR_EXEC_CGS, ['department' => 'CGS']);
         $this->user('Norshahirah', 'manager@utp.edu.my', Role::MANAGER_CGS, ['department' => 'CGS']);
         $this->user('En Zulkifly', 'director@utp.edu.my', Role::SENIOR_DIRECTOR_CGS, ['department' => 'CGS']);
         $this->user('Prof. Dr. Hafiz Osman', 'dean@utp.edu.my', Role::DEAN_PGR, ['department' => 'PGR']);

@@ -8,6 +8,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Models\Candidacy;
 use App\Modules\Norhanis\Models\RpdDismissalDetail;
+use App\Modules\Norhanis\Notifications\CandidacyTerminated;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,8 @@ use Illuminate\Validation\ValidationException;
  *      names the person being dismissed; `initiated_by` names the CGS officer
  *      who opened the case.
  *   2. The final stage does real work. When the Registry approves, the
- *      candidacy is marked dismissed and the termination is timestamped.
+ *      candidacy is marked dismissed, the termination is timestamped, and
+ *      the student is sent the termination email that stage exists for.
  */
 class RpdDismissalController extends Controller
 {
@@ -149,6 +151,17 @@ class RpdDismissalController extends Controller
         }
 
         if ($decided->status === Application::STATUS_APPROVED) {
+            // Outside the transaction, deliberately: the termination is the
+            // durable thing and the email is best effort, the same rule
+            // WorkflowEngine::decide() follows for its own notification.
+            $detail = RpdDismissalDetail::with('candidacy')
+                ->where('application_id', $decided->id)
+                ->first();
+
+            if ($detail?->candidacy) {
+                $decided->student?->notify(new CandidacyTerminated($detail->candidacy, $detail));
+            }
+
             return back()->with('status', "Dismissal #{$decided->id} completed. The candidacy is now closed and the student has been notified.");
         }
 

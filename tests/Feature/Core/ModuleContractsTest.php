@@ -11,6 +11,7 @@ use App\Modules\Core\Services\StudentDashboard;
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\TravelDetail;
 use App\Modules\Nureen\Models\AttendanceRecord;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -122,6 +123,41 @@ class ModuleContractsTest extends TestCase
                 $this->assertTrue(
                     \Illuminate\Support\Facades\Route::has($module->createRoute()),
                     "Module '{$key}' names a create route that is not registered."
+                );
+            }
+        }
+    }
+
+    /**
+     * Every stage in every chain needs somebody able to act on it.
+     *
+     * A role can be declared in `Support\Role`, owned by a stage, gated on a
+     * route and still have no account anywhere -- and then that chain simply
+     * stops there, with no error, for everyone. That is exactly what happened
+     * to `senior_exec_cgs` and `HardboundAppealWorkflow`: appeals could be
+     * filed and compiled and then sat forever, because the Senior Executive
+     * did not exist. Nothing else catches this, because every test makes its
+     * own users and never looks at the seeder.
+     *
+     * Asserted against `DatabaseSeeder` on purpose. It is the file that
+     * defines who exists on a fresh clone, so it is the one that has to keep
+     * up with six people adding stages.
+     */
+    public function test_every_stage_role_in_every_module_has_a_seeded_account(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $seeded = User::query()->pluck('role')->unique();
+
+        foreach (app(ModuleRegistry::class)->all() as $key => $module) {
+            // stages(null) is the superset -- every role the chain can reach,
+            // including the ones only a conditional branch uses.
+            foreach ($module->stages(null) as $stage) {
+                $this->assertTrue(
+                    $seeded->contains($stage->role),
+                    "Module '{$key}' has a '{$stage->label}' stage owned by the "
+                    ."'{$stage->role}' role, and DatabaseSeeder creates nobody with it. "
+                    .'Every application reaching that stage stops there.'
                 );
             }
         }

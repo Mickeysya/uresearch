@@ -29,9 +29,9 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | **102**, all green — covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains — none for Jason's |
+| Automated tests | **157**, all green — covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, Nureen’s and Hani’s chains, and Jason's three rules (signature gate, resubmit guard, appeal once-only) |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12 |
-| Last reviewed | 2026-09-17 — Jason's merge, plus a per-owner outstanding-issues audit in each section below |
+| Last reviewed | 2026-09-17 — Jason's merge, a per-owner outstanding-issues audit in each section below, and every open item in Norhanis's and Jason's sections closed |
 
 ---
 
@@ -77,18 +77,27 @@ being invisible to the roles that owned them. See `git log`.
       route gets 403, and a Chair acting on a row still at the Supervisor
       stage is refused with the row left unmoved.
 
-- [ ] **Still open from that pass:** `WorkflowEngine::decide()` queues the
-      notification *inside* its DB transaction, so a broker outage turns a
-      valid approval into a rollback. Move the `notify()` after the commit
-      (or onto `DB::afterCommit()`) — an approval is the durable thing, the
-      email is best-effort. This is what turned a config mistake into data
-      loss, so it is worth closing regardless.
-- [ ] **Still open:** the approver dashboard's "Recent activity" table is
-      unscoped — it lists the 8 most recently updated applications for every
-      module the role owns a stage in, with no filter on student, supervisee
-      or department, so a supervisor sees other supervisors' students by name
-      and status. Same theme as the queue-scoping gap below, different file
-      (`DashboardController`).
+- [x] **Closed 2026-09-17:** `WorkflowEngine::decide()` now hands the student
+      notification to `DB::afterCommit()`, and `notifyStudent()` reports and
+      swallows a failure rather than 500ing a request the system accepted.
+      That covers the outage above *and* the opposite failure: `RpdAppeal`,
+      `RpdDismissal` and `AppointmentLetter` wrap `decide()` in a transaction
+      of their own, and a notification dispatched inside it announced an
+      approval that the outer transaction could still roll back.
+      `DB::afterCommit()` defers to the **outermost** commit and runs inline
+      when there is no transaction, so both directions are answered by one
+      call. `tests/Feature/Core/WorkflowNotificationTest` holds it: both tests
+      fail if the `notify()` goes back inside the transaction body.
+      Checked every other notification site — Nureen's attendance and
+      certification mails and Jason's three already sit outside their
+      transactions, so the engine was the only one.
+- [x] **Closed 2026-09-17: that table no longer exists.** The approver
+      dashboard was rebuilt and its unscoped "Recent activity" list was
+      replaced by "Your recent decisions", which reads `approval_history`
+      filtered to this approver's own rows. The underlying exposure — an
+      approver seeing rows that are not theirs — survives through the queues
+      themselves and is tracked once, under "Scope approver queues to the
+      right people".
 
 ### Third pass — 2026-09-15 (post-merge review)
 
@@ -117,11 +126,25 @@ merge, and `route:list` boots clean. What the review did turn up:
       create migrations already carry the right shape, and Laravel ignores a
       `migrations` row whose file is gone, so a machine that already ran it
       needs nothing. **42 tests pass again** (48 with the two new files below).
-- [ ] Run the suite through Sail (`./vendor/bin/sail artisan test`), which is
-      what the README documents — the app container ships `pdo_sqlite`. A bare
-      `php artisan test` on an Ubuntu host fails with `could not find driver
-      (sqlite)` until `sudo apt install php8.3-sqlite3`; that is a host
-      convenience, not a project requirement.
+- [x] **Done 2026-09-17: the suite runs through Sail — 152 passed.**
+      `./vendor/bin/sail artisan test` is the documented way and the app
+      container ships `pdo_sqlite`; a bare `php artisan test` on an Ubuntu
+      host fails with `could not find driver (sqlite)` until
+      `sudo apt install php8.3-sqlite3`, which is a host convenience, not a
+      project requirement. One real trap found on the way: 13 storage tests
+      failed with `UnableToCreateDirectory ... storage/framework/testing/disks`
+      because 244 files under `storage/` and `bootstrap/cache` were owned by
+      **root** — left behind by someone running artisan as root in the
+      container (`docker compose exec` defaults to root; `sail` runs as uid
+      1000). Sail then could not write into its own testing disk. Fixed, and
+      the fix if it happens again on anyone's machine:
+
+      ```bash
+      docker compose exec laravel.test chown -R sail:sail storage bootstrap/cache
+      ```
+
+      Prefer `./vendor/bin/sail artisan ...` over `docker compose exec` for
+      exactly this reason — it runs as the right user.
 - [x] **Tests added for both merges** — the claims money path, Publication's
       pre-validation author read, the examiner tie-up and re-viva's
       one-open-cycle rule. Each was confirmed to fail against the unfixed code
@@ -133,26 +156,38 @@ merge, and `route:list` boots clean. What the review did turn up:
       file in your own folder — the same property `app/Modules/` has. Shared
       cast in `Tests\Support\MakesUsers`. Same 53 tests, same 268 assertions.
       See `docs/conventions.md`.
-- [ ] **`PublicationController.php:61` — 500 instead of a validation error.**
+- [x] **Closed 2026-09-17, verified in the code: `PublicationController.php:61`.**
+      `count((array) $request->input('authors', []))` — the cast turns a
+      scalar into a one-element array so it fails the `array` rule properly
+      instead of throwing a TypeError. Original report:
       `count($request->input('authors', []))` runs *before* `validate()`, so a
       posted `authors=foo` throws an unhandled `TypeError` and the student gets
       a blank 500. Fix is one cast: `count((array) $request->input('authors', []))`.
       (Norhanis)
-- [ ] **`ClaimsController.php:73` — `claim_balance` can go negative.**
+- [x] **Closed 2026-09-17, verified in the code: `ClaimsController.php`.**
+      An advance larger than the total now throws a `ValidationException`
+      after validation, where the total is known. Original report:
       `less_cash_advance` is validated `min:0` but never against the summed
       total, so an advance larger than the claim stores a negative balance and
       walks it through all four approvers. (Norhanis)
-- [ ] **`ExaminerNominationController::tieUpExaminers()` fires on any approval,
+- [x] **Closed 2026-09-17, verified in the code.** It now checks
+      `$application->refresh()->status === STATUS_APPROVED`, so it fires when
+      the chain finishes rather than when this approver says yes — which
+      survives the second stage that workflow's docblock plans. Original
+      report: it fired on any approval,
       not the final one.** Harmless while the chain has one stage — but
       `ExaminerNominationWorkflow`'s own docblock plans a second stage for
       touchpoint 2, and the day it lands both examiners get tied up for 180
       days at the *first* approval. Guard it with
       `$application->refresh()->status === Application::STATUS_APPROVED`. (Hani)
-- [ ] **`ReVivaController.php:34` — N+1 on the create form.** `latestCycle()`
+- [x] **Closed 2026-09-17, verified in the code: `ReVivaController::create()`.**
+      Every student's latest cycle comes from one query keyed by student.
+      Original report: N+1, because `latestCycle()`
       runs one query per student, so `/re-viva/new` costs one query per
       postgraduate in the system. One `whereIn` keyed by student replaces the
       loop. (Hani)
-- [ ] **`public/css/uresearch.css:504,515` — two unscoped element selectors.**
+- [x] **Closed 2026-09-17, verified in the code.** Both are scoped to
+      `.app-form` now. Original report:
       `form > button[type="submit"]` now centres the login button and the
       submit on all five of Nureen's module forms; `input[type="file"]`
       restyles every file input in the app. `conventions.md` asks for at least
@@ -160,13 +195,20 @@ merge, and `route:list` boots clean. What the review did turn up:
 - [x] **Done: the publication "fix" migration is deleted** — see the first
       item in this list. It was not the tidiness problem it looked like; it
       was fatal on every database built from scratch. (Norhanis)
-- [ ] Minor: `items` and `authors` are validated `array|min:1` with no `max`,
+- [x] **Closed 2026-09-17, verified in the code:** `items` is `max:100` and
+      `authors` is `max:50`. Original report: no `max`,
       so a crafted post can insert unbounded rows. `ExaminerAdminController`
       pulls the whole examiner pool into memory and filters in PHP — fine at
       FYP scale, worth knowing.
 
-- [ ] Confirm `laravel/framework: ^12.0` in `composer.json` is still the
-      version the team wants; bump if you prefer newer.
+- [x] **Confirmed 2026-09-17: staying on `laravel/framework: ^12.0`.**
+      `^12.0` already floats to the newest 12.x — the lock is on 12.69.2, and
+      `composer update` picks up every 12.x release without touching
+      `composer.json`. The only thing a "bump" could mean is Laravel 13, which
+      is a framework major in the middle of an FYP with five other people
+      pulling this repo: new deprecations, a `laravel/sail` and
+      `maatwebsite/excel` compatibility check, and a re-run of all 152 tests,
+      for no feature this project needs. Revisit after the demo, if at all.
 - [ ] Have each teammate run `./setup.sh` on their own machine — the first run
       is the memory-hungry one, and their laptops differ.
 
@@ -521,13 +563,17 @@ query; there is no placeholder data in the views.
       UTP header are given `view-transition-name`s so they sit out the fade
       and stay visually fixed, which is what stops it reading as a reload.
       Firefox navigates exactly as it does today.
-- [ ] **The four short forms gained the least.** Three or four fields behind a
-      two-step wizard is an extra click for a review of something already on
-      screen; the three long ones are where the win is. Kept for consistency
-      and because a confirmation before something goes to four approvers is
-      defensible — but if the team dislikes it, reverting one is deleting its
-      `<fieldset class="fstep">` wrapper and the include. Worth asking the
-      other five what they think after a demo.
+- [x] **Decided 2026-09-17: the four short forms keep the wizard.** Three or
+      four fields behind a two-step wizard is an extra click for a review of
+      something already on screen, and the three long forms are where the win
+      is — but a confirmation step before something goes to four approvers is
+      defensible on its own, and one form behaving differently from the other
+      twelve costs more to explain than the click costs to make. This is a
+      taste call, not a defect, so it is closed rather than left open: the
+      revert is still one form at a time, deleting that view's
+      `<fieldset class="fstep">` wrapper and its `@include` of
+      `core::partials.form-stepper`. Reopen it if the demo audience trips on
+      it — not before.
 - [x] **Fixed while building it: `el.hidden` had silently stopped working on
       buttons.** `layout.css` gives `button` a `display`, and an author rule
       beats the UA sheet's `[hidden] { display: none }` at any specificity —
@@ -543,7 +589,7 @@ query; there is no placeholder data in the views.
       placeholder weight rather than as if it were filled in.
       Icons needed no work — they were already `stroke="currentColor"`
       throughout, which is why they themed correctly from the start.
-- [ ] **No custom date picker, deliberately.** The panel is browser chrome and
+- [x] **No custom date picker, deliberately.** The panel is browser chrome and
       already follows the theme through `color-scheme`. Replacing it means
       300-odd lines of JavaScript plus keyboard, locale and screen-reader
       handling, to land somewhere worse than the native control on a phone.
@@ -554,11 +600,14 @@ query; there is no placeholder data in the views.
       Only `background-image` is swapped; size, position, attachment and
       repeat are already set on `body` by `uresearch.css` and carry over, so
       the two plates stay in register.
-- [ ] **That plate is 2.7 MB against the light one's 138 KB** — 20x, on every
-      dark-mode page load. It is 2400x1792 for a `background-size: cover`
-      layer, so it can be resized and recompressed well under 300 KB with no
-      visible loss (GD is available in the app container). Worth doing before
-      the FYP demo, especially on conference wifi.
+- [x] **Done 2026-09-17: the plate is 2712 KB → 226 KB**, 2400x1792 → 1280x955
+      at JPEG quality 80, resized with GD in the app container. That is a 12x
+      cut and it now sits just above the light plate's 138 KB rather than 20x
+      over it. 1280 wide matches the light plate exactly, and the layer is
+      `background-size: cover` under an 0.86 scrim, so there is nothing to see
+      at any window size. Same filename, so no CSS changed — but it is the
+      same URL, so anyone who loaded the old one gets it from cache until a
+      hard refresh.
 - [x] **The shared shell redesigned** in `layout.css`: cards, the full set of
       form controls (including the ones nobody had styled — search, tel, url,
       time, file), three button kinds, status badges, four flash tones,
@@ -607,7 +656,7 @@ query; there is no placeholder data in the views.
       CGS dashboard, admin dashboard, application tracking, travel form,
       attendance upload, at-risk list, notification feed, profile and the
       audit log. Every screen in the app now has been looked at, not assumed.
-- [ ] `docs/conventions.md` now has a **Design** section: the token groups,
+- [x] `docs/conventions.md` now has a **Design** section: the token groups,
       why `--navy` and `--accent-solid` are separate, and the rule that no
       other sheet may contain a colour literal.
 
@@ -684,17 +733,25 @@ query; there is no placeholder data in the views.
         approval, an intermediate rejection leaving it alone, and the
         dismissal chain end to end.
 
-**Outstanding — audited 2026-09-17.** Her four modules are the most complete
-in the repo and all four carry tests (Travel 6, Publication 2, Claims 4,
-RPD 12). One thing is genuinely unfinished:
+**Outstanding — audited 2026-09-17, then closed the same day.** Her four
+modules are the most complete in the repo and all four carry tests (Travel 6,
+Publication 2, Claims 4, RPD 12). The one thing that was genuinely unfinished
+is now built:
 
-- [ ] **The dismissal's termination email is not written.** The Registry stage
-      closes the candidacy and stamps `terminated_at`
-      (`RpdDismissalController.php:174`) and stops there — the student is
-      never told. `norhanis.md` Module 4.3 makes "Registry sends termination
-      email" the *point* of that stage, so the chain is one notification short
-      of doing what it says on the box. `Notifications\RpdDeadlineApproaching`
-      is the pattern to copy.
+- [x] **Done 2026-09-17: the dismissal's termination email is written.**
+      `Notifications\CandidacyTerminated` (mail + database, queued, copied from
+      `RpdDeadlineApproaching`) is sent to the student when the Registry
+      approves — `norhanis.md` 4.3 makes "Registry sends termination email"
+      the *point* of that stage, and the chain stopped one notification short
+      of it. It names the termination date, the RPD deadline that was missed
+      and the grounds CGS recorded, and links to the decision record. Sent
+      **after** the transaction commits, not inside `closeCandidacy()`, for
+      the reason the engine's own notify learnt the hard way. Student only:
+      the Dean, Faculty and Registry all saw the case in their queues; the
+      person who had not is the one it happens to. Covered by
+      `test_registry_approval_closes_the_candidacy_and_emails_the_student`,
+      which renders the mail for real inside the assertion so a broken
+      `toMail()` fails rather than passes — confirmed to fail without it.
 
 Checked and clear: `rpd:remind` is registered and due daily at 07:00; an
 approved appeal moves the deadline, banks the months against the ceiling and
@@ -986,8 +1043,8 @@ handoff, not a duplicate of her scope.
 None of the three chains need a new `Support\Role` entry — `chair`,
 `non_exec_cgs`, `senior_exec_cgs`, `academic_exec` and `dean_pgr` already
 exist and already carry this shape of chain elsewhere. `senior_exec_cgs` is
-declared but unused by any built module, and unseeded — see the cross-cutting
-note below.
+used by exactly one built stage — this module's appeal ruling — and was
+unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
 
 - [x] **Hardbound Submission** (`hardbound_submission`) — Supervisor →
       Chairman of the Viva Voce Examination (the `chair` role) → Non-Executive
@@ -1037,12 +1094,18 @@ note below.
         back to the returned one. That needed no `WorkflowEngine` change —
         reject already terminates, and the cloning is module code — and it
         keeps each attempt, its reviewer and its remarks on the record
-        instead of overwriting them. Which stage the rejection happened at
-        is what separates the two endings: returned at `cgs_review` and the
-        student resubmits, rejected at `cgs_approve` and their only route is
-        the appeal chain. A true "returned, still open" outcome is still
-        worth having in Core — see Cross-cutting — but nothing here is
-        blocked on it now.
+        instead of overwriting them. **Corrected 2026-09-17:** this bullet
+        used to say the stage separated two endings — returned at
+        `cgs_review` and the student resubmits, rejected at `cgs_approve`
+        and the appeal is their only route. There is no `cgs_approve` stage
+        in this chain and has not been since the Senior Executive sign-off
+        was dropped on 2026-09-14, so **every rejection in it is a return**
+        and the student may resubmit whichever stage returned it. That is
+        also the right behaviour: a supervisor saying "these are not the
+        corrections the panel asked for" should send the student back to
+        their corrections, not to an appeal at CGS. A true "returned, still
+        open" outcome is still worth having in Core — see Cross-cutting —
+        but nothing here is blocked on it now.
 
 - [x] **Appeal Hardbound Submission** (`hardbound_appeal`) — only filable
       once a Hardbound Submission has been rejected/returned
@@ -1056,10 +1119,15 @@ note below.
   - [x] Senior Exec: ruling (accept/reject) — **on accept the original is
         not rewritten.** `applications.status` belongs to WorkflowEngine and
         the original rejection is a decision on the record, not a mistake to
-        erase, so an upheld appeal instead unlocks the resubmission form for
-        the submission it names. Only two things make a submission
-        resubmittable: CGS returned it at `cgs_review`, or an appeal against
-        it was upheld.
+        erase. **Corrected 2026-09-17:** this used to claim an upheld appeal
+        "unlocks the resubmission form", and that only a `cgs_review` return
+        or an upheld appeal made a submission resubmittable. Neither is what
+        the code does or what `jason.md` §3 asks for. What the appeal chain
+        produces is the thing §3.3 names — a deliberation, a Dean PFR report
+        and a formal ruling emailed to the student — not a permission the
+        student did not already have. A returned submission is resubmittable
+        because it was returned; the appeal is the route for a student who
+        wants the return itself ruled on rather than complying with it.
   - [x] Auto-email the ruling to the student — the engine's
         `ApplicationDecided`, same as every other chain
   - [x] A submission may only be appealed once, and only if it has not
@@ -1112,10 +1180,13 @@ elsewhere in this file:
 - RBAC/login, the progress stepper, and email notifications
   (`jason.md` §1.1–1.3) — done; see "Core" above.
 - A full audit-log admin viewer covering every view/upload, not just
-  decisions (`jason.md` §1.4) — `approval_history` already logs
-  approve/reject with who and when; logging views and uploads and giving
-  admin a search UI over it is a Core change, not something to build inside
-  this module folder.
+  decisions (`jason.md` §1.4) — **built in Core and done**, at
+  `/admin/audit-logs` (`spatie/laravel-activitylog`), logging from
+  `DocumentController`, `DocumentStore`, `WorkflowEngine` and
+  `LoginController`. `approval_history` records decisions only, so a
+  document *view* or *upload* left no trace; that is what this closes. It
+  was always a Core change rather than something to build inside this
+  module folder — this line used to say it was still outstanding.
 - The Admin Dashboard (`jason.md` §5.5) — already listed, unowned, under
   "Team" below.
 
@@ -1123,8 +1194,8 @@ elsewhere in this file:
 **Re-audited 2026-09-17 (second pass).** All three chains are built,
 registered and routable: 23 routes, 3 workflows, 9 migrations, 20 views. The
 first pass found four things. Five more turned up on this pass, four of them
-defects that no test could have caught because there were no tests. Six are
-now fixed; three need a decision from Jason.
+defects that no test could have caught because there were no tests. Six were
+fixed then; the remaining three were closed on 2026-09-17 — see below.
 
 Fixed on this pass:
 
@@ -1174,9 +1245,11 @@ Fixed on this pass:
       unclosed step renders perfectly and produces no wizard.
 - [x] **`cgs_prep` added to the stage-key table** in `docs/module-keys.md`.
 
-Still open, and all three want Jason:
+Were open, all three closed 2026-09-17 (the third by rewriting the prose
+rather than the code — read it before assuming the appeal chain changed):
 
-- [ ] **A Chair cannot see a nomination once they have filed it.**
+- [x] **Closed 2026-09-17 by the Chair dashboard's "Panels you filed" panel**,
+      which lists each one with the stage it is sitting on. Original report:
       `jason.md` §4.2 says the Academic Executive's rejection "routes back to
       Faculty Dept with comments". It does not route anywhere the Chair can
       look: `/appointment-letter/queue` is gated to
@@ -1190,33 +1263,61 @@ Still open, and all three want Jason:
       cannot. Wants a "My Nominations" screen for the filer, or the
       `ApplicationDecided` notification extended to whoever submitted.
 
-- [ ] **The appeal chain cannot be finished: no `senior_exec_cgs` account
-      exists.** `HardboundAppealWorkflow`'s last stage is `cgs_approve` /
-      `Role::SENIOR_EXEC_CGS`, and no seeder creates anyone with that role.
-      An appeal can be filed and compiled by CGS and then sits forever with
-      nobody able to rule on it. The fix is one line in
-      `database/seeders/DatabaseSeeder.php`, but that is a shared file, so
-      raise it at the next sync rather than just adding it.
-- [ ] **The appeal chain still earns the student nothing.**
-      `HardboundSubmissionDetail::resubmittableFor()` returns any rejected
-      submission not yet replaced, so a rejected student can simply resubmit
-      and appealing buys them nothing. The paragraph above describes a
-      stricter design than the code implements, and names `cgs_approve` as a
-      stage of a chain that has not had one since the Senior Exec sign-off
-      was dropped on 2026-09-14. Either tighten `resubmittableFor()` or
-      rewrite the paragraph. They cannot both stand.
-- [ ] **The three behaviour tests the first pass asked for are still
-      missing:** the signature gate on approval, the resubmit guard, and the
-      appeal's once-only rule. `FormsTest` covers how his screens render, not
-      what his rules enforce, and those three rules are the ones that fail
-      quietly.
+- [x] **Done 2026-09-17: `seniorexec@utp.edu.my` is seeded** (Puan Hasnah,
+      `Role::SENIOR_EXEC_CGS`, password `password` like every other account),
+      so `HardboundAppealWorkflow`'s `cgs_approve` stage has somebody able to
+      rule on it and an appeal can reach an outcome. **This is one line in the
+      shared `database/seeders/DatabaseSeeder.php`** — flagged here rather
+      than done quietly, because that file is everyone's: it is an added line
+      in the middle of the account list, so git merges it cleanly unless
+      somebody else adds an account in the same place. Anyone who already has
+      a database needs `./reset.sh` or `php artisan db:seed` to get the
+      account. Also added to the README table, along with `faculty@` which
+      was seeded but never documented.
+- [x] **Closed the class of bug, not just this instance.**
+      `ModuleContractsTest::test_every_stage_role_in_every_module_has_a_seeded_account`
+      seeds `DatabaseSeeder` and walks `stages(null)` for **every registered
+      module**, asserting somebody exists in each stage's role. A stage whose
+      role nobody holds is invisible — no error, no empty queue anybody
+      notices, applications just stop — and every other test makes its own
+      users, so nothing looked at the seeder. Confirmed to fail before the
+      line above was added, naming the module, the stage and the role.
+- [x] **Resolved 2026-09-17 by rewriting the paragraph, not by tightening
+      `resubmittableFor()`.** The code is right and the prose was stale. With
+      the Senior Executive sign-off dropped from the submission chain on
+      2026-09-14, the chain is Supervisor → Chairman → Non-Exec CGS and there
+      is no terminating rejection left in it: every rejection is a return, so
+      "any rejected submission not yet replaced" is exactly the right set.
+      Tightening it would have meant a student whose *supervisor* said the
+      corrections were not done had to appeal to CGS before fixing them,
+      which contradicts `jason.md` §2.1 and is worse behaviour besides. The
+      appeal is not a precondition for resubmitting and §3 never said it was
+      — what it produces is the Dean PFR report and a formal ruling (§3.2,
+      §3.3). Two bits of code carried the same stale claim and were corrected
+      with it: the resubmit backstop's 403 read "CGS rejected this
+      submission. File an appeal before resubmitting.", a rule the system
+      does not have and an `abort` that could never fire anyway, and the
+      upheld-appeal banner said "The student may now resubmit" when they
+      always could.
+- [x] **Done 2026-09-17: `tests/Feature/Jason/HardboundRulesTest.php`, 4
+      cases** covering all three — the signature gate on approval (and that
+      rejecting is deliberately *not* gated, since a rejection signs
+      nothing), the resubmit guard (not yours, not returned, not twice) and
+      the appeal's once-only rule (not twice, and not after the submission
+      has been replaced instead). A fourth covers the resubmission's
+      mandatory response to comments. Each was confirmed by breaking the rule
+      it guards and watching it fail: the gate bypassed, the guard removed,
+      the `whereNotIn` dropped. The resubmit case asserts the specific 403
+      *message*, because the shared backstop below it also returns 403 and a
+      status-only assertion would not notice the guard going missing.
 
 Known and tracked elsewhere: the student sidebar drops his "Resubmit #N"
 links (Core gap below; worked around by putting them on the Hardbound page).
 Deliberately out of scope and correctly so: the Senior Exec sign-off on
-Hardbound (dropped 2026-09-14), the audit viewer covering views and uploads
-(§1.4, Core), the Admin Dashboard (§5.5, unowned) and the CGS Lifecycle
-Monitor (§5.3, blocked on overlap #3).
+Hardbound (dropped 2026-09-14), the Admin Dashboard (§5.5, unowned) and the
+CGS Lifecycle Monitor (§5.3, blocked on overlap #3). The audit viewer
+covering views and uploads (§1.4) is not out of scope — it is built, in
+Core, at `/admin/audit-logs`.
 
 ---
 
@@ -1456,8 +1557,8 @@ audited in full; the rest fell out of the same query.
       is system-wide configuration, but the route carried no role middleware,
       so a student could open it by URL. Now gated to `Role::cgsTeam()` plus
       `ADMIN`, matching who is offered it, with a test.
-- [ ] **One thing a Chair should be able to reach and cannot:** their own
-      filed nominations. Tracked in Jason's section above.
+- [x] **Closed 2026-09-17.** Their own filed nominations are on the Chair
+      dashboard now. See Jason's section.
 - [x] **The Chair's two examiner entries are not redundant — the round trip
       between them was (2026-09-17).** Asked whether *Nominate Examiner Panel*
       and *Examiner List* are the same job listed twice. They are not: the
@@ -1815,9 +1916,8 @@ audited in full; the rest fell out of the same query.
       screen instead of leaving four narrow cards marooned in a long row, and
       the panel rows on `minmax(min(100%, 26rem), 1fr)` so two panels split
       whatever width they get and stack cleanly on a tablet. No breakpoints.
-- [ ] **The approver dashboard is the last screen still capped**, because it
-      is the last one not on `.sdash` — same entry as below. Rebuilding it
-      gets it the full screen for free.
+- [x] **Closed 2026-09-17.** It was rebuilt on `.sdash`, so it takes the full
+      screen like every other dashboard.
 
 ### Four identical sidebar links (2026-09-17)
 
@@ -2071,7 +2171,12 @@ audited in full; the rest fell out of the same query.
       does not filter on it. Same for Chair and department. This needs one
       team decision — whether scoping is a `Stage` property or a hook on the
       module — and then a change in `Core`, so agree it first.
-- [ ] Pagination on queues and the tracking page; both currently `->get()`
+- [x] **Queues are paginated** (20 a page, searchable, sortable — see the
+      section above). **The tracking page is not:** `ApplicationTrackingController`
+      is still a plain `->get()`. A student with a long history loads all of
+      it, which is a much smaller problem than the queues were but is the
+      same fix. Original item: pagination on queues and the tracking page,
+      both `->get()`
       everything, which is fine at seed scale and not at real scale.
 - [x] **Fixed: `tests/` did not exist**, though `composer.json` mapped `Tests\`
       to it and required PHPUnit 11 — so `php artisan test` failed outright on
@@ -2154,9 +2259,11 @@ audited in full; the rest fell out of the same query.
       individual modules. Jason, Chloe and Haziq will all want to edit it —
       expect conflicts there, and consider a per-module `demoData()` hook
       before three people edit it in the same week.
-- [ ] Give `/calendar` and `/documents` real screens. Both are still
-      `PageController` placeholders that the dashboard links to.
-      (`/notifications` and `/profile` are done — see below.)
+- [x] **Closed 2026-09-17, verified in `Core/routes.php`:** `/calendar` is
+      `CalendarController` (a month grid built from dates the modules own,
+      no events table) and `/documents` is `DocumentLibraryController` (every
+      file this user may see, with search and filters). Neither is a
+      `PageController` placeholder any more.
 - [x] **Profile screen (2026-09-13)** — `/profile`, replacing the placeholder.
       `Http\Controllers\ProfileController`, `Resources/views/profile/show`,
       `public/css/profile.css`.
@@ -2219,14 +2326,15 @@ audited in full; the rest fell out of the same query.
       which needs no Core change. Still worth having if another chain wants
       a genuine re-open (Chloe's candidacy appeal), and it would let
       Hardbound drop the clone.
-- [ ] Seed a `senior_exec_cgs` test account — no seeded user has this role.
-      Only Jason's Appeal Hardbound Submission ends there now (Hardbound
-      Submission itself was collapsed to the Non-Exec alone). The appeal was
-      tested against an account created directly in the local database, so
-      **the seeder still needs this line** before anyone else can rule on an
-      appeal — or the ruling stage could move to `dean_pgr`, who is seeded:
-      `$this->user('Encik Rahim Senior Exec', 'seniorexec@utp.edu.my', Role::SENIOR_EXEC_CGS, ['department' => 'CGS']);`
-      Left to whoever owns the seeder rather than edited from a module folder.
+- [x] **Done 2026-09-17: `senior_exec_cgs` is seeded** as
+      `seniorexec@utp.edu.my` (Puan Hasnah). Only Jason's Appeal Hardbound
+      Submission ends there, and it had been tested against an account made
+      by hand in a local database, so nobody else could rule on an appeal.
+      The ruling stage stays with the Senior Executive rather than moving to
+      `dean_pgr` — `jason.md` §3.3 is explicit about who deliberates.
+      `ModuleContractsTest` now fails if any module's stage is owned by a
+      role the seeder does not create, so this cannot recur silently for
+      anyone's chain.
 - [ ] **Actors named in scope documents that are not roles yet:** `GRS Exec`
       and `Research Centre` (Haziq), `Project Director` (Norhanis' Claims),
       `Faculty` (Norhanis' RPD dismissal, Jason). `Programme Chair` (Chloe) is
@@ -2392,10 +2500,11 @@ are what to reach for when touching the file anyway.
    commands.~~ Re-viva is done (see Hani's section); RPD is the one large
    piece still outstanding, and still needs a scheduled command for its
    3/2/1-month reminders.
-8. Jason's three chains are built. The "return to student" engine question
-   was settled without a Core change (see his section); the
-   `senior_exec_cgs` account still needs seeding before anyone other than
-   Jason can walk the Hardbound chains.
+8. Jason's three chains are built, and every open item in his section was
+   closed on 2026-09-17: the `senior_exec_cgs` account is seeded, the appeal
+   chain's prose was corrected to match the code, and his three rules have
+   tests. The "return to student" engine question was settled without a Core
+   change (see his section).
 9. **Before Chloe or Haziq writes any code, hold one meeting** and settle the
    four overlaps above. Haziq's is the urgent one — it collides with modules
    that already exist and have rows in the database.

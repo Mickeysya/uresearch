@@ -205,8 +205,10 @@ Created by the seeder. **Every one uses the password `password`.**
 | `dean@utp.edu.my` | Dean of PGR | **final approval for international travel** |
 | `director@utp.edu.my` | Senior Director CGS | final approval for GA extensions |
 | `ae@utp.edu.my` | Academic Executive | approves examiner nominations |
-| `manager@utp.edu.my` | Manager CGS | Claims, module not built yet |
-| `registry@utp.edu.my` | Registry | RPD dismissals, module not built yet |
+| `seniorexec@utp.edu.my` | Senior Executive CGS | rules on hardbound appeals |
+| `manager@utp.edu.my` | Manager CGS | approves claims |
+| `faculty@utp.edu.my` | Faculty | signs off an RPD dismissal before the Registry |
+| `registry@utp.edu.my` | Registry | closes a dismissed candidacy and sends the termination email |
 | `admin@utp.edu.my` | Admin | no admin screens exist yet |
 
 Both students are supervised by `supervisor@utp.edu.my`, so the supervisee
