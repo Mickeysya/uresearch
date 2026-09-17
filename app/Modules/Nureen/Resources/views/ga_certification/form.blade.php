@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>GA/GRA Certification Letter Request</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="GA/GRA Certification Letter Request" />
 
+    <div class="card card-wide">
         <form method="POST" action="{{ route('ga-certification.store') }}" data-stepper>
             @csrf
 

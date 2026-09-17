@@ -17,10 +17,10 @@
 </style>
 
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Add Examiner</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Add Examiner" />
 
+    <div class="card card-wide">
         {{-- A wizard because the external sheet pushed this form to thirteen
              fields, past the eight `docs/conventions.md` puts the line at. The
              split is the one the two CGS sheets already make: who the person

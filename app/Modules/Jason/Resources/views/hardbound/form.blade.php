@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>{{ $returned ? 'Resubmit Hardbound Thesis' : 'Hardbound Thesis Submission' }}</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="{{ $returned ? 'Resubmit Hardbound Thesis' : 'Hardbound Thesis Submission' }}" />
 
+    <div class="card card-wide">
         @if ($awaiting->isNotEmpty())
             <div class="app-item" style="margin-bottom: 18px; border-left: 4px solid #A86A12;">
                 <p><b>CGS returned {{ $awaiting->count() === 1 ? 'a submission' : $awaiting->count().' submissions' }} to you for correction</b></p>

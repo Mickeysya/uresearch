@@ -4,14 +4,11 @@
 
 @section('content')
 <div class="rpd-page">
-    <header class="rpd-header">
-        <div>
-            <h2>Calendar</h2>
-            <p class="queue-meta">
-                Deadlines and dates from your applications. Nothing is entered here:
+    <x-core::page-header title="Calendar">
+        <x-slot:subtitle>
+Deadlines and dates from your applications. Nothing is entered here:
                 every date comes from a record that already exists.
-            </p>
-        </div>
+        </x-slot:subtitle>
 
         <nav class="cal-nav" aria-label="Change month">
             <a href="{{ route('calendar.index', ['month' => $prevMonth]) }}"
@@ -23,7 +20,7 @@
                 <a href="{{ route('calendar.index') }}" class="sdash-action">Today</a>
             @endunless
         </nav>
-    </header>
+    </x-core::page-header>
 
     <div class="cal-layout">
         <section class="cal-grid-wrap" aria-label="{{ $month->format('F Y') }}">

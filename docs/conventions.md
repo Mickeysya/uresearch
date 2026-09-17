@@ -222,6 +222,75 @@ reported rather than blanking the calendar for everyone.
 **Do not add an events table.** Every date on that page is already recorded
 somewhere; a second copy is only a second thing to keep in sync.
 
+### The page shell
+
+Every screen is the same shape and the same width. Wrap the page in
+`.card-container-inline` and open it with the header component:
+
+```blade
+<div class="card-container-inline">
+    <x-core::page-header title="Examiner List"
+                         subtitle="One line saying what this screen is for.">
+        <a href="..." class="btn">Add an examiner</a>
+    </x-core::page-header>
+
+    ...the page...
+</div>
+```
+
+`.card-container-inline` is `max-width: var(--page-max)`, which is
+`clamp(880px, 92vw, 1320px)` — it grows with the viewport instead of holding a
+laptop-era number, and a `.card` inside it fills it. There used to be five
+page widths (480, 680, 880, `--page-max`, and whatever the dashboard grid came
+to), which is why two tabs in a row looked like two different products.
+
+**The page is full width; the text inside it is not.** A subtitle caps at
+68ch and a form's own fields cap at 46rem, because a 1320px line is
+unreadable however wide the monitor is. If your screen has a small object in
+it (an upload, a signature), put it in its own column rather than stretching
+it.
+
+When the context line needs Blade of its own, pass it as a slot instead of an
+attribute:
+
+```blade
+<x-core::page-header title="Documents">
+    <x-slot:subtitle>
+        {{ $documents->count() }} {{ Str::plural('file', $documents->count()) }}
+    </x-slot:subtitle>
+
+    <a href="..." class="btn">Upload</a>
+</x-core::page-header>
+```
+
+Below 720px the header stacks and its actions go full width. No second
+layout, no breakpoint of your own.
+
+**A stepper form uses the same header.** `form-stepper` looks for an `<h2>`
+inside the card; with the header above the card there is none, so it puts the
+step counter into the page header instead of building a band of its own. The
+wizard is the page width now, not its old 880px, and the field column caps at
+46rem like every other form.
+
+`tests/Feature/Core/PageShellTest.php` scans every signed-in view and fails on
+a screen that declares its own heading, keeps a heading inside the card, or
+writes a page width of its own. Two screens are exempt and say why: login is
+on the guest layout, and the four dashboards open with the welcome banner,
+which is a hero rather than a page header.
+
+Three older names still resolve to the page header so nothing breaks
+mid-branch: `.rpd-header`, `.notif-header` and the `.rpd-page` / `.notif-page`
+wrappers. They are deprecated. Do not write new ones.
+
+### Colour and contrast
+
+Use the tokens; never a literal. `--text-grey` is the secondary text colour
+and is **`--grey-600` in light mode**, which is 5.14:1 on white and passes
+WCAG AA. It used to be `--grey-500` at 3.06:1, which failed, and was what made
+every hint, queue meta line and stat note look greyed out. If a new colour is
+needed, add it to `tokens.css` with both themes rather than writing a hex in a
+component, or it will be a light-mode value that stays light in the dark theme.
+
 ### Empty states
 
 An empty state's one way forward is a **button**, not a sentence with a

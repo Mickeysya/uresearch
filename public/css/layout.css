@@ -895,22 +895,20 @@ button[value="rejected"]:hover {
    with one submit button.
    ============================================================ */
 
-/* The wizard wants the width the page has, not the 480/680px a short
-   card is capped at. The container stops centring a narrow box and the
-   card grows to a real working width. */
-.card-container-inline.is-wizard-container {
-    display: block;
-    padding: 0 0 var(--space-10);
-}
+/* Nothing to do here any more: .card-container-inline IS the page shell
+   now, at --page-max and fluid, and a .card inside it already fills it.
+   The class is still added by the script so a module can hook it. */
+.card-container-inline.is-wizard-container { }
 
-/* 1080px left a ~476px form column sitting in a ~780px pane, so every step
-   had a third of the card empty down its right-hand side, worst on a step
-   that is prose and one button. Sized to what a form column actually needs
-   now: the 232px rail, the pane's padding, and a 584px field column the
-   fields are allowed to fill. */
+/* The wizard is a page like any other page: it fills the shell, which is
+   already capped at --page-max and fluid. It used to carry its own 880px,
+   which is how a stepper form and the list screen beside it ended up
+   looking like two different products. The measure that actually matters
+   is the field column, capped below, not the surface. */
 .card.is-wizard {
-    max-width: 880px;
-    margin: 0 auto;
+    max-width: none;
+    width: 100%;
+    margin: 0;
     padding: 0;
     overflow: hidden;
 }
@@ -1152,14 +1150,18 @@ button[value="rejected"]:hover {
     margin-top: var(--space-2);
 }
 
-/* Fields fill the column. See the note above .fstep > label for why the
-   34em cap that used to live here went with the 1080px card. */
+/* The cap is back, and for the reason it existed the first time: the card
+   is no longer 880px, it is up to 1320px, and a text input stretched
+   across that reads as a textarea and gives the eye no anchor. 46rem is
+   the same measure every other form on the site now uses. */
 .card.is-wizard .fstep > input,
 .card.is-wizard .fstep > select,
 .card.is-wizard .fstep > textarea,
 .card.is-wizard .fstep > .field-error,
-.card.is-wizard .fstep > .field-hint {
-    max-width: 100%;
+.card.is-wizard .fstep > .field-hint,
+.card.is-wizard .fstep > .fstep-hint,
+.card.is-wizard .fstep > label {
+    max-width: 46rem;
 }
 
 .card.is-wizard .fstep > .checkbox-row {
@@ -1467,7 +1469,13 @@ button[value="rejected"]:hover {
     margin: 0 auto;
 }
 
-.rpd-header {
+/* (deprecated) .rpd-header and .notif-header were this same shape under two
+   other names, which is how three screens that do the same job ended up
+   looking different. Both are now the page header; the rules below are kept
+   only so an unconverted view does not lose its layout mid-branch. Use
+   x-core::page-header. */
+.rpd-header,
+.notif-header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -1476,7 +1484,16 @@ button[value="rejected"]:hover {
     margin-bottom: var(--space-5);
 }
 
-.rpd-header h2 { margin: 0 0 var(--space-1); }
+.rpd-header h2,
+.notif-header h2 { margin: 0 0 var(--space-1); }
+
+/* The page wrappers, likewise: one shell. */
+.rpd-page,
+.notif-page {
+    width: 100%;
+    max-width: var(--page-max);
+    margin-inline: auto;
+}
 
 /* ---- the facts panel ----
    Three or four figures stated before anything asks a question. Not
@@ -1908,4 +1925,285 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     .cal-event { font-size: 10px; -webkit-line-clamp: 1; }
 
     .cal-upcoming { order: -1; }
+}
+
+/* ============================================================
+   N · Approval queue (core::partials.queue)
+
+   A queue is a work list, not a stack of open forms. The row is one
+   line and the decision form lives behind a <details>, so a page of
+   twenty reads at a glance and a backlog of thousands is paged rather
+   than rendered. Everything here is shared by all thirteen module
+   queues, which is why it is in this sheet rather than a module's.
+   ============================================================ */
+
+.queue-head { margin-bottom: var(--space-5); }
+.queue-head h2 { margin: 0 0 var(--space-1); }
+.queue-head .queue-meta { margin: 0; }
+
+/* ---- search and order ---- */
+.queue-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+    padding: var(--space-4) var(--space-5);
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+}
+
+.queue-tool-field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.queue-tool-field:first-child { flex: 1 1 320px; }
+.queue-tool-field label {
+    margin: 0;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    color: var(--text-grey);
+}
+.queue-tools input[type="search"],
+.queue-tools select {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
+}
+.queue-tools input[type="search"] { width: 100%; }
+.queue-tools button { margin: 0; padding: var(--space-2) var(--space-5); font-size: var(--text-sm); }
+.queue-clear { align-self: center; font-size: var(--text-sm); color: var(--text-grey); }
+
+/* ---- the bulk bar ----
+   Sticky, because the rows you ticked are usually scrolled past by the
+   time you want to act on them. */
+.queue-bulk {
+    position: sticky;
+    top: var(--space-3);
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    background: var(--accent-subtle);
+    border: 1px solid var(--navy);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+}
+.queue-bulk-count { margin: 0; font-size: var(--text-sm); font-weight: var(--weight-semi); color: var(--navy); }
+.queue-bulk-remarks { flex: 1 1 260px; margin: 0; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); }
+.queue-bulk button { margin: 0; padding: var(--space-2) var(--space-4); font-size: var(--text-sm); }
+
+/* ---- the list ---- */
+.queue-list {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.queue-list-head {
+    padding: var(--space-3) var(--space-5);
+    background: var(--surface-sunken);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.queue-check { display: inline-flex; align-items: center; gap: var(--space-2); margin: 0; cursor: pointer; }
+.queue-check span { font-size: var(--text-sm); color: var(--text-grey); }
+.queue-check input { margin: 0; }
+
+.queue-row { border-bottom: 1px solid var(--border-subtle); }
+.queue-row:last-child { border-bottom: none; }
+.queue-row[open] { background: var(--surface-sunken); }
+
+.queue-row-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+    cursor: pointer;
+    list-style: none;
+}
+/* The default disclosure triangle, in both engines. The chevron at the
+   end of the row replaces it. */
+.queue-row-summary::-webkit-details-marker { display: none; }
+.queue-row-summary::marker { content: ''; }
+.queue-row-summary:hover { background: var(--surface-hover); }
+.queue-row-summary:focus-visible { outline: 2px solid var(--accent-solid); outline-offset: -2px; }
+
+.queue-row-id {
+    flex-shrink: 0;
+    font-weight: var(--weight-semi);
+    color: var(--navy);
+    font-variant-numeric: tabular-nums;
+}
+
+.queue-row-who { flex-shrink: 0; min-width: 0; font-size: var(--text-sm); }
+.queue-row-matric { color: var(--text-grey); }
+
+/* The one line the module writes about its own record. It gives way
+   first when the row runs out of width. */
+.queue-row-summary-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+}
+
+.queue-row-docs {
+    flex-shrink: 0;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--info-bg);
+    color: var(--info-fg);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semi);
+}
+
+/* How long it has waited. Quiet until it is not: a fortnight is a
+   nudge, a month is a problem. */
+.queue-row-age {
+    flex-shrink: 0;
+    min-width: 3.5em;
+    text-align: right;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    font-variant-numeric: tabular-nums;
+}
+.queue-row-age.tone-quiet { color: var(--text-grey); }
+.queue-row-age.tone-warn { color: var(--warning-fg); }
+.queue-row-age.tone-critical { color: var(--danger-fg); }
+
+.queue-row-chevron { flex-shrink: 0; display: inline-flex; color: var(--text-grey); }
+.queue-row-chevron svg { width: 16px; height: 16px; transition: transform var(--duration-fast) var(--ease); }
+.queue-row[open] .queue-row-chevron svg { transform: rotate(180deg); }
+
+.queue-row-body { padding: 0 var(--space-5) var(--space-5); }
+.queue-row-body > :first-child { margin-top: 0; }
+.queue-row-submitted { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--text-grey); }
+
+/* ---- pagination (core::partials.pagination) ---- */
+.pager { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-5); }
+.pager-link {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    color: var(--navy);
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+}
+.pager-link:hover { background: var(--surface-hover); border-color: var(--navy); }
+.pager-link.is-current { background: var(--navy); color: var(--text-on-accent); border-color: var(--navy); }
+.pager-link.is-disabled { color: var(--text-grey); border-color: var(--border-subtle); }
+.pager-link.is-disabled:hover { background: none; border-color: var(--border-subtle); }
+.pager-gap { align-self: center; color: var(--text-grey); }
+
+@media (max-width: 720px) {
+    .queue-row-summary { flex-wrap: wrap; }
+    .queue-row-summary-text { flex-basis: 100%; order: 10; }
+    .queue-tool-field { flex: 1 1 100%; }
+}
+
+/* ============================================================
+   N+1 · The page shell — one shape for every screen
+
+   There were five page widths in this app: .card at 480px, .card-wide
+   at 680px, .card.is-wizard at 880px, the list screens at --page-max,
+   and the dashboards at whatever the grid came to. Two tabs in a row
+   looked like two products.
+
+   One shape now, and it is fluid rather than a set of laptop-era
+   numbers: --page-max is clamp(880px, 92vw, 1320px), so the page grows
+   with the viewport and stops before a line of text gets too long to
+   track back.
+
+   Done here rather than in fifty Blade files because every card screen
+   already wraps itself in .card-container-inline. Changing what that
+   means changes every one of them at once, with no module edited.
+   ============================================================ */
+
+.card-container-inline {
+    display: block;
+    width: 100%;
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding: 0 0 var(--space-10);
+}
+
+/* (override) uresearch.css caps .card at 480px and .card-wide at 680px.
+   Two classes, because .card-container-inline .card (0,2,0) has to beat
+   her single-class rule. The card fills the shell; what needs to stay
+   narrow is the text inside it, not the surface. */
+.card-container-inline > .card,
+.card-container-inline > .card.card-wide {
+    max-width: none;
+    width: 100%;
+}
+
+/* ---- the standard page header ----
+   Title, one line of context, and the page's actions on the right. The
+   pattern the Examiner List established; every screen gets the same one.
+   Wraps to stacked on a narrow viewport rather than squeezing. */
+.page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-5);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-6);
+}
+
+.page-header-text { flex: 1 1 24rem; min-width: 0; }
+.page-header h2 { margin: 0 0 var(--space-1); }
+
+/* The subtitle stops at a readable measure even when the page does not.
+   A 1320px-wide line of explanatory prose is unreadable however wide the
+   monitor is. */
+.page-header p {
+    margin: 0;
+    max-width: 68ch;
+    color: var(--text-grey);
+    font-size: var(--text-sm);
+}
+
+.page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-shrink: 0;
+}
+
+/* ---- keeping the measure inside a full-width card ----
+   The page is full width; a form inside it is not a spreadsheet. Fields
+   cap at a measure the eye can track, the same reasoning the wizard's
+   584px field column already uses. Direct children only, so a module's
+   own grid or table is left alone. */
+.card-container-inline > .card > form > input,
+.card-container-inline > .card > form > select,
+.card-container-inline > .card > form > textarea,
+.card-container-inline > .card > form > .field-hint,
+.card-container-inline > .card > form > .field-error,
+.card-container-inline > .card > form > label {
+    max-width: 46rem;
+}
+
+@media (max-width: 720px) {
+    .page-header { flex-direction: column; }
+    .page-header-actions { width: 100%; }
+    .page-header-actions > * { flex: 1 1 auto; justify-content: center; }
+}
+
+/* The step counter when the page header already carries the title, so the
+   wizard has no heading of its own to sit beside. */
+.page-header-counter {
+    margin: 0;
+    align-self: center;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    color: var(--text-grey);
+    font-variant-numeric: tabular-nums;
 }

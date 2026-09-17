@@ -10,6 +10,7 @@ use App\Modules\Core\Http\Controllers\LoginController;
 use App\Modules\Core\Http\Controllers\NotificationController;
 use App\Modules\Core\Http\Controllers\PageController;
 use App\Modules\Core\Http\Controllers\ProfileController;
+use App\Modules\Core\Http\Controllers\QueueController;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\Route;
 
@@ -28,6 +29,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/applications', [ApplicationTrackingController::class, 'index'])->name('applications.index');
         Route::get('/applications/{application}', [ApplicationTrackingController::class, 'show'])->name('applications.show');
     });
+
+    // Deciding a page of any module's queue in one submission. Generic on
+    // purpose -- the module is a route parameter, so this is one route rather
+    // than one in each of the thirteen module route files, and a new module
+    // gets it for free. Authorisation is not here: every row goes through
+    // WorkflowEngine::decide(), which re-checks the actor's role against the
+    // stage that row is on, so posting ids you do not own decides nothing.
+    Route::post('/queue/{module}/decide', [QueueController::class, 'decideBulk'])
+        ->name('queue.decide-bulk');
 
     Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
 

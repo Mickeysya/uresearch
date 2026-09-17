@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Appeal Hardbound Submission</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Appeal Hardbound Submission" />
 
+    <div class="card card-wide">
         @if ($submissions->isEmpty())
             <div class="empty-state">
                 You have no hardbound submission to appeal.<br>

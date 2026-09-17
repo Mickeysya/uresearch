@@ -4,9 +4,14 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="Add an Examiner"
+        subtitle="They appear on the nomination form as soon as they are on the list.">
+        <a href="{{ route('appointment-letter.examiners', array_filter(['return' => $returnToNomination ? 'nominate' : null])) }}"
+           class="btn-secondary">Back to the list</a>
+    </x-core::page-header>
+
     <div class="card card-wide">
-        <h2>Add an Examiner</h2>
-        <div class="card-divider"></div>
 
         {{-- data-stepper-review because the generated review's default line
              says the form goes to the first approver. This one files nothing
@@ -74,9 +79,4 @@
     </div>
 </div>
 
-<p class="field-hint" style="text-align: center;">
-    <a href="{{ route('appointment-letter.examiners', array_filter(['return' => $returnToNomination ? 'nominate' : null])) }}">
-        &larr; Back to the examiner list
-    </a>
-</p>
 @endsection

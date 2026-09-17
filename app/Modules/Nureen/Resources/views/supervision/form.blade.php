@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Supervisor Appointment Request</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Supervisor Appointment Request" />
 
+    <div class="card card-wide">
         <form method="POST" action="{{ route('supervision.store') }}" enctype="multipart/form-data" data-stepper>
             @csrf
 

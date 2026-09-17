@@ -4,17 +4,11 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="Dismissal for Exceeded Candidacy"
+        subtitle="Opens a dismissal against a student whose RPD deadline passed without an approved extension. It is endorsed by the Dean of PGR, approved by Faculty, and the Registry sends the termination. You are the author, not an approver, so you will not see this again in a queue." />
+
     <div class="card card-wide">
-        <h2>Dismissal for Exceeded Candidacy</h2>
-        <div class="card-divider"></div>
-
-        <p class="queue-meta">
-            Opens a dismissal against a student whose RPD deadline passed without an
-            approved extension. It is endorsed by the Dean of PGR, approved by Faculty,
-            and the Registry sends the termination. You are the author, not an approver, so
-            you will not see this again in a queue.
-        </p>
-
         @if ($eligible->isEmpty())
             <div class="empty-state">
                 <p>No candidacy is currently eligible for dismissal.</p>

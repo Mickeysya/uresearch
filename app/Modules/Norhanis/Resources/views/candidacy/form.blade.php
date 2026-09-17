@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Register a Candidacy</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Register a Candidacy" />
 
+    <div class="card card-wide">
         @if ($students->isEmpty())
             <div class="empty-state">
                 <p>Every student already has a candidacy on record.</p>

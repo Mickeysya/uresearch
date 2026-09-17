@@ -23,14 +23,6 @@
     /* Sizes come from tokens.css, not literals: --page-max and the --text-*
        scale are fluid, so this page narrows and its type shrinks with the
        viewport instead of holding laptop-era numbers on every screen. */
-    .exam-page { max-width: var(--page-max); margin: 0 auto; }
-
-    .exam-header {
-        display: flex; align-items: flex-start; justify-content: space-between;
-        gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
-    }
-    .exam-header h2 { margin: 0 0 4px; }
-
     /* auto-fit, not a fixed 4: the cards share out whatever the row has, so
        they stay even at every width instead of leaving a 3+1 orphan. */
     .examiner-stats {
@@ -159,7 +151,7 @@
        as the sidebar and the top bar already are, so only the stat counts and
        the table animate. Names must be unique in a document; each of these is
        a single element. */
-    .exam-header      { view-transition-name: exam-header; }
+    .page-header      { view-transition-name: exam-header; }
     .exam-tabs        { view-transition-name: exam-tabs; }
     .examiner-filters { view-transition-name: exam-filters; }
 
@@ -180,17 +172,12 @@
     $isInternal = $type === \App\Modules\Hani\Models\Examiner::TYPE_INTERNAL;
 @endphp
 
-<div class="exam-page">
-    <header class="exam-header">
-        <div>
-            <h2>Examiner Pool</h2>
-            <p class="queue-meta">
-                {{ $examiners->total() }} {{ Str::plural('examiner', $examiners->total()) }} on record.
-                State is derived, so anyone on gap becomes available again on their own.
-            </p>
-        </div>
-        <a href="{{ route('examiner-admin.create') }}" class="sdash-action">+ Add an examiner</a>
-    </header>
+<div class="card-container-inline">
+    <x-core::page-header
+        title="Examiner Pool"
+        subtitle="{{ $examiners->total() }} {{ Str::plural('examiner', $examiners->total()) }} on record. State is derived, so anyone on gap becomes available again on their own.">
+        <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
+    </x-core::page-header>
 
     <nav class="exam-tabs" aria-label="Examiner lists">
         @foreach ([

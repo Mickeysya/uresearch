@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Attendance History</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Attendance History" />
 
+    <div class="card card-wide">
         @forelse ($records as $record)
             <div class="app-item">
                 <div class="app-item-header">

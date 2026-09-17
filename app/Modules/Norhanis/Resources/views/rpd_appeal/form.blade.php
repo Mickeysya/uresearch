@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>RPD Extension Appeal</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="RPD Extension Appeal" />
 
+    <div class="card card-wide">
         @if (! $candidacy)
             <div class="empty-state">
                 <p>You have no RPD candidacy on record yet.</p>

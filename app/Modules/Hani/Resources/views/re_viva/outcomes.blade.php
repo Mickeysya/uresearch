@@ -4,14 +4,11 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Re-viva Outcomes</h2>
-        <div class="card-divider"></div>
-        <p class="queue-meta">
-            Consolidation is scheduled; record the outcome level to close out the cycle.
-            Level 4 lets the student open another cycle by uploading again; level 5 is terminal.
-        </p>
+    <x-core::page-header
+        title="Re-viva Outcomes"
+        subtitle="Consolidation is scheduled; record the outcome level to close out the cycle. Level 4 lets the student open another cycle by uploading again; level 5 is terminal." />
 
+    <div class="card card-wide">
         @forelse ($details as $detail)
             <div class="app-item">
                 <div class="app-item-header">

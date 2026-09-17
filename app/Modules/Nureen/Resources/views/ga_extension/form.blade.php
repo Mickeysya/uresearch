@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>GA Extension Application</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="GA Extension Application" />
 
+    <div class="card card-wide">
         <form method="POST" action="{{ route('ga-extension.store') }}" enctype="multipart/form-data" data-stepper>
             @csrf
 

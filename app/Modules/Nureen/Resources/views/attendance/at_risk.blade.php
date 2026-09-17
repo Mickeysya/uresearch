@@ -4,14 +4,11 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>At-Risk Students</h2>
-        <div class="card-divider"></div>
-        <p class="queue-meta">
-            {{ $records->count() }} {{ Str::plural('student', $records->count()) }} currently below,
-            or trending toward, the mandatory 80% attendance threshold.
-        </p>
+    <x-core::page-header
+        title="At-Risk Students"
+        subtitle="{{ $records->count() }} {{ Str::plural('student', $records->count()) }} currently below, or trending toward, the mandatory 80% attendance threshold." />
 
+    <div class="card card-wide">
         @forelse ($records as $record)
             <div class="app-item">
                 <div class="app-item-header">

@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Publication Funding Application</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Publication Funding Application" />
 
+    <div class="card card-wide">
         <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
 

@@ -6,13 +6,13 @@
 @php use App\Modules\Norhanis\Models\Candidacy; @endphp
 
 <div class="rpd-page">
-    <header class="rpd-header">
-        <div>
-            <h2>RPD Masterlist</h2>
-            <p class="queue-meta">Every candidature clock CGS tracks. Reminders fire automatically at 3, 2 and 1 months.</p>
-        </div>
+    <x-core::page-header title="RPD Masterlist">
+        <x-slot:subtitle>
+Every candidature clock CGS tracks. Reminders fire automatically at 3, 2 and 1 months.
+        </x-slot:subtitle>
+
         <a href="{{ route('candidacies.create') }}" class="sdash-action">+ Register candidacy</a>
-    </header>
+    </x-core::page-header>
 
     <nav class="notif-filters" aria-label="Filter candidacies">
         @foreach ([

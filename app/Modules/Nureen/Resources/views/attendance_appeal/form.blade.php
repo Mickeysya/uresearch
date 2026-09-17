@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Attendance Appeal</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Attendance Appeal" />
 
+    <div class="card card-wide">
         <form method="POST" action="{{ route('attendance-appeal.store') }}" enctype="multipart/form-data" data-stepper>
             @csrf
 

@@ -1537,6 +1537,101 @@ audited in full; the rest fell out of the same query.
       are recorded here rather than buried in a module. Reverting either is a
       one-expression deletion.
 
+### The approval queue, rebuilt for a real backlog (2026-09-17)
+
+- [x] **Queues are paged, searchable and sortable.** They were a plain
+      `->get()` rendering every pending row fully expanded, each with its own
+      textarea and two buttons. Fine for the two rows a demo has; an
+      out-of-memory error and an unusable page for a department with a real
+      backlog. Now 20 a page, oldest first (a queue is FIFO, and the longest
+      wait is the one at risk), with `?q=` searching application number,
+      student name and matric number, and `?sort=newest` to flip it.
+      **Both changes are in two Core files** — `ApprovesApplications::queueFor()`
+      and `partials/queue.blade.php` — so all **fourteen** queue controllers
+      and **thirteen** queue views got it without one of them being edited.
+      `applications` is a `LengthAwarePaginator` now rather than a Collection;
+      `AbstractPaginator` forwards unknown calls to its collection, so the
+      `->pluck('id')` every detail lookup does still works, and now only loads
+      the details for the page being shown.
+      This closes the "Pagination on queues" item in this section.
+- [x] **A row is one line, and the decision form is behind a `<details>`.**
+      Native disclosure, no JavaScript for the open/close. The line carries
+      the application number, the student, the module's own one-line
+      `summary()`, a file count, and **how long it has waited** — quiet until
+      a fortnight, amber to 30 days, red past that. That last one is the
+      triage signal the old screen had nowhere to put.
+- [x] **Tick rows and decide them in one submission.** `POST /queue/{module}/decide`,
+      generic in Core rather than a `decide-bulk` route in thirteen
+      `routes.php` files across five folders. A new module gets it for free.
+      **It does not bypass the engine**: every row goes through
+      `WorkflowEngine::decide()` one at a time, which is still the only code
+      that writes `status` or `current_stage`, and which re-checks the actor's
+      role against the stage that row is actually on. So a student posting a
+      list of ids decides nothing. Not atomic across the batch on purpose —
+      one row someone else already decided must not roll back the nineteen
+      that were fine. Capped at 100 a submission.
+      `tests/Feature/Core/QueueTest.php`, 7 cases, including the two that
+      matter: bulk-deciding rows that are not yours, and ids from another
+      module.
+- [x] **One Blade edit outside Core was required.** `Hani/re_viva/queue.blade.php`
+      does not use the shared partial but does use `queueFor()`, so it now
+      gets a paginator: `->count()` became `->total()` (count is this page
+      only) and it needed `core::partials.pagination`, or every cycle past
+      the first 20 would silently vanish with nothing to say so.
+
+### The page shell, standardised (2026-09-17)
+
+- [x] **Five page widths became one.** `.card` at 480px, `.card-wide` at
+      680px, `.card.is-wizard` at 880px, list screens at `--page-max` and the
+      dashboards at whatever the grid came to — two tabs in a row looked like
+      two different products. Every card screen already wraps itself in
+      `.card-container-inline`, so redefining that one class made every one of
+      them full width and fluid at `clamp(880px, 92vw, 1320px)` with **no
+      module view edited**. The 480/680 caps are overridden with two-class
+      specificity, as `docs/conventions.md` requires for anything of
+      Norhanis'.
+      **Full width for the page, a measure for the text**: a subtitle caps at
+      68ch and a form's direct-child fields at 46rem, because a 1320px line is
+      unreadable on any monitor.
+- [x] **`<x-core::page-header>` on every screen — 52 of them.** The pattern
+      the Examiner List established: title, one line of context, actions on
+      the right, stacking to full-width actions below 720px. It has a
+      `subtitle` slot as well as the attribute, for the screens whose context
+      line is a count or a condition.
+      There were **four** heading shapes before: `<h2>` + `.card-divider`
+      inside the card (28 screens), `.rpd-header` (3), `.notif-header` (2)
+      and a bare `<h2>` (2). 27 of the first group were migrated by script
+      after a dry run; the rest by hand. `.rpd-header`, `.notif-header`,
+      `.rpd-page` and `.notif-page` now resolve to the page header and shell
+      so nothing breaks mid-branch, and are deprecated.
+      **Exempt, and the test says why:** login is on the guest layout, and the
+      four dashboards open with the welcome banner, which is a hero rather
+      than a page header.
+- [x] **The stepper joined the shell too.** `.card.is-wizard` carried its own
+      `max-width: 880px`, which is precisely how a stepper form and the list
+      screen beside it ended up looking like two different products. It fills
+      the shell now, and the **34em field cap is back** on the field column —
+      it had been removed when the card shrank to 880px, and at up to 1320px a
+      text input stretched across the card reads as a textarea. 46rem, the
+      same measure as every other form.
+      `form-stepper` looks for an `<h2>` inside the card to build its head
+      band; with the title above the card there is none, so it puts the step
+      counter into the page header instead. (Found while doing it: naming a
+      Blade component in a `//` comment **invokes it** — Blade compiles
+      component tags inside `<script>` too — and the view stops compiling.)
+- [x] **Guarded.** `tests/Feature/Core/PageShellTest.php`, 3 cases: every
+      signed-in screen opens with the shared header, no screen keeps a heading
+      inside its card, and no module declares a page width of its own. A
+      repo-wide scan, for the same reason `ContentSecurityPolicyTest` is one:
+      a screen that quietly reverts renders perfectly.
+- [x] **Light-mode secondary text failed WCAG AA.** `--text-grey` was
+      `--grey-500` (#8A94A6), **3.06:1** on white against the 4.5:1 minimum,
+      and it is what `.queue-meta`, `.field-hint` and every stat note use,
+      most at `--text-sm` or smaller. That is the "greyed out, hard to see"
+      report. Now `--grey-600` (#656E7E), **5.14:1**, still clearly secondary
+      next to `--text-body`. Dark mode already passed at 5.74:1 and is
+      untouched. One token, so every screen in the app lifted at once.
+
 ### House style, applied across every folder (2026-09-17)
 
 - [x] **An empty state's way forward is a button now, not a hyperlink.**

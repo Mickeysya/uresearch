@@ -4,25 +4,22 @@
 
 @section('content')
 <div class="rpd-page">
-    <header class="rpd-header">
-        <div>
-            <h2>Documents</h2>
-            <p class="queue-meta">
-                @if ($documents->isEmpty() && $search === '' && $module === 'all')
+    <x-core::page-header title="Documents">
+        <x-slot:subtitle>
+@if ($documents->isEmpty() && $search === '' && $module === 'all')
                     Files you upload with an application appear here automatically.
                 @else
                     {{ $documents->count() }} {{ Str::plural('file', $documents->count()) }}@if ($totalBytes > 0) · {{ round($totalBytes / 1024 / 1024, 1) }} MB @endif
                     @unless ($isOwnList) · files from applications you have handled or are handling @endunless
                 @endif
-            </p>
-        </div>
+        </x-slot:subtitle>
 
         <form method="GET" action="{{ route('documents.index') }}" class="doc-search">
             @if ($module !== 'all')<input type="hidden" name="module" value="{{ $module }}">@endif
             <input type="search" name="q" id="doc-search" value="{{ $search }}"
                    placeholder="Search by name, type or reference" aria-label="Search documents">
         </form>
-    </header>
+    </x-core::page-header>
 
     @if ($byModule->isNotEmpty())
         <nav class="notif-filters" aria-label="Filter by application type">

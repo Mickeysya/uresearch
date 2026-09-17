@@ -3,7 +3,8 @@
 @section('title', 'My Applications')
 
 @section('content')
-    <h2>My Applications</h2>
+    <x-core::page-header title="My Applications"
+                         subtitle="Every application you have filed, and where each one has reached." />
 
     @forelse ($applications as $application)
         <div class="app-item">

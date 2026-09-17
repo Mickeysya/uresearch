@@ -74,7 +74,14 @@
        anything sitting on a filled brand colour. */
     --text-dark:      var(--grey-800);
     --text-body:      var(--grey-700);
-    --text-grey:      var(--grey-500);
+    /* grey-600, not grey-500. On white, #8A94A6 is 3.06:1, which fails
+       WCAG AA for normal text (4.5:1) and is exactly the "greyed out and
+       hard to read" this carried everywhere: .queue-meta, .field-hint and
+       every stat note use it, most of them at --text-sm or smaller.
+       #656E7E is 5.14:1 on the same ground and still clearly secondary
+       next to --text-body. Dark mode already passed at 5.74:1 and is
+       unchanged. */
+    --text-grey:      var(--grey-600);
     --text-on-accent: #FFFFFF;
 
     /* Borders. -subtle divides rows inside a card, the default

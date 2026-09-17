@@ -3,7 +3,7 @@
 @section('title', 'Application #' . $application->id)
 
 @section('content')
-    <h2>{{ $application->module()->label() }} Application #{{ $application->id }}</h2>
+    <x-core::page-header :title="$application->module()->label().' Application #'.$application->id" />
     <p class="queue-meta">
         <x-core::status-badge :status="$application->status" />
         &nbsp;Submitted {{ $application->submitted_at?->format('j M Y, g:ia') }}

@@ -5,10 +5,10 @@
 @section('content')
 @php($c = $defaults['candidate'])
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Prepare Appointment Pack: Application #{{ $application->id }}</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Prepare Appointment Pack: Application #{{ $application->id }}" />
 
+    <div class="card card-wide">
         <p class="queue-meta">
             Endorsed by the Academic Executive. The candidate's details below are filled
             in automatically from {{ $student?->name ?? 'the candidate' }}'s record. Check

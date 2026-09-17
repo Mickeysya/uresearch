@@ -4,11 +4,14 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="Re-viva Monitoring: {{ $stage->queueTitle() }}" />
+
     <div class="card card-wide">
-        <h2>Re-viva Monitoring: {{ $stage->queueTitle() }}</h2>
-        <div class="card-divider"></div>
+        {{-- total(), not count(): queues are paginated in Core now, and
+             count() is how many are on THIS page. --}}
         <p class="queue-meta">
-            {{ $applications->count() }} {{ Str::plural('cycle', $applications->count()) }} at this step.
+            {{ $applications->total() }} {{ Str::plural('cycle', $applications->total()) }} at this step.
         </p>
 
         @forelse ($applications as $application)
@@ -54,6 +57,11 @@
         @empty
             <div class="empty-state">Nothing at this step right now.</div>
         @endforelse
+
+        {{-- Required, not optional: Core paginates queues, so without this
+             every cycle past the first page is simply missing from the page
+             with nothing to say so. --}}
+        @include('core::partials.pagination', ['paginator' => $applications, 'label' => 'Re-viva pages'])
     </div>
 </div>
 @endsection

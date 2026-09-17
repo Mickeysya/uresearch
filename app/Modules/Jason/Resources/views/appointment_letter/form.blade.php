@@ -11,10 +11,10 @@
     $external = $pool->reject(fn ($e) => $e->isInternal());
 @endphp
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Examiner Panel Nomination: Appointment Letter</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Examiner Panel Nomination: Appointment Letter" />
 
+    <div class="card card-wide">
         @if ($candidates->isEmpty())
             <div class="empty-state">
                 There are no candidates in your department yet.<br>

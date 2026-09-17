@@ -6,10 +6,10 @@
 @php use App\Modules\Norhanis\Models\Candidacy; @endphp
 
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>My RPD Candidacy</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="My RPD Candidacy" />
 
+    <div class="card card-wide">
         @if (! $candidacy)
             <div class="empty-state">
                 <p>No candidacy is on record for you yet.</p>

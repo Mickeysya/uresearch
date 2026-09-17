@@ -13,15 +13,6 @@
      pool is: a six-column list inside a 680px card scrolls sideways on a
      1900px monitor. Sizes come from tokens.css, not literals. --}}
 <style>
-    .pool-page { max-width: var(--page-max); margin: 0 auto; }
-
-    .pool-header {
-        display: flex; align-items: flex-start; justify-content: space-between;
-        gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-5);
-    }
-    .pool-header h2 { margin: 0 0 var(--space-1); }
-    .pool-header .queue-meta { margin: 0; max-width: 62ch; }
-
     .pool-table-wrap {
         background: var(--surface);
         border: 1px solid var(--border-subtle);
@@ -64,18 +55,13 @@
     $active = $examiners->where('is_active', true);
 @endphp
 
-<div class="pool-page">
-    <header class="pool-header">
-        <div>
-            <h2>Examiner List</h2>
-            <p class="queue-meta">
-                The examiners a Chair can put on a panel. Removing one keeps past
-                nominations intact, because each nomination holds its own copy of the details.
-            </p>
-        </div>
+<div class="card-container-inline">
+    <x-core::page-header
+        title="Examiner List"
+        subtitle="The examiners a Chair can put on a panel. Removing one keeps past nominations intact, because each nomination holds its own copy of the details.">
         <a href="{{ route('appointment-letter.examiners.create', array_filter(['return' => $returnToNomination ? 'nominate' : null])) }}"
            class="btn">Add an examiner</a>
-    </header>
+    </x-core::page-header>
 
     @if ($examiners->isNotEmpty())
         <div class="pool-counts">

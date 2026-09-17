@@ -192,17 +192,38 @@
             var divider = card.querySelector('.card-divider');
             if (divider) divider.remove();
 
-            var head = document.createElement('div');
-            head.className = 'wizard-head';
-
             var counter = document.createElement('p');
             counter.className = 'wizard-counter';
 
+            // Most screens now open with the x-core::page-header component,
+            // which puts the title OUTSIDE the card. There is then nothing
+            // for a head band to hold but the counter, and an empty band
+            // above the rail is exactly the wasted strip the band was added
+            // to remove. So the counter joins the page header instead, and
+            // the band is only built for a card that still carries its own
+            // heading.
+            //
+            // Written without the angle brackets on purpose: Blade compiles
+            // component tags anywhere in the file, script blocks included,
+            // so naming one in a comment invokes it and the view stops
+            // compiling.
+            var pageHeader = document.querySelector('.page-header');
+
             if (heading) {
+                var head = document.createElement('div');
+                head.className = 'wizard-head';
                 head.appendChild(heading);
+                head.appendChild(counter);
+                card.insertBefore(head, card.firstChild);
+            } else if (pageHeader) {
+                counter.className = 'page-header-counter';
+                pageHeader.appendChild(counter);
+            } else {
+                var bare = document.createElement('div');
+                bare.className = 'wizard-head';
+                bare.appendChild(counter);
+                card.insertBefore(bare, card.firstChild);
             }
-            head.appendChild(counter);
-            card.insertBefore(head, card.firstChild);
 
             // Rail and content live side by side below the head.
             var body = document.createElement('div');

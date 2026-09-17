@@ -15,10 +15,10 @@
     in, so the review shows the chosen file and nothing else.
 --}}
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Upload Attendance</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Upload Attendance" />
 
+    <div class="card card-wide">
         <form method="POST" action="{{ route('attendance.upload') }}" enctype="multipart/form-data" data-stepper>
             @csrf
 

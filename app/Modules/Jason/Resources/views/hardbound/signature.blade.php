@@ -13,7 +13,10 @@
      It is also exactly what the Confirmation of Correction prints it onto, so
      this is a preview of the document, not a preview of the page. --}}
 <style>
-    .sig-card { max-width: 620px; }
+    /* The page is the standard width; the signature itself is a small
+       object, so the plate and the drop target sit in a column the eye can
+       take in at once rather than stretching to the full page. */
+    .sig-body { max-width: 46rem; }
 
     .sig-plate {
         display: flex; align-items: center; justify-content: center;
@@ -66,15 +69,12 @@
 </style>
 
 <div class="card-container-inline">
-    <div class="card card-wide sig-card">
-        <h2>My Signature</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="My Signature"
+        subtitle="When you approve a Hardbound Submission as Supervisor or as Chairman of the Viva Voce Examination, this image is stamped into your block on the Confirmation of Correction to Thesis (UTP/CGS/017A) together with that day's date." />
 
-        <p class="queue-meta">
-            When you approve a Hardbound Submission as Supervisor or as Chairman of the Viva
-            Voce Examination, this image is stamped into your block on the Confirmation of
-            Correction to Thesis (UTP/CGS/017A) together with that day's date.
-        </p>
+    <div class="card card-wide">
+        <div class="sig-body">
 
         @if ($signature)
             <div class="sig-onfile">
@@ -130,6 +130,7 @@
                 <span class="field-hint" style="margin: 0;">Replaceable at any time.</span>
             </div>
         </form>
+        </div>
     </div>
 </div>
 

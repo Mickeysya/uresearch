@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Travel Application</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Travel Application" />
 
+    <div class="card card-wide">
         <form method="POST" action="{{ route('travel.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
 

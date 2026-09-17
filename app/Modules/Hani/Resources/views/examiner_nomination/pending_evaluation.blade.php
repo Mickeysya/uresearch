@@ -4,15 +4,11 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Pending Evaluation</h2>
-        <div class="card-divider"></div>
-        <p class="queue-meta">
-            Approved nominations whose examiners are still tied up. Mark an evaluation
-            complete once the viva has actually happened. That clears the tie-up and
-            starts the {{ \App\Modules\Hani\Models\Examiner::GAP_DAYS }}-day cooling-off period from today.
-        </p>
+    <x-core::page-header
+        title="Pending Evaluation"
+        subtitle="Approved nominations whose examiners are still tied up. Mark an evaluation complete once the viva has actually happened. That clears the tie-up and starts the {{ \App\Modules\Hani\Models\Examiner::GAP_DAYS }}-day cooling-off period from today." />
 
+    <div class="card card-wide">
         @forelse ($nominations as $nomination)
             <div class="app-item">
                 <div class="app-item-header">

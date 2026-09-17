@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Examiner Nomination</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Examiner Nomination" />
 
+    <div class="card card-wide">
         @if ($candidates->isEmpty())
             <div class="empty-state">
                 You have no candidates assigned to you yet.<br>

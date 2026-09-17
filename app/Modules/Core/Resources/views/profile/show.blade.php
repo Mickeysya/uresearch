@@ -44,6 +44,9 @@
     ])->filter(fn ($row) => filled($row['value']));
 @endphp
 
+<x-core::page-header title="My Profile"
+                     subtitle="Your record as the portal holds it. Contact details and password are changed here." />
+
 <div class="prof">
     {{-- No flash include here: layouts/app.blade.php already renders one
          above @yield('content'), and a second copy showed every "Contact
