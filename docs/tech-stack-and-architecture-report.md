@@ -113,7 +113,7 @@ Nothing here is decorative. Every dependency closes a specific gap the legacy ap
 
 | Technology | Version | Purpose |
 |---|---|---|
-| **PHPUnit** | `^11.0` | Six suites under `tests/`, covering the workflow engine's authorisation logic, the CSP header, module-contract conformance, and Nureen's approval chains end to end. The legacy app had none. |
+| **PHPUnit** | `^11.0` | 18 test classes, **88 tests** (as of 2026-09-17), laid out one folder per owner under `tests/Feature/` plus `tests/Unit/`. They cover the workflow engine's two authorisation locks, the CSP header, module-contract conformance, the attendance import and its risk rule, and the approval chains of Norhanis', Nureen's and Hani's modules end to end. SQLite in memory, so the suite needs no Docker and cannot touch a developer's database. The legacy app had none. |
 
 ---
 

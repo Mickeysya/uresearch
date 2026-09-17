@@ -415,7 +415,10 @@ Everything else is Sail:
 ./vendor/bin/sail shell                    # a shell inside the app container
 ./vendor/bin/sail artisan migrate          # apply new migrations
 ./vendor/bin/sail artisan route:list       # every route, including all modules
-./vendor/bin/sail artisan tinker           # REPL against the app
+./vendor/bin/sail artisan tinker           # REPL against the app (dev only —
+                                           #   laravel/tinker is in require-dev,
+                                           #   so it is absent after a
+                                           #   `composer install --no-dev`)
 ./vendor/bin/sail artisan optimize:clear   # clear config/route/view caches
 ./vendor/bin/sail artisan test             # the test suite (SQLite in memory —
                                            #   never touches your database)

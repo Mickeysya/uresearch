@@ -268,3 +268,10 @@ Type-inject `DocumentStore $documents`. Never call `move_uploaded_file()`.
 
 Run `php artisan queue:work`, or set `QUEUE_CONNECTION=sync` in `.env`, or the
 emails sit in the queue.
+
+Then write that walk down as a test, in `tests/Feature/<You>/`. The five steps
+above are a feature test almost verbatim — `MakesUsers` gives you the cast, and
+asserting the stage after *each* decision rather than only the final status is
+what catches a chain that skips its middle approver.
+`tests/Feature/Nureen/GaExtensionTest.php` is the shortest example of exactly
+that shape. See `docs/conventions.md` → Tests.

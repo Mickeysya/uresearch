@@ -20,7 +20,7 @@ as the work it describes.
 | Norhanis — Publication | done |
 | Norhanis — RPD (reminders · appeals · dismissals) | done |
 | Nureen — GA Extension · Attendance · Supervision · Certification | done · matches `docs/scope/nureen.md` |
-| Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done |
+| Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done · internal/external pool split on `feature/hani-remaining-modules`, unmerged |
 | CGS dashboard (5 stat cards + 5 live panels) | done |
 | Admin dashboard (5 cards + 4 panels, system health) | done |
 | Notification feed (`/notifications`) | done |
@@ -29,7 +29,7 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | 77, covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains — none for Jason's |
+| Automated tests | 88 on `develop`, 97 once `feature/hani-remaining-modules` merges (+9 `ExaminerPoolTest`) — covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, and Nureen’s and Hani’s chains — none for Jason's |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12 |
 | Last reviewed | 2026-09-17 — Jason's merge, plus a per-owner outstanding-issues audit in each section below |
 
@@ -194,6 +194,23 @@ merge, and `route:list` boots clean. What the review did turn up:
       caches left over from the previous branch, and restarts the queue worker
       (`queue:work` holds the app in memory and otherwise keeps running
       pre-pull code). `--check` reports without changing anything.
+- [x] **Fixed: `sync.sh` reported "MySQL is not running" at a healthy MySQL**
+      (2026-09-17, on `feature/hani-remaining-modules` — commit `524e9ec`,
+      not yet in `develop`). Six checks in the script grepped
+      `docker compose ps --status running` for a container name. That needs
+      three things to line up at once: a Compose new enough to know
+      `--status` (2.6+), a working directory resolving to the same project
+      that owns the containers, and a table shape the grep still matches. On
+      a teammate's Mac one of them didn't, so every check reported "not
+      running" while `docker ps` showed `uresearch-mysql` up and healthy for
+      an hour — and the script aborted before migrations. All six now call
+      one `container_up()` helper that asks `docker inspect` about the
+      `container_name` the compose file pins: no project resolution, no flag
+      support, no text parsing. It is also stricter where it counts — a
+      container that declares a healthcheck (mysql, mailpit) must be
+      *healthy*, not merely running, because migrations fired at a MySQL
+      still booting fail in a way that reads like a schema bug. Containers
+      without one (app, queue) fall back to plain state.
 - [x] `.env.example` matching the compose file — no configuration needed
 - [x] Laravel 12 skeleton: `artisan`, `bootstrap/`, `public/index.php`, `routes/`
 - [x] `config/` — app, auth, database, mail
@@ -564,6 +581,29 @@ query; there is no placeholder data in the views.
       `prefers-color-scheme` listener repaints every live instance with
       `update('none')` — no animation replay, and no chart needs to know how
       it is themed.
+- [x] **The type scale is fluid** (2026-09-17, on
+      `feature/hani-remaining-modules` — commit `e99cc11`, not yet in
+      `develop`). No second scale was added: `--text-md` became
+      `clamp(13px, 0.66rem + 0.24vw, 14px)` and the other seven sizes are
+      ratios of it, so the whole scale shrinks as one instead of each page
+      picking its own numbers. It resolves to exactly the old px at ≥1440px
+      and floors at 13px, so nothing got smaller than readable. The `rem` in
+      the middle term is deliberate — a size in pure `vw` shrinks as the user
+      zooms in. `--page-max: clamp(880px, 92vw, 1320px)` joined it for page
+      width. Caveat worth knowing before anyone calls this "global": most of
+      the app still hardcodes px (`layout.css` alone is ~1900 lines), so a
+      page becomes fluid only as its owner swaps literals for `var(--text-*)`.
+      `app/Modules/Hani/.../examiner_admin/index.blade.php` is the worked
+      example — zero `font-size` literals left.
+- [x] **Two sidebar bugs, both in shared rules** (same commit).
+      `.nav-subitem` had `white-space: nowrap` and nothing else, so a long
+      queue label ("Appeal Hardbound Submission") ran off the panel mid-word
+      with no sign there was more — it now clips with an ellipsis, and the
+      two subitem links that render module labels carry a `title`.
+      `.nav-item-flat` was `padding-left: 24px`, so an icon-less link under
+      "Actions" started 32px left of every other nav label; it is `56px` now
+      (24 padding + 20 icon + 12 gap), which lines them up. Both fixes are in
+      `public/css/sidebar.css`, so they reach every role at once.
 - [x] Verified in both themes, headless at 1440x950: login, student dashboard,
       CGS dashboard, admin dashboard, application tracking, travel form,
       attendance upload, at-risk list, notification feed, profile and the
@@ -722,7 +762,11 @@ overlap #3.
   - [x] Attendance appeal workflow (`attendance_appeal`, single stage to
         Non-Executive CGS), reachable from a student's "My Attendance" page
 
-- [~] **Supervision** — supervisor appointment requests
+- [x] **Supervision** — supervisor appointment requests. Closed 2026-09-17:
+      every bullet below is done and the module's own scope is complete. The
+      tilde had been standing in for the Core queue-scoping gap, which is
+      not Nureen's to close — it is tracked under "Correctness gaps in Core"
+      and affects every module, so leaving it on her line only hid it.
   - [x] Request → Supervisor → CGS eligibility review
   - [x] **Closed: required documentation** (`nureen.md` Module 3 asks for
         "Student submits request *with required documentation*"). The form now
@@ -752,7 +796,7 @@ overlap #3.
       stat cards and the at-risk task all read `attendance_records` live.
       `AttendanceRiskEvaluator` gained `project()` for the predicted figure.
 
-- [~] **GA/GRA Certification Letter**
+- [x] **GA/GRA Certification Letter** — closed 2026-09-17; generate, format and dispatch are all in.
   - [x] **Closed: the letter is now dispatched** (`nureen.md` Module 4 asks
         for "generate, format, **and dispatch**"). `Notifications\CertificationIssued`
         emails the student with the PDF attached from the private disk, and
@@ -773,23 +817,39 @@ overlap #3.
         cannot fetch another's certificate (403)
 
 
-**Outstanding — audited 2026-09-17.** Every sub-item above is closed and all
-four chains work end to end. What is left is coverage and two stale markers:
+**Outstanding — audited 2026-09-17, cleared the same day.** Every sub-item
+above is closed, all four chains work end to end, and all four now carry
+tests (Attendance 8, GA Extension 6, Attendance Appeal 5, Supervision 2,
+Certification 1). Nothing is open in this section:
 
-- [ ] **GA Extension has no feature test.** The oldest of her four chains and
-      the only one with nothing guarding it. Its automated document-
-      completeness rule — the thing `nureen.md` Module 2 calls the point of
-      the module — is exactly the kind that breaks quietly.
-- [ ] **Attendance Appeal has no feature test.** `AttendanceTest` covers the
-      import, the risk rule, the template round-trip and the alerts, but not
-      the single-stage appeal chain a student files from "My Attendance".
-- [ ] **Decide whether Supervision and Certification are still `[~]`.** Every
-      bullet under both is `[x]`, so the tildes now say less than the lines
-      under them. Certification looks done outright. Supervision's is
-      arguably still right — its queue scoping is a module-local patch in
-      `SupervisionController`, not a fix to the Core gap every other module
-      still has. If that is what the tilde means, say so on the line;
-      otherwise close both.
+- [x] **GA Extension now has one** (2026-09-17) —
+      `tests/Feature/Nureen/GaExtensionTest.php`, 6 cases. Document
+      completeness is the module's point per `nureen.md` Module 2, so three
+      of them are the ways an incomplete request must bounce: no supporting
+      document, a new end date that is not after the current one, and a
+      one-line "justification". The other three walk the chain, asserting the
+      position after *every* decision rather than only at the end —
+      supervisor endorsement leaves it on `cgs_verify`, CGS verification
+      leaves it on `senior_director`, and only the Senior Director closes it.
+      That middle stage is precisely what the legacy app got wrong, and a
+      test that only checked the final status would not have caught it. A
+      rejection is checked to hold the stage it died on, so the trail still
+      names who stopped it.
+- [x] **Attendance Appeal now has one** (2026-09-17) —
+      `tests/Feature/Nureen/AttendanceAppealTest.php`, 5 cases. One stage
+      means the first approval is the last one, with no second approver to
+      catch a mistake, so that is asserted directly. The important one is
+      ownership: `attendance_record_id` is a student-supplied id, and the
+      check in `store()` is all that stops one student attaching another
+      student's flagged period to their own appeal — 403, and nothing
+      written. Also covers that the document is optional here (unlike GA
+      Extension and Supervision) but still lands on the private disk under a
+      random name, and that a general dispute with no record named is valid.
+- [x] **Both tildes resolved** (2026-09-17). Certification closed outright.
+      Supervision closed too, with the reason written on its own line: the
+      Core queue-scoping gap it was standing in for belongs to Core, not to
+      her module, and keeping it as a tilde here hid a problem every module
+      has behind one person's name.
 
 Checked and clear: `supervision:remind-stalled` is registered and due daily at
 08:00; `AttendanceAtRisk`, `SupervisionRequestStalled` and
@@ -840,6 +900,48 @@ notification does on a box with no worker.
       an examiner Unavailable now goes through a reason modal; the reason is
       shown back on the list and cleared on reactivation. One migration:
       `examiners.unavailable_reason` (nullable text).
+- [x] **Internal and external are two different records now** (2026-09-17,
+      on `feature/hani-remaining-modules` — commit `e99cc11`, not yet in
+      `develop`). CGS keeps two spreadsheets, and the external one carries
+      nine columns the internal one has no equivalent of. `/examiners` grew a
+      tab strip (All / Internal / External, each with its count) and the
+      table's columns follow the tab; the stat cards and the department
+      filter scope to it too. Migration
+      `2026_09_17_000100_add_external_details_to_examiners_table`:
+      `faculty_approval`, `institution`, `sector` (technical/research),
+      `expertise`, `utp_cluster`, `years_experience`, `msc_graduated`,
+      `phd_graduated`, `first_examination_date` — all nullable, all external
+      only. Three sheet columns deliberately got **no** column: "Date 2nd" is
+      `last_examination_date`, which already drives the 90-day gap and would
+      drift if copied; "Student Name" (and the internal sheet's "Remarks") is
+      derived from `examiner_nominations` in
+      `ExaminerAdminController::studentsByExaminer()`, so the pool cannot
+      contradict the nominations; "Remark" is empty in both issued sheets and
+      `unavailable_reason` already shows under the badge. The split is
+      enforced, not just displayed — `institution` is
+      `required_if:type,external`, and `store()` strips
+      `Examiner::EXTERNAL_FIELDS` when an internal examiner is saved, so an
+      internal row can never hold half an external record. New:
+      `tests/Feature/Hani/ExaminerPoolTest.php`, 9 cases covering each tab's
+      columns, tab-scoped counts, the derived student column, the strip and
+      the validation.
+      **On merge:** `app/Modules/Hani/README.md` still describes the pool
+      before the split, and it was left that way deliberately — a module
+      README sits beside its code, and on `develop` that code does not exist
+      yet. Update it in the merge commit, the way `app/Modules/Nureen/README.md`
+      now carries a Tests table.
+- [x] **Tab switching stopped looking like a page reload** (same commit).
+      Every tab is a real GET — the portal is server-rendered and
+      `layout.css` already cross-fades navigations via the native View
+      Transitions API. The flash came from the root snapshot including the
+      page header, the tab strip and the filter bar, which are identical on
+      every tab. Each now carries its own `view-transition-name`, the same
+      way `.sidebar` and `.main-content-header` already did, so only the stat
+      counts and the table animate. Firefox has no cross-document view
+      transitions and navigates as before. Speculation-rules prerendering was
+      considered and rejected: the page renders in 20–30ms, so it would buy
+      ~40ms in exchange for a CSP exception, a second render per hovered tab
+      and Chrome-only behaviour.
 
 
 **Outstanding — audited 2026-09-17.** The examiner lifecycle and the re-viva
@@ -1498,12 +1600,18 @@ are what to reach for when touching the file anyway.
 - [x] **Done 2026-09-17.** Both deleted, along with their entries in `all()`
       and `label()`. Nothing referenced either one. Whoever needs a DAC or a
       panel examiner adds the line back in the commit that uses it.
-- [x] **Done 2026-09-17.** All 17 deleted. Verified first that every path in
-      `ModuleServiceProvider` is guarded by `File::isDirectory()` or
-      `File::exists()`, so a missing `Workflows/` or `Models/` is a no-op, not
-      a warning. Chloe's and Haziq's folders stay claimed in git by their
-      `ModuleProvider.php`, `routes.php` and `README.md` — the sub-folders
-      appear when their first real file does.
+- [x] **Done 2026-09-17, and again 2026-09-17 (22 of them).** Verified first
+      that every path in `ModuleServiceProvider` is guarded by
+      `File::isDirectory()` or `File::exists()`, so a missing `Workflows/` or
+      `Models/` is a no-op, not a warning. Chloe's and Haziq's folders stay
+      claimed in git by their `ModuleProvider.php`, `routes.php` and
+      `README.md` — the sub-folders appear when their first real file does.
+      **Git cannot store an empty directory**, so this was never a repo
+      change and there is nothing to commit: the cleanup only ever empties
+      one working tree, and the folders come back in anyone else's checkout
+      the moment a tool recreates them. If `find app/Modules -type d -empty`
+      prints anything on your machine, `-delete` it and move on; do not
+      re-file this as a regression.
 - [x] **Done 2026-09-17 — the custom date picker is gone, −647 lines.**
       `core::partials.date-picker` was 380 lines of JS drawing a calendar panel
       over the native `<input type="date">`, plus 267 lines of `.dp-*` CSS in
@@ -1520,11 +1628,21 @@ are what to reach for when touching the file anyway.
       `nureen.md` describes as the real ingestion route. **Not cut — this
       removes a feature, not just complexity.** CGS works in Excel, and
       dropping .xlsx is Nureen's call, not an audit's.
-- [ ] **`laravel/tinker` sits in `require`, not `require-dev`.** One line in
-      `composer.json` — but moving a package between the two sections
-      regenerates `composer.lock`, which is a wide blast radius for a REPL
-      nobody ships. Worth doing in the same commit as the deployment work
-      (`composer install --no-dev`), not before.
+      **Re-examined 2026-09-17 and still not cut.** Asked to patch every
+      over-engineering item in the same pass as completing Nureen's modules,
+      which is the contradiction: `.xlsx` upload and the `.xlsx` template are
+      two of those features, `nureen.md` asks for them, and CGS exports from
+      UTrace into Excel. Deleting a working feature is not a complexity fix,
+      and it is not an audit's call — it needs Nureen to say the CSV path is
+      enough.
+- [x] **Done 2026-09-17. `laravel/tinker` is in `require-dev`.** It is a REPL;
+      nothing ships it. Moved with `composer update laravel/tinker` so the
+      lock moved with it — `laravel/tinker` and `psy/psysh` both sit in
+      `packages-dev` now, 89 prod / 38 dev, and `composer validate` passes.
+      No version changed, so this is a section move, not an upgrade. The
+      stale `TinkerServiceProvider` line in `bootstrap/cache/packages.php` is
+      harmless: that directory is git-ignored and discovery re-runs on
+      install, so a `--no-dev` deploy never sees it.
 - [x] **Done 2026-09-17.** `Console\Commands\SeedDemoData` re-implemented a
       scenario check `DemoDataSeeder::run()` was already doing — the same
       `array_key_exists` and a near-identical message, eleven lines apart from
@@ -1546,17 +1664,21 @@ are what to reach for when touching the file anyway.
       Applications, Attendance (x2), Reports (x3), Users and Roles, Document
       Repository. Each names what is missing; several need only a query and a
       table, since the data already exists.
-- [~] Automated tests — the harness exists and **77 pass** (73 feature, 4
+- [~] Automated tests — the harness exists and **88 pass** (84 feature, 4
       unit), covering the parts that break quietly: both authorisation locks,
       approve/reject outcomes, Travel's conditional routing, the
       `stages(null)` superset, that every registered module's routes actually
       exist, and the attendance contract including its degradation path, plus
       Attendance's import, Supervision, Certification, Claims, Publication,
       Examiner Nomination, Re-viva and RPD's three flows.
-      Per owner: Core 33 · Norhanis 24 · Nureen 11 · Hani 5 · **Jason 0**.
-      **Still wanted (re-checked 2026-09-17):** Jason's three chains, GA
-      Extension, Attendance Appeal and Conflict Detection have no feature test
-      of their own, and neither does `DocumentStore`'s allow-list. Travel is
+      Per owner: Core 33 · Norhanis 24 · Nureen 22 · Hani 5 · **Jason 0**
+      — Hani reaches 14 once `feature/hani-remaining-modules` merges
+      (`ExaminerPoolTest`, 9).
+      **Still wanted (re-checked 2026-09-17):** Jason's three chains and
+      Conflict Detection have no feature test of their own, and neither does
+      `DocumentStore`'s allow-list. GA Extension and Attendance Appeal came
+      off this list the same day — `GaExtensionTest` (6) and
+      `AttendanceAppealTest` (5) — which is what took Nureen from 11 to 22. Travel is
       no longer on this list — `TravelTest` covers it with six. Each owner
       writing one for their own module is the cheap way to get there —
       `tests/Feature/<You>/` is where it goes.

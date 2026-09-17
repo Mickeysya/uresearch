@@ -82,10 +82,12 @@ own database.
 tests/
   Support/        helpers shared across files — MakesUsers is the cast
   Feature/
-    Core/         the engine, the seams, CSP, the profile — the team's
-    Norhanis/     ClaimsTest.php, PublicationTest.php
-    Nureen/       AttendanceTest.php, SupervisionTest.php, CertificationTest.php
-    Hani/         ExaminerNominationTest.php, ReVivaTest.php
+    Core/         the engine, the seams, CSP, the pages, the profile,
+                  the demo seeder — the team's
+    Norhanis/     ClaimsTest, PublicationTest, RpdTest, TravelTest
+    Nureen/       AttendanceTest, AttendanceAppealTest, GaExtensionTest,
+                  SupervisionTest, CertificationTest
+    Hani/         ExaminerNominationTest, ReVivaTest
     Jason/ Chloe/ Haziq/     — when you write your first one
   Unit/           pure functions, no database
 ```

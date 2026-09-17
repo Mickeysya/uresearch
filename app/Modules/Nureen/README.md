@@ -27,6 +27,20 @@
   `DocumentStore::storeGenerated()` attaches it, so the existing download
   route and permission check apply with no extra code.
 
+## Tests
+
+`tests/Feature/Nureen/` — 22 cases, all four chains covered.
+
+| File | Guards |
+|---|---|
+| `AttendanceTest` | the template round-trip (download it, feed it straight back), the header check, the date formats Excel writes, a bad row being skipped with a reason while the good rows save, re-uploading a period replacing rather than duplicating, and the at-risk alert firing on the transition |
+| `GaExtensionTest` | document completeness — the module's point per `nureen.md` Module 2 — and the three-stage chain, asserting the position after *every* decision, because the middle stage is what the legacy app got wrong |
+| `AttendanceAppealTest` | the single stage being final, and that a student cannot attach another student's flagged record to their own appeal (403) |
+| `SupervisionTest` | the required document, and that it lands on the private disk under a random name |
+| `CertificationTest` | the letter being generated, attached as an `ApplicationDocument`, and actually dispatched |
+
+Run them with `./vendor/bin/sail artisan test --filter=Nureen`.
+
 ## Layout
 
 ```
