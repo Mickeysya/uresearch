@@ -34,6 +34,14 @@
                 Not on the list? <a href="{{ route('appointment-letter.examiners') }}">Add the examiner first</a>.
             </p>
 
+            @if ($pool->reject->isAvailable()->isNotEmpty())
+                <p class="queue-meta">
+                    Greyed-out names are already on an appointment. An examiner is free again
+                    {{ \App\Modules\Jason\Models\PoolExaminer::COOLDOWN_MONTHS }} months after
+                    the Dean appoints them.
+                </p>
+            @endif
+
             <form method="POST" action="{{ route('appointment-letter.store') }}">
                 @csrf
 
@@ -61,15 +69,19 @@
                                     <option value="">— Select an examiner —</option>
                                     <optgroup label="Internal Examiners (UTP)">
                                         @foreach ($internal as $e)
-                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)>
+                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)
+                                                    @disabled(! $e->isAvailable())>
                                                 {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
+                                                @unless ($e->isAvailable()) — not available, {{ $e->unavailableLabel() }} @endunless
                                             </option>
                                         @endforeach
                                     </optgroup>
                                     <optgroup label="External Examiners">
                                         @foreach ($external as $e)
-                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)>
+                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)
+                                                    @disabled(! $e->isAvailable())>
                                                 {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
+                                                @unless ($e->isAvailable()) — not available, {{ $e->unavailableLabel() }} @endunless
                                             </option>
                                         @endforeach
                                     </optgroup>

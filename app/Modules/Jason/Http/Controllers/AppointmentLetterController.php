@@ -50,7 +50,9 @@ class AppointmentLetterController extends Controller
                 ->where('department', $request->user()->department)
                 ->orderBy('name')
                 ->get(),
-            'pool' => PoolExaminer::active()->orderBy('name')->get(),
+            // `appointments` is eager-loaded so the availability check on
+            // each option is a read from memory, not a query per examiner.
+            'pool' => PoolExaminer::active()->with('appointments')->orderBy('name')->get(),
         ]);
     }
 
@@ -83,6 +85,17 @@ class AppointmentLetterController extends Controller
         if ($chosen->pluck('examiner_type')->unique()->count() < 2) {
             return back()->withInput()->withErrors([
                 'examiners' => 'The panel needs at least one internal and one external examiner.',
+            ]);
+        }
+
+        // The form greys these out, but a disabled <option> is only a
+        // courtesy -- the rule is enforced here.
+        $busy = $chosen->reject->isAvailable();
+
+        if ($busy->isNotEmpty()) {
+            return back()->withInput()->withErrors([
+                'examiners' => $busy->map(fn ($e) => $e->name.' is '.$e->unavailableLabel())->implode('; ')
+                    .'. An examiner takes one assignment at a time.',
             ]);
         }
 
@@ -361,6 +374,12 @@ class AppointmentLetterController extends Controller
         $approved = $data['decision'] === 'approve';
 
         if ($approved && $stage?->key === 'dean') {
+            // The appointment is real from this moment: it starts each
+            // examiner's cooldown, whether or not the mail gets through.
+            AppointmentExaminer::where('application_id', $application->id)
+                ->whereNull('appointed_at')
+                ->update(['appointed_at' => now()]);
+
             $this->dispatchPacks($application);
 
             $application->student?->notify(new ExaminersAppointed(
@@ -372,6 +391,56 @@ class AppointmentLetterController extends Controller
         $verb = $approved ? 'approved' : 'rejected';
 
         return back()->with('status', "Application #{$application->id} {$verb}.");
+    }
+
+    /**
+     * Every nomination the Dean has approved, with the delivery state of each
+     * examiner's pack.
+     *
+     * The gap this closes: dispatch happens after the engine has committed
+     * the approval, so a bad address or an unwritable document directory used
+     * to lose a pack silently -- the nomination read "approved" and nobody
+     * learned the examiner had received nothing until they failed to return a
+     * report. Anything listed here as not delivered can be sent again.
+     */
+    public function issued(Request $request)
+    {
+        $applications = Application::where('module_type', $this->moduleKey())
+            ->where('status', Application::STATUS_APPROVED)
+            ->with('student')
+            ->orderByDesc('id')
+            ->get();
+
+        return view('jason::appointment_letter.issued', [
+            'applications' => $applications,
+            'examiners' => AppointmentExaminer::whereIn('application_id', $applications->pluck('id'))
+                ->orderByRaw("CASE WHEN examiner_type = 'internal' THEN 0 ELSE 1 END")
+                ->get()
+                ->groupBy('application_id'),
+        ]);
+    }
+
+    /**
+     * Sends an examiner's pack again. The same archived bytes the Dean
+     * approved, so a resend can never differ from the original -- and it does
+     * not touch the appointment itself, only the delivery.
+     */
+    public function resend(Request $request, Application $application, AppointmentExaminer $examiner): RedirectResponse
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($examiner->application_id === $application->id, 404);
+        abort_unless($application->status === Application::STATUS_APPROVED, 403);
+
+        $sent = $this->dispatchPacks($application, collect([$examiner]));
+
+        if ($sent === 0) {
+            return back()->with('error',
+                "Nothing was sent to {$examiner->examiner_name} — the prepared documents for that examiner are missing from the archive. "
+                .'Ask CGS to prepare the pack again before resending.');
+        }
+
+        return back()->with('status',
+            "Appointment pack queued again for {$examiner->examiner_name} ({$examiner->examiner_email}).");
     }
 
     /**
@@ -432,9 +501,17 @@ class AppointmentLetterController extends Controller
     /**
      * Emails each examiner the two documents that carry their name. Reads the
      * archived copies the Dean approved rather than regenerating, so what
-     * goes out is exactly what was reviewed.
+     * goes out is exactly what was reviewed -- which is also why a resend is
+     * safe: it sends the same approved bytes.
+     *
+     * One examiner failing must not stop the rest, and a failure must not
+     * take down a decision the engine has already committed. `pack_sent_at`
+     * is not set here: the MessageSent listener sets it when the transport
+     * actually accepts the message.
+     *
+     * @param  \Illuminate\Support\Collection<int, AppointmentExaminer>|null  $only
      */
-    protected function dispatchPacks(Application $application): void
+    protected function dispatchPacks(Application $application, $only = null): int
     {
         $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
 
@@ -442,7 +519,9 @@ class AppointmentLetterController extends Controller
             ->whereIn('doc_type', [self::DOC_LETTER, self::DOC_REPORT])
             ->get();
 
-        foreach ($detail->examiners as $examiner) {
+        $sent = 0;
+
+        foreach ($only ?? $detail->examiners as $examiner) {
             $suffix = '-'.ucfirst($examiner->examiner_type).'-'.Str::slug($examiner->examiner_name).'.pdf';
 
             $files = $documents
@@ -458,9 +537,19 @@ class AppointmentLetterController extends Controller
                 continue;
             }
 
-            Mail::to($examiner->examiner_email)->send(
-                new AppointmentLetterMail($application, $examiner, $files)
-            );
+            try {
+                Mail::to($examiner->examiner_email)->send(
+                    new AppointmentLetterMail($application, $examiner, $files)
+                );
+                $sent++;
+            } catch (\Throwable $e) {
+                // The Dean's approval is already committed and the documents
+                // are archived; one unreachable examiner is a resend, not a
+                // failed approval.
+                report($e);
+            }
         }
+
+        return $sent;
     }
 }

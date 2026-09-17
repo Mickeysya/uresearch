@@ -14,6 +14,12 @@
             each nomination holds its own copy of the details.
         </p>
 
+        <p class="queue-meta">
+            An examiner the Dean has appointed is unavailable for the next
+            {{ \App\Modules\Jason\Models\PoolExaminer::COOLDOWN_MONTHS }} months, so no one
+            carries two panels at once. They come back to the nomination form on their own.
+        </p>
+
         @if ($examiners->isEmpty())
             <div class="empty-state">No examiners yet. Add the first one below.</div>
         @else
@@ -28,7 +34,7 @@
             <div style="max-height: 340px; overflow-y: auto; border: 1px solid var(--border, #ddd); margin-bottom: 24px;">
             <table class="recent-activity-table" style="margin: 0;">
                 <thead style="position: sticky; top: 0; background: #fff; z-index: 1;">
-                    <tr><th>Name</th><th>Type</th><th>Institution</th><th>Expertise</th><th>Email</th><th></th></tr>
+                    <tr><th>Name</th><th>Type</th><th>Institution</th><th>Expertise</th><th>Email</th><th>Availability</th><th></th></tr>
                 </thead>
                 <tbody>
                     @foreach ($examiners as $examiner)
@@ -38,6 +44,15 @@
                             <td>{{ $examiner->institution }}</td>
                             <td>{{ $examiner->expertise }}</td>
                             <td>{{ $examiner->email }}</td>
+                            <td>
+                                @if (! $examiner->is_active)
+                                    <span style="color: var(--text-grey);">&mdash;</span>
+                                @elseif ($examiner->isAvailable())
+                                    <span style="color: #1c7c3f;">Available</span>
+                                @else
+                                    <span style="color: #a0521d;">Not available &mdash;<br>{{ $examiner->unavailableLabel() }}</span>
+                                @endif
+                            </td>
                             <td>
                                 <form method="POST" action="{{ route('appointment-letter.examiners.toggle', $examiner) }}">
                                     @csrf

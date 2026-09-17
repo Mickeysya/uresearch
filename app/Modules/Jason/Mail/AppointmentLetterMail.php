@@ -10,6 +10,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
 
 /**
@@ -27,6 +28,8 @@ use Illuminate\Queue\SerializesModels;
 class AppointmentLetterMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
+
+    public const EXAMINER_HEADER = 'X-UResearch-Examiner';
 
     /**
      * Queued jobs are serialized to a JSON envelope around a PHP-serialized
@@ -57,6 +60,19 @@ class AppointmentLetterMail extends Mailable implements ShouldQueue
         return new Envelope(
             subject: 'Appointment as '.$this->examiner->typeLabel().' — UTP Centre for Graduate Studies',
         );
+    }
+
+    /**
+     * Stamps the examiner row's id onto the outgoing message so
+     * RecordExaminerPackDelivery can tell, when the transport accepts it,
+     * which pack was delivered. Queued mail is sent long after the request
+     * that built it, so the message itself has to carry the link.
+     */
+    public function headers(): Headers
+    {
+        return new Headers(text: [
+            self::EXAMINER_HEADER => (string) $this->examiner->id,
+        ]);
     }
 
     public function content(): Content

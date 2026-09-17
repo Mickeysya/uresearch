@@ -72,7 +72,7 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
     public function summary(Application $application): string
     {
         $examiners = AppointmentExaminer::where('application_id', $application->id)
-            ->orderByRaw("FIELD(examiner_type, 'internal', 'external')")
+            ->orderByRaw("CASE WHEN examiner_type = 'internal' THEN 0 ELSE 1 END")
             ->get();
 
         if ($examiners->isEmpty()) {
@@ -113,6 +113,7 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
             // by whoever hears of them first.
             Role::NON_EXEC_CGS => [
                 ['label' => 'Examiner List', 'route' => 'appointment-letter.examiners'],
+                ['label' => 'Issued Appointments', 'route' => 'appointment-letter.issued'],
             ],
             default => [],
         };

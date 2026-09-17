@@ -32,7 +32,7 @@ class AppointmentDetail extends Model
     public function examiners(): HasMany
     {
         return $this->hasMany(AppointmentExaminer::class, 'application_id', 'application_id')
-            ->orderByRaw("FIELD(examiner_type, 'internal', 'external')")
+            ->orderByRaw("CASE WHEN examiner_type = 'internal' THEN 0 ELSE 1 END")
             ->orderBy('id');
     }
 
