@@ -38,6 +38,7 @@ class PageShellTest extends TestCase
         'app/Modules/Core/Resources/views/dashboard/approver.blade.php',
         'app/Modules/Core/Resources/views/dashboard/cgs.blade.php',
         'app/Modules/Core/Resources/views/dashboard/student.blade.php',
+        'app/Modules/Core/Resources/views/dashboard/supervisor.blade.php',
     ];
 
     /** @return array<int, string> */
@@ -191,6 +192,85 @@ class PageShellTest extends TestCase
             $offenders,
             "These dashboards do not root in .sdash, so layout.css cannot release "
             ."the width cap for them:\n  ".implode("\n  ", $offenders)
+        );
+    }
+
+    /**
+     * The Chair and Supervisor screens are locked to one viewport on a
+     * desktop, so a panel has to have decided what it does when that squeezes
+     * it. There are exactly two right answers and a panel declares one:
+     *
+     *   approver-scroll  a list of unknown length; it scrolls internally, and
+     *                    the *-scroll name is what dashboard-states.css hides
+     *                    the bar on -- a visible scrollbar inside a one-screen
+     *                    layout is what that rule exists to stop.
+     *   approver-fit     a known, fixed amount of content (a chart and a short
+     *                    legend); it is sized to hold it and never scrolls.
+     *
+     * A panel declaring neither is one that will overflow the layout.
+     */
+    public function test_every_approver_panel_body_declares_how_it_handles_being_squeezed(): void
+    {
+        $offenders = [];
+
+        foreach (glob(base_path('app/Modules/Core/Resources/views/dashboard/partials/{approver,supervisor,chair}-*.blade.php'), GLOB_BRACE) as $view) {
+            $source = file_get_contents($view);
+            $name = basename($view);
+
+            // Only panels; the stat cards and the alert strip do not scroll.
+            if (! str_contains($source, 'approver-panel')) {
+                continue;
+            }
+
+            // Matched inside a class attribute, not anywhere in the file:
+            // both names appear in these partials' own comments explaining
+            // the choice, and a guard a comment can satisfy is not a guard.
+            if (! preg_match('/class="[^"]*\bapprover-(scroll|fit)\b/', $source)) {
+                $offenders[] = $name;
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "These panels declare neither approver-scroll nor approver-fit, so "
+            ."they will overflow the one-screen layout:\n  "
+            .implode("\n  ", $offenders)
+        );
+    }
+
+    /**
+     * layout.css is linked BEFORE the dashboard sheets, so a rule here that
+     * modifies a `.sdash-*` component loses at equal specificity and does
+     * nothing. It cost two rounds of "the panels are overlapping": the
+     * container kept `display: grid` from dashboard-student.css because the
+     * override was written with one class.
+     *
+     * So a `.sdash-*` modifier in layout.css must name both classes.
+     */
+    public function test_layout_css_overrides_dashboard_components_with_two_classes(): void
+    {
+        $offenders = [];
+
+        foreach (file(public_path('css/layout.css')) as $i => $line) {
+            $line = trim($line);
+
+            // A selector line (ends in { or ,) that starts with a single
+            // .sdash-something and never qualifies it.
+            if (! preg_match('/^\.sdash-[a-z0-9-]+\s*[,{]/', $line)) {
+                continue;
+            }
+
+            $offenders[] = 'layout.css:'.($i + 1).'  '.$line;
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "These rules modify a .sdash-* component from layout.css, which is "
+            ."linked first and so loses at equal specificity. Write them as "
+            ."`.sdash.sdash-name` or `.sdash-component.your-class`:\n  "
+            .implode("\n  ", $offenders)
         );
     }
 

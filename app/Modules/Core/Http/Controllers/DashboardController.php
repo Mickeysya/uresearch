@@ -8,6 +8,7 @@ use App\Modules\Core\Services\CgsDashboard;
 use App\Modules\Core\Services\ChairDashboard;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\StudentDashboard;
+use App\Modules\Core\Services\SupervisorDashboard;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
 use Illuminate\Http\Request;
@@ -91,6 +92,8 @@ class DashboardController extends Controller
 
             return view('core::dashboard.chair', [
                 'queues' => $dash->queues(),
+                'ageing' => $dash->ageingProfile(),
+                'overdue' => $dash->overdueCount(),
                 'awaitingMe' => $dash->awaitingMe(),
                 'longestWait' => $dash->longestWait(),
                 'decided' => $dash->decidedRecently(),
@@ -102,6 +105,32 @@ class DashboardController extends Controller
                 'alerts' => $dash->alerts(),
                 // The same module-declared links the sidebar builds from, so
                 // a teammate's new Chair-facing screen appears here too.
+                'shortcuts' => $registry->linksFor($user),
+                'unavailable' => $dash->unavailable(),
+            ]);
+        }
+
+        if ($user->role === Role::SUPERVISOR) {
+            // Seven stages, so the generic view below would render seven stat
+            // cards mostly reading zero -- and none of them would answer the
+            // question a supervisor actually opens the portal with, which is
+            // whether one of their candidates is in trouble.
+            $dash = new SupervisorDashboard($user, $registry);
+
+            return view('core::dashboard.supervisor', [
+                'queues' => $dash->queues(),
+                'ageing' => $dash->ageingProfile(),
+                'overdue' => $dash->overdueCount(),
+                'awaitingMe' => $dash->awaitingMe(),
+                'longestWait' => $dash->longestWait(),
+                'busiestRoute' => $dash->busiestQueueRoute(),
+                'longestWaitRoute' => $dash->longestWaitRoute(),
+                'candidates' => $dash->candidates(),
+                'candidateCount' => $dash->candidateCount(),
+                'atRisk' => $dash->atRiskCount(),
+                'attendanceSpread' => $dash->attendanceSpread(),
+                'oldest' => $dash->oldestWaiting(),
+                'alerts' => $dash->alerts(),
                 'shortcuts' => $registry->linksFor($user),
                 'unavailable' => $dash->unavailable(),
             ]);

@@ -6,7 +6,7 @@
     should have been -- that one listed applications already decided and no
     longer anyone's problem.
 --}}
-<section class="sdash-card chair-panel">
+<section class="sdash-card approver-panel">
     <header class="sdash-card-head">
         <h3>Waiting longest</h3>
     </header>
@@ -18,20 +18,20 @@
             <p>Nothing is waiting on you.</p>
         </div>
     @else
-        <ul class="chair-feed">
+        <ul class="approver-feed approver-scroll">
             @foreach ($oldest as $application)
                 @php
                     $days = $application->submitted_at ? (int) $application->submitted_at->diffInDays() : null;
-                    $tone = \App\Modules\Core\Services\ChairDashboard::toneFor($days);
+                    $tone = \App\Modules\Core\Services\ApproverDashboard::toneFor($days);
                 @endphp
-                <li class="chair-feed-row">
-                    <span class="chair-feed-main">
+                <li class="approver-feed-row">
+                    <span class="approver-feed-main">
                         <b>#{{ $application->id }}</b>
                         {{ $application->student?->name ?? 'Unknown student' }}
-                        <span class="chair-feed-sub">{{ $application->module()->label() }}</span>
+                        <span class="approver-feed-sub">{{ $application->module()->label() }}</span>
                     </span>
 
-                    <span class="chair-queue-age tone-{{ $tone }}">
+                    <span class="approver-queue-age tone-{{ $tone }}">
                         {{ $days === null ? 'not submitted' : $days.'d' }}
                     </span>
                 </li>

@@ -9,10 +9,10 @@
     alert strip that is always on is one nobody reads.
 --}}
 @if (! empty($alerts))
-    <div class="chair-alerts">
+    <div class="approver-alerts">
         @foreach ($alerts as $alert)
-            <div class="chair-alert tone-{{ $alert['tone'] }}">
-                <div class="chair-alert-text">
+            <div class="approver-alert tone-{{ $alert['tone'] }}">
+                <div class="approver-alert-text">
                     <b>{{ $alert['title'] }}</b>
                     <span>{{ $alert['body'] }}</span>
                 </div>

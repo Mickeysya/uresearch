@@ -7,7 +7,7 @@
     each row carries the oldest wait on it, toned the same way the queue
     screen tones its rows.
 --}}
-<section class="sdash-card chair-panel">
+<section class="sdash-card approver-panel">
     <header class="sdash-card-head">
         <h3>Your queues</h3>
     </header>
@@ -17,20 +17,20 @@
     @elseif ($queues->isEmpty())
         <div class="empty-state">You own no approval stages.</div>
     @else
-        <ul class="chair-queue-list">
+        <ul class="approver-queue-list approver-scroll">
             @foreach ($queues as $queue)
-                @php $tone = \App\Modules\Core\Services\ChairDashboard::toneFor($queue['oldest']); @endphp
+                @php $tone = \App\Modules\Core\Services\ApproverDashboard::toneFor($queue['oldest']); @endphp
                 <li>
-                    <a href="{{ $queue['route'] }}" class="chair-queue-row @if ($queue['count'] === 0) is-clear @endif">
-                        <span class="chair-queue-label">{{ $queue['label'] }}</span>
+                    <a href="{{ $queue['route'] }}" class="approver-queue-row @if ($queue['count'] === 0) is-clear @endif">
+                        <span class="approver-queue-label">{{ $queue['label'] }}</span>
 
                         @if ($queue['oldest'] !== null)
-                            <span class="chair-queue-age tone-{{ $tone }}">
+                            <span class="approver-queue-age tone-{{ $tone }}">
                                 oldest {{ $queue['oldest'] }}d
                             </span>
                         @endif
 
-                        <span class="chair-queue-count">{{ $queue['count'] }}</span>
+                        <span class="approver-queue-count">{{ $queue['count'] }}</span>
                     </a>
                 </li>
             @endforeach

@@ -1,16 +1,12 @@
 {{--
-    Five figures, fixed -- not one per queue.
+    Five figures, fixed -- not one per queue, which for a supervisor would be
+    seven cards mostly reading zero.
 
-    "Longest wait" is the one that earns its place: it is what a Chair is
-    actually measured on and it is what the per-queue cards could never show.
-    It is toned, so a number that is fine looks fine and a number that is not
-    reads red without anyone having to know the threshold.
-
-    Each card ends in a pill that goes somewhere, the same as the CGS and
-    student cards: a figure you cannot act on is a poster. Where there is
-    genuinely nowhere to send someone -- "decided by you" has no screen of its
-    own yet -- the pill renders flat, which is the shape those two dashboards
-    already use for the same case.
+    Two are about the desk and two are about the people, which is the split
+    that makes this screen a supervisor's rather than a generic approver's.
+    Every card ends in a pill that goes somewhere; where there is genuinely
+    nowhere to send someone the pill renders flat, the same shape the CGS and
+    student cards already use.
 --}}
 @php
     $waitTone = \App\Modules\Core\Services\ApproverDashboard::toneFor($longestWait);
@@ -53,29 +49,28 @@
             'url' => $overdue > 0 ? $longestWaitRoute : null,
         ],
         [
-            'tone' => 'green', 'icon' => 'check', 'panel' => 'decided',
-            'label' => 'Decided by you',
-            'value' => $decided['total'],
-            'note' => $decided['rejected'] > 0
-                ? $decided['rejected'].' returned · last 30 days'
-                : 'last 30 days',
-            'pill' => 'Last 30 days',
-            'pillTone' => 'good',
-            'url' => null,
+            'tone' => 'blue', 'icon' => 'people', 'panel' => 'candidates',
+            'label' => 'My candidates',
+            'value' => $candidateCount,
+            'note' => $candidateCount === 1 ? 'student under your supervision' : 'students under your supervision',
+            'pill' => 'Nominate examiners',
+            'pillTone' => 'info',
+            'url' => route('examiner-nomination.create'),
         ],
         [
-            'tone' => 'blue', 'icon' => 'people', 'panel' => 'nominations',
-            'label' => 'Panels you filed',
-            'value' => $nominations->count(),
-            'note' => 'examiner nominations',
-            'pill' => 'Nominate a panel',
-            'pillTone' => 'info',
-            'url' => route('appointment-letter.create'),
+            'tone' => $atRisk > 0 ? 'red' : 'green', 'icon' => $atRisk > 0 ? 'cross' : 'check',
+            'panel' => 'candidates',
+            'label' => 'Flagged at risk',
+            'value' => $atRisk,
+            'note' => $atRisk === 0 ? 'nobody is flagged' : 'on attendance',
+            'pill' => $atRisk === 0 ? 'All clear' : 'See who',
+            'pillTone' => $atRisk === 0 ? 'good' : 'critical',
+            'url' => null,
         ],
     ];
 @endphp
 
-<div class="sdash-stats chair-stats">
+<div class="sdash-stats approver-stats">
     @foreach ($cards as $card)
         <div class="sdash-stat tone-{{ $card['tone'] }}">
             @if (isset($unavailable[$card['panel']]))

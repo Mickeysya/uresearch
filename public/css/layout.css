@@ -2237,29 +2237,95 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 }
 
 /* ============================================================
-   N+2 · Chair of Department dashboard
+   N+2 · Approver dashboards (Chair, Supervisor)
 
    Reuses the .sdash vocabulary the student, CGS and admin screens
    share -- .sdash-stats, .sdash-stat, .sdash-card -- and adds only
-   the three things a Chair's screen has that theirs do not: the
-   blocking-alert strip, the queue list that replaced the bar chart,
-   and the two feeds.
+   what a screen for someone who DECIDES things needs and theirs do
+   not: the blocking-alert strip, the queue list that replaced the
+   bar chart, and the feeds. Named approver-, not chair-, because the
+   Chair and the Supervisor screens are the same furniture.
    ============================================================ */
 
-.sdash-chair { display: flex; flex-direction: column; gap: var(--space-5); }
+/* TWO CLASSES, and that is the whole point of them.
+   `.sdash { display: grid }` lives in dashboard-student.css, which is linked
+   AFTER layout.css, so a single-class `.sdash-chair { display: flex }` here
+   loses the cascade at equal specificity and the container stayed a grid
+   with three explicit rows. Five children then landed in squashed implicit
+   rows: every panel in the first row collapsed to its header, because
+   `.sdash-card-body` is `flex: 1 1 auto` and shrinks to nothing when its
+   parent is. (0,2,0) beats (0,1,0) whatever the sheet order. */
+.sdash.sdash-chair,
+.sdash.sdash-supervisor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sdash-gap, 16px);
+}
 
-/* auto-fit with a fluid minimum: the cards share out whatever the row has
-   at any width, so this needs no breakpoints of its own. clamp() rather
-   than a fixed 210px so the floor grows a little on a big screen instead
-   of leaving four narrow cards marooned in a very wide row. */
-.chair-stats { grid-template-columns: repeat(auto-fit, minmax(clamp(210px, 18vw, 320px), 1fr)); }
+/* ONE SCREEN ON A DESKTOP, like the student and CGS dashboards.
+
+   `.sdash` is locked to the viewport at >=1201x700 (dashboard-student.css).
+   These two screens are a flex column rather than that sheet's grid, so the
+   `grid-template-rows: ... minmax(0, 1fr)` that makes the lock work does not
+   reach them -- the height applied, the rows did not, and four children were
+   squeezed into one viewport and painted over each other.
+
+   Flex is kept and made to do the same job, which it does better here: the
+   alert strip is conditional, and `flex: 1 1 0` on the panel rows shares out
+   whatever the banner, the cards and (sometimes) the alerts leave, without
+   anything having to know how many children there are. An explicit
+   grid-template-rows would have to be re-counted every time a strip appears
+   or disappears.
+
+   Below either threshold the lock lifts and the page returns to natural
+   height, which is the right answer on a laptop in a split window: no layout
+   fits five panels into 500px and stays readable. */
+@media (min-width: 1201px) and (min-height: 700px) {
+    /* Two classes (0,2,0) so it beats `.sdash` (0,1,0) whatever the sheet
+       order; --sdash-chrome is inherited from that same media query. */
+    .sdash.sdash-chair,
+    .sdash.sdash-supervisor {
+        height: calc(100dvh - var(--sdash-chrome, 120px));
+    }
+
+    /* The panel rows take what is left, evenly. min-height: 0 because a flex
+       item's default minimum is its content, which is what lets a tall panel
+       push the page past the viewport and bring the scrollbar back. */
+    .sdash-chair > .approver-row,
+    .sdash-supervisor > .approver-row {
+        flex: 1 1 0;
+        min-height: 0;
+    }
+}
+
+/* `.sdash-card` is already a flex column whose head is flex-shrink: 0 and
+   whose body is flex: 1 1 auto, so a panel needs one thing from here and no
+   more: permission to be shorter than its content, which is what lets the
+   body scroll instead of the row growing. */
+.approver-panel { min-height: 0; }
+
+/* Named *-scroll on purpose: dashboard-states.css hides the bar on anything
+   matching [class*="-scroll"]. The panel scrolls, the bar does not show. */
+.approver-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Nothing to add: `.sdash-stats` is a wrapping flex row (dashboard-student.css)
+   and already shares the cards out at any width. A grid-template-columns was
+   written here first and was dead code -- the property does nothing on a flex
+   container -- which is easy to miss because the cards look right either way.
+   The class stays as a hook; if these four ever need to differ from the other
+   dashboards' five, it is `.sdash-stats.approver-stats`, two classes, for the
+   same cascade reason as the block at the top of this section. */
 
 /* ---- blocking alerts ----
    Rendered only when something is actually in the way, so this is
    allowed to be loud. */
-.chair-alerts { display: flex; flex-direction: column; gap: var(--space-3); }
+.approver-alerts { display: flex; flex-direction: column; gap: var(--space-3); }
 
-.chair-alert {
+.approver-alert {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2269,14 +2335,14 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     border-radius: var(--radius-md);
     border: 1px solid;
 }
-.chair-alert-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 24rem; }
-.chair-alert-text b { font-size: var(--text-md); }
-.chair-alert-text span { font-size: var(--text-sm); }
-.chair-alert .btn { flex-shrink: 0; }
+.approver-alert-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 24rem; }
+.approver-alert-text b { font-size: var(--text-md); }
+.approver-alert-text span { font-size: var(--text-sm); }
+.approver-alert .btn { flex-shrink: 0; }
 
-.chair-alert.tone-critical { background: var(--danger-bg); color: var(--danger-fg); border-color: var(--danger-border); }
-.chair-alert.tone-warn     { background: var(--warning-bg); color: var(--warning-fg); border-color: var(--warning-border); }
-.chair-alert.tone-info     { background: var(--info-bg); color: var(--info-fg); border-color: var(--info-border); }
+.approver-alert.tone-critical { background: var(--danger-bg); color: var(--danger-fg); border-color: var(--danger-border); }
+.approver-alert.tone-warn     { background: var(--warning-bg); color: var(--warning-fg); border-color: var(--warning-border); }
+.approver-alert.tone-info     { background: var(--info-bg); color: var(--info-fg); border-color: var(--info-border); }
 
 /* ---- the two panel rows ----
    auto-fit rather than a fixed two, so the pair sits side by side on a
@@ -2285,19 +2351,22 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
    wide screen still two rather than four -- the row has two children, so
    auto-fit collapses the tracks they do not fill and they split the width
    evenly however wide it gets. The minimum is what decides when they stack. */
-.chair-row {
+.approver-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
     gap: var(--space-5);
-    align-items: start;
+    /* stretch, not start: on the locked one-screen layout a panel that sits
+       at its content height leaves the rest of the row empty, and on a
+       natural-height page equal heights simply read tidier than ragged. */
+    align-items: stretch;
 }
 
-.chair-panel { min-width: 0; }
+.approver-panel { min-width: 0; }
 
 /* ---- queues, in place of the bar chart ---- */
-.chair-queue-list { list-style: none; margin: 0; padding: 0; }
+.approver-queue-list { list-style: none; margin: 0; padding: 0; }
 
-.chair-queue-row {
+.approver-queue-row {
     display: flex;
     align-items: center;
     gap: var(--space-3);
@@ -2306,16 +2375,16 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     text-decoration: none;
     color: var(--text-dark);
 }
-.chair-queue-list li:last-child .chair-queue-row { border-bottom: none; }
-.chair-queue-row:hover { background: var(--surface-hover); }
+.approver-queue-list li:last-child .approver-queue-row { border-bottom: none; }
+.approver-queue-row:hover { background: var(--surface-hover); }
 
 /* A queue with nothing in it is still worth listing -- it says the
    stage exists -- but it should not compete with one that has work. */
-.chair-queue-row.is-clear { color: var(--text-grey); }
+.approver-queue-row.is-clear { color: var(--text-grey); }
 
-.chair-queue-label { flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); }
+.approver-queue-label { flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); }
 
-.chair-queue-count {
+.approver-queue-count {
     flex-shrink: 0;
     min-width: 2ch;
     text-align: right;
@@ -2323,20 +2392,20 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     font-variant-numeric: tabular-nums;
 }
 
-.chair-queue-age {
+.approver-queue-age {
     flex-shrink: 0;
     font-size: var(--text-xs);
     font-weight: var(--weight-semi);
     font-variant-numeric: tabular-nums;
 }
-.chair-queue-age.tone-quiet    { color: var(--text-grey); }
-.chair-queue-age.tone-warn     { color: var(--warning-fg); }
-.chair-queue-age.tone-critical { color: var(--danger-fg); }
+.approver-queue-age.tone-quiet    { color: var(--text-grey); }
+.approver-queue-age.tone-warn     { color: var(--warning-fg); }
+.approver-queue-age.tone-critical { color: var(--danger-fg); }
 
 /* ---- the two feeds ---- */
-.chair-feed { list-style: none; margin: 0; padding: 0; }
+.approver-feed { list-style: none; margin: 0; padding: 0; }
 
-.chair-feed-row {
+.approver-feed-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2344,29 +2413,78 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     padding: var(--space-3) var(--space-5);
     border-bottom: 1px solid var(--border-subtle);
 }
-.chair-feed-row:last-child { border-bottom: none; }
+.approver-feed-row:last-child { border-bottom: none; }
 
-.chair-feed-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--text-sm); }
-.chair-feed-sub { font-size: var(--text-xs); color: var(--text-grey); }
+.approver-feed-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--text-sm); }
+.approver-feed-sub { font-size: var(--text-xs); color: var(--text-grey); }
 
 /* ---- quick actions ---- */
-.chair-shortcut-list { list-style: none; margin: 0; padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
+/* Tiles, not rows: icon over label, centred, the shape the CGS dashboard's
+   Quick Shortcuts uses. Deliberately its own rules rather than reusing
+   `.cgs-shortcut*` -- those live in dashboard-cgs.css and their clamp()
+   sizing is tuned to that screen's fixed-height row, so borrowing them would
+   tie this panel's appearance to changes made for another dashboard. Same
+   shape, sized for this panel.
 
-.chair-shortcut {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    text-decoration: none;
-    color: var(--navy);
-    font-size: var(--text-sm);
-    font-weight: var(--weight-semi);
+   auto-fit with a 6.25rem floor fits all seven across a half-width panel, so
+   the panel is one short row rather than two tall ones -- which matters here
+   beyond looks: these dashboards are locked to one screen, and two rows of
+   tall tiles was enough to push the bottom row past the fold. It still drops
+   to two or three across on a narrow panel, with no breakpoint here. */
+.approver-shortcut-list {
+    list-style: none;
+    margin: 0;
+    padding: var(--space-2) var(--space-4) var(--space-4);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.25rem), 1fr));
+    gap: var(--space-2);
+
+    /* start, not the default stretch. The list is the panel's flex child and
+       fills its height, so stretched rows shared out all the leftover space
+       between them -- which is where the wide gap between the two rows of
+       links came from. */
+    align-content: start;
 }
-.chair-shortcut:hover { background: var(--light-blue-bg); border-color: var(--navy); }
-.chair-shortcut-icon { display: inline-flex; color: var(--text-grey); }
-.chair-shortcut-icon svg { width: 16px; height: 16px; }
+
+.approver-shortcut {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-1);
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    text-align: center;
+    color: var(--text-dark);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semi);
+    line-height: 1.25;
+    /* Every tile the same height whatever its label wraps to, or the grid
+       reads as a ragged wall. Sized for a two-line label, which is the
+       longest any of them run to. */
+    min-height: 4rem;
+    transition: border-color var(--duration-fast) var(--ease),
+                background-color var(--duration-fast) var(--ease),
+                transform var(--duration-fast) var(--ease);
+}
+
+.approver-shortcut:hover {
+    border-color: var(--navy);
+    background: var(--surface-sunken);
+    color: var(--navy);
+    transform: translateY(-2px);
+}
+
+.approver-shortcut-icon {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    color: var(--navy);
+}
+.approver-shortcut-icon svg { width: 100%; height: 100%; }
 
 /* The line of guidance a queue can carry, under the page header and above
    the toolbar. Capped at a measure like every other run of prose. */
@@ -2377,3 +2495,101 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     color: var(--text-grey);
 }
 .queue-intro b { color: var(--text-dark); }
+
+/* ---- the supervisor's candidates ---- */
+.cand-name { display: flex; align-items: center; gap: var(--space-2); }
+
+/* A dot rather than a badge: at-risk is already said by the attendance
+   figure's colour, and this only has to carry the eye to the right row. */
+.cand-flag { color: var(--danger-fg); font-size: var(--text-xs); line-height: 1; }
+
+.cand-attendance {
+    flex-shrink: 0;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    font-variant-numeric: tabular-nums;
+}
+.cand-attendance.tone-good     { color: var(--success-fg); }
+.cand-attendance.tone-warn     { color: var(--warning-fg); }
+.cand-attendance.tone-critical { color: var(--danger-fg); }
+.cand-attendance.tone-none     { color: var(--text-grey); font-weight: var(--weight-normal); }
+
+/* ---- the ageing chart ---- */
+.ageing-body { padding: var(--space-4) var(--space-5) var(--space-5); }
+
+/* A minimum, because a canvas with no height at all collapses to zero
+   inside a flex parent and the chart silently never appears. It grows into
+   whatever the panel has beyond that. */
+.ageing-chart { flex: 1 1 auto; min-height: 150px; position: relative; }
+.ageing-body { display: flex; flex-direction: column; }
+
+/* The numbers live on the bars now (datalabels). This is the same set of
+   figures in text for a screen reader, which cannot read a canvas -- taken
+   out of the visual flow rather than deleted, so the panel has nothing to
+   scroll and the counts are still announced. */
+.ageing-readout {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* An empty panel still owns its share of the row, so its message belongs in
+   the middle of that space rather than in a short box with a gap under it. */
+.approver-panel > .empty-state {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+}
+.approver-panel > .empty-state p { margin: 0; }
+
+/* A row where the second panel is an aside rather than an equal half.
+   Quick actions is seven small tiles and does not need the same width as a
+   list of applications beside it; giving it a third of the row hands the
+   rest to the panel that has content to show. Below the one-screen
+   threshold the row has already collapsed to a single column, so this only
+   needs to describe the wide case. */
+@media (min-width: 1201px) {
+    .approver-row-aside {
+        /* 27rem, not 23: at the tile floor of 6.25rem this is four across
+           rather than three, so seven tiles are two rows instead of three
+           and the panel no longer needs scrolling to reach the last of
+           them. Wide enough to fit its content, narrow enough that the
+           panel beside it still gets the room. */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 27rem);
+    }
+}
+
+/* A panel whose content is a known, fixed amount -- a chart and a short
+   legend -- so it is sized to hold it rather than given a scrollbar. The
+   counterpart to .approver-scroll, and the guard in PageShellTest accepts
+   either: what it is really asking is that a panel has decided how it
+   behaves when the one-screen layout squeezes it. */
+.approver-fit {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ---- the supervisor's cohort doughnut ---- */
+
+/* No fixed height: the ring takes what is left after the legend and shrinks
+   with the panel, so the pair always fits. charts.css forces the canvas to
+   100% of this box, so sizing the box is all that is needed. */
+.sup-donut { flex: 1 1 auto; min-height: 110px; }
+
+.sup-donut-legend { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); flex-shrink: 0; }
+.sup-donut-legend li { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-xs); }
+.sup-donut-label { flex: 1 1 auto; min-width: 0; color: var(--text-grey); }
+.sup-donut-count { font-weight: var(--weight-semi); font-variant-numeric: tabular-nums; }
+
+.ageing-dot.tone-none { background: var(--text-grey); }

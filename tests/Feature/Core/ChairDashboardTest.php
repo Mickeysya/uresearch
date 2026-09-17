@@ -191,6 +191,104 @@ class ChairDashboardTest extends TestCase
         );
     }
 
+    /**
+     * The chart these screens earn. A count per module is what the generic
+     * approver dashboard drew and it answers nothing across five queues; how
+     * long the backlog has waited is the question the screen exists for.
+     */
+    public function test_the_ageing_chart_buckets_the_backlog_by_how_long_it_waited(): void
+    {
+        $student = $this->student();
+
+        $this->travelAwaitingChair($student, 2);    // up to a week
+        $this->travelAwaitingChair($student, 20);   // two weeks to a month
+        $this->travelAwaitingChair($student, 45);   // over a month
+        $this->travelAwaitingChair($student, 50);   // over a month
+
+        $html = $this->actingAs($this->chair())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('How long they have waited')
+            ->assertSee('4 pending')
+            ->getContent();
+
+        // Four bands, and the two oldest land together in the last one.
+        $this->assertStringContainsString('Over a month', $html);
+        // `data:` is a literal JS property; only its value is @json'd.
+        $this->assertStringContainsString('data: [1,0,1,2]', $html);
+
+        // Colours come from the status tokens, never a literal hex.
+        $this->assertStringContainsString('Chart.uresearchToken', $html);
+
+        // The count sits ON the bar, so the panel needs no legend list under
+        // it and therefore nothing to scroll.
+        $this->assertStringContainsString('datalabels', $html);
+        $this->assertStringContainsString("display: true", $html);
+
+        // The tooltip is the free-floating one from chartjs.blade.php. A
+        // local `external` would pin it back inside the card, which has
+        // overflow: hidden.
+        $this->assertStringNotContainsString('external:', $html);
+
+        // The figures still reach a screen reader, which cannot read a canvas.
+        $this->assertStringContainsString('ageing-readout', $html);
+        $this->assertStringContainsString('waiting over a month', $html);
+    }
+
+    /**
+     * Five cards, and the fifth is a count rather than a single row.
+     *
+     * longestWait() reports one application. A desk with one 40-day
+     * straggler and a desk with nineteen of them report the same longest
+     * wait and are not the same problem, which is what Overdue says.
+     */
+    public function test_the_overdue_card_counts_everything_past_a_fortnight(): void
+    {
+        $student = $this->student();
+
+        $this->travelAwaitingChair($student, 3);    // fine
+        $this->travelAwaitingChair($student, 16);   // warn
+        $this->travelAwaitingChair($student, 40);   // critical
+
+        $chair = $this->chair();
+
+        $this->actingAs($chair)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Overdue')
+            ->assertSee('waiting over a fortnight')
+            ->assertSee('Clear the backlog');
+
+        $dash = new \App\Modules\Core\Services\ChairDashboard(
+            $chair, app(\App\Modules\Core\Services\ModuleRegistry::class)
+        );
+
+        // Two of the three, and the 40-day one is still the longest wait.
+        $this->assertSame(2, $dash->overdueCount());
+        $this->assertSame(40, $dash->longestWait());
+    }
+
+    /**
+     * Quick actions was the module links alone, which for a Chair is three
+     * and for a Supervisor two. The Core destinations every approver uses
+     * are listed with them.
+     */
+    public function test_quick_actions_carries_the_core_destinations_too(): void
+    {
+        $this->actingAs($this->chair())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Quick actions')
+            // Declared by Jason's module through ProvidesLinks.
+            ->assertSee('Nominate Examiner Panel')
+            ->assertSee('My Signature')
+            // Added by the panel itself.
+            ->assertSee('Documents')
+            ->assertSee('Calendar')
+            ->assertSee('My Profile')
+            ->assertSee('Help &amp; Support', false);
+    }
+
     /** One dead panel must cost that panel, not the page. */
     public function test_a_dashboard_panel_that_throws_does_not_take_the_page_down(): void
     {

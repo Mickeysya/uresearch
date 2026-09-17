@@ -176,7 +176,22 @@ Route::middleware('auth')->group(function () {
 
 Three files under `app/Modules/<You>/Resources/views/conference/`:
 
-**`form.blade.php`** — extend `core::layouts.app`, use `.card.card-wide`.
+**`form.blade.php`** — extend `core::layouts.app` and open with the page
+header. The heading goes *above* the card, never inside it:
+
+```blade
+<div class="card-container-inline">
+    <x-core::page-header title="Conference Attendance"
+                         subtitle="One line saying what this screen is for." />
+
+    <div class="card card-wide">
+        ...the form...
+    </div>
+</div>
+```
+
+The width is the layout's job, not yours — see the page shell in
+`docs/conventions.md`.
 
 If it runs past about eight fields, make it a wizard. Two edits, no
 controller change — see the Forms section in `docs/conventions.md`:
@@ -220,9 +235,21 @@ says what it does instead with `data-stepper-review="..."` on the `<form>`.
         'moduleLabel' => 'Conference Attendance',
         'decideRoute' => 'conference.decide',
         'detailView'  => '<you>::conference._detail',
+
+        // Optional. A line about what deciding here means.
+        'intro' => 'Approving sends this to the Chair of Department.',
     ])
 @endsection
 ```
+
+The partial gives you the page header, search, sort, pagination, the rows as
+a collapsed list with how long each has waited, and bulk approve/reject. You
+supply the detail lines and nothing else.
+
+**Do not print anything above the include.** The partial renders the page
+header, so a `<p>` written before it lands above the page title and the screen
+reads as though it has no heading. That is what `intro` is for, and
+`tests/Feature/Core/PageShellTest.php` fails the build on it.
 
 **`_detail.blade.php`** — just your fields; the card, the student's name, the
 attachments and the approve/reject form are supplied by the shared partial:

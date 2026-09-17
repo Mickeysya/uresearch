@@ -254,6 +254,15 @@ Also worth trying: as `supervisor@utp.edu.my`, use *Nominate Examiners*. The
 dropdown disables examiners who are assigned, unavailable, or still inside the
 90-day cooling-off period, and tells you when each becomes eligible again.
 
+**Worth seeing: the dashboards.** Each role gets a different one, because they
+answer different questions. `student@utp.edu.my` sees their own attendance and
+applications; `cgs@utp.edu.my` sees the portal-wide desk; `chair@utp.edu.my`
+and `supervisor@utp.edu.my` get approver screens built around *how long things
+have been waiting*, and they deliberately draw different charts — the Chair's
+is a bar over four age bands, the Supervisor's a doughnut of their candidates'
+attendance. On a desktop these fit one screen and the panels scroll, not the
+page.
+
 And as `chair@utp.edu.my`, *Nominate Examiner Panel* → "Add the examiner
 first". You land on the add-examiner form, fill it in, and come back to the
 nomination with the candidate and the rows you had already picked still

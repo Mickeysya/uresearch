@@ -178,6 +178,48 @@ class QueueTest extends TestCase
         $this->assertSame(Application::STATUS_PENDING, $applications[0]->fresh()->status);
     }
 
+    /**
+     * Render EVERY queue, for every role that owns a stage on it.
+     *
+     * This is the test that should have existed before queues were
+     * paginated. Only Travel's queue was ever rendered by a test, so when
+     * Supervision's controller filtered the returned rows -- which forwards
+     * to the paginator's collection and hands back a plain Collection -- the
+     * partial asking that Collection for ->total() was a 500 that nothing
+     * caught. Thirteen of the fourteen queues had no render test at all.
+     *
+     * Deliberately dumb: it asserts 200 and the page header. A queue that
+     * throws, or one whose controller quietly breaks the paginator contract,
+     * fails here whoever owns it.
+     */
+    public function test_every_module_queue_renders_for_every_role_that_owns_a_stage(): void
+    {
+        $registry = app(\App\Modules\Core\Services\ModuleRegistry::class);
+        $checked = 0;
+
+        foreach ($registry->all() as $module) {
+            foreach ($module->stages(null) as $stage) {
+                $user = User::create([
+                    'name' => 'Queue Smoke '.$checked,
+                    'email' => 'smoke'.$checked.'@test.my',
+                    'password' => 'password',
+                    'role' => $stage->role,
+                ]);
+
+                $this->actingAs($user)
+                    ->get(route($module->queueRoute(), ['stage' => $stage->key]))
+                    ->assertOk()
+                    // Escaped needle, not raw: "GA Extension & VISA" reaches
+                    // the page as "GA Extension &amp; VISA".
+                    ->assertSee($module->label());
+
+                $checked++;
+            }
+        }
+
+        $this->assertGreaterThan(20, $checked, 'Expected every module stage to be covered.');
+    }
+
     public function test_bulk_deciding_cannot_reach_into_another_module(): void
     {
         $travel = $this->pending(1)[0];

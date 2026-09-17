@@ -7,7 +7,7 @@
     filed it, which `TODO.md` carries as the one thing a Chair should be able
     to reach and could not.
 --}}
-<section class="sdash-card chair-panel">
+<section class="sdash-card approver-panel">
     <header class="sdash-card-head">
         <h3>Panels you filed</h3>
     </header>
@@ -20,13 +20,13 @@
             <a href="{{ route('appointment-letter.create') }}" class="btn-secondary">Nominate a panel</a>
         </div>
     @else
-        <ul class="chair-feed">
+        <ul class="approver-feed approver-scroll">
             @foreach ($nominations as $application)
-                <li class="chair-feed-row">
-                    <span class="chair-feed-main">
+                <li class="approver-feed-row">
+                    <span class="approver-feed-main">
                         <b>#{{ $application->id }}</b>
                         {{ $application->student?->name ?? 'Unknown student' }}
-                        <span class="chair-feed-sub">
+                        <span class="approver-feed-sub">
                             {{ $application->module()->label() }}
                             @if ($application->status === \App\Modules\Core\Models\Application::STATUS_PENDING)
                                 &middot; with {{ $stageLabels[$application->id] ?? 'the next approver' }}

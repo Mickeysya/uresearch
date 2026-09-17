@@ -72,6 +72,20 @@ application approved when the chain runs out), and notifies the student.
 Rejection sets `status = rejected` and **leaves `current_stage` where it was**,
 so the stepper can show the student exactly where it stopped.
 
+`queue()` returns a **Builder**, not a collection, and
+`Concerns\ApprovesApplications::queueFor()` paginates it (20 a page), searches
+it and sorts it. All fourteen queue controllers go through that one method, so
+none of them holds a queue in memory. A queue that was a plain `->get()` is
+fine for the two rows a demo has and an out-of-memory error for a real
+backlog.
+
+Deciding a whole page at once goes through `POST /queue/{module}/decide`
+(`Core\Http\Controllers\QueueController`), which is generic so a module does
+not add a route for it. It loops `decide()` one row at a time rather than
+doing anything clever: that keeps the engine the only writer, re-checks the
+actor against each row's own stage, and means a row someone else already
+decided cannot roll back the rest of the batch.
+
 ### Conditional routing
 
 `stages()` receives the application, so the chain can depend on its data:
@@ -95,11 +109,38 @@ built from that, so a stage which only some applications reach (CGS and the
 Dean on international travel) is still visible to the role that owns it.
 
 
-## The student dashboard
+## The dashboards
 
-`Services\StudentDashboard` gathers every figure the student dashboard shows,
-one named method per panel, so changing a data source is a one-method edit —
-no view, route or controller changes.
+There are six: student, CGS, admin, **Chair**, **Supervisor**, and the generic
+approver screen every other approving role still falls through to. Five are a
+service plus a view of partials, one named method per panel, so changing a
+data source is a one-method edit with no view, route or controller change.
+
+`ChairDashboard` and `SupervisorDashboard` both extend
+`Services\ApproverDashboard`, which holds the half they share — the queues,
+the longest wait, the triage list, the blocking alerts. What each subclass
+adds is the part that makes it a different screen rather than the same one
+retitled: a Chair files examiner panels, a Supervisor is accountable for
+**named students**.
+
+Both exist because the generic approver view builds one stat card per queue. A
+Chair owns five stages and a Supervisor seven, so that screen rendered six and
+eight cards, most reading zero, over a chart of mostly-empty categories — and
+never showed the figure either of them is actually measured on. That screen is
+the last one still on the pre-`.sdash` markup and is tracked in `TODO.md`.
+
+**They draw different charts on purpose.** The Chair's asks how long work has
+been sitting (four ordered bands — a bar); the Supervisor's asks whether the
+cohort is healthy (parts of a whole — a doughnut). Same library, same tokens,
+different question. See the Charts section in `docs/conventions.md`.
+
+**One screen on a desktop.** `.sdash` is height-locked at ≥1201×700, so every
+panel declares how it behaves when squeezed — `approver-scroll` for a list of
+unknown length, `approver-fit` for content that must not scroll. Below either
+threshold the lock lifts and the page returns to natural height. Two things
+about that layout are easy to get wrong and are both guarded: a `.sdash-*`
+override written in `layout.css` needs two classes to win the cascade, and a
+panel that declares neither class overflows.
 
 Two things about it are worth knowing before building on it:
 
@@ -122,12 +163,33 @@ skeletons — the same degradation as before, expressed as a contract rather
 than a string class name. Core hands out `Support\AttendanceReading`, a small
 readonly DTO, so Core never sees another module's Eloquent model.
 
-The three dashboard services also share `Services\Concerns\BuildsPanels` —
+The dashboard services share `Services\Concerns\BuildsPanels` —
 `safely()`, `remember()`, `withTrend()` and the unavailable-panel bookkeeping,
 which had been written out three times and had already started to drift.
 
+**Blocking alerts follow the same rule as attendance.** A Chair cannot approve
+a hardbound thesis without a signature on file, and nothing said so until they
+tried. That rule and the model behind it live in `app/Modules/Jason`, so Core
+cannot read them: the module declares the alert through
+`Core\Contracts\ProvidesDashboardAlerts` and the registry merges them, exactly
+as `ProvidesLinks` does for the sidebar. The arrow points from the module to
+Core, like every other arrow here.
+
 The application list itself is registry-driven, so a new module appears there
 with no edit.
+
+## Repo-wide guards
+
+Four tests in `tests/Feature/Core/` scan every Blade view in the repo rather
+than only the screens a test happens to render, because the failures they
+catch all render perfectly:
+
+| Test | Catches |
+|---|---|
+| `ContentSecurityPolicyTest` | an inline `<script>` without `@cspNonce`, or a CDN tag — the browser refuses it and the page still returns 200 |
+| `PageShellTest` | a screen with its own heading, its own page width, or markup above a queue's page header; a dashboard panel that declares neither `approver-scroll` nor `approver-fit`; a single-class `.sdash-*` override in `layout.css`; a dashboard that has lost its `.sdash` root |
+| `ProseTest` | an em dash used as a sentence connector |
+| `QueueTest` | the queue paging, searching, sorting and bulk-deciding, including rows that are not yours |
 
 ## Stylesheets
 

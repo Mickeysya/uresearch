@@ -109,6 +109,24 @@ they pick, so a column change on her side can never rewrite a letter already
 issued. The price: an examiner added here gets no eligibility check. Her
 on-gap / assigned / unavailable states do not reach this list.
 
+## The signature gate, and how the dashboard knows about it
+
+Approving a Hardbound Submission without a signature on file is not possible:
+`HardboundSubmissionController::decide()` bounces the approver to the upload
+page. Nothing said so until they tried, which is a bad way to find out at the
+end of clearing a queue.
+
+`HardboundSubmissionWorkflow` therefore implements
+`Core\Contracts\ProvidesDashboardAlerts` alongside `ProvidesLinks`. The rule
+and `HardboundSignature` both live in this folder and **Core cannot import
+them**, so the module declares the alert and Core lays it out — the same shape
+`ProvidesLinks` uses for the sidebar. It is raised only for someone who signs
+at one of this chain's stages *and* actually has something waiting, so it is
+not permanent furniture on an empty queue.
+
+Only for things that **block**. A count or a reminder belongs in a panel; an
+alert strip that is usually on is one nobody reads by the second week.
+
 ## House style
 
 Two rules from `docs/conventions.md` that this module is the reference for,

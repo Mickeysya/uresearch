@@ -49,6 +49,12 @@ trait ApprovesApplications
      * The rows sitting on one stage of this module's chain.
      * Pass ?stage=<key>; falls back to the first stage this role owns.
      *
+     * Pass $scope to narrow the query further; see the note at the call site
+     * in Nureen's SupervisionController for the case it exists for. This is
+     * deliberately a per-call closure and NOT the general answer to "scope
+     * approver queues to the right people" in TODO.md, which still needs the
+     * team to choose between a Stage property and a module hook.
+     *
      * PAGINATED, SEARCHABLE AND SORTABLE since 2026-09-17. This used to be a
      * plain ->get(), which is fine for the two rows a demo has and is an
      * out-of-memory error for a department with a real backlog: every
@@ -71,8 +77,12 @@ trait ApprovesApplications
      *     filters: array{q: string, sort: string}
      * }
      */
-    protected function queueFor(Request $request, WorkflowEngine $engine, array $with = []): array
-    {
+    protected function queueFor(
+        Request $request,
+        WorkflowEngine $engine,
+        array $with = [],
+        ?callable $scope = null,
+    ): array {
         $queues = app(ModuleRegistry::class)->queuesForRole($request->user()->role);
 
         $mine = array_values(array_filter(
@@ -91,6 +101,19 @@ trait ApprovesApplications
         $sort = $request->query('sort') === 'newest' ? 'newest' : 'oldest';
 
         $query = $engine->queue($this->moduleKey(), $match['stage']->key)->with($with);
+
+        // A module narrowing its own queue, applied to the QUERY and so
+        // before the count and the page. The engine's queue is role-scoped,
+        // not person-scoped, and a module that knows better -- Supervision
+        // knows which supervisor a request actually names -- says so here.
+        //
+        // Filtering the returned rows instead is the trap: it silently
+        // reports the unfiltered total, pages over rows it then discards, and
+        // (because the paginator forwards unknown calls to its collection)
+        // quietly turns the paginator back into a plain Collection.
+        if ($scope) {
+            $scope($query, $match['stage']);
+        }
 
         // Application number, student name or matric number. Everything an
         // approver is given when someone asks "what happened to mine?".

@@ -325,6 +325,50 @@ Three older names still resolve to the page header so nothing breaks
 mid-branch: `.rpd-header`, `.notif-header` and the `.rpd-page` / `.notif-page`
 wrappers. They are deprecated. Do not write new ones.
 
+### Dashboard panels
+
+A dashboard is locked to one viewport on a desktop (`dashboard-student.css`,
+≥1201×700), so every panel has to have decided what it does when that squeezes
+it. There are two right answers and a panel declares one on its body:
+
+| Class | For | Behaviour |
+|---|---|---|
+| `approver-scroll` | a list of unknown length | scrolls internally; the `*-scroll` name is what `dashboard-states.css` hides the bar on |
+| `approver-fit` | known, fixed content (a chart and a short legend) | sized to hold it, never scrolls |
+
+A panel declaring neither overflows the layout.
+`tests/Feature/Core/PageShellTest.php` fails the build on one, matching inside
+a `class="…"` attribute rather than anywhere in the file — a guard a comment
+can satisfy is not a guard.
+
+**Overriding a dashboard component from `layout.css` needs two classes.**
+`layout.css` is linked *before* the dashboard sheets, so `.sdash-chair { … }`
+written there loses to `.sdash { … }` at equal specificity and silently does
+nothing. Write `.sdash.sdash-chair`. `PageShellTest` fails on a single-class
+`.sdash-*` rule in `layout.css`; this cost three rounds of debugging a layout
+that was never the problem.
+
+### Charts
+
+Chart.js, loaded by `core::dashboard.partials.chartjs`. Two rules:
+
+**Pick the type from the question, not from habit.** Every dashboard reaching
+for a bar chart is how a portal ends up looking like one report repeated.
+Ordered magnitudes (how long has each band of work waited) are a bar; parts of
+a whole (how does my cohort split across attendance bands) is a doughnut. The
+Chair's screen and the Supervisor's deliberately draw different charts.
+
+**Colours come from tokens, never literals.** A canvas is out of CSS's reach,
+so a colour has to be handed to the library as a string:
+`Chart.uresearchToken('--danger-fg', '#D0342C')`. Pass it as a *function* in
+the config — Chart.js re-evaluates scriptable options on update, which is what
+lets the charts follow the dark theme. Hard-coded hexes are why the admin
+chart's labels were once near-black on a dark page.
+
+`chartjs-plugin-datalabels` is registered but off. A bar chart opts in, so its
+values read without hovering; a doughnut does not, because numbers stamped
+across four slices are noise.
+
 ### Colour and contrast
 
 Use the tokens; never a literal. `--text-grey` is the secondary text colour
@@ -333,6 +377,37 @@ WCAG AA. It used to be `--grey-500` at 3.06:1, which failed, and was what made
 every hint, queue meta line and stat note look greyed out. If a new colour is
 needed, add it to `tokens.css` with both themes rather than writing a hex in a
 component, or it will be a light-mode value that stays light in the dark theme.
+
+### Narrowing your own queue
+
+`queueFor()` hands back a **paginator**, not a collection. Read it freely
+(`->pluck('id')` for your detail rows is fine and only loads the page being
+shown), but **never filter the rows it returns**:
+
+```php
+// WRONG. Reports the unfiltered total, pages over rows it then discards,
+// and -- because a paginator forwards unknown calls to its collection --
+// hands the view a plain Collection, which 500s on ->total().
+$queue['applications'] = $queue['applications']->filter(...);
+
+// RIGHT. Narrow the QUERY, before the count and before the page.
+$queue = $this->queueFor($request, $engine, ['documents'],
+    function ($query, Stage $stage) use ($request) {
+        if ($stage->key !== 'supervisor') {
+            return;
+        }
+
+        $query->whereIn('id', SupervisionDetail::query()
+            ->where('requested_supervisor_id', $request->user()->id)
+            ->select('application_id'));
+    });
+```
+
+Nureen's Supervision queue is the live example: the engine scopes by role, and
+every supervisor-role account would otherwise be handed every request at that
+stage. This closure is per-call and is **not** the general answer to "scope
+approver queues to the right people" in `TODO.md` — that still needs the team
+to pick between a `Stage` property and a module hook.
 
 ### Empty states
 

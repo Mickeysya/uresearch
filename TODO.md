@@ -1166,8 +1166,9 @@ Fixed on this pass:
 - [x] **He has tests now**, though not the ones the first pass asked for:
       `tests/Feature/Jason/FormsTest.php`, 4 cases covering the stepper
       contract on all four forms and the chart no longer coming from a CDN.
-      (6 as of 2026-09-17 — the Examiner List wizard in its own card, and
-      the return trip out of the nomination form.)
+      (7 as of 2026-09-17 — the Examiner List wizard on its own page, the
+      return trip out of the nomination form, and the signature preview
+      staying inside the Content-Security-Policy.)
       Render tests, deliberately: the stepper is client-side, so what breaks
       server-side is the markup contract, and a missing `data-stepper` or an
       unclosed step renders perfectly and produces no wizard.
@@ -1536,6 +1537,239 @@ audited in full; the rest fell out of the same query.
       **Both are Core edits and affect all six people**, which is why they
       are recorded here rather than buried in a module. Reverting either is a
       one-expression deletion.
+
+### Two dashboards, two chart types (2026-09-17)
+
+- [x] **The Supervisor's chart is a doughnut, not the Chair's bar.** Every
+      dashboard reaching for the same chart type is how a portal ends up
+      looking like one report repeated. The two screens ask different
+      questions and now draw them differently: the Chair's is about a **desk**
+      (how long has work been sitting — four ordered bands, which is a bar),
+      the Supervisor's is about **people** (is my cohort healthy — parts of a
+      whole, which is a ring with the headcount in the middle).
+      Bands come from `StudentDashboard::attendanceBands()`, so a student
+      reading "Good" on their own dashboard is counted as Good here; two
+      thresholds that have to agree are two that can disagree.
+      **"Not recorded" is its own slice**, not a dropped row: a supervisor
+      whose candidates have no attendance on file should see that rather than
+      a chart quietly describing three of their twelve students.
+      Datalabels are on for the bar and off for the ring, which is the
+      distinction `chartjs.blade.php` already documents — numbers stamped
+      across four slices are noise.
+- [x] **The doughnut panel fits rather than scrolls.** A ring and four legend
+      rows are a known, fixed amount of content, so the panel is sized to
+      hold it: the legend keeps its height and the ring takes what is left,
+      shrinking with the panel (charts.css already forces the canvas to 100%
+      of its box, so sizing the box is the whole job).
+      That needed a second answer to the question the one-screen layout asks
+      every panel, so there are now two and a panel declares one:
+      `approver-scroll` for a list of unknown length, `approver-fit` for
+      content that is known and must not scroll. `PageShellTest` accepts
+      either and rejects neither.
+      **Found while proving that guard bites:** it was a `str_contains` over
+      the whole file, so the words appearing in a partial's own explanatory
+      comment satisfied it. It matches inside a `class="..."` attribute now.
+      A guard a comment can satisfy is not a guard.
+
+### The approver dashboards: a layout bug and the missing chart (2026-09-17)
+
+- [x] **Panels were painting over each other.** `.sdash` is locked to the
+      viewport at >=1201x700 (`dashboard-student.css`) and makes that work
+      with `grid-template-rows: ... minmax(0, 1fr)` plus panels that scroll
+      internally. The Chair and Supervisor screens were given
+      `display: flex`, which throws those rows away **while the height
+      stays** — so four children were squeezed into one viewport and
+      overflowed on top of one another.
+      **Fixed by making the lock work rather than by lifting it** — a
+      dashboard belongs on one screen when the screen is big enough, which is
+      the same requirement the student and CGS dashboards are built to. Flex
+      is kept and made to do the grid's job, which suits these two better:
+      the alert strip is conditional, and `flex: 1 1 0` on the panel rows
+      shares out whatever the banner, the cards and sometimes the alerts
+      leave, with nothing having to know how many children there are. An
+      explicit `grid-template-rows` would need re-counting every time a strip
+      appears or disappears.
+      Five panels split **three then two**, the shape the CGS screen already
+      uses; `auto-fit` works the columns out from the child count, so neither
+      row declares a number. Panels are a header that stays and a body that
+      scrolls, the bodies named `*-scroll` so `dashboard-states.css` hides
+      the bar — a visible scrollbar inside a one-screen layout is exactly
+      what that rule exists to stop. Rows `stretch` rather than `start`, or a
+      short panel leaves the rest of its row empty, and an empty panel
+      centres its message in the space it owns.
+      Below 1201x700 the lock lifts and the page returns to natural height:
+      no layout fits five panels into 500px and stays readable.
+      Guarded — `PageShellTest` fails on a panel with no `*-scroll` body.
+- [x] **What actually broke it, twice: the cascade, not the layout.**
+      `layout.css` is linked **before** the dashboard sheets, and
+      `dashboard-student.css` has `.sdash { display: grid }`. A single-class
+      `.sdash-chair { display: flex }` written in `layout.css` therefore lost
+      at equal specificity and never applied: the container stayed a
+      three-row grid, five children landed in squashed implicit rows, and
+      every panel in the first row collapsed to its header because
+      `.sdash-card-body` is `flex: 1 1 auto` and shrinks to nothing when its
+      parent does. Two rounds of fixing the *symptom* followed. Written
+      `.sdash.sdash-chair` (0,2,0) it works whatever the sheet order.
+      Found in the same pass: `.approver-stats { grid-template-columns }` was
+      **dead code** — `.sdash-stats` is a wrapping flex row, and the property
+      does nothing on a flex container. The cards look right either way,
+      which is exactly why it went unnoticed.
+      Guarded: `PageShellTest` now fails on any `.sdash-*` rule in
+      `layout.css` that does not qualify itself. Verified by planting one.
+      Also removed: `.approver-panel`'s duplicated `display: flex` and head
+      rules. `.sdash-card` is already a flex column with a shrink-proof head
+      and a `flex: 1 1 auto` body; the panel needed `min-height: 0` and
+      nothing else.
+- [x] **They had no chart, and now have the right one.** Not a count per
+      module, which is what the generic approver dashboard drew and which
+      across five or seven queues is a row of mostly-empty categories
+      answering nothing. The question a Chair or a Supervisor actually has is
+      not "which module" but "how bad is the backlog", so: **how long
+      everything has waited, in four bands** — up to a week, one to two
+      weeks, two weeks to a month, over a month. A fat green bar is a healthy
+      desk and a fat red one is not, and it reads the same whether you own
+      two queues or ten.
+      Bands reuse the tones the stat cards and queue rows already use, so the
+      same number is the same colour everywhere on the screen, and the
+      colours come from the status tokens through `Chart.uresearchToken()`
+      rather than literals, so they survive the dark theme. The figures are
+      repeated as text beneath the canvas, which a screen reader can read and
+      a canvas cannot.
+- [x] **The counts moved onto the bars (2026-09-17).** They were a list under
+      the chart, which is what made the panel need a scrollbar inside a
+      one-screen layout. `chartjs-plugin-datalabels` is already loaded and
+      opt-in, so this is `datalabels: { display: true, anchor: 'end', align:
+      'top' }` and eighteen pixels of top padding for the tallest bar's
+      number. Zero is drawn too: "none in this band" is information and an
+      absent bar is not.
+      The figures stay in the markup as a visually-hidden list, because a
+      canvas is invisible to a screen reader beyond its label and a datalabel
+      is pixels.
+      **The tooltip already floats free** — `chartjs.blade.php` makes the
+      `<body>`-appended one the default, so this chart only adds wording and
+      deliberately sets no `external` of its own, which would pin it back
+      inside a card that has `overflow: hidden`.
+- [x] **Quick actions was two links for a Supervisor.** It rendered only what
+      the modules declare through `ProvidesLinks`, which is three for a Chair
+      and two for a Supervisor. The Core destinations every approver actually
+      uses — Documents, Calendar, Notifications, My profile — are listed with
+      them, module links first because those are the role's real work. Icons
+      are matched by route prefix rather than defaulted, since a column of
+      identical document icons is decoration rather than a signpost, and the
+      list is a two-column grid where there is width for it.
+      Routes are checked with `Route::has()` before rendering, so a link
+      never 500s a dashboard if a route is renamed.
+- [x] **And then it looked wrong, for one reason.** The list is the panel's
+      flex child and fills its height, and a grid's default `align-content`
+      is `stretch` — so the rows shared out all the leftover space between
+      them and the two rows of links sat half a panel apart. `align-content:
+      start` keeps the links their own size and leaves the slack at the
+      bottom.
+      **Then made tiles**, icon over label and centred, the shape the CGS
+      dashboard's Quick Shortcuts already uses — asked for on the Supervisor
+      screen, and applied to the Chair's too because it is one shared partial
+      and two dashboards side by side should not disagree about what a
+      shortcut looks like.
+      Deliberately its **own** rules rather than reusing `.cgs-shortcut*`:
+      those live in `dashboard-cgs.css` and their `clamp()` sizing is tuned
+      to that screen's fixed-height row, so borrowing them would tie this
+      panel's appearance to changes made for a different dashboard. Same
+      shape, sized for this panel; `auto-fit` at an 8rem floor gives four
+      across a half-width panel and two on a narrow one with no breakpoint.
+      Seven tiles now — Help & Support joined the Core set. Not padded out to
+      eight: every tile goes through `Route::has()` first, because a dead
+      tile on a dashboard is worse than one fewer tile.
+      **Then narrowed the PANEL, not the tiles.** The first pass shrank the
+      buttons, which was the wrong axis: the complaint was that Quick actions
+      took half the row from a panel with real content in it. Its row is
+      `.approver-row-aside` now — `minmax(0, 1fr) minmax(0, 27rem)` — so the
+      list beside it gets roughly two thirds. 27rem rather than the 23rem
+      first tried: at the tile floor of 6.25rem that is four across instead
+      of three, so seven tiles are two rows rather than three and the panel
+      does not need scrolling to reach the last of them. Only described for the wide
+      case, because below the one-screen threshold the row has already
+      collapsed to one column.
+      The earlier tile shrink stayed, which mattered beyond looks: at the first size they
+      wrapped to two rows of tall tiles, and that was enough to push the
+      bottom row of the dashboard past the fold on a screen the one-screen
+      lock was supposed to fit. A 6.25rem floor fits all seven across a
+      half-width panel, so the panel is one short row. The overflow was the
+      symptom; the tile height was the cause.
+- [x] **Five stat cards, not four, on both screens.** The fifth is
+      **Overdue** — how many have waited longer than a fortnight.
+      Deliberately not the same thing as Longest wait, which is a single row:
+      a desk with one 40-day straggler and a desk with nineteen of them
+      report the same longest wait and are not the same problem. Read off
+      `ageingProfile()`, which is already memoised for the chart, rather than
+      counted again — two queries that have to agree are two queries that can
+      disagree.
+- [x] Shared, so both screens get it from one partial, and
+      `pendingOnMyStages()` was extracted while adding it — `oldestWaiting()`
+      had the same "every stage I own" clause written out longhand. It
+      returns **null** rather than an empty query for someone who owns no
+      stages, because `where(nothing)` matches every pending application in
+      the portal.
+
+### The Supervisor gets a dashboard too (2026-09-17)
+
+- [x] **Built**, and the Chair's screen refactored under it rather than
+      copied. `Services\ApproverDashboard` (abstract) now holds everything a
+      Chair and a Supervisor share — the queue list, the longest wait, the
+      triage feed, the blocking alerts, the card destinations — and
+      `ChairDashboard` and `SupervisorDashboard` add only what differs. The
+      shared partials and CSS were renamed `chair-*` to `approver-*` for the
+      same reason: they were never the Chair's.
+- [x] **The panel that justifies a separate screen: "My candidates".** A
+      supervisor is accountable for named students, not just for a desk, and
+      "is one of my candidates in trouble" is a question no queue answers.
+      Rows carry matric, programme and the attendance figure, flagged students
+      sorted to the top so a supervisor with twenty candidates does not read
+      twenty rows to find the two who need them.
+      Attendance comes through `Contracts\SuppliesAttendance`, so **Core still
+      names no module**; with no module bound the column is simply absent and
+      the rest of the row renders.
+- [x] **Four fixed cards, two about the desk and two about the people**:
+      awaiting you · longest wait · my candidates · flagged at risk. A
+      supervisor owns **seven** stages, so the generic screen gave them eight
+      cards mostly reading zero — the worst case of that problem in the app.
+- [x] **The signature alert already worked for them.** Supervisors sign the
+      Confirmation too, and `ProvidesDashboardAlerts` is keyed off the stage
+      roles, so it appeared with no change. That is the contract doing its job.
+- [ ] **Left for the team, deliberately: the other six queues are still
+      role-scoped.** "Awaiting you" on a supervisor's screen is portal-wide
+      while "My candidates" is correctly theirs, and both sit on the same
+      page. Supervision is the one queue already narrowed. The mechanism now
+      exists — `queueFor()`'s `$scope` closure — so applying it is small, but
+      it changes what every approver sees across four people's folders and
+      this file says to agree it first. One word and it is done.
+
+### A 500 on the Supervision queue, and the gap that let it ship (2026-09-17)
+
+- [x] **`Collection::total() does not exist` on `/supervision/queue`.**
+      Pagination landed in `queueFor()`, and `SupervisionController` was the
+      one controller that did not just *read* the result — it reassigned
+      `$queue['applications']` to a `->filter(...)`. A paginator forwards
+      unknown calls to its underlying collection, so that handed back a plain
+      `Collection` and the partial asking it for `->total()` was a 500.
+      **Patching the type would have left it broken anyway**: filtering after
+      paging reports the unfiltered total and pages over rows it then throws
+      away. So the narrowing moved into the query. `queueFor()` takes an
+      optional `$scope` closure applied before the count and the page.
+      That closure is per-call and **does not settle** the "scope approver
+      queues to the right people" decision below; it is the one concrete case
+      that could not wait.
+- [x] **The real gap: thirteen of the fourteen queues had no render test.**
+      Only Travel's was ever rendered, which is why a 500 on Supervision got
+      through a green suite. `QueueTest` now renders **every** module queue
+      for **every** role that owns a stage on it — 20+ screens, asserting 200
+      and the header. Dumb on purpose: a queue that throws, or a controller
+      that quietly breaks the paginator contract, fails there whoever owns it.
+- [x] **And the rule it was enforcing had no test either.** A supervisor
+      seeing only requests addressed to them is the one place role-scoping is
+      not enough, and nothing covered it, so the rewrite could have widened it
+      silently. `SupervisionTest` now asserts a supervisor sees their own
+      request, does not see a colleague's, and that the **count** follows the
+      scoping.
 
 ### Two things the shell missed, found on the Chair's login (2026-09-17)
 

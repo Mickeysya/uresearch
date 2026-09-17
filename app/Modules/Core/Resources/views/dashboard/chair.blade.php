@@ -22,16 +22,21 @@
             subtitle="What is waiting on your decision, and how long it has waited." />
 
         @include('core::dashboard.partials.chair-stat-cards')
-        @include('core::dashboard.partials.chair-alerts')
+        @include('core::dashboard.partials.approver-alerts')
 
-        <div class="chair-row">
-            @include('core::dashboard.partials.chair-queues')
-            @include('core::dashboard.partials.chair-oldest')
+        {{-- Three then two, which is the split the CGS screen already uses
+             and what lets the whole thing sit on one screen. auto-fit works
+             it out from the child count; neither row declares a column
+             number of its own. --}}
+        <div class="approver-row">
+            @include('core::dashboard.partials.approver-ageing')
+            @include('core::dashboard.partials.approver-queues')
+            @include('core::dashboard.partials.approver-oldest')
         </div>
 
-        <div class="chair-row">
+        <div class="approver-row approver-row-aside">
             @include('core::dashboard.partials.chair-nominations')
-            @include('core::dashboard.partials.chair-shortcuts')
+            @include('core::dashboard.partials.approver-shortcuts')
         </div>
     </div>
 @endsection
