@@ -237,6 +237,33 @@ class JasonAppointmentLetterTest extends TestCase
             ->assertSee('not listed below');
     }
 
+    public function test_the_form_offers_both_kinds_of_examiner(): void
+    {
+        $this->candidate();
+        $internal = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
+        $external = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
+
+        // Both kinds live in one dropdown, and with a hundred examiners on
+        // the list the external group sits far below the fold -- which is
+        // exactly how it came to look as though there were no external
+        // examiners at all. The second slot therefore starts on External,
+        // and each row picks its kind before its person.
+        $response = $this->actingAs($this->chair())
+            ->get(route('appointment-letter.create'))
+            ->assertOk()
+            ->assertSee($internal->name)
+            ->assertSee($external->name)
+            ->assertSee('Internal Examiners (UTP)')
+            ->assertSee('External Examiners');
+
+        $rows = $response->getContent();
+        preg_match_all('/<select class="examiner-type".*?<\/select>/s', $rows, $types);
+
+        $this->assertCount(2, $types[0], 'Both slots should offer a kind to pick.');
+        $this->assertStringContainsString('value="internal" selected', $types[0][0]);
+        $this->assertStringContainsString('value="external" selected', $types[0][1]);
+    }
+
     public function test_the_form_explains_itself_when_every_examiner_of_one_kind_is_busy(): void
     {
         $this->candidate();

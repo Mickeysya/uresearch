@@ -3,6 +3,22 @@
 @section('title', 'Nominate Examiner Panel')
 
 @section('content')
+@push('head')
+    <style>
+        .examiner-row-filters,
+        .examiner-row-picker { display: flex; gap: 8px; align-items: flex-start; }
+        .examiner-row-filters { margin-bottom: 6px; }
+        .examiner-row-filters .examiner-type { flex: 0 0 170px; }
+        .examiner-row-filters .examiner-filter { flex: 1; min-width: 0; }
+        .examiner-row-picker .examiner-select { flex: 1; min-width: 0; }
+        .examiner-row-picker .remove-row { flex: 0 0 auto; padding: 8px 12px; }
+        .examiner-row + .examiner-row { margin-top: 18px; }
+        @media (max-width: 640px) {
+            .examiner-row-filters { flex-wrap: wrap; }
+            .examiner-row-filters .examiner-type { flex: 1 0 100%; }
+        }
+    </style>
+@endpush
 @php
     // Repopulate after a validation failure, otherwise start with one
     // internal and one external slot -- the smallest panel that is valid.
@@ -95,30 +111,56 @@
 
                 <div id="examiners">
                     @foreach ($rows as $i => $row)
+                        @php
+                            // Which kind this row is picking. Follows whatever is
+                            // already chosen after a validation failure; otherwise the
+                            // first two rows are the minimum valid panel, one of each.
+                            $chosen = $pool->firstWhere('id', $row['pool_id'] ?? null);
+                            $rowType = $chosen?->examiner_type ?? ($i === 1 ? 'external' : 'internal');
+                        @endphp
                         <div class="examiner-row">
                             <label>Examiner <span class="row-number">{{ $i + 1 }}</span></label>
-                            <div style="display: flex; gap: 8px; align-items: flex-start;">
-                                <select name="examiners[{{ $i }}][pool_id]" required style="flex: 1;"
-                                        class="@error("examiners.$i.pool_id") is-invalid @enderror">
+
+                            {{-- Kind first, then a filter, then the names. With a
+                                 hundred examiners on the list, opening one long
+                                 dropdown and scrolling for the group you want is not a
+                                 way to pick anybody. --}}
+                            <div class="examiner-row-filters">
+                                <select class="examiner-type" aria-label="Examiner {{ $i + 1 }} type">
+                                    <option value="internal" @selected($rowType === 'internal')>Internal (UTP)</option>
+                                    <option value="external" @selected($rowType === 'external')>External</option>
+                                </select>
+                                <input type="search" class="examiner-filter" autocomplete="off"
+                                       aria-label="Filter examiner {{ $i + 1 }}"
+                                       placeholder="Filter by name, institution or expertise">
+                            </div>
+
+                            <div class="examiner-row-picker">
+                                <select name="examiners[{{ $i }}][pool_id]" required
+                                        class="examiner-select @error("examiners.$i.pool_id") is-invalid @enderror">
                                     <option value="">— Select an examiner —</option>
-                                    <optgroup label="Internal Examiners (UTP)">
+                                    <optgroup label="Internal Examiners (UTP)" data-type="internal">
                                         @foreach ($internal as $e)
-                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)>
+                                            <option value="{{ $e->id }}" data-type="internal"
+                                                    @selected(($row['pool_id'] ?? '') == $e->id)>
                                                 {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
                                             </option>
                                         @endforeach
                                     </optgroup>
-                                    <optgroup label="External Examiners">
+                                    <optgroup label="External Examiners" data-type="external">
                                         @foreach ($external as $e)
-                                            <option value="{{ $e->id }}" @selected(($row['pool_id'] ?? '') == $e->id)>
+                                            <option value="{{ $e->id }}" data-type="external"
+                                                    @selected(($row['pool_id'] ?? '') == $e->id)>
                                                 {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
                                             </option>
                                         @endforeach
                                     </optgroup>
                                 </select>
-                                <button type="button" class="remove-row" style="padding: 8px 12px;"
+                                <button type="button" class="remove-row"
                                         @if (count($rows) <= 2) hidden @endif>Remove</button>
                             </div>
+
+                            <p class="queue-meta examiner-count" style="margin: 4px 0 0;"></p>
                             @error("examiners.$i.pool_id") <p class="field-error">{{ $message }}</p> @enderror
                         </div>
                     @endforeach
@@ -144,11 +186,55 @@
         const add = document.getElementById('add-examiner');
         if (!list || !add) return;
 
+        // Narrows a row's dropdown to the kind it is picking and to whatever
+        // has been typed in its filter box. The whole list is in the markup;
+        // this only hides what does not match, so nothing depends on a
+        // round-trip and the posted value is still a plain pool_id.
+        function applyFilter(row) {
+            const type = row.querySelector('.examiner-type').value;
+            const needle = row.querySelector('.examiner-filter').value.trim().toLowerCase();
+            const select = row.querySelector('.examiner-select');
+            let shown = 0;
+
+            row.querySelectorAll('optgroup').forEach((group) => {
+                const wanted = group.dataset.type === type;
+                group.hidden = ! wanted;
+                // Safari ignores hidden on an optgroup; disabled it obeys.
+                group.disabled = ! wanted;
+
+                group.querySelectorAll('option').forEach((option) => {
+                    const matches = wanted
+                        && (needle === '' || option.textContent.toLowerCase().includes(needle));
+                    option.hidden = ! matches;
+                    option.disabled = ! matches;
+                    if (matches) shown++;
+                });
+            });
+
+            // A name that has just been filtered out must not stay selected.
+            const selected = select.selectedOptions[0];
+            if (selected && selected.value !== '' && selected.hidden) {
+                select.value = '';
+            }
+
+            const count = row.querySelector('.examiner-count');
+            if (needle === '') {
+                count.textContent = shown + ' ' + type + ' examiner' + (shown === 1 ? '' : 's')
+                    + ' available to pick.';
+            } else {
+                count.textContent = shown === 0
+                    ? 'No ' + type + ' examiner matches “' + needle + '”.'
+                    : shown + ' of the ' + type + ' examiners match “' + needle + '”.';
+            }
+        }
+
         function renumber() {
             const rows = list.querySelectorAll('.examiner-row');
             rows.forEach((row, i) => {
                 row.querySelector('.row-number').textContent = i + 1;
-                row.querySelector('select').name = 'examiners[' + i + '][pool_id]';
+                row.querySelector('.examiner-select').name = 'examiners[' + i + '][pool_id]';
+                row.querySelector('.examiner-type').setAttribute('aria-label', 'Examiner ' + (i + 1) + ' type');
+                row.querySelector('.examiner-filter').setAttribute('aria-label', 'Filter examiner ' + (i + 1));
                 // The two default slots stay; anything beyond can be removed.
                 row.querySelector('.remove-row').hidden = rows.length <= 2;
             });
@@ -156,11 +242,14 @@
 
         add.addEventListener('click', () => {
             const clone = list.querySelector('.examiner-row').cloneNode(true);
-            clone.querySelector('select').value = '';
-            clone.querySelectorAll('.field-error').forEach(el => el.remove());
-            clone.querySelector('select').classList.remove('is-invalid');
+            const select = clone.querySelector('.examiner-select');
+            select.value = '';
+            select.classList.remove('is-invalid');
+            clone.querySelector('.examiner-filter').value = '';
+            clone.querySelectorAll('.field-error').forEach((el) => el.remove());
             list.appendChild(clone);
             renumber();
+            applyFilter(clone);
         });
 
         list.addEventListener('click', (e) => {
@@ -170,7 +259,20 @@
             }
         });
 
+        list.addEventListener('input', (e) => {
+            if (e.target.classList.contains('examiner-filter')) {
+                applyFilter(e.target.closest('.examiner-row'));
+            }
+        });
+
+        list.addEventListener('change', (e) => {
+            if (e.target.classList.contains('examiner-type')) {
+                applyFilter(e.target.closest('.examiner-row'));
+            }
+        });
+
         renumber();
+        list.querySelectorAll('.examiner-row').forEach(applyFilter);
     })();
 </script>
 @endpush

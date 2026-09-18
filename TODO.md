@@ -629,7 +629,12 @@ note below.
   - [x] `Database\Seeders\ExaminerPoolSeeder` — 100 fictional examiners, 50
         internal across UTP's departments and 50 external across Malaysian
         public universities, the private and branch campuses, and regional
-        and international institutions. Matched on email, so it adds only
+        and international institutions. At that size one long dropdown stops
+        working — the external group starts at option 47, below the fold, so
+        the form looked as though it offered internal examiners only. Each
+        slot now picks its **kind** first (slot 1 internal, slot 2 external,
+        the minimum valid panel) and carries a filter box that narrows the
+        names by person, institution or expertise. Matched on email, so it adds only
         what is missing and never disturbs an examiner who already has
         appointment history. Run it with
         `php artisan db:seed --class="App\Modules\Jason\Database\Seeders\ExaminerPoolSeeder"`.
