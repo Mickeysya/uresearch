@@ -102,16 +102,6 @@ class AdminController extends Controller
             .'so agree ownership before building it.');
     }
 
-    public function users()
-    {
-        return $this->page('Users and Roles',
-            'Create and edit accounts and assign roles. This is the administrator\'s core job per '
-            .'technical.md and jason.md §5.5, and the one piece of this dashboard nothing else covers. '
-            .'Roles can currently only be set in the seeder or phpMyAdmin. The 13 roles are listed in '
-            .'App\\Modules\\Core\\Support\\Role; staff accounts are filtered from here rather than '
-            .'getting a separate Faculty screen.');
-    }
-
     /**
      * The audit log, backed by spatie/laravel-activitylog.
      *

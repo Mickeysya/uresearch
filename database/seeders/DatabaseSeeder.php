@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Modules\Core\Models\Department;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
@@ -22,6 +23,8 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
+        $this->departments();
+
         $supervisor = $this->user('Dr. Aisyah Rahman', 'supervisor@utp.edu.my', Role::SUPERVISOR, [
             'department' => 'Computer & Information Sciences',
             'faculty' => 'FSMC',
@@ -78,6 +81,42 @@ class DatabaseSeeder extends Seeder
             ['Role', 'Email'],
             User::orderBy('id')->get(['role', 'email'])->map(fn ($u) => [Role::label($u->role), $u->email])->all()
         );
+    }
+
+    /**
+     * The 17 UTP departments CGS actually has, so the department field on
+     * the "add a user" screen (UserAdminController) and the department
+     * admin screen (DepartmentAdminController) are not empty on a fresh
+     * database. This is the reference list; Computer & Information Sciences
+     * below is the seeder's own long-standing spelling and is left as is
+     * rather than forced to match #4's "Science" (singular), so existing
+     * accounts are not silently moved to a different department.
+     */
+    protected function departments(): void
+    {
+        $names = [
+            'Chemical Engineering',
+            'Civil & Environmental Engineering',
+            'Civil Engineering',
+            'Computer & Information Science',
+            'Computing',
+            'Applied Science',
+            'Science',
+            'Electrical & Electronic Engineering',
+            'Faculty of Science, Management & Computing',
+            'Fundamental & Applied Science',
+            'Geoscience',
+            'Information Technology',
+            'Management',
+            'Management & Humanities',
+            'Mechanical Engineering',
+            'Petroleum Engineering',
+            'Petroleum Geoscience',
+        ];
+
+        foreach ($names as $name) {
+            Department::updateOrCreate(['name' => $name], ['is_active' => true]);
+        }
     }
 
     protected function user(string $name, string $email, string $role, array $extra = []): User

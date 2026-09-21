@@ -6,6 +6,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Notifications\ApplicationDecided;
+use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +70,19 @@ class WorkflowEngine
         if ($actor->role !== $stage->role) {
             throw new UnauthorizedException(
                 "Role '{$actor->role}' cannot act at the '{$stage->label}' stage."
+            );
+        }
+
+        // The role check above is not enough for Chair and Academic
+        // Executive: it proves the actor holds the stage's role, not that
+        // this is their department's row. Without this, one Chair could
+        // decide another department's application straight off the URL,
+        // and queue()'s own filtering (ApprovesApplications::queueFor())
+        // never runs to stop them, since it only shapes what the queue
+        // *page* shows. See Role::isDepartmentScoped().
+        if (Role::isDepartmentScoped($actor->role) && $actor->department !== $application->student?->department) {
+            throw new UnauthorizedException(
+                "'{$actor->department}' cannot act on a '{$application->student?->department}' application."
             );
         }
 

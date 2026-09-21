@@ -53,6 +53,11 @@ trait MakesUsers
         return $this->user(Role::NON_EXEC_CGS, ['name' => 'Puan Waheeda', 'email' => 'cgs@test.my']);
     }
 
+    protected function admin(): User
+    {
+        return $this->user(Role::ADMIN, ['name' => 'System Admin', 'email' => 'admin@test.my']);
+    }
+
     protected function academicExec(): User
     {
         return $this->user(Role::ACADEMIC_EXEC, ['name' => 'Siti Academic Exec', 'email' => 'ae@test.my']);

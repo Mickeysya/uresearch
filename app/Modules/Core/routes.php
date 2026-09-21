@@ -4,6 +4,7 @@ use App\Modules\Core\Http\Controllers\AdminController;
 use App\Modules\Core\Http\Controllers\ApplicationTrackingController;
 use App\Modules\Core\Http\Controllers\DashboardController;
 use App\Modules\Core\Http\Controllers\CalendarController;
+use App\Modules\Core\Http\Controllers\DepartmentAdminController;
 use App\Modules\Core\Http\Controllers\DocumentController;
 use App\Modules\Core\Http\Controllers\DocumentLibraryController;
 use App\Modules\Core\Http\Controllers\LoginController;
@@ -11,6 +12,7 @@ use App\Modules\Core\Http\Controllers\NotificationController;
 use App\Modules\Core\Http\Controllers\PageController;
 use App\Modules\Core\Http\Controllers\ProfileController;
 use App\Modules\Core\Http\Controllers\QueueController;
+use App\Modules\Core\Http\Controllers\UserAdminController;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\Route;
 
@@ -78,10 +80,32 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports', [AdminController::class, 'reports'])->name('reports.index');
         Route::get('/reports/approval-times', [AdminController::class, 'approvalTimes'])->name('reports.approval-times');
         Route::get('/reports/bottlenecks', [AdminController::class, 'bottlenecks'])->name('reports.bottlenecks');
-        Route::get('/users', [AdminController::class, 'users'])->name('users.index');
         Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('audit.index');
         Route::get('/documents', [AdminController::class, 'documents'])->name('documents.index');
     });
+
+    // Departments and Users and Roles: the administrator's actual job, and
+    // (since a department can now have more than one Chair or Academic
+    // Executive, see Role::isDepartmentScoped()) Non-Executive CGS's too --
+    // CGS is who fields "we need another AE" in practice. Kept under /admin
+    // and the admin.* route names rather than duplicated under /cgs, since
+    // it is the same screen either way; the role gate is what actually
+    // controls access, and the sidebar link is placed for each separately.
+    Route::middleware('role:'.implode(',', [Role::ADMIN, Role::NON_EXEC_CGS]))
+        ->prefix('admin')->name('admin.')->group(function () {
+            Route::get('/departments', [DepartmentAdminController::class, 'index'])->name('departments.index');
+            Route::get('/departments/create', [DepartmentAdminController::class, 'create'])->name('departments.create');
+            Route::post('/departments', [DepartmentAdminController::class, 'store'])->name('departments.store');
+            Route::get('/departments/{department}/edit', [DepartmentAdminController::class, 'edit'])->name('departments.edit');
+            Route::put('/departments/{department}', [DepartmentAdminController::class, 'update'])->name('departments.update');
+            Route::patch('/departments/{department}/toggle', [DepartmentAdminController::class, 'toggleActive'])->name('departments.toggle');
+
+            Route::get('/users', [UserAdminController::class, 'index'])->name('users.index');
+            Route::get('/users/create', [UserAdminController::class, 'create'])->name('users.create');
+            Route::post('/users', [UserAdminController::class, 'store'])->name('users.store');
+            Route::get('/users/{user}/edit', [UserAdminController::class, 'edit'])->name('users.edit');
+            Route::put('/users/{user}', [UserAdminController::class, 'update'])->name('users.update');
+        });
 
     // CGS-only screens. Gated by role here as well as hidden from the sidebar,
     // because a sidebar that does not render a link is not access control.

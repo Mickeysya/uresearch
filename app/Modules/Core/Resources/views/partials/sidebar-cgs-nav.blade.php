@@ -108,6 +108,29 @@
     <span class="nav-label">Reports and Analytics</span>
 </a>
 
+{{-- ---- Administration --------------------------------------------------
+     Non-Executive CGS only (route middleware enforces this regardless):
+     Puan Waheeda is who actually fields "add another AE for this
+     department", not the system administrator, who owns no workflow stage.
+     See Role::isDepartmentScoped() and routes.php's shared admin.* group. --}}
+@if (auth()->user()?->role === \App\Modules\Core\Support\Role::NON_EXEC_CGS)
+    <div class="nav-section-label"><span class="nav-label">Administration</span></div>
+
+    <a href="{{ route('admin.departments.index') }}" class="nav-item @if(request()->routeIs('admin.departments.*')) active @endif" title="Departments">
+        <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+        </span>
+        <span class="nav-label">Departments</span>
+    </a>
+
+    <a href="{{ route('admin.users.index') }}" class="nav-item @if(request()->routeIs('admin.users.*')) active @endif" title="Users and Roles">
+        <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/><path d="M19 3.5v4"/><path d="M17 5.5h4"/></svg>
+        </span>
+        <span class="nav-label">Users and Roles</span>
+    </a>
+@endif
+
 {{-- Anything a module declared that is NOT already placed in a tree above,
      so a teammate's new ProvidesLinks entry still reaches CGS. --}}
 @php
