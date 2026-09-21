@@ -24,6 +24,9 @@ class ApplicationDecided extends Notification implements ShouldQueue
         protected Application $application,
         protected Stage $stage,
         protected bool $approved,
+        // null (default) => derive wording from $approved, exactly as before.
+        // 'returned' => sent back for revision, not a terminal outcome.
+        protected ?string $outcome = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -43,14 +46,18 @@ class ApplicationDecided extends Notification implements ShouldQueue
         $module = $this->application->module()->label();
         $next = $this->application->currentStage();
 
+        $title = match (true) {
+            $this->outcome === 'returned' => "Your {$module} application was returned for revision at the {$this->stage->label} stage.",
+            $this->approved => "Your {$module} application has been {$this->stage->decision} at the {$this->stage->label} stage.",
+            default => "Your {$module} application was not approved at the {$this->stage->label} stage.",
+        };
+
         return [
             'application_id' => $this->application->id,
             'module' => $module,
             'approved' => $this->approved,
             'stage_label' => $this->stage->label,
-            'title' => $this->approved
-                ? "Your {$module} application has been {$this->stage->decision} at the {$this->stage->label} stage."
-                : "Your {$module} application was not approved at the {$this->stage->label} stage.",
+            'title' => $title,
             'next_stage' => $next?->label,
         ];
     }
@@ -61,9 +68,23 @@ class ApplicationDecided extends Notification implements ShouldQueue
         $ref = $module.' Application #'.$this->application->id;
         $next = $this->application->currentStage();
 
+        $subject = match (true) {
+            $this->outcome === 'returned' => 'Returned for Revision',
+            $this->approved => 'Progress Update',
+            default => 'Not Approved',
+        };
+
         $mail = (new MailMessage)
-            ->subject($ref.' — '.($this->approved ? 'Progress Update' : 'Not Approved'))
+            ->subject($ref.' — '.$subject)
             ->greeting('Hi '.$notifiable->name.',');
+
+        if ($this->outcome === 'returned') {
+            return $mail
+                ->line("Your {$module} application was returned for revision at the {$this->stage->label} stage.")
+                ->line('Please review the comments, make the necessary changes, and resubmit.')
+                ->action('Review and resubmit', route('applications.index'))
+                ->line('Thank you for using UResearch 2.0.');
+        }
 
         if (! $this->approved) {
             return $mail

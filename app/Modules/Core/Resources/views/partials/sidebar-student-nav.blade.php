@@ -15,6 +15,26 @@
     <span class="nav-label">Track My Applications</span>
 </a>
 
+{{-- Workstation Management (Chloe) — not an approval chain, so it is not
+     driven by ModuleRegistry::submittable() like the tree below; it is a
+     fixed link the same way Track My Applications is. --}}
+<a href="{{ route('workstation.select') }}" class="nav-item @if(request()->routeIs('workstation.select') || request()->routeIs('workstation.register')) active @endif" title="Workstation">
+    <span class="nav-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+    </span>
+    <span class="nav-label">Workstation</span>
+</a>
+
+{{-- My Candidacy (Chloe) — status/expiry/reminder history, a fixed link
+     the same way. The appeal *form* is a real WorkflowModule and already
+     appears in the My Application tree below on its own. --}}
+<a href="{{ route('candidacy.status') }}" class="nav-item @if(request()->routeIs('candidacy.status')) active @endif" title="My Candidacy">
+    <span class="nav-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+    </span>
+    <span class="nav-label">My Candidacy</span>
+</a>
+
 <div class="nav-tree @if(request()->routeIs('attendance.*')) open @endif">
     <button type="button" class="nav-item nav-tree-trigger" title="Attendance"
             aria-expanded="@if(request()->routeIs('attendance.*')) true @else false @endif">

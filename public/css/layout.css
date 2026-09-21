@@ -28,6 +28,8 @@
 .status-badge.approved { background: #E4F8ED; color: #07794A; }
 .status-badge.rejected { background: #FDEEED; color: #D0342C; }
 .status-badge.draft    { background: var(--border-grey); color: var(--text-grey); }
+/* Returned for revision — action is on the student, same tone as pending. */
+.status-badge.returned { background: var(--light-gold-bg); color: #8A5F14; }
 
 /* The "who is waiting on this" line above a queue */
 .queue-meta {

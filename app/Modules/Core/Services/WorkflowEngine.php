@@ -49,8 +49,9 @@ class WorkflowEngine
     /**
      * Record a decision and advance (or terminate) the application.
      *
-     * @param  string  $decision  'approve' or 'reject' — the caller states intent;
-     *                            the verb written to history comes from the Stage.
+     * @param  string  $decision  'approve', 'reject' or 'return' — the caller states
+     *                            intent; the verb written to history comes from the
+     *                            Stage (or, for 'return', the literal 'returned').
      */
     public function decide(
         Application $application,
@@ -70,6 +71,10 @@ class WorkflowEngine
             throw new UnauthorizedException(
                 "Role '{$actor->role}' cannot act at the '{$stage->label}' stage."
             );
+        }
+
+        if ($decision === 'return') {
+            return $this->recordReturn($application, $actor, $stage, $remarks);
         }
 
         $approved = $decision === 'approve';
@@ -115,6 +120,75 @@ class WorkflowEngine
 
             return $application;
         });
+    }
+
+    /**
+     * 'return' path for decide() — sent back to the student for revision.
+     * Not a rejection: the application stays open, on the same stage, so the
+     * same approver reviews the resubmission rather than the chain
+     * restarting from stage one.
+     */
+    protected function recordReturn(Application $application, User $actor, Stage $stage, ?string $remarks): Application
+    {
+        return DB::transaction(function () use ($application, $actor, $stage, $remarks) {
+            ApprovalHistory::create([
+                'application_id' => $application->id,
+                'approver_id' => $actor->id,
+                'stage_key' => $stage->key,
+                'stage_label' => $stage->label,
+                'decision' => 'returned',
+                'remarks' => $remarks,
+            ]);
+
+            $application->forceFill(['status' => Application::STATUS_RETURNED])->save();
+            $application->refresh();
+
+            activity('workflow')
+                ->causedBy($actor)
+                ->performedOn($application)
+                ->withProperties([
+                    'action' => 'returned',
+                    'module' => $application->module_type,
+                    'stage' => $stage->key,
+                    'stage_label' => $stage->label,
+                    'status' => $application->status,
+                ])
+                ->log('Application returned for revision');
+
+            $application->student?->notify(new ApplicationDecided($application, $stage, false, 'returned'));
+
+            return $application;
+        });
+    }
+
+    /**
+     * Puts a returned application back onto the stage it was returned from —
+     * call this after the student has edited their detail row. Deliberately
+     * not stage one: the approver who asked for the revision reviews it
+     * again, the chain does not restart.
+     */
+    public function resubmit(Application $application): Application
+    {
+        if ($application->status !== Application::STATUS_RETURNED) {
+            throw new \LogicException("Application #{$application->id} has not been returned, so there is nothing to resubmit.");
+        }
+
+        $application->forceFill([
+            'status' => Application::STATUS_PENDING,
+            'submitted_at' => now(),
+        ])->save();
+
+        activity('workflow')
+            ->causedBy($application->student)
+            ->performedOn($application)
+            ->withProperties([
+                'action' => 'resubmitted',
+                'module' => $application->module_type,
+                'stage' => $application->current_stage,
+            ])
+            ->log('Application resubmitted after being returned');
+
+        return $application;
     }
 
     /**

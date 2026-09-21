@@ -22,6 +22,7 @@
     $queueRoutes = collect($queues)->map(fn ($q) => $q['module']->queueRoute())->unique();
     $applicationsOpen = $queueRoutes->contains(fn ($r) => request()->routeIs($r));
     $attendanceOpen = request()->routeIs('attendance.*') || request()->routeIs('cgs.attendance.*');
+    $candidacyOpen = request()->routeIs('candidacy.cgs.*');
 
     // Attendance links a module declared through ProvidesLinks (the CSV
     // upload and the at-risk list) belong in the Attendance tree, not loose
@@ -100,6 +101,40 @@
     </span>
     <span class="nav-label">Documents</span>
 </a>
+
+{{-- Workstation Management (Chloe) — not an approval chain, so it carries no
+     queue and is not driven by ModuleRegistry; a fixed link like Students
+     and Documents above. --}}
+<a href="{{ route('workstation.cgs.operations') }}" class="nav-item @if(request()->routeIs('workstation.cgs.*')) active @endif" title="Workstation Management">
+    <span class="nav-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+    </span>
+    <span class="nav-label">Workstation Management</span>
+</a>
+
+{{-- Candidacy Management (Chloe) — the Reminder/Dismiss screens, which
+     unlike Appeal are not WorkflowModule queues, so they get a fixed tree
+     the same way Attendance Monitoring does. The CGS Verification appeal
+     queue itself already appears in the Applications tree above, driven by
+     ModuleRegistry — nothing added here for that part. --}}
+<div class="nav-tree @if($candidacyOpen) open @endif">
+    <button type="button" class="nav-item nav-tree-trigger" title="Candidacy Management"
+            aria-expanded="@if($candidacyOpen) true @else false @endif">
+        <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+        </span>
+        <span class="nav-label">Candidacy Management</span>
+        <span class="nav-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </span>
+    </button>
+    <div class="nav-tree-panel">
+        <div class="nav-tree-items">
+            <a href="{{ route('candidacy.cgs.operations') }}" class="nav-subitem @if(request()->routeIs('candidacy.cgs.operations')) active @endif">Operations</a>
+            <a href="{{ route('candidacy.cgs.dismissals') }}" class="nav-subitem @if(request()->routeIs('candidacy.cgs.dismissals')) active @endif">Dismissal List</a>
+        </div>
+    </div>
+</div>
 
 <a href="{{ route('cgs.reports.index') }}" class="nav-item @if(request()->routeIs('cgs.reports.*')) active @endif" title="Reports and Analytics">
     <span class="nav-icon">
