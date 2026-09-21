@@ -10,7 +10,7 @@ use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
- * The department picker admin and Non-Executive CGS (Puan Waheeda) manage
+ * The department picker admin and Non-Executive CGS (M Syahmi Ifwat M Jafri) manage
  * together, added so a department name can change without an ALTER and
  * without abandoning every account already filed under the old one -- see
  * the migration and DepartmentAdminController's doc comment.

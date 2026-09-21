@@ -29,7 +29,12 @@ for containerization because two triggers exist today:
 1. **Registration / verification** — Laravel's built-in `MustVerifyEmail` flow,
    fired on user registration.
 2. **Workflow notifications** — `WorkflowEngine::decide()` notifies the student
-   on every stage transition (endorsed, rejected, approved, etc.).
+   on every stage transition (endorsed, rejected, approved, etc.), and
+   `::returnTo()` notifies both the student and whoever the application has
+   been sent back to (`ApplicationReturned`). The second audience is the only
+   case where an *approver* is emailed rather than the candidate: work has
+   gone backwards to a desk that had already cleared it, and nothing else
+   would tell them.
 
 Both should go through **Laravel's queued Notifications**, not synchronous
 `Mail::send()` calls. Queuing decouples "the workflow transaction committed"

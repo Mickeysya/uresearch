@@ -50,7 +50,13 @@ trait MakesUsers
 
     protected function cgs(): User
     {
-        return $this->user(Role::NON_EXEC_CGS, ['name' => 'Puan Waheeda', 'email' => 'cgs@test.my']);
+        return $this->user(Role::NON_EXEC_CGS, ['name' => 'M Syahmi Ifwat M Jafri', 'email' => 'cgs@test.my']);
+    }
+
+    /** Puan Waheeda's desk: compiles the faculty examiner list, holds the finalised report. */
+    protected function seniorExec(): User
+    {
+        return $this->user(Role::SENIOR_EXEC_CGS, ['name' => 'Puan Waheeda', 'email' => 'seniorexec@test.my']);
     }
 
     protected function admin(): User

@@ -56,9 +56,11 @@ application, so conditional routing is just an `if` — see `TravelWorkflow`,
 where international travel returns four stages and local travel two.
 
 `WorkflowEngine` is the **only** code that writes `applications.status` or
-`applications.current_stage`. Call `submit()` and `decide()`; never set those
-columns directly. This is the rule that keeps the modules from drifting apart
-the way the legacy app's did.
+`applications.current_stage`. Call `submit()`, `decide()` or `returnTo()`;
+never set those columns directly. (`returnTo()` sends an application back to an
+earlier stage with a mandatory reason instead of ending it — the Senior
+Director and the Dean use it on examiner lists.) This is the rule that keeps
+the modules from drifting apart the way the legacy app's did.
 
 ## Publishing — the human's call
 

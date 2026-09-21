@@ -202,12 +202,12 @@ Created by the seeder. **Every one uses the password `password`.**
 | `student2@utp.edu.my` | Student | a second candidate, for examiner nominations |
 | `supervisor@utp.edu.my` | Supervisor | first endorsement on every chain; files examiner nominations |
 | `chair@utp.edu.my` | Chair of Department | second endorsement, and **final approval for local travel** |
-| `cgs@utp.edu.my` | Non-Executive CGS | reviews international travel, verifies GA extensions |
+| `cgs@utp.edu.my` | Non-Executive CGS | M Syahmi Ifwat M Jafri — reviews international travel, verifies GA extensions, releases the final examiner list |
 | `dean@utp.edu.my` | Dean of PGR | **final approval for international travel** |
 | `director@utp.edu.my` | Senior Director CGS | final approval for GA extensions |
 | `ae@utp.edu.my` | Academic Executive | approves examiner nominations, for Computing |
 | `ae.chemical@utp.edu.my` … | Academic Executive | one per department — `ae.<department>@utp.edu.my`, e.g. `ae.civil`, `ae.petroleum`, `ae.management`. Each sees only their own department's queue; the departments screen lists them all |
-| `seniorexec@utp.edu.my` | Senior Executive CGS | rules on hardbound appeals |
+| `seniorexec@utp.edu.my` | Senior Executive CGS | Puan Waheeda — compiles the faculty examiner list and holds the finalised report, and rules on hardbound appeals |
 | `manager@utp.edu.my` | Manager CGS | approves claims |
 | `faculty@utp.edu.my` | Faculty | signs off an RPD dismissal before the Registry |
 | `registry@utp.edu.my` | Registry | closes a dismissed candidacy and sends the termination email |
@@ -254,9 +254,29 @@ gives final approval. CGS and the Dean are never involved.
 decision. (The `queue` container sends them; `./vendor/bin/sail logs queue`
 if they have not appeared.)
 
-Also worth trying: as `supervisor@utp.edu.my`, use *Nominate Examiners*. The
-dropdown disables examiners who are assigned, unavailable, or still inside the
-90-day cooling-off period, and tells you when each becomes eligible again.
+Also worth trying: as `supervisor@utp.edu.my`, use *Nominate Examiners*. A
+panel is four seats — internal main and backup, external main and backup — and
+two rules are visible as you fill it in. The internal side only offers
+examiners from **the candidate's own department**: pick a different candidate
+and the list changes under you. Every dropdown disables examiners who are
+assigned, unavailable, or still inside the 90-day cooling-off period, and tells
+you when each becomes eligible again. Both rules are re-checked on submit.
+
+**Then walk the examiner chain**, which is the longest one in the system and
+the one that goes *backwards* as well as forwards:
+
+`ae.<department>@utp.edu.my` (or `ae@utp.edu.my` for Computing) →
+`seniorexec@utp.edu.my` → `director@utp.edu.my` → `dean@utp.edu.my` →
+`seniorexec@utp.edu.my` → `cgs@utp.edu.my`
+
+At the Senior Director's or the Dean's desk, open a row and use **Send back to
+the department** instead of approving. The list does not die: it drops to the
+Academic Executive of *that* department, still pending, with the reason
+recorded — and both the candidate and that department's Academic Executives
+get an email. Everyone from the Academic Executive up also has *Examiner
+Report*: the compiled list, grouped faculty → department, with cross-department
+clashes flagged, and the same rows downloadable as Excel or CSV. An Academic
+Executive sees only their own department there; CGS and above see the lot.
 
 **Worth seeing: the dashboards.** Each role gets a different one, because they
 answer different questions. `student@utp.edu.my` sees their own attendance and

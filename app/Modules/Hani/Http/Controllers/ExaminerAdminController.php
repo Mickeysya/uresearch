@@ -110,7 +110,11 @@ class ExaminerAdminController extends Controller
         $map = [];
 
         ExaminerNomination::with('application.student')
-            ->where(fn ($q) => $q->whereIn('main_examiner_id', $ids)->orWhereIn('backup_examiner_id', $ids))
+            ->where(function ($q) use ($ids) {
+                foreach (array_keys(ExaminerNomination::SLOTS) as $slot) {
+                    $q->orWhereIn($slot, $ids);
+                }
+            })
             ->get()
             ->each(function (ExaminerNomination $nomination) use (&$map, $ids) {
                 $student = $nomination->application?->student;
@@ -122,7 +126,9 @@ class ExaminerAdminController extends Controller
                 // "Hussaini Mamman_21000736", the form the CGS sheet uses.
                 $label = $student->matric_no ? "{$student->name}_{$student->matric_no}" : $student->name;
 
-                foreach ([$nomination->main_examiner_id, $nomination->backup_examiner_id] as $id) {
+                foreach (array_keys(ExaminerNomination::SLOTS) as $slot) {
+                    $id = $nomination->{$slot};
+
                     if ($id && $ids->contains($id)) {
                         $map[$id][] = $label;
                     }

@@ -38,8 +38,12 @@ and safe to reword.
 ## Rules
 
 **1. Never write `status` or `current_stage` yourself.**
-`WorkflowEngine::submit()` and `::decide()`. This is the single most important
-rule — it is what stops the modules drifting apart again.
+`WorkflowEngine::submit()`, `::decide()` and `::returnTo()`. This is the single
+most important rule — it is what stops the modules drifting apart again.
+`returnTo()` is the one to reach for when a late stage needs the work redone
+rather than refused: it sends the application back to a named earlier stage
+with a mandatory reason, and the chain replays forward from there. See
+`docs/architecture.md`.
 
 **2. `stages(null)` must return every stage you can ever use.**
 The registry calls it that way to build the sidebar and gate the approval

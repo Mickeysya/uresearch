@@ -6,10 +6,12 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Notifications\ApplicationDecided;
+use App\Modules\Core\Notifications\ApplicationReturned;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\UnauthorizedException;
 
 /**
@@ -130,6 +132,147 @@ class WorkflowEngine
 
             return $application;
         });
+    }
+
+    /**
+     * Send an application BACK to an earlier stage instead of ending it.
+     *
+     * A rejection is final: decide('reject') marks the application rejected
+     * and the chain stops. That is right for "no", and wrong for "this list
+     * has a problem, the department needs to pick again" -- which is exactly
+     * what the Senior Director and the Dean do to an examiner nomination
+     * they will not sign off. Rejecting there would kill the candidate's
+     * nomination outright and split the audit trail across two applications.
+     *
+     * So: the decision is recorded as 'returned' at the stage that returned
+     * it, current_stage moves BACK, and the application stays pending. The
+     * chain then replays forward through every stage in between, which is
+     * the point -- a list the Dean sent back is re-approved by the Academic
+     * Executive and re-compiled by CGS before it reaches the Dean again.
+     *
+     * Remarks are mandatory here, unlike on approve/reject. Somebody is
+     * being asked to redo work; they are owed the reason.
+     *
+     * Forward jumps are refused. This method exists to undo progress, not to
+     * skip a stage, and letting it move an application forward would be a
+     * way around every authorisation check on the stages in between.
+     */
+    public function returnTo(
+        Application $application,
+        User $actor,
+        string $stageKey,
+        string $remarks,
+    ): Application {
+        $stage = $this->currentStage($application);
+
+        if ($stage === null) {
+            throw new \LogicException("Application #{$application->id} is not awaiting a decision.");
+        }
+
+        // Same two checks decide() makes, for the same reasons: holding the
+        // role is not the same as this being your department's row.
+        if ($actor->role !== $stage->role) {
+            throw new UnauthorizedException(
+                "Role '{$actor->role}' cannot act at the '{$stage->label}' stage."
+            );
+        }
+
+        if (Role::isDepartmentScoped($actor->role) && $actor->department !== $application->student?->department) {
+            throw new UnauthorizedException(
+                "'{$actor->department}' cannot act on a '{$application->student?->department}' application."
+            );
+        }
+
+        $stages = $this->stagesFor($application);
+        $keys = array_map(fn (Stage $s) => $s->key, $stages);
+
+        $targetIndex = array_search($stageKey, $keys, true);
+        $currentIndex = array_search($stage->key, $keys, true);
+
+        if ($targetIndex === false) {
+            throw new \LogicException("Stage '{$stageKey}' is not on this application's chain.");
+        }
+
+        if ($targetIndex >= $currentIndex) {
+            throw new \LogicException(
+                "'{$stageKey}' is not earlier than '{$stage->key}'. returnTo() only moves an application back."
+            );
+        }
+
+        $target = $stages[$targetIndex];
+
+        return DB::transaction(function () use ($application, $actor, $stage, $target, $remarks) {
+            ApprovalHistory::create([
+                'application_id' => $application->id,
+                'approver_id' => $actor->id,
+                'stage_key' => $stage->key,
+                'stage_label' => $stage->label,
+                'decision' => 'returned',
+                'remarks' => $remarks,
+            ]);
+
+            // Still pending -- that is the whole difference from a rejection.
+            $application->forceFill([
+                'status' => Application::STATUS_PENDING,
+                'current_stage' => $target->key,
+            ])->save();
+
+            $application->refresh();
+
+            activity('workflow')
+                ->causedBy($actor)
+                ->performedOn($application)
+                ->withProperties([
+                    'action' => 'returned',
+                    'module' => $application->module_type,
+                    'stage' => $stage->key,
+                    'stage_label' => $stage->label,
+                    'returned_to' => $target->key,
+                    'status' => $application->status,
+                ])
+                ->log('Application returned to '.$target->label);
+
+            // AFTER THE COMMIT, never inside it -- see notifyStudent().
+            DB::afterCommit(function () use ($application, $stage, $target, $remarks) {
+                $this->notifyReturn($application, $stage, $target, $remarks);
+            });
+
+            return $application;
+        });
+    }
+
+    /**
+     * A return has two audiences, unlike every other decision.
+     *
+     * The student is told, as always. So is whoever now has to act: the work
+     * has gone backwards to a desk that had already cleared it, and nothing
+     * would otherwise tell them except the row quietly reappearing in their
+     * queue. A department-scoped stage is narrowed to that application's own
+     * department -- see Role::isDepartmentScoped() -- so eleven Academic
+     * Executives are not emailed about one department's list.
+     *
+     * Best effort, for the reason notifyStudent() gives: the decision is
+     * committed and durable; the announcement is not worth a 500 over.
+     */
+    protected function notifyReturn(Application $application, Stage $from, Stage $target, string $remarks): void
+    {
+        try {
+            $notification = new ApplicationReturned($application, $from, $target, $remarks);
+
+            $application->student?->notify($notification);
+
+            $owners = User::where('role', $target->role)
+                ->when(
+                    Role::isDepartmentScoped($target->role) && $application->student?->department,
+                    fn ($q) => $q->where('department', $application->student->department)
+                )
+                ->get()
+                ->reject(fn (User $user) => $user->is($application->student));
+
+            Notification::send($owners, $notification);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**

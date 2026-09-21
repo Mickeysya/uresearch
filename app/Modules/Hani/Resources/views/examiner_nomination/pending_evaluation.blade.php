@@ -16,18 +16,14 @@
                 </div>
                 <p>Student: {{ $nomination->application->student->name }}</p>
                 <p>Thesis: {{ $nomination->thesis_title }}</p>
-                <p>Main examiner: <b>{{ $nomination->mainExaminer->name }}</b>
-                    @if ($nomination->mainExaminer->assigned_until)
-                        tied up until {{ $nomination->mainExaminer->assigned_until->format('j M Y') }}
-                    @endif
-                </p>
-                @if ($nomination->backupExaminer)
-                    <p>Backup examiner: {{ $nomination->backupExaminer->name }}
-                        @if ($nomination->backupExaminer->assigned_until)
-                            tied up until {{ $nomination->backupExaminer->assigned_until->format('j M Y') }}
+                @foreach ($nomination->panel() as $seat => $examiner)
+                    @continue (! $examiner)
+                    <p>{{ $seat }}: <b>{{ $examiner->name }}</b>
+                        @if ($examiner->assigned_until)
+                            tied up until {{ $examiner->assigned_until->format('j M Y') }}
                         @endif
                     </p>
-                @endif
+                @endforeach
 
                 <form method="POST" action="{{ route('examiner-nomination.mark-complete', $nomination) }}">
                     @csrf

@@ -123,7 +123,14 @@ class DemoDataSeeder extends Seeder
         'supervision' => [Role::SUPERVISOR, Role::NON_EXEC_CGS],
         'ga_certification' => [Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS],
         'attendance_appeal' => [Role::NON_EXEC_CGS],
-        'examiner_nomination' => [Role::ACADEMIC_EXEC],
+        // Six stages since 2026-09-22 -- see ExaminerNominationWorkflow.
+        // The demo walks part of it and leaves rows genuinely pending at
+        // every desk on the way up, which is what makes each of those
+        // queues show something.
+        'examiner_nomination' => [
+            Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS,
+            Role::DEAN_PGR, Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS,
+        ],
     ];
 
     public function run(?string $scenario = null): void
@@ -185,6 +192,7 @@ class DemoDataSeeder extends Seeder
             Role::SENIOR_DIRECTOR_CGS => User::where('email', 'director@utp.edu.my')->firstOrFail(),
             Role::DEAN_PGR => User::where('email', 'dean@utp.edu.my')->firstOrFail(),
             Role::ACADEMIC_EXEC => User::where('email', 'ae@utp.edu.my')->firstOrFail(),
+            Role::SENIOR_EXEC_CGS => User::where('email', 'seniorexec@utp.edu.my')->firstOrFail(),
         ];
     }
 
@@ -435,7 +443,7 @@ class DemoDataSeeder extends Seeder
         foreach ($decisions as $i => $decision) {
             $role = self::CHAINS[$chainKey][$i];
             $when = $when->copy()->addDays($gapDays);
-            $actor = $role === Role::SUPERVISOR ? $application->student->supervisor : $this->deciders[$role];
+            $actor = $this->deciderFor($role, $application);
 
             $this->at($when, fn () => $this->engine->decide($application, $actor, $decision));
 
@@ -445,6 +453,45 @@ class DemoDataSeeder extends Seeder
         }
 
         return $application->fresh();
+    }
+
+    /**
+     * Who acts at this stage, for this application.
+     *
+     * The supervisor is whoever actually supervises the candidate, and a
+     * department-scoped role (Chair, Academic Executive -- see
+     * Role::isDepartmentScoped()) has to be someone from the candidate's OWN
+     * department, or WorkflowEngine::decide() refuses the decision outright.
+     * The fixed roster account is the fallback for departments nobody covers.
+     */
+    protected function deciderFor(string $role, Application $application): User
+    {
+        if ($role === Role::SUPERVISOR) {
+            return $application->student->supervisor;
+        }
+
+        $department = $application->student?->department;
+
+        if (Role::isDepartmentScoped($role) && $department) {
+            $local = User::where('role', $role)
+                ->where('department', $department)
+                ->orderBy('id')
+                ->first();
+
+            // Nobody covers that department yet, so the demo makes one rather
+            // than handing the decision to an approver from somewhere else,
+            // which the engine would refuse outright. A department-scoped
+            // chain cannot run without a local approver, and a demo with a
+            // hole in it teaches the wrong thing about the rule.
+            return $local ?? $this->user(
+                Role::label($role).', '.$department,
+                Str::slug(str_replace('_', '-', $role).'-'.$department).'@utp.edu.my',
+                $role,
+                ['department' => $department, 'faculty' => $application->student->faculty]
+            );
+        }
+
+        return $this->deciders[$role];
     }
 
     /** Spreads submissions across the last ~65 days so this-month/last-month deltas are both populated. */
@@ -732,18 +779,24 @@ class DemoDataSeeder extends Seeder
             'Cybersecurity Risk Modelling for SCADA Systems in Critical Infrastructure',
         ]);
 
-        // rosli and chandra are the seeded examiners in "available" states;
-        // nabila is the backup used across the board.
-        $main = Examiner::whereIn('email', ['rosli@utp.edu.my', 'chandra@utp.edu.my'])->get()->keyBy('email')->values();
-        $backup = Examiner::where('email', 'nabila@um.edu.my')->first();
+        // The internal half of a panel has to come from the candidate's own
+        // department (ExaminerNominationController::store()), so the pool is
+        // indexed by department and each nomination takes the one that
+        // matches its candidate. The external half is not department-bound.
+        $internals = Examiner::where('type', Examiner::TYPE_INTERNAL)->get()->groupBy('department');
+        $externals = Examiner::where('type', Examiner::TYPE_EXTERNAL)->orderBy('name')->get();
 
+        // One row left waiting at each desk on the chain, so every stage of
+        // it has something to show: nothing decided yet, then cleared by the
+        // department, then compiled, then verified, then approved by the
+        // Dean, and one refused on the way.
         $outcomes = [
-            ['approve'],
-            ['approve'],
             [],
             ['approve'],
-            ['reject'],
-            [],
+            ['approve', 'approve'],
+            ['approve', 'approve', 'approve'],
+            ['approve', 'approve', 'approve', 'approve'],
+            ['approve', 'reject'],
         ];
 
         $count = 0;
@@ -751,7 +804,15 @@ class DemoDataSeeder extends Seeder
         foreach ($titles as $i => $title) {
             $student = $students[($i * 9 + 4) % $students->count()];
             $submittedAt = $this->daysAgo($anchor, $i + 29);
-            $mainExaminer = $main[$i % $main->count()];
+
+            $sameDepartment = $internals->get($student->department, collect());
+
+            // No internal examiner in this candidate's department means no
+            // panel can legally be filed for them -- skip rather than seed a
+            // nomination the form itself would have refused.
+            if ($sameDepartment->isEmpty() || $externals->isEmpty()) {
+                continue;
+            }
 
             $application = Application::create([
                 'student_id' => $student->id,
@@ -761,8 +822,14 @@ class DemoDataSeeder extends Seeder
 
             ExaminerNomination::create([
                 'application_id' => $application->id,
-                'main_examiner_id' => $mainExaminer->id,
-                'backup_examiner_id' => $backup?->id,
+                'internal_main_id' => $sameDepartment[$i % $sameDepartment->count()]->id,
+                'internal_backup_id' => $sameDepartment->count() > 1
+                    ? $sameDepartment[($i + 1) % $sameDepartment->count()]->id
+                    : null,
+                'external_main_id' => $externals[$i % $externals->count()]->id,
+                'external_backup_id' => $externals->count() > 1
+                    ? $externals[($i + 1) % $externals->count()]->id
+                    : null,
                 'thesis_title' => $title,
             ]);
 

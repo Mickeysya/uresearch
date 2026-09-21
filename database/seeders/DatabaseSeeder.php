@@ -37,11 +37,17 @@ class DatabaseSeeder extends Seeder
             'faculty' => 'FSMC',
         ]);
 
-        $this->user('Puan Waheeda', 'cgs@utp.edu.my', Role::NON_EXEC_CGS, ['department' => 'CGS']);
-        // Rules on a hardbound appeal after the Non-Executive compiles the
-        // Dean PFR report -- the last stage of HardboundAppealWorkflow, which
-        // had nobody able to act on it until this account existed.
-        $this->user('Puan Hasnah', 'seniorexec@utp.edu.my', Role::SENIOR_EXEC_CGS, ['department' => 'CGS']);
+        // Who sits at which CGS desk, corrected 2026-09-22: Puan Waheeda is
+        // the Senior Executive and M Syahmi Ifwat M Jafri is the
+        // Non-Executive. They were seeded the other way round, which put the
+        // examiner-nomination compilation and the final release on the wrong
+        // two desks. The addresses stay with the ROLE, not the person, so
+        // every doc, test and route that names them still holds.
+        $this->user('M Syahmi Ifwat M Jafri', 'cgs@utp.edu.my', Role::NON_EXEC_CGS, ['department' => 'CGS']);
+        // Compiles the faculty examiner list and holds the finalised report
+        // (ExaminerNominationWorkflow), and rules on a hardbound appeal after
+        // the Non-Executive prepares the Dean PFR report.
+        $this->user('Puan Waheeda', 'seniorexec@utp.edu.my', Role::SENIOR_EXEC_CGS, ['department' => 'CGS']);
         $this->user('Norshahirah', 'manager@utp.edu.my', Role::MANAGER_CGS, ['department' => 'CGS']);
         $this->user('En Zulkifly', 'director@utp.edu.my', Role::SENIOR_DIRECTOR_CGS, ['department' => 'CGS']);
         $this->user('Prof. Dr. Hafiz Osman', 'dean@utp.edu.my', Role::DEAN_PGR, ['department' => 'PGR']);
@@ -232,7 +238,7 @@ class DatabaseSeeder extends Seeder
             // Available: never examined, no assignment.
             ['Prof. Dr. Rosli Hamid', 'rosli@utp.edu.my', 'Petroleum Engineering', 'FOE', 'internal', true, null, null, []],
             // Available: last examined well beyond the 90-day gap.
-            ['Dr. Chandra Segaran', 'chandra@utp.edu.my', 'Civil Engineering', 'FOE', 'internal', true, '-200 days', null, []],
+            ['Dr. Chandra Segaran', 'chandra@utp.edu.my', 'Civil & Environmental Engineering', 'FOE', 'internal', true, '-200 days', null, []],
             // On gap: examined 30 days ago.
             ['Prof. Madya Dr. Nabila Yusof', 'nabila@um.edu.my', 'Computing', null, 'external', true, '-30 days', null, [
                 'institution' => 'Universiti Malaya (UM)',
@@ -259,6 +265,31 @@ class DatabaseSeeder extends Seeder
             ]],
             // Unavailable: retired.
             ['Prof. Dr. Ismail Bakar', 'ismail@utp.edu.my', 'Chemical Engineering', 'FOE', 'internal', false, null, null, []],
+
+            // One available internal in each department the seeded candidates
+            // actually belong to. The internal half of a panel has to come
+            // from the candidate's own department -- see
+            // ExaminerNominationController::store() -- so without these there
+            // is no legal nomination to file for most of them.
+            ['Dr. Lim Kah Meng', 'lim.kahmeng@utp.edu.my', 'Computing', 'FSMC', 'internal', true, null, null, []],
+            ['Dr. Noraini Abdul Ghani', 'noraini.ghani@utp.edu.my', 'Chemical Engineering', 'FOE', 'internal', true, null, null, []],
+            ['Dr. Hafiz Zainuddin', 'hafiz.zainuddin@utp.edu.my', 'Electrical & Electronics Engineering', 'FOE', 'internal', true, null, null, []],
+
+            // An AVAILABLE external. Without one there is no legal panel to
+            // file at all: every nomination needs an external main, and the
+            // two externals above are deliberately parked in "assigned" and
+            // "on gap" to show those states.
+            ['Prof. Dr. Ariffin Samsuri', 'ariffin@utm.edu.my', 'External', null, 'external', true, null, null, [
+                'institution' => 'Universiti Teknologi Malaysia (UTM)',
+                'sector' => 'research',
+                'faculty_approval' => '3.2025',
+                'utp_cluster' => 'Petroleum Engineering',
+                'expertise' => '1. Reservoir Engineering'."\n".'2. Enhanced Oil Recovery',
+                'years_experience' => 22,
+                'msc_graduated' => 20,
+                'phd_graduated' => 9,
+                'first_examination_date' => '-3 years',
+            ]],
         ];
 
         foreach ($rows as [$name, $email, $dept, $faculty, $type, $active, $lastExam, $assigned, $external]) {

@@ -16,16 +16,28 @@
     }
 
     .dept-table { width: 100%; }
-    .dept-table td:last-child { text-align: right; white-space: nowrap; }
+
+    /* Every column reads down its own centre line, headings included. The
+       base .data-table pads on the right only, which would pull centred
+       content off that line, so this one pads both sides evenly. */
+    .dept-table th,
+    .dept-table td {
+        text-align: center;
+        padding-left: var(--space-3);
+    }
+
+    .dept-table td:last-child { white-space: nowrap; }
     .dept-table td:last-child a, .dept-table td:last-child button {
-        margin: 0 0 0 var(--space-2); padding: var(--space-1) var(--space-3); font-size: var(--text-sm);
+        margin: 0 var(--space-1); padding: var(--space-1) var(--space-3); font-size: var(--text-sm);
     }
     .dept-table tr.is-retired td { color: var(--text-grey); }
     .dept-count { color: var(--text-grey); font-variant-numeric: tabular-nums; }
 
     /* The faculty band. A row in the same table rather than a table each, so
-       every column still lines up down the whole page. */
+       every column still lines up down the whole page. It is a heading rather
+       than a cell, so it stays at the left edge while the columns centre. */
     .dept-faculty > td {
+        text-align: left;
         padding: var(--space-4) var(--space-3);
         border-bottom: 1px solid var(--border-grey);
         background: var(--surface-sunken);

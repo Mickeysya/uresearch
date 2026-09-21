@@ -20,7 +20,7 @@ as the work it describes.
 | Norhanis — Publication | done |
 | Norhanis — RPD (reminders · appeals · dismissals) | done |
 | Nureen — GA Extension · Attendance · Supervision · Certification | done · matches `docs/scope/nureen.md` |
-| Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done · internal/external pool split merged 2026-09-17 |
+| Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done · four-seat panel and the six-stage chain landed 2026-09-22 |
 | CGS dashboard (5 stat cards + 5 live panels) | done |
 | Admin dashboard (5 cards + 4 panels, system health) | done |
 | Notification feed (`/notifications`) | done |
@@ -29,9 +29,9 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | **157**, all green — covering the engine, the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, Nureen’s and Hani’s chains, and Jason's three rules (signature gate, resubmit guard, appeal once-only) |
+| Automated tests | **194**, all green — covering the engine (including `returnTo`, through Hani's chain), the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, Nureen’s and Hani’s chains, the department admin screen, and Jason's three rules (signature gate, resubmit guard, appeal once-only) |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12 |
-| Last reviewed | 2026-09-17 — Jason's merge, a per-owner outstanding-issues audit in each section below, and every open item in Norhanis's and Jason's sections closed |
+| Last reviewed | 2026-09-22 — the faculty/department list, the examiner-nomination chain and `WorkflowEngine::returnTo()`; before that 2026-09-17, Jason's merge and a per-owner outstanding-issues audit |
 
 ---
 
@@ -40,7 +40,7 @@ as the work it describes.
 Run end to end on 2026-09-09 (Ubuntu 24.04 / WSL2, PHP 8.3.6, MySQL 8.4.11):
 
 - [x] `./setup.sh` completes from a clean clone and an empty volume
-- [x] All migrations run (9 at the time, 18 now); 11 accounts and 5 examiners seeded
+- [x] All migrations run (9 at the time, 41 now); the roster plus one Academic Executive per department, and 9 examiners, seeded
 - [x] Every route registers, including every module — auto-discovery works
       (20 at the time, 85 now)
 - [x] International travel routes through all four approvers; the student's
@@ -173,8 +173,11 @@ merge, and `route:list` boots clean. What the review did turn up:
 - [x] **Closed 2026-09-17, verified in the code.** It now checks
       `$application->refresh()->status === STATUS_APPROVED`, so it fires when
       the chain finishes rather than when this approver says yes — which
-      survives the second stage that workflow's docblock plans. Original
-      report: it fired on any approval,
+      survives the second stage that workflow's docblock plans. **That guard
+      earned itself on 2026-09-22**, when the chain went from one stage to
+      six: without it every panel would have been tied up for 180 days at the
+      Academic Executive's approval, five stages before the list was final.
+      Original report: it fired on any approval,
       not the final one.** Harmless while the chain has one stage — but
       `ExaminerNominationWorkflow`'s own docblock plans a second stage for
       touchpoint 2, and the day it lands both examiners get tied up for 180
@@ -272,7 +275,10 @@ merge, and `route:list` boots clean. What the review did turn up:
 - [x] Migrations: users, sessions, cache, jobs, applications, approval_history, application_documents
 - [x] Blade: layouts, registry-driven sidebar, stepper, status badge, decision form, shared queue partial
 - [x] Norhanis' stylesheet carried over unchanged, additions appended below a marked line
-- [x] Seeder — 11 accounts covering every role, 5 examiners in all four states
+- [x] Seeder — every role covered, plus an Academic Executive for each of the
+      twelve departments; 9 examiners, including one available external (without
+      one, no panel can be filed at all) and one internal per department the
+      seeded candidates belong to (the internal seat is department-bound)
 - [x] Module auto-discovery (`ModuleServiceProvider`)
 
 ### Core — student dashboard (2026-09-12)
@@ -412,6 +418,45 @@ query; there is no placeholder data in the views.
       by both layouts, instead of being duplicated in each.
       New styling goes in the sheet that owns that screen; anything shared by
       all three dashboards goes in `charts.css` or `dashboard-states.css`.
+
+### Core — faculties, departments and `returnTo()` (2026-09-22)
+
+- [x] **The department list is the university's own.** `departments` grew a
+      `faculty` column (`2026_09_22_000200`), holding the same short codes
+      `users.faculty` already carries. `Core/Support/Faculty.php` holds the
+      titles, shaped like `Role`: CFS, FOE, FSMC. CGS is deliberately absent —
+      it routes candidates through these same departments rather than having
+      its own.
+- [x] **The canonical twelve are seeded**: the two foundation streams, FoE's
+      six and FSMC's four. The old flat seventeen-name list was *renamed* into
+      them, accounts and all, using the same two-step write
+      `DepartmentAdminController::update()` does, so nobody was left filed
+      under a name the picker no longer offers. 18 accounts moved from
+      "Computer & Information Sciences" to "Computing".
+- [x] **`/admin/departments` shows the shape**: a faculty band, then its
+      departments, then who covers each one's examiner-nomination queue. A
+      department with accounts and no Academic Executive is called out in
+      amber — that queue has nobody to clear it. The picker on "add a user"
+      is grouped by faculty with `<optgroup>`s.
+- [x] **One Academic Executive per department is seeded** (`ae.chemical@`,
+      `ae.civil@`, … `ae.management@`), because the AE queue is
+      department-scoped: eleven departments had no one who could act on their
+      rows at all.
+- [x] **`WorkflowEngine::returnTo()`** — send an application back to a named
+      earlier stage with a mandatory reason, instead of rejecting it. Records
+      `decision = 'returned'`, leaves `status = pending`, refuses forward
+      jumps, and notifies both the candidate and whoever now has to act
+      (narrowed to the right department for a department-scoped stage).
+      Additive: nothing changes for a module that does not opt in, which it
+      does by passing `$returnRoute` to `core::partials.queue`.
+      **Jason** — this is the "returned, still open" outcome your Hardbound
+      notes ask for; `hardbound_submission` can use it instead of
+      reject-and-clone if you want one application per attempt.
+- [x] **`./sync.sh` now seeds as well as migrates.** A migration adds the
+      column; the seeder is what fills it, so a pull that changes reference
+      data needed both. It is `updateOrCreate` throughout, so it is a no-op
+      once you are current — but it does put the test accounts' passwords
+      back to `password`.
 
 ### Core — design system and dark mode (2026-09-15)
 - [x] **`public/css/tokens.css`** — the app had a brand but no system: 67
@@ -922,6 +967,38 @@ notification does on a box with no worker.
 - [x] **Nomination** — supervisor nominates main + backup for their own
       candidates; AE approves. Touchpoint 1 enforced in the dropdown and again
       on submit.
+- [x] **The four-seat panel and the six-stage chain (2026-09-22).** The flow
+      CGS confirmed, end to end:
+      supervisor → `academic_exec` → `cgs_compile` (Senior Exec CGS) →
+      `senior_director` → `dean` → `cgs_final` (Senior Exec CGS) →
+      `cgs_release` (Non-Exec CGS).
+      - A nomination is now **internal main + backup and external main +
+        backup**, four nullable FK columns on `examiner_nominations`
+        (`2026_09_22_000400_split_nomination_examiners_by_type`, which carries
+        existing rows across by the examiner's own type). The old
+        `main_examiner_id`/`backup_examiner_id` pair is gone.
+      - **The internal pair must come from the candidate's own department.**
+        Enforced in `ExaminerNominationController::store()` — a foreign key
+        cannot express "the same department as the student on this
+        application" — and mirrored in the form, where choosing a candidate
+        hides every internal examiner from another department.
+      - **`WorkflowEngine::returnTo()` is new, and it is in Core.** The Senior
+        Director and the Dean send a list back to `academic_exec` with a
+        mandatory reason instead of rejecting it; the application stays
+        pending, keeps one audit trail, and replays forward. Additive: no
+        existing module changes behaviour, and a module opts in by passing
+        `$returnRoute` to `core::partials.queue`. **Raise it at standup.**
+      - **The compiled report** — `/examiner-nomination/report`, plus
+        `?format=xlsx|csv` on `/examiner-nomination/report/export`, both off
+        one `ExaminerListExport` and both scoped by the reader's role. This is
+        step 3 of the agreed flow (the AE's department list) and step 5 (CGS's
+        merged list) on one screen.
+      - The panel is tied up only when the **chain finishes**, not at the
+        first approval — see the note under "Cross-cutting" about
+        `$application->refresh()->status`.
+      - Puan Waheeda is **Senior Executive CGS** and M Syahmi Ifwat M Jafri is
+        **Non-Executive CGS**; the seeder had the two desks the other way
+        round. The addresses stay with the role (`seniorexec@`, `cgs@`).
 - [x] **Examiner lifecycle closed** — `ExaminerNominationController::decide()`
       overrides the trait to set `assigned_until` on both examiners when the
       AE approves; a new "Pending Evaluation" screen (AE) marks the
@@ -1016,12 +1093,15 @@ matters:
       `ExaminerNominationTest`; touchpoint 2
       (`/examiner-nomination/conflicts`) has none, and it is much the harder
       query of the two — cross-department duplicates across active
-      nominations.
-- [ ] **Touchpoint 2 is built for a different actor than the scope names.**
-      `hani.md` puts it at the "CGS Management Compilation Stage", with the
-      Dean or CGS Management deciding the substitution; the screen is gated to
-      the Academic Executive. One of the two is stale — confirm with CGS and
-      correct whichever it is.
+      nominations. The compiled report computes the same clash set
+      (`ExaminerNominationController::report()`) and is likewise untested for
+      it: one test over a two-department fixture would cover both.
+- [x] **Touchpoint 2's actor, settled 2026-09-22.** `hani.md` put it at the
+      "CGS Management Compilation Stage" while the screen was gated to the
+      Academic Executive. Both are now true and neither is stale: the AE keeps
+      `/examiner-nomination/conflicts` for their own department, and the
+      merged cross-department view is the `cgs_compile` stage's compiled
+      report, which flags the same clashes inline for the Senior Executive.
 - [ ] **Re-appointment letters were left behind in the pivot.** `hani.md` §3
       lists re-appointment letters and evaluation-report PDFs for external
       panel examiners. Jason's `appointment_letter` generates both, but only
@@ -1111,6 +1191,10 @@ unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
         their corrections, not to an appeal at CGS. A true "returned, still
         open" outcome is still worth having in Core — see Cross-cutting —
         but nothing here is blocked on it now.
+        **Landed 2026-09-22:** `WorkflowEngine::returnTo()` now provides
+        exactly that, built for Hani's examiner chain. Adopting it here is
+        Jason's call and not required — reject-and-clone keeps every attempt
+        as its own row, which returning does not.
 
 - [x] **Appeal Hardbound Submission** (`hardbound_appeal`) — only filable
       once a Hardbound Submission has been rejected/returned

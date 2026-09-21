@@ -9,6 +9,11 @@
     Optional: $intro -- a line of guidance about what deciding here means.
               Pass it in rather than writing it above the include, or it
               renders ABOVE the page title and the screen reads headless.
+              $returnRoute / $returnLabel -- a route that posts to
+              WorkflowEngine::returnTo(), for a stage that can send work back
+              to an earlier one instead of rejecting it outright.
+              $tools -- a partial rendered beside the search box, for a screen
+              that offers something more than deciding (an export, say).
 
     WHAT CHANGED, AND WHY (2026-09-17)
 
@@ -52,6 +57,14 @@
 
 @isset ($intro)
     <p class="queue-intro">{!! $intro !!}</p>
+@endisset
+
+{{-- A screen that offers more than deciding -- an export, a link to the
+     compiled report -- names a partial here. It has to render inside this
+     file rather than above the include, or it lands above the page title and
+     the screen reads headless. --}}
+@isset ($tools)
+    @include($tools)
 @endisset
 
 @if ($total > 0 || $filters['q'] !== '')
@@ -193,7 +206,16 @@
                         </ul>
                     @endif
 
-                    <x-core::decision-form :application="$application" :route="route($decideRoute, $application)" />
+                    {{-- $returnRoute is optional: a module whose stage can send
+                         work back to an earlier one passes the route name and
+                         the button label, and the decision form grows a third
+                         action. Modules that do not are untouched. --}}
+                    <x-core::decision-form
+                        :application="$application"
+                        :route="route($decideRoute, $application)"
+                        :return-action="isset($returnRoute)
+                            ? ['route' => route($returnRoute, $application), 'label' => $returnLabel ?? 'Send back']
+                            : null" />
                 </div>
             </details>
         @endforeach

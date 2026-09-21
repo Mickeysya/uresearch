@@ -61,6 +61,7 @@ that did not contain it.
 ```php
 $engine->submit($application);                              // onto stage 1
 $engine->decide($application, $user, 'approve', $remarks);  // advance or finish
+$engine->returnTo($application, $user, 'academic_exec', $why);  // send it back
 $engine->queue('travel', 'chair');                          // who is waiting
 $engine->progress($application);                            // for the stepper
 ```
@@ -71,6 +72,35 @@ application approved when the chain runs out), and notifies the student.
 
 Rejection sets `status = rejected` and **leaves `current_stage` where it was**,
 so the stepper can show the student exactly where it stopped.
+
+### Sending an application back (`returnTo`)
+
+Some stages do not want either answer. A Senior Director who will not sign off
+a compiled examiner list is not refusing the candidate — one department has to
+choose again, and everything above that department has to see the replacement.
+Rejecting there would end the application and split the audit trail across two
+of them.
+
+`returnTo()` records the decision as `returned` at the stage doing the sending,
+moves `current_stage` **backwards** to a named earlier stage, and leaves the
+application `pending`. The chain then replays forward through every stage in
+between. Remarks are **mandatory**, unlike on approve and reject: somebody is
+being asked to redo work.
+
+It refuses a forward jump — it exists to undo progress, not to skip a stage,
+and moving an application forward this way would bypass the authorisation on
+every stage in between.
+
+Two audiences are notified, which is the other thing that makes it different:
+the student, as always, and whoever now has to act, since work has gone
+backwards to a desk that had already cleared it. A department-scoped target
+stage (`Role::isDepartmentScoped()`) is narrowed to that application's own
+department, so one department's list does not email eleven Academic
+Executives.
+
+A module opts in by passing `$returnRoute` and `$returnLabel` to
+`core::partials.queue`; a module that does not renders exactly what it did
+before. `ExaminerNominationWorkflow` is the worked example.
 
 `queue()` returns a **Builder**, not a collection, and
 `Concerns\ApprovesApplications::queueFor()` paginates it (20 a page), searches
@@ -284,11 +314,17 @@ Nothing central lists the modules, which is why adding one causes no conflict.
 Two independent locks:
 
 1. `role:` middleware on the route — a wrong role never reaches the controller.
-2. `WorkflowEngine::decide()` re-checks the actor's role against the stage the
-   application is **actually** on.
+2. `WorkflowEngine::decide()` (and `::returnTo()`) re-checks the actor's role
+   against the stage the application is **actually** on.
 
 The second matters because one queue route serves every stage of a chain. A
 Chair can open the travel queue, but cannot act on a row sitting at the Dean.
+Examiner Nomination is the case that makes this load-bearing: one route serves
+all six of its stages, and five different roles can reach it.
+
+A department-scoped role (`Role::isDepartmentScoped()` — Chair and Academic
+Executive) gets a third check in the same place: holding the role is not the
+same as this being your department's row.
 
 ## Uploads
 

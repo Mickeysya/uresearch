@@ -3,14 +3,23 @@
 @if ($nomination)
     <p>Filed by: {{ $application->submittedBy?->name ?? 'Unknown' }}</p>
     <p>Thesis: {{ $nomination->thesis_title }}</p>
-    <p>Main examiner: <b>{{ $nomination->mainExaminer->name }}</b>
-       {{ $nomination->mainExaminer->department }}
-       ({{ ucfirst($nomination->mainExaminer->type) }})</p>
-    @if ($nomination->backupExaminer)
-        <p>Backup examiner: {{ $nomination->backupExaminer->name }}
-           {{ $nomination->backupExaminer->department }}
-           ({{ ucfirst($nomination->backupExaminer->type) }})</p>
-    @endif
+
+    <table class="recent-activity-table">
+        <thead>
+            <tr><th>Seat</th><th>Examiner</th><th>Department / Institution</th><th>State</th></tr>
+        </thead>
+        <tbody>
+            @foreach ($nomination->panel() as $seat => $examiner)
+                <tr>
+                    <td>{{ $seat }}</td>
+                    <td>{{ $examiner?->name ?? '—' }}</td>
+                    <td>{{ $examiner?->institution ?: $examiner?->department ?: '—' }}</td>
+                    <td>{{ $examiner?->stateLabel() ?? '—' }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+
     @if ($nomination->notes)
         <p>Notes: {{ $nomination->notes }}</p>
     @endif
