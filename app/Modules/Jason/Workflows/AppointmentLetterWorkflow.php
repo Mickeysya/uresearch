@@ -113,6 +113,7 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
             // by whoever hears of them first.
             Role::NON_EXEC_CGS => [
                 ['label' => 'Examiner List', 'route' => 'appointment-letter.examiners'],
+                ['label' => 'Issued Appointments', 'route' => 'appointment-letter.issued'],
             ],
             default => [],
         };

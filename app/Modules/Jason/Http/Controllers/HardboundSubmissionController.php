@@ -10,6 +10,7 @@ use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Models\ApplicationDocument;
 use App\Modules\Jason\Models\HardboundSignature;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
+use App\Modules\Jason\Notifications\HardboundSubmissionRejected;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -184,12 +185,19 @@ class HardboundSubmissionController extends Controller
 
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],
-            // A rejection at any stage is a return to the student, and a return
-            // without comments gives them nothing to correct.
-            'remarks' => [$returning ? 'required' : 'nullable', 'string', 'max:2000'],
-        ], [
-            'remarks.required' => 'Tell the student what to correct before returning the submission.',
+            'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // A return without comments gives the student nothing to act on. This
+        // is checked here rather than as a validation rule because the shared
+        // decision form labels remarks "(optional)" and nothing renders the
+        // validation error bag -- a failed rule would just bounce the reviewer
+        // back to an unchanged page with no explanation. A flashed error is
+        // rendered by the layout.
+        if ($returning && blank($data['remarks'] ?? null)) {
+            return back()->with('error',
+                'Returning a submission needs remarks — tell the student what to correct, then press Reject again.');
+        }
 
         // Approving as Supervisor or Chairman stamps a signature onto the
         // Confirmation, so there has to be one to stamp. CGS has no block on
@@ -215,6 +223,18 @@ class HardboundSubmissionController extends Controller
 
         if (! $returning && $stage?->key === self::FINAL_STAGE) {
             $this->issueAcknowledgement($application);
+        }
+
+        if ($returning && $stage) {
+            // The engine's own notice says only "not approved ... contact your
+            // supervisor", which is wrong here -- this chain closes the
+            // application and offers two ways forward.
+            $application->student?->notify(new HardboundSubmissionRejected(
+                $application,
+                $stage,
+                $request->user()->name,
+                $data['remarks'] ?? null,
+            ));
         }
 
         return back()->with('status', $returning

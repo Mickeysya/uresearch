@@ -59,6 +59,14 @@ Route::middleware('auth')->group(function () {
             ->name('appointment-letter.prepare');
         Route::post('/appointment-letter/{application}/prepare', [AppointmentLetterController::class, 'savePreparation'])
             ->name('appointment-letter.prepare.store');
+
+        // What happened to the packs after the Dean approved. Dispatch runs
+        // outside the workflow engine, so this is the only place a pack that
+        // never reached its examiner shows up -- and where CGS resends it.
+        Route::get('/appointment-letter/issued', [AppointmentLetterController::class, 'issued'])
+            ->name('appointment-letter.issued');
+        Route::post('/appointment-letter/{application}/resend/{examiner}', [AppointmentLetterController::class, 'resend'])
+            ->name('appointment-letter.resend');
     });
 
     // ---- Hardbound Submission ------------------------------------------

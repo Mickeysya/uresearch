@@ -13,13 +13,30 @@ class AppointmentExaminer extends Model
     public const TYPE_EXTERNAL = 'external';
 
     protected $fillable = [
-        'application_id', 'examiner_type', 'examiner_name', 'examiner_institution',
+        'application_id', 'pool_examiner_id', 'examiner_type', 'examiner_name', 'examiner_institution',
         'examiner_address', 'examiner_email', 'examiner_expertise', 'letter_ref_no',
+        'appointed_at', 'pack_sent_at',
     ];
+
+    protected function casts(): array
+    {
+        return ['appointed_at' => 'datetime', 'pack_sent_at' => 'datetime'];
+    }
 
     public function application(): BelongsTo
     {
         return $this->belongsTo(Application::class);
+    }
+
+    /** The list entry this panel member was picked from, where there was one. */
+    public function poolExaminer(): BelongsTo
+    {
+        return $this->belongsTo(PoolExaminer::class, 'pool_examiner_id');
+    }
+
+    public function packSent(): bool
+    {
+        return $this->pack_sent_at !== null;
     }
 
     public function isInternal(): bool
