@@ -209,7 +209,7 @@ class QueueTest extends TestCase
                 $this->actingAs($user)
                     ->get(route($module->queueRoute(), ['stage' => $stage->key]))
                     ->assertOk()
-                    // Escaped needle, not raw: "GA Extension & VISA" reaches
+                    // Escaped needle, not raw: "GA Extension" reaches
                     // the page as "GA Extension &amp; VISA".
                     ->assertSee($module->label());
 
