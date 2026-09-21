@@ -50,7 +50,7 @@ class ClaimsWorkflow implements WorkflowModule
             return 'Student Claims application';
         }
 
-        return $detail->purpose_of_claim.' — RM '.number_format($detail->total_claim_amount, 2);
+        return $detail->purpose_of_claim.', RM '.number_format($detail->total_claim_amount, 2);
     }
 
     public function createRoute(): ?string

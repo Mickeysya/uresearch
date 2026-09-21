@@ -28,11 +28,22 @@ class ReVivaController extends Controller
     {
         $students = User::where('role', Role::STUDENT)->orderBy('name')->get();
 
+        // Every student's latest cycle in one query. This used to call
+        // latestCycle() inside the loop below, which cost one query per
+        // postgraduate in the system every time the form was opened.
+        // Ascending order matters: keyBy() keeps the last row it sees for a
+        // repeated key, so the highest cycle_number per student wins.
+        $latestCycles = ReVivaDetail::with('application:id,student_id')
+            ->whereHas('application', fn ($q) => $q->where('module_type', $this->moduleKey()))
+            ->orderBy('cycle_number')
+            ->get()
+            ->keyBy(fn (ReVivaDetail $detail) => $detail->application->student_id);
+
         // Same pattern as the examiner dropdown on the nomination form: show
         // every student, but flag which ones CGS cannot log a new cycle for
         // right now, and why.
         $blockedReasons = $students->mapWithKeys(
-            fn (User $student) => [$student->id => $this->blockReason($this->latestCycle($student->id))]
+            fn (User $student) => [$student->id => $this->blockReason($latestCycles->get($student->id))]
         );
 
         return view('hani::re_viva.form', compact('students', 'blockedReasons'));

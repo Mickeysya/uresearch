@@ -1,14 +1,17 @@
 @extends('core::layouts.app')
 
-@section('title', 'Re-viva — ' . $stage->queueTitle())
+@section('title', 'Re-viva: ' . $stage->queueTitle())
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="Re-viva Monitoring: {{ $stage->queueTitle() }}" />
+
     <div class="card card-wide">
-        <h2>Re-viva Monitoring — {{ $stage->queueTitle() }}</h2>
-        <div class="card-divider"></div>
+        {{-- total(), not count(): queues are paginated in Core now, and
+             count() is how many are on THIS page. --}}
         <p class="queue-meta">
-            {{ $applications->count() }} {{ Str::plural('cycle', $applications->count()) }} at this step.
+            {{ $applications->total() }} {{ Str::plural('cycle', $applications->total()) }} at this step.
         </p>
 
         @forelse ($applications as $application)
@@ -16,7 +19,7 @@
             <div class="app-item">
                 <div class="app-item-header">
                     <p><b>Application #{{ $application->id }}</b>
-                        @if ($detail) — Cycle {{ $detail->cycle_number }} @endif
+                        @if ($detail) Cycle {{ $detail->cycle_number }} @endif
                     </p>
                     <span style="color: var(--text-grey); font-size: 12.5px;">
                         Submitted {{ $application->submitted_at?->diffForHumans() }}
@@ -28,13 +31,13 @@
                 @if ($detail)
                     <p>Resubmitted: {{ $detail->resubmission_at->format('j M Y') }}</p>
                     <p>Correction deadline: {{ $detail->correction_deadline->format('j M Y') }}
-                        — Hardbound deadline: {{ $detail->hardbound_deadline->format('j M Y') }}</p>
+                        Hardbound deadline: {{ $detail->hardbound_deadline->format('j M Y') }}</p>
                 @endif
 
                 @if ($application->documents->isNotEmpty())
                     <ul class="doc-list">
                         @foreach ($application->documents as $doc)
-                            <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }} — {{ $doc->original_name }}</a></li>
+                            <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
                         @endforeach
                     </ul>
                 @endif
@@ -54,6 +57,11 @@
         @empty
             <div class="empty-state">Nothing at this step right now.</div>
         @endforelse
+
+        {{-- Required, not optional: Core paginates queues, so without this
+             every cycle past the first page is simply missing from the page
+             with nothing to say so. --}}
+        @include('core::partials.pagination', ['paginator' => $applications, 'label' => 'Re-viva pages'])
     </div>
 </div>
 @endsection

@@ -1,18 +1,14 @@
 @extends('core::layouts.app')
 
-@section('title', 'Examiner Nomination — Pending Evaluation')
+@section('title', 'Examiner Nomination: Pending Evaluation')
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Pending Evaluation</h2>
-        <div class="card-divider"></div>
-        <p class="queue-meta">
-            Approved nominations whose examiners are still tied up. Mark an evaluation
-            complete once the viva has actually happened — this clears the tie-up and
-            starts the {{ \App\Modules\Hani\Models\Examiner::GAP_DAYS }}-day cooling-off period from today.
-        </p>
+    <x-core::page-header
+        title="Pending Evaluation"
+        subtitle="Approved nominations whose examiners are still tied up. Mark an evaluation complete once the viva has actually happened. That clears the tie-up and starts the {{ \App\Modules\Hani\Models\Examiner::GAP_DAYS }}-day cooling-off period from today." />
 
+    <div class="card card-wide">
         @forelse ($nominations as $nomination)
             <div class="app-item">
                 <div class="app-item-header">
@@ -22,13 +18,13 @@
                 <p>Thesis: {{ $nomination->thesis_title }}</p>
                 <p>Main examiner: <b>{{ $nomination->mainExaminer->name }}</b>
                     @if ($nomination->mainExaminer->assigned_until)
-                        — tied up until {{ $nomination->mainExaminer->assigned_until->format('j M Y') }}
+                        tied up until {{ $nomination->mainExaminer->assigned_until->format('j M Y') }}
                     @endif
                 </p>
                 @if ($nomination->backupExaminer)
                     <p>Backup examiner: {{ $nomination->backupExaminer->name }}
                         @if ($nomination->backupExaminer->assigned_until)
-                            — tied up until {{ $nomination->backupExaminer->assigned_until->format('j M Y') }}
+                            tied up until {{ $nomination->backupExaminer->assigned_until->format('j M Y') }}
                         @endif
                     </p>
                 @endif

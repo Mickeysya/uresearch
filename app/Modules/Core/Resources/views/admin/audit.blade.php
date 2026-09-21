@@ -28,18 +28,15 @@
 @endphp
 
 <div class="notif-page">
-    <header class="notif-header">
-        <div class="notif-heading">
-            <h2>Audit Logs</h2>
-            <p>
-                @if ($total > 0)
-                    <b>{{ number_format($total) }}</b> recorded {{ Str::plural('action', $total) }} — sign-ins, decisions, uploads and document views.
+    <x-core::page-header title="Audit Logs">
+        <x-slot:subtitle>
+@if ($total > 0)
+                    <b>{{ number_format($total) }}</b> recorded {{ Str::plural('action', $total) }}: sign-ins, decisions, uploads and document views.
                 @else
                     Nothing has been recorded yet.
                 @endif
-            </p>
-        </div>
-    </header>
+        </x-slot:subtitle>
+    </x-core::page-header>
 
     @if ($logNames->isNotEmpty())
         <nav class="notif-filters" aria-label="Filter by log">

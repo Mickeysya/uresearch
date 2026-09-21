@@ -4,15 +4,17 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Publication Funding Application</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Publication Funding Application" />
 
-        <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data">
+    <div class="card card-wide">
+        <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
 
-            <h3 style="margin-bottom: 4px;">Paper Presentation Details</h3>
+            <fieldset class="fstep" data-label="Paper">
+            <p class="fstep-hint">The paper itself and where it is being presented or published.</p>
 
+            
             <label for="type_of_request">Type of Request</label>
             <select name="type_of_request" id="type_of_request" required
                     class="@error('type_of_request') is-invalid @enderror">
@@ -53,6 +55,11 @@
                    class="@error('conference_end_date') is-invalid @enderror">
             @error('conference_end_date') <p class="field-error">{{ $message }}</p> @enderror
 
+            </fieldset>
+
+            <fieldset class="fstep" data-label="Cost">
+            <p class="fstep-hint">What it costs, in which currency, and which cost centre it is charged against.</p>
+
             <label for="conference_journal_fee">Conference / Journal Fee</label>
             <input type="number" step="0.01" name="conference_journal_fee" id="conference_journal_fee" required
                    value="{{ old('conference_journal_fee', 0) }}"
@@ -80,7 +87,11 @@
                 <label for="wants_letter_of_undertaking">I require a Letter of Undertaking</label>
             </div>
 
-            <h3 style="margin-top: 24px; margin-bottom: 4px;">Author's Details</h3>
+            </fieldset>
+
+            <fieldset class="fstep" data-label="Authors">
+            <p class="fstep-hint">Everyone credited on the paper. List more than five and the Authorship Contribution Form becomes mandatory on the next step.</p>
+
             @error('authors') <p class="field-error">{{ $message }}</p> @enderror
 
             <div id="authors-container">
@@ -107,8 +118,12 @@
                 + Add Another Author
             </button>
 
-            <h3 style="margin-top: 24px; margin-bottom: 4px;">Documents</h3>
+            </fieldset>
 
+            <fieldset class="fstep" data-label="Documents">
+            <p class="fstep-hint">All optional unless marked otherwise. Each is attached under its own label so CGS can tell them apart later.</p>
+
+            
             <label for="invoice">Invoice <span style="color: var(--text-grey)">(optional)</span></label>
             <input type="file" name="invoice" id="invoice" class="@error('invoice') is-invalid @enderror">
             @error('invoice') <p class="field-error">{{ $message }}</p> @enderror
@@ -153,11 +168,14 @@
             <label for="paper_evaluation_sheet">Paper Evaluation Sheet <span style="color: var(--text-grey)">(optional)</span></label>
             <input type="file" name="paper_evaluation_sheet" id="paper_evaluation_sheet" class="@error('paper_evaluation_sheet') is-invalid @enderror">
             @error('paper_evaluation_sheet') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
-            <button type="submit" style="margin-top: 20px;">Submit Application</button>
+            <button type="submit">Submit Application</button>
         </form>
     </div>
 </div>
+
+@include('core::partials.form-stepper')
 
 <template id="author-row-template">
     <div class="claim-item-row" data-index="__INDEX__">

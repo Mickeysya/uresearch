@@ -1,13 +1,16 @@
-{{-- RPD Dismissal-specific lines inside the shared queue card. --}}
+{{-- Dismissal-specific lines inside the shared queue card. --}}
 @php($detail = $details[$application->id] ?? null)
 
-@php($missedDeadline = $detail && $detail->candidacy && $detail->candidacy->status === \App\Modules\Norhanis\Models\Candidacy::STATUS_FAILED_AWAITING_RESUBMISSION ? $detail->candidacy->resubmission_deadline : $detail?->candidacy?->deadline)
-
-@if ($detail && $detail->candidacy)
-    <p><b>Programme:</b> {{ $detail->candidacy->programme === \App\Modules\Norhanis\Models\Candidacy::PROGRAMME_PHD ? 'PhD' : 'Masters' }}</p>
-    <p><b>Study Mode:</b> {{ $detail->candidacy->study_mode === \App\Modules\Norhanis\Models\Candidacy::STUDY_MODE_PART_TIME ? 'Part-Time' : 'Full-Time' }}</p>
-    <p><b>Deadline Missed:</b> {{ $missedDeadline->format('j M Y') }}</p>
-    <p><b>Reason CGS Initiated Dismissal:</b> {{ $detail->reason }}</p>
+@if ($detail)
+    <p>Deadline missed: <b class="tone-critical">{{ $detail->deadline_missed_on->format('j M Y') }}</b>
+       ({{ abs((int) now()->startOfDay()->diffInDays($detail->deadline_missed_on, false)) }} days ago)</p>
+    @if ($detail->candidacy)
+        <p>Programme: {{ \App\Modules\Norhanis\Models\Candidacy::programmeTypes()[$detail->candidacy->programme_type] ?? $detail->candidacy->programme_type }}
+           &middot; started {{ $detail->candidacy->candidature_start_date->format('j M Y') }}</p>
+        <p>Extension granted over the candidacy: {{ $detail->candidacy->extension_months_used }} months</p>
+    @endif
+    <p>Opened by: {{ $detail->initiator?->name ?? 'CGS' }}</p>
+    <p class="rpd-justification">{{ $detail->grounds }}</p>
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif

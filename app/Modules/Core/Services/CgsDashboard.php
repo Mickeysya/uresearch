@@ -3,8 +3,6 @@
 namespace App\Modules\Core\Services;
 
 use App\Modules\Core\Models\Application;
-use App\Modules\Core\Models\ApprovalHistory;
-use App\Modules\Core\Contracts\SuppliesAttendance;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\Concerns\BuildsPanels;
 use App\Modules\Core\Services\Concerns\ReadsAttendance;
@@ -165,7 +163,7 @@ class CgsDashboard
         }
 
         return $this->safely('attendance', function () use ($source) {
-            $latest = $this->latestRecords($source);
+            $latest = $this->latestPerStudent($source);
 
             $bands = collect(StudentDashboard::attendanceBands())
                 ->map(fn ($band) => [
@@ -203,38 +201,24 @@ class CgsDashboard
         return $this->safely('activity', function () use ($limit) {
             $registry = app(ModuleRegistry::class);
 
-            $decisions = ApprovalHistory::with('application.student', 'approver')
-                ->latest('created_at')
-                ->limit($limit)
-                ->get()
-                ->filter(fn ($h) => $h->application && $h->application->student)
-                ->map(fn ($h) => [
+            return $this->mergeFeed(
+                $limit,
+                $this->recentDecisions($limit)->map(fn ($h) => [
                     'text' => $h->application->student->name.'\'s '.$registry->labelFor($h->application->module_type)
                         .' application has been '.$h->decision.' by '.($h->approver->name ?? 'an approver').'.',
                     'at' => $h->created_at,
                     'tone' => $h->decision === 'rejected' ? 'critical' : 'good',
                     'icon' => $h->decision === 'rejected' ? 'pencil' : 'check',
                     'url' => null,
-                ]);
-
-            $submissions = Application::with('student')
-                ->whereNotNull('submitted_at')
-                ->latest('submitted_at')
-                ->limit($limit)
-                ->get()
-                ->filter(fn ($a) => $a->student)
-                ->map(fn ($a) => [
+                ]),
+                $this->recentSubmissions($limit)->map(fn ($a) => [
                     'text' => $a->student->name.' submitted a new '.$registry->labelFor($a->module_type).'.',
                     'at' => $a->submitted_at,
                     'tone' => 'info',
                     'icon' => 'doc',
                     'url' => null,
-                ]);
-
-            return $decisions->concat($submissions)
-                ->sortByDesc(fn ($row) => $row['at'])
-                ->take($limit)
-                ->values();
+                ]),
+            );
         }, collect());
     }
 
@@ -274,13 +258,4 @@ class CgsDashboard
         ), $this->noTrend());
     }
 
-    /**
-     * The most recent attendance reading for each student, one each.
-     *
-     * @return Collection<int, \App\Modules\Core\Support\AttendanceReading>
-     */
-    protected function latestRecords(SuppliesAttendance $source): Collection
-    {
-        return $this->remember('latestRecords', fn () => $source->latestPerStudent());
-    }
 }

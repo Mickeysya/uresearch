@@ -27,6 +27,52 @@
   `DocumentStore::storeGenerated()` attaches it, so the existing download
   route and permission check apply with no extra code.
 
+## The one queue that narrows itself
+
+The engine's queue is scoped by **role**, not by person: every
+supervisor-role account is handed every request sitting at the `supervisor`
+stage, because the student has no `supervisor_id` yet for the engine to filter
+on — this request is what sets it. So `SupervisionController::queue()` passes
+a `$scope` closure to `queueFor()`:
+
+```php
+$queue = $this->queueFor($request, $engine, ['documents'],
+    function ($query, Stage $stage) use ($request) {
+        if ($stage->key !== 'supervisor') {
+            return;
+        }
+
+        $query->whereIn('id', SupervisionDetail::query()
+            ->where('requested_supervisor_id', $request->user()->id)
+            ->select('application_id'));
+    });
+```
+
+**Applied to the query, never to the rows that come back.** It was briefly a
+`->filter()` on the result, which reported the unfiltered total, paged over
+rows it then discarded, and — because a paginator forwards unknown calls to
+its collection — handed the view a plain `Collection`, which 500s the moment
+it is asked for a total. `docs/conventions.md` has the rule; `SupervisionTest`
+guards the behaviour.
+
+This closure is per-call and is **not** the general answer to "scope approver
+queues to the right people" in `TODO.md`; the other queues are still
+role-scoped pending that decision.
+
+## Tests
+
+`tests/Feature/Nureen/` — 23 cases, all four chains covered.
+
+| File | Guards |
+|---|---|
+| `AttendanceTest` | the template round-trip (download it, feed it straight back), the header check, the date formats Excel writes, a bad row being skipped with a reason while the good rows save, re-uploading a period replacing rather than duplicating, and the at-risk alert firing on the transition |
+| `GaExtensionTest` | document completeness — the module's point per `nureen.md` Module 2 — and the three-stage chain, asserting the position after *every* decision, because the middle stage is what the legacy app got wrong |
+| `AttendanceAppealTest` | the single stage being final, and that a student cannot attach another student's flagged record to their own appeal (403) |
+| `SupervisionTest` | the required document, that it lands on the private disk under a random name, and that a supervisor sees only the requests naming them |
+| `CertificationTest` | the letter being generated, attached as an `ApplicationDocument`, and actually dispatched |
+
+Run them with `./vendor/bin/sail artisan test --filter=Nureen`.
+
 ## Layout
 
 ```

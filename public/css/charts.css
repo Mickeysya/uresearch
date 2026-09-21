@@ -54,10 +54,10 @@
 }
 
 .adm-mix-legend li:hover,
-.cgs-workload-legend li:hover { background: #EEF2F9; }
+.cgs-workload-legend li:hover { background: var(--surface-hover); }
 
 .adm-tile { transition: border-color 0.15s, background-color 0.15s; }
-.adm-tile:hover { border-color: var(--navy); background: #FAFBFE; }
+.adm-tile:hover { border-color: var(--navy); background: var(--surface-sunken); }
 
 /* The bar brightens and its number goes navy, so the column you are reading
    is unambiguous even when the axis labels have been clipped. */
@@ -115,7 +115,7 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    border: clamp(10px, 1.8vh, 16px) solid #EDEFF4;
+    border: clamp(10px, 1.8vh, 16px) solid var(--border-grey);
 }
 
 /* An explicit, bounded height. With maintainAspectRatio:false a Chart.js
@@ -218,7 +218,7 @@
 }
 
 /* Hovering a legend row lights it, matching the donut's own hover. */
-.adm-mix-legend li:hover { background: #EFF3FA; }
+.adm-mix-legend li:hover { background: var(--surface-hover); }
 
 /* Column headings for the legend grid — no text, just alignment: the bar
    track and the count column line up with every row below them. */
@@ -237,7 +237,7 @@ button.sdash-note-row {
     margin: 0;
     background: none;
     border: 0;
-    border-bottom: 1px solid #F1F3F7;
+    border-bottom: 1px solid var(--border-subtle);
     border-radius: 6px;
     font: inherit;
     text-align: left;
@@ -250,7 +250,7 @@ button.sdash-note-row:last-child { border-bottom: 0; }
 
 .sdash-note-form:last-child button.sdash-note-row { border-bottom: 0; }
 
-button.sdash-note-row:hover { background: #F6F8FC; }
+button.sdash-note-row:hover { background: var(--surface-hover); }
 
 button.sdash-note-row:focus-visible {
     outline: 2px solid var(--navy);
@@ -295,9 +295,9 @@ button.sdash-note-row:focus-visible {
     font-variant-numeric: tabular-nums;
 }
 
-.chart-gauge-value.tone-good     .sdash-gauge-number { color: #00A857; }
-.chart-gauge-value.tone-warn     .sdash-gauge-number { color: #C98A12; }
-.chart-gauge-value.tone-critical .sdash-gauge-number { color: #D0342C; }
+.chart-gauge-value.tone-good     .sdash-gauge-number { color: var(--success-fg); }
+.chart-gauge-value.tone-warn     .sdash-gauge-number { color: var(--warning-fg); }
+.chart-gauge-value.tone-critical .sdash-gauge-number { color: var(--danger-fg); }
 .chart-gauge-value.tone-none     .sdash-gauge-number { color: var(--text-grey); }
 
 .chart-gauge-value .sdash-gauge-caption { font-size: 11px; color: var(--text-grey); }

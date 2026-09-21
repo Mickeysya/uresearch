@@ -3,7 +3,8 @@
 @section('title', 'My Applications')
 
 @section('content')
-    <h2>My Applications</h2>
+    <x-core::page-header title="My Applications"
+                         subtitle="Every application you have filed, and where each one has reached." />
 
     @forelse ($applications as $application)
         <div class="app-item">
@@ -32,10 +33,10 @@
                 <div class="history-trail">
                     @foreach ($application->history as $entry)
                         <div class="entry">
-                            <b>{{ $entry->stage_label }}</b> — {{ $entry->decision }}
+                            <b>{{ $entry->stage_label }}</b>: {{ $entry->decision }}
                             by {{ $entry->approver->name }}
                             on {{ $entry->created_at->format('j M Y, g:ia') }}
-                            @if ($entry->remarks) — "{{ $entry->remarks }}" @endif
+                            @if ($entry->remarks) "{{ $entry->remarks }}" @endif
                         </div>
                     @endforeach
                 </div>

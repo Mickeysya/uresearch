@@ -5,7 +5,7 @@ namespace App\Modules\Norhanis\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
-use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Models\Candidacy;
 use App\Modules\Norhanis\Models\RpdAppealDetail;
@@ -13,7 +13,16 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\UnauthorizedException;
+use Illuminate\Validation\ValidationException;
 
+/**
+ * RPD extension appeals — norhanis.md Module 4, path 2.
+ *
+ * The chain itself is ordinary (see RpdAppealWorkflow). What is not ordinary is
+ * decide(): on the Dean's approval this is the code that "automatically
+ * recalculates the new deadline and updates the masterlist", which is the
+ * feature the scope actually names.
+ */
 class RpdAppealController extends Controller
 {
     use ApprovesApplications;
@@ -25,29 +34,55 @@ class RpdAppealController extends Controller
 
     public function create(Request $request)
     {
-        $candidacy = $this->activeCandidacyFor($request->user());
+        $candidacy = $this->candidacyFor($request);
 
-        return view('norhanis::rpd_appeal.form', ['candidacy' => $candidacy]);
+        return view('norhanis::rpd_appeal.form', [
+            'candidacy' => $candidacy,
+            'maxMonths' => $candidacy?->extensionMonthsRemaining() ?? 0,
+            'openAppeal' => $candidacy ? $this->openAppealFor($candidacy) : null,
+        ]);
     }
 
-    public function store(Request $request, WorkflowEngine $engine): RedirectResponse
+    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
+        $candidacy = $this->candidacyFor($request);
+
+        // Guarded here and not only in the view: a student can post this form
+        // directly, and the six-month ceiling is a policy, not a hint.
+        if (! $candidacy) {
+            throw ValidationException::withMessages([
+                'requested_months' => 'You have no RPD candidacy on record. Contact CGS before appealing.',
+            ]);
+        }
+
+        if (! $candidacy->canAppeal()) {
+            throw ValidationException::withMessages([
+                'requested_months' => $candidacy->extensionMonthsRemaining() === 0
+                    ? 'You have already used the maximum '.Candidacy::MAX_EXTENSION_MONTHS.' months of extension.'
+                    : 'Your candidacy is '.$candidacy->status.' and can no longer be appealed.',
+            ]);
+        }
+
+        if ($this->openAppealFor($candidacy)) {
+            throw ValidationException::withMessages([
+                'requested_months' => 'You already have an appeal under review. Wait for its outcome before filing another.',
+            ]);
+        }
+
         $data = $request->validate([
-            'reason' => ['required', 'string', 'max:2000'],
-            'requested_extension_months' => ['required', 'integer', 'between:1,'.Candidacy::MAX_APPEAL_EXTENSION_MONTHS],
+            // max is the remaining ceiling, not a constant -- a student who has
+            // already taken 9 months may ask for 3, not 12.
+            'requested_months' => ['required', 'integer', 'min:1', 'max:'.$candidacy->extensionMonthsRemaining()],
+            'justification' => ['required', 'string', 'min:40', 'max:2000'],
+            'supporting_document' => DocumentStore::rules(),
+        ], [
+            'requested_months.max' => 'You have '.$candidacy->extensionMonthsRemaining().' month(s) of extension left under the '.Candidacy::MAX_EXTENSION_MONTHS.'-month ceiling.',
+            'justification.min' => 'Please give the Dean enough detail to decide on. A sentence or two at minimum.',
         ]);
 
-        // The candidacy is never trusted from the form -- it is derived from
-        // the signed-in student's own active record, the same way TravelController
-        // derives duration_days instead of trusting a posted number.
-        $candidacy = $this->activeCandidacyFor($request->user());
-
-        abort_unless($candidacy, 404, 'You have no active RPD candidacy to appeal.');
-
-        $application = DB::transaction(function () use ($request, $data, $candidacy, $engine) {
+        $application = DB::transaction(function () use ($request, $data, $candidacy, $engine, $documents) {
             $application = Application::create([
                 'student_id' => $request->user()->id,
-                'submitted_by_id' => $request->user()->id,
                 'module_type' => $this->moduleKey(),
                 'status' => Application::STATUS_DRAFT,
             ]);
@@ -55,30 +90,31 @@ class RpdAppealController extends Controller
             RpdAppealDetail::create([
                 'application_id' => $application->id,
                 'candidacy_id' => $candidacy->id,
-                'reason' => $data['reason'],
-                'requested_extension_months' => $data['requested_extension_months'],
+                'requested_months' => $data['requested_months'],
+                'justification' => $data['justification'],
+                // Snapshot: the approver must see the deadline the student was
+                // looking at, even if something moves it in the meantime.
+                'deadline_at_filing' => $candidacy->rpd_deadline,
             ]);
 
-            // Paused while the appeal is under review -- see Candidacy's
-            // docblock. Stops RemindRpdCandidates nagging a student who has
-            // already asked for more time, and stops the candidacy showing
-            // up on CGS's overdue-for-dismissal list mid-review.
-            $candidacy->update(['status' => Candidacy::STATUS_APPEAL_PENDING]);
+            if ($request->hasFile('supporting_document')) {
+                $documents->attach($application, $request->file('supporting_document'), 'Supporting Document');
+            }
 
             return $engine->submit($application);
         });
 
         return redirect()
             ->route('applications.index')
-            ->with('status', "RPD Appeal #{$application->id} submitted. Your supervisor has been notified.");
+            ->with('status', "RPD extension appeal #{$application->id} submitted. Your supervisor has been notified.");
     }
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
-        $queue = $this->queueFor($request, $engine);
+        $queue = $this->queueFor($request, $engine, ['documents', 'student']);
 
-        $details = RpdAppealDetail::whereIn('application_id', $queue['applications']->pluck('id'))
-            ->with('candidacy')
+        $details = RpdAppealDetail::with('candidacy')
+            ->whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()
             ->keyBy('application_id');
 
@@ -86,10 +122,11 @@ class RpdAppealController extends Controller
     }
 
     /**
-     * Overrides the trait's decide(): the Dean holds the final stage, and
-     * approval there is the one moment candidacies.deadline is allowed to
-     * move -- the "masterlist" update the scope document describes. Modelled
-     * exactly on CertificationController::decide()/generateCertificate().
+     * Approve or reject — and on the Dean's approval, move the masterlist.
+     *
+     * Everything that changes the candidacy happens in one transaction with the
+     * engine's own write, so a failure halfway cannot leave an approved appeal
+     * beside an unmoved deadline.
      */
     public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
     {
@@ -100,62 +137,84 @@ class RpdAppealController extends Controller
             'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        // Captured before decide() moves the application -- currentStage()
-        // only resolves a stage while status is still PENDING.
-        $stage = $engine->currentStage($application);
-
         try {
-            $decided = $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
+            $decided = DB::transaction(function () use ($application, $request, $data, $engine) {
+                $decided = $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
+
+                if ($decided->status === Application::STATUS_APPROVED) {
+                    $this->grantExtension($decided);
+                }
+
+                return $decided;
+            });
         } catch (UnauthorizedException $e) {
             return back()->with('error', $e->getMessage());
         } catch (\LogicException $e) {
             return back()->with('error', 'That application has already been decided.');
         }
 
-        if ($stage?->key === 'dean' && $decided->status === Application::STATUS_APPROVED) {
-            $this->extendCandidacy($decided);
-        } elseif ($decided->status === Application::STATUS_REJECTED) {
-            // Rejected at any stage -- release the candidacy back to normal
-            // tracking under its existing (unchanged) deadline, so a failed
-            // appeal does not leave it permanently exempt from reminders and
-            // dismissal eligibility.
-            $this->releaseCandidacy($decided);
+        if ($data['decision'] === 'approve' && $decided->status === Application::STATUS_APPROVED) {
+            $detail = RpdAppealDetail::where('application_id', $decided->id)->first();
+
+            return back()->with('status', "Appeal #{$decided->id} approved. The RPD deadline is now "
+                .$detail?->new_deadline?->format('j M Y').'.');
         }
 
         $verb = $data['decision'] === 'approve' ? 'approved' : 'rejected';
 
-        return back()->with('status', "Application #{$application->id} {$verb}.");
+        return back()->with('status', "Application #{$decided->id} {$verb}.");
     }
 
     /**
-     * Extends the candidacy's current deadline by the months the student
-     * requested (1-6, validated at submission). The Dean's approval is the
-     * only thing that lets this run; nothing here lets an approver or the
-     * student choose a calendar date.
+     * Move the deadline, bank the months used, and clear the reminder log.
+     *
+     * The reminder rows have to go: they record that the 3/2/1-month emails
+     * fired against the OLD deadline. Leaving them would mean the student is
+     * never reminded about the new one, because the unique index still says
+     * "milestone 3 already sent for this candidacy".
      */
-    protected function extendCandidacy(Application $application): void
-    {
-        $detail = RpdAppealDetail::where('application_id', $application->id)->with('candidacy')->firstOrFail();
-        $candidacy = $detail->candidacy;
-
-        $candidacy->update([
-            'deadline' => $candidacy->deadline->copy()->addMonths($detail->requested_extension_months),
-            'status' => Candidacy::STATUS_ACTIVE,
-        ]);
-    }
-
-    protected function releaseCandidacy(Application $application): void
+    protected function grantExtension(Application $application): void
     {
         $detail = RpdAppealDetail::where('application_id', $application->id)->first();
 
-        $detail?->candidacy()->update(['status' => Candidacy::STATUS_ACTIVE]);
+        if (! $detail) {
+            return;
+        }
+
+        $candidacy = Candidacy::find($detail->candidacy_id);
+
+        if (! $candidacy) {
+            return;
+        }
+
+        // Extend from the deadline as it stands now, not from the snapshot --
+        // if anything else moved it while the appeal was in the chain, the
+        // student is owed their months on top of that, not instead of it.
+        $newDeadline = $candidacy->rpd_deadline->copy()->addMonthsNoOverflow($detail->requested_months);
+
+        $candidacy->update([
+            'rpd_deadline' => $newDeadline,
+            'status' => Candidacy::STATUS_EXTENDED,
+            'extension_months_used' => $candidacy->extension_months_used + $detail->requested_months,
+        ]);
+
+        $detail->update(['new_deadline' => $newDeadline]);
+
+        $candidacy->reminderLogs()->delete();
     }
 
-    protected function activeCandidacyFor(User $user): ?Candidacy
+    protected function candidacyFor(Request $request): ?Candidacy
     {
-        return Candidacy::where('student_id', $user->id)
-            ->where('status', Candidacy::STATUS_ACTIVE)
-            ->latest('start_date')
+        return Candidacy::where('student_id', $request->user()->id)->first();
+    }
+
+    /** An appeal already in the chain for this candidacy, if any. */
+    protected function openAppealFor(Candidacy $candidacy): ?Application
+    {
+        return Application::query()
+            ->where('module_type', $this->moduleKey())
+            ->where('status', Application::STATUS_PENDING)
+            ->whereIn('id', RpdAppealDetail::where('candidacy_id', $candidacy->id)->pluck('application_id'))
             ->first();
     }
 }

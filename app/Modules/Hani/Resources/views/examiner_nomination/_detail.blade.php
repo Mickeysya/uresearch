@@ -4,11 +4,11 @@
     <p>Filed by: {{ $application->submittedBy?->name ?? 'Unknown' }}</p>
     <p>Thesis: {{ $nomination->thesis_title }}</p>
     <p>Main examiner: <b>{{ $nomination->mainExaminer->name }}</b>
-       — {{ $nomination->mainExaminer->department }}
+       {{ $nomination->mainExaminer->department }}
        ({{ ucfirst($nomination->mainExaminer->type) }})</p>
     @if ($nomination->backupExaminer)
         <p>Backup examiner: {{ $nomination->backupExaminer->name }}
-           — {{ $nomination->backupExaminer->department }}
+           {{ $nomination->backupExaminer->department }}
            ({{ ucfirst($nomination->backupExaminer->type) }})</p>
     @endif
     @if ($nomination->notes)

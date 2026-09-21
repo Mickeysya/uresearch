@@ -9,12 +9,12 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * The 3/2/1-month RPD candidacy deadline reminder.
+ * The 3 / 2 / 1-month RPD reminder, sent to the student and their supervisor.
  *
- * Not tied to an Application -- candidacies are tracked entirely outside
- * WorkflowEngine (see Candidacy's docblock). Sent by RemindRpdCandidates,
- * once per (candidacy, month_mark) pair; RpdReminderLog's unique constraint
- * is what stops the same reminder ever firing twice.
+ * Both channels on purpose: `mail` is the reminder norhanis.md asks for, and
+ * `database` puts it in the in-app feed so a student who missed the email still
+ * sees it next time they open the portal. The feed row carries `url`, so the
+ * notification page links straight to the appeal form.
  */
 class RpdDeadlineApproaching extends Notification implements ShouldQueue
 {
@@ -22,7 +22,7 @@ class RpdDeadlineApproaching extends Notification implements ShouldQueue
 
     public function __construct(
         protected Candidacy $candidacy,
-        protected int $monthsRemaining,
+        protected int $milestone,
     ) {}
 
     public function via(object $notifiable): array
@@ -32,29 +32,53 @@ class RpdDeadlineApproaching extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $unit = $this->monthsRemaining === 1 ? 'month' : 'months';
+        $student = $this->candidacy->student;
+        $isStudent = $notifiable->is($student);
+        $deadline = $this->candidacy->rpd_deadline->format('j M Y');
+        $months = $this->milestone === 1 ? '1 month' : "{$this->milestone} months";
 
-        return (new MailMessage)
-            ->subject("RPD Candidacy Deadline — {$this->monthsRemaining} {$unit} remaining")
-            ->greeting('Hi '.$notifiable->name.',')
-            ->line('Your Research Proposal Defence (RPD) candidacy deadline is '
-                .$this->candidacy->deadline->format('j M Y')
-                ." — {$this->monthsRemaining} {$unit} from now.")
-            ->line('If you need more time, submit an RPD Appeal / Extension before the deadline passes.')
-            ->action('Submit an RPD Appeal', route('rpd-appeal.create'))
-            ->line('Thank you for using UResearch 2.0.');
+        $mail = (new MailMessage)
+            ->subject("Research Proposal Defence due in {$months}".($isStudent ? '' : ': '.$student->name))
+            ->greeting('Hi '.$notifiable->name.',');
+
+        $mail = $isStudent
+            ? $mail->line("Your Research Proposal Defence deadline is {$deadline}, {$months} from now.")
+            : $mail->line("{$student->name}'s Research Proposal Defence deadline is {$deadline}, {$months} from now.");
+
+        $mail->line('Programme: '.(Candidacy::programmeTypes()[$this->candidacy->programme_type] ?? $this->candidacy->programme_type));
+
+        if ($isStudent) {
+            $mail->line('If you need more time, you can file an extension appeal. It is endorsed by your supervisor and the Chair, reviewed by CGS, and decided by the Dean of PGR, so file early rather than close to the deadline.');
+
+            if ($this->candidacy->canAppeal()) {
+                $mail->action('File an extension appeal', route('rpd-appeal.create'));
+            }
+
+            $mail->line('Missing the deadline without an approved appeal starts a dismissal for exceeded candidacy.');
+        } else {
+            $mail->line('Please follow up with your supervisee.');
+        }
+
+        return $mail->line('Thank you for using UResearch 2.0.');
     }
 
-    /** Feeds the student dashboard's notification list, same as ApplicationDecided. */
+    /** @return array<string, mixed> */
     public function toArray(object $notifiable): array
     {
-        $unit = $this->monthsRemaining === 1 ? 'month' : 'months';
+        $student = $this->candidacy->student;
+        $isStudent = $notifiable->is($student);
+        $months = $this->milestone === 1 ? '1 month' : "{$this->milestone} months";
 
         return [
-            'candidacy_id' => $this->candidacy->id,
-            'deadline' => $this->candidacy->deadline->toDateString(),
-            'months_remaining' => $this->monthsRemaining,
-            'title' => "Your RPD candidacy deadline is {$this->monthsRemaining} {$unit} away.",
+            'title' => $isStudent
+                ? "Your RPD is due in {$months}"
+                : "{$student->name}'s RPD is due in {$months}",
+            'module' => 'RPD Candidacy',
+            'meta' => 'Deadline '.$this->candidacy->rpd_deadline->format('j M Y'),
+            // No `approved` key on purpose: the feed reads that as a decision
+            // and paints the row green or red. A reminder is neither, so it
+            // falls through to the neutral tone.
+            'url' => $isStudent && $this->candidacy->canAppeal() ? route('rpd-appeal.create') : null,
         ];
     }
 }

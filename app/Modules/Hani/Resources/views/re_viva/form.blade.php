@@ -4,30 +4,25 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="Log Re-viva Submission"
+        subtitle="Log the re-corrected thesis once it reaches CGS. The moment you submit is recorded as the formal resubmission timestamp. The 6-month correction and 1-year hardbound deadlines are both counted from it." />
+
     <div class="card card-wide">
-        <h2>Log Re-viva Submission</h2>
-        <div class="card-divider"></div>
-
-        <p class="queue-meta">
-            Log the re-corrected thesis once it reaches CGS. The moment you submit is
-            recorded as the formal resubmission timestamp — the 6-month correction and
-            1-year hardbound deadlines are both counted from it.
-        </p>
-
         <form method="POST" action="{{ route('reviva.store') }}" enctype="multipart/form-data">
             @csrf
 
             <label for="student_id">Student</label>
             <select name="student_id" id="student_id" required
                     class="@error('student_id') is-invalid @enderror">
-                <option value="">— Select —</option>
+                <option value="">Select</option>
                 @foreach ($students as $student)
                     <option value="{{ $student->id }}"
                             @selected(old('student_id') == $student->id)
                             @disabled($blockedReasons[$student->id] !== null)>
                         {{ $student->name }} @if ($student->matric_no)({{ $student->matric_no }})@endif
                         @if ($blockedReasons[$student->id])
-                            — {{ $blockedReasons[$student->id] }}
+                            {{ $blockedReasons[$student->id] }}
                         @endif
                     </option>
                 @endforeach

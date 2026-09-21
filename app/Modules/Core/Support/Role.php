@@ -24,10 +24,16 @@ final class Role
     public const SENIOR_DIRECTOR_CGS = 'senior_director_cgs';
     public const DEAN_PGR = 'dean_pgr';
     public const ACADEMIC_EXEC = 'academic_exec';
-    public const DAC = 'dac';
-    public const PANEL_EXAMINER = 'panel_examiner';
-    public const REGISTRY = 'registry';
+
+    /**
+     * Faculty-level final approver, above the Chair of Department and
+     * distinct from the Dean of PGR. Named in norhanis.md (RPD dismissal)
+     * and jason.md; module-keys.md listed it as undecided. Claimed here by
+     * RpdDismissalWorkflow, which needs a signatory between the Dean's
+     * endorsement and the Registry's termination email.
+     */
     public const FACULTY = 'faculty';
+    public const REGISTRY = 'registry';
     public const ADMIN = 'admin';
 
     /** @return array<int, string> */
@@ -43,10 +49,8 @@ final class Role
             self::SENIOR_DIRECTOR_CGS,
             self::DEAN_PGR,
             self::ACADEMIC_EXEC,
-            self::DAC,
-            self::PANEL_EXAMINER,
-            self::REGISTRY,
             self::FACULTY,
+            self::REGISTRY,
             self::ADMIN,
         ];
     }
@@ -85,8 +89,7 @@ final class Role
             self::SENIOR_DIRECTOR_CGS => 'Senior Director CGS',
             self::DEAN_PGR => 'Dean of PGR',
             self::ACADEMIC_EXEC => 'Academic Executive',
-            self::DAC => 'DAC',
-            self::PANEL_EXAMINER => 'Panel Examiner',
+            self::FACULTY => 'Faculty',
             default => ucwords(str_replace('_', ' ', $role)),
         };
     }

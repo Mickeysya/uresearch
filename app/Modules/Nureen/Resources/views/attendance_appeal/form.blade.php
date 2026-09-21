@@ -4,13 +4,17 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Attendance Appeal</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Attendance Appeal" />
 
-        <form method="POST" action="{{ route('attendance-appeal.store') }}" enctype="multipart/form-data">
+    <div class="card card-wide">
+        <form method="POST" action="{{ route('attendance-appeal.store') }}" enctype="multipart/form-data" data-stepper>
             @csrf
 
+            <fieldset class="fstep" data-label="Appeal details">
+            <p class="fstep-hint">Why the recorded attendance is wrong, and anything that evidences it.</p>
+
+            
             @if ($latestAtRisk)
                 <input type="hidden" name="attendance_record_id" value="{{ $latestAtRisk->id }}">
                 <p class="queue-meta">
@@ -28,9 +32,11 @@
             <input type="file" name="supporting_document" id="supporting_document"
                    class="@error('supporting_document') is-invalid @enderror">
             @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
             <button type="submit">Submit Appeal</button>
         </form>
     </div>
 </div>
+@include('core::partials.form-stepper')
 @endsection

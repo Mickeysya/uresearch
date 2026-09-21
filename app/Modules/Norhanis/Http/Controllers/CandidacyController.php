@@ -3,75 +3,141 @@
 namespace App\Modules\Norhanis\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
+use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\Candidacy;
-use Illuminate\Http\RedirectResponse;
+use App\Modules\Norhanis\Models\RpdAppealDetail;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
- * Records the outcome of an RPD attempt reaching CGS from the AE -- not a
- * WorkflowModule, because there is no approver here, just CGS entering a
- * result. Department-level RPD assessment scheduling and examiner
- * coordination are explicitly outside this module's scope (norhanis.md
- * §4 "Excluded AE Processes"), so this is the point where that manual
- * process re-enters the system: whoever CGS hears the result from, this is
- * where it gets recorded against the candidacy.
+ * The RPD masterlist — the screen norhanis.md keeps referring to as the thing
+ * appeals "update".
  *
- * A failed attempt does not touch applications/WorkflowEngine at all -- it
- * is a `candidacies` state change only, same as the appeal/dismissal
- * controllers' post-approval updates to this table.
+ * CGS sees every candidacy with its deadline, tone and remaining extension, and
+ * opens dismissals from here. A student sees only their own clock: the same
+ * data, one row, plus whether they can still appeal.
  */
 class CandidacyController extends Controller
 {
-    /** Candidacies that have attempted and could plausibly need a result recorded. */
-    public function create()
+    /** CGS: the whole masterlist, filterable. */
+    public function index(Request $request)
     {
-        return view('norhanis::candidacies.failed_attempt', [
-            'candidacies' => $this->recordableCandidacies(),
+        $filter = $request->query('filter', 'active');
+
+        $query = Candidacy::with('student')->orderBy('rpd_deadline');
+
+        match ($filter) {
+            'overdue' => $query->whereIn('status', [Candidacy::STATUS_ACTIVE, Candidacy::STATUS_EXTENDED])
+                ->whereDate('rpd_deadline', '<', now()->startOfDay()),
+            'due_soon' => $query->whereIn('status', [Candidacy::STATUS_ACTIVE, Candidacy::STATUS_EXTENDED])
+                ->whereDate('rpd_deadline', '>=', now()->startOfDay())
+                ->whereDate('rpd_deadline', '<=', now()->startOfDay()->addMonthsNoOverflow(3)),
+            'closed' => $query->whereIn('status', [Candidacy::STATUS_DEFENDED, Candidacy::STATUS_DISMISSED]),
+            default => $query->whereIn('status', [Candidacy::STATUS_ACTIVE, Candidacy::STATUS_EXTENDED]),
+        };
+
+        $all = Candidacy::selectRaw('status, rpd_deadline')->get();
+
+        return view('norhanis::candidacy.index', [
+            'candidacies' => $query->paginate(20)->withQueryString(),
+            'filter' => $filter,
+            'counts' => [
+                'active' => $all->whereIn('status', [Candidacy::STATUS_ACTIVE, Candidacy::STATUS_EXTENDED])->count(),
+                'due_soon' => $all->whereIn('status', [Candidacy::STATUS_ACTIVE, Candidacy::STATUS_EXTENDED])
+                    ->filter(fn ($c) => $c->rpd_deadline >= now()->startOfDay()
+                        && $c->rpd_deadline <= now()->startOfDay()->addMonthsNoOverflow(3))->count(),
+                'overdue' => $all->whereIn('status', [Candidacy::STATUS_ACTIVE, Candidacy::STATUS_EXTENDED])
+                    ->filter(fn ($c) => $c->rpd_deadline < now()->startOfDay())->count(),
+                'closed' => $all->whereIn('status', [Candidacy::STATUS_DEFENDED, Candidacy::STATUS_DISMISSED])->count(),
+            ],
         ]);
     }
 
-    public function recordFailedAttempt(Request $request, Candidacy $candidacy): RedirectResponse
+    /** CGS: register a student's candidature so the clock starts. */
+    public function create()
     {
-        $request->validate([
-            'notes' => ['nullable', 'string', 'max:2000'],
+        return view('norhanis::candidacy.form', [
+            'students' => $this->studentsWithoutCandidacy(),
+            'programmeTypes' => Candidacy::programmeTypes(),
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'student_id' => [
+                'required', 'integer',
+                // unique is the schema's rule too -- checked here so the
+                // student gets a message instead of a 500 from the index.
+                Rule::exists('users', 'id')->where('role', Role::STUDENT),
+                Rule::unique('candidacies', 'student_id'),
+            ],
+            'programme_type' => ['required', Rule::in(array_keys(Candidacy::programmeTypes()))],
+            'candidature_start_date' => ['required', 'date', 'before_or_equal:today'],
+        ], [
+            'student_id.unique' => 'That student already has a candidacy on record. Edit it instead of adding another.',
+            'candidature_start_date.before_or_equal' => 'Candidature cannot start in the future.',
         ]);
 
-        abort_unless(
-            $this->recordableCandidacies()->contains('id', $candidacy->id),
-            404,
-            'That candidacy is not eligible to be recorded as failed right now.'
-        );
-
-        $candidacy->update([
-            'status' => Candidacy::STATUS_FAILED_AWAITING_RESUBMISSION,
-            'resubmission_deadline' => Candidacy::computeResubmissionDeadline(
-                now(),
-                $candidacy->programme,
-                $candidacy->study_mode,
-            ),
-            'attempt_number' => $candidacy->attempt_number + 1,
+        // The deadline is computed once, here, and stored. After this the
+        // stored date is the truth -- see the Candidacy model for why.
+        $candidacy = Candidacy::create($data + [
+            'rpd_deadline' => Candidacy::initialDeadline($data['programme_type'], $data['candidature_start_date']),
+            'status' => Candidacy::STATUS_ACTIVE,
         ]);
 
         return redirect()
-            ->route('candidacy.failed-attempt.create')
-            ->with('status', "Recorded a failed RPD attempt for {$candidacy->student->name}. Resubmission due {$candidacy->fresh()->resubmission_deadline->format('j M Y')}.");
+            ->route('candidacies.index')
+            ->with('status', "Candidacy registered. RPD deadline: {$candidacy->rpd_deadline->format('j M Y')}.");
     }
 
-    /**
-     * Active, or already on a resubmission attempt -- either can fail again,
-     * which is why this isn't restricted to STATUS_ACTIVE alone: a second
-     * (or later) failure recomputes resubmission_deadline the same way as
-     * the first and bumps attempt_number again. A dismissed or completed
-     * candidacy has nothing left to record.
-     */
-    protected function recordableCandidacies()
+    /** CGS: record that the defence happened, which stops the clock. */
+    public function markDefended(Request $request, Candidacy $candidacy)
     {
-        return Candidacy::whereIn('status', [
-            Candidacy::STATUS_ACTIVE,
-            Candidacy::STATUS_FAILED_AWAITING_RESUBMISSION,
-        ])
-            ->with('student')
-            ->orderBy('deadline')
+        $data = $request->validate([
+            'defended_on' => ['required', 'date', 'before_or_equal:today'],
+        ]);
+
+        $candidacy->update([
+            'defended_on' => $data['defended_on'],
+            'status' => Candidacy::STATUS_DEFENDED,
+        ]);
+
+        // Nothing left to remind them about.
+        $candidacy->reminderLogs()->delete();
+
+        return back()->with('status', "{$candidacy->student->name}'s RPD is recorded as defended. Reminders have stopped.");
+    }
+
+    /** The student's own view of their clock. */
+    public function mine(Request $request)
+    {
+        $candidacy = Candidacy::where('student_id', $request->user()->id)->first();
+
+        $appeals = $candidacy
+            ? Application::with('history')
+                ->whereIn('id', RpdAppealDetail::where('candidacy_id', $candidacy->id)->pluck('application_id'))
+                ->latest()
+                ->get()
+            : collect();
+
+        return view('norhanis::candidacy.mine', [
+            'candidacy' => $candidacy,
+            'appeals' => $appeals,
+            'details' => $candidacy
+                ? RpdAppealDetail::whereIn('application_id', $appeals->pluck('id'))->get()->keyBy('application_id')
+                : collect(),
+        ]);
+    }
+
+    /** @return \Illuminate\Support\Collection<int, User> */
+    protected function studentsWithoutCandidacy()
+    {
+        return User::where('role', Role::STUDENT)
+            ->whereNotIn('id', Candidacy::pluck('student_id'))
+            ->orderBy('name')
             ->get();
     }
 }

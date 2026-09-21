@@ -32,7 +32,7 @@
 
         <div class="adm-health">
             @foreach ($health as $tile)
-                <div class="adm-tile tone-{{ $tile['tone'] }}" title="{{ $tile['label'] }}: {{ $tile['value'] }} — {{ $tile['note'] }}">
+                <div class="adm-tile tone-{{ $tile['tone'] }}" title="{{ $tile['label'] }}: {{ $tile['value'] }}, {{ $tile['note'] }}">
                     <span class="adm-tile-icon" aria-hidden="true">
                         @include('core::dashboard.partials.icon', ['name' => $tile['icon']])
                     </span>
@@ -99,7 +99,9 @@
                             data: @json($mix->pluck('count')),
                             backgroundColor: @json($mix->keys()->map(fn ($i) => $palette[$i % count($palette)])),
                             borderWidth: 2,
-                            borderColor: '#FFFFFF',
+                            // The gap between segments is a cut down to
+                            // the card, so it has to BE the card colour.
+                            borderColor: function () { return Chart.uresearchToken('--surface', '#FFFFFF'); },
                             hoverOffset: 5,
                         }],
                     },

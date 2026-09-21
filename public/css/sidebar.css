@@ -69,7 +69,7 @@
        heuristics were still painting a dark native surface on a transparent
        button background despite color-scheme: light + appearance: none, so
        this pins it to a real, known colour instead of leaving it to guess. */
-    background-color: white;
+    background-color: var(--surface);
     border: none;
     appearance: none;
     -webkit-appearance: none;
@@ -272,7 +272,12 @@
     font-size: 13.5px;
     color: var(--text-dark);
     text-decoration: none;
+    /* nowrap on its own only moved the clipping to the sidebar's edge --
+       "Appeal Hardbound Submission" ran out of the panel mid-word with no
+       sign there was more. Ellipsis here, full text in the title. */
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sidebar a.nav-subitem:hover {
@@ -285,8 +290,11 @@
     font-weight: 600;
 }
 
+/* No icon, so the label has to take the icon's place rather than start at
+   the panel edge -- 24px padding + a 20px icon + the 12px gap. Without this
+   every link under "Actions" sits 32px left of every other nav label. */
 .sidebar .nav-item-flat {
-    padding-left: 24px;
+    padding-left: 56px;
 }
 
 .sidebar .nav-section-label {
@@ -333,6 +341,7 @@
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    gap: var(--space-4);
     /* Matches .sidebar-header's height exactly -- see the comment there. */
     height: 64px;
     box-sizing: border-box;
@@ -341,7 +350,7 @@
     z-index: 5;
     margin: -32px -32px 24px;
     padding: 0 32px;
-    background: white;
+    background: var(--surface);
     border-bottom: 1px solid var(--border-grey);
 }
 
@@ -357,7 +366,7 @@
     height: 34px;
     border-radius: 50%;
     background: var(--navy);
-    color: white;
+    color: var(--text-on-accent);
     font-size: 13px;
     font-weight: 700;
 }
@@ -383,11 +392,11 @@
 }
 
 .sidebar .logout-link {
-    color: #D0342C;
+    color: var(--danger-fg);
 }
 
 .sidebar .logout-link .nav-icon {
-    color: #D0342C;
+    color: var(--danger-fg);
 }
 
 /* Collapsed state -- toggled on <html> so it applies before first paint.
@@ -475,3 +484,68 @@ html.sidebar-collapsed .sidebar-profile {
 .uresearch-logo {
     height: 52px;
 }
+
+/* ============================================================
+   A tree inside a tree
+
+   A module that owns more than one stage for a role gets its own group
+   rather than repeating its name once per stage -- Hani's re-viva has
+   four consecutive Academic Executive stages, which read as four
+   identical "Re-viva Monitoring" links you could not choose between.
+   See core::partials.queue-links.
+
+   Everything here is the nested case only. The outer tree, the panel
+   animation and the toggle script are all unchanged: the script uses
+   closest('.nav-tree'), so a nested trigger toggles its own group and
+   not its parent.
+   ============================================================ */
+
+/* The trigger sits where a sub-item sits, so the group lines up with the
+   links around it rather than with the top-level items. */
+.sidebar .nav-tree-nested > .nav-tree-trigger {
+    padding: 9px 16px 9px 56px;
+    font-size: 13.5px;
+    font-weight: 500;
+}
+
+/* The nested items step in once more, and the guide line goes UNDER THE
+   GROUP IT BELONGS TO rather than staying at the outer depth -- a line at
+   the parent list's position reads as though these items belong to that
+   list, which is the opposite of what the group is saying.
+
+   56px is where the trigger's label starts, so the line runs directly
+   beneath the first letter of the module name and the items hang off it. */
+.sidebar .nav-tree-nested a.nav-subitem {
+    padding-left: 76px;
+    font-size: 13px;
+}
+
+.sidebar .nav-tree-nested > .nav-tree-panel > .nav-tree-items::before {
+    left: 58px;
+}
+
+/* How many stages are behind the group, so the count is visible without
+   opening it. */
+.sidebar .nav-count {
+    margin-left: auto;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--border-subtle);
+    color: var(--text-grey);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.sidebar .nav-tree-nested > .nav-tree-trigger .nav-chevron { margin-left: 6px; }
+
+/* A queue group in the FLAT branch (three modules or fewer) has no outer
+   tree around it, so its links need the indent the outer panel would
+   otherwise have given them.
+
+   DIRECT children only. As a descendant selector this also matched the
+   items inside a nested group, at equal specificity and later in the file,
+   so it silently undid the nesting above: the sub-items sat at the outer
+   indent and the guide line with them. The child combinator is what keeps
+   this rule about the flat list it is named for. */
+.sidebar .nav-flat-queues > a.nav-subitem { padding-left: 56px; }

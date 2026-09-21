@@ -1,50 +1,56 @@
 @extends('core::layouts.app')
 
-@section('title', 'Overdue RPD Candidacies')
+@section('title', 'Open a Dismissal')
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="Dismissal for Exceeded Candidacy"
+        subtitle="Opens a dismissal against a student whose RPD deadline passed without an approved extension. It is endorsed by the Dean of PGR, approved by Faculty, and the Registry sends the termination. You are the author, not an approver, so you will not see this again in a queue." />
+
     <div class="card card-wide">
-        <h2>Overdue RPD Candidacies</h2>
-        <div class="card-divider"></div>
-        <p class="queue-meta">
-            {{ $candidacies->count() }} {{ Str::plural('candidacy', $candidacies->count()) }} past their deadline
-            (original or resubmission), with no dismissal case already in progress.
-        </p>
-
-        @forelse ($candidacies as $candidacy)
-            @php($missedDeadline = $candidacy->status === \App\Modules\Norhanis\Models\Candidacy::STATUS_FAILED_AWAITING_RESUBMISSION ? $candidacy->resubmission_deadline : $candidacy->deadline)
-            <div class="app-item">
-                <div class="app-item-header">
-                    <p><b>{{ $candidacy->student->name }}</b>
-                        @if ($candidacy->student->matric_no) ({{ $candidacy->student->matric_no }}) @endif
-                    </p>
-                    <span style="color: var(--red, #c0392b); font-weight: 600;">
-                        {{ $missedDeadline->diffForHumans() }}
-                    </span>
-                </div>
-                <p>Programme: {{ $candidacy->programme === \App\Modules\Norhanis\Models\Candidacy::PROGRAMME_PHD ? 'PhD' : 'Masters' }}</p>
-                <p>Study Mode: {{ $candidacy->study_mode === \App\Modules\Norhanis\Models\Candidacy::STUDY_MODE_PART_TIME ? 'Part-Time' : 'Full-Time' }}</p>
-                <p>
-                    {{ $candidacy->status === \App\Modules\Norhanis\Models\Candidacy::STATUS_FAILED_AWAITING_RESUBMISSION ? 'Resubmission Deadline (missed)' : 'RPD Deadline (missed)' }}:
-                    {{ $missedDeadline->format('j M Y') }}
-                </p>
-
-                <form method="POST" action="{{ route('rpd-dismissal.store') }}" style="margin-top: 12px;">
-                    @csrf
-                    <input type="hidden" name="candidacy_id" value="{{ $candidacy->id }}">
-
-                    <label for="reason-{{ $candidacy->id }}">Reason for Initiating Dismissal</label>
-                    <textarea name="reason" id="reason-{{ $candidacy->id }}" rows="3" required></textarea>
-
-                    <button type="submit" class="btn-secondary" style="margin-top: 8px;">
-                        Initiate Dismissal Case
-                    </button>
-                </form>
+        @if ($eligible->isEmpty())
+            <div class="empty-state">
+                <p>No candidacy is currently eligible for dismissal.</p>
+                <p class="queue-meta">Only students past their deadline with no dismissal already open appear here.</p>
+                <a href="{{ route('candidacies.index', ['filter' => 'overdue']) }}" class="btn-secondary">See the overdue list</a>
             </div>
-        @empty
-            <div class="empty-state">No candidacies are currently overdue for dismissal.</div>
-        @endforelse
+        @else
+            <form method="POST" action="{{ route('rpd-dismissal.store') }}" class="app-form" data-stepper>
+                @csrf
+
+                <fieldset class="fstep" data-label="Student">
+                <p class="fstep-hint">Only students past their RPD deadline with no dismissal already open are listed. The deadline they missed is shown against each name.</p>
+
+                <label for="candidacy_id">Student</label>
+                <select name="candidacy_id" id="candidacy_id" required
+                        class="@error('candidacy_id') is-invalid @enderror">
+                    <option value="">Select a student</option>
+                    @foreach ($eligible as $candidacy)
+                        <option value="{{ $candidacy->id }}" @selected(old('candidacy_id') == $candidacy->id)>
+                            {{ $candidacy->student->name }}@if ($candidacy->student->matric_no) ({{ $candidacy->student->matric_no }})@endif
+                            deadline {{ $candidacy->rpd_deadline->format('j M Y') }},
+                            {{ abs($candidacy->daysRemaining()) }} days overdue
+                        </option>
+                    @endforeach
+                </select>
+                @error('candidacy_id') <p class="field-error">{{ $message }}</p> @enderror
+                </fieldset>
+
+                <fieldset class="fstep" data-label="Grounds">
+                <p class="fstep-hint">Read by the Dean and by Faculty, and kept on the record after termination. State what was missed and what was already attempted.</p>
+
+                <label for="grounds">Grounds for dismissal</label>
+                <textarea name="grounds" id="grounds" rows="8" required
+                          class="@error('grounds') is-invalid @enderror">{{ old('grounds') }}</textarea>
+                @error('grounds') <p class="field-error">{{ $message }}</p> @enderror
+                </fieldset>
+
+                <button type="submit">Open Dismissal</button>
+            </form>
+        @endif
     </div>
 </div>
+
+@include('core::partials.form-stepper')
 @endsection

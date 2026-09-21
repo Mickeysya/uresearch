@@ -205,7 +205,7 @@ class AttendanceController extends Controller
 
         return back()
             ->with('status', $summary)
-            ->with('warning', count($problems).' '.Str::plural('row', $problems).' skipped — '
+            ->with('warning', count($problems).' '.Str::plural('row', $problems).' skipped. '
                 .implode(' ', $shown)
                 .($extra > 0 ? " (and {$extra} more)" : ''));
     }

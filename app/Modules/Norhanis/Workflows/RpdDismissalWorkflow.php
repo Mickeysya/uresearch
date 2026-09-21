@@ -2,29 +2,32 @@
 
 namespace App\Modules\Norhanis\Workflows;
 
-use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
-use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Norhanis\Models\RpdDismissalDetail;
 
 /**
- * RPD Dismissal -- for candidates who blew past their RPD deadline without
- * appealing. Non-Exec CGS initiates this, not the student, which is why
- * createRoute() returns null: there is no "New Application" form for it, only
- * a list of overdue candidacies CGS picks from (see RpdDismissalController).
+ * Dismissal for exceeded candidacy — Dean → Faculty.
  *
- * Chain: Dean of PGR (endorsement) -> Faculty (final approval). Registry is
- * NOT a stage here -- same category of question as Claims' Project Director,
- * resolved the same way: Registry doesn't decide anything, it issues the
- * termination notice as a post-approval action once Faculty approves (see
- * RpdDismissalController::decide()), the way PD's payment processing happens
- * after Manager CGS approves in Claims. Modelling Registry as a third Stage
- * would mean it could reject or stall a decision that was already final.
+ * norhanis.md Module 4, path 3: "Non-Exec CGS initiates dismissal. Routes to
+ * Dean (Endorsement) → Faculty (Final Approval). Once approved, Registry issues
+ * the official notification."
+ *
+ * Registry is NOT a stage: it decides nothing. Its termination email fires as a
+ * post-approval action once Faculty approves (see RpdDismissalController::decide()),
+ * the same resolution as Project Director on Claims.
+ *
+ * Non-Exec CGS is deliberately NOT a stage. They author the case, they do not
+ * approve it — the same shape as Hani's re_viva, where CGS opens the record and
+ * the Academic Executive advances it. Putting the initiator in the chain would
+ * mean CGS approving their own submission at step one.
+ *
+ * createRoute() returns null because no student can file this. That keeps it
+ * out of the student sidebar; the CGS entry point is the masterlist.
  */
-class RpdDismissalWorkflow implements WorkflowModule, ProvidesLinks
+class RpdDismissalWorkflow implements WorkflowModule
 {
     public function key(): string
     {
@@ -39,8 +42,20 @@ class RpdDismissalWorkflow implements WorkflowModule, ProvidesLinks
     public function stages(?Application $application = null): array
     {
         return [
-            new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'endorsed'),
-            new Stage('faculty', 'Faculty', Role::FACULTY, 'terminated', queueTitle: 'Pending Final Decision'),
+            new Stage(
+                key: 'dean',
+                label: 'Dean of PGR',
+                role: Role::DEAN_PGR,
+                decision: 'endorsed',
+                queueTitle: 'Dismissals Pending My Endorsement',
+            ),
+            new Stage(
+                key: 'faculty',
+                label: 'Faculty',
+                role: Role::FACULTY,
+                decision: 'approved',
+                queueTitle: 'Dismissals Pending Final Approval',
+            ),
         ];
     }
 
@@ -48,35 +63,21 @@ class RpdDismissalWorkflow implements WorkflowModule, ProvidesLinks
     {
         $detail = RpdDismissalDetail::where('application_id', $application->id)->first();
 
-        return $detail ? 'RPD Dismissal — '.$detail->reason : 'RPD Dismissal case';
+        if (! $detail) {
+            return 'RPD dismissal';
+        }
+
+        return 'Deadline missed '.$detail->deadline_missed_on->format('j M Y');
     }
 
+    /** Nobody files this against themselves. */
     public function createRoute(): ?string
     {
-        // CGS-initiated from the overdue-candidacies list, not self-submitted
-        // by a student -- see RpdDismissalController::create().
         return null;
     }
 
     public function queueRoute(): string
     {
         return 'rpd-dismissal.queue';
-    }
-
-    /**
-     * Non-Exec CGS owns no stage in this chain -- they initiate the case, they
-     * do not decide it -- so the stage-derived sidebar would never show them
-     * a way to reach the overdue-candidacies list without this.
-     */
-    public function links(User $user): array
-    {
-        return match ($user->role) {
-            Role::NON_EXEC_CGS => [
-                ['label' => 'Overdue RPD Candidacies', 'route' => 'rpd-dismissal.create'],
-                ['label' => 'Upcoming RPD Reminders', 'route' => 'rpd-reminders.index'],
-                ['label' => 'Record Failed RPD Attempt', 'route' => 'candidacy.failed-attempt.create'],
-            ],
-            default => [],
-        };
     }
 }

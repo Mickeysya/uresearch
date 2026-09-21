@@ -10,6 +10,7 @@ use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ClaimsController extends Controller
 {
@@ -31,7 +32,7 @@ class ClaimsController extends Controller
             'purpose_of_claim' => ['required', 'string', 'max:255'],
             'bank_account_no' => ['required', 'string', 'max:30'],
             'less_cash_advance' => ['nullable', 'numeric', 'min:0'],
-            'items' => ['required', 'array', 'min:1'],
+            'items' => ['required', 'array', 'min:1', 'max:100'],
             'items.*.item_date' => ['required', 'date'],
             'items.*.travel_from' => ['nullable', 'string', 'max:150'],
             'items.*.travel_to' => ['nullable', 'string', 'max:150'],
@@ -42,27 +43,42 @@ class ClaimsController extends Controller
             'receipt' => DocumentStore::rules(),
         ], [
             'items.required' => 'Add at least one expense item.',
+            'items.max' => 'A single claim cannot carry more than 100 expense items.',
         ]);
 
-        $application = DB::transaction(function () use ($request, $data, $engine, $documents) {
+        // total_claim_amount and claim_balance are NEVER read from the
+        // request — summed from the items array server-side, the same way
+        // TravelController derives duration_days instead of trusting a posted
+        // number. A student editing the DOM to inflate the total client-side
+        // has no effect on what actually gets saved.
+        $totalClaimAmount = collect($data['items'])->sum(function ($item) {
+            return ($item['flight_train_amount'] ?? 0)
+                + ($item['meal_allowance'] ?? 0)
+                + ($item['lodging_amount'] ?? 0)
+                + ($item['misc_amount'] ?? 0);
+        });
+        $lessCashAdvance = $data['less_cash_advance'] ?? 0;
+
+        // The advance can only be checked once the total is known, which is
+        // after validation — so it is a ValidationException here rather than
+        // a rule above. Without it an advance larger than the claim stored a
+        // negative claim_balance and walked it through all four approvers.
+        if ($lessCashAdvance > $totalClaimAmount) {
+            throw ValidationException::withMessages([
+                'less_cash_advance' => sprintf(
+                    'The cash advance (RM %s) cannot exceed the total claimed (RM %s).',
+                    number_format((float) $lessCashAdvance, 2),
+                    number_format((float) $totalClaimAmount, 2),
+                ),
+            ]);
+        }
+
+        $application = DB::transaction(function () use ($request, $data, $engine, $documents, $totalClaimAmount, $lessCashAdvance) {
             $application = Application::create([
                 'student_id' => $request->user()->id,
                 'module_type' => $this->moduleKey(),
                 'status' => Application::STATUS_DRAFT,
             ]);
-
-            // total_claim_amount and claim_balance are NEVER read from the
-            // request — summed from the items array server-side, the same
-            // way TravelController derives duration_days instead of trusting
-            // a posted number. A student editing the DOM to inflate the
-            // total client-side has no effect on what actually gets saved.
-            $totalClaimAmount = collect($data['items'])->sum(function ($item) {
-                return ($item['flight_train_amount'] ?? 0)
-                    + ($item['meal_allowance'] ?? 0)
-                    + ($item['lodging_amount'] ?? 0)
-                    + ($item['misc_amount'] ?? 0);
-            });
-            $lessCashAdvance = $data['less_cash_advance'] ?? 0;
 
             $claimsDetail = ClaimsDetail::create([
                 'application_id' => $application->id,

@@ -19,9 +19,9 @@ Add a row here in the same commit that registers the workflow.
 | `supervision` | Supervisor Appointment | Nureen | built |
 | `ga_certification` | GA/GRA Certification Letter | Nureen | built |
 | `re_viva` | Re-examination Monitoring | Hani | built |
-| `hardbound_submission` | Hardbound Submission | Jason | planned |
-| `hardbound_appeal` | Appeal Hardbound Submission | Jason | planned |
-| `appointment_letter` | Appointment Letter & Report Management | Jason | planned |
+| `hardbound_submission` | Hardbound Submission | Jason | built |
+| `hardbound_appeal` | Appeal Hardbound Submission | Jason | built |
+| `appointment_letter` | Appointment Letter & Report Management | Jason | built |
 | `workstation` | Workstation Management | Chloe | planned |
 | `candidacy_reminder` | Study Candidacy Reminder | Chloe | planned · see overlap note |
 | `candidacy_appeal` | Study Candidacy Appeal | Chloe | planned · see overlap note |
@@ -51,7 +51,21 @@ across modules is fine and desirable — it keeps the vocabulary consistent.
 | `manager` | Manager CGS | `manager_cgs` |
 | `academic_exec` | Academic Executive | `academic_exec` |
 | `cgs_approve` | Senior Executive CGS | `senior_exec_cgs` |
+| `cgs_prep` | Non-Executive CGS (prepares the appointment pack) | `non_exec_cgs` |
 | `faculty` | Faculty | `faculty` |
+| `registry` | Registry | `registry` |
+| `report_sent` | Report Sent | `academic_exec` |
+| `under_panel_review` | Under Panel Review | `academic_exec` |
+| `report_received` | Report Received | `academic_exec` |
+| `consolidation_scheduled` | Consolidation Scheduled | `academic_exec` |
+
+The last four are Hani's re-viva monitoring stepper. They read as statuses
+rather than approvers because that is what they are: one actor advancing a
+case through four states, expressed as a chain so the engine still owns the
+position.
+
+Checked against `grep` over every `Workflows/*.php` on 2026-09-17, so this
+table is the full set, not a sample.
 
 ## Actors named in scope documents that are not yet roles
 
@@ -65,13 +79,7 @@ first whether an existing role already means the same person.
 | Programme Chair | `chloe.md` | probably the existing `chair` — confirm with CGS |
 | Project Director | `norhanis.md` | may be a post-approval export, not a stage |
 
-**Resolved:** `Role::FACULTY` added 2026-09-21 for the RPD dismissal chain's
-final-approval stage (`norhanis.md`) — Dean of PGR (endorse) → Faculty (final
-approval). Jason's Hardbound modules can reuse it — confirm with him before
-adding a second meaning to the same role.
-
-**Correction, same day:** Registry is *not* a stage in RPD dismissal, same
-category of question as Project Director on Claims — it issues the
-termination notice as a post-approval action once Faculty approves, not a
-decision of its own. `Role::REGISTRY` (pre-existing) is unaffected; it simply
-has no stage in this particular chain.
+**Resolved.** `Faculty` is now a role (`App\Modules\Core\Support\Role::FACULTY`),
+claimed by `RpdDismissalWorkflow` as the final approver between the Dean's
+endorsement and the Registry's termination email. Jason's modules may reuse it.
+Seeded as `faculty@utp.edu.my`.

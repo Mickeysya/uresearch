@@ -3,49 +3,58 @@
 namespace App\Modules\Norhanis\Models;
 
 use App\Modules\Core\Models\User;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 
 /**
- * A student's RPD candidacy -- the "masterlist" entry the scope document
- * refers to. There is no separate masterlist table; this row IS it.
+ * One student's RPD clock.
  *
- * Deliberately not an Application: reminders, appeals and dismissals all read
- * or write this record, but the candidacy itself is never submitted through
- * WorkflowEngine -- it is the thing the RPD appeal/dismissal chains act on.
+ * All the deadline arithmetic lives here rather than in the controllers, so
+ * the reminder command, the appeal flow and the dismissal flow cannot disagree
+ * about when a deadline falls or how far it may move.
  */
 class Candidacy extends Model
 {
-    public const STUDY_MODE_FULL_TIME = 'full_time';
-    public const STUDY_MODE_PART_TIME = 'part_time';
-
-    public const PROGRAMME_MASTERS = 'masters';
-    public const PROGRAMME_PHD = 'phd';
-
-    /** Longest extension a student may request on an appeal, agreed with CGS. */
-    public const MAX_APPEAL_EXTENSION_MONTHS = 6;
+    /** Plural of "candidacy" is not what Laravel guesses ("candidacies" vs "candidacys"). */
+    protected $table = 'candidacies';
 
     public const STATUS_ACTIVE = 'active';
-    public const STATUS_APPEAL_PENDING = 'appeal_pending';
-    public const STATUS_FAILED_AWAITING_RESUBMISSION = 'failed_awaiting_resubmission';
+    public const STATUS_EXTENDED = 'extended';
+    public const STATUS_DEFENDED = 'defended';
     public const STATUS_DISMISSED = 'dismissed';
-    public const STATUS_COMPLETED = 'completed';
+
+    /**
+     * The RPD window, in months, per programme type. Straight from
+     * norhanis.md: 8 months full-time, 12 months part-time, Masters or PhD.
+     */
+    public const WINDOW_MONTHS = [
+        'msc_ft' => 8,
+        'phd_ft' => 8,
+        'msc_pt' => 12,
+        'phd_pt' => 12,
+    ];
+
+    /**
+     * Ceiling on total extension across every appeal a student files.
+     *
+     * Six months in total, confirmed with CGS. A student may ask for any whole
+     * number of months up to whatever is left of it; the Dean approves or
+     * rejects each request. This is the one constant to change if CGS moves it.
+     */
+    public const MAX_EXTENSION_MONTHS = 6;
 
     protected $fillable = [
-        'student_id', 'study_mode', 'programme', 'start_date', 'deadline',
-        'resubmission_deadline', 'attempt_number', 'status', 'rpd_completed_at',
+        'student_id', 'programme_type', 'candidature_start_date',
+        'rpd_deadline', 'status', 'extension_months_used', 'defended_on',
     ];
 
     protected function casts(): array
     {
         return [
-            'start_date' => 'date',
-            'deadline' => 'date',
-            'resubmission_deadline' => 'date',
-            'rpd_completed_at' => 'datetime',
+            'candidature_start_date' => 'date',
+            'rpd_deadline' => 'date',
+            'defended_on' => 'date',
         ];
     }
 
@@ -59,101 +68,84 @@ class Candidacy extends Model
         return $this->hasMany(RpdReminderLog::class);
     }
 
-    /**
-     * Months-before-deadline marks the scope document asks for, in the order
-     * checked. Shared by RemindRpdCandidates (the automatic 07:00 scan) and
-     * UpcomingRpdRemindersController (the CGS visibility page + manual "Send
-     * Now" fallback), so the two can never disagree about which mark a
-     * candidacy is in.
-     */
-    public const REMINDER_MONTH_MARKS = [3, 2, 1];
-
-    /**
-     * The moment a given month-mark's reminder window opens for this
-     * candidacy -- e.g. a 31 Mar deadline's 3-month mark opens on 31 Dec, not
-     * "90 days before", which drifts depending on which months fall in
-     * between. A mark is due once now() reaches this instant.
-     */
-    public function reminderWindowOpensAt(int $monthMark): Carbon
+    /** @return array<string, string> */
+    public static function programmeTypes(): array
     {
-        return $this->deadline->copy()->subMonths($monthMark);
+        return [
+            'msc_ft' => 'MSc Full Time (8 months)',
+            'msc_pt' => 'MSc Part Time (12 months)',
+            'phd_ft' => 'PhD Full Time (8 months)',
+            'phd_pt' => 'PhD Part Time (12 months)',
+        ];
     }
 
     /**
-     * 8 months full-time, 12 months part-time -- Masters and PhD are the
-     * same duration, only study mode changes it. This is the *first*
-     * deadline only; a failed attempt's resubmission window is a different
-     * table, see resubmissionMonthsFor().
+     * The first deadline for a programme, before any extension.
+     *
+     * Only ever used to seed rpd_deadline at creation. After that the stored
+     * date is the truth -- recomputing it would erase every granted extension.
      */
-    public static function deadlineMonthsFor(string $studyMode): int
+    public static function initialDeadline(string $programmeType, \DateTimeInterface $start): \Carbon\Carbon
     {
-        return $studyMode === self::STUDY_MODE_PART_TIME ? 12 : 8;
+        $months = self::WINDOW_MONTHS[$programmeType] ?? 8;
+
+        return \Carbon\Carbon::parse($start)->addMonthsNoOverflow($months);
     }
 
-    public static function computeDeadline(Carbon $startDate, string $studyMode): Carbon
+    /** Whole months from today to the deadline; negative once it has passed. */
+    public function monthsRemaining(): int
     {
-        return $startDate->copy()->addMonths(self::deadlineMonthsFor($studyMode));
+        return (int) now()->startOfDay()->diffInMonths($this->rpd_deadline, false);
     }
 
-    /**
-     * Resubmission window after a failed RPD attempt -- Table 5 of the FYP I
-     * interim report. Unlike the first deadline, this genuinely differs by
-     * programme at the same study mode: Masters Full-Time resubmits in 3
-     * months, PhD Full-Time in 6; Masters Part-Time in 6, PhD Part-Time in 12.
-     */
-    public static function resubmissionMonthsFor(string $programme, string $studyMode): int
+    public function daysRemaining(): int
     {
-        return match (true) {
-            $programme === self::PROGRAMME_PHD && $studyMode === self::STUDY_MODE_PART_TIME => 12,
-            $programme === self::PROGRAMME_PHD => 6,
-            $studyMode === self::STUDY_MODE_PART_TIME => 6,
-            default => 3, // Masters, Full-Time
-        };
+        return (int) now()->startOfDay()->diffInDays($this->rpd_deadline, false);
     }
 
-    public static function computeResubmissionDeadline(Carbon $from, string $programme, string $studyMode): Carbon
-    {
-        return $from->copy()->addMonths(self::resubmissionMonthsFor($programme, $studyMode));
-    }
-
-    /**
-     * Candidacies eligible for Non-Exec CGS to initiate a dismissal for: the
-     * RPD milestone was never recorded as done, and either the original
-     * deadline passed while still on the first attempt, or the resubmission
-     * deadline passed after a failed attempt. Not mid-appeal, not already
-     * dismissed or completed either way.
-     */
-    public function scopeOverdue(Builder $query): Builder
-    {
-        return $query->whereNull('rpd_completed_at')
-            ->where(function (Builder $query) {
-                $query->where(function (Builder $query) {
-                    $query->where('status', self::STATUS_ACTIVE)
-                        ->whereDate('deadline', '<', now());
-                })->orWhere(function (Builder $query) {
-                    $query->where('status', self::STATUS_FAILED_AWAITING_RESUBMISSION)
-                        ->whereDate('resubmission_deadline', '<', now());
-                });
-            });
-    }
-
-    /**
-     * Same rule as scopeOverdue(), for a single already-loaded model. Compares
-     * by calendar day, not by isPast() -- a deadline of today is not yet
-     * overdue, and this must agree with the SQL scope used for the CGS
-     * dismissal-initiation list or a candidacy could appear eligible in one
-     * place and not the other.
-     */
     public function isOverdue(): bool
     {
-        if ($this->rpd_completed_at !== null) {
-            return false;
-        }
+        return $this->daysRemaining() < 0;
+    }
 
-        return match ($this->status) {
-            self::STATUS_ACTIVE => $this->deadline->lt(now()->startOfDay()),
-            self::STATUS_FAILED_AWAITING_RESUBMISSION => $this->resubmission_deadline?->lt(now()->startOfDay()) ?? false,
-            default => false,
+    /** Extension months still available under the ceiling. */
+    public function extensionMonthsRemaining(): int
+    {
+        return max(0, self::MAX_EXTENSION_MONTHS - $this->extension_months_used);
+    }
+
+    /**
+     * Whether this candidacy may appeal at all.
+     *
+     * A defended or dismissed clock has stopped, and a student who has used the
+     * whole ceiling has nothing left to ask for.
+     */
+    public function canAppeal(): bool
+    {
+        return in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_EXTENDED], true)
+            && $this->extensionMonthsRemaining() > 0;
+    }
+
+    /** Whether CGS may open a dismissal: the deadline passed and it is still running. */
+    public function isDismissible(): bool
+    {
+        return $this->isOverdue()
+            && in_array($this->status, [self::STATUS_ACTIVE, self::STATUS_EXTENDED], true);
+    }
+
+    /**
+     * How urgent this row is, for the masterlist and the student's own view.
+     * Same four tones the dashboards already use.
+     */
+    public function tone(): string
+    {
+        return match (true) {
+            $this->status === self::STATUS_DISMISSED => 'critical',
+            $this->status === self::STATUS_DEFENDED => 'good',
+            $this->isOverdue() => 'critical',
+            $this->monthsRemaining() <= 1 => 'warn',
+            $this->monthsRemaining() <= 3 => 'info',
+            default => 'good',
         };
     }
 }

@@ -44,6 +44,9 @@
     ])->filter(fn ($row) => filled($row['value']));
 @endphp
 
+<x-core::page-header title="My Profile"
+                     subtitle="Your record as the portal holds it. Contact details and password are changed here." />
+
 <div class="prof">
     {{-- No flash include here: layouts/app.blade.php already renders one
          above @yield('content'), and a second copy showed every "Contact
@@ -114,7 +117,7 @@
                     </span>
                     <span>
                         These are your official records and cannot be edited here.
-                        If something is wrong, contact CGS — changing a programme or
+                        If something is wrong, contact CGS. Changing a programme or
                         supervisor affects deadlines and approval routing, so it goes
                         through them.
                     </span>

@@ -1,13 +1,17 @@
-{{-- RPD Appeal-specific lines inside the shared queue card. --}}
+{{-- Appeal-specific lines inside the shared queue card. --}}
 @php($detail = $details[$application->id] ?? null)
 
-@if ($detail && $detail->candidacy)
-    <p><b>Current Deadline:</b> {{ $detail->candidacy->deadline->format('j M Y') }}</p>
-    <p><b>Extension Requested:</b> {{ $detail->requested_extension_months }} {{ $detail->requested_extension_months === 1 ? 'month' : 'months' }}
-        (new deadline if approved: {{ $detail->candidacy->deadline->copy()->addMonths($detail->requested_extension_months)->format('j M Y') }})</p>
-    <p><b>Programme:</b> {{ $detail->candidacy->programme === \App\Modules\Norhanis\Models\Candidacy::PROGRAMME_PHD ? 'PhD' : 'Masters' }}</p>
-    <p><b>Study Mode:</b> {{ $detail->candidacy->study_mode === \App\Modules\Norhanis\Models\Candidacy::STUDY_MODE_PART_TIME ? 'Part-Time' : 'Full-Time' }}</p>
-    <p><b>Reason:</b> {{ $detail->reason }}</p>
+@if ($detail)
+    <p>Requested: <b>{{ $detail->requested_months }} {{ Str::plural('month', $detail->requested_months) }}</b></p>
+    <p>Deadline when filed: {{ $detail->deadline_at_filing->format('j M Y') }}
+       → would become
+       {{ $detail->deadline_at_filing->copy()->addMonthsNoOverflow($detail->requested_months)->format('j M Y') }}</p>
+    @if ($detail->candidacy)
+        <p>Programme: {{ \App\Modules\Norhanis\Models\Candidacy::programmeTypes()[$detail->candidacy->programme_type] ?? $detail->candidacy->programme_type }}</p>
+        <p>Extension already used: {{ $detail->candidacy->extension_months_used }} of
+           {{ \App\Modules\Norhanis\Models\Candidacy::MAX_EXTENSION_MONTHS }} months</p>
+    @endif
+    <p class="rpd-justification">{{ $detail->justification }}</p>
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif

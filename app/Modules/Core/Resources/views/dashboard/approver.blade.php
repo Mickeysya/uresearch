@@ -2,79 +2,41 @@
 
 @section('title', 'Dashboard')
 
-@include('core::dashboard.partials.chartjs')
-
 @section('content')
-    <div class="welcome-banner">
-        <h2>Welcome, {{ auth()->user()->name }}</h2>
-        <p>{{ auth()->user()->roleLabel() }}@if (auth()->user()->department) &middot; {{ auth()->user()->department }}@endif</p>
-    </div>
+    {{--
+        Every approving role without a screen of its own: the Dean of PGR,
+        the Academic Executive, the Registry, the Faculty office, the Senior
+        Executive.
 
-    <div class="stat-cards-row">
-        <div class="stat-card accent-blue">
-            <div class="stat-number">{{ $total }}</div>
-            <div class="stat-label">Awaiting your action</div>
+        This was the last screen still on the pre-.sdash markup, and it was
+        the one that showed why the Chair and Supervisor needed their own: it
+        built ONE STAT CARD PER QUEUE, so the Academic Executive got seven
+        cards of which six normally read zero, over a bar chart of six
+        categories with one bar in it -- and never showed how long anything
+        had been waiting.
+
+        Now the same five figures and the same panels every approver screen
+        uses. The only panel here that the Chair and Supervisor do not have
+        is the decision trail, which fits because this screen has no bespoke
+        panel taking its place.
+    --}}
+    <div class="sdash sdash-approver">
+        <x-core::welcome-banner
+            art="desk"
+            subtitle="What is waiting on your decision, and how long it has waited." />
+
+        @include('core::dashboard.partials.approver-stat-cards')
+        @include('core::dashboard.partials.approver-alerts')
+
+        <div class="approver-row">
+            @include('core::dashboard.partials.approver-ageing')
+            @include('core::dashboard.partials.approver-queues')
+            @include('core::dashboard.partials.approver-oldest')
         </div>
-        @foreach ($chart as $bar)
-            <div class="stat-card accent-gold">
-                <div class="stat-number">{{ $bar['count'] }}</div>
-                <div class="stat-label">{{ $bar['label'] }}</div>
-            </div>
-        @endforeach
-    </div>
 
-    <div class="dashboard-grid">
-        <div class="chart-card">
-            <h3>Applications Pending Your Action</h3>
-            @if ($total === 0)
-                <p style="color: var(--text-grey); font-size: 13px;">Your queues are clear.</p>
-            @else
-                <canvas id="dashboardChart"></canvas>
-            @endif
-        </div>
-
-        <div>
-            <h3 style="color: var(--navy); font-size: 15px; margin-top: 0;">Recent activity</h3>
-            <table class="recent-activity-table">
-                <thead>
-                    <tr><th>#</th><th>Type</th><th>Student</th><th>Status</th></tr>
-                </thead>
-                <tbody>
-                    @forelse ($recent as $application)
-                        <tr>
-                            <td>{{ $application->id }}</td>
-                            <td>{{ $application->module()->label() }}</td>
-                            <td>{{ $application->student->name }}</td>
-                            <td><x-core::status-badge :status="$application->status" /></td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="4" style="color: var(--text-grey);">No activity yet.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+        <div class="approver-row approver-row-aside">
+            @include('core::dashboard.partials.approver-decisions')
+            @include('core::dashboard.partials.approver-shortcuts')
         </div>
     </div>
 @endsection
-
-@push('scripts')
-    @if ($total > 0)
-        <script @cspNonce>
-            new Chart(document.getElementById('dashboardChart'), {
-                type: 'bar',
-                data: {
-                    labels: @json(array_column($chart, 'label')),
-                    datasets: [{
-                        label: 'Pending',
-                        data: @json(array_column($chart, 'count')),
-                        backgroundColor: '#284B80',
-                        borderRadius: 6,
-                    }],
-                },
-                options: {
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } },
-                    plugins: { legend: { display: false } },
-                },
-            });
-        </script>
-    @endif
-@endpush

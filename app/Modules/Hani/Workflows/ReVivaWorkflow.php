@@ -3,12 +3,14 @@
 namespace App\Modules\Hani\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Hani\Models\ReVivaDetail;
+use Carbon\CarbonInterface;
 
 /**
  * Re-examination monitoring.
@@ -33,7 +35,7 @@ use App\Modules\Hani\Models\ReVivaDetail;
  * CGS-only link below, the same mechanism the Examiner Pool admin screen
  * uses to appear for that role.
  */
-class ReVivaWorkflow implements WorkflowModule, ProvidesLinks
+class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
 {
     public function key(): string
     {
@@ -67,7 +69,7 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks
             return 'Re-viva monitoring';
         }
 
-        return "Cycle {$detail->cycle_number} — resubmitted ".$detail->resubmission_at->format('j M Y');
+        return "Cycle {$detail->cycle_number}, resubmitted ".$detail->resubmission_at->format('j M Y');
     }
 
     public function createRoute(): ?string
@@ -97,5 +99,53 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks
             ],
             default => [],
         };
+    }
+
+    /**
+     * The two deadlines that run from the resubmission timestamp.
+     *
+     * These are the hardest dates in the portal -- 6 months to submit
+     * corrections, 12 to hardbound -- and they are exactly why the timestamp
+     * is stamped once and stored rather than recomputed. A student whose
+     * thesis is in a re-viva cycle should not have to open the application to
+     * find out when they run out of time.
+     */
+    public function calendarEvents(User $user, CarbonInterface $from, CarbonInterface $to): array
+    {
+        if ($user->role !== Role::STUDENT) {
+            return [];
+        }
+
+        $details = ReVivaDetail::query()
+            ->whereIn('application_id', Application::query()
+                ->where('module_type', $this->key())
+                ->where('student_id', $user->id)
+                ->select('id'))
+            // A cycle that already has an outcome has stopped running.
+            ->whereNull('outcome_level')
+            ->get();
+
+        $events = [];
+
+        foreach ($details as $detail) {
+            foreach ([
+                ['correction_deadline', 'Thesis corrections due', 'warn'],
+                ['hardbound_deadline', 'Hardbound submission due', 'critical'],
+            ] as [$field, $title, $tone]) {
+                if (! $detail->$field?->betweenIncluded($from, $to)) {
+                    continue;
+                }
+
+                $events[] = [
+                    'date' => $detail->$field,
+                    'title' => $title,
+                    'tone' => $tone,
+                    'meta' => 'Re-viva cycle '.$detail->cycle_number,
+                    'url' => route('applications.show', $detail->application_id),
+                ];
+            }
+        }
+
+        return $events;
     }
 }

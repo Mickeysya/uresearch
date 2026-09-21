@@ -34,6 +34,10 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->user('Puan Waheeda', 'cgs@utp.edu.my', Role::NON_EXEC_CGS, ['department' => 'CGS']);
+        // Rules on a hardbound appeal after the Non-Executive compiles the
+        // Dean PFR report -- the last stage of HardboundAppealWorkflow, which
+        // had nobody able to act on it until this account existed.
+        $this->user('Puan Hasnah', 'seniorexec@utp.edu.my', Role::SENIOR_EXEC_CGS, ['department' => 'CGS']);
         $this->user('Norshahirah', 'manager@utp.edu.my', Role::MANAGER_CGS, ['department' => 'CGS']);
         $this->user('En Zulkifly', 'director@utp.edu.my', Role::SENIOR_DIRECTOR_CGS, ['department' => 'CGS']);
         $this->user('Prof. Dr. Hafiz Osman', 'dean@utp.edu.my', Role::DEAN_PGR, ['department' => 'PGR']);
@@ -41,8 +45,12 @@ class DatabaseSeeder extends Seeder
             'department' => 'Computer & Information Sciences',
             'faculty' => 'FSMC',
         ]);
+        // Faculty signs off an RPD dismissal between the Dean's endorsement
+        // and the Registry's termination email -- see RpdDismissalWorkflow.
+        $this->user('Faculty Office', 'faculty@utp.edu.my', Role::FACULTY, [
+            'department' => 'Faculty of Engineering', 'faculty' => 'FOE',
+        ]);
         $this->user('Registry Officer', 'registry@utp.edu.my', Role::REGISTRY, ['department' => 'Registry']);
-        $this->user('Assoc. Prof. Dr. Kamarul Ariffin', 'faculty@utp.edu.my', Role::FACULTY, ['department' => 'FSMC']);
         $this->user('System Admin', 'admin@utp.edu.my', Role::ADMIN);
 
         // Students, all attached to the supervisor above so the supervisee
@@ -83,24 +91,53 @@ class DatabaseSeeder extends Seeder
         ], $extra));
     }
 
-    /** One examiner in each of the four states, so the rules are visible. */
+    /**
+     * One examiner in each of the four states, so the rules are visible --
+     * and both lists, so the internal/external split on the pool screen has
+     * something to show. The external rows carry the extra record CGS keeps
+     * for anyone from outside UTP; the internal ones deliberately do not.
+     */
     protected function examiners(): void
     {
         $rows = [
             // Available: never examined, no assignment.
-            ['Prof. Dr. Rosli Hamid', 'rosli@utp.edu.my', 'Petroleum Engineering', 'FOE', 'internal', true, null, null],
+            ['Prof. Dr. Rosli Hamid', 'rosli@utp.edu.my', 'Petroleum Engineering', 'FOE', 'internal', true, null, null, []],
             // Available: last examined well beyond the 90-day gap.
-            ['Dr. Chandra Segaran', 'chandra@utp.edu.my', 'Civil Engineering', 'FOE', 'internal', true, '-200 days', null],
+            ['Dr. Chandra Segaran', 'chandra@utp.edu.my', 'Civil Engineering', 'FOE', 'internal', true, '-200 days', null, []],
             // On gap: examined 30 days ago.
-            ['Prof. Madya Dr. Nabila Yusof', 'nabila@um.edu.my', 'Computer Science', null, 'external', true, '-30 days', null],
+            ['Prof. Madya Dr. Nabila Yusof', 'nabila@um.edu.my', 'Computer & Information Sciences', null, 'external', true, '-30 days', null, [
+                'institution' => 'Universiti Malaya (UM)',
+                'sector' => 'research',
+                'faculty_approval' => '2.2023',
+                'utp_cluster' => 'Intelligent Systems',
+                'expertise' => '1. Machine Learning'."\n".'2. Computer Vision',
+                'years_experience' => 18,
+                'msc_graduated' => 12,
+                'phd_graduated' => 6,
+                'first_examination_date' => '-2 years',
+            ]],
             // Assigned: tied to an active case.
-            ['Dr. Tan Boon Keat', 'tan@usm.edu.my', 'Software Engineering', null, 'external', true, null, '+45 days'],
+            ['Dr. Tan Boon Keat', 'tan@usm.edu.my', 'Computer & Information Sciences', null, 'external', true, null, '+45 days', [
+                'institution' => 'Universiti Sains Malaysia (USM)',
+                'sector' => 'technical',
+                'faculty_approval' => '1.2024',
+                'utp_cluster' => 'Software Engineering',
+                'expertise' => '1. Software Verification',
+                'years_experience' => 11,
+                'msc_graduated' => 5,
+                'phd_graduated' => 5,
+                'first_examination_date' => '-14 months',
+            ]],
             // Unavailable: retired.
-            ['Prof. Dr. Ismail Bakar', 'ismail@utp.edu.my', 'Chemical Engineering', 'FOE', 'internal', false, null, null],
+            ['Prof. Dr. Ismail Bakar', 'ismail@utp.edu.my', 'Chemical Engineering', 'FOE', 'internal', false, null, null, []],
         ];
 
-        foreach ($rows as [$name, $email, $dept, $faculty, $type, $active, $lastExam, $assigned]) {
-            Examiner::updateOrCreate(['email' => $email], [
+        foreach ($rows as [$name, $email, $dept, $faculty, $type, $active, $lastExam, $assigned, $external]) {
+            if (isset($external['first_examination_date'])) {
+                $external['first_examination_date'] = now()->modify($external['first_examination_date']);
+            }
+
+            Examiner::updateOrCreate(['email' => $email], $external + [
                 'name' => $name,
                 'department' => $dept,
                 'faculty' => $faculty,
@@ -113,41 +150,26 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
-     * One candidacy nearing its RPD deadline (exercises the reminder command
-     * and the appeal chain) and one already overdue (exercises the CGS
-     * dismissal-initiation screen), so both of Norhanis' RPD flows have real
-     * data to click through on a fresh database.
+     * One candidacy inside its 1-month reminder window (exercises the reminder
+     * command and the appeal chain) and one already overdue (exercises the CGS
+     * dismissal screen), so both RPD flows have data on a fresh database.
      */
     protected function candidacies(User $fullTimeStudent, User $partTimeStudent): void
     {
-        // MSc Full-Time, 8-month deadline: started 7 months ago, so the
-        // deadline is about a month out -- within the reminder command's
-        // 1-month window and still appeal-eligible.
         $start = now()->subMonths(7);
-        Candidacy::updateOrCreate(
-            ['student_id' => $fullTimeStudent->id],
-            [
-                'study_mode' => Candidacy::STUDY_MODE_FULL_TIME,
-                'programme' => Candidacy::PROGRAMME_MASTERS,
-                'start_date' => $start,
-                'deadline' => Candidacy::computeDeadline($start, Candidacy::STUDY_MODE_FULL_TIME),
-                'status' => Candidacy::STATUS_ACTIVE,
-            ]
-        );
+        Candidacy::updateOrCreate(['student_id' => $fullTimeStudent->id], [
+            'programme_type' => 'msc_ft',
+            'candidature_start_date' => $start,
+            'rpd_deadline' => Candidacy::initialDeadline('msc_ft', $start),
+            'status' => Candidacy::STATUS_ACTIVE,
+        ]);
 
-        // PhD Part-Time, 12-month deadline: started 14 months ago, so the
-        // deadline already passed with no appeal filed -- eligible for CGS
-        // to initiate dismissal.
         $start = now()->subMonths(14);
-        Candidacy::updateOrCreate(
-            ['student_id' => $partTimeStudent->id],
-            [
-                'study_mode' => Candidacy::STUDY_MODE_PART_TIME,
-                'programme' => Candidacy::PROGRAMME_PHD,
-                'start_date' => $start,
-                'deadline' => Candidacy::computeDeadline($start, Candidacy::STUDY_MODE_PART_TIME),
-                'status' => Candidacy::STATUS_ACTIVE,
-            ]
-        );
+        Candidacy::updateOrCreate(['student_id' => $partTimeStudent->id], [
+            'programme_type' => 'phd_pt',
+            'candidature_start_date' => $start,
+            'rpd_deadline' => Candidacy::initialDeadline('phd_pt', $start),
+            'status' => Candidacy::STATUS_ACTIVE,
+        ]);
     }
 }

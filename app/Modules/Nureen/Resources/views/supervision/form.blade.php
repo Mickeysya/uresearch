@@ -4,12 +4,15 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Supervisor Appointment Request</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Supervisor Appointment Request" />
 
-        <form method="POST" action="{{ route('supervision.store') }}" enctype="multipart/form-data">
+    <div class="card card-wide">
+        <form method="POST" action="{{ route('supervision.store') }}" enctype="multipart/form-data" data-stepper>
             @csrf
+
+            <fieldset class="fstep" data-label="Supervisor">
+            <p class="fstep-hint">Who you are asking for, and why them.</p>
 
             <label for="requested_supervisor_id">Requested Supervisor</label>
             <select name="requested_supervisor_id" id="requested_supervisor_id" required
@@ -17,7 +20,7 @@
                 <option value="">Select a supervisor&hellip;</option>
                 @foreach ($supervisors as $supervisor)
                     <option value="{{ $supervisor->id }}" @selected(old('requested_supervisor_id') == $supervisor->id)>
-                        {{ $supervisor->name }}@if ($supervisor->department) &mdash; {{ $supervisor->department }}@endif
+                        {{ $supervisor->name }}@if ($supervisor->department) &middot; {{ $supervisor->department }}@endif
                     </option>
                 @endforeach
             </select>
@@ -32,7 +35,12 @@
             </p>
             @error('justification') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="supporting_document">Supporting Document <span style="color: var(--text-grey)">(required)</span></label>
+            </fieldset>
+
+            <fieldset class="fstep" data-label="Supporting document">
+            <p class="fstep-hint">Required. Checked for completeness here rather than after it reaches your prospective supervisor.</p>
+
+            <label for="supporting_document"> <span style="color: var(--text-grey)">(required)</span></label>
             <input type="file" name="supporting_document" id="supporting_document" required
                    class="@error('supporting_document') is-invalid @enderror">
             @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
@@ -42,9 +50,11 @@
                 The request is checked for completeness here rather than after it
                 reaches your prospective supervisor.
             </p>
+            </fieldset>
 
             <button type="submit">Submit Request</button>
         </form>
     </div>
 </div>
+@include('core::partials.form-stepper')
 @endsection

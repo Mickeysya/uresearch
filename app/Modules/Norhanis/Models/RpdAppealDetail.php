@@ -6,18 +6,19 @@ use App\Modules\Core\Models\Application;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * requested_extension_months (1-6) is what the student asked for; on the
- * Dean's approval the candidacy's deadline is extended by that many months.
- * See RpdAppealController::extendCandidacy().
- */
 class RpdAppealDetail extends Model
 {
-    protected $fillable = ['application_id', 'candidacy_id', 'reason', 'requested_extension_months'];
+    protected $fillable = [
+        'application_id', 'candidacy_id', 'requested_months',
+        'justification', 'deadline_at_filing', 'new_deadline',
+    ];
 
     protected function casts(): array
     {
-        return ['requested_extension_months' => 'integer'];
+        return [
+            'deadline_at_filing' => 'date',
+            'new_deadline' => 'date',
+        ];
     }
 
     public function application(): BelongsTo

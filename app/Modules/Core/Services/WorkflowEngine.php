@@ -111,10 +111,47 @@ class WorkflowEngine
                 ])
                 ->log($approved ? 'Application '.$stage->decision : 'Application rejected');
 
-            $application->student?->notify(new ApplicationDecided($application, $stage, $approved));
+            // AFTER THE COMMIT, never inside it. See notifyStudent().
+            DB::afterCommit(fn () => $this->notifyStudent($application, $stage, $approved));
 
             return $application;
         });
+    }
+
+    /**
+     * Tell the student what happened. Deliberately outside the transaction.
+     *
+     * TWO FAILURES THIS AVOIDS, and they point in opposite directions.
+     *
+     * Notifying INSIDE the transaction meant a queue broker that was down
+     * threw, the transaction rolled back, and a perfectly valid approval was
+     * lost -- an outage in the email path destroying the decision it was
+     * only meant to announce. That is what turned a config mistake into data
+     * loss once already.
+     *
+     * The other direction is quieter and worse. Three controllers wrap
+     * decide() in a transaction of their own (RpdAppeal, RpdDismissal,
+     * AppointmentLetter), so a notification dispatched inside it goes out
+     * while that outer transaction is still open -- and if it later rolls
+     * back, the student has been told about an approval that never happened,
+     * with nothing in the database to show for it.
+     *
+     * DB::afterCommit() answers both: it defers to the OUTERMOST commit, and
+     * runs immediately when there is no transaction at all.
+     *
+     * The try/catch is the other half. Once the decision is committed it is
+     * the durable thing and the email is best effort, so a broker outage is
+     * reported and swallowed rather than turned into a 500 on a request that
+     * actually succeeded. An approver should not be shown an error for work
+     * the system accepted.
+     */
+    protected function notifyStudent(Application $application, Stage $stage, bool $approved): void
+    {
+        try {
+            $application->student?->notify(new ApplicationDecided($application, $stage, $approved));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**
