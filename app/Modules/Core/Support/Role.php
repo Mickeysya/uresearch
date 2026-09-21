@@ -27,6 +27,7 @@ final class Role
     public const DAC = 'dac';
     public const PANEL_EXAMINER = 'panel_examiner';
     public const REGISTRY = 'registry';
+    public const FACULTY = 'faculty';
     public const ADMIN = 'admin';
 
     /** @return array<int, string> */
@@ -45,6 +46,7 @@ final class Role
             self::DAC,
             self::PANEL_EXAMINER,
             self::REGISTRY,
+            self::FACULTY,
             self::ADMIN,
         ];
     }

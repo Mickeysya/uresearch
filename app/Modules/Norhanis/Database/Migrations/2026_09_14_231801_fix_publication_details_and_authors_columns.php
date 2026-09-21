@@ -12,40 +12,52 @@ use Illuminate\Support\Facades\Schema;
  * nothing, since Laravel had already recorded them as run. This adds the
  * columns the models actually write and drops the stale ones, several of
  * which are NOT NULL with no default and would otherwise fail every insert.
+ *
+ * The two create-table migrations were since corrected in place too, so on
+ * any database that migrates from scratch (a fresh dev setup, or the SQLite
+ * database `php artisan test` builds for every run) they already create the
+ * real-spec columns directly, and the stale columns this migration expects to
+ * drop never existed there. Each block below is guarded on the stale column
+ * it targets, so this migration is a no-op on a fresh database and only does
+ * real work against one that still carries the old schema.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('publication_details', function (Blueprint $table) {
-            $table->dropColumn([
-                'conference_or_journal_name', 'publication_title', 'event_date',
-                'location', 'funding_amount_requested', 'requires_letter_of_undertaking',
-            ]);
+        if (Schema::hasColumn('publication_details', 'conference_or_journal_name')) {
+            Schema::table('publication_details', function (Blueprint $table) {
+                $table->dropColumn([
+                    'conference_or_journal_name', 'publication_title', 'event_date',
+                    'location', 'funding_amount_requested', 'requires_letter_of_undertaking',
+                ]);
 
-            $table->string('type_of_request', 30)->after('application_id'); // publication_conference | publication_journal
-            $table->string('title_of_paper', 255)->after('type_of_request');
-            $table->string('title_of_conference_journal', 255)->after('title_of_paper');
-            $table->string('organizer_publisher', 255)->after('title_of_conference_journal');
+                $table->string('type_of_request', 30)->after('application_id'); // publication_conference | publication_journal
+                $table->string('title_of_paper', 255)->after('type_of_request');
+                $table->string('title_of_conference_journal', 255)->after('title_of_paper');
+                $table->string('organizer_publisher', 255)->after('title_of_conference_journal');
 
-            $table->decimal('conference_journal_fee', 10, 2)->default(0)->after('organizer_publisher');
-            $table->string('currency_type', 10)->default('MYR')->after('conference_journal_fee');
-            $table->string('cost_centre', 100)->after('currency_type');
+                $table->decimal('conference_journal_fee', 10, 2)->default(0)->after('organizer_publisher');
+                $table->string('currency_type', 10)->default('MYR')->after('conference_journal_fee');
+                $table->string('cost_centre', 100)->after('currency_type');
 
-            $table->boolean('wants_letter_of_undertaking')->default(false)->after('cost_centre');
+                $table->boolean('wants_letter_of_undertaking')->default(false)->after('cost_centre');
 
-            $table->date('conference_start_date')->after('wants_letter_of_undertaking');
-            $table->date('conference_end_date')->after('conference_start_date');
-        });
+                $table->date('conference_start_date')->after('wants_letter_of_undertaking');
+                $table->date('conference_end_date')->after('conference_start_date');
+            });
+        }
 
-        Schema::table('publication_authors', function (Blueprint $table) {
-            $table->dropColumn(['name', 'is_corresponding_author']);
+        if (Schema::hasColumn('publication_authors', 'name')) {
+            Schema::table('publication_authors', function (Blueprint $table) {
+                $table->dropColumn(['name', 'is_corresponding_author']);
 
-            $table->string('author_name', 150)->after('publication_detail_id');
-            $table->string('designation', 150)->nullable()->after('author_name'); // e.g. PhD Student, Co-Supervisor, External Collaborator
-            $table->string('organisation', 150)->nullable()->after('designation');
-            $table->string('role_contribution', 150)->nullable()->after('organisation');
-        });
+                $table->string('author_name', 150)->after('publication_detail_id');
+                $table->string('designation', 150)->nullable()->after('author_name'); // e.g. PhD Student, Co-Supervisor, External Collaborator
+                $table->string('organisation', 150)->nullable()->after('designation');
+                $table->string('role_contribution', 150)->nullable()->after('organisation');
+            });
+        }
     }
 
     public function down(): void

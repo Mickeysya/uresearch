@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
+use App\Modules\Norhanis\Models\Candidacy;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -41,11 +42,12 @@ class DatabaseSeeder extends Seeder
             'faculty' => 'FSMC',
         ]);
         $this->user('Registry Officer', 'registry@utp.edu.my', Role::REGISTRY, ['department' => 'Registry']);
+        $this->user('Assoc. Prof. Dr. Kamarul Ariffin', 'faculty@utp.edu.my', Role::FACULTY, ['department' => 'FSMC']);
         $this->user('System Admin', 'admin@utp.edu.my', Role::ADMIN);
 
         // Students, all attached to the supervisor above so the supervisee
         // relationship can actually be exercised.
-        $this->user('Ahmad Danial', 'student@utp.edu.my', Role::STUDENT, [
+        $student = $this->user('Ahmad Danial', 'student@utp.edu.my', Role::STUDENT, [
             'matric_no' => '22001001',
             'programme' => 'MSc Full-Time',
             'department' => 'Computer & Information Sciences',
@@ -53,7 +55,7 @@ class DatabaseSeeder extends Seeder
             'supervisor_id' => $supervisor->id,
         ]);
 
-        $this->user('Nur Farah Adilah', 'student2@utp.edu.my', Role::STUDENT, [
+        $student2 = $this->user('Nur Farah Adilah', 'student2@utp.edu.my', Role::STUDENT, [
             'matric_no' => '22001002',
             'programme' => 'PhD Part-Time',
             'department' => 'Computer & Information Sciences',
@@ -62,6 +64,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->examiners();
+        $this->candidacies($student, $student2);
 
         $this->command->newLine();
         $this->command->info('Seeded. Every account uses the password: '.self::PASSWORD);
@@ -107,5 +110,44 @@ class DatabaseSeeder extends Seeder
                 'assigned_until' => $assigned ? now()->modify($assigned) : null,
             ]);
         }
+    }
+
+    /**
+     * One candidacy nearing its RPD deadline (exercises the reminder command
+     * and the appeal chain) and one already overdue (exercises the CGS
+     * dismissal-initiation screen), so both of Norhanis' RPD flows have real
+     * data to click through on a fresh database.
+     */
+    protected function candidacies(User $fullTimeStudent, User $partTimeStudent): void
+    {
+        // MSc Full-Time, 8-month deadline: started 7 months ago, so the
+        // deadline is about a month out -- within the reminder command's
+        // 1-month window and still appeal-eligible.
+        $start = now()->subMonths(7);
+        Candidacy::updateOrCreate(
+            ['student_id' => $fullTimeStudent->id],
+            [
+                'study_mode' => Candidacy::STUDY_MODE_FULL_TIME,
+                'programme' => Candidacy::PROGRAMME_MASTERS,
+                'start_date' => $start,
+                'deadline' => Candidacy::computeDeadline($start, Candidacy::STUDY_MODE_FULL_TIME),
+                'status' => Candidacy::STATUS_ACTIVE,
+            ]
+        );
+
+        // PhD Part-Time, 12-month deadline: started 14 months ago, so the
+        // deadline already passed with no appeal filed -- eligible for CGS
+        // to initiate dismissal.
+        $start = now()->subMonths(14);
+        Candidacy::updateOrCreate(
+            ['student_id' => $partTimeStudent->id],
+            [
+                'study_mode' => Candidacy::STUDY_MODE_PART_TIME,
+                'programme' => Candidacy::PROGRAMME_PHD,
+                'start_date' => $start,
+                'deadline' => Candidacy::computeDeadline($start, Candidacy::STUDY_MODE_PART_TIME),
+                'status' => Candidacy::STATUS_ACTIVE,
+            ]
+        );
     }
 }
