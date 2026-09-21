@@ -205,7 +205,7 @@ class HardboundSubmissionController extends Controller
         if (! $returning && $stage && in_array($stage->key, self::SIGNING_STAGES, true)
             && ! HardboundSignature::forUser($request->user()->id)) {
             return redirect()->route('hardbound.signature')
-                ->with('error', 'Upload your signature first — approving stamps it onto the Confirmation of Correction to Thesis.');
+                ->with('error', 'Upload your signature first. Approving stamps it onto the Confirmation of Correction to Thesis.');
         }
 
         try {
@@ -337,10 +337,16 @@ class HardboundSubmissionController extends Controller
             'You have already resubmitted this submission.'
         );
 
+        // The backstop, and the only check here that is the shared rule
+        // rather than a restatement of it: if resubmittableFor() is ever
+        // tightened, this is what enforces the tightening. It says nothing
+        // about appealing -- with the Senior Executive sign-off dropped from
+        // this chain, every rejection in it is a return, and the appeal is a
+        // route to a ruling rather than a precondition for resubmitting.
         abort_unless(
             HardboundSubmissionDetail::resubmittableFor($request->user()->id)->whereKey($application->id)->exists(),
             403,
-            'CGS rejected this submission. File an appeal before resubmitting.'
+            'That submission is no longer awaiting correction.'
         );
 
         return HardboundSubmissionDetail::where('application_id', $application->id)->firstOrFail();

@@ -31,7 +31,7 @@
 .sidebar-card {
     border: 1px solid var(--border-grey);
     border-radius: 12px;
-    background: white;
+    background: var(--surface);
     overflow: hidden;
 }
 
@@ -59,7 +59,7 @@
     display: grid;
     place-items: center;
     background: var(--navy);
-    color: white;
+    color: var(--text-on-accent);
     font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.3px;
@@ -68,7 +68,7 @@
 /* The administrator's card carries the university crest instead of
    initials, so it must not be tinted or cropped like an initials disc. */
 .avatar-crest {
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border-grey);
     object-fit: contain;
     padding: 3px;
@@ -125,14 +125,14 @@
     gap: 10px;
     padding: 10px 12px;
     border-top: 1px solid var(--border-grey);
-    color: #D0342C;
+    color: var(--danger-fg);
     font-size: 12.5px;
     font-weight: 600;
     text-decoration: none;
     transition: background-color 0.15s;
 }
 
-.sidebar .sidebar-signout:hover { background: #FDEEED; }
+.sidebar .sidebar-signout:hover { background: var(--danger-bg); }
 
 /* Both halves red. .nav-label carries its own colour elsewhere in the
    sidebar, so inheriting from the anchor is not enough here, and the icon
@@ -140,7 +140,7 @@
 .sidebar .sidebar-signout,
 .sidebar .sidebar-signout .nav-label,
 .sidebar .sidebar-signout .nav-icon {
-    color: #D0342C;
+    color: var(--danger-fg);
 }
 
 .sidebar .sidebar-signout .nav-icon {

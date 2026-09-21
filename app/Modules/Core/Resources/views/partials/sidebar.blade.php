@@ -168,7 +168,7 @@
             @endphp
 
             <div class="sidebar-card">
-                <a href="{{ route('profile.show') }}" class="sidebar-profile" title="{{ $user->name }} — view profile">
+                <a href="{{ route('profile.show') }}" class="sidebar-profile" title="{{ $user->name }}, view profile">
                     @if ($isAdminCard)
                         <img src="{{ asset('images/UTP_logo.png') }}" alt="" class="avatar avatar-crest">
                     @else

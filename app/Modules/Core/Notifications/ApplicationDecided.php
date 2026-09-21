@@ -62,7 +62,7 @@ class ApplicationDecided extends Notification implements ShouldQueue
         $next = $this->application->currentStage();
 
         $mail = (new MailMessage)
-            ->subject($ref.' — '.($this->approved ? 'Progress Update' : 'Not Approved'))
+            ->subject($ref.': '.($this->approved ? 'Progress Update' : 'Not Approved'))
             ->greeting('Hi '.$notifiable->name.',');
 
         if (! $this->approved) {

@@ -494,3 +494,32 @@ button[value="rejected"]:hover {
         grid-template-columns: 1fr;
     }
 }
+
+/* Both rules below are scoped to .app-form — the class on Travel, Claims and
+   Publication's <form> — rather than to the bare element. uresearch.css is
+   loaded on every page, so an unscoped `input[type="file"]` or
+   `form > button[type="submit"]` reaches the login screen, the profile forms
+   and every other module's forms too, restyling pages nobody asked to change.
+   conventions.md asks for at least two classes on anything added here. */
+
+/* input[type="file"] was never styled, so it kept the browser's intrinsic
+   inline-block sizing instead of stacking like every other field — on forms
+   with several file inputs back to back (e.g. Publication), the next field's
+   label would end up wrapping right up against the previous file input, and
+   a submit button placed right after one would sit beside it on the same
+   line instead of dropping to its own row underneath. */
+.app-form input[type="file"] {
+    display: block;
+    width: 100%;
+    margin-top: 2px;
+}
+
+/* A create-application form ends in one direct-child submit button (see
+   Travel/Claims/Publication's form.blade.php) — center it under the card
+   instead of leaving it wherever the previous field's flow left off. Scoped
+   to a direct child so it does not reach the Approve/Reject buttons inside
+   x-core::decision-form's .decision-row, which are meant to sit side by side. */
+.app-form > button[type="submit"] {
+    display: block;
+    margin: 24px auto 0;
+}

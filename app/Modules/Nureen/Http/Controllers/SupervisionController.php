@@ -8,6 +8,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Stage;
 use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Models\SupervisionDetail;
 use Illuminate\Http\RedirectResponse;
@@ -81,24 +82,32 @@ class SupervisionController extends Controller
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
-        $queue = $this->queueFor($request, $engine, ['documents']);
-
-        $details = SupervisionDetail::with('requestedSupervisor')
-            ->whereIn('application_id', $queue['applications']->pluck('id'))
-            ->get()
-            ->keyBy('application_id');
-
         // The engine's queue is role-scoped, not person-scoped: every
         // supervisor-role user is handed every pending request at the
         // "supervisor" stage, because the student has no supervisor_id yet
         // for the engine to filter on -- this request is what sets it. Cut
         // the list down to the ones actually addressed to this supervisor so
         // nobody sees, or is tempted to act on, someone else's request.
-        if ($queue['stage']->key === 'supervisor') {
-            $queue['applications'] = $queue['applications']->filter(
-                fn ($application) => ($details[$application->id]->requested_supervisor_id ?? null) === $request->user()->id
-            )->values();
-        }
+        //
+        // Applied to the QUERY, not to the rows that come back. Filtering
+        // afterwards reported the unfiltered total, paged over rows it then
+        // threw away, and turned the paginator into a plain Collection --
+        // which is a 500 the moment the view asks it for a total.
+        $queue = $this->queueFor($request, $engine, ['documents'],
+            function ($query, Stage $stage) use ($request) {
+                if ($stage->key !== 'supervisor') {
+                    return;
+                }
+
+                $query->whereIn('id', SupervisionDetail::query()
+                    ->where('requested_supervisor_id', $request->user()->id)
+                    ->select('application_id'));
+            });
+
+        $details = SupervisionDetail::with('requestedSupervisor')
+            ->whereIn('application_id', $queue['applications']->pluck('id'))
+            ->get()
+            ->keyBy('application_id');
 
         return view('nureen::supervision.queue', $queue + ['details' => $details]);
     }

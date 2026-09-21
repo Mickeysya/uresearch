@@ -42,19 +42,16 @@
 
 <div class="notif-page">
 
-    <header class="notif-header">
-        <div class="notif-heading">
-            <h2>Notifications</h2>
-            <p>
-                @if ($unreadCount > 0)
+    <x-core::page-header title="Notifications">
+        <x-slot:subtitle>
+@if ($unreadCount > 0)
                     You have <b>{{ $unreadCount }}</b> unread of {{ $totalCount }}.
                 @elseif ($totalCount > 0)
                     All {{ $totalCount }} read. Nothing needs your attention.
                 @else
                     Alerts about your applications will appear here.
                 @endif
-            </p>
-        </div>
+        </x-slot:subtitle>
 
         @if ($unreadCount > 0)
             <form method="POST" action="{{ route('notifications.read-all') }}" class="notif-readall">
@@ -62,7 +59,7 @@
                 <button type="submit">Mark all as read</button>
             </form>
         @endif
-    </header>
+    </x-core::page-header>
 
     <nav class="notif-filters" aria-label="Filter notifications">
         <a href="{{ route('notifications.index') }}"

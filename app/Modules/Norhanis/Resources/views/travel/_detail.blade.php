@@ -9,7 +9,7 @@
        ({{ $detail->duration_days }} {{ Str::plural('day', $detail->duration_days) }})</p>
     <p>Type: <b>{{ $detail->is_international ? 'International' : 'Local' }}</b>
        &middot; {{ \App\Modules\Norhanis\Models\TravelDetail::requestTypes()[$detail->type_of_request] ?? $detail->type_of_request }}
-       @if ($detail->other_request_specify) — {{ $detail->other_request_specify }} @endif
+       @if ($detail->other_request_specify) ({{ $detail->other_request_specify }}) @endif
     </p>
     @if ($detail->contact_person_name)
         <p>Contact: {{ $detail->contact_person_name }} {{ $detail->contact_person_no }}</p>

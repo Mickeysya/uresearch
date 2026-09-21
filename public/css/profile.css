@@ -68,7 +68,7 @@
 /* ---- card --------------------------------------------------------- */
 
 .prof-card {
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border-grey);
     border-radius: 12px;
     overflow: hidden;
@@ -80,7 +80,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 14px 18px 12px;
-    border-bottom: 1px solid #EDF0F4;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .prof-card-head h3 {
@@ -115,8 +115,8 @@
     gap: 10px;
     align-items: flex-start;
     padding: 12px 18px 14px;
-    background: #FAFBFD;
-    border-top: 1px solid #EDF0F4;
+    background: var(--surface-sunken);
+    border-top: 1px solid var(--border-subtle);
     color: var(--text-grey);
     font-size: 12px;
     line-height: 1.55;
@@ -149,7 +149,7 @@
     display: grid;
     place-items: center;
     background: var(--navy);
-    color: white;
+    color: var(--text-on-accent);
     font-size: 28px;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -193,7 +193,7 @@
 }
 
 .prof-badge-quiet {
-    background: #F1F3F7;
+    background: var(--surface-hover);
     color: var(--text-grey);
 }
 
@@ -205,14 +205,14 @@
     gap: 1px;
     width: 100%;
     margin: 18px 0 0;
-    background: #EDF0F4;
-    border: 1px solid #EDF0F4;
+    background: var(--border-subtle);
+    border: 1px solid var(--border-subtle);
     border-radius: 10px;
     overflow: hidden;
 }
 
 .prof-stat {
-    background: white;
+    background: var(--surface);
     padding: 10px 6px;
 }
 
@@ -234,8 +234,8 @@
 
 /* Semantic, and separate from the navy accent: a figure that needs
    attention says so in colour as well as in number. */
-.prof-stat dd.tone-good     { color: #00873E; }
-.prof-stat dd.tone-critical { color: #D0342C; }
+.prof-stat dd.tone-good     { color: var(--success-fg); }
+.prof-stat dd.tone-critical { color: var(--danger-fg); }
 .prof-stat dd.tone-info     { color: var(--navy); }
 
 .prof-identity-foot {
@@ -246,8 +246,8 @@
     width: calc(100% + 40px);
     margin: 18px -20px 0;
     padding: 12px 18px;
-    border-top: 1px solid #EDF0F4;
-    background: #FAFBFD;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--surface-sunken);
 }
 
 .prof-since {
@@ -264,7 +264,7 @@
     padding: 0;
     background: none;
     border: 0;
-    color: #D0342C;
+    color: var(--danger-fg);
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
@@ -273,7 +273,7 @@
 .prof-signout:hover { text-decoration: underline; }
 
 .prof-signout:focus-visible {
-    outline: 2px solid #D0342C;
+    outline: 2px solid var(--danger-fg);
     outline-offset: 2px;
     border-radius: 3px;
 }
@@ -293,7 +293,7 @@
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
     gap: 16px;
     padding: 11px 0;
-    border-bottom: 1px solid #F2F4F7;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .prof-record-row:last-child { border-bottom: 0; }
@@ -352,7 +352,7 @@
     border-radius: 8px;
     font-size: 13px;
     color: var(--text-dark);
-    background: white;
+    background: var(--surface);
 }
 
 .prof-form input:focus {
@@ -368,7 +368,7 @@
     outline-offset: 2px;
 }
 
-.prof-form input.is-invalid { border-color: #D0342C; }
+.prof-form input.is-invalid { border-color: var(--danger-fg); }
 
 .prof-hint {
     margin: 0;
@@ -384,7 +384,7 @@
     justify-content: flex-end;
     margin-top: 16px;
     padding-top: 14px;
-    border-top: 1px solid #EDF0F4;
+    border-top: 1px solid var(--border-subtle);
 }
 
 .prof-actions button {
@@ -406,7 +406,7 @@
     gap: 12px;
     align-items: flex-start;
     padding: 10px 0;
-    border-bottom: 1px solid #F2F4F7;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .prof-signin:last-child { border-bottom: 0; }

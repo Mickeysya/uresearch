@@ -19,7 +19,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Hardbound Thesis Submission — {{ $student->name }}</title>
+    <title>Hardbound Thesis Submission: {{ $student->name }}</title>
     <style>
         @page { margin: 12mm 14mm; }
         body { font-family: 'DejaVu Sans', sans-serif; font-size: 10.5px; color: #000; line-height: 1.5; }

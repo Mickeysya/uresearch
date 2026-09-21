@@ -4,10 +4,10 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Attendance Overview</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Attendance Overview" />
 
+    <div class="card card-wide">
         @if ($latest)
             <div class="stat-cards-row">
                 <div class="stat-card {{ $latest->at_risk ? 'accent-red' : 'accent-green' }}">
@@ -23,8 +23,9 @@
 
             @if ($latest->at_risk)
                 <div class="empty-state" style="border-color: var(--red, #c0392b);">
-                    You are currently flagged at-risk.
-                    <a href="{{ route('attendance-appeal.create') }}">File an appeal</a> if you believe this is inaccurate.
+                    <p>You are currently flagged at-risk.</p>
+                    <p class="queue-meta">File an appeal if you believe this is inaccurate.</p>
+                    <a href="{{ route('attendance-appeal.create') }}" class="btn-secondary">File an appeal</a>
                 </div>
             @endif
         @else

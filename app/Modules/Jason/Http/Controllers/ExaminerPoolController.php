@@ -3,6 +3,7 @@
 namespace App\Modules\Jason\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
+use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Models\AppointmentExaminer;
 use App\Modules\Jason\Models\PoolExaminer;
 use Illuminate\Http\RedirectResponse;
@@ -15,7 +16,7 @@ use Illuminate\Validation\Rule;
  */
 class ExaminerPoolController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         return view('jason::examiner_pool.index', [
             'examiners' => PoolExaminer::query()
@@ -24,6 +25,28 @@ class ExaminerPoolController extends Controller
                 ->orderByDesc('is_active')
                 ->orderBy('name')
                 ->get(),
+            'returnToNomination' => $this->returningToNomination($request),
+        ]);
+    }
+
+    /**
+     * Whether this visit came out of the nomination form, which is the only
+     * screen that sends anyone here mid-task.
+     *
+     * The role is re-checked rather than trusted from the query string: CGS
+     * keeps this list too, and bouncing them to a Chair-only route would be
+     * a 403 at the end of a successful save.
+     */
+    protected function returningToNomination(Request $request): bool
+    {
+        return $request->input('return') === 'nominate'
+            && $request->user()->role === Role::CHAIR;
+    }
+
+    public function create(Request $request)
+    {
+        return view('jason::examiner_pool.form', [
+            'returnToNomination' => $this->returningToNomination($request),
         ]);
     }
 
@@ -41,10 +64,17 @@ class ExaminerPoolController extends Controller
         ]);
 
         $examiner = PoolExaminer::create($data);
+        $status = "{$examiner->name} added as {$examiner->typeLabel()}.";
 
-        return redirect()
-            ->route('appointment-letter.examiners')
-            ->with('status', "{$examiner->name} added as {$examiner->typeLabel()}.");
+        // Came here from the nomination form to add the one missing examiner:
+        // go back to it rather than stranding them on the list. The panel they
+        // had already picked is restored client-side -- see the script at the
+        // foot of appointment_letter/form.blade.php.
+        if ($this->returningToNomination($request)) {
+            return redirect()->route('appointment-letter.create')->with('status', $status);
+        }
+
+        return redirect()->route('appointment-letter.examiners')->with('status', $status);
     }
 
     /**

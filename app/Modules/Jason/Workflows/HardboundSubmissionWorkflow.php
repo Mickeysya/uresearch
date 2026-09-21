@@ -2,12 +2,14 @@
 
 namespace App\Modules\Jason\Workflows;
 
+use App\Modules\Core\Contracts\ProvidesDashboardAlerts;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Jason\Models\HardboundSignature;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
 
 /**
@@ -34,7 +36,7 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
  * to an engine change. There is no separate "rejected outright" ending: the
  * student may either resubmit or take it to Appeal Hardbound Submission.
  */
-class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
+class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks, ProvidesDashboardAlerts
 {
     public function key(): string
     {
@@ -96,8 +98,8 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
             $replaced = HardboundSubmissionDetail::where('resubmission_of_id', $application->id)->exists();
 
             $summary .= $replaced
-                ? ' — replaced by a resubmission'
-                : ' — returned for correction; resubmit or appeal from the Hardbound Submission page';
+                ? ' (replaced by a resubmission)'
+                : ' (returned for correction). Resubmit from the Hardbound Submission page, or appeal';
         }
 
         return $summary;
@@ -136,10 +138,52 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks
                 ->all();
         }
 
-        $signingRoles = array_map(fn (Stage $s) => $s->role, $this->stages());
-
-        return in_array($user->role, $signingRoles, true)
+        return $this->signs($user)
             ? [['label' => 'My Signature', 'route' => 'hardbound.signature']]
             : [];
+    }
+
+    /** Does this role stamp a signature onto the Confirmation? */
+    protected function signs(User $user): bool
+    {
+        return in_array($user->role, array_map(fn (Stage $s) => $s->role, $this->stages()), true);
+    }
+
+    /**
+     * Approving without a signature on file is not possible:
+     * HardboundSubmissionController::decide() bounces the approver to the
+     * upload page. Nothing said so until they tried, which is the whole
+     * point of an alert -- a Chair finds out at the moment they were about
+     * to clear a queue.
+     *
+     * Only raised for someone who actually has something to approve. An
+     * approver with an empty queue does not need chasing about a signature
+     * they have not needed yet.
+     */
+    public function alerts(User $user): array
+    {
+        if (! $this->signs($user) || HardboundSignature::forUser($user->id)) {
+            return [];
+        }
+
+        $waiting = Application::where('module_type', $this->key())
+            ->where('status', Application::STATUS_PENDING)
+            ->whereIn('current_stage', array_map(
+                fn (Stage $s) => $s->key,
+                array_filter($this->stages(), fn (Stage $s) => $s->role === $user->role)
+            ))
+            ->exists();
+
+        if (! $waiting) {
+            return [];
+        }
+
+        return [[
+            'tone' => 'critical',
+            'title' => 'No signature on file',
+            'body' => 'You cannot approve a Hardbound Submission until you upload one. '
+                .'It is stamped onto the Confirmation of Correction with the date you approve.',
+            'action' => ['label' => 'Upload my signature', 'route' => 'hardbound.signature'],
+        ]];
     }
 }

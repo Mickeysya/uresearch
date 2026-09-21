@@ -2,11 +2,14 @@
 
 namespace App\Modules\Norhanis\Workflows;
 
+use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Norhanis\Models\TravelDetail;
+use Carbon\CarbonInterface;
 
 /**
  * Travel requests.
@@ -19,7 +22,7 @@ use App\Modules\Norhanis\Models\TravelDetail;
  * a chain instead means the student's stepper shows the correct number of
  * steps from the moment they submit, and nothing has to be kept in sync.
  */
-class TravelWorkflow implements WorkflowModule
+class TravelWorkflow implements WorkflowModule, SuppliesCalendarEvents
 {
     /** @var array<int, bool> memoised per application, keyed by id */
     protected array $internationalCache = [];
@@ -68,7 +71,7 @@ class TravelWorkflow implements WorkflowModule
             return 'Travel application';
         }
 
-        return $detail->reason_for_travel.' — '.$detail->destination_address;
+        return $detail->reason_for_travel.', '.$detail->destination_address;
     }
 
     public function createRoute(): ?string
@@ -96,5 +99,53 @@ class TravelWorkflow implements WorkflowModule
     protected function detail(Application $application): ?TravelDetail
     {
         return TravelDetail::where('application_id', $application->id)->first();
+    }
+
+    /**
+     * The student's own travel windows.
+     *
+     * Only their own, and only applications that are still live -- a rejected
+     * trip from March is not a thing anyone needs to see coming.
+     */
+    public function calendarEvents(User $user, CarbonInterface $from, CarbonInterface $to): array
+    {
+        if ($user->role !== Role::STUDENT) {
+            return [];
+        }
+
+        $details = TravelDetail::query()
+            ->whereIn('application_id', Application::query()
+                ->where('module_type', $this->key())
+                ->where('student_id', $user->id)
+                ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED])
+                ->select('id'))
+            ->whereDate('travel_end_date', '>=', $from)
+            ->whereDate('travel_start_date', '<=', $to)
+            ->get();
+
+        $events = [];
+
+        foreach ($details as $detail) {
+            $label = $detail->is_international ? 'International travel' : 'Travel';
+
+            // Start and end are separate entries rather than one spanning bar:
+            // a month grid cannot draw a span without a lane system, and the
+            // two dates are what the student actually needs to act on.
+            foreach ([['travel_start_date', 'departs'], ['travel_end_date', 'returns']] as [$field, $verb]) {
+                if (! $detail->$field->betweenIncluded($from, $to)) {
+                    continue;
+                }
+
+                $events[] = [
+                    'date' => $detail->$field,
+                    'title' => $label.': '.$verb,
+                    'tone' => 'info',
+                    'meta' => $detail->destination_address,
+                    'url' => route('applications.show', $detail->application_id),
+                ];
+            }
+        }
+
+        return $events;
     }
 }

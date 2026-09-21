@@ -4,12 +4,16 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Travel Application</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header
+        title="Travel Application" />
 
-        <form method="POST" action="{{ route('travel.store') }}" enctype="multipart/form-data">
+    <div class="card card-wide">
+        <form method="POST" action="{{ route('travel.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
+
+            <fieldset class="fstep" data-label="Trip details">
+            <p class="fstep-hint">Where you are going, when, and why. The
+               duration is worked out from the dates.</p>
 
             <label for="type_of_request">Type of Request</label>
             <select name="type_of_request" id="type_of_request" required
@@ -27,7 +31,11 @@
             @error('other_request_specify') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="travel_start_date">Start Date</label>
+            {{-- min mirrors the controller's after_or_equal:today. Without it
+                 the wizard's checkValidity() gate waves a past date through and
+                 the student only finds out on submit. --}}
             <input type="date" name="travel_start_date" id="travel_start_date" required
+                   min="{{ now()->toDateString() }}"
                    value="{{ old('travel_start_date') }}"
                    class="@error('travel_start_date') is-invalid @enderror">
             @error('travel_start_date') <p class="field-error">{{ $message }}</p> @enderror
@@ -58,10 +66,15 @@
                        @checked(old('is_international'))>
                 <label for="is_international">International Travel</label>
             </div>
-            <p class="queue-meta" style="margin-top: -8px;">
-                International requests are routed on to Non-Executive CGS and the Dean of PGR
-                after your Chair endorses them.
-            </p>
+            </fieldset>
+
+            {{-- International travel routes through CGS and the Dean as well,
+                 so which of these two steps you are on does not change the
+                 chain -- TravelWorkflow::stages() decides that from
+                 is_international on submit. --}}
+            <fieldset class="fstep" data-label="Contact &amp; documents">
+            <p class="fstep-hint">Who to reach if something goes wrong while
+               you are away, and anything supporting the request.</p>
 
             <label for="contact_person_name">Contact Person Name</label>
             <input type="text" name="contact_person_name" id="contact_person_name"
@@ -75,9 +88,12 @@
             <input type="file" name="supporting_document" id="supporting_document"
                    class="@error('supporting_document') is-invalid @enderror">
             @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
             <button type="submit">Submit Application</button>
         </form>
     </div>
 </div>
+
+@include('core::partials.form-stepper')
 @endsection

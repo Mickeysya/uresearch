@@ -58,7 +58,7 @@ class AppointmentLetterMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Appointment as '.$this->examiner->typeLabel().' — UTP Centre for Graduate Studies',
+            subject: 'Appointment as '.$this->examiner->typeLabel().', UTP Centre for Graduate Studies',
         );
     }
 

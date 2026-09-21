@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Hardbound Submission Acknowledgement — #{{ $application->id }}</title>
+    <title>Hardbound Submission Acknowledgement: #{{ $application->id }}</title>
     <style>
         body { font-family: 'DejaVu Sans', sans-serif; font-size: 11px; color: #000; line-height: 1.5; }
         .logo { text-align: center; margin-bottom: 18px; }
@@ -22,7 +22,7 @@
         <img src="{{ public_path('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS">
     </div>
 
-    <h1>Hardbound Thesis Submission — Acknowledgement Receipt</h1>
+    <h1>Hardbound Thesis Submission: Acknowledgement Receipt</h1>
 
     <p>
         The Centre for Graduate Studies acknowledges receipt and acceptance of the
@@ -50,7 +50,7 @@
                 <td>
                     {{ ucfirst($row->decision) }}
                     on {{ $row->created_at?->format('j F Y') }}
-                    @if ($row->remarks) — {{ $row->remarks }} @endif
+                    @if ($row->remarks) ({{ $row->remarks }}) @endif
                 </td>
             </tr>
         @endforeach
