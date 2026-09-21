@@ -6,22 +6,18 @@
 <div class="card-container-inline">
     <x-core::page-header
         title="Add an Examiner"
-        subtitle="They appear on the nomination form as soon as they are on the list.">
-        <a href="{{ route('appointment-letter.examiners', array_filter(['return' => $returnToNomination ? 'nominate' : null])) }}"
-           class="btn-secondary">Back to the list</a>
+        subtitle="They become available for a panel as soon as they are on the list.">
+        <a href="{{ route('appointment-letter.examiners') }}" class="btn-secondary">Back to the list</a>
     </x-core::page-header>
 
     <div class="card card-wide">
 
         {{-- data-stepper-review because the generated review's default line
              says the form goes to the first approver. This one files nothing
-             -- it adds a row to a list the Chair and CGS keep themselves. --}}
+             -- it adds a row to a list CGS keeps itself. --}}
         <form method="POST" action="{{ route('appointment-letter.examiners.store') }}" data-stepper
               data-stepper-review="Check the details, then add them to the list. Nothing here is submitted for approval. The examiner simply becomes available to pick on a panel.">
             @csrf
-            @if ($returnToNomination)
-                <input type="hidden" name="return" value="nominate">
-            @endif
 
             <fieldset class="fstep" data-label="Who they are">
             <p class="fstep-hint">How the examiner is named on the appointment letter.</p>

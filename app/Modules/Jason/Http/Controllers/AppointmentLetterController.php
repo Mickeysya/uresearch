@@ -14,8 +14,6 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Mail\AppointmentLetterMail;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
-use App\Modules\Jason\Models\PoolExaminer;
-use App\Modules\Jason\Notifications\ExaminerPanelNominated;
 use App\Modules\Jason\Notifications\ExaminersAppointed;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -39,110 +37,6 @@ class AppointmentLetterController extends Controller
     protected function moduleKey(): string
     {
         return 'appointment_letter';
-    }
-
-    public function create(Request $request)
-    {
-        // `appointments` is eager-loaded so the availability check on each
-        // examiner is a read from memory, not a query per person -- the list
-        // is a hundred people and grows.
-        $pool = PoolExaminer::active()->with('appointments')->orderBy('name')->get();
-
-        return view('jason::appointment_letter.form', [
-            // Scoped to the Chair's own department -- the same "an approver
-            // only sees rows that are theirs" rule the queues already enforce.
-            'candidates' => User::where('role', Role::STUDENT)
-                ->where('department', $request->user()->department)
-                ->orderBy('name')
-                ->get(),
-            // Only the pickable ones reach the dropdown. At this size, listing
-            // people who cannot be chosen is noise; the count of who is left
-            // out goes on the page, and the Examiner List says who and until
-            // when, so nobody has to wonder where a name went.
-            'pool' => $pool->filter->isAvailable(),
-            'unavailable' => $pool->reject->isAvailable(),
-        ]);
-    }
-
-    public function store(Request $request, WorkflowEngine $engine)
-    {
-        $data = $request->validate([
-            'student_id' => [
-                'required',
-                Rule::exists('users', 'id')
-                    ->where('role', Role::STUDENT)
-                    ->where('department', $request->user()->department),
-            ],
-            'examiners' => ['required', 'array', 'min:2'],
-            'examiners.*.pool_id' => [
-                'required', 'distinct',
-                Rule::exists('appointment_examiner_pool', 'id')->where('is_active', true),
-            ],
-        ], [
-            'student_id.exists' => 'You may only nominate examiners for candidates in your own department.',
-            'examiners.min' => 'Nominate at least one internal and one external examiner.',
-            'examiners.*.pool_id.required' => 'Pick an examiner for every slot.',
-            'examiners.*.pool_id.distinct' => 'The same examiner is on the panel twice.',
-            'examiners.*.pool_id.exists' => 'That examiner is no longer on the list.',
-        ]);
-
-        $chosen = PoolExaminer::whereIn('id', collect($data['examiners'])->pluck('pool_id'))->get();
-
-        // A panel is an internal and an external examiner at minimum. Two
-        // externals and no internal is not a panel.
-        if ($chosen->pluck('examiner_type')->unique()->count() < 2) {
-            return back()->withInput()->withErrors([
-                'examiners' => 'The panel needs at least one internal and one external examiner.',
-            ]);
-        }
-
-        // The form greys these out, but a disabled <option> is only a
-        // courtesy -- the rule is enforced here.
-        $busy = $chosen->reject->isAvailable();
-
-        if ($busy->isNotEmpty()) {
-            return back()->withInput()->withErrors([
-                'examiners' => $busy->map(fn ($e) => $e->name.' is '.$e->unavailableLabel())->implode('; ')
-                    .'. An examiner takes one assignment at a time.',
-            ]);
-        }
-
-        $application = DB::transaction(function () use ($request, $data, $engine, $chosen) {
-            $application = Application::create([
-                // The candidate this appointment concerns, so it shows on
-                // their own tracking page and they receive the standard
-                // progress notifications the engine already sends.
-                'student_id' => $data['student_id'],
-                // The Chair who actually filed the nomination.
-                'submitted_by_id' => $request->user()->id,
-                'module_type' => $this->moduleKey(),
-                'status' => Application::STATUS_DRAFT,
-            ]);
-
-            AppointmentDetail::create(['application_id' => $application->id]);
-
-            // Copied, not referenced: the letters must say what the examiner's
-            // details were on the day, whatever later happens to the list entry.
-            foreach ($chosen as $examiner) {
-                AppointmentExaminer::create(['application_id' => $application->id] + $examiner->toSnapshot());
-            }
-
-            // Hands the nomination to the Academic Executive.
-            return $engine->submit($application);
-        });
-
-        // The engine announces decisions, not submissions -- every other
-        // chain is started by the student, who needs no telling. This one
-        // is filed on the candidate's behalf, so tell them.
-        $application->student?->notify(new ExaminerPanelNominated(
-            $application,
-            $request->user()->name,
-            $this->examinerLines($chosen),
-        ));
-
-        return redirect()
-            ->route('appointment-letter.create')
-            ->with('status', "Nomination #{$application->id} with {$chosen->count()} examiners submitted to the Academic Executive.");
     }
 
     public function queue(Request $request, WorkflowEngine $engine, ModuleRegistry $registry)
@@ -454,7 +348,7 @@ class AppointmentLetterController extends Controller
     /**
      * "Name (internal)" per examiner, internal first, for the candidate's notices.
      *
-     * @param  \Illuminate\Support\Collection<int, PoolExaminer|AppointmentExaminer>  $examiners
+     * @param  \Illuminate\Support\Collection<int, AppointmentExaminer>  $examiners
      * @return array<int, string>
      */
     protected function examinerLines($examiners): array

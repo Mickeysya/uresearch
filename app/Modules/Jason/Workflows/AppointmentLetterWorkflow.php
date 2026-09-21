@@ -13,22 +13,22 @@ use App\Modules\Jason\Models\AppointmentExaminer;
 /**
  * Examiner appointment letters.
  *
- * The Chair of Department nominates an examiner panel -- at least one
- * internal and one external examiner -- for one of the department's
- * candidates. The Academic Executive endorses (or rejects with comments).
- * The Non-Executive CGS then prepares the pack: the candidate's degree,
- * programme, supervisor and thesis title, auto-filled from the candidate's
- * own record wherever one exists, plus each examiner's address and reference
- * number. Preparing generates two documents per examiner -- the appointment
- * letter and the thesis evaluation report form -- and archives them, so the
- * Dean of PGR approves documents that already exist. On the Dean's approval
- * each examiner is emailed their own two documents. Examiners have no
- * account in this system, so that dispatch happens outside the
- * WorkflowEngine/ApplicationDecided path.
+ * Nomination -- the Chair filing an examiner panel, at least one internal and
+ * one external, for one of the department's candidates -- has been removed;
+ * nothing currently creates a new application here. What remains is the
+ * chain that still processes whatever already exists: the Academic Executive
+ * endorses (or rejects with comments), then the Non-Executive CGS prepares
+ * the pack -- the candidate's degree, programme, supervisor and thesis
+ * title, auto-filled from the candidate's own record wherever one exists,
+ * plus each examiner's address and reference number. Preparing generates two
+ * documents per examiner -- the appointment letter and the thesis evaluation
+ * report form -- and archives them, so the Dean of PGR approves documents
+ * that already exist. On the Dean's approval each examiner is emailed their
+ * own two documents. Examiners have no account in this system, so that
+ * dispatch happens outside the WorkflowEngine/ApplicationDecided path.
  * See AppointmentLetterController::generatePack() and dispatchPacks().
  *
- * A straight linear chain, no conditional routing -- the closest analogue is
- * Hani's ExaminerNominationWorkflow, not Norhanis' branching TravelWorkflow.
+ * A straight linear chain, no conditional routing.
  */
 class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
 {
@@ -97,20 +97,13 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
     }
 
     /**
-     * The Chair owns no stage in this chain (nomination is stage zero, filed
-     * before the chain starts), so without this the nomination form would
-     * never appear in their sidebar. Same shape as Hani's supervisor link
-     * for Examiner Nomination.
+     * The Chair no longer files nominations, so they get nothing from this
+     * chain -- see the class doc comment. CGS keeps the examiner list, so a
+     * new examiner can still be registered by whoever hears of them first.
      */
     public function links(User $user): array
     {
         return match ($user->role) {
-            Role::CHAIR => [
-                ['label' => 'Nominate Examiner Panel', 'route' => 'appointment-letter.create'],
-                ['label' => 'Examiner List', 'route' => 'appointment-letter.examiners'],
-            ],
-            // CGS keeps the list too, so a new examiner can be registered
-            // by whoever hears of them first.
             Role::NON_EXEC_CGS => [
                 ['label' => 'Examiner List', 'route' => 'appointment-letter.examiners'],
                 ['label' => 'Issued Appointments', 'route' => 'appointment-letter.issued'],

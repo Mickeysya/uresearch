@@ -13,16 +13,16 @@ use App\Modules\Jason\Models\PoolExaminer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
  * Appointment Letter — the two rules that live outside the workflow engine,
  * and so have nothing else watching them.
  *
- * 1. An examiner the Dean has appointed is unavailable for three months. The
- *    nomination form greys them out, but a disabled <option> is only a
- *    courtesy, so the rule has to hold against a posted form as well.
+ * 1. An examiner the Dean has appointed is unavailable for three months.
+ *    Nomination no longer has a form of its own -- see AppointmentLetterWorkflow's
+ *    class doc comment -- so these build the panel straight into the
+ *    database via nomination() below and check the rule holds regardless.
  * 2. A pack counts as delivered only when the mail transport accepts it.
  *    Dispatch happens after the engine has committed the Dean's approval, so
  *    a failure there leaves an approved nomination whose examiner received
@@ -126,57 +126,6 @@ class JasonAppointmentLetterTest extends TestCase
         $this->assertTrue($examiner->fresh()->isAvailable());
     }
 
-    public function test_an_unavailable_examiner_is_refused_even_when_the_form_is_bypassed(): void
-    {
-        Notification::fake();
-
-        $chair = $this->chair();
-        $candidate = $this->candidate();
-        $internal = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $external = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        $application = $this->nomination($internal);
-        AppointmentExaminer::where('application_id', $application->id)
-            ->update(['appointed_at' => now()]);
-
-        // A hand-built POST, exactly what a disabled <option> cannot stop.
-        $this->actingAs($chair)
-            ->post(route('appointment-letter.store'), [
-                'student_id' => $candidate->id,
-                'examiners' => [['pool_id' => $internal->id], ['pool_id' => $external->id]],
-            ])
-            ->assertSessionHasErrors('examiners');
-
-        $this->assertSame(1, Application::where('module_type', 'appointment_letter')->count());
-    }
-
-    public function test_an_available_panel_is_accepted(): void
-    {
-        Notification::fake();
-
-        $chair = $this->chair();
-        $candidate = $this->candidate();
-        $internal = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $external = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        $this->actingAs($chair)
-            ->post(route('appointment-letter.store'), [
-                'student_id' => $candidate->id,
-                'examiners' => [['pool_id' => $internal->id], ['pool_id' => $external->id]],
-            ])
-            ->assertSessionHasNoErrors();
-
-        $application = Application::where('module_type', 'appointment_letter')->firstOrFail();
-
-        // The snapshot keeps the link back to the list entry, which is what
-        // the availability check counts against.
-        $this->assertEqualsCanonicalizing(
-            [$internal->id, $external->id],
-            AppointmentExaminer::where('application_id', $application->id)
-                ->pluck('pool_examiner_id')->all(),
-        );
-    }
-
     /* -----------------------------------------------------------------
      | Pack delivery
      |------------------------------------------------------------------*/
@@ -212,78 +161,6 @@ class JasonAppointmentLetterTest extends TestCase
     /* -----------------------------------------------------------------
      | The two screens
      |------------------------------------------------------------------*/
-
-    public function test_the_nomination_form_leaves_an_unavailable_examiner_out(): void
-    {
-        $this->candidate();
-        $busy = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'busy@test.my');
-        $free = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'free@test.my');
-        $free->update(['name' => 'Prof Free Internal']);
-        $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        $application = $this->nomination($busy);
-        AppointmentExaminer::where('application_id', $application->id)
-            ->update(['appointed_at' => now()]);
-
-        $this->actingAs($this->chair())
-            ->get(route('appointment-letter.create'))
-            ->assertOk()
-            ->assertSee('Prof Free Internal')
-            // Not in the dropdown, but the page says how many are missing and
-            // where to look them up, so a Chair searching for a name they
-            // expected finds out why it is gone.
-            ->assertDontSee($busy->name)
-            ->assertSee('on an appointment and')
-            ->assertSee('not listed below');
-    }
-
-    public function test_the_form_offers_both_kinds_of_examiner(): void
-    {
-        $this->candidate();
-        $internal = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $external = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        // Both kinds live in one dropdown, and with a hundred examiners on
-        // the list the external group sits far below the fold -- which is
-        // exactly how it came to look as though there were no external
-        // examiners at all. The second slot therefore starts on External,
-        // and each row picks its kind before its person.
-        $response = $this->actingAs($this->chair())
-            ->get(route('appointment-letter.create'))
-            ->assertOk()
-            ->assertSee($internal->name)
-            ->assertSee($external->name)
-            ->assertSee('Internal Examiners (UTP)')
-            ->assertSee('External Examiners');
-
-        $rows = $response->getContent();
-        preg_match_all('/<select class="examiner-type".*?<\/select>/s', $rows, $types);
-
-        $this->assertCount(2, $types[0], 'Both slots should offer a kind to pick.');
-        $this->assertStringContainsString('value="internal" selected', $types[0][0]);
-        $this->assertStringContainsString('value="external" selected', $types[0][1]);
-    }
-
-    public function test_the_form_explains_itself_when_every_examiner_of_one_kind_is_busy(): void
-    {
-        $this->candidate();
-        $internal = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        $application = $this->nomination($internal);
-        AppointmentExaminer::where('application_id', $application->id)
-            ->update(['appointed_at' => now()]);
-
-        // Hiding the unavailable would otherwise leave an empty Internal group
-        // and no hint why -- the Chair would fill the form in and only find
-        // out on submit.
-        $this->actingAs($this->chair())
-            ->get(route('appointment-letter.create'))
-            ->assertOk()
-            ->assertSee('The only internal examiner on the list is on an appointment until')
-            ->assertSee(now()->addMonths(PoolExaminer::COOLDOWN_MONTHS)->format('j M Y'))
-            ->assertDontSee('Submit Nomination');
-    }
 
     public function test_cgs_sees_an_undelivered_pack_and_can_resend_it(): void
     {

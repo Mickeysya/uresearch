@@ -4,8 +4,8 @@ namespace Tests\Feature\Jason;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
-use App\Modules\Core\Services\WorkflowEngine;
-use App\Modules\Core\Support\Role;
+use App\Modules\Jason\Models\AppointmentDetail;
+use App\Modules\Jason\Models\AppointmentExaminer;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
 use App\Modules\Jason\Models\PoolExaminer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -90,15 +90,9 @@ class FormsTest extends TestCase
         $this->assertIsStepper($this->actingAs($student)->get(route('hardbound-appeal.create')), 3);
     }
 
-    public function test_the_nomination_and_preparation_forms_are_steppers(): void
+    public function test_the_preparation_form_is_a_stepper(): void
     {
-        $chair = $this->user(Role::CHAIR, [
-            'name' => 'Dr. Lim Wei Chun',
-            'email' => 'chair@test.my',
-            'department' => 'Civil & Environmental Engineering',
-        ]);
-
-        $candidate = $this->student(attributes: ['department' => $chair->department]);
+        $candidate = $this->student(attributes: ['department' => 'Civil & Environmental Engineering']);
 
         $internal = PoolExaminer::create([
             'examiner_type' => 'internal', 'name' => 'Dr. Internal', 'institution' => 'UTP',
@@ -109,20 +103,19 @@ class FormsTest extends TestCase
             'email' => 'external@usm.edu.my', 'expertise' => 'Geotechnics', 'is_active' => true,
         ]);
 
-        $this->assertIsStepper($this->actingAs($chair)->get(route('appointment-letter.create')), 2);
+        // Nomination has no form of its own any more, so straight into the
+        // database, sitting on the stage this test actually exercises.
+        $application = Application::create([
+            'student_id' => $candidate->id,
+            'submitted_by_id' => $this->chair()->id,
+            'module_type' => 'appointment_letter',
+            'status' => Application::STATUS_PENDING,
+            'current_stage' => 'cgs_prep',
+        ]);
 
-        $this->actingAs($chair)
-            ->post(route('appointment-letter.store'), [
-                'student_id' => $candidate->id,
-                'examiners' => [['pool_id' => $internal->id], ['pool_id' => $external->id]],
-            ])
-            ->assertSessionHasNoErrors();
-
-        $application = Application::where('module_type', 'appointment_letter')->sole();
-
-        // The AE endorses, which is what puts it on the CGS preparation desk.
-        app(WorkflowEngine::class)->decide($application, $this->academicExec(), 'approve');
-        $this->assertSame('cgs_prep', $application->fresh()->current_stage);
+        AppointmentDetail::create(['application_id' => $application->id]);
+        AppointmentExaminer::create(['application_id' => $application->id] + $internal->toSnapshot());
+        AppointmentExaminer::create(['application_id' => $application->id] + $external->toSnapshot());
 
         $this->assertIsStepper(
             $this->actingAs($this->cgs())->get(route('appointment-letter.prepare', $application)),
@@ -143,16 +136,16 @@ class FormsTest extends TestCase
             'email' => 'internal@utp.edu.my', 'expertise' => 'Structures', 'is_active' => true,
         ]);
 
-        $chair = $this->chair();
+        $cgs = $this->cgs();
 
         // The list is a list: no form on it beyond the per-row Remove button.
-        $this->actingAs($chair)->get(route('appointment-letter.examiners'))
+        $this->actingAs($cgs)->get(route('appointment-letter.examiners'))
             ->assertOk()
             ->assertSee('Dr. Internal')
             ->assertSee(route('appointment-letter.examiners.create'), false)
             ->assertDontSee('data-stepper', false);
 
-        $response = $this->actingAs($chair)->get(route('appointment-letter.examiners.create'));
+        $response = $this->actingAs($cgs)->get(route('appointment-letter.examiners.create'));
 
         $this->assertIsStepper($response, 2);
 
@@ -178,36 +171,6 @@ class FormsTest extends TestCase
         $this->assertStringContainsString('readAsDataURL(', $html);
         // The call, not the word -- the comment above it names the API it avoids.
         $this->assertStringNotContainsString('createObjectURL(', $html);
-    }
-
-    /**
-     * "Add the examiner first" used to be a one-way trip: you landed back on
-     * the list, and the panel you had half-picked was gone.
-     */
-    public function test_adding_an_examiner_from_the_nomination_form_goes_back_to_it(): void
-    {
-        $examiner = [
-            'examiner_type' => 'external',
-            'name' => 'Dr. External',
-            'institution' => 'Universiti Sains Malaysia',
-            'expertise' => 'Geotechnics',
-        ];
-
-        $this->actingAs($this->chair())
-            ->post(route('appointment-letter.examiners.store'), $examiner + [
-                'email' => 'first@usm.edu.my',
-                'return' => 'nominate',
-            ])
-            ->assertRedirect(route('appointment-letter.create'));
-
-        // CGS keeps the same list but cannot open the Chair's nomination
-        // form, so the flag must not bounce them into a 403 after a good save.
-        $this->actingAs($this->cgs())
-            ->post(route('appointment-letter.examiners.store'), $examiner + [
-                'email' => 'second@usm.edu.my',
-                'return' => 'nominate',
-            ])
-            ->assertRedirect(route('appointment-letter.examiners'));
     }
 
     /**

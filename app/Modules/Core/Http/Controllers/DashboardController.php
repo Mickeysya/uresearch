@@ -10,7 +10,6 @@ use App\Modules\Core\Services\GeneralApproverDashboard;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\StudentDashboard;
 use App\Modules\Core\Services\SupervisorDashboard;
-use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
 use Illuminate\Http\Request;
 
@@ -89,7 +88,6 @@ class DashboardController extends Controller
             // normally zero, over a chart of five categories with one bar in
             // it. See Services\ChairDashboard for what replaced it.
             $dash = new ChairDashboard($user, $registry);
-            $nominations = $dash->myNominations();
 
             return view('core::dashboard.chair', [
                 'queues' => $dash->queues(),
@@ -101,8 +99,7 @@ class DashboardController extends Controller
                 'busiestRoute' => $dash->busiestQueueRoute(),
                 'longestWaitRoute' => $dash->longestWaitRoute(),
                 'oldest' => $dash->oldestWaiting(),
-                'nominations' => $nominations,
-                'stageLabels' => $dash->stageLabels($nominations, app(WorkflowEngine::class)),
+                'decisions' => $dash->myRecentDecisions(),
                 'alerts' => $dash->alerts(),
                 // The same module-declared links the sidebar builds from, so
                 // a teammate's new Chair-facing screen appears here too.

@@ -58,9 +58,8 @@
 <div class="card-container-inline">
     <x-core::page-header
         title="Examiner List"
-        subtitle="The examiners a Chair can put on a panel. Removing one keeps past nominations intact, because each nomination holds its own copy of the details.">
-        <a href="{{ route('appointment-letter.examiners.create', array_filter(['return' => $returnToNomination ? 'nominate' : null])) }}"
-           class="btn">Add an examiner</a>
+        subtitle="Examiners available for an Appointment Letter panel. Removing one keeps past nominations intact, because each nomination holds its own copy of the details.">
+        <a href="{{ route('appointment-letter.examiners.create') }}" class="btn">Add an examiner</a>
     </x-core::page-header>
 
     @if ($examiners->isNotEmpty())
@@ -77,15 +76,14 @@
     <p class="queue-meta">
         An examiner the Dean has appointed is unavailable for the next
         {{ \App\Modules\Jason\Models\PoolExaminer::COOLDOWN_MONTHS }} months, so no one
-        carries two panels at once. They come back to the nomination form on their own.
+        carries two panels at once. They come back on the list on their own.
     </p>
 
     @if ($examiners->isEmpty())
         <div class="empty-state">
             <p>No examiners yet.</p>
-            <p class="queue-meta">Add the first one and they appear on the nomination form.</p>
-            <a href="{{ route('appointment-letter.examiners.create', array_filter(['return' => $returnToNomination ? 'nominate' : null])) }}"
-               class="btn">Add an examiner</a>
+            <p class="queue-meta">Add the first one to make them available for a panel.</p>
+            <a href="{{ route('appointment-letter.examiners.create') }}" class="btn">Add an examiner</a>
         </div>
     @else
         <div class="pool-table-wrap">
@@ -150,15 +148,6 @@
                 </tbody>
             </table>
         </div>
-    @endif
-
-    {{-- Set when the Chair arrived from the nomination form. They came to add
-         someone; this is the way out if they only came to look. The panel they
-         had already picked is still waiting to be restored. --}}
-    @if ($returnToNomination)
-        <p class="field-hint" style="margin-top: var(--space-5);">
-            <a href="{{ route('appointment-letter.create') }}">&larr; Back to the nomination without adding anyone</a>
-        </p>
     @endif
 </div>
 @endsection

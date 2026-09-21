@@ -1,5 +1,6 @@
 {{--
-    Five figures, fixed -- not one per queue.
+    Four figures, fixed -- not one per queue. The fifth, "Panels you filed",
+    went with examiner-panel nomination, which the Chair no longer does.
 
     "Longest wait" is the one that earns its place: it is what a Chair is
     actually measured on and it is what the per-queue cards could never show.
@@ -62,15 +63,6 @@
             'pill' => 'Last 30 days',
             'pillTone' => 'good',
             'url' => null,
-        ],
-        [
-            'tone' => 'blue', 'icon' => 'people', 'panel' => 'nominations',
-            'label' => 'Panels you filed',
-            'value' => $nominations->count(),
-            'note' => 'examiner nominations',
-            'pill' => 'Nominate a panel',
-            'pillTone' => 'info',
-            'url' => route('appointment-letter.create'),
         ],
     ];
 @endphp

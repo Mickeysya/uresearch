@@ -56,7 +56,7 @@ class ChairDashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Your queues')
             ->assertSee('Waiting longest')
-            ->assertSee('Panels you filed')
+            ->assertSee('Your recent decisions')
             // The generic approver screen's chart canvas must not be here.
             ->assertDontSee('dashboardChart', false);
     }
@@ -142,31 +142,6 @@ class ChairDashboardTest extends TestCase
     }
 
     /**
-     * A Chair files an examiner panel and it leaves their hands entirely.
-     * Until this panel it was invisible to the person who filed it.
-     */
-    public function test_panels_the_chair_filed_are_visible_to_them(): void
-    {
-        $chair = $this->chair();
-        $student = $this->student();
-
-        Application::create([
-            'student_id' => $student->id,
-            'submitted_by_id' => $chair->id,
-            'module_type' => 'appointment_letter',
-            'status' => Application::STATUS_PENDING,
-            'current_stage' => 'academic_exec',
-            'submitted_at' => now()->subDays(2),
-        ]);
-
-        $this->actingAs($chair)->get(route('dashboard'))
-            ->assertOk()
-            ->assertSee('Panels you filed')
-            ->assertSee($student->name)
-            ->assertSee('Academic Executive');
-    }
-
-    /**
      * A figure you cannot act on is a poster. Every other dashboard's cards
      * end in a pill that goes somewhere; these did not.
      */
@@ -180,7 +155,6 @@ class ChairDashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Open the queue')
             ->assertSee('Go to the oldest')
-            ->assertSee('Nominate a panel')
             ->getContent();
 
         // The two queue pills point at the queue holding the row, not at a
@@ -269,9 +243,9 @@ class ChairDashboardTest extends TestCase
     }
 
     /**
-     * Quick actions was the module links alone, which for a Chair is three
-     * and for a Supervisor two. The Core destinations every approver uses
-     * are listed with them.
+     * Quick actions was the module links alone, which for a Chair is one
+     * (My Signature) and for a Supervisor two. The Core destinations every
+     * approver uses are listed with them.
      */
     public function test_quick_actions_carries_the_core_destinations_too(): void
     {
@@ -280,7 +254,6 @@ class ChairDashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Quick actions')
             // Declared by Jason's module through ProvidesLinks.
-            ->assertSee('Nominate Examiner Panel')
             ->assertSee('My Signature')
             // Added by the panel itself.
             ->assertSee('Documents')
