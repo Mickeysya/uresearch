@@ -3,11 +3,14 @@
 use App\Modules\Core\Http\Controllers\AdminController;
 use App\Modules\Core\Http\Controllers\ApplicationTrackingController;
 use App\Modules\Core\Http\Controllers\DashboardController;
+use App\Modules\Core\Http\Controllers\CalendarController;
 use App\Modules\Core\Http\Controllers\DocumentController;
+use App\Modules\Core\Http\Controllers\DocumentLibraryController;
 use App\Modules\Core\Http\Controllers\LoginController;
 use App\Modules\Core\Http\Controllers\NotificationController;
 use App\Modules\Core\Http\Controllers\PageController;
 use App\Modules\Core\Http\Controllers\ProfileController;
+use App\Modules\Core\Http\Controllers\QueueController;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +30,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/applications/{application}', [ApplicationTrackingController::class, 'show'])->name('applications.show');
     });
 
+    // Deciding a page of any module's queue in one submission. Generic on
+    // purpose -- the module is a route parameter, so this is one route rather
+    // than one in each of the thirteen module route files, and a new module
+    // gets it for free. Authorisation is not here: every row goes through
+    // WorkflowEngine::decide(), which re-checks the actor's role against the
+    // stage that row is on, so posting ids you do not own decides nothing.
+    Route::post('/queue/{module}/decide', [QueueController::class, 'decideBulk'])
+        ->name('queue.decide-bulk');
+
     Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
 
     // The notification feed. Real, for every role -- see NotificationController.
@@ -34,16 +46,27 @@ Route::middleware('auth')->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])->name('notifications.read-all');
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'read'])->name('notifications.read');
 
+    // Every file this user may see, in one list. Reads application_documents
+    // through the same visibility rule documents.show enforces.
+    Route::get('/documents', [DocumentLibraryController::class, 'index'])->name('documents.index');
+
+    // A month grid over dates the modules already own -- no events table.
+    Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar.index');
+
     // Sidebar destinations with no feature behind them yet -- see PageController.
-    Route::get('/documents', [PageController::class, 'documents'])->name('documents.index');
-    Route::get('/calendar', [PageController::class, 'calendar'])->name('calendar.index');
-    Route::get('/help', [PageController::class, 'help'])->name('help.index');
+    Route::get('/help', [PageController::class, 'show'])->name('help.index')->defaults('page', 'help');
     // The signed-in user's own record. Contact details and password are
     // separate routes on purpose — see ProfileController.
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::patch('/profile/contact', [ProfileController::class, 'updateContact'])->name('profile.contact');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
-    Route::get('/settings', [PageController::class, 'settings'])->name('settings.index');
+    // Gated to the roles the sidebar actually offers it to. Everything the
+    // page describes (notification preferences, the attendance threshold,
+    // reminder timings) is system-wide configuration, and it was reachable
+    // by any signed-in account, including a student, purely because no
+    // role middleware was on it.
+    Route::middleware('role:'.implode(',', [...Role::cgsTeam(), Role::ADMIN]))
+        ->get('/settings', [PageController::class, 'show'])->name('settings.index')->defaults('page', 'settings');
 
     // Administrator screens. Oversight is read-only by design: the admin owns
     // no workflow stage, so nothing here acts on an application.
@@ -63,9 +86,9 @@ Route::middleware('auth')->group(function () {
     // CGS-only screens. Gated by role here as well as hidden from the sidebar,
     // because a sidebar that does not render a link is not access control.
     Route::middleware('role:'.implode(',', Role::cgsTeam()))->group(function () {
-        Route::get('/cgs/attendance', [PageController::class, 'cgsAttendanceOverview'])->name('cgs.attendance.overview');
-        Route::get('/cgs/attendance/students', [PageController::class, 'cgsStudentList'])->name('cgs.attendance.students');
-        Route::get('/cgs/students', [PageController::class, 'cgsStudents'])->name('cgs.students.index');
-        Route::get('/cgs/reports', [PageController::class, 'cgsReports'])->name('cgs.reports.index');
+        Route::get('/cgs/attendance', [PageController::class, 'show'])->name('cgs.attendance.overview')->defaults('page', 'cgs-attendance');
+        Route::get('/cgs/attendance/students', [PageController::class, 'show'])->name('cgs.attendance.students')->defaults('page', 'cgs-student-list');
+        Route::get('/cgs/students', [PageController::class, 'show'])->name('cgs.students.index')->defaults('page', 'cgs-students');
+        Route::get('/cgs/reports', [PageController::class, 'show'])->name('cgs.reports.index')->defaults('page', 'cgs-reports');
     });
 });

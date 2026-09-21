@@ -8,7 +8,7 @@
 
     Two concentric rings, which is how the band scale survives the move:
 
-      outer, thin   the three bands — Critical / Warning / Good. Replaces the
+      outer, thin   the three bands: Critical / Warning / Good. Replaces the
                     notches the SVG drew, and each band is hoverable in its
                     own right.
       inner, thick  this student's value against the remainder.
@@ -68,7 +68,7 @@
         <div class="sdash-gauge-side">
             <ul class="sdash-legend">
                 @foreach ($bands as $band)
-                    <li class="{{ $band['tone'] === $tone ? 'is-active' : '' }}" title="{{ $band['label'] }}{{ $band['tone'] === $tone ? ' — you are here' : '' }}">
+                    <li class="{{ $band['tone'] === $tone ? 'is-active' : '' }}" title="{{ $band['label'] }}{{ $band['tone'] === $tone ? ' (you are here)' : '' }}">
                         <span class="sdash-dot tone-{{ $band['tone'] }}" aria-hidden="true"></span>
                         <span class="sdash-legend-label">{{ $band['label'] }}</span>
                         @if ($band['tone'] === $tone)
@@ -134,7 +134,14 @@
                             label: 'Attendance',
                             data: pct === null ? [0, 100] : [pct, 100 - pct],
                             segmentLabels: ['Your attendance', 'Remaining'],
-                            backgroundColor: [toneColour, '#E7EBF2'],
+                            // Index 0 is the reading itself and keeps its
+                            // tone colour; index 1 is the empty remainder,
+                            // which is track, not data.
+                            backgroundColor: function (ctx) {
+                                return ctx.dataIndex === 0
+                                    ? toneColour
+                                    : Chart.uresearchToken('--border-grey', '#E7EBF2');
+                            },
                             borderWidth: 0,
                             weight: 3.4,
                         },
@@ -161,7 +168,7 @@
                                 },
                                 label: function (ctx) {
                                     if (ctx.datasetIndex === 1) {
-                                        return ' ' + ctx.parsed + '% — the threshold is 80%';
+                                        return ' ' + ctx.parsed + '%, and the threshold is 80%';
                                     }
                                     return ' covers ' + ctx.parsed + ' percentage points of the scale';
                                 },

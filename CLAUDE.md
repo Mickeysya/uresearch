@@ -107,6 +107,8 @@ Also: do not commit on `main`. Branch first.
 | `docs/conventions.md` | naming, ownership, the nine rules, which stylesheet to edit |
 | `docs/module-keys.md` | claim a `module_type` here |
 | `docs/migration-from-legacy.md` | every bug the rewrite fixed |
+| `docs/email-service-integration.md` | Mailpit now, real SMTP later |
+| `docs/tech-stack-and-architecture-report.md` | the stack write-up for the FYP report |
 
 `app/Modules/Norhanis/` is the reference implementation — a complete module
 with a workflow, model, migration, controller, routes and views. Point people

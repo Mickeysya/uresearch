@@ -12,23 +12,24 @@
    ============================================================ */
 
 /* =====================================================================
-   No scrollbars anywhere — scrolling still works, nothing draws a track.
-   Applies to the page, every panel body and the sidebar nav alike.
+   No scrollbar on the sidebar nav, which scrolls inside a fixed-height
+   rail and has its own affordance (the active item, hover). The page
+   itself is deliberately NOT in this list: the dashboards are natural-
+   height now and the page is the thing that scrolls, so it needs the
+   browser's ordinary scrollbar as the visual cue that there is more below
+   the fold. Hiding it here once made sense when only small panel bodies
+   scrolled invisibly inside an otherwise fixed one-screen layout; it does
+   not once the whole page can be several screens tall.
    ===================================================================== */
 
-html,
-body,
-.sdash-card-body,
-.main-content,
 .sidebar-nav,
 [class*="-scroll"] {
     scrollbar-width: none;          /* Firefox */
     -ms-overflow-style: none;       /* legacy Edge */
 }
 
-html::-webkit-scrollbar,
-body::-webkit-scrollbar,
-*::-webkit-scrollbar {
+.sidebar-nav::-webkit-scrollbar,
+[class*="-scroll"]::-webkit-scrollbar {
     width: 0;
     height: 0;
     display: none;                  /* Chrome, Safari, Edge */
@@ -90,14 +91,14 @@ body::-webkit-scrollbar,
     flex-direction: column;
     gap: 10px;
     padding: 16px 18px;
-    background: white;
+    background: var(--surface);
     border-radius: inherit;
 }
 
 .skel {
     display: block;
     border-radius: 6px;
-    background: #E6EAF2;
+    background: var(--border-grey);
 }
 
 .skel-bar    { height: 10px; }
@@ -174,7 +175,7 @@ body::-webkit-scrollbar,
     max-width: 190px;
     aspect-ratio: 2 / 1;
     border-radius: 999px 999px 0 0;
-    background: #E6EAF2;
+    background: var(--border-grey);
     mask: radial-gradient(circle at 50% 100%, transparent 52%, #000 52.5%);
     -webkit-mask: radial-gradient(circle at 50% 100%, transparent 52%, #000 52.5%);
 }

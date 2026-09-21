@@ -4,6 +4,7 @@ namespace App\Modules\Hani;
 
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Hani\Workflows\ExaminerNominationWorkflow;
+use App\Modules\Hani\Workflows\ReVivaWorkflow;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -15,8 +16,6 @@ class ModuleProvider extends ServiceProvider
     public function boot(ModuleRegistry $registry): void
     {
         $registry->register(new ExaminerNominationWorkflow());
-
-        // Still to build:
-        // $registry->register(new ReVivaWorkflow());
+        $registry->register(new ReVivaWorkflow());
     }
 }

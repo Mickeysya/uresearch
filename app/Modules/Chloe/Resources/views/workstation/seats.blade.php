@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', $workstationLocation->name . ' — Workstation')
+@section('title', 'Workstation: ' . $workstationLocation->name)
 
 @php
     // Reusing the portal's own chart palette (dashboard-gauge.css /
@@ -16,15 +16,15 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
-            <p style="margin:0;">
-                <a href="{{ route('workstation.rooms', $workstationLocation->block) }}">&larr; Block {{ $workstationLocation->block }}</a>
-            </p>
-            <a href="{{ route('workstation.select') }}"><button type="button">Home</button></a>
-        </div>
+    <x-core::page-header title="{{ $workstationLocation->name }}">
+        <a href="{{ route('workstation.select') }}"><button type="button">Home</button></a>
+    </x-core::page-header>
 
-        <h2>{{ $workstationLocation->name }}</h2>
+    <div class="card card-wide">
+        <p style="margin:0;">
+            <a href="{{ route('workstation.rooms', $workstationLocation->block) }}">&larr; Block {{ $workstationLocation->block }}</a>
+        </p>
+
         <p style="color: var(--text-grey); font-size: 13px;">
             {{ $workstationLocation->room_code }} · Block {{ $workstationLocation->block }} ·
             <span class="status-badge {{ $workstationLocation->gender === 'female' ? 'rejected' : 'pending' }}">{{ $workstationLocation->genderLabel() }}</span>
@@ -55,7 +55,7 @@
             @foreach ($seatsByCluster as $clusterLabel => $seats)
                 <div style="display:flex; flex-wrap:wrap; gap:3px; align-content:flex-start;">
                     @foreach ($seats as $seat)
-                        <div title="Seat {{ $seat->seat_code }} — {{ ucfirst($seat->status) }}"
+                        <div title="Seat {{ $seat->seat_code }}: {{ ucfirst($seat->status) }}"
                              style="width:22px;height:20px;border-radius:2px;color:#fff;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;background:{{ $seatColor[$seat->status] }};">
                             {{ $seat->seat_code }}
                         </div>
@@ -73,13 +73,13 @@
                         @if ($seat->isAvailable() && ! $activeRequest)
                             <form method="POST" action="{{ route('workstation.register', $seat) }}">
                                 @csrf
-                                <button type="submit" title="Seat {{ $seat->seat_code }} — Available"
+                                <button type="submit" title="Seat {{ $seat->seat_code }}: Available"
                                         style="width:48px;height:40px;padding:0;border:none;border-radius:4px;color:#fff;font-weight:600;cursor:pointer;background:{{ $seatColor['available'] }};display:flex;align-items:center;justify-content:center;">
                                     {{ $seat->seat_code }}
                                 </button>
                             </form>
                         @else
-                            <div title="Seat {{ $seat->seat_code }} — {{ ucfirst($seat->status) }}"
+                            <div title="Seat {{ $seat->seat_code }}: {{ ucfirst($seat->status) }}"
                                  style="width:48px;height:40px;border-radius:4px;color:#fff;font-weight:600;display:flex;align-items:center;justify-content:center;background:{{ $seatColor[$seat->status] }}; opacity:{{ $seat->isAvailable() ? '0.55' : '1' }};">
                                 {{ $seat->seat_code }}
                             </div>

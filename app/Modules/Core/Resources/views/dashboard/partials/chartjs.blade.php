@@ -44,9 +44,29 @@
             (function () {
                 if (typeof Chart === 'undefined') return;
 
+                /* ---- tokens, read at draw time --------------------------
+                   Chart.js paints to a canvas, so CSS cannot reach any of it:
+                   a gridline or a datalabel colour has to be a string handed
+                   to the library. Hard-coding those strings is what left the
+                   admin bar chart's value labels near-black on a dark page.
+
+                   This reads the same custom properties tokens.css defines,
+                   so a chart asks for --text-grey exactly as a stylesheet
+                   would. Pass it as a FUNCTION in a chart config, not a
+                   value: Chart.js re-evaluates scriptable options on every
+                   update(), which is what makes retheme() below work without
+                   every chart having to know how it is themed.
+                   --------------------------------------------------------- */
+                var root = document.documentElement;
+
+                Chart.uresearchToken = function (name, fallback) {
+                    var value = getComputedStyle(root).getPropertyValue(name);
+                    return (value && value.trim()) || fallback;
+                };
+
                 Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
                 Chart.defaults.font.size = 11;
-                Chart.defaults.color = '#8A94A6';
+                Chart.defaults.color = Chart.uresearchToken('--text-grey', '#8A94A6');
                 Chart.defaults.maintainAspectRatio = false;
                 Chart.defaults.responsive = true;
 
@@ -160,6 +180,32 @@
                 Chart.defaults.plugins.tooltip.enabled = false;
                 Chart.defaults.plugins.tooltip.external = externalTooltip;
                 Chart.defaults.plugins.tooltip.displayColors = true;
+
+                /* ---- repaint every chart when the theme changes ---------
+                   Chart.defaults.color is a plain value rather than a
+                   scriptable option, so it is re-read here; everything else
+                   a chart themes goes through uresearchToken() as a function
+                   and is re-resolved by update(). 'none' skips the animation
+                   -- re-running the grow-from-zero bars on a theme flip looks
+                   like the page reloaded. --------------------------------- */
+                function retheme() {
+                    Chart.defaults.color = Chart.uresearchToken('--text-grey', '#8A94A6');
+
+                    Object.keys(Chart.instances || {}).forEach(function (key) {
+                        try {
+                            Chart.instances[key].update('none');
+                        } catch (e) {}
+                    });
+                }
+
+                // The toggle writes data-theme; the media query covers anyone
+                // who has never pressed it and whose OS changes under them.
+                new MutationObserver(retheme).observe(root, {
+                    attributes: true,
+                    attributeFilter: ['data-theme'],
+                });
+
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
             })();
         </script>
     @endpush

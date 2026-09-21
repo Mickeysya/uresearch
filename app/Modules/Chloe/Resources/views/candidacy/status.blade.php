@@ -4,10 +4,9 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>My Study Candidacy</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header title="My Study Candidacy" />
 
+    <div class="card card-wide">
         @if (! $candidacy)
             <div class="empty-state">No candidacy record found for your account yet. Contact CGS if you believe this is an error.</div>
         @else
@@ -33,9 +32,9 @@
             @if ($candidacy->canAppeal() && ! $candidacy->hasOpenAppeal())
                 <a href="{{ route('candidacy-appeal.create') }}"><button type="submit">Submit an Appeal</button></a>
             @elseif ($candidacy->hasOpenAppeal())
-                <p style="color: var(--text-grey); font-size: 13px;">You have an appeal in progress — see below.</p>
+                <p style="color: var(--text-grey); font-size: 13px;">You have an appeal in progress; see below.</p>
             @elseif ($candidacy->last_rejection_at)
-                <p style="color: var(--text-grey); font-size: 13px;">A previous appeal was rejected — no further appeals can be filed.</p>
+                <p style="color: var(--text-grey); font-size: 13px;">A previous appeal was rejected; no further appeals can be filed.</p>
             @elseif ($candidacy->remainingAppealMonths() <= 0)
                 <p style="color: var(--text-grey); font-size: 13px;">You have used your full 12-month appeal allowance.</p>
             @endif
@@ -45,7 +44,7 @@
 
 <div class="card-container-inline">
     <div class="card card-wide">
-        <h2>My Appeals</h2>
+        <h3>My Appeals</h3>
         <div class="card-divider"></div>
 
         @if ($appeals->isEmpty())
@@ -70,7 +69,7 @@
 
 <div class="card-container-inline">
     <div class="card card-wide">
-        <h2>My Reminder History</h2>
+        <h3>My Reminder History</h3>
         <div class="card-divider"></div>
 
         @if ($reminders->isEmpty())

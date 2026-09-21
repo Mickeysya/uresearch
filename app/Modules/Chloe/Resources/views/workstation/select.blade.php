@@ -8,14 +8,13 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>My Workstation</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header title="Workstation" />
 
+    <div class="card card-wide">
         @if ($activeRequest)
             <p>
-                Seat <b>{{ $activeRequest->workstation->seat_code }}</b>
-                — {{ $activeRequest->workstation->location->name }} ({{ $activeRequest->workstation->location->block }})
+                Seat <b>{{ $activeRequest->workstation->seat_code }}</b>,
+                {{ $activeRequest->workstation->location->name }} ({{ $activeRequest->workstation->location->block }})
                 <span class="status-badge approved">Confirmed</span>
             </p>
             <p style="color: var(--text-grey); font-size: 13px;">
@@ -47,15 +46,15 @@
 
 <div class="card-container-inline">
     <div class="card card-wide">
-        <h2>Postgraduate Workstation Availability</h2>
+        <h3>Postgraduate Workstation Availability</h3>
         <div class="card-divider"></div>
 
         @if (! $gender)
-            <p>Rooms are designated by gender — tell us yours to see the rooms that apply to you.</p>
+            <p>Rooms are designated by gender; tell us yours to see the rooms that apply to you.</p>
             <form method="POST" action="{{ route('workstation.gender.set') }}">
                 @csrf
                 <select name="gender" required>
-                    <option value="">— Select —</option>
+                    <option value="">Select&hellip;</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                 </select>

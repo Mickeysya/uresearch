@@ -1,17 +1,15 @@
 @extends('core::layouts.app')
 
-@section('title', 'Block ' . $block . ' — Workstation')
+@section('title', 'Workstation: Block ' . $block)
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <p><a href="{{ route('workstation.select') }}">&larr; Home</a></p>
-        <h2>Block {{ $block }}</h2>
-        <p style="color: var(--text-grey); font-size: 13px;">
-            Each room is designated for one gender — pick the room that applies to you.
-        </p>
-        <div class="card-divider"></div>
+    <x-core::page-header title="Block {{ $block }}"
+                         subtitle="Each room is designated for one gender; pick the room that applies to you.">
+        <a href="{{ route('workstation.select') }}"><button type="button">Home</button></a>
+    </x-core::page-header>
 
+    <div class="card card-wide">
         @if ($activeRequest)
             <div class="empty-state">
                 You already hold Seat {{ $activeRequest->workstation->seat_code }} in {{ $activeRequest->workstation->location->name }}.

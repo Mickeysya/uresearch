@@ -7,6 +7,7 @@
     <title>UResearch</title>
     <link rel="icon" type="image/png" href="{{ asset('images/uresearch-logo.png') }}">
     @include('core::partials.stylesheets')
+    @include('core::partials.theme-init')
     <script @cspNonce>
         // Applied before the body paints, straight from localStorage, so a
         // collapsed sidebar never flashes open-then-closed on page load --
@@ -27,11 +28,20 @@
 
         <div class="main-content">
             <div class="main-content-header">
+                @include('core::partials.theme-toggle')
                 <img src="{{ asset('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS" class="utp-logo">
             </div>
 
-            @include('core::partials.flash')
-            @yield('content')
+            {{-- THE PAGE SHELL. Every screen is capped and centred here, not
+                 in each view: a queue page did not wrap itself in
+                 .card-container-inline and so ran the full width of the
+                 content area while every card page sat at --page-max, which
+                 is two different pages side by side in the same app. Doing it
+                 in the layout means a view cannot forget. --}}
+            <div class="page-shell">
+                @include('core::partials.flash')
+                @yield('content')
+            </div>
         </div>
     </div>
 
@@ -53,6 +63,11 @@
             toggle.setAttribute('aria-expanded', document.documentElement.classList.contains('sidebar-collapsed') ? 'false' : 'true');
         })();
     </script>
+    {{-- A calendar panel over every <input type="date">. Included once, at
+         the layout level, so a module gets it without knowing it exists --
+         see the partial for why it enhances the native input rather than
+         replacing it. --}}
+
     @stack('scripts')
 </body>
 </html>

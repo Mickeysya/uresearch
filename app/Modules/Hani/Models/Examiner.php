@@ -20,14 +20,40 @@ class Examiner extends Model
     /** Mandatory cooling-off after an evaluation, in days. */
     public const GAP_DAYS = 90;
 
+    /**
+     * How far out assigned_until is set on approval, absent any other signal
+     * of when the case will actually conclude. Marking the evaluation
+     * complete (ExaminerNominationController::markComplete()) clears this
+     * immediately and starts the gap from that real date instead, so this
+     * window only matters if completion is never recorded.
+     */
+    public const DEFAULT_ASSIGNMENT_DAYS = 180;
+
     public const STATE_ASSIGNED = 'assigned';
     public const STATE_ON_GAP = 'on_gap';
     public const STATE_AVAILABLE = 'available';
     public const STATE_UNAVAILABLE = 'unavailable';
 
+    public const TYPE_INTERNAL = 'internal';
+    public const TYPE_EXTERNAL = 'external';
+
+    /**
+     * The columns that only mean anything for an external examiner. The form
+     * shows them for external only, and the controller strips them when an
+     * internal examiner is saved, so an internal row can never end up holding
+     * half an external record.
+     */
+    public const EXTERNAL_FIELDS = [
+        'faculty_approval', 'institution', 'sector', 'expertise', 'utp_cluster',
+        'years_experience', 'msc_graduated', 'phd_graduated',
+    ];
+
     protected $fillable = [
         'name', 'email', 'department', 'faculty', 'type',
-        'is_active', 'last_examination_date', 'assigned_until',
+        'is_active', 'unavailable_reason', 'last_examination_date', 'assigned_until',
+        // External only -- see the 2026_09_17 migration for why each exists.
+        'faculty_approval', 'institution', 'sector', 'expertise', 'utp_cluster',
+        'years_experience', 'msc_graduated', 'phd_graduated', 'first_examination_date',
     ];
 
     protected function casts(): array
@@ -35,9 +61,53 @@ class Examiner extends Model
         return [
             'is_active' => 'boolean',
             'last_examination_date' => 'date',
+            'first_examination_date' => 'date',
             'assigned_until' => 'date',
+            'years_experience' => 'integer',
+            'msc_graduated' => 'integer',
+            'phd_graduated' => 'integer',
         ];
     }
+
+    /**
+     * Whether this examiner is from outside UTP. The distinction is not
+     * cosmetic: CGS keeps a different record for each (the external sheet
+     * carries the faculty approval, institution, expertise and supervision
+     * history an internal one has no equivalent of), and only external
+     * examiners are shown or asked for those columns.
+     */
+    public function isExternal(): bool
+    {
+        return $this->type === self::TYPE_EXTERNAL;
+    }
+
+    public function typeLabel(): string
+    {
+        return $this->isExternal() ? 'External' : 'Internal';
+    }
+
+    /**
+     * The sheet's "Details" cell -- experience and graduates supervised, with
+     * whichever of the three are on file. Null when none are, so the column
+     * shows an em dash rather than an empty box.
+     */
+    public function experienceSummary(): ?string
+    {
+        $parts = array_filter([
+            $this->years_experience !== null ? "Experience: {$this->years_experience} years" : null,
+            $this->msc_graduated !== null ? "MSc Grad: {$this->msc_graduated}" : null,
+            $this->phd_graduated !== null ? "PhD Grad: {$this->phd_graduated}" : null,
+        ]);
+
+        return $parts ? implode("\n", $parts) : null;
+    }
+
+    /** "Technical" / "Research", the sheet's University/Industry column. */
+    public function sectorLabel(): ?string
+    {
+        return $this->sector ? ucfirst($this->sector) : null;
+    }
+
 
     /** When this examiner comes off gap, or null if they are not on one. */
     public function gapEndsOn(): ?CarbonInterface
@@ -65,6 +135,28 @@ class Examiner extends Model
     public function isEligible(): bool
     {
         return $this->state() === self::STATE_AVAILABLE;
+    }
+
+    /** Human label for state(), for display -- state() itself stays machine-readable. */
+    public function stateLabel(): string
+    {
+        return match ($this->state()) {
+            self::STATE_AVAILABLE => 'Available',
+            self::STATE_ON_GAP => 'On Gap',
+            self::STATE_ASSIGNED => 'Assigned',
+            self::STATE_UNAVAILABLE => 'Unavailable',
+        };
+    }
+
+    /** Which .sdash-stat tone (dashboard-student.css) and .status-badge-like colour this state reads as. */
+    public function stateTone(): string
+    {
+        return match ($this->state()) {
+            self::STATE_AVAILABLE => 'good',
+            self::STATE_ON_GAP => 'warn',
+            self::STATE_ASSIGNED => 'info',
+            self::STATE_UNAVAILABLE => 'critical',
+        };
     }
 
     /** Why this examiner cannot be nominated right now, or null if they can. */

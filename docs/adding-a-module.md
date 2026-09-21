@@ -176,7 +176,53 @@ Route::middleware('auth')->group(function () {
 
 Three files under `app/Modules/<You>/Resources/views/conference/`:
 
-**`form.blade.php`** — extend `core::layouts.app`, use `.card.card-wide`.
+**`form.blade.php`** — extend `core::layouts.app` and open with the page
+header. The heading goes *above* the card, never inside it:
+
+```blade
+<div class="card-container-inline">
+    <x-core::page-header title="Conference Attendance"
+                         subtitle="One line saying what this screen is for." />
+
+    <div class="card card-wide">
+        ...the form...
+    </div>
+</div>
+```
+
+The width is the layout's job, not yours — see the page shell in
+`docs/conventions.md`.
+
+If it runs past about eight fields, make it a wizard. Two edits, no
+controller change — see the Forms section in `docs/conventions.md`:
+
+```blade
+<form method="POST" action="{{ route('conference.store') }}"
+      enctype="multipart/form-data" data-stepper>
+    @csrf
+
+    <fieldset class="fstep" data-label="Conference">
+        <p class="fstep-hint">Which conference, and when.</p>
+        ...fields...
+    </fieldset>
+
+    <fieldset class="fstep" data-label="Documents">
+        ...fields...
+    </fieldset>
+
+    <button type="submit">Submit Application</button>
+</form>
+
+@include('core::partials.form-stepper')
+```
+
+The progress rail, Back/Continue, and a generated review step are all built
+for you. The form still POSTs once, to the same route, with the same fields.
+
+The review step signs off with "Once submitted it goes to the first approver
+and you cannot edit it" — correct here, and on every form that files an
+application. A form that does something else (keeps a list, stores a file)
+says what it does instead with `data-stepper-review="..."` on the `<form>`.
 
 **`queue.blade.php`** — the whole file:
 
@@ -189,9 +235,21 @@ Three files under `app/Modules/<You>/Resources/views/conference/`:
         'moduleLabel' => 'Conference Attendance',
         'decideRoute' => 'conference.decide',
         'detailView'  => '<you>::conference._detail',
+
+        // Optional. A line about what deciding here means.
+        'intro' => 'Approving sends this to the Chair of Department.',
     ])
 @endsection
 ```
+
+The partial gives you the page header, search, sort, pagination, the rows as
+a collapsed list with how long each has waited, and bulk approve/reject. You
+supply the detail lines and nothing else.
+
+**Do not print anything above the include.** The partial renders the page
+header, so a `<p>` written before it lands above the page title and the screen
+reads as though it has no heading. That is what `intro` is for, and
+`tests/Feature/Core/PageShellTest.php` fails the build on it.
 
 **`_detail.blade.php`** — just your fields; the card, the student's name, the
 attachments and the approve/reject form are supplied by the shared partial:
@@ -242,3 +300,10 @@ Type-inject `DocumentStore $documents`. Never call `move_uploaded_file()`.
 
 Run `php artisan queue:work`, or set `QUEUE_CONNECTION=sync` in `.env`, or the
 emails sit in the queue.
+
+Then write that walk down as a test, in `tests/Feature/<You>/`. The five steps
+above are a feature test almost verbatim — `MakesUsers` gives you the cast, and
+asserting the stage after *each* decision rather than only the final status is
+what catches a chain that skips its middle approver.
+`tests/Feature/Nureen/GaExtensionTest.php` is the shortest example of exactly
+that shape. See `docs/conventions.md` → Tests.

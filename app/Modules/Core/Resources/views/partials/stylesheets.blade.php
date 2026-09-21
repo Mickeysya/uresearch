@@ -9,7 +9,11 @@
     dashboard-student.css lays out. Do not reorder these.
 
       uresearch.css       Norhanis' original. Never edited in place.
-      layout.css          page frame
+      tokens.css          the design system. Redefines uresearch.css's
+                          eleven :root variables, so it MUST load after
+                          it -- and everything else MUST load after this,
+                          or it styles against the old hard-coded values.
+      layout.css          page frame, and the shell every screen shares
       sidebar.css         sidebar nav
       dashboard-*.css     one dashboard screen each
       notifications.css   the /notifications feed
@@ -22,6 +26,7 @@
 --}}
 @foreach ([
     'uresearch',
+    'tokens',
     'layout',
     'sidebar',
     'dashboard-banner',

@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'GA Extension — ' . $stage->queueTitle())
+@section('title', 'GA Extension: ' . $stage->queueTitle())
 
 @section('content')
     @include('core::partials.queue', [

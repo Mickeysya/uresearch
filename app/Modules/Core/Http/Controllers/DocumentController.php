@@ -18,12 +18,9 @@ class DocumentController extends Controller
         $user = $request->user();
         $application = $document->application;
 
-        $mayView = $application->student_id === $user->id
-            || $user->hasRole(Role::ADMIN)
-            || $application->currentStage()?->role === $user->role
-            || $application->history()->where('approver_id', $user->id)->exists();
-
-        abort_unless($mayView, 403);
+        // The rule itself now lives on the model, because the Documents page
+        // has to apply the same one when deciding what to list.
+        abort_unless($document->visibleTo($user), 403);
         abort_unless($document->exists(), 404);
 
         // Who opened whose document, and when. `approval_history` records
