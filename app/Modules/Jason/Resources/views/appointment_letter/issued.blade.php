@@ -4,20 +4,19 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Issued Appointments</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header title="Issued Appointments" />
 
+    <div class="card card-wide">
         <p class="queue-meta">
             Every nomination the Dean has approved, and whether each examiner's pack
             actually reached the mail server. A pack is marked delivered only once the
-            mail transport accepts it — if a send fails, it stays undelivered here and
+            mail transport accepts it; if a send fails, it stays undelivered here and
             can be sent again. A resend posts the same documents the Dean approved.
         </p>
 
         <p class="queue-meta">
             Appointments approved before delivery tracking existed have nothing recorded
-            either way, so they read as not delivered. Resending one is harmless — the
+            either way, so they read as not delivered. Resending one is harmless: the
             examiner receives the same approved documents again.
         </p>
 
@@ -31,7 +30,7 @@
             @if ($pending->isNotEmpty())
                 <div class="message-warning">
                     {{ $pending->count() }} {{ Str::plural('pack', $pending->count()) }} not yet delivered.
-                    Resend below, or wait — a queued mail may still be in flight.
+                    Resend below, or wait: a queued mail may still be in flight.
                 </div>
             @endif
 

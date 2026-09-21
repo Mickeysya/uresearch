@@ -88,7 +88,7 @@
                     Another {{ $unavailable->count() }}
                     {{ Str::plural('examiner', $unavailable->count()) }}
                     {{ $unavailable->count() === 1 ? 'is' : 'are' }} on an appointment and
-                    {{ $unavailable->count() === 1 ? 'is' : 'are' }} not listed below — an examiner
+                    {{ $unavailable->count() === 1 ? 'is' : 'are' }} not listed below; an examiner
                     is free again {{ \App\Modules\Jason\Models\PoolExaminer::COOLDOWN_MONTHS }}
                     months after the Dean appoints them.
                     <a href="{{ route('appointment-letter.examiners') }}">See who, and until when</a>.
@@ -150,12 +150,12 @@
                             <div class="examiner-row-picker">
                                 <select name="examiners[{{ $i }}][pool_id]" required
                                         class="examiner-select @error("examiners.$i.pool_id") is-invalid @enderror">
-                                    <option value="">— Select an examiner —</option>
+                                    <option value="">Select an examiner</option>
                                     <optgroup label="Internal Examiners (UTP)" data-type="internal">
                                         @foreach ($internal as $e)
                                             <option value="{{ $e->id }}" data-type="internal"
                                                     @selected(($row['pool_id'] ?? '') == $e->id)>
-                                                {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
+                                                {{ $e->name }}, {{ $e->institution }} ({{ $e->expertise }})
                                             </option>
                                         @endforeach
                                     </optgroup>
@@ -163,7 +163,7 @@
                                         @foreach ($external as $e)
                                             <option value="{{ $e->id }}" data-type="external"
                                                     @selected(($row['pool_id'] ?? '') == $e->id)>
-                                                {{ $e->name }} — {{ $e->institution }} ({{ $e->expertise }})
+                                                {{ $e->name }}, {{ $e->institution }} ({{ $e->expertise }})
                                             </option>
                                         @endforeach
                                     </optgroup>

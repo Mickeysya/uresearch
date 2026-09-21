@@ -15,7 +15,7 @@
                     @foreach ($awaiting as $app)
                         @php($last = $app->history->last())
                         <li>
-                            <b>#{{ $app->id }}</b> — {{ $awaitingDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
+                            <b>#{{ $app->id }}</b>: {{ $awaitingDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
                             @if ($last)
                                 <br><span style="color: var(--text-grey);">
                                     {{ $last->stage_label }}@if ($last->remarks): “{{ $last->remarks }}”@endif
@@ -29,7 +29,7 @@
                     @endforeach
                 </ul>
                 <p class="queue-meta" style="margin: 6px 0 0;">
-                    Correct what was asked and resubmit, or appeal if you disagree — you can do one or
+                    Correct what was asked and resubmit, or appeal if you disagree; you can do one or
                     the other, not both. The form below starts a brand-new submission instead.
                 </p>
             </div>

@@ -2308,10 +2308,17 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 .approver-panel { min-height: 0; }
 
 /* Named *-scroll on purpose: dashboard-states.css hides the bar on anything
-   matching [class*="-scroll"]. The panel scrolls, the bar does not show. */
+   matching [class*="-scroll"]. The panel scrolls, the bar does not show --
+   which is exactly why this needs a floor rather than min-height: 0. A
+   panel squeezed thinner than its content still scrolls to reach the rest,
+   but with no visible bar there is nothing telling anyone that; below this
+   floor it reads as empty instead of as short. The figure is a guess at
+   "one line of an empty-state message plus a little air," not a budget
+   anything is expected to fill -- real content still shrinks to it exactly
+   as before. */
 .approver-scroll {
     flex: 1 1 auto;
-    min-height: 0;
+    min-height: 4rem;
     overflow-y: auto;
 }
 
@@ -2348,20 +2355,38 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 .approver-alert.tone-info     { background: var(--info-bg); color: var(--info-fg); border-color: var(--info-border); }
 
 /* ---- the two panel rows ----
-   auto-fit rather than a fixed two, so the pair sits side by side on a
-   desktop and stacks on a tablet without a breakpoint of its own. */
-/* Two panels side by side on a desktop, stacked on a tablet, and on a very
-   wide screen still two rather than four -- the row has two children, so
-   auto-fit collapses the tracks they do not fill and they split the width
-   evenly however wide it gets. The minimum is what decides when they stack. */
+   Stacked below 1201px -- the same threshold the one-screen lock and
+   .approver-row-aside's own split both use -- and explicit tracks above it,
+   not auto-fit.
+
+   auto-fit's minmax(min(100%, 26rem), 1fr) was written assuming this class
+   only ever holds two panels (true of .approver-row-aside alone), where an
+   uneven wrap is impossible: two items either both fit a track each or both
+   drop to one column. But chair.blade.php, approver.blade.php and
+   supervisor.blade.php all use the *base* .approver-row for their first
+   row, which holds three. Between roughly 1201 and 1580px wide, three
+   26rem tracks did not fit but two did, so auto-fit wrapped 2-then-1: the
+   third panel dropped into a second implicit grid row of its own, halving
+   that row's share of the one-screen height lock below and pushing its
+   neighbours' content out of a scroll area whose scrollbar is deliberately
+   hidden (see .approver-scroll) -- so it simply looked blank, with nothing
+   on screen saying there was more to see.
+
+   Three explicit tracks can only ever be one row, whatever the width. */
 .approver-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-5);
     /* stretch, not start: on the locked one-screen layout a panel that sits
        at its content height leaves the rest of the row empty, and on a
        natural-height page equal heights simply read tidier than ragged. */
     align-items: stretch;
+}
+
+@media (min-width: 1201px) {
+    .approver-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
 .approver-panel { min-width: 0; }
@@ -2543,10 +2568,19 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 }
 
 /* An empty panel still owns its share of the row, so its message belongs in
-   the middle of that space rather than in a short box with a gap under it. */
+   the middle of that space rather than in a short box with a gap under it.
+
+   The base .empty-state rule's padding (space-10 top/bottom) assumes a
+   full-width page block and does not shrink with its box -- squeezed below
+   about 130px tall by the one-screen lock, the padding alone exceeded the
+   space available and pushed the text past it, out of .approver-scroll's
+   clipped, scrollbar-hidden overflow. A smaller, fixed padding here keeps
+   the message inside whatever height this panel actually has, instead of
+   the one the unconstrained rule assumed it would. */
 .approver-panel > .empty-state {
     flex: 1 1 auto;
     min-height: 0;
+    padding: var(--space-3) var(--space-4);
     display: flex;
     flex-direction: column;
     align-items: center;

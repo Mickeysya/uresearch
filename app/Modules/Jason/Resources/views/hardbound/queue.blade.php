@@ -3,18 +3,6 @@
 @section('title', 'Hardbound Submission: ' . $stage->queueTitle())
 
 @section('content')
-    @if ($errors->any())
-        {{-- Core's layout flashes session messages but never renders the
-             validation error bag, and the shared queue partial has no slot for
-             it, so a failed rule would bounce the reviewer back to an unchanged
-             page with no explanation. --}}
-        <div class="message-error">
-            @foreach ($errors->all() as $message)
-                <p style="margin: 0;">{{ $message }}</p>
-            @endforeach
-        </div>
-    @endif
-
     {{-- Passed INTO the partial, not written above it: the partial renders
          the page header, so anything printed before the include lands above
          the page title and the screen reads as though it has no heading.
@@ -35,6 +23,18 @@
 
         if ($stage->key !== 'cgs_review') {
             $intro .= ' <a href="'.route('hardbound.signature').'">Check the signature on file &rarr;</a>';
+        }
+
+        // Core's layout flashes session messages but never renders the
+        // validation error bag, and the shared queue partial has no slot
+        // for it, so a failed rule would bounce the reviewer back to an
+        // unchanged page with no explanation. Prepended onto $intro rather
+        // than a separate block, since the partial only takes the one.
+        if ($errors->any()) {
+            $intro = '<div class="message-error">'
+                .collect($errors->all())->map(fn ($message) => '<p style="margin: 0;">'.e($message).'</p>')->implode('')
+                .'</div>'
+                .$intro;
         }
     @endphp
 

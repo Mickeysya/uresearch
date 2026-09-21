@@ -3,22 +3,25 @@
 @section('title', 'Appointment Letter: ' . $stage->queueTitle())
 
 @section('content')
-    @if ($errors->any())
-        {{-- Core's layout flashes session messages but never renders the
-             validation error bag, and the shared queue partial has no slot for
-             it, so a failed rule would bounce the reviewer back to an unchanged
-             page with no explanation. --}}
-        <div class="message-error">
-            @foreach ($errors->all() as $message)
-                <p style="margin: 0;">{{ $message }}</p>
-            @endforeach
-        </div>
-    @endif
+    @php
+        // Core's layout flashes session messages but never renders the
+        // validation error bag, and the shared queue partial has no slot for
+        // it, so a failed rule would bounce the reviewer back to an
+        // unchanged page with no explanation. Built as HTML and passed as
+        // 'intro' rather than printed here: anything above the include
+        // lands above the page title (see PageShellTest).
+        $intro = $errors->any()
+            ? '<div class="message-error">'
+                .collect($errors->all())->map(fn ($message) => '<p style="margin: 0;">'.e($message).'</p>')->implode('')
+                .'</div>'
+            : null;
+    @endphp
 
     @include('core::partials.queue', [
         'moduleLabel' => 'Appointment Letter',
         'decideRoute' => 'appointment-letter.decide',
         'detailView' => 'jason::appointment_letter._detail',
+        'intro' => $intro,
     ])
 
     {{-- Below the list, not above the page title. It is context on the

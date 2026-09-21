@@ -130,11 +130,11 @@
                             <td><span class="pool-expertise">{{ $examiner->expertise }}</span></td>
                             <td>
                                 @if (! $examiner->is_active)
-                                    <span style="color: var(--text-grey);">&mdash;</span>
+                                    <span style="color: var(--text-grey);">—</span>
                                 @elseif ($examiner->isAvailable())
                                     <span style="color: #1c7c3f;">Available</span>
                                 @else
-                                    <span style="color: #a0521d;">Not available &mdash;<br>{{ $examiner->unavailableLabel() }}</span>
+                                    <span style="color: #a0521d;">Not available:<br>{{ $examiner->unavailableLabel() }}</span>
                                 @endif
                             </td>
                             <td>
