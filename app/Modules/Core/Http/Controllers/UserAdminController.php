@@ -4,6 +4,7 @@ namespace App\Modules\Core\Http\Controllers;
 
 use App\Modules\Core\Models\Department;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Faculty;
 use App\Modules\Core\Support\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -49,7 +50,7 @@ class UserAdminController extends Controller
         return view('core::admin.users.form', [
             'user' => new User(),
             'roles' => Role::staffRoles(),
-            'departments' => Department::where('is_active', true)->orderBy('name')->pluck('name'),
+            'departmentGroups' => $this->departmentOptions(),
         ]);
     }
 
@@ -77,20 +78,49 @@ class UserAdminController extends Controller
     {
         abort_if($user->isStudent(), 404);
 
-        $departments = Department::where('is_active', true)->orderBy('name')->pluck('name');
+        return view('core::admin.users.form', [
+            'user' => $user,
+            'roles' => Role::staffRoles(),
+            'departmentGroups' => $this->departmentOptions($user),
+        ]);
+    }
+
+    /**
+     * The picker, grouped under the faculty each department sits in — the same
+     * shape the department list itself is shown in, so the two screens read
+     * the same way round.
+     *
+     * @return array<string, array<int, string>>
+     */
+    protected function departmentOptions(?User $user = null): array
+    {
+        $departments = Department::where('is_active', true)->orderBy('name')->get();
+        $groups = [];
+
+        foreach (Faculty::all() as $code) {
+            $names = $departments->where('faculty', $code)->pluck('name')->all();
+
+            if ($names !== []) {
+                $groups[Faculty::label($code)] = $names;
+            }
+        }
+
+        $unfiled = $departments
+            ->reject(fn ($department) => in_array($department->faculty, Faculty::all(), true))
+            ->pluck('name')->all();
+
+        if ($unfiled !== []) {
+            $groups['Not under a faculty'] = $unfiled;
+        }
 
         // A department retired since this account was placed under it must
         // still appear as an option, or saving the form with nothing else
         // changed would silently clear it.
-        if ($user->department && ! $departments->contains($user->department)) {
-            $departments = $departments->push($user->department)->sort()->values();
+        if ($user?->department && ! $departments->pluck('name')->contains($user->department)) {
+            $groups['On this account already'] = [$user->department];
         }
 
-        return view('core::admin.users.form', [
-            'user' => $user,
-            'roles' => Role::staffRoles(),
-            'departments' => $departments,
-        ]);
+        return $groups;
     }
 
     public function update(Request $request, User $user)

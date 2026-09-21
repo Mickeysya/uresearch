@@ -4,8 +4,11 @@ namespace App\Modules\Core\Http\Controllers;
 
 use App\Modules\Core\Models\Department;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Faculty;
+use App\Modules\Core\Support\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * The department picker admin and CGS use everywhere else: on the "add a
@@ -29,9 +32,33 @@ class DepartmentAdminController extends Controller
             ->groupBy('department')
             ->pluck('aggregate', 'department');
 
+        // Who covers each department's examiner-nomination queue. A department
+        // with nobody here has a queue nothing can clear, which is the one
+        // thing this screen is worth showing at a glance.
+        $execs = User::where('role', Role::ACADEMIC_EXEC)
+            ->whereNotNull('department')
+            ->orderBy('name')
+            ->get(['id', 'name', 'department'])
+            ->groupBy('department');
+
+        $departments = Department::orderBy('name')->get();
+
+        // Faculty order is the university's own (Faculty::all()), not
+        // alphabetical, with anything unfiled gathered at the end under ''.
+        $groups = collect(Faculty::all())->push('')
+            ->map(fn ($code) => [
+                'code' => $code,
+                'label' => $code === '' ? 'Not under a faculty' : Faculty::label($code),
+                'note' => $code === '' ? 'Added by hand, or left over from before the list was settled.' : Faculty::note($code),
+                'departments' => $departments->where('faculty', $code === '' ? null : $code)->values(),
+            ])
+            ->filter(fn ($group) => $group['departments']->isNotEmpty())
+            ->values();
+
         return view('core::admin.departments.index', [
-            'departments' => Department::orderBy('name')->get(),
+            'groups' => $groups,
             'counts' => $counts,
+            'execs' => $execs,
         ]);
     }
 
@@ -44,6 +71,7 @@ class DepartmentAdminController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150', 'unique:departments,name'],
+            'faculty' => ['nullable', Rule::in(Faculty::all())],
         ]);
 
         Department::create($data + ['is_active' => true]);
@@ -61,20 +89,29 @@ class DepartmentAdminController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150', 'unique:departments,name,'.$department->id],
+            'faculty' => ['nullable', Rule::in(Faculty::all())],
         ]);
 
         $old = $department->name;
         $new = $data['name'];
 
-        if ($old !== $new) {
-            DB::transaction(function () use ($department, $old, $new) {
-                $department->update(['name' => $new]);
+        // The faculty is this table's own business -- no account is filed
+        // under it -- so it saves either way; only the name has to reach
+        // `users` too, and only when it actually changed.
+        if ($old === $new) {
+            $department->update(['faculty' => $data['faculty'] ?? null]);
+        } else {
+            DB::transaction(function () use ($department, $data, $old, $new) {
+                $department->update(['name' => $new, 'faculty' => $data['faculty'] ?? null]);
                 User::where('department', $old)->update(['department' => $new]);
             });
         }
 
-        return redirect()->route('admin.departments.index')
-            ->with('status', "Department renamed to \"{$new}\". Every account under the old name now carries the new one.");
+        $status = $old === $new
+            ? "\"{$new}\" saved."
+            : "Department renamed to \"{$new}\". Every account under the old name now carries the new one.";
+
+        return redirect()->route('admin.departments.index')->with('status', $status);
     }
 
     /**

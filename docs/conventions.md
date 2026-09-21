@@ -523,9 +523,10 @@ One branch per person: `feature/<name>-<module>`, e.g. `feature/nureen-attendanc
 checkout in a state the app cannot run in, and none of it is obvious:
 `composer.lock` may have changed, a teammate may have added a key to
 `.env.example` that your git-ignored `.env` does not have, there may be pending
-migrations, compiled Blade views from the previous branch are still being
-served, and `queue:work` holds the app in memory so the queue worker is still
-running pre-pull code. `./sync.sh --check` reports all of that without changing
+migrations, a migration may have added a column the seeder is what actually
+fills (the department list is the usual one), compiled Blade views from the
+previous branch are still being served, and `queue:work` holds the app in
+memory so the queue worker is still running pre-pull code. `./sync.sh --check` reports all of that without changing
 anything.
 
 Because you only touch your own folder, conflicts should be rare. If you hit

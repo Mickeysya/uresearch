@@ -107,10 +107,11 @@ git pull
 `sync.sh` does everything a pull or a branch switch can require, and is safe
 to re-run: installs dependencies if `composer.lock` changed, copies across any
 new setting a teammate added to `.env.example` (your own `.env` is git-ignored,
-so a pull never updates it), runs pending migrations, clears compiled Blade
-views and config left over from the previous branch, and restarts the queue
-worker, which holds the app in memory and otherwise keeps running pre-pull
-code.
+so a pull never updates it), runs pending migrations, re-seeds the reference
+data a migration cannot fill in for itself (the department list, the test
+accounts — whose passwords go back to `password`), clears compiled Blade views
+and config left over from the previous branch, and restarts the queue worker,
+which holds the app in memory and otherwise keeps running pre-pull code.
 
 To see what it would do without changing anything:
 
@@ -204,7 +205,8 @@ Created by the seeder. **Every one uses the password `password`.**
 | `cgs@utp.edu.my` | Non-Executive CGS | reviews international travel, verifies GA extensions |
 | `dean@utp.edu.my` | Dean of PGR | **final approval for international travel** |
 | `director@utp.edu.my` | Senior Director CGS | final approval for GA extensions |
-| `ae@utp.edu.my` | Academic Executive | approves examiner nominations |
+| `ae@utp.edu.my` | Academic Executive | approves examiner nominations, for Computing |
+| `ae.chemical@utp.edu.my` … | Academic Executive | one per department — `ae.<department>@utp.edu.my`, e.g. `ae.civil`, `ae.petroleum`, `ae.management`. Each sees only their own department's queue; the departments screen lists them all |
 | `seniorexec@utp.edu.my` | Senior Executive CGS | rules on hardbound appeals |
 | `manager@utp.edu.my` | Manager CGS | approves claims |
 | `faculty@utp.edu.my` | Faculty | signs off an RPD dismissal before the Registry |

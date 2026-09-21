@@ -47,8 +47,12 @@
             <label for="department">Department <span style="color: var(--text-grey);">(optional)</span></label>
             <select name="department" id="department" class="@error('department') is-invalid @enderror">
                 <option value="">No department</option>
-                @foreach ($departments as $department)
-                    <option value="{{ $department }}" @selected(old('department', $user->department) === $department)>{{ $department }}</option>
+                @foreach ($departmentGroups as $faculty => $names)
+                    <optgroup label="{{ $faculty }}">
+                        @foreach ($names as $department)
+                            <option value="{{ $department }}" @selected(old('department', $user->department) === $department)>{{ $department }}</option>
+                        @endforeach
+                    </optgroup>
                 @endforeach
             </select>
             <p class="field-hint">

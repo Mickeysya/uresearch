@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Modules\Core\Models\Department;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Faculty;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
 use Illuminate\Database\Seeder;
@@ -24,14 +25,15 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->departments();
+        $this->academicExecs();
 
         $supervisor = $this->user('Dr. Aisyah Rahman', 'supervisor@utp.edu.my', Role::SUPERVISOR, [
-            'department' => 'Computer & Information Sciences',
+            'department' => 'Computing',
             'faculty' => 'FSMC',
         ]);
 
         $this->user('Dr. Lim Wei Chun', 'chair@utp.edu.my', Role::CHAIR, [
-            'department' => 'Computer & Information Sciences',
+            'department' => 'Computing',
             'faculty' => 'FSMC',
         ]);
 
@@ -44,7 +46,7 @@ class DatabaseSeeder extends Seeder
         $this->user('En Zulkifly', 'director@utp.edu.my', Role::SENIOR_DIRECTOR_CGS, ['department' => 'CGS']);
         $this->user('Prof. Dr. Hafiz Osman', 'dean@utp.edu.my', Role::DEAN_PGR, ['department' => 'PGR']);
         $this->user('Siti Academic Exec', 'ae@utp.edu.my', Role::ACADEMIC_EXEC, [
-            'department' => 'Computer & Information Sciences',
+            'department' => 'Computing',
             'faculty' => 'FSMC',
         ]);
         // Faculty signs off an RPD dismissal between the Dean's endorsement
@@ -60,7 +62,7 @@ class DatabaseSeeder extends Seeder
         $this->user('Ahmad Danial', 'student@utp.edu.my', Role::STUDENT, [
             'matric_no' => '22001001',
             'programme' => 'MSc Full-Time',
-            'department' => 'Computer & Information Sciences',
+            'department' => 'Computing',
             'faculty' => 'FSMC',
             'supervisor_id' => $supervisor->id,
         ]);
@@ -68,7 +70,7 @@ class DatabaseSeeder extends Seeder
         $this->user('Nur Farah Adilah', 'student2@utp.edu.my', Role::STUDENT, [
             'matric_no' => '22001002',
             'programme' => 'PhD Part-Time',
-            'department' => 'Computer & Information Sciences',
+            'department' => 'Computing',
             'faculty' => 'FSMC',
             'supervisor_id' => $supervisor->id,
         ]);
@@ -84,39 +86,129 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
-     * The 17 UTP departments CGS actually has, so the department field on
-     * the "add a user" screen (UserAdminController) and the department
-     * admin screen (DepartmentAdminController) are not empty on a fresh
-     * database. This is the reference list; Computer & Information Sciences
-     * below is the seeder's own long-standing spelling and is left as is
-     * rather than forced to match #4's "Science" (singular), so existing
-     * accounts are not silently moved to a different department.
+     * The university's own list: the two foundation streams, the Faculty of
+     * Engineering's six departments and FSMC's four, each filed under its
+     * faculty so the picker and the admin list can group them. CGS has none
+     * of its own -- it routes MSc and PhD candidates into these same
+     * departments at postgraduate level.
+     */
+    protected const FACULTY_DEPARTMENTS = [
+        Faculty::CFS => [
+            'Foundation in Business Management & Computing',
+            'Foundation in Engineering & Science',
+        ],
+        Faculty::FOE => [
+            'Chemical Engineering',
+            'Civil & Environmental Engineering',
+            'Electrical & Electronics Engineering',
+            'Integrated Engineering',
+            'Mechanical Engineering',
+            'Petroleum Engineering',
+        ],
+        Faculty::FSMC => [
+            'Applied Sciences',
+            'Computing',
+            'Geosciences',
+            'Management',
+        ],
+    ];
+
+    /**
+     * What the flat seventeen-name list called them, and the canonical name
+     * each one became. Accounts move with the name: `users.department` is
+     * free text, so an account left under a name nothing lists any more falls
+     * out of the Chair and Academic Executive queues that filter on it (see
+     * Role::isDepartmentScoped()).
+     */
+    protected const RENAMED_DEPARTMENTS = [
+        'Computer & Information Science' => 'Computing',
+        'Computer & Information Sciences' => 'Computing',
+        'Information Technology' => 'Computing',
+        'Electrical & Electronic Engineering' => 'Electrical & Electronics Engineering',
+        'Civil Engineering' => 'Civil & Environmental Engineering',
+        'Applied Science' => 'Applied Sciences',
+        'Fundamental & Applied Science' => 'Applied Sciences',
+        'Geoscience' => 'Geosciences',
+        'Petroleum Geoscience' => 'Geosciences',
+        'Management & Humanities' => 'Management',
+    ];
+
+    /** Left over from that list, and not a department of anything. */
+    protected const DROPPED_DEPARTMENTS = [
+        'Science',
+        'Faculty of Science, Management & Computing',
+    ];
+
+    /**
+     * One Academic Executive per department, because the examiner-nomination
+     * queue is department-scoped (Role::isDepartmentScoped()): a department
+     * with nobody on this desk has a queue nothing can clear, which is what
+     * the departments screen calls out in amber.
+     *
+     * Computing is not here -- ae@utp.edu.my, the roster account above,
+     * covers it. The rest are addressed ae.<department>@utp.edu.my so the one
+     * you want is guessable from the department name.
+     */
+    protected const ACADEMIC_EXECS = [
+        'Foundation in Business Management & Computing' => ['Puan Raihanah Mokhtar', 'ae.foundation.business'],
+        'Foundation in Engineering & Science' => ['En Faizal Ramli', 'ae.foundation.engineering'],
+        'Chemical Engineering' => ['Puan Hafizah Malik', 'ae.chemical'],
+        'Civil & Environmental Engineering' => ['En Khairul Anuar', 'ae.civil'],
+        'Electrical & Electronics Engineering' => ['Puan Suraya Ismail', 'ae.electrical'],
+        'Integrated Engineering' => ['En Yusri Abdullah', 'ae.integrated'],
+        'Mechanical Engineering' => ['En Danial Hakimi', 'ae.mechanical'],
+        'Petroleum Engineering' => ['Puan Norazlina Samad', 'ae.petroleum'],
+        'Applied Sciences' => ['Puan Vimala Krishnan', 'ae.applied'],
+        'Geosciences' => ['En Amirul Hakim', 'ae.geosciences'],
+        'Management' => ['Puan Lee Siew Mei', 'ae.management'],
+    ];
+
+    /** The faculty each one inherits is the department's own, not a second list. */
+    protected function academicExecs(): void
+    {
+        $facultyOf = [];
+
+        foreach (self::FACULTY_DEPARTMENTS as $faculty => $names) {
+            foreach ($names as $name) {
+                $facultyOf[$name] = $faculty;
+            }
+        }
+
+        foreach (self::ACADEMIC_EXECS as $department => [$name, $handle]) {
+            $this->user($name, $handle.'@utp.edu.my', Role::ACADEMIC_EXEC, [
+                'department' => $department,
+                'faculty' => $facultyOf[$department] ?? null,
+            ]);
+        }
+    }
+
+    /**
+     * Brings the department list to the canonical one above, so the picker on
+     * the "add a user" screen (UserAdminController) and the department screen
+     * (DepartmentAdminController) show the university's actual shape.
+     *
+     * Renaming is the same two-step write DepartmentAdminController::update()
+     * does -- the row and every account under the old name, together.
      */
     protected function departments(): void
     {
-        $names = [
-            'Chemical Engineering',
-            'Civil & Environmental Engineering',
-            'Civil Engineering',
-            'Computer & Information Science',
-            'Computing',
-            'Applied Science',
-            'Science',
-            'Electrical & Electronic Engineering',
-            'Faculty of Science, Management & Computing',
-            'Fundamental & Applied Science',
-            'Geoscience',
-            'Information Technology',
-            'Management',
-            'Management & Humanities',
-            'Mechanical Engineering',
-            'Petroleum Engineering',
-            'Petroleum Geoscience',
-        ];
-
-        foreach ($names as $name) {
-            Department::updateOrCreate(['name' => $name], ['is_active' => true]);
+        foreach (self::RENAMED_DEPARTMENTS as $old => $new) {
+            Department::where('name', $old)->delete();
+            User::where('department', $old)->update(['department' => $new]);
         }
+
+        foreach (self::FACULTY_DEPARTMENTS as $faculty => $names) {
+            foreach ($names as $name) {
+                Department::updateOrCreate(['name' => $name], ['faculty' => $faculty, 'is_active' => true]);
+            }
+        }
+
+        // Deleted rather than retired: nothing is filed under these, so there
+        // is no history to keep them valid for. Anything an admin added by
+        // hand is left alone -- only the names this seeder itself wrote.
+        Department::whereIn('name', self::DROPPED_DEPARTMENTS)
+            ->whereNotIn('name', User::whereNotNull('department')->distinct()->pluck('department'))
+            ->delete();
     }
 
     protected function user(string $name, string $email, string $role, array $extra = []): User
@@ -142,7 +234,7 @@ class DatabaseSeeder extends Seeder
             // Available: last examined well beyond the 90-day gap.
             ['Dr. Chandra Segaran', 'chandra@utp.edu.my', 'Civil Engineering', 'FOE', 'internal', true, '-200 days', null, []],
             // On gap: examined 30 days ago.
-            ['Prof. Madya Dr. Nabila Yusof', 'nabila@um.edu.my', 'Computer & Information Sciences', null, 'external', true, '-30 days', null, [
+            ['Prof. Madya Dr. Nabila Yusof', 'nabila@um.edu.my', 'Computing', null, 'external', true, '-30 days', null, [
                 'institution' => 'Universiti Malaya (UM)',
                 'sector' => 'research',
                 'faculty_approval' => '2.2023',
@@ -154,7 +246,7 @@ class DatabaseSeeder extends Seeder
                 'first_examination_date' => '-2 years',
             ]],
             // Assigned: tied to an active case.
-            ['Dr. Tan Boon Keat', 'tan@usm.edu.my', 'Computer & Information Sciences', null, 'external', true, null, '+45 days', [
+            ['Dr. Tan Boon Keat', 'tan@usm.edu.my', 'Computing', null, 'external', true, null, '+45 days', [
                 'institution' => 'Universiti Sains Malaysia (USM)',
                 'sector' => 'technical',
                 'faculty_approval' => '1.2024',

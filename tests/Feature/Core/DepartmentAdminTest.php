@@ -3,6 +3,7 @@
 namespace Tests\Feature\Core;
 
 use App\Modules\Core\Models\Department;
+use App\Modules\Core\Support\Faculty;
 use App\Modules\Core\Support\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\MakesUsers;
@@ -82,6 +83,48 @@ class DepartmentAdminTest extends TestCase
         $this->assertSame('Computing and Information Technology', $chair->fresh()->department);
         $this->assertSame('Computing and Information Technology', $ae->fresh()->department);
         $this->assertSame('Geoscience', $unrelated->fresh()->department, 'A different department must not move.');
+    }
+
+    public function test_a_department_is_added_under_its_faculty_and_listed_below_it(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->post(route('admin.departments.store'), ['name' => 'Petroleum Engineering', 'faculty' => Faculty::FOE])
+            ->assertRedirect(route('admin.departments.index'));
+
+        $this->assertDatabaseHas('departments', ['name' => 'Petroleum Engineering', 'faculty' => Faculty::FOE]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.departments.index'))
+            ->assertOk()
+            ->assertSeeInOrder([Faculty::label(Faculty::FOE), 'Petroleum Engineering']);
+    }
+
+    public function test_a_faculty_nobody_has_is_rejected(): void
+    {
+        $this->actingAs($this->admin())
+            ->post(route('admin.departments.store'), ['name' => 'School of Wizardry', 'faculty' => 'HOGWARTS'])
+            ->assertSessionHasErrors('faculty');
+
+        $this->assertDatabaseMissing('departments', ['name' => 'School of Wizardry']);
+    }
+
+    /**
+     * The faculty is this table's own business -- no account is filed under
+     * it -- so saving one must not touch the accounts the way a rename does.
+     */
+    public function test_moving_a_department_to_another_faculty_leaves_its_accounts_alone(): void
+    {
+        $department = Department::create(['name' => 'Computing', 'faculty' => Faculty::FOE, 'is_active' => true]);
+        $chair = $this->user(Role::CHAIR, ['name' => 'A Chair', 'email' => 'a-chair@test.my', 'department' => 'Computing']);
+
+        $this->actingAs($this->admin())
+            ->put(route('admin.departments.update', $department), ['name' => 'Computing', 'faculty' => Faculty::FSMC])
+            ->assertRedirect(route('admin.departments.index'));
+
+        $this->assertSame(Faculty::FSMC, $department->fresh()->faculty);
+        $this->assertSame('Computing', $chair->fresh()->department);
     }
 
     public function test_retiring_and_reactivating_a_department(): void

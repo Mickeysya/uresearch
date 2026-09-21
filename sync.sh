@@ -2,8 +2,8 @@
 # UResearch 2.0 — bring your checkout back into a working state after a
 # `git pull`, a branch switch, or a merge.
 #
-# Everything here is safe to re-run and nothing destroys data. Use ./reset.sh
-# if you actually want the database wiped and reseeded.
+# Everything here is safe to re-run and nothing destroys data: it migrates and
+# re-seeds, it never drops. Use ./reset.sh if you want the database wiped.
 #
 #   ./sync.sh            do it all
 #   ./sync.sh --check    report what WOULD change; touch nothing
@@ -233,6 +233,35 @@ if [ -x ./vendor/bin/sail ] && container_up uresearch-mysql; then
     else
         warn "could not read migration status — is the database reachable?"
         printf '%s\n' "$STATUS" | tail -3 | sed 's/^/      /'
+    fi
+else
+    warn "skipped — containers are not up"
+fi
+
+# ---------------------------------------------------------------------------
+say "Reference data"
+# ---------------------------------------------------------------------------
+# The other half of a schema change. A migration adds the column; the rows
+# themselves are the seeder's business, so a pull that adds a department, a
+# test account or a role needs this as well as `migrate` -- without it you get
+# the new column and the old data, which looks like a broken feature.
+#
+# Safe on every run: the seeder is updateOrCreate throughout, so once you are
+# up to date it changes nothing. It is not ./reset.sh -- nothing is dropped.
+# The one thing it does put back: the test accounts' passwords return to
+# `password`, which is what they are for.
+if [ -x ./vendor/bin/sail ] && container_up uresearch-mysql; then
+    if [ "$CHECK_ONLY" -eq 1 ]; then
+        note "seed reference data (departments, test accounts)"
+        warn "would re-seed departments and test accounts"
+        info "(test account passwords go back to 'password')"
+    else
+        if SEED_OUT="$(artisan db:seed --force 2>&1)"; then
+            ok "departments and test accounts are up to date"
+        else
+            warn "seeding failed — the rest of the sync still applied:"
+            printf '%s\n' "$SEED_OUT" | tail -5 | sed 's/^/      /'
+        fi
     fi
 else
     warn "skipped — containers are not up"

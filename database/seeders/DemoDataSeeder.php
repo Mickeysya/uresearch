@@ -200,10 +200,10 @@ class DemoDataSeeder extends Seeder
     {
         $rows = [
             ['Dr. Farid Kamal', 'farid.kamal@utp.edu.my', Role::SUPERVISOR, 'Chemical Engineering', 'FOE'],
-            ['Dr. Siti Nurhaliza', 'siti.nurhaliza@utp.edu.my', Role::SUPERVISOR, 'Electrical & Electronic Engineering', 'FOE'],
-            ['Prof. Dr. Kumaran Vellu', 'kumaran.vellu@utp.edu.my', Role::SUPERVISOR, 'Computer & Information Sciences', 'FSMC'],
+            ['Dr. Siti Nurhaliza', 'siti.nurhaliza@utp.edu.my', Role::SUPERVISOR, 'Electrical & Electronics Engineering', 'FOE'],
+            ['Prof. Dr. Kumaran Vellu', 'kumaran.vellu@utp.edu.my', Role::SUPERVISOR, 'Computing', 'FSMC'],
             ['Dr. Mei Ling Tan', 'meiling.tan@utp.edu.my', Role::CHAIR, 'Chemical Engineering', 'FOE'],
-            ['Dr. Zulhilmi Rahman', 'zulhilmi.rahman@utp.edu.my', Role::ACADEMIC_EXEC, 'Electrical & Electronic Engineering', 'FOE'],
+            ['Dr. Zulhilmi Rahman', 'zulhilmi.rahman@utp.edu.my', Role::ACADEMIC_EXEC, 'Electrical & Electronics Engineering', 'FOE'],
         ];
 
         return collect($rows)->map(fn ($r) => $this->user($r[0], $r[1], $r[2], [
@@ -230,9 +230,9 @@ class DemoDataSeeder extends Seeder
         $programmes = ['MSc Full-Time', 'MSc Part-Time', 'PhD Full-Time', 'PhD Part-Time'];
 
         $departments = [
-            ['Computer & Information Sciences', 'FSMC'],
+            ['Computing', 'FSMC'],
             ['Chemical Engineering', 'FOE'],
-            ['Electrical & Electronic Engineering', 'FOE'],
+            ['Electrical & Electronics Engineering', 'FOE'],
         ];
 
         $supervisors = [

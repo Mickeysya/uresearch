@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Department extends Model
 {
-    protected $fillable = ['name', 'is_active'];
+    protected $fillable = ['name', 'faculty', 'is_active'];
 
     protected function casts(): array
     {
