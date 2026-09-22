@@ -78,6 +78,32 @@ class SidebarQueuesTest extends TestCase
     }
 
     /**
+     * CGS's loose tools collapse into one tree. Eight links from four
+     * modules -- the examiner pool, the appointment list, a signature, the
+     * RPD masterlist -- were stacked flat under one label, which is a list
+     * nobody reads to the bottom of.
+     */
+    public function test_the_cgs_actions_list_is_a_tree(): void
+    {
+        $cgs = $this->cgs();
+
+        $actions = collect(app(ModuleRegistry::class)->linksFor($cgs))
+            ->reject(fn ($l) => in_array($l['route'], ['attendance.upload.form', 'attendance.at-risk'], true));
+
+        $this->assertGreaterThan(3, $actions->count(), 'This is a tree because CGS owns more than a handful.');
+
+        $html = $this->actingAs($cgs)->get(route('dashboard'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('class="nav-item nav-tree-trigger" title="Actions"', $html);
+        $this->assertStringNotContainsString('nav-item-flat', $html, 'CGS should have no flat action links left.');
+
+        // Collapsed, not dropped.
+        foreach ($actions as $action) {
+            $this->assertStringContainsString($action['label'], $html, "'{$action['label']}' must still be reachable.");
+        }
+    }
+
+    /**
      * Flat-or-collapsed counts MODULES, not stages: the Academic Executive
      * owns six stages across three modules, which reads as three items.
      */

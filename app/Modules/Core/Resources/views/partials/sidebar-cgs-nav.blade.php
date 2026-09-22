@@ -109,10 +109,12 @@
 </a>
 
 {{-- ---- Administration --------------------------------------------------
-     Non-Executive CGS only (route middleware enforces this regardless):
-     Puan Waheeda is who actually fields "add another AE for this
-     department", not the system administrator, who owns no workflow stage.
-     See Role::isDepartmentScoped() and routes.php's shared admin.* group. --}}
+     Non-Executive CGS only (route middleware enforces this regardless), and
+     read-only: the department list says who covers each department's
+     Academic Executive queue, which is a fact CGS works from daily. Adding
+     or retiring a department, and everything on Users and Roles, belongs to
+     the administrator -- so no link to either is placed here.
+     See Role::isDepartmentScoped() and routes.php's admin.* groups. --}}
 @if (auth()->user()?->role === \App\Modules\Core\Support\Role::NON_EXEC_CGS)
     <div class="nav-section-label"><span class="nav-label">Administration</span></div>
 
@@ -121,13 +123,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
         </span>
         <span class="nav-label">Departments</span>
-    </a>
-
-    <a href="{{ route('admin.users.index') }}" class="nav-item @if(request()->routeIs('admin.users.*')) active @endif" title="Users and Roles">
-        <span class="nav-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/><path d="M19 3.5v4"/><path d="M17 5.5h4"/></svg>
-        </span>
-        <span class="nav-label">Users and Roles</span>
     </a>
 @endif
 
@@ -138,10 +133,32 @@
         ->reject(fn ($l) => in_array($l['route'], $attendanceLinkRoutes, true));
 @endphp
 @if ($unplacedLinks->isNotEmpty())
-    <div class="nav-section-label"><span class="nav-label">Actions</span></div>
-    @foreach ($unplacedLinks as $link)
-        <a href="{{ route($link['route'], $link['params'] ?? []) }}" class="nav-item nav-item-flat" title="{{ $link['label'] }}">
-            <span class="nav-label">{{ $link['label'] }}</span>
-        </a>
-    @endforeach
+    {{-- A tree, not the flat list the generic approver nav uses. An approver
+         owns two or three of these and a list of three is just three links;
+         Non-Executive CGS owns eight, from four different modules, and eight
+         unrelated tools stacked under one label is where the sidebar stopped
+         being scannable. Opens itself when you are on one of its pages, like
+         every other tree here. --}}
+    @php($actionsOpen = $unplacedLinks->contains(fn ($l) => request()->routeIs($l['route'])))
+    <div class="nav-tree @if($actionsOpen) open @endif">
+        <button type="button" class="nav-item nav-tree-trigger" title="Actions"
+                aria-expanded="@if($actionsOpen) true @else false @endif">
+            <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </span>
+            <span class="nav-label">Actions</span>
+            <span class="nav-chevron">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+            </span>
+        </button>
+        <div class="nav-tree-panel">
+            <div class="nav-tree-items">
+                @foreach ($unplacedLinks as $link)
+                    <a href="{{ route($link['route'], $link['params'] ?? []) }}"
+                       class="nav-subitem @if(request()->routeIs($link['route'])) active @endif"
+                       title="{{ $link['label'] }}">{{ $link['label'] }}</a>
+                @endforeach
+            </div>
+        </div>
+    </div>
 @endif

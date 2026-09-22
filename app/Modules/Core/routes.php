@@ -84,28 +84,40 @@ Route::middleware('auth')->group(function () {
         Route::get('/documents', [AdminController::class, 'documents'])->name('documents.index');
     });
 
-    // Departments and Users and Roles: the administrator's actual job, and
-    // (since a department can now have more than one Chair or Academic
-    // Executive, see Role::isDepartmentScoped()) Non-Executive CGS's too --
-    // CGS is who fields "we need another AE" in practice. Kept under /admin
-    // and the admin.* route names rather than duplicated under /cgs, since
-    // it is the same screen either way; the role gate is what actually
-    // controls access, and the sidebar link is placed for each separately.
+    // Departments and Users and Roles. Both live under /admin and the admin.*
+    // route names rather than being duplicated under /cgs, since it is the
+    // same screen either way; the role gate is what actually controls access,
+    // and the sidebar link is placed for each role separately.
+    //
+    // Reading a list and changing what is on it are separate permissions here.
+    // Non-Executive CGS reads the department list -- who covers each Academic
+    // Executive desk is exactly what they need from it, see
+    // Role::isDepartmentScoped() -- and nothing else on either screen.
+    // Accounts and roles are the administrator's alone.
     Route::middleware('role:'.implode(',', [Role::ADMIN, Role::NON_EXEC_CGS]))
         ->prefix('admin')->name('admin.')->group(function () {
             Route::get('/departments', [DepartmentAdminController::class, 'index'])->name('departments.index');
-            Route::get('/departments/create', [DepartmentAdminController::class, 'create'])->name('departments.create');
-            Route::post('/departments', [DepartmentAdminController::class, 'store'])->name('departments.store');
-            Route::get('/departments/{department}/edit', [DepartmentAdminController::class, 'edit'])->name('departments.edit');
-            Route::put('/departments/{department}', [DepartmentAdminController::class, 'update'])->name('departments.update');
-            Route::patch('/departments/{department}/toggle', [DepartmentAdminController::class, 'toggleActive'])->name('departments.toggle');
-
-            Route::get('/users', [UserAdminController::class, 'index'])->name('users.index');
-            Route::get('/users/create', [UserAdminController::class, 'create'])->name('users.create');
-            Route::post('/users', [UserAdminController::class, 'store'])->name('users.store');
-            Route::get('/users/{user}/edit', [UserAdminController::class, 'edit'])->name('users.edit');
-            Route::put('/users/{user}', [UserAdminController::class, 'update'])->name('users.update');
         });
+
+    Route::middleware('role:'.Role::ADMIN)->prefix('admin')->name('admin.')->group(function () {
+        // Adding, renaming and retiring a department: a rename rewrites
+        // users.department on every account filed under the old name.
+        Route::get('/departments/create', [DepartmentAdminController::class, 'create'])->name('departments.create');
+        Route::post('/departments', [DepartmentAdminController::class, 'store'])->name('departments.store');
+        Route::get('/departments/{department}/edit', [DepartmentAdminController::class, 'edit'])->name('departments.edit');
+        Route::put('/departments/{department}', [DepartmentAdminController::class, 'update'])->name('departments.update');
+        Route::patch('/departments/{department}/toggle', [DepartmentAdminController::class, 'toggleActive'])->name('departments.toggle');
+
+        // Accounts and roles. Nobody but the administrator, not even CGS:
+        // this screen mints logins and hands out every role in the portal,
+        // including the Academic Executive queues and the administrator role
+        // itself. "We need another AE" is a request to the administrator now.
+        Route::get('/users', [UserAdminController::class, 'index'])->name('users.index');
+        Route::get('/users/create', [UserAdminController::class, 'create'])->name('users.create');
+        Route::post('/users', [UserAdminController::class, 'store'])->name('users.store');
+        Route::get('/users/{user}/edit', [UserAdminController::class, 'edit'])->name('users.edit');
+        Route::put('/users/{user}', [UserAdminController::class, 'update'])->name('users.update');
+    });
 
     // CGS-only screens. Gated by role here as well as hidden from the sidebar,
     // because a sidebar that does not render a link is not access control.

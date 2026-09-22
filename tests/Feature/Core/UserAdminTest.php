@@ -20,23 +20,48 @@ class UserAdminTest extends TestCase
     use MakesUsers;
     use RefreshDatabase;
 
-    public function test_admin_and_cgs_can_both_reach_the_user_list(): void
+    public function test_the_administrator_can_reach_the_user_list(): void
     {
-        foreach ([$this->admin(), $this->cgs()] as $user) {
-            $this->actingAs($user)
-                ->get(route('admin.users.index'))
-                ->assertOk()
-                ->assertSee('Users and Roles');
-        }
+        $this->actingAs($this->admin())
+            ->get(route('admin.users.index'))
+            ->assertOk()
+            ->assertSee('Users and Roles');
     }
 
-    public function test_nobody_else_can_reach_it(): void
+    /**
+     * CGS included. This screen mints logins and hands out every role in the
+     * portal, the administrator's own among them, so it is the one place CGS
+     * does not go -- not the list, not the form, not the writes behind them.
+     * They keep the department list, which is where "who covers this
+     * department's AE queue" is answered.
+     */
+    public function test_nobody_else_can_reach_it_not_even_cgs(): void
     {
-        foreach ([$this->chair(), $this->academicExec(), $this->student()] as $user) {
+        $chair = $this->chair();
+        $cgs = $this->cgs();
+
+        foreach ([$cgs, $chair, $this->academicExec(), $this->student()] as $user) {
             $this->actingAs($user)
                 ->get(route('admin.users.index'))
                 ->assertForbidden();
         }
+
+        $this->actingAs($cgs)->get(route('admin.users.create'))->assertForbidden();
+        $this->actingAs($cgs)->get(route('admin.users.edit', $chair))->assertForbidden();
+        $this->actingAs($cgs)
+            ->post(route('admin.users.store'), [
+                'name' => 'Backdoor', 'email' => 'backdoor@test.my',
+                'password' => 'password123', 'role' => Role::ADMIN,
+            ])
+            ->assertForbidden();
+        $this->actingAs($cgs)
+            ->put(route('admin.users.update', $chair), [
+                'name' => 'Renamed', 'email' => 'renamed@test.my', 'role' => Role::ADMIN,
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('users', ['email' => 'backdoor@test.my']);
+        $this->assertSame(Role::CHAIR, $chair->fresh()->role);
     }
 
     public function test_the_list_never_includes_students(): void
@@ -50,16 +75,18 @@ class UserAdminTest extends TestCase
 
     /**
      * The scenario the whole feature exists for: a second Academic
-     * Executive for a department that already has one.
+     * Executive for a department that already has one. CGS is who notices
+     * the gap -- the department list colours it amber for them -- but the
+     * administrator is who fills it.
      */
-    public function test_cgs_can_add_a_second_academic_exec_for_a_department(): void
+    public function test_a_second_academic_exec_can_be_added_for_a_department(): void
     {
         Department::create(['name' => 'Petroleum Engineering', 'is_active' => true]);
         $this->user(Role::ACADEMIC_EXEC, [
             'name' => 'First AE', 'email' => 'first-ae@test.my', 'department' => 'Petroleum Engineering',
         ]);
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->admin())
             ->post(route('admin.users.store'), [
                 'name' => 'Second AE',
                 'email' => 'second-ae@test.my',

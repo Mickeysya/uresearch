@@ -202,7 +202,7 @@ Created by the seeder. **Every one uses the password `password`.**
 | `student2@utp.edu.my` | Student | a second candidate, for examiner nominations |
 | `supervisor@utp.edu.my` | Supervisor | first endorsement on every chain; files examiner nominations |
 | `chair@utp.edu.my` | Chair of Department | second endorsement, and **final approval for local travel** |
-| `cgs@utp.edu.my` | Non-Executive CGS | M Syahmi Ifwat M Jafri — reviews international travel, verifies GA extensions, releases the final examiner list |
+| `cgs@utp.edu.my` | Non-Executive CGS | M Syahmi Ifwat M Jafri — reviews international travel, verifies GA extensions, releases the final examiner list; **reads** the departments screen (who covers each AE queue) but changes nothing on it |
 | `dean@utp.edu.my` | Dean of PGR | **final approval for international travel** |
 | `director@utp.edu.my` | Senior Director CGS | final approval for GA extensions |
 | `ae@utp.edu.my` | Academic Executive | approves examiner nominations, for Computing |
@@ -211,7 +211,7 @@ Created by the seeder. **Every one uses the password `password`.**
 | `manager@utp.edu.my` | Manager CGS | approves claims |
 | `faculty@utp.edu.my` | Faculty | signs off an RPD dismissal before the Registry |
 | `registry@utp.edu.my` | Registry | closes a dismissed candidacy and sends the termination email |
-| `admin@utp.edu.my` | Admin | no admin screens exist yet |
+| `admin@utp.edu.my` | Admin | the dashboard, audit log, reports, **Departments** (add, rename, retire) and **Users and Roles** (create staff accounts, set role and department). Accounts and roles are this login's alone — ask here for another Academic Executive |
 
 Both students are supervised by `supervisor@utp.edu.my`, so the supervisee
 relationship can be exercised.

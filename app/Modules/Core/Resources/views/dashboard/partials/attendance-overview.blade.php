@@ -24,7 +24,12 @@
 @php
     use App\Modules\Core\Services\StudentDashboard;
 
-    $pct = $attendance?->percentage !== null ? (float) $attendance->percentage : null;
+    // Nothing on file is not zero attendance -- see
+    // StudentDashboard::STARTING_PERCENTAGE. The skeleton above still covers
+    // the other case, where no module supplies attendance at all.
+    $pct = $attendance !== null
+        ? (float) $attendance->percentage
+        : StudentDashboard::STARTING_PERCENTAGE;
     $tone = StudentDashboard::toneFor($pct);
     $bands = StudentDashboard::attendanceBands();
 
@@ -56,11 +61,11 @@
     <div class="sdash-card-body sdash-attendance-body">
         <div class="chart-gauge-wrap">
             <canvas id="{{ $chartId }}" role="img"
-                    aria-label="{{ $pct !== null ? 'Current attendance '.$pct.' percent' : 'No attendance data' }}"></canvas>
+                    aria-label="Current attendance {{ $pct }} percent{{ $attendance ? '' : ', nothing recorded yet' }}"></canvas>
 
             <div class="chart-gauge-value tone-{{ $tone }}">
                 <span class="sdash-gauge-number"
-                      @if ($pct !== null) data-count-to="{{ $pct }}" data-count-decimals="1" data-count-suffix="%" data-count-duration="950" @endif>{{ $pct !== null ? rtrim(rtrim(number_format($pct, 1), '0'), '.').'%' : '—' }}</span>
+                      data-count-to="{{ $pct }}" data-count-decimals="1" data-count-suffix="%" data-count-duration="950">{{ rtrim(rtrim(number_format($pct, 1), '0'), '.') }}%</span>
                 <span class="sdash-gauge-caption">Current Attendance</span>
             </div>
         </div>
@@ -96,8 +101,8 @@
     <footer class="sdash-note tone-{{ $tone }}">
         <span class="sdash-note-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'info'])</span>
         <span>
-            @if ($pct === null)
-                No attendance has been uploaded for you yet.
+            @if (! $attendance)
+                Nothing has been uploaded yet, so you start at 100%.
             @elseif ($attendance->at_risk)
                 You are flagged at-risk. <a href="{{ route('attendance-appeal.create') }}">File an appeal</a> if this looks wrong.
             @else
@@ -132,7 +137,7 @@
                         },
                         {
                             label: 'Attendance',
-                            data: pct === null ? [0, 100] : [pct, 100 - pct],
+                            data: [pct, 100 - pct],
                             segmentLabels: ['Your attendance', 'Remaining'],
                             // Index 0 is the reading itself and keeps its
                             // tone colour; index 1 is the empty remainder,

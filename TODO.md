@@ -29,9 +29,9 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | scoped, not started |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started |
 | **Cross-module overlaps** | **4 unresolved — see below** |
-| Automated tests | **194**, all green — covering the engine (including `returnTo`, through Hani's chain), the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, Nureen’s and Hani’s chains, the department admin screen, and Jason's three rules (signature gate, resubmit guard, appeal once-only) |
+| Automated tests | **197**, all green — covering the engine (including `returnTo`, through Hani's chain), the seams, the CSP, the import, the profile, RPD’s three flows, Travel’s branch, Nureen’s and Hani’s chains, the department and user admin screens (including who is locked out of each), the student gauge's starting point, the CGS Actions tree, and Jason's three rules (signature gate, resubmit guard, appeal once-only) |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12 |
-| Last reviewed | 2026-09-22 — the faculty/department list, the examiner-nomination chain and `WorkflowEngine::returnTo()`; before that 2026-09-17, Jason's merge and a per-owner outstanding-issues audit |
+| Last reviewed | 2026-09-23 — who administers accounts (Users and Roles is the administrator's alone now), the attendance gauge's starting point and the CGS sidebar's Actions tree; before that 2026-09-22, the faculty/department list, the examiner-nomination chain and `WorkflowEngine::returnTo()` |
 
 ---
 
@@ -457,6 +457,45 @@ query; there is no placeholder data in the views.
       data needed both. It is `updateOrCreate` throughout, so it is a no-op
       once you are current — but it does put the test accounts' passwords
       back to `password`.
+
+### Core — who administers accounts, and where the gauge starts (2026-09-23)
+
+- [x] **Users and Roles is the administrator's alone.** `/admin/users*` moved
+      out of the shared `admin,non_exec_cgs` group into a `role:admin` one,
+      and the link is gone from the CGS sidebar. The screen mints logins and
+      hands out every role in the portal, the administrator role included, so
+      it is not a desk CGS should be sitting at. "We need another AE for this
+      department" is now a request *to* the administrator rather than
+      something CGS does itself — the department screen is still where CGS
+      sees the gap, coloured amber.
+- [x] **CGS reads `/admin/departments` and writes nothing on it.** The index
+      stays shared; create, edit, rename, retire and reactivate are behind
+      `role:admin`, and the Add / Edit / Retire controls are not rendered for
+      anyone else. Rendering no button is not access control — the routes are
+      gated too, and `DepartmentAdminTest` posts to all four as CGS and
+      asserts 403. The rename that rewrites `users.department` on every
+      account filed under the old name is exactly the operation worth keeping
+      behind one login.
+- [x] **CGS's eight loose Actions collapse into one tree.** The links four
+      modules declare through `ProvidesLinks` — Examiner Pool, Examiner
+      Report, Log Re-viva Submission, Examiner List, Issued Appointments, My
+      Signature, RPD Masterlist, Open a Dismissal — were stacked flat under
+      an "Actions" label and ran off the bottom of the sidebar. They are now
+      one `nav-tree`, opening itself when you are on one of its pages, using
+      the markup, CSS and toggle the other trees already share: no new
+      component, no new JS. The generic approver nav stays flat deliberately
+      (see the 2026-09-17 sidebar audit) — an approver owns two or three of
+      these, and three links are not a list. `SidebarQueuesTest` asserts the
+      tree renders, that no flat action link is left for CGS, and that every
+      label is still reachable.
+- [x] **The attendance gauge starts at 100%, not at an em dash.** A student
+      with nothing uploaded had a grey dial reading `—` and a stat card
+      reading `—`; a student who has had no session recorded has missed none
+      either, so both now open at `StudentDashboard::STARTING_PERCENTAGE` and
+      come down as absences arrive. The footer still says nothing has been
+      uploaded, and the panel still holds its *skeleton* when attendance
+      cannot be loaded at all — "unknown" and "untouched" stay different
+      states. See `docs/architecture.md`.
 
 ### Core — design system and dark mode (2026-09-15)
 - [x] **`public/css/tokens.css`** — the app had a brand but no system: 67
@@ -2598,15 +2637,16 @@ are what to reach for when touching the file anyway.
       the exit code from quietly regressing.
 
 ### Team
-- [~] **Admin module** — the dashboard, sidebar and audit log are built; the
-      screens behind them are placeholders. The one that matters is **Users
-      and Roles**: roles can still only be set in the seeder or phpMyAdmin,
-      and it is the administrator's core job per `technical.md` and
-      `jason.md` §5.5. Somebody needs to own it.
-- [ ] Nine admin/CGS screens remain honest placeholders: Students,
-      Applications, Attendance (x2), Reports (x3), Users and Roles, Document
-      Repository. Each names what is missing; several need only a query and a
-      table, since the data already exists.
+- [x] **Admin module** — the dashboard, sidebar, audit log, Departments and
+      **Users and Roles** are built. Staff accounts, roles and departments are
+      set from the screens rather than the seeder or phpMyAdmin, and both are
+      the administrator's own (2026-09-23): CGS reads the department list and
+      nothing more. The administrator's core job per `technical.md` and
+      `jason.md` §5.5, now actually theirs.
+- [ ] Eight admin/CGS screens remain honest placeholders: Students,
+      Applications, Attendance (x2), Reports (x3), Document Repository. Each
+      names what is missing; several need only a query and a table, since the
+      data already exists.
 - [~] Automated tests — the harness exists and **102 pass** (98 feature, 4
       unit), covering the parts that break quietly: both authorisation locks,
       approve/reject outcomes, Travel's conditional routing, the

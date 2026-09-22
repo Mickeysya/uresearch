@@ -164,6 +164,18 @@ class StudentDashboard
      |---------------------------------------------------------------*/
 
     /**
+     * What the gauge reads before anything has been uploaded.
+     *
+     * A student with no sessions on file has not missed one either: the dial
+     * starts full and comes down as absences are recorded, rather than
+     * opening at zero and telling a first-week student they are critical.
+     * Deliberately NOT the same as the panel having no attendance source at
+     * all -- that keeps its skeleton, because then the figure is unknown
+     * rather than untouched.
+     */
+    public const STARTING_PERCENTAGE = 100.0;
+
+    /**
      * Attendance bands, shared by the gauge and its legend so the two can
      * never disagree about where "Good" stops and "Warning" starts.
      *

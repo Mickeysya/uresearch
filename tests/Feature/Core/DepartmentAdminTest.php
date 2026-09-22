@@ -10,10 +10,12 @@ use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
- * The department picker admin and Non-Executive CGS (M Syahmi Ifwat M Jafri) manage
- * together, added so a department name can change without an ALTER and
- * without abandoning every account already filed under the old one -- see
- * the migration and DepartmentAdminController's doc comment.
+ * The department picker the administrator maintains and Non-Executive CGS
+ * (M Syahmi Ifwat M Jafri) reads, added so a department name can change
+ * without an ALTER and without abandoning every account already filed under
+ * the old one -- see the migration and DepartmentAdminController's doc
+ * comment. CGS sees the list, including who covers each Academic Executive
+ * desk; adding, renaming and retiring is the administrator's.
  */
 class DepartmentAdminTest extends TestCase
 {
@@ -75,7 +77,7 @@ class DepartmentAdminTest extends TestCase
         $ae = $this->user(Role::ACADEMIC_EXEC, ['name' => 'An AE', 'email' => 'an-ae@test.my', 'department' => 'Computing']);
         $unrelated = $this->user(Role::CHAIR, ['name' => 'Other Chair', 'email' => 'other-chair@test.my', 'department' => 'Geoscience']);
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->admin())
             ->put(route('admin.departments.update', $department), ['name' => 'Computing and Information Technology'])
             ->assertRedirect(route('admin.departments.index'));
 
@@ -142,6 +144,25 @@ class DepartmentAdminTest extends TestCase
             ->patch(route('admin.departments.toggle', $department))
             ->assertRedirect(route('admin.departments.index'));
 
+        $this->assertTrue($department->fresh()->is_active);
+    }
+
+    /**
+     * CGS reads this screen, and that is all. The list is theirs to consult;
+     * the rename that rewrites every account's department is not.
+     */
+    public function test_cgs_cannot_add_rename_or_retire_a_department(): void
+    {
+        $department = Department::create(['name' => 'Management', 'is_active' => true]);
+        $cgs = $this->cgs();
+
+        $this->actingAs($cgs)->post(route('admin.departments.store'), ['name' => 'Geoscience'])->assertForbidden();
+        $this->actingAs($cgs)->get(route('admin.departments.create'))->assertForbidden();
+        $this->actingAs($cgs)->put(route('admin.departments.update', $department), ['name' => 'Renamed'])->assertForbidden();
+        $this->actingAs($cgs)->patch(route('admin.departments.toggle', $department))->assertForbidden();
+
+        $this->assertDatabaseMissing('departments', ['name' => 'Geoscience']);
+        $this->assertSame('Management', $department->fresh()->name);
         $this->assertTrue($department->fresh()->is_active);
     }
 

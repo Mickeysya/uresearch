@@ -79,14 +79,18 @@
     <x-core::page-header
         title="Faculties and Departments"
         subtitle="The list every account's department is picked from, under the faculty it belongs to. Renaming one here updates every account already filed under the old name.">
-        <a href="{{ route('admin.departments.create') }}" class="btn">Add a department</a>
+        @if (auth()->user()->isAdmin())
+            <a href="{{ route('admin.departments.create') }}" class="btn">Add a department</a>
+        @endif
     </x-core::page-header>
 
     @if ($groups->isEmpty())
         <div class="empty-state">
             <p>No departments yet.</p>
             <p class="queue-meta">Add the first one so it appears on the "add a user" form.</p>
-            <a href="{{ route('admin.departments.create') }}" class="btn">Add a department</a>
+            @if (auth()->user()->isAdmin())
+                <a href="{{ route('admin.departments.create') }}" class="btn">Add a department</a>
+            @endif
         </div>
     @else
         <div class="dept-table-wrap">
@@ -140,15 +144,19 @@
                                         {{ $department->is_active ? 'Active' : 'Retired' }}
                                     </span>
                                 </td>
+                                {{-- CGS reads this list; only an administrator changes it.
+                                     The routes are gated too -- see core/routes.php. --}}
                                 <td>
-                                    <a href="{{ route('admin.departments.edit', $department) }}" class="btn-secondary">Edit</a>
-                                    <form method="POST" action="{{ route('admin.departments.toggle', $department) }}" style="display:inline">
-                                        @csrf
-                                        @method('PATCH')
-                                        <button type="submit" @class(['btn-reject' => $department->is_active])>
-                                            {{ $department->is_active ? 'Retire' : 'Reactivate' }}
-                                        </button>
-                                    </form>
+                                    @if (auth()->user()->isAdmin())
+                                        <a href="{{ route('admin.departments.edit', $department) }}" class="btn-secondary">Edit</a>
+                                        <form method="POST" action="{{ route('admin.departments.toggle', $department) }}" style="display:inline">
+                                            @csrf
+                                            @method('PATCH')
+                                            <button type="submit" @class(['btn-reject' => $department->is_active])>
+                                                {{ $department->is_active ? 'Retire' : 'Reactivate' }}
+                                            </button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach

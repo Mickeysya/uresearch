@@ -192,6 +192,15 @@ state — "nothing to show" and "could not load" mean different things to a
 student looking at their own record — and one dead query costs that panel
 rather than the whole page.
 
+Attendance has a third state, and the gauge tells all three apart. *Could not
+load*, or no module supplying attendance at all, holds the skeleton: the
+figure is unknown. *Nothing uploaded yet* is not unknown and it is not zero —
+a student who has had no session recorded has missed none either — so the dial
+opens full, at `StudentDashboard::STARTING_PERCENTAGE`, and comes down as
+absences arrive. Opening at zero put every new account in the Critical band on
+its first day. The panel still says nothing has been uploaded; only the number
+starts optimistic.
+
 **It names no module.** Attendance belongs to `app/Modules/Nureen`, and this
 service used to import its Eloquent models directly behind a `class_exists()`
 guard — the one place Core reached into someone else's folder. It now asks for
