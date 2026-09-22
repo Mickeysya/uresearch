@@ -476,17 +476,28 @@ query; there is no placeholder data in the views.
       asserts 403. The rename that rewrites `users.department` on every
       account filed under the old name is exactly the operation worth keeping
       behind one login.
-- [x] **CGS's eight loose Actions collapse into one tree.** The links four
-      modules declare through `ProvidesLinks` — Examiner Pool, Examiner
-      Report, Log Re-viva Submission, Examiner List, Issued Appointments, My
-      Signature, RPD Masterlist, Open a Dismissal — were stacked flat under
-      an "Actions" label and ran off the bottom of the sidebar. They are now
-      one `nav-tree`, opening itself when you are on one of its pages, using
-      the markup, CSS and toggle the other trees already share: no new
-      component, no new JS. The generic approver nav stays flat deliberately
-      (see the 2026-09-17 sidebar audit) — an approver owns two or three of
-      these, and three links are not a list. `SidebarQueuesTest` asserts the
-      tree renders, that no flat action link is left for CGS, and that every
+- [x] **CGS's eight loose Actions collapse into one tree, grouped by
+      module.** The links five modules declare through `ProvidesLinks` —
+      Examiner Pool, Examiner Report, Log Re-viva Submission, Examiner List,
+      Issued Appointments, My Signature, RPD Masterlist, Open a Dismissal —
+      were stacked flat under an "Actions" label and ran off the bottom of
+      the sidebar. They are now one `nav-tree` whose contents follow the same
+      rule `core::partials.queue-links` already uses: a module with two or
+      more links becomes a sub-tree named after it, a module with one stays a
+      plain link. Eight rows became five — Examiner Nomination (2), Re-viva
+      Monitoring, Appointment Letter (2), Hardbound Submission, RPD Extension
+      Appeal (2) — and the tree opens itself when you are on one of its
+      pages, using the markup, CSS and toggle the other trees already share:
+      no new component, no new JS, no new stylesheet.
+      **No contract change.** `ModuleRegistry::linksFor()` now tags each link
+      with the module that declared it, the same shape `queuesForRole()`
+      returns — it is already looping over exactly that — so `links()` keeps
+      returning `{label, route, params?}` and nobody's module needed
+      touching. The generic approver nav stays flat deliberately (see the
+      2026-09-17 sidebar audit): an approver owns two or three of these, and
+      three links are not a list. `SidebarQueuesTest` asserts the tree
+      renders, that there is one sub-tree per multi-link module and none for
+      the rest, that no flat action link is left for CGS, and that every
       label is still reachable.
 - [x] **The attendance gauge starts at 100%, not at an em dash.** A student
       with nothing uploaded had a grey dial reading `—` and a stat card

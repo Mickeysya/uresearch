@@ -20,6 +20,11 @@ interface ProvidesLinks
     /**
      * Extra sidebar links for this user, or [] for none.
      *
+     * Return `label` and `route` (and `params` if the route takes any) --
+     * nothing else. `ModuleRegistry::linksFor()` tags each one with the
+     * module it came from, which is what lets CGS's sidebar group several
+     * of your links under your module's name instead of listing them loose.
+     *
      * @return array<int, array{label: string, route: string, params?: array}>
      */
     public function links(User $user): array;

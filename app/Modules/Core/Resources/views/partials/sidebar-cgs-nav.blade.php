@@ -135,11 +135,19 @@
 @if ($unplacedLinks->isNotEmpty())
     {{-- A tree, not the flat list the generic approver nav uses. An approver
          owns two or three of these and a list of three is just three links;
-         Non-Executive CGS owns eight, from four different modules, and eight
-         unrelated tools stacked under one label is where the sidebar stopped
-         being scannable. Opens itself when you are on one of its pages, like
-         every other tree here. --}}
-    @php($actionsOpen = $unplacedLinks->contains(fn ($l) => request()->routeIs($l['route'])))
+         Non-Executive CGS owns eight, from five modules, and eight unrelated
+         tools stacked under one label is where the sidebar stopped being
+         scannable. Grouped by module inside, so it reads as five rows rather
+         than eight. Opens itself when you are on one of its pages, like every
+         other tree here. --}}
+    @php
+        $actionsOpen = $unplacedLinks->contains(fn ($l) => request()->routeIs($l['route']));
+
+        // Grouped by the module that declared each link (ModuleRegistry
+        // tags them). A link with no module -- nothing produces one today --
+        // falls into a group of its own and renders as a plain item.
+        $byModule = $unplacedLinks->groupBy(fn ($l) => isset($l['module']) ? $l['module']->key() : $l['route']);
+    @endphp
     <div class="nav-tree @if($actionsOpen) open @endif">
         <button type="button" class="nav-item nav-tree-trigger" title="Actions"
                 aria-expanded="@if($actionsOpen) true @else false @endif">
@@ -153,10 +161,38 @@
         </button>
         <div class="nav-tree-panel">
             <div class="nav-tree-items">
-                @foreach ($unplacedLinks as $link)
-                    <a href="{{ route($link['route'], $link['params'] ?? []) }}"
-                       class="nav-subitem @if(request()->routeIs($link['route'])) active @endif"
-                       title="{{ $link['label'] }}">{{ $link['label'] }}</a>
+                {{-- Same rule as the queue tree above (core::partials.queue-links):
+                     one module, one link, stays a link -- naming the module as
+                     well would just say "Hardbound Submission: My Signature".
+                     Two or more get a nested tree named after the module. --}}
+                @foreach ($byModule as $group)
+                    @if ($group->count() === 1)
+                        @php($link = $group->first())
+                        <a href="{{ route($link['route'], $link['params'] ?? []) }}"
+                           class="nav-subitem @if(request()->routeIs($link['route'])) active @endif"
+                           title="{{ $link['label'] }}">{{ $link['label'] }}</a>
+                    @else
+                        @php($groupOpen = $group->contains(fn ($l) => request()->routeIs($l['route'])))
+                        <div class="nav-tree nav-tree-nested @if($groupOpen) open @endif">
+                            <button type="button" class="nav-item nav-tree-trigger" title="{{ $group->first()['module']->label() }}"
+                                    aria-expanded="@if($groupOpen) true @else false @endif">
+                                <span class="nav-label">{{ $group->first()['module']->label() }}</span>
+                                <span class="nav-count">{{ $group->count() }}</span>
+                                <span class="nav-chevron">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+                                </span>
+                            </button>
+                            <div class="nav-tree-panel">
+                                <div class="nav-tree-items">
+                                    @foreach ($group as $link)
+                                        <a href="{{ route($link['route'], $link['params'] ?? []) }}"
+                                           class="nav-subitem @if(request()->routeIs($link['route'])) active @endif"
+                                           title="{{ $group->first()['module']->label() }}: {{ $link['label'] }}">{{ $link['label'] }}</a>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    @endif
                 @endforeach
             </div>
         </div>

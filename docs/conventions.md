@@ -342,6 +342,16 @@ So a stage label is user-facing in two places, not one: the queue page's title
 and the sidebar. `Stage::$label` is display-only and safe to reword;
 `Stage::$key` is stored in `applications.current_stage` and is not.
 
+**Your `ProvidesLinks` links group the same way.** On the CGS sidebar, where
+they add up — Non-Executive CGS is handed eight of them from five modules —
+they sit inside one collapsible **Actions** tree, grouped by the module that
+declared them: two or more links from your module become a sub-tree named
+after it, one stays a plain link labelled by the link itself. You declare
+nothing extra for this. `ModuleRegistry::linksFor()` tags each link with the
+module it came from, so `links()` keeps returning `{label, route, params?}`.
+Every other approver owns two or three links and keeps the flat list — three
+links are not a list worth collapsing.
+
 ### Dashboard panels
 
 A dashboard is locked to one viewport on a desktop (`dashboard-student.css`,

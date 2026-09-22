@@ -78,12 +78,14 @@ class SidebarQueuesTest extends TestCase
     }
 
     /**
-     * CGS's loose tools collapse into one tree. Eight links from four
-     * modules -- the examiner pool, the appointment list, a signature, the
-     * RPD masterlist -- were stacked flat under one label, which is a list
-     * nobody reads to the bottom of.
+     * CGS's loose tools collapse into one tree, grouped by the module that
+     * declared them. Eight links from five modules -- the examiner pool, the
+     * appointment list, a signature, the RPD masterlist -- were stacked flat
+     * under one label, which is a list nobody reads to the bottom of. Same
+     * rule as the queue tree: one link stays a link, two or more become a
+     * sub-tree named after the module.
      */
-    public function test_the_cgs_actions_list_is_a_tree(): void
+    public function test_the_cgs_actions_list_is_a_tree_grouped_by_module(): void
     {
         $cgs = $this->cgs();
 
@@ -97,9 +99,32 @@ class SidebarQueuesTest extends TestCase
         $this->assertStringContainsString('class="nav-item nav-tree-trigger" title="Actions"', $html);
         $this->assertStringNotContainsString('nav-item-flat', $html, 'CGS should have no flat action links left.');
 
-        // Collapsed, not dropped.
-        foreach ($actions as $action) {
-            $this->assertStringContainsString($action['label'], $html, "'{$action['label']}' must still be reachable.");
+        // Just the Actions tree: it is the last thing the CGS nav renders,
+        // so everything between its trigger and the divider is its own.
+        $panel = substr($html, strpos($html, 'title="Actions"'));
+        $panel = substr($panel, 0, strpos($panel, 'nav-divider'));
+
+        $groups = $actions->groupBy(fn ($l) => $l['module']->key());
+
+        $this->assertSame(
+            $groups->filter(fn ($g) => $g->count() > 1)->count(),
+            substr_count($panel, 'nav-tree-nested'),
+            'One sub-tree per module with more than one tool, and none for the rest.'
+        );
+
+        foreach ($groups as $group) {
+            if ($group->count() > 1) {
+                $this->assertStringContainsString(
+                    '>'.$group->first()['module']->label().'<',
+                    $panel,
+                    'A module with several tools is named once, as the group.'
+                );
+            }
+
+            // Collapsed, not dropped.
+            foreach ($group as $link) {
+                $this->assertStringContainsString($link['label'], $panel, "'{$link['label']}' must still be reachable.");
+            }
         }
     }
 
