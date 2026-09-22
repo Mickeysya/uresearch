@@ -759,12 +759,20 @@ query; there is no placeholder data in the views.
 - [x] `README.md`, `CLAUDE.md`, `LEGACY.md`, this file
 - [x] `docs/` — architecture, adding-a-module, conventions, module-keys,
       migration-from-legacy, email-service-integration,
-      tech-stack-and-architecture-report
+      tech-stack-and-architecture-report, test-accounts
 - [x] `docs/scope/` — six per-person scope documents + `technical.md`.
       `chloe.md` and `haziq.md` written 2026-09-12 from their interim-report PDFs,
       which are kept alongside in `docs/scope/chloe/` and `docs/scope/haziq/`.
 - [x] `.claude/agents/` — module-builder, legacy-porter, core-guard, security-reviewer
 - [x] A README in every module folder
+- [x] **`docs/test-accounts.md` (2026-09-23)** — every account in the seeded
+      database, so nobody has to open phpMyAdmin to find a login: the roster
+      one-per-role, all twelve Academic Executives with the department each
+      covers, the demo staff, and the student cohort with matric, programme
+      and supervisor. Generated from the database rather than transcribed,
+      and it says which seeder makes which group (and which six accounts no
+      seeder recreates any more). `README.md` keeps the short table and
+      points here.
 
 ---
 

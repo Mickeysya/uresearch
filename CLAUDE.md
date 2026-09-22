@@ -102,6 +102,7 @@ Also: do not commit on `main`. Branch first.
 | Doc | Covers |
 |---|---|
 | `README.md` | setup, test accounts, commands |
+| `docs/test-accounts.md` | every seeded login, by role, with department and supervisor |
 | `sync.sh` | run it after any `git pull` or branch switch; `--check` to dry-run |
 | `TODO.md` | what is built, what is not, and the agreed order of work |
 | `docs/architecture.md` | layers, engine, data model |
@@ -118,7 +119,8 @@ at it, and copy its patterns rather than inventing new ones.
 
 ## Test accounts
 
-Password for all: `password`. See the table in `README.md`.
+Password for all: `password`. The handful a walkthrough needs are in
+`README.md`; every account is in `docs/test-accounts.md`.
 `student@utp.edu.my` → `supervisor@utp.edu.my` → `chair@utp.edu.my` walks a
 full local-travel chain.
 

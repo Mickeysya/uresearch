@@ -216,6 +216,11 @@ Created by the seeder. **Every one uses the password `password`.**
 Both students are supervised by `supervisor@utp.edu.my`, so the supervisee
 relationship can be exercised.
 
+**Every account, not just these:** `docs/test-accounts.md` lists all 52 —
+the twelve Academic Executives with the department each one covers, the demo
+student cohort with its supervisors, and how to regenerate the list after
+seeding.
+
 To get back to a clean database at any time:
 
 ```bash
