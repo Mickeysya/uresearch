@@ -23,14 +23,12 @@
                             @endif
                             <br>
                             <a href="{{ route('hardbound.resubmit.form', $app) }}"><b>Resubmit it</b></a>
-                            &nbsp;·&nbsp;
-                            <a href="{{ route('hardbound-appeal.create') }}">Appeal the decision</a>
                         </li>
                     @endforeach
                 </ul>
                 <p class="queue-meta" style="margin: 6px 0 0;">
-                    Correct what was asked and resubmit, or appeal if you disagree. You can do one or
-                    the other, not both. The form below starts a brand-new submission instead.
+                    Correct what was asked and resubmit. The form below starts a brand-new
+                    submission instead.
                 </p>
             </div>
         @endif

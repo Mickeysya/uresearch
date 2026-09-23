@@ -15,9 +15,9 @@ use Illuminate\Notifications\Notification;
  *
  * The engine's own ApplicationDecided already fires, but it says only "was
  * not approved at the Supervisor stage" and "contact your supervisor" --
- * true of every module, and wrong here: this chain has two ways forward.
- * This one names who rejected it, quotes what they asked for, and says what
- * the candidate can do about it.
+ * true of every module, and wrong here, where a rejection is a return and
+ * the candidate is expected to correct and resubmit. This one names who
+ * returned it, quotes what they asked for, and says what to do about it.
  */
 class HardboundSubmissionRejected extends Notification implements ShouldQueue
 {
@@ -41,8 +41,8 @@ class HardboundSubmissionRejected extends Notification implements ShouldQueue
             .($this->rejectedBy ? " ({$this->rejectedBy})" : '').'. ';
 
         $title .= $this->remarks
-            ? "Reason: “{$this->remarks}” This application is now closed — correct it and resubmit, or appeal the decision."
-            : 'This application is now closed — correct it and resubmit, or appeal the decision.';
+            ? "Reason: “{$this->remarks}” This application is now closed. Correct it and resubmit."
+            : 'This application is now closed. Correct it and resubmit.';
 
         return [
             'application_id' => $this->application->id,
@@ -69,11 +69,10 @@ class HardboundSubmissionRejected extends Notification implements ShouldQueue
 
         return $mail
             ->line('**This application is now closed.** Nothing further happens on it, and the decision stays on your record.')
-            ->line('You have two ways forward, and you may take one of them:')
-            ->line('1. **Correct and resubmit** — this opens a new submission that starts again from your supervisor.')
-            ->line('2. **Appeal the decision** — if you believe the rejection was mistaken, file an appeal with a memo and your grounds.')
+            ->line('**Correct and resubmit.** This opens a new submission that starts again from your supervisor, '
+                .'and carries your response to the comments above.')
             ->action('Open Hardbound Submission', route('hardbound.create'))
-            ->line('Both options are on that page.')
+            ->line('The resubmission form is on that page.')
             ->salutation('Centre for Graduate Studies, Universiti Teknologi PETRONAS');
     }
 }

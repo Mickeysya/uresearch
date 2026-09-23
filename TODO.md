@@ -1112,32 +1112,60 @@ unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
         open" outcome is still worth having in Core — see Cross-cutting —
         but nothing here is blocked on it now.
 
-- [x] **Appeal Hardbound Submission** (`hardbound_appeal`) — only filable
-      once a Hardbound Submission has been rejected/returned
-  - [x] `hardbound_appeal_details` table, FK'd to the originating
-        `hardbound_submission` application
-  - [x] Appeal memo upload + written justification
-  - [x] Non-Exec: compile the Dean PFR report (Dompdf) from the appeal memo
-        and the original submission, then forward to Senior Exec. The
-        Non-Exec's remarks are the recommendation printed in the report, so
-        they are required at that stage.
-  - [x] Senior Exec: ruling (accept/reject) — **on accept the original is
-        not rewritten.** `applications.status` belongs to WorkflowEngine and
-        the original rejection is a decision on the record, not a mistake to
-        erase. **Corrected 2026-09-17:** this used to claim an upheld appeal
-        "unlocks the resubmission form", and that only a `cgs_review` return
-        or an upheld appeal made a submission resubmittable. Neither is what
-        the code does or what `jason.md` §3 asks for. What the appeal chain
-        produces is the thing §3.3 names — a deliberation, a Dean PFR report
-        and a formal ruling emailed to the student — not a permission the
-        student did not already have. A returned submission is resubmittable
-        because it was returned; the appeal is the route for a student who
-        wants the return itself ruled on rather than complying with it.
-  - [x] Auto-email the ruling to the student — the engine's
-        `ApplicationDecided`, same as every other chain
-  - [x] A submission may only be appealed once, and only if it has not
-        already been replaced by a resubmission — enforced in the module,
-        not by a database constraint
+- [x] **Appeal Hardbound Submission** (`hardbound_appeal`) — an appeal for an
+      **extension of the hardbound thesis submission deadline**, filed by a
+      candidate who cannot submit on time. Student → Supervisor → HOD/Chair →
+      Non-Executive CGS.
+  - [x] **Rebuilt 2026-09-23, and this is a change of meaning, not of
+        design.** It was first built as an appeal against a rejected
+        submission — a Dean PFR report compiled by CGS and a ruling by the
+        Senior Executive — which is what `docs/scope/jason.md` §3 describes
+        and what the code did. CGS means a late-submission extension request
+        by it. §3 of the scope document is the older understanding; the
+        workshop one is what is built. **The scope document still needs
+        updating to match.**
+  - [x] The portal **writes the memo**, it is not uploaded: CGS's
+        *Appeal for Extension of Hardbound Thesis Submission* template is
+        reproduced in `hardbound_appeal/memo.blade.php` and filled in from the
+        candidate's own record — addressed to the Dean of Postgraduate and
+        Research, Through the HOD/Chair and the Supervisor, From the
+        candidate, with their name, student ID and department under the
+        signature line. The candidate supplies the reason (the body of the
+        memo), the date they are asking for, and optionally their current
+        deadline.
+  - [x] Routed the way the paper memo is routed. Supervisor and HOD/Chair
+        each endorse, and each endorsement re-issues the memo with that
+        endorser's uploaded signature and the date stamped in, replacing the
+        previous copy so the appeal carries exactly one current version. The
+        signature is the same one on file for the Confirmation of Correction
+        — an approver uploads it once at "My Signature" — and endorsing
+        without one redirects to the upload page.
+  - [x] **The chain ends at CGS, deliberately.** CGS acknowledges the memo,
+        takes it to the Dean off-portal, and emails the candidate the
+        outcome, so the portal never claims to know whether the extension was
+        granted. The last stage's decision verb is `received` rather than
+        `approved`, the Dean's *Approved / Not Approved* block on the memo is
+        left blank for a physical signature, and the module's own
+        `ExtensionMemoReceived` notification says "memo received, please wait
+        for further notification".
+  - [x] One appeal moving at a time, enforced in the controller and not only
+        by hiding the form.
+  - [x] Refusing to endorse ends the appeal and requires remarks, since the
+        shared decision form calls them optional.
+  - [ ] **Known rough edge.** The engine's own `ApplicationDecided` fires
+        alongside, and on the last stage of any chain it says "All approvals
+        are complete. Your application has been fully approved." Here that is
+        the one thing that is not true — CGS receiving the memo is not the
+        Dean granting the extension. The module's own notification is sent to
+        counter it, so the candidate gets two emails, one of which overstates
+        the position. Fixing it properly means a way for a module to suppress
+        or reword the engine's notice, which is a **Core** change: see
+        Cross-cutting.
+  - [ ] Two rows from the old meaning are still in the dev database —
+        appeals **#40** and **#45**, filed against rejected submissions. #45
+        sits at `cgs_approve`, a stage that no longer exists, so it is
+        orphaned: nothing resolves its current stage and no queue will ever
+        show it. Harmless but stuck; delete both when convenient.
 
 - [x] **Appointment Letter & Report Management** (`appointment_letter`) —
       Chair of Department (the spec's "Faculty Department") → Academic

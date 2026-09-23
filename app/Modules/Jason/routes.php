@@ -113,9 +113,16 @@ Route::middleware('auth')->group(function () {
             ->name('hardbound-appeal.create');
         Route::post('/hardbound-appeal', [HardboundAppealController::class, 'store'])
             ->name('hardbound-appeal.store');
+
+        // The candidate's own copy of the memo the portal wrote for them,
+        // carrying whatever endorsements it has collected so far.
+        Route::get('/hardbound-appeal/{application}/memo', [HardboundAppealController::class, 'memo'])
+            ->name('hardbound-appeal.memo');
     });
 
-    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::SENIOR_EXEC_CGS]))->group(function () {
+    // The memo is routed "Through" the Supervisor and the HOD/Chair, exactly
+    // as the paper template is, before it reaches CGS.
+    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS]))->group(function () {
         Route::get('/hardbound-appeal/queue', [HardboundAppealController::class, 'queue'])
             ->name('hardbound-appeal.queue');
         Route::post('/hardbound-appeal/{application}/decide', [HardboundAppealController::class, 'decide'])

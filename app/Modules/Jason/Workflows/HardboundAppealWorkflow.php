@@ -9,22 +9,39 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Jason\Models\HardboundAppealDetail;
 
 /**
- * Appeal against a rejected hardbound submission.
+ * Appeal Hardbound Submission: a request to extend the hardbound thesis
+ * submission deadline.
  *
- * The candidate files the appeal with a memo and a written justification,
- * the Non-Executive CGS compiles the Dean PFR report from that memo and the
- * original submission, and the Senior Executive CGS rules on it.
+ * A candidate who cannot submit on time fills in the extension memo the
+ * portal provides, giving the reason and the date they are asking for.
  *
- * An upheld appeal is meant to reopen the original submission. It does not
- * rewrite it: `applications.status` belongs to WorkflowEngine, and the
- * original's rejection is a decision on the record, not a mistake to erase.
- * Instead an approved appeal unlocks the resubmission form for the
- * submission it names -- see HardboundSubmissionController::resubmittableDetail().
+ * The memo is addressed to the Dean of Postgraduate and Research and routed
+ * "Through" the Supervisor and the HOD/Chair, which is the chain the portal
+ * walks: each of them endorses in turn, and their uploaded signature and the
+ * date they endorsed are stamped into the memo -- the same mechanism the
+ * Confirmation of Correction uses, and the same signature on file. The
+ * Non-Executive CGS then reviews the memo and acknowledges it.
+ *
+ * The chain ENDS at that acknowledgement, and deliberately: CGS takes the
+ * decision offline and emails the candidate personally, so the portal would
+ * be guessing if it claimed an outcome. What the last stage records is
+ * "memo received and under consideration", which is why its decision verb is
+ * `received` rather than `approved`, and why the candidate's notice says to
+ * wait for CGS rather than announcing an extension.
+ *
+ * REPLACED, 2026-09-23. This module was first built as an appeal against a
+ * rejected submission, which is what docs/scope/jason.md §3 describes: a
+ * Dean PFR report compiled by CGS and a ruling by the Senior Executive. CGS
+ * means an extension request by it. The scope document is the older
+ * understanding; this is the workshop one.
  */
 class HardboundAppealWorkflow implements WorkflowModule
 {
     public function key(): string
     {
+        // Stored in rows, so permanent -- it stays `hardbound_appeal` even
+        // though the module now means an extension request. Labels are
+        // display-only and say what it actually is.
         return 'hardbound_appeal';
     }
 
@@ -37,18 +54,27 @@ class HardboundAppealWorkflow implements WorkflowModule
     {
         return [
             new Stage(
+                key: 'supervisor',
+                label: 'Supervisor',
+                role: Role::SUPERVISOR,
+                decision: 'endorsed',
+                queueTitle: 'Extension Memos to Endorse',
+            ),
+            new Stage(
+                key: 'chair',
+                label: 'HOD / Chair of Department',
+                role: Role::CHAIR,
+                decision: 'endorsed',
+                queueTitle: 'Extension Memos to Endorse',
+            ),
+            new Stage(
                 key: 'cgs_review',
                 label: 'Non-Executive CGS',
                 role: Role::NON_EXEC_CGS,
-                decision: 'reviewed',
-                queueTitle: 'Appeals to Compile',
-            ),
-            new Stage(
-                key: 'cgs_approve',
-                label: 'Senior Executive CGS',
-                role: Role::SENIOR_EXEC_CGS,
-                decision: 'approved',
-                queueTitle: 'Appeals for Ruling',
+                // Not `approved`: receiving the memo is not granting the
+                // extension. CGS decides offline and emails the candidate.
+                decision: 'received',
+                queueTitle: 'Extension Memos to Review',
             ),
         ];
     }
@@ -57,11 +83,19 @@ class HardboundAppealWorkflow implements WorkflowModule
     {
         $detail = HardboundAppealDetail::where('application_id', $application->id)->first();
 
-        if (! $detail) {
-            return 'Hardbound submission appeal';
+        if (! $detail?->requested_until) {
+            return 'Hardbound submission extension request';
         }
 
-        return 'Appeal against submission #'.$detail->hardbound_application_id;
+        $summary = 'Extension requested until '.$detail->requested_until->format('j M Y');
+
+        // The badge says "approved" once CGS has the memo, which on its own
+        // would read as though the extension had been granted.
+        if ($application->status === Application::STATUS_APPROVED) {
+            $summary .= '. CGS has the memo and will email you the outcome';
+        }
+
+        return $summary;
     }
 
     public function createRoute(): ?string

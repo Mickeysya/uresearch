@@ -15,10 +15,13 @@
     {{-- Into the partial, not above it: see the note in hardbound/queue. --}}
     @php
         $intro = $stage->key === 'cgs_review'
-            ? 'Approving compiles the Dean PFR report from the appeal and the original submission, '
-                .'and sends it to the Senior Executive for a ruling. Your remarks become the '
-                .'recommendation in that report, so they are required.'
-            : 'Upholding an appeal lets the student resubmit the thesis it was filed against.';
+            ? 'Approving records that CGS has the memo and tells the candidate to wait for '
+                .'further notification. It does not grant the extension: the memo goes to the '
+                .'Dean of Postgraduate and Research, who signs it, and CGS emails the candidate '
+                .'the outcome. Rejecting ends the appeal and needs remarks.'
+            : 'Endorsing stamps your signature and today\'s date onto the candidate\'s memo and '
+                .'passes it on. Rejecting ends the appeal and needs remarks saying why. '
+                .'<a href="'.route('hardbound.signature').'">Check the signature on file &rarr;</a>';
     @endphp
 
     @include('core::partials.queue', [

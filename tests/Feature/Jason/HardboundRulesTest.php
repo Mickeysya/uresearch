@@ -8,8 +8,10 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Jason\Models\HardboundAppealDetail;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
+use App\Modules\Jason\Notifications\ExtensionMemoReceived;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
@@ -18,10 +20,11 @@ use Tests\TestCase;
  * The three rules in this module that fail quietly.
  *
  * `FormsTest` covers how his screens render. These cover what they enforce:
- * the signature gate on approval, the resubmit guard, and the appeal's
- * once-only rule. All three are the kind that break without anything on
- * screen looking wrong -- an unsigned Confirmation goes out, a student
- * resubmits twice, or a rejected submission is appealed over and over.
+ * the signature gate on approval, the resubmit guard, and what the appeal
+ * chain enforces. All of them are the kind that break without anything on
+ * screen looking wrong -- an unsigned Confirmation or memo goes out, a
+ * student resubmits twice, or CGS receiving an extension memo is announced
+ * to the candidate as the extension being granted.
  */
 class HardboundRulesTest extends TestCase
 {
@@ -196,51 +199,175 @@ class HardboundRulesTest extends TestCase
 
     /* ---------------- the appeal's once-only rule ---------------- */
 
-    public function test_a_submission_may_be_appealed_once_and_not_after_it_has_been_replaced(): void
+    /* ---------------- the extension appeal ---------------- */
+
+    /**
+     * An appeal is a request to extend the hardbound submission deadline,
+     * filed by a candidate who has NOT submitted. Two of them moving at once
+     * would reach CGS as two appeals for the same deadline, so the second is
+     * refused -- and refused in the controller, not only by hiding the form,
+     * because a posted form does not go through the page.
+     */
+    public function test_only_one_appeal_may_be_moving_at_a_time(): void
     {
         Storage::fake('local');
 
         $student = $this->student();
-        $returned = $this->rejectedSubmission($student);
+        $this->supervisor();
 
-        $payload = [
-            'hardbound_application_id' => $returned->id,
-            'justification' => 'The corrections CGS listed were completed before the deadline and the letter shows it.',
-            'appeal_memo' => UploadedFile::fake()->create('appeal-memo.pdf', 80, 'application/pdf'),
+        $this->actingAs($student)
+            ->post(route('hardbound-appeal.store'), $this->appealPayload())
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(1, HardboundAppealDetail::count());
+
+        $this->actingAs($student)
+            ->post(route('hardbound-appeal.store'), $this->appealPayload())
+            ->assertSessionHas('error');
+
+        $this->assertSame(1, HardboundAppealDetail::count());
+    }
+
+    /**
+     * The memo is written by the portal, not uploaded, so filing an appeal
+     * has to produce one -- the Supervisor opens a memo rather than a form.
+     */
+    public function test_filing_an_appeal_writes_the_memo(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $this->supervisor();
+
+        $this->actingAs($student)
+            ->post(route('hardbound-appeal.store'), $this->appealPayload())
+            ->assertSessionHasNoErrors();
+
+        $appeal = Application::where('module_type', 'hardbound_appeal')->firstOrFail();
+
+        $memo = $appeal->documents()->where('doc_type', 'Appeal Memo')->firstOrFail();
+
+        $this->assertSame("Appeal-Memo-{$appeal->id}.pdf", $memo->original_name);
+        Storage::disk('local')->assertExists($memo->path);
+    }
+
+    /**
+     * Endorsing stamps the endorser's signature onto the memo, so there has
+     * to be one -- the same gate the Confirmation has, for the same reason.
+     * The re-issued memo replaces the previous copy, so the appeal carries
+     * exactly one current version rather than a pile of drafts.
+     */
+    public function test_endorsing_an_appeal_needs_a_signature_and_re_issues_the_memo(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $supervisor = $this->supervisor();
+
+        $this->actingAs($student)->post(route('hardbound-appeal.store'), $this->appealPayload());
+        $appeal = Application::where('module_type', 'hardbound_appeal')->firstOrFail();
+
+        // No signature on file: bounced to the upload page, nothing decided.
+        $this->actingAs($supervisor)
+            ->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve'])
+            ->assertRedirect(route('hardbound.signature'));
+
+        $this->assertSame('supervisor', $appeal->fresh()->current_stage);
+
+        $this->signatureFor($supervisor);
+
+        $this->actingAs($supervisor)
+            ->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve'])
+            ->assertSessionHas('status');
+
+        $this->assertSame('chair', $appeal->fresh()->current_stage);
+        $this->assertSame(1, $appeal->documents()->where('doc_type', 'Appeal Memo')->count());
+    }
+
+    /**
+     * Refusing ends the appeal, so the candidate has to be told why. The
+     * shared decision form calls remarks optional, so without this the
+     * refusal goes through silently and they are left guessing.
+     */
+    public function test_refusing_an_appeal_needs_remarks(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $supervisor = $this->supervisor();
+        $this->signatureFor($supervisor);
+
+        $this->actingAs($student)->post(route('hardbound-appeal.store'), $this->appealPayload());
+        $appeal = Application::where('module_type', 'hardbound_appeal')->firstOrFail();
+
+        $this->actingAs($supervisor)
+            ->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'reject'])
+            ->assertSessionHas('error');
+
+        $this->assertSame(Application::STATUS_PENDING, $appeal->fresh()->status);
+
+        $this->actingAs($supervisor)
+            ->post(route('hardbound-appeal.decide', $appeal), [
+                'decision' => 'reject',
+                'remarks' => 'Your corrections are nearly done; submit on time instead.',
+            ])
+            ->assertSessionHas('status');
+
+        $this->assertSame(Application::STATUS_REJECTED, $appeal->fresh()->status);
+    }
+
+    /**
+     * CGS receiving the memo is NOT the extension being granted: the Dean
+     * signs the memo off-portal and CGS emails the outcome. The engine's own
+     * notice would tell the candidate their application is "fully approved",
+     * so the module sends its own saying what actually happened.
+     */
+    public function test_cgs_receiving_the_memo_tells_the_candidate_to_wait(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $student = $this->student();
+        $supervisor = $this->supervisor();
+        $chair = $this->chair();
+        $cgs = $this->cgs();
+        $this->signatureFor($supervisor);
+        $this->signatureFor($chair);
+
+        $this->actingAs($student)->post(route('hardbound-appeal.store'), $this->appealPayload());
+        $appeal = Application::where('module_type', 'hardbound_appeal')->firstOrFail();
+
+        $this->actingAs($supervisor)->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve']);
+        $this->actingAs($chair)->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve']);
+
+        // Both endorsements are on the one current memo.
+        $this->assertSame(1, $appeal->documents()->where('doc_type', 'Appeal Memo')->count());
+
+        $this->actingAs($cgs)
+            ->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve'])
+            ->assertSessionHas('status');
+
+        Notification::assertSentTo($student, ExtensionMemoReceived::class);
+    }
+
+    /** Puts a signature on file for an approver, the way they would. */
+    protected function signatureFor(User $approver): void
+    {
+        $this->actingAs($approver)
+            ->post(route('hardbound.signature.store'), [
+                'signature' => UploadedFile::fake()->image('signature.png', 300, 100),
+            ])
+            ->assertSessionHasNoErrors();
+    }
+
+    /** What the appeal form posts. */
+    protected function appealPayload(array $overrides = []): array
+    {
+        return $overrides + [
+            'reason' => "My experimental rig failed in the final month and the replacement parts "
+                ."took six weeks to arrive.\n\nThe remaining chapters are drafted.",
+            'original_deadline' => now()->addWeeks(2)->toDateString(),
+            'requested_until' => now()->addMonths(3)->toDateString(),
         ];
-
-        $this->actingAs($student)
-            ->post(route('hardbound-appeal.store'), $payload)
-            ->assertSessionHasNoErrors();
-
-        $this->assertSame(1, HardboundAppealDetail::where('hardbound_application_id', $returned->id)->count());
-
-        // Twice is not allowed, and the rule is in the validator rather than
-        // only in the picker, so posting the id directly cannot get round it.
-        $this->actingAs($student)
-            ->post(route('hardbound-appeal.store'), $payload + [
-                'appeal_memo' => UploadedFile::fake()->create('appeal-memo-2.pdf', 80, 'application/pdf'),
-            ])
-            ->assertSessionHasErrors('hardbound_application_id');
-
-        $this->assertSame(1, HardboundAppealDetail::where('hardbound_application_id', $returned->id)->count());
-
-        // And a submission the student has already replaced is spent too:
-        // they took the other route, so there is nothing left to appeal.
-        $replaced = $this->rejectedSubmission($student);
-
-        $this->actingAs($student)
-            ->post(route('hardbound.resubmit', $replaced), $this->resubmissionPayload())
-            ->assertSessionHasNoErrors();
-
-        $this->actingAs($student)
-            ->post(route('hardbound-appeal.store'), [
-                'hardbound_application_id' => $replaced->id,
-                'justification' => 'Changed my mind about resubmitting and would like a ruling instead.',
-                'appeal_memo' => UploadedFile::fake()->create('appeal-memo-3.pdf', 80, 'application/pdf'),
-            ])
-            ->assertSessionHasErrors('hardbound_application_id');
-
-        $this->assertSame(0, HardboundAppealDetail::where('hardbound_application_id', $replaced->id)->count());
     }
 }

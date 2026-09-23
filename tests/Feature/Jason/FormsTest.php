@@ -59,35 +59,37 @@ class FormsTest extends TestCase
             ->assertSee(route('hardbound.template', 'submission'), false);
     }
 
-    public function test_the_appeal_form_is_a_stepper_once_there_is_something_to_appeal(): void
+    public function test_the_appeal_form_is_a_stepper(): void
+    {
+        // An appeal is an extension request, filed before the deadline by a
+        // candidate who has not submitted, so there is no precondition to
+        // meet and the form is always there.
+        $this->assertIsStepper(
+            $this->actingAs($this->student())->get(route('hardbound-appeal.create')),
+            2,
+        );
+    }
+
+    public function test_the_appeal_form_stands_down_while_one_is_already_moving(): void
     {
         $student = $this->student();
 
-        // Nothing rejected yet: the page is an empty state, and there is no
-        // form to make a stepper of.
-        $this->actingAs($student)->get(route('hardbound-appeal.create'))
-            ->assertOk()
-            ->assertSee('You have no hardbound submission to appeal')
-            ->assertDontSee('data-stepper', false);
-
-        $rejected = Application::create([
+        $open = Application::create([
             'student_id' => $student->id,
             'submitted_by_id' => $student->id,
-            'module_type' => 'hardbound_submission',
-            'status' => Application::STATUS_REJECTED,
-            'current_stage' => 'cgs_review',
+            'module_type' => 'hardbound_appeal',
+            'status' => Application::STATUS_PENDING,
+            'current_stage' => 'supervisor',
         ]);
 
-        HardboundSubmissionDetail::create([
-            'application_id' => $rejected->id,
-            'thesis_title' => 'A Study of Something',
-            'matric_no' => $student->matric_no,
-            'programme' => 'PhD Full-Time',
-            'supervisor_name' => 'Dr. Supervisor',
-            'viva_date' => now()->subMonth(),
-        ]);
-
-        $this->assertIsStepper($this->actingAs($student)->get(route('hardbound-appeal.create')), 3);
+        $this->actingAs($student)->get(route('hardbound-appeal.create'))
+            ->assertOk()
+            // The id is inside its own <b>, so the sentence is asserted in
+            // the two pieces the markup actually renders.
+            ->assertSee('is still being processed')
+            ->assertSee("#{$open->id}")
+            ->assertSee("Track appeal #{$open->id}")
+            ->assertDontSee('data-stepper', false);
     }
 
     public function test_the_nomination_and_preparation_forms_are_steppers(): void

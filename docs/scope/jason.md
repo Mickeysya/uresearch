@@ -64,6 +64,19 @@
 ---
 
 ## 3. Module B: Appeal Hardbound Submission
+
+> **Superseded by CGS, 23 September 2026.** An "appeal" here is a request to
+> **extend the hardbound thesis submission deadline**, filed by a candidate
+> who cannot submit on time — not an appeal against a rejected submission.
+> The candidate fills in CGS's *Appeal for Extension of Hardbound Thesis
+> Submission* memo, which the portal writes for them; it is routed Through
+> the Supervisor and the HOD/Chair, who each endorse and sign it, to the
+> Non-Executive CGS, who acknowledges receipt. The Dean of Postgraduate and
+> Research signs the memo off-portal and CGS emails the candidate the
+> outcome, so there is no Dean PFR report and no Senior Executive ruling.
+> What is built follows this note; the rest of §3 is the earlier reading and
+> is kept for the record.
+
 *Workflow: Student Appeal Filing -> CGS Non-Exec (Dean PFR) -> CGS Senior Exec (Deliberation & Ruling) -> Auto-Email Outcome.*
 
 ### 3.1 Student Features
