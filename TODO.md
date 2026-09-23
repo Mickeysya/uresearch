@@ -1161,11 +1161,15 @@ unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
         the position. Fixing it properly means a way for a module to suppress
         or reword the engine's notice, which is a **Core** change: see
         Cross-cutting.
-  - [ ] Two rows from the old meaning are still in the dev database —
-        appeals **#40** and **#45**, filed against rejected submissions. #45
-        sits at `cgs_approve`, a stage that no longer exists, so it is
-        orphaned: nothing resolves its current stage and no queue will ever
-        show it. Harmless but stuck; delete both when convenient.
+  - [x] An appeal stranded on a stage the workflow no longer declares does
+        not count as the candidate's open appeal. Two rows from the old
+        meaning are still in the dev database — appeals **#40** and **#45** —
+        and #45 sits `pending` at `cgs_approve`, a stage that no longer
+        exists. Nothing can ever decide it, so treating it as open locked
+        `student@utp.edu.my` out of the module entirely. `openRequest()` now
+        counts only appeals a live stage actually owns, which also covers any
+        future stage rename. The two old rows are still there and can be
+        deleted whenever convenient.
 
 - [x] **Appointment Letter & Report Management** (`appointment_letter`) —
       Chair of Department (the spec's "Faculty Department") → Academic

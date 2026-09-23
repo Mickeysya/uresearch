@@ -256,12 +256,25 @@ class HardboundAppealController extends Controller
 
     /**
      * The candidate's appeal that is still moving, if any.
+     *
+     * "Still moving" means a stage actually owns it. An application left on
+     * a stage key this module no longer declares -- as every appeal filed
+     * under the old meaning of this module was, and as anything would be
+     * after a future stage rename -- resolves to no stage, so no queue can
+     * ever reach it and no decision can ever close it. Counting one of those
+     * as open would lock the candidate out of the module permanently, which
+     * is worse than letting them file again.
      */
     protected function openRequest(int $studentId): ?Application
     {
+        $stages = array_map(fn ($stage) => $stage->key, app(WorkflowEngine::class)->stagesFor(
+            Application::make(['module_type' => $this->moduleKey()])
+        ));
+
         return Application::where('module_type', $this->moduleKey())
             ->where('student_id', $studentId)
             ->where('status', Application::STATUS_PENDING)
+            ->whereIn('current_stage', $stages)
             ->latest('id')
             ->first();
     }

@@ -229,6 +229,36 @@ class HardboundRulesTest extends TestCase
     }
 
     /**
+     * An appeal stranded on a stage this module no longer declares -- every
+     * appeal filed under the old meaning of this module was, and anything
+     * would be after a future stage rename -- can never be decided, because
+     * no queue can reach it. Counting it as the candidate's open appeal
+     * locks them out of the module for good.
+     */
+    public function test_an_appeal_stuck_on_a_stage_that_no_longer_exists_does_not_block_a_new_one(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $this->supervisor();
+
+        Application::create([
+            'student_id' => $student->id,
+            'submitted_by_id' => $student->id,
+            'module_type' => 'hardbound_appeal',
+            'status' => Application::STATUS_PENDING,
+            // A stage the workflow no longer has.
+            'current_stage' => 'cgs_approve',
+        ]);
+
+        $this->actingAs($student)
+            ->post(route('hardbound-appeal.store'), $this->appealPayload())
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(1, HardboundAppealDetail::count());
+    }
+
+    /**
      * The memo is written by the portal, not uploaded, so filing an appeal
      * has to produce one -- the Supervisor opens a memo rather than a form.
      */
