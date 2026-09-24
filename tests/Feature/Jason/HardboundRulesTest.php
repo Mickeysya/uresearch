@@ -259,10 +259,11 @@ class HardboundRulesTest extends TestCase
     }
 
     /**
-     * The memo is written by the portal, not uploaded, so filing an appeal
-     * has to produce one -- the Supervisor opens a memo rather than a form.
+     * The candidate fills the memo in themselves and uploads it, so their
+     * file is what has to be stored -- and stored as they sent it, because
+     * the portal must not be able to reword an appeal.
      */
-    public function test_filing_an_appeal_writes_the_memo(): void
+    public function test_the_candidates_own_memo_is_what_is_filed(): void
     {
         Storage::fake('local');
 
@@ -274,20 +275,50 @@ class HardboundRulesTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $appeal = Application::where('module_type', 'hardbound_appeal')->firstOrFail();
-
         $memo = $appeal->documents()->where('doc_type', 'Appeal Memo')->firstOrFail();
 
-        $this->assertSame("Appeal-Memo-{$appeal->id}.pdf", $memo->original_name);
+        $this->assertSame('appeal-memo.pdf', $memo->original_name);
         Storage::disk('local')->assertExists($memo->path);
     }
 
+    /** An appeal cannot be filed without the completed memo. */
+    public function test_an_appeal_needs_the_completed_memo(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('hardbound-appeal.store'), [
+                'requested_until' => now()->addMonths(3)->toDateString(),
+            ])
+            ->assertSessionHasErrors('memo');
+
+        $this->assertSame(0, HardboundAppealDetail::count());
+    }
+
+    /** The blank the candidate downloads to fill in. */
+    public function test_the_blank_memo_is_pre_filled_and_downloadable(): void
+    {
+        $student = $this->student();
+        $this->supervisor();
+
+        $response = $this->actingAs($student)->get(route('hardbound-appeal.template'));
+
+        $response->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $this->assertStringContainsString('.pdf', $response->headers->get('content-disposition'));
+    }
+
     /**
-     * Endorsing stamps the endorser's signature onto the memo, so there has
-     * to be one -- the same gate the Confirmation has, for the same reason.
-     * The re-issued memo replaces the previous copy, so the appeal carries
-     * exactly one current version rather than a pile of drafts.
+     * Endorsing stamps the endorser's signature onto the endorsement slip,
+     * so there has to be one -- the same gate the Confirmation has, for the
+     * same reason. The re-issued slip replaces the previous copy, so the
+     * appeal carries exactly one, and the candidate's own memo is never
+     * touched.
      */
-    public function test_endorsing_an_appeal_needs_a_signature_and_re_issues_the_memo(): void
+    public function test_endorsing_an_appeal_needs_a_signature_and_re_issues_the_slip(): void
     {
         Storage::fake('local');
 
@@ -311,6 +342,7 @@ class HardboundRulesTest extends TestCase
             ->assertSessionHas('status');
 
         $this->assertSame('chair', $appeal->fresh()->current_stage);
+        $this->assertSame(1, $appeal->documents()->where('doc_type', 'Endorsement Slip')->count());
         $this->assertSame(1, $appeal->documents()->where('doc_type', 'Appeal Memo')->count());
     }
 
@@ -370,7 +402,9 @@ class HardboundRulesTest extends TestCase
         $this->actingAs($supervisor)->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve']);
         $this->actingAs($chair)->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve']);
 
-        // Both endorsements are on the one current memo.
+        // Both endorsements are on the one current slip, and the candidate's
+        // memo is still the single file they uploaded.
+        $this->assertSame(1, $appeal->documents()->where('doc_type', 'Endorsement Slip')->count());
         $this->assertSame(1, $appeal->documents()->where('doc_type', 'Appeal Memo')->count());
 
         $this->actingAs($cgs)
@@ -390,14 +424,13 @@ class HardboundRulesTest extends TestCase
             ->assertSessionHasNoErrors();
     }
 
-    /** What the appeal form posts. */
+    /** What the appeal form posts: the completed memo, and the dates. */
     protected function appealPayload(array $overrides = []): array
     {
         return $overrides + [
-            'reason' => "My experimental rig failed in the final month and the replacement parts "
-                ."took six weeks to arrive.\n\nThe remaining chapters are drafted.",
             'original_deadline' => now()->addWeeks(2)->toDateString(),
             'requested_until' => now()->addMonths(3)->toDateString(),
+            'memo' => UploadedFile::fake()->create('appeal-memo.pdf', 90, 'application/pdf'),
         ];
     }
 }

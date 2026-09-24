@@ -3,21 +3,28 @@
      * Appeal for Extension of Hardbound Thesis Submission, reproduced from
      * CGS's memo template.
      *
-     * The template's red starred placeholders -- *HOD/Chair, *Supervisor,
-     * *Student Name, *Department, *Student ID -- are what this fills in.
+     * This is the BLANK the candidate downloads. The template's red starred
+     * placeholders -- *HOD/Chair, *Supervisor, *Student Name, *Department,
+     * *Student ID -- are filled in from the portal's own records, and
+     * everything the candidate has to say in their own words is left empty
+     * for them: the body of the letter and their signature.
      *
-     * $signatures is keyed by stage key ('supervisor', 'chair'); a stage that
-     * has not endorsed yet has no entry, so an unsigned memo prints the same
-     * blank rules the paper template has. The Dean's "Approved / Not
-     * Approved" block is always left blank: the Dean signs the memo itself,
-     * off-portal, and CGS emails the candidate the outcome.
+     * They complete it, sign it and upload it back, the same way the
+     * Hardbound Thesis Submission form (UTP/CGS/021) works. Nothing the
+     * candidate writes passes through here, so nothing they write can be
+     * reworded by the portal.
+     *
+     * The endorsements are NOT on this page. Once the candidate's own file
+     * is what travels, the portal cannot write inside it, so the Supervisor
+     * and HOD/Chair endorsements are stamped onto the endorsement slip that
+     * accompanies it -- see endorsement.blade.php.
      */
 @endphp
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Appeal for Extension of Hardbound Thesis Submission: #{{ $application->id }}</title>
+    <title>Appeal for Extension of Hardbound Thesis Submission</title>
     <style>
         /* One page, like the paper memo. Everything below is sized so that a
            memo with both endorsements and a reason of a few paragraphs still
@@ -38,7 +45,7 @@
         h2 { font-size: 11px; font-weight: bold; text-decoration: underline; margin: 14px 0 10px; }
 
         .body p { margin: 0 0 8px; text-align: justify; }
-        .closing { margin-top: 16px; }
+        .closing { margin-top: 20px; }
 
         .sigline { position: relative; height: 34px; }
         .sigline img { position: absolute; left: 0; bottom: 1px; max-height: 32px; max-width: 170px; }
@@ -48,10 +55,10 @@
         /* The two endorsements sit side by side rather than stacked: the
            page has the width, and stacking them pushed the Dean's block --
            the one that has to be signed -- onto a second sheet. */
-        table.endorse { width: 100%; border-collapse: collapse; margin-top: 16px; }
-        table.endorse td { width: 50%; vertical-align: top; padding-right: 16px; }
+        /* Ruled writing space in the body of a blank memo. */
+        .write { border-bottom: 1px solid #999; height: 17px; margin-bottom: 4px; }
 
-        .verdict { margin-top: 18px; }
+        .verdict { margin-top: 26px; }
         .foot { position: fixed; bottom: 0; left: 0; right: 0;
                 border-top: 1.2px solid #000; padding-top: 3px;
                 text-align: center; font-size: 8.5px; font-weight: bold; }
@@ -87,7 +94,7 @@
         </tr>
         <tr>
             <td class="k">Date</td><td class="c">:</td>
-            <td>{{ $issuedAt->format('j F Y') }}</td>
+            <td></td>
         </tr>
     </table>
 
@@ -96,20 +103,11 @@
     <div class="body">
         <p>Dear {{ $dean?->name ?? 'Professor' }},</p>
 
-        {{-- The candidate's own words, paragraph by paragraph. --}}
-        @foreach (preg_split('/\R{2,}/', trim($detail->reason)) as $paragraph)
-            <p>{{ trim($paragraph) }}</p>
-        @endforeach
-
-        <p>
-            @if ($detail->original_deadline)
-                My hardbound thesis submission is due on
-                {{ $detail->original_deadline->format('j F Y') }}.
-            @endif
-            I therefore appeal for an extension until
-            <b>{{ $detail->requested_until->format('j F Y') }}</b>,
-            and would be grateful for your kind consideration.
-        </p>
+        {{-- Left for the candidate. The ruled lines are what a blank memo
+             gives someone filling it in by hand or on screen. --}}
+        @for ($line = 0; $line < 14; $line++)
+            <div class="write"></div>
+        @endfor
     </div>
 
     <div class="closing">
@@ -123,31 +121,6 @@
             {{ $student?->department }}
         </div>
     </div>
-
-    {{-- Not on the paper template, which routes the memo physically. The
-         portal collects these two endorsements, so it prints them: a memo
-         reaching the Dean has to show who it came through. --}}
-    <table class="endorse">
-        <tr>
-            @foreach (['supervisor' => 'Supervisor', 'chair' => 'HOD/Chair'] as $key => $role)
-                <td>
-                    <div class="sigline">
-                        @if (isset($signatures[$key]['image']))
-                            <img src="{{ $signatures[$key]['image'] }}" alt="Signature of {{ $signatures[$key]['name'] }}">
-                        @endif
-                    </div>
-                    <div class="rule"></div>
-                    <div class="who">
-                        {{ $signatures[$key]['name'] ?? '' }}<br>
-                        {{ $role }}
-                        @isset ($signatures[$key])
-                            <br>{{ $signatures[$key]['date'] }}
-                        @endisset
-                    </div>
-                </td>
-            @endforeach
-        </tr>
-    </table>
 
     <div class="verdict">
         <p style="margin: 0 0 22px;">Approved / Not Approved</p>

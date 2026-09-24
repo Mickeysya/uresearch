@@ -63,10 +63,11 @@ class FormsTest extends TestCase
     {
         // An appeal is an extension request, filed before the deadline by a
         // candidate who has not submitted, so there is no precondition to
-        // meet and the form is always there.
+        // meet and the form is always there. Three steps: the dates, the
+        // blank memo to download, and the completed one coming back.
         $this->assertIsStepper(
             $this->actingAs($this->student())->get(route('hardbound-appeal.create')),
-            2,
+            3,
         );
     }
 

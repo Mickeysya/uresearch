@@ -114,8 +114,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/hardbound-appeal', [HardboundAppealController::class, 'store'])
             ->name('hardbound-appeal.store');
 
-        // The candidate's own copy of the memo the portal wrote for them,
-        // carrying whatever endorsements it has collected so far.
+        // The blank memo to fill in and sign, and the candidate's own copy
+        // of the one they uploaded.
+        Route::get('/hardbound-appeal/template', [HardboundAppealController::class, 'template'])
+            ->name('hardbound-appeal.template');
         Route::get('/hardbound-appeal/{application}/memo', [HardboundAppealController::class, 'memo'])
             ->name('hardbound-appeal.memo');
     });

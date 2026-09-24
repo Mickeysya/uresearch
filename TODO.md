@@ -1124,22 +1124,32 @@ unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
         by it. §3 of the scope document is the older understanding; the
         workshop one is what is built. **The scope document still needs
         updating to match.**
-  - [x] The portal **writes the memo**, it is not uploaded: CGS's
-        *Appeal for Extension of Hardbound Thesis Submission* template is
-        reproduced in `hardbound_appeal/memo.blade.php` and filled in from the
-        candidate's own record — addressed to the Dean of Postgraduate and
-        Research, Through the HOD/Chair and the Supervisor, From the
-        candidate, with their name, student ID and department under the
-        signature line. The candidate supplies the reason (the body of the
-        memo), the date they are asking for, and optionally their current
-        deadline.
+  - [x] **Download, fill in, upload back** — the same shape as the Hardbound
+        Thesis Submission form (UTP/CGS/021), and for the same reason: the
+        appeal is the candidate's own words, so the portal must not compose
+        it. `hardbound_appeal/memo.blade.php` reproduces CGS's
+        *Appeal for Extension of Hardbound Thesis Submission* and serves it
+        as a **blank**: addressed to the Dean of Postgraduate and Research,
+        Through the HOD/Chair and the Supervisor, From the candidate with
+        their name, student ID and department already filled in, and ruled
+        writing space where the letter goes. The candidate writes their
+        appeal on it, signs and dates it, and uploads it back. Their file is
+        archived exactly as uploaded and never rewritten.
   - [x] Routed the way the paper memo is routed. Supervisor and HOD/Chair
-        each endorse, and each endorsement re-issues the memo with that
-        endorser's uploaded signature and the date stamped in, replacing the
-        previous copy so the appeal carries exactly one current version. The
-        signature is the same one on file for the Confirmation of Correction
-        — an approver uploads it once at "My Signature" — and endorsing
-        without one redirects to the upload page.
+        each endorse, using the same signature on file as the Confirmation of
+        Correction — uploaded once at "My Signature" — and endorsing without
+        one redirects to the upload page.
+  - [x] Endorsements go on an **endorsement slip**, not on the memo. Once the
+        travelling document is the candidate's own upload, the portal cannot
+        write inside it: stamping into an existing PDF needs a PDF-editing
+        library (`setasign/fpdi`) that is not installed, and `composer.json`
+        belongs to all six people. So `endorsement.blade.php` is generated
+        alongside — the candidate, the dates, both endorsers' stamped
+        signatures, and the Dean's *Approved / Not Approved* block — and
+        re-issued at each endorsement, replacing the previous copy so the
+        appeal carries exactly one. **If the team is happy to add FPDI, the
+        signatures could be stamped straight onto the candidate's memo and
+        the slip would not be needed.**
   - [x] **The chain ends at CGS, deliberately.** CGS acknowledges the memo,
         takes it to the Dean off-portal, and emails the candidate the
         outcome, so the portal never claims to know whether the extension was

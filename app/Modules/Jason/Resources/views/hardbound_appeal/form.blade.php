@@ -20,15 +20,15 @@
             </div>
         @else
             <p class="queue-meta">
-                This writes the CGS memo, <b>Appeal for Extension of Hardbound Thesis
-                Submission</b>, for you. It is addressed to the Dean of Postgraduate and
-                Research and goes through your supervisor and your HOD/Chair, who each endorse
-                it and whose signatures are stamped onto it, before reaching CGS.
-                You do not need to print or upload anything.
+                Download the CGS memo, <b>Appeal for Extension of Hardbound Thesis
+                Submission</b>, write your appeal on it in your own words, sign it, and upload
+                it back here. It is already addressed to the Dean of Postgraduate and Research
+                and carries your name, student ID and department. Your supervisor and your
+                HOD/Chair then endorse it before it reaches CGS.
             </p>
 
             <form method="POST" action="{{ route('hardbound-appeal.store') }}"
-                  class="app-form" data-stepper>
+                  enctype="multipart/form-data" class="app-form" data-stepper>
                 @csrf
 
                 <fieldset class="fstep" data-label="Dates">
@@ -49,20 +49,32 @@
                 @error('requested_until') <p class="field-error">{{ $message }}</p> @enderror
                 </fieldset>
 
-                <fieldset class="fstep" data-label="Your memo">
-                <p class="fstep-hint">Written in your own words, and printed as the body
-                   of the memo the Dean reads.</p>
+                <fieldset class="fstep" data-label="Get the memo">
+                <p class="fstep-hint">Pre-filled with your name, student ID
+                   ({{ $student->matric_no ?: 'not on your record' }}) and department
+                   ({{ $student->department ?: 'not on your record' }}). The reason is
+                   yours to write.</p>
 
-                <label for="reason">Reason for the Appeal</label>
-                <textarea name="reason" id="reason" rows="10" required
-                          placeholder="Explain why you cannot submit your hardbound thesis by the deadline, and what remains to be done."
-                          class="@error('reason') is-invalid @enderror">{{ old('reason') }}</textarea>
-                @error('reason') <p class="field-error">{{ $message }}</p> @enderror
+                <a href="{{ route('hardbound-appeal.template') }}" class="btn-secondary">
+                    Download the memo
+                </a>
+                <p class="queue-meta">
+                    Write why you cannot submit your hardbound thesis by the deadline and what
+                    remains to be done, then sign it above your name.
+                </p>
+                </fieldset>
+
+                <fieldset class="fstep" data-label="Upload it back">
+                <p class="fstep-hint">Your completed, signed memo. This is the document
+                   your supervisor, your HOD/Chair and the Dean read.</p>
+
+                <label for="memo">Completed Memo</label>
+                <input type="file" name="memo" id="memo" required
+                       class="@error('memo') is-invalid @enderror">
+                @error('memo') <p class="field-error">{{ $message }}</p> @enderror
                 <p class="queue-meta" style="margin-top: -8px;">
-                    Leave a blank line between paragraphs. Your name, student ID
-                    ({{ $student->matric_no ?: 'not on your record' }}) and department
-                    ({{ $student->department ?: 'not on your record' }}) are filled in from your
-                    own record, and the date the memo carries is the date you file it.
+                    PDF, Word, Excel or an image, up to 10 MB. It is stored exactly as you
+                    upload it: the portal never edits what you wrote.
                 </p>
                 </fieldset>
 

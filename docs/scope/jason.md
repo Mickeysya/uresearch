@@ -68,9 +68,11 @@
 > **Superseded by CGS, 23 September 2026.** An "appeal" here is a request to
 > **extend the hardbound thesis submission deadline**, filed by a candidate
 > who cannot submit on time — not an appeal against a rejected submission.
-> The candidate fills in CGS's *Appeal for Extension of Hardbound Thesis
-> Submission* memo, which the portal writes for them; it is routed Through
-> the Supervisor and the HOD/Chair, who each endorse and sign it, to the
+> The candidate downloads CGS's *Appeal for Extension of Hardbound Thesis
+> Submission* memo, pre-filled from the portal's records but blank where the
+> appeal itself goes, writes and signs it, and uploads it back. It is then
+> routed Through the Supervisor and the HOD/Chair, who each endorse it — on
+> an accompanying endorsement slip carrying their signatures — to the
 > Non-Executive CGS, who acknowledges receipt. The Dean of Postgraduate and
 > Research signs the memo off-portal and CGS emails the candidate the
 > outcome, so there is no Dean PFR report and no Senior Executive ruling.

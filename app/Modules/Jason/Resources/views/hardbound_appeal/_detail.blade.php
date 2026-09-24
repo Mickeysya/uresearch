@@ -11,12 +11,10 @@
         @endif
     </p>
 
-    <p style="margin-top: 10px;"><b>Reason given:</b></p>
-    <p style="white-space: pre-line;">{{ $detail->reason }}</p>
-
     <p class="queue-meta" style="margin-top: 10px;">
-        The memo itself is in the documents above. It carries every endorsement
-        collected so far, and is re-issued with yours when you endorse it.
+        The candidate's own memo is in the documents above, and says why in their
+        own words. Your endorsement is stamped onto the endorsement slip that
+        travels with it, which is re-issued each time it is endorsed.
     </p>
 @else
     <p style="color: var(--text-grey);">Detail record missing for this appeal.</p>
