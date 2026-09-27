@@ -36,11 +36,13 @@
                 $tone = match ($application->status) {
                     \App\Modules\Core\Models\Application::STATUS_APPROVED => 'good',
                     \App\Modules\Core\Models\Application::STATUS_REJECTED => 'critical',
+                    \App\Modules\Core\Models\Application::STATUS_RETURNED => 'warn',
                     default => $decision ? 'info' : 'warn',
                 };
                 $statusLabel = match ($application->status) {
                     \App\Modules\Core\Models\Application::STATUS_APPROVED => 'Approved',
                     \App\Modules\Core\Models\Application::STATUS_REJECTED => 'Rejected',
+                    \App\Modules\Core\Models\Application::STATUS_RETURNED => 'Returned — Action Needed',
                     default => $decision ? 'Under Review' : 'Pending Approval',
                 };
             @endphp

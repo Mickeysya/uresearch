@@ -22,18 +22,32 @@ Add a row here in the same commit that registers the workflow.
 | `hardbound_submission` | Hardbound Submission | Jason | built |
 | `hardbound_appeal` | Appeal Hardbound Submission | Jason | built |
 | `appointment_letter` | Appointment Letter & Report Management | Jason | built |
-| `workstation` | Workstation Management | Chloe | planned |
-| `candidacy_reminder` | Study Candidacy Reminder | Chloe | planned · see overlap note |
-| `candidacy_appeal` | Study Candidacy Appeal | Chloe | planned · see overlap note |
-| `candidacy_dismissal` | Dismiss Exceeded Study Candidacy | Chloe | planned · see overlap note |
+| `workstation` | Workstation Management | Chloe | built · not a workflow, see `app/Modules/Chloe/README.md` |
+| `candidacy_reminder` | Study Candidacy Reminder | Chloe | built · not application-backed (own tables + scheduled command), see `app/Modules/Chloe/README.md` |
+| `candidacy_appeal` | Study Candidacy Appeal | Chloe | built · own `study_candidacies` table, not shared with Norhanis' RPD trio — see overlap note |
+| `candidacy_dismissal` | Dismiss Exceeded Study Candidacy | Chloe | built · not application-backed (own tables + scheduled command), see `app/Modules/Chloe/README.md` |
 | `gra_application` | GRA Application + Stage Gates | Haziq | planned · see overlap note |
 | `ga_application` | GA Application | Haziq | planned · see overlap note |
 
-**Overlap note — do not claim these without agreeing first.** Chloe's three
-candidacy keys duplicate the *shape* of Norhanis' `rpd_appeal` and
-`rpd_dismissal` (different deadline, near-identical machinery), and Haziq's
-two keys duplicate the *subject* of Nureen's already-built `ga_extension` and
-`ga_certification`. See the overlap section in `TODO.md`.
+**Overlap note.** Chloe's three candidacy keys duplicate the *shape* of
+Norhanis' `rpd_appeal` and `rpd_dismissal` (different deadline, near-identical
+machinery), and Haziq's two keys duplicate the *subject* of Nureen's
+already-built `ga_extension` and `ga_certification`. See the overlap section
+in `TODO.md`.
+
+**Update, 2026-09-21 (post-merge of `develop`):** both sides of this overlap
+are now actually built, independently, exactly as the note above warned —
+Norhanis' RPD trio landed on `develop` with its own `candidacies` table
+(`app/Modules/Norhanis/Models/Candidacy.php`) tracking the RPD milestone,
+while Chloe's candidacy trio (this branch) tracks study-candidacy expiry in
+its own `study_candidacies` table. Nothing was unified, because neither side
+knew the other had shipped until this merge. The two are structurally
+similar (reminder cadence, an appeal chain with a cumulative-extension cap,
+a dismissal list) but track different deadlines for the same student, in
+two separate tables with no shared code. **This still needs a team decision**
+— whether that's acceptable as two intentionally-separate concerns, or
+worth consolidating later — flagged here rather than picked unilaterally
+while resolving this merge.
 
 ## Stage keys in use
 
@@ -76,7 +90,7 @@ first whether an existing role already means the same person.
 |---|---|---|
 | GRS Executive | `haziq.md` | new role, or map to `non_exec_cgs` |
 | Research Centre | `haziq.md` | new role — conducts GA interviews |
-| Programme Chair | `chloe.md` | probably the existing `chair` — confirm with CGS |
+| Programme Chair | `chloe.md` | reused as the existing `chair` role in the built Study Candidacy Appeal chain (2026-09-21) — CGS confirmation is still outstanding, flag if that turns out wrong |
 | Project Director | `norhanis.md` | may be a post-approval export, not a stage |
 
 **Resolved.** `Faculty` is now a role (`App\Modules\Core\Support\Role::FACULTY`),

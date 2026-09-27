@@ -27,6 +27,15 @@ class Application extends Model
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
 
+    /**
+     * Sent back to the student for revision — not terminal, unlike rejected.
+     * `current_stage` stays at the returning stage; WorkflowEngine::resubmit()
+     * puts it back to `pending` on that same stage once the student edits and
+     * resubmits, so the same approver reviews it again rather than the chain
+     * restarting from stage one.
+     */
+    public const STATUS_RETURNED = 'returned';
+
     protected $fillable = [
         'student_id', 'submitted_by_id', 'module_type', 'status', 'current_stage', 'submitted_at',
     ];
