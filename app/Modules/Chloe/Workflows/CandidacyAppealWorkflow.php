@@ -45,7 +45,7 @@ class CandidacyAppealWorkflow implements WorkflowModule
         $detail = CandidacyAppealDetail::where('application_id', $application->id)->first();
 
         return $detail
-            ? "Extension request — {$detail->requested_extension_months} month(s)"
+            ? "Extension request: {$detail->requested_extension_months} month(s)"
             : 'Study candidacy appeal';
     }
 

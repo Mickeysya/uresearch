@@ -54,7 +54,7 @@ class WorkstationController extends Controller
 
         if (! $gender) {
             return redirect()->route('workstation.select')
-                ->with('error', 'Set your gender first — rooms are shown by gender designation.');
+                ->with('error', 'Set your gender first. Rooms are shown by gender designation.');
         }
 
         $rooms = WorkstationLocation::where('block', $block)
@@ -78,7 +78,7 @@ class WorkstationController extends Controller
 
         if (! $gender) {
             return redirect()->route('workstation.select')
-                ->with('error', 'Set your gender first — rooms are shown by gender designation.');
+                ->with('error', 'Set your gender first. Rooms are shown by gender designation.');
         }
 
         // Belt-and-suspenders against a direct URL to a room of the other

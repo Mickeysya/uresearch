@@ -36,7 +36,7 @@ class CandidacyDismissalController extends Controller
 
         return redirect()->route('candidacy.cgs.dismissals')
             ->with('status', $created === 0
-                ? 'List is already up to date — no new candidates.'
+                ? 'The list is already up to date. There are no new candidates.'
                 : "{$created} new candidate(s) added to the list.");
     }
 

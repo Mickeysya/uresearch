@@ -62,7 +62,7 @@ class WorkstationCatalogController extends Controller
     {
         if ($workstation->status === Workstation::STATUS_OCCUPIED) {
             return redirect()->route('workstation.cgs.catalog')
-                ->with('error', 'This seat is occupied — force-release it from the operations screen before editing.');
+                ->with('error', 'This seat is occupied. Force-release it from Workstation Management before editing it.');
         }
 
         $data = $request->validate([
@@ -86,7 +86,7 @@ class WorkstationCatalogController extends Controller
     {
         if ($workstation->requests()->exists()) {
             return redirect()->route('workstation.cgs.catalog')
-                ->with('error', 'This seat has request history — disable it instead of deleting it.');
+                ->with('error', 'This seat has booking history, so it cannot be deleted. Set it to Under maintenance instead.');
         }
 
         $workstation->delete();

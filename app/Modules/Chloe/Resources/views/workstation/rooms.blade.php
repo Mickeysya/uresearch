@@ -3,33 +3,35 @@
 @section('title', 'Workstation: Block ' . $block)
 
 @section('content')
+@include('chloe::partials.styles')
+
 <div class="card-container-inline">
-    <x-core::page-header title="Block {{ $block }}"
-                         subtitle="Each room is designated for one gender; pick the room that applies to you.">
-        <a href="{{ route('workstation.select') }}"><button type="button">Home</button></a>
+    <x-core::page-header :title="'Block '.$block"
+                         subtitle="Each room is designated for one gender. Pick a room to see its seats.">
+        <a href="{{ route('workstation.select') }}" class="btn-secondary">All blocks</a>
     </x-core::page-header>
 
+    @if ($activeRequest)
+        <p class="message-info">
+            You already hold Seat {{ $activeRequest->workstation->seat_code }} in {{ $activeRequest->workstation->location->name }}.
+            Release it from <a href="{{ route('workstation.select') }}">your workstation</a> before choosing another.
+        </p>
+    @endif
+
     <div class="card card-wide">
-        @if ($activeRequest)
-            <div class="empty-state">
-                You already hold Seat {{ $activeRequest->workstation->seat_code }} in {{ $activeRequest->workstation->location->name }}.
-                Release it from the <a href="{{ route('workstation.select') }}">Home</a> screen before selecting another.
+        @if ($rooms->isEmpty())
+            <div class="empty-state">No rooms in this block are open to you.</div>
+        @else
+            <div class="chloe-tiles">
+                @foreach ($rooms as $room)
+                    <a href="{{ route('workstation.seats', $room) }}" class="chloe-tile">
+                        <span class="chloe-tile-title">{{ $room->name }}</span>
+                        <span><span class="status-badge draft">{{ $room->genderLabel() }}</span></span>
+                        <span class="chloe-tile-meta">{{ $room->available_count }} of {{ $room->workstations_count }} seats available</span>
+                    </a>
+                @endforeach
             </div>
         @endif
-
-        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-top: 12px;">
-            @foreach ($rooms as $room)
-                <a href="{{ route('workstation.seats', $room) }}" class="card" style="margin:0; padding:16px; text-decoration:none; color:inherit;">
-                    <b>{{ $room->name }}</b>
-                    <div style="margin-top:6px;">
-                        <span class="status-badge {{ $room->gender === 'female' ? 'rejected' : 'pending' }}">{{ $room->genderLabel() }}</span>
-                    </div>
-                    <p style="color: var(--text-grey); font-size: 13px; margin-top:6px;">
-                        {{ $room->available_count }} of {{ $room->workstations_count }} seats available
-                    </p>
-                </a>
-            @endforeach
-        </div>
     </div>
 </div>
 @endsection

@@ -2,89 +2,109 @@
 
 @section('title', 'Workstation')
 
+@section('content')
+@include('chloe::partials.styles')
+
 @php
     $lockerBadgeTone = ['requested' => 'pending', 'collected' => 'approved', 'returned' => 'draft'];
 @endphp
 
-@section('content')
 <div class="card-container-inline">
-    <x-core::page-header title="Workstation" />
+    <x-core::page-header title="Workstation"
+                         subtitle="Book a postgraduate workstation and request its locker key." />
 
-    <div class="card card-wide">
-        @if ($activeRequest)
-            <p>
-                Seat <b>{{ $activeRequest->workstation->seat_code }}</b>,
-                {{ $activeRequest->workstation->location->name }} ({{ $activeRequest->workstation->location->block }})
-                <span class="status-badge approved">Confirmed</span>
-            </p>
-            <p style="color: var(--text-grey); font-size: 13px;">
-                Since {{ $activeRequest->requested_at->format('j M Y, g:ia') }}
-            </p>
+    <div class="chloe-stack">
+        <div class="card card-wide">
+            <h3>My workstation</h3>
 
-            <form method="POST" action="{{ route('workstation.release', $activeRequest) }}" style="display:inline-block; margin-right: 8px;">
-                @csrf
-                <button type="submit">Release Seat</button>
-            </form>
+            @if ($activeRequest)
+                <dl class="rpd-facts">
+                    <div>
+                        <dt>Seat</dt>
+                        <dd>{{ $activeRequest->workstation->seat_code }}</dd>
+                    </div>
+                    <div>
+                        <dt>Room</dt>
+                        <dd>{{ $activeRequest->workstation->location->name }}</dd>
+                    </div>
+                    <div>
+                        <dt>Block</dt>
+                        <dd>{{ $activeRequest->workstation->location->block }}</dd>
+                    </div>
+                    <div>
+                        <dt>Held since</dt>
+                        <dd>{{ $activeRequest->requested_at->format('j M Y') }}</dd>
+                    </div>
+                    <div>
+                        <dt>Locker key</dt>
+                        <dd>
+                            @if ($activeRequest->lockerKey)
+                                <span class="status-badge {{ $lockerBadgeTone[$activeRequest->lockerKey->status] ?? 'draft' }}">{{ ucfirst($activeRequest->lockerKey->status) }}</span>
+                            @else
+                                Not requested
+                            @endif
+                        </dd>
+                    </div>
+                </dl>
 
-            @if ($activeRequest->lockerKey)
-                <span class="status-badge {{ $lockerBadgeTone[$activeRequest->lockerKey->status] }}">
-                    Locker Key: {{ ucfirst($activeRequest->lockerKey->status) }}
-                </span>
+                <div class="chloe-actions">
+                    @unless ($activeRequest->lockerKey)
+                        <form method="POST" action="{{ route('workstation.locker-key.request') }}">
+                            @csrf
+                            <button type="submit">Request locker key</button>
+                        </form>
+                    @endunless
+                    <form method="POST" action="{{ route('workstation.release', $activeRequest) }}">
+                        @csrf
+                        <button type="submit" class="btn-reject">Release seat</button>
+                    </form>
+                </div>
             @else
-                <form method="POST" action="{{ route('workstation.locker-key.request') }}" style="display:inline-block;">
-                    @csrf
-                    <button type="submit">Request Locker Key</button>
-                </form>
+                <div class="empty-state">
+                    <p>You do not hold a workstation.</p>
+                    <p class="queue-meta">Choose a block below to browse its rooms and pick a seat.</p>
+                </div>
             @endif
-        @else
-            <div class="empty-state">
-                You do not currently hold a workstation. Choose a block below to browse rooms and pick a seat.
-            </div>
-        @endif
-    </div>
-</div>
+        </div>
 
-<div class="card-container-inline">
-    <div class="card card-wide">
-        <h3>Postgraduate Workstation Availability</h3>
-        <div class="card-divider"></div>
+        <div class="card card-wide">
+            <h3>Find a seat</h3>
 
-        @if (! $gender)
-            <p>Rooms are designated by gender; tell us yours to see the rooms that apply to you.</p>
-            <form method="POST" action="{{ route('workstation.gender.set') }}">
-                @csrf
-                <select name="gender" required>
-                    <option value="">Select&hellip;</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                </select>
-                <button type="submit">Continue</button>
-            </form>
-        @else
-            <p style="color: var(--text-grey); font-size: 13px; margin-bottom: 4px;">
-                Showing rooms for: <b>{{ ucfirst($gender) }}</b>
-            </p>
-            <details style="margin-bottom:12px;">
-                <summary style="cursor:pointer; color: var(--text-grey); font-size: 13px;">Change</summary>
-                <form method="POST" action="{{ route('workstation.gender.set') }}" style="margin-top:8px;">
+            @if (! $gender)
+                <p class="queue-meta">Rooms are designated by gender. Tell us yours to see the rooms that apply to you.</p>
+                <form method="POST" action="{{ route('workstation.gender.set') }}" class="chloe-inline">
                     @csrf
-                    <select name="gender" required>
-                        <option value="male" @selected($gender === 'male')>Male</option>
-                        <option value="female" @selected($gender === 'female')>Female</option>
+                    <select name="gender" id="gender" aria-label="Gender" required>
+                        <option value="">Select your gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
                     </select>
-                    <button type="submit">Save</button>
+                    <button type="submit">Continue</button>
                 </form>
-            </details>
+            @else
+                <details class="queue-meta">
+                    <summary>Showing rooms for <b>{{ ucfirst($gender) }}</b> students. Change</summary>
+                    <form method="POST" action="{{ route('workstation.gender.set') }}" class="chloe-inline">
+                        @csrf
+                            <select name="gender" id="gender" aria-label="Gender" required>
+                            <option value="male" @selected($gender === 'male')>Male</option>
+                            <option value="female" @selected($gender === 'female')>Female</option>
+                        </select>
+                        <button type="submit" class="btn-secondary">Save</button>
+                    </form>
+                </details>
 
-            <p style="color: var(--text-grey); font-size: 13px;">Click a block to see its rooms.</p>
-            <div style="display:flex; gap:16px; flex-wrap:wrap;">
-                @foreach ($blocks as $block)
-                    <a href="{{ route('workstation.rooms', $block) }}" style="text-decoration:none;">
-                        <button type="button" style="min-width: 160px; padding: 18px 28px; font-size: 15px;">Block {{ $block }}</button>
-                    </a>
-                @endforeach
-            </div>
-        @endif
+                <p class="chloe-eyebrow">Blocks</p>
+                <div class="chloe-tiles">
+                    @foreach ($blocks as $block)
+                        <a href="{{ route('workstation.rooms', $block) }}" class="chloe-tile">
+                            <span class="chloe-tile-title">Block {{ $block }}</span>
+                            <span class="chloe-tile-meta">See its rooms</span>
+                        </a>
+                    @endforeach
+                </div>
+            @endif
+        </div>
     </div>
 </div>
 @endsection

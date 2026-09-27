@@ -133,7 +133,7 @@ class WorkstationAllocator
             $locked = Workstation::whereKey($seat->id)->lockForUpdate()->first();
 
             if (! $locked || $locked->status === Workstation::STATUS_OCCUPIED) {
-                throw new RuntimeException('That seat is occupied — force-release it before reassigning.');
+                throw new RuntimeException('That seat is occupied. Force-release it before reassigning it.');
             }
 
             $locked->update(['status' => Workstation::STATUS_OCCUPIED]);

@@ -262,7 +262,7 @@ class CandidacyAppealController extends Controller
     protected function appealFormMessages(StudyCandidacy $candidacy): array
     {
         return [
-            'requested_extension_months.max' => 'You can request at most '.$candidacy->remainingAppealMonths().' more month(s) — the 12-month cap.',
+            'requested_extension_months.max' => 'You can request at most '.$candidacy->remainingAppealMonths().' more month(s) under the 12-month cap.',
             'writing_completion_percent.required' => 'Enter your percentage of completion.',
             'rcs_date.required_if' => 'Enter the RCS date, or mark RCS as not yet done.',
             'rcs_category.required_if' => 'Enter the RCS category, or mark RCS as not yet done.',
@@ -312,7 +312,7 @@ class CandidacyAppealController extends Controller
     {
         return match (true) {
             $candidacy->hasOpenAppeal() => 'You already have an appeal in progress.',
-            $candidacy->last_rejection_at !== null => 'A previous appeal was rejected — no further appeals can be filed.',
+            $candidacy->last_rejection_at !== null => 'A previous appeal was rejected, so no further appeals can be filed.',
             $candidacy->remainingAppealMonths() <= 0 => 'You have used your full 12-month appeal allowance.',
             default => 'You are not eligible to submit a new appeal.',
         };
