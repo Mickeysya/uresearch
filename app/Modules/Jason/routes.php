@@ -11,6 +11,21 @@ use Illuminate\Support\Facades\Route;
 | Hardbound Submission · Appeal Hardbound Submission · Appointment Letter
 */
 
+// An appointed examiner signs the Confirmation of Correction through an
+// emailed link, outside `auth`: they have no account and are not going to be
+// given one for a single signature. The `signed` middleware is the
+// credential -- Laravel rejects a tampered or expired URL before the
+// controller runs, and the controller re-checks that the link belongs to
+// this submission and to a stage still waiting for it.
+Route::middleware('signed')->group(function () {
+    Route::get('/hardbound/{application}/examiner-signature/{examiner}',
+        [HardboundSubmissionController::class, 'examinerSignForm'])
+        ->name('hardbound.examiner.sign');
+    Route::post('/hardbound/{application}/examiner-signature/{examiner}',
+        [HardboundSubmissionController::class, 'storeExaminerSignature'])
+        ->name('hardbound.examiner.sign.store');
+});
+
 Route::middleware('auth')->group(function () {
 
     // ---- Appointment Letter --------------------------------------------

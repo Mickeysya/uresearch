@@ -1081,10 +1081,35 @@ while no workflow declares it.
         two stages without a signature on file redirects to the upload page;
         rejecting needs none. The signature and date come from the
         `approval_history` row the engine wrote, so the stamped form and the
-        audit trail cannot disagree. **The Examiner block is left for a
-        physical signature and official stamp** — examiners have no login.
-        CGS has no block on 017A; its signature belongs on paper in 021's
-        office block.
+        audit trail cannot disagree. CGS has no block on 017A; its signature
+        belongs on paper in 021's office block.
+  - [x] **The examiner signs too, from 2026-09-30, and without an account.**
+        They were the one signatory left on paper, because they have no login
+        and are not going to be given one for a single signature. Instead:
+        when the **Chairman** approves — the last signatory with an account —
+        every examiner the Dean appointed for that candidate is emailed a
+        **temporary signed URL** (`ExaminerSignatureRequest`, a plain
+        Mailable for the same reason `AppointmentLetterMail` is one). The
+        link opens a page with the candidate, thesis and viva details and
+        takes a signature image; `signed` middleware is the credential, and
+        the controller re-checks that the link belongs to this submission and
+        to a stage still waiting for it, so one examiner's link cannot sign
+        as another and a used link stops working once CGS accepts.
+        `hardbound_examiner_signatures` is separate from `hardbound_
+        signatures` because the latter is keyed on `user_id` and there is no
+        user to key on; it is one row per application, since 017A has a
+        single "INTERNAL / EXTERNAL EXAMINER" block and the first examiner to
+        sign fills it. Signing re-issues the Confirmation with all three
+        signatures.
+  - [x] **CGS cannot accept until the examiner has signed.** The examiner
+        signs through a link rather than a queue, so without this the
+        submission could complete with the block the form exists for still
+        empty. Enforced only where the portal knows of an examiner: a
+        candidate whose panel was appointed off-system has none on record,
+        and blocking CGS on somebody it cannot name would strand the
+        submission. **Who the examiner is comes from the Appointment Letter
+        chain** — the panel the Dean approved for that candidate — so nobody
+        retypes them and the two modules line up.
   - [x] Non-Exec review screen — forward to Senior Exec, or return to the
         student with mandatory comments
   - [x] Every stage's approve/reject emails the student (the engine's

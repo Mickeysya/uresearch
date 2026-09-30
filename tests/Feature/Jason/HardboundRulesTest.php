@@ -6,13 +6,18 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Jason\Mail\ExaminerSignatureRequest;
+use App\Modules\Jason\Models\AppointmentExaminer;
 use App\Modules\Jason\Models\HardboundAppealDetail;
+use App\Modules\Jason\Models\HardboundExaminerSignature;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
 use App\Modules\Jason\Notifications\ExtensionMemoReceived;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
@@ -138,6 +143,174 @@ class HardboundRulesTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame('chair', $application->fresh()->current_stage);
+    }
+
+    /* ---------------- the examiner's signature ---------------- */
+
+    /**
+     * The Confirmation has three signatories, and the examiner is the one
+     * without an account. They sign through an emailed link once the
+     * Supervisor and the Chairman have approved, and CGS cannot accept the
+     * submission until they have — otherwise the form completes with the
+     * block it exists for still empty.
+     */
+    public function test_cgs_cannot_accept_until_the_appointed_examiner_has_signed(): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+
+        $student = $this->student();
+        $supervisor = $this->supervisor();
+        $chair = $this->chair();
+        $cgs = $this->cgs();
+        $this->signatureFor($supervisor);
+        $this->signatureFor($chair);
+
+        $examiner = $this->appointedExaminerFor($student);
+        $application = $this->submission($student);
+
+        $this->actingAs($supervisor)->post(route('hardbound.decide', $application), ['decision' => 'approve']);
+        $this->actingAs($chair)->post(route('hardbound.decide', $application), ['decision' => 'approve']);
+
+        $this->assertSame('cgs_review', $application->fresh()->current_stage);
+
+        // The examiner was asked, by email, for the signature CGS is waiting
+        // on. Queued, not sent: the mailable is ShouldQueue, like every other
+        // piece of mail this module addresses to someone without an account.
+        Mail::assertQueued(ExaminerSignatureRequest::class);
+
+        $this->actingAs($cgs)
+            ->post(route('hardbound.decide', $application), ['decision' => 'approve'])
+            ->assertSessionHas('error');
+
+        $this->assertSame(Application::STATUS_PENDING, $application->fresh()->status);
+
+        // The examiner signs through their link, and CGS can accept.
+        $this->post($this->signingUrl($application, $examiner, 'hardbound.examiner.sign.store'), [
+            'signature' => UploadedFile::fake()->image('examiner.png', 300, 100),
+        ])->assertSessionHasNoErrors();
+
+        $this->assertNotNull(HardboundExaminerSignature::forApplication($application->id));
+
+        $this->actingAs($cgs)
+            ->post(route('hardbound.decide', $application), ['decision' => 'approve'])
+            ->assertSessionHas('status');
+
+        $this->assertSame(Application::STATUS_APPROVED, $application->fresh()->status);
+    }
+
+    /**
+     * The signed URL is the only credential an examiner has, so it has to be
+     * the whole credential: an unsigned link is refused outright, and a link
+     * issued for one examiner cannot sign as another.
+     */
+    public function test_a_signing_link_is_refused_without_its_signature(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $examiner = $this->appointedExaminerFor($student);
+        $application = $this->atExaminerStage($student);
+
+        // No signature on the URL at all.
+        $this->get(route('hardbound.examiner.sign', [
+            'application' => $application->id, 'examiner' => $examiner->id,
+        ]))->assertForbidden();
+
+        // Properly signed, and it opens.
+        $this->get($this->signingUrl($application, $examiner))
+            ->assertOk()
+            ->assertSee($examiner->examiner_name);
+    }
+
+    /**
+     * Rejecting signs nothing, and a submission still with its supervisor
+     * has not reached the examiner. A link that worked once must not keep
+     * working after the form has moved on.
+     */
+    public function test_an_examiner_cannot_sign_a_form_that_is_not_waiting_for_them(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $examiner = $this->appointedExaminerFor($student);
+
+        // Still on the supervisor's desk.
+        $application = $this->submission($student);
+
+        $this->get($this->signingUrl($application, $examiner))->assertForbidden();
+    }
+
+    /**
+     * A candidate whose panel was appointed off-system has no examiner on
+     * record. Blocking CGS on somebody the portal cannot name would strand
+     * the submission, so the gate only applies where there is an examiner.
+     */
+    public function test_a_submission_with_no_appointed_examiner_is_not_blocked(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $supervisor = $this->supervisor();
+        $chair = $this->chair();
+        $cgs = $this->cgs();
+        $this->signatureFor($supervisor);
+        $this->signatureFor($chair);
+
+        $application = $this->submission($student);
+
+        $this->actingAs($supervisor)->post(route('hardbound.decide', $application), ['decision' => 'approve']);
+        $this->actingAs($chair)->post(route('hardbound.decide', $application), ['decision' => 'approve']);
+
+        $this->actingAs($cgs)
+            ->post(route('hardbound.decide', $application), ['decision' => 'approve'])
+            ->assertSessionHas('status');
+
+        $this->assertSame(Application::STATUS_APPROVED, $application->fresh()->status);
+    }
+
+    /** An approved appointment giving this candidate a panel. */
+    protected function appointedExaminerFor(User $student): AppointmentExaminer
+    {
+        $appointment = Application::create([
+            'student_id' => $student->id,
+            'submitted_by_id' => $student->id,
+            'module_type' => 'appointment_letter',
+            'status' => Application::STATUS_APPROVED,
+            'current_stage' => 'dean',
+        ]);
+
+        return AppointmentExaminer::create([
+            'application_id' => $appointment->id,
+            'examiner_type' => AppointmentExaminer::TYPE_EXTERNAL,
+            'examiner_name' => 'Professor Ir Ts Dr Muzamir Bin Isa',
+            'examiner_institution' => 'Universiti Malaysia Perlis',
+            'examiner_email' => 'muzamir@unimap.edu.my',
+            'examiner_address' => 'Perlis',
+        ]);
+    }
+
+    /** A submission sitting where the examiner is expected to sign. */
+    protected function atExaminerStage(User $student): Application
+    {
+        $application = $this->submission($student);
+        $supervisor = $this->supervisor();
+        $chair = $this->chair();
+        $this->signatureFor($supervisor);
+        $this->signatureFor($chair);
+
+        $this->actingAs($supervisor)->post(route('hardbound.decide', $application), ['decision' => 'approve']);
+        $this->actingAs($chair)->post(route('hardbound.decide', $application), ['decision' => 'approve']);
+
+        return $application->fresh();
+    }
+
+    protected function signingUrl(Application $application, AppointmentExaminer $examiner, string $route = 'hardbound.examiner.sign'): string
+    {
+        return URL::temporarySignedRoute($route, now()->addDay(), [
+            'application' => $application->id,
+            'examiner' => $examiner->id,
+        ]);
     }
 
     /* ---------------- the resubmit guard ---------------- */
