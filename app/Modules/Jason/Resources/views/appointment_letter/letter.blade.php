@@ -35,13 +35,22 @@
         'The examiner can be assigned one (1) assignment at one (1) time. The examiner can be appointed to other assignment upon completion of 1st assignment during his/her tenure.',
     ];
 
-    $conflicts = [
+    /**
+     * The conflict of interest declaration.
+     *
+     * CGS revised it for external examiners (the MSc and PhD templates dated
+     * September 2026): a purpose preamble, a "Proposal" column in place of
+     * "Type of conflict of interest", six working-relationship criteria in
+     * place of five, wider personal and other criteria, and a signed
+     * declaration on a page of its own. The internal template has not been
+     * reissued, so it keeps the older, shorter wording -- swap it here when
+     * the internal version arrives.
+     */
+    $conflicts = $internal ? [
         'Working relationship' => [
             "Co-authored paper with the student and/or student's supervisor in the research thesis to be examined",
             'Worked with the student on matters of analysis and/or synthesis in the research thesis to be examined',
-            $internal
-                ? 'Funds have been provided to the student in the research thesis to be examined'
-                : 'Has provided funds to the student in the research thesis to be examined',
+            'Funds have been provided to the student in the research thesis to be examined',
             'Has refereed/edited a paper published by the student in the research thesis to be examined',
             'Has been employed or currently employed by the student',
         ],
@@ -50,14 +59,52 @@
             'Has a personal relationship of enmity with the student or supervisor',
             'A Mentor/Associate of the student',
         ],
-        'Others' => $internal ? [
-            'Any other potential conflict of interest<br>State here:',
-        ] : [
-            'Has currently been appointed by Universiti Teknologi PETRONAS (e.g. Adjunct lecturer, Adjunct Professor, IAP, Visiting Professor etc)',
-            'A former (leaving UTP) staff/student of Universiti Teknologi PETRONAS for less than five years',
+        'Others' => [
             'Any other potential conflict of interest<br>State here:',
         ],
+    ] : [
+        'Working relationship' => [
+            'Has co-authored any scholarly publication (e.g. journal article, conference paper, book chapter, '
+                .'book, patent, technical report or other research output) with the student and/or the '
+                ."student's supervisor(s) in the same or a closely related field of research, including the "
+                ."student's thesis research area, within the last five (5) years.",
+            "Have collaborated with the student and/or the student's supervisor(s) on the design, methodology, "
+                .'data collection, analysis, interpretation, synthesis or writing of the research thesis or any '
+                .'research directly related to the thesis under examination.',
+            'Have provided, administered or received research funding, sponsorship or other financial support '
+                ."directly related to the student's research thesis or associated research project.",
+            'Has reviewed, edited, proofread, or provided substantial intellectual input to the research thesis '
+                ."under examination or to any publication or other scholarly output arising from the student's "
+                .'research thesis.',
+            'Has been employed by or is currently employed by the student or by an organisation in which the '
+                .'student has a direct supervisory, managerial or reporting relationship.',
+            'Has supervised, co-supervised, served on a supervisory committee or provided formal academic advice '
+                .'to the student in relation to the thesis or research project under examination.',
+        ],
+        'Personal relationship' => [
+            "Is a close relative of the student and/or the student's supervisor(s) (e.g. spouse, parent, child, "
+                .'sibling, grandparent, grandchild or in-law).',
+            'Has a close personal relationship or a relationship of enmity with the student and/or the '
+                ."student's supervisor(s) that may affect or reasonably be perceived to affect, impartiality.",
+            'Has served as a mentor, advisor, collaborator, associate or other close professional associate of '
+                .'the student that may give rise to an actual, potential or perceived conflict of interest.',
+        ],
+        'Others' => [
+            'Currently holds an appointment with Universiti Teknologi PETRONAS (UTP) (e.g. Adjunct Lecturer, '
+                .'Adjunct Professor, Industry Advisory Panel (IAP) member, Visiting Professor or any other '
+                .'honorary or affiliated appointment).',
+            'Is a former staff member or student of Universiti Teknologi PETRONAS (UTP) who left or graduated '
+                .'less than five (5) years ago.',
+            'Has any other actual, potential or perceived conflict of interest that may compromise or reasonably '
+                .'be perceived to compromise, the independence, objectivity or impartiality of the examination.'
+                .'<br><br>If yes, please provide details: <span class="fill" style="min-width: 210px;"></span>',
+        ],
     ];
+
+    // The revised external forms carry the 026 series; the internal template
+    // has not been reissued and stays on 025.
+    $formCode = $internal ? 'UTP/CGS/025' : 'UTP/CGS/026';
+
 @endphp
 <!DOCTYPE html>
 <html>
@@ -91,6 +138,12 @@
         table.grid { width: 100%; border-collapse: collapse; margin: 10px 0; }
         table.grid th, table.grid td { border: 1px solid #000; padding: 5px 6px; text-align: left; vertical-align: top; }
         table.grid th { font-weight: bold; }
+
+        /* The revised external declaration has twelve criteria in full legal
+           wording. At the body size it runs onto a second sheet, which the
+           issued form does not: it is one page, table and all. */
+        table.grid.coi { font-size: 9px; line-height: 1.3; margin: 8px 0 0; }
+        table.grid.coi th, table.grid.coi td { padding: 3px 5px; }
 
         ol.terms { margin: 6px 0 10px 20px; padding-left: 12px; }
         ol.terms li { margin-bottom: 6px; }
@@ -276,7 +329,7 @@
 
 {{-- ==================================================== acknowledgement slip --}}
 <div class="sheet">
-    <div class="form-code">UTP/CGS/025</div>
+    <div class="form-code">{{ $formCode }}</div>
     <h2 class="doc-title">Acknowledgement Slip</h2>
 
     <p style="text-align: right;">Date: <span class="fill"></span></p>
@@ -304,11 +357,11 @@
     <p>
         @if ($internal)
             I hereby read and complete the declaration on conflict of interest as specified in
-            Appendix UTP/CGS/025, to the best of my knowledge and submit it to your office for
+            Appendix {{ $formCode }}, to the best of my knowledge and submit it to your office for
             reference and further process.
         @else
             I hereby had read and completed the declaration on conflict of interest as specified in
-            Appendix UTP/CGS/025, to the best of my knowledge and submitted to your office for
+            Appendix {{ $formCode }}, to the best of my knowledge and submitted to your office for
             reference and further process.
         @endif
     </p>
@@ -349,14 +402,29 @@
 
 {{-- =========================================== conflict of interest declaration --}}
 <div class="sheet">
-    <div class="form-code">UTP/CGS/025</div>
+    <div class="form-code">{{ $formCode }}</div>
     <h2 class="doc-title">Conflict of Interest Declaration</h2>
 
-    <table class="grid">
+    @unless ($internal)
+        <p style="font-weight: bold; margin: 0 0 4px;">Purpose of Declaration</p>
+        <p style="text-align: justify; margin-bottom: 6px;">
+            Universiti Teknologi PETRONAS (&ldquo;UTP&rdquo;) requires all appointed external
+            examiners to declare any actual, potential or perceived conflict of interest that may
+            affect or reasonably be perceived to affect, their independence, objectivity and
+            impartiality in conducting the examination of the candidate's thesis.
+        </p>
+        <p style="text-align: justify; margin-bottom: 4px;">
+            The existence of a disclosed conflict of interest does not automatically disqualify an
+            examiner from appointment. UTP reserves the right to assess the nature and materiality
+            of any disclosed conflict and determine the appropriate course of action.
+        </p>
+    @endunless
+
+    <table class="grid @unless ($internal) coi @endunless">
         <thead>
             <tr>
                 <th style="width: 92px;">Category</th>
-                <th>Type of conflict of interest</th>
+                <th>{{ $internal ? 'Type of conflict of interest' : 'Proposal' }}</th>
                 <th style="width: 34px; text-align: center;">Yes</th>
                 <th style="width: 34px; text-align: center;">No</th>
             </tr>
@@ -377,20 +445,56 @@
         </tbody>
     </table>
 
-    <p style="margin-top: 22px;">Thank you.</p>
-    <p>Yours sincerely,</p>
+    @if ($internal)
+        <p style="margin-top: 22px;">Thank you.</p>
+        <p>Yours sincerely,</p>
 
-    <div class="sig-line"></div>
+        <div class="sig-line"></div>
 
-    <table class="details">
-        <tr><td class="label">Name</td><td class="sep">:</td><td>{{ $examiner->examiner_name }}</td></tr>
-        <tr><td class="label">Date</td><td class="sep">:</td><td></td></tr>
-    </table>
+        <table class="details">
+            <tr><td class="label">Name</td><td class="sep">:</td><td>{{ $examiner->examiner_name }}</td></tr>
+            <tr><td class="label">Date</td><td class="sep">:</td><td></td></tr>
+        </table>
+    @endif
 </div>
+
+{{-- The declaration the revised external form puts on a page of its own. --}}
+@unless ($internal)
+    <div class="sheet">
+        <p style="text-align: justify;">
+            I declare that the information provided in this form is true, complete and accurate to
+            the best of my knowledge.
+        </p>
+
+        <p>I further confirm that:</p>
+
+        <p class="clause" style="text-align: justify;">
+            a)&nbsp;&nbsp;&nbsp;&nbsp;I will undertake the examination independently, objectively
+            and impartially;
+        </p>
+        <p class="clause" style="text-align: justify;">
+            b)&nbsp;&nbsp;&nbsp;&nbsp;I have disclosed all actual, potential or perceived conflicts
+            of interest known to me at the time of signing this declaration; and
+        </p>
+        <p class="clause" style="text-align: justify;">
+            c)&nbsp;&nbsp;&nbsp;&nbsp;should any actual, potential or perceived conflict of interest
+            arise after submission of this declaration, I will promptly notify UTP in writing and
+            provide the relevant details for further assessment.
+        </p>
+
+        <table class="details" style="margin-top: 30px;">
+            <tr><td class="label">Signature</td><td class="sep">:</td><td></td></tr>
+            <tr><td class="label">Name</td><td class="sep">:</td><td></td></tr>
+            <tr><td class="label">Position</td><td class="sep">:</td><td></td></tr>
+            <tr><td class="label">Organisation</td><td class="sep">:</td><td></td></tr>
+            <tr><td class="label">Date</td><td class="sep">:</td><td></td></tr>
+        </table>
+    </div>
+@endunless
 
 {{-- ============================================== thesis receipt confirmation --}}
 <div class="sheet">
-    <div class="form-code">UTP/CGS/025</div>
+    <div class="form-code">{{ $formCode }}</div>
     <h2 class="doc-title">Thesis Receipt Confirmation</h2>
 
     <p style="text-align: right;">Date: <span class="fill"></span></p>

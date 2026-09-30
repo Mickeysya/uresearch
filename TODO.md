@@ -1209,6 +1209,19 @@ unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
         form (UTP/PPS/024) — and archives them, so the Dean approves
         documents that already exist. On Dean approval each examiner is
         emailed their own two.
+  - [x] **The external conflict-of-interest declaration follows CGS's
+        September 2026 revision** (their MSc and PhD templates), replacing the
+        older form: a *Purpose of Declaration* preamble, a **Proposal**
+        column in place of *Type of conflict of interest*, six
+        working-relationship criteria in place of five, wider personal and
+        other criteria in full legal wording, and a signed declaration
+        (Signature, Name, **Position**, **Organisation**, Date) on a page of
+        its own. The external pack moves from the **025** series to **026**,
+        which the acknowledgement slip's appendix reference follows. The
+        **internal** template has not been reissued, so it keeps the older
+        wording and the 025 code — the two are separate branches of
+        `$conflicts` in `letter.blade.php`, so swap the internal one when CGS
+        issues it. Nothing else in the chain changed.
   - [x] **Open question, resolved:** every other module's notification goes
         to the student, a system user with an account. This one's final
         recipient is an external examiner with no login, so the PDF is sent
