@@ -11,18 +11,20 @@ use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
+use App\Modules\Jason\Exports\AppointmentTemplateExport;
+use App\Modules\Jason\Imports\AppointmentSheetImport;
 use App\Modules\Jason\Mail\AppointmentLetterMail;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
-use App\Modules\Jason\Models\PoolExaminer;
-use App\Modules\Jason\Notifications\ExaminerPanelNominated;
 use App\Modules\Jason\Notifications\ExaminersAppointed;
+use App\Modules\Jason\Support\AppointmentSheet;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -41,108 +43,237 @@ class AppointmentLetterController extends Controller
         return 'appointment_letter';
     }
 
-    public function create(Request $request)
+    /**
+     * Nomination moved out of this module on 2026-09-30.
+     *
+     * Core's Chair dashboard still links here, and `route()` throws on a
+     * name that no longer exists, so removing it outright takes the whole
+     * Chair dashboard down. This answers instead, and says where the work
+     * went. It goes when Core's two Chair partials are updated -- see
+     * TODO.md.
+     */
+    public function nominationMoved()
     {
-        // `appointments` is eager-loaded so the availability check on each
-        // examiner is a read from memory, not a query per person -- the list
-        // is a hundred people and grows.
-        $pool = PoolExaminer::active()->with('appointments')->orderBy('name')->get();
+        return view('jason::appointment_letter.moved');
+    }
 
-        return view('jason::appointment_letter.form', [
-            // Scoped to the Chair's own department -- the same "an approver
-            // only sees rows that are theirs" rule the queues already enforce.
-            'candidates' => User::where('role', Role::STUDENT)
-                ->where('department', $request->user()->department)
-                ->orderBy('name')
-                ->get(),
-            // Only the pickable ones reach the dropdown. At this size, listing
-            // people who cannot be chosen is noise; the count of who is left
-            // out goes on the page, and the Examiner List says who and until
-            // when, so nobody has to wonder where a name went.
-            'pool' => $pool->filter->isAvailable(),
-            'unavailable' => $pool->reject->isAvailable(),
+    /**
+     * Where CGS starts: the finalised examiner list arrives as a
+     * spreadsheet, and this is the screen that takes it.
+     */
+    public function importForm(Request $request)
+    {
+        return view('jason::appointment_letter.import', [
+            'columns' => AppointmentSheet::COLUMNS,
         ]);
     }
 
-    public function store(Request $request, WorkflowEngine $engine)
+    /**
+     * The blank list, for when CGS has no file from the faculty side.
+     */
+    public function template(Request $request)
     {
-        $data = $request->validate([
-            'student_id' => [
-                'required',
-                Rule::exists('users', 'id')
-                    ->where('role', Role::STUDENT)
-                    ->where('department', $request->user()->department),
-            ],
-            'examiners' => ['required', 'array', 'min:2'],
-            'examiners.*.pool_id' => [
-                'required', 'distinct',
-                Rule::exists('appointment_examiner_pool', 'id')->where('is_active', true),
-            ],
+        $stamp = now()->format('Y-m-d');
+
+        if ($request->query('format') === 'csv') {
+            return response()->streamDownload(function () {
+                $out = fopen('php://output', 'w');
+                fputcsv($out, AppointmentSheet::COLUMNS);
+                foreach (AppointmentSheet::sampleRows() as $row) {
+                    fputcsv($out, $row);
+                }
+                fclose($out);
+            }, "examiner-list-template-{$stamp}.csv", ['Content-Type' => 'text/csv']);
+        }
+
+        return Excel::download(new AppointmentTemplateExport(), "examiner-list-template-{$stamp}.xlsx");
+    }
+
+    /**
+     * Reads the finalised examiner list and opens one appointment per
+     * candidate on it, each carrying its own panel.
+     *
+     * One row per examiner, grouped on matric_no -- see AppointmentSheet.
+     * Nothing is written unless every row is good: a list is approved as a
+     * whole upstream, and importing half of it would leave CGS to work out
+     * which candidates made it.
+     *
+     * Not routed through DocumentStore: the sheet is not one candidate's
+     * document, it is parsed into applications and discarded, the same way
+     * the attendance import treats a UTrace export.
+     */
+    public function import(Request $request, WorkflowEngine $engine)
+    {
+        $request->validate([
+            'sheet' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:5120'],
         ], [
-            'student_id.exists' => 'You may only nominate examiners for candidates in your own department.',
-            'examiners.min' => 'Nominate at least one internal and one external examiner.',
-            'examiners.*.pool_id.required' => 'Pick an examiner for every slot.',
-            'examiners.*.pool_id.distinct' => 'The same examiner is on the panel twice.',
-            'examiners.*.pool_id.exists' => 'That examiner is no longer on the list.',
+            'sheet.required' => 'Choose the examiner list to import.',
         ]);
 
-        $chosen = PoolExaminer::whereIn('id', collect($data['examiners'])->pluck('pool_id'))->get();
+        try {
+            $sheets = Excel::toArray(new AppointmentSheetImport(), $request->file('sheet'));
+        } catch (\Throwable $e) {
+            report($e);
 
-        // A panel is an internal and an external examiner at minimum. Two
-        // externals and no internal is not a panel.
-        if ($chosen->pluck('examiner_type')->unique()->count() < 2) {
-            return back()->withInput()->withErrors([
-                'examiners' => 'The panel needs at least one internal and one external examiner.',
-            ]);
+            return back()->with('error', 'That file could not be read. Upload a .csv or .xlsx, '
+                .'or start from the template on this page.');
         }
 
-        // The form greys these out, but a disabled <option> is only a
-        // courtesy -- the rule is enforced here.
-        $busy = $chosen->reject->isAvailable();
+        $rows = $sheets[0] ?? [];
+        $header = array_map(fn ($h) => strtolower(trim((string) $h)), array_shift($rows) ?? []);
+        $expected = AppointmentSheet::COLUMNS;
 
-        if ($busy->isNotEmpty()) {
-            return back()->withInput()->withErrors([
-                'examiners' => $busy->map(fn ($e) => $e->name.' is '.$e->unavailableLabel())->implode('; ')
-                    .'. An examiner takes one assignment at a time.',
-            ]);
+        if (array_slice($header, 0, count($expected)) !== $expected) {
+            return back()->with('error', 'The first row must be exactly: '.implode(', ', $expected)
+                .'. Download the template on this page to start from a correct file.');
         }
 
-        $application = DB::transaction(function () use ($request, $data, $engine, $chosen) {
-            $application = Application::create([
-                // The candidate this appointment concerns, so it shows on
-                // their own tracking page and they receive the standard
-                // progress notifications the engine already sends.
-                'student_id' => $data['student_id'],
-                // The Chair who actually filed the nomination.
-                'submitted_by_id' => $request->user()->id,
-                'module_type' => $this->moduleKey(),
-                'status' => Application::STATUS_DRAFT,
-            ]);
+        [$candidates, $problems] = $this->readSheet($rows);
 
-            AppointmentDetail::create(['application_id' => $application->id]);
+        if ($problems !== []) {
+            return back()->with('error', 'Nothing was imported. '.implode(' ', array_slice($problems, 0, 6))
+                .(count($problems) > 6 ? ' (+'.(count($problems) - 6).' more)' : ''));
+        }
 
-            // Copied, not referenced: the letters must say what the examiner's
-            // details were on the day, whatever later happens to the list entry.
-            foreach ($chosen as $examiner) {
-                AppointmentExaminer::create(['application_id' => $application->id] + $examiner->toSnapshot());
+        $opened = [];
+
+        DB::transaction(function () use ($candidates, $request, $engine, &$opened) {
+            foreach ($candidates as $candidate) {
+                $application = Application::create([
+                    'student_id' => $candidate['student']->id,
+                    // The CGS officer who imported the list. Nobody files
+                    // this on a form any more -- the decision that produced
+                    // it was taken before the list arrived.
+                    'submitted_by_id' => $request->user()->id,
+                    'module_type' => $this->moduleKey(),
+                    'status' => Application::STATUS_DRAFT,
+                ]);
+
+                AppointmentDetail::create([
+                    'application_id' => $application->id,
+                    'candidate_degree' => $candidate['degree'],
+                    'candidate_programme' => $candidate['programme'],
+                    'supervisor_name' => $candidate['supervisor_name'],
+                    'thesis_title' => $candidate['thesis_title'],
+                ]);
+
+                foreach ($candidate['examiners'] as $examiner) {
+                    AppointmentExaminer::create(['application_id' => $application->id] + $examiner);
+                }
+
+                $opened[] = $engine->submit($application);
             }
-
-            // Hands the nomination to the Academic Executive.
-            return $engine->submit($application);
         });
 
-        // The engine announces decisions, not submissions -- every other
-        // chain is started by the student, who needs no telling. This one
-        // is filed on the candidate's behalf, so tell them.
-        $application->student?->notify(new ExaminerPanelNominated(
-            $application,
-            $request->user()->name,
-            $this->examinerLines($chosen),
-        ));
+        $count = count($opened);
 
         return redirect()
-            ->route('appointment-letter.create')
-            ->with('status', "Nomination #{$application->id} with {$chosen->count()} examiners submitted to the Academic Executive.");
+            ->route('appointment-letter.queue')
+            ->with('status', "{$count} ".Str::plural('candidate', $count).' imported. '
+                .'Prepare each pack, then send it to the Dean.');
+    }
+
+    /**
+     * Turns the sheet's rows into one entry per candidate, or into a list of
+     * what is wrong with them.
+     *
+     * Every problem is reported with its row number, because the person
+     * repairing the file is looking at row numbers -- being told only how
+     * many rows failed is what makes an import unusable.
+     *
+     * @param  array<int, array<int, mixed>>  $rows
+     * @return array{0: array<string, array<string, mixed>>, 1: array<int, string>}
+     */
+    protected function readSheet(array $rows): array
+    {
+        $candidates = [];
+        $problems = [];
+        $seen = [];
+
+        foreach ($rows as $i => $row) {
+            // +2: the header is row 1 and spreadsheets count from 1.
+            $line = $i + 2;
+            $row = array_map(fn ($cell) => trim((string) $cell), array_pad(array_slice($row, 0, 10), 10, ''));
+            [$matric, $degree, $programme, $supervisor, $title, $type, $name, $institution, $email, $address] = $row;
+
+            if (implode('', $row) === '') {
+                continue;
+            }
+
+            $student = $matric === '' ? null : User::where('role', Role::STUDENT)->where('matric_no', $matric)->first();
+
+            if (! $student) {
+                $problems[] = "Row {$line}: no candidate with matric number \"{$matric}\".";
+
+                continue;
+            }
+
+            $kind = AppointmentSheet::parseType($type);
+
+            if (! $kind) {
+                $problems[] = "Row {$line}: examiner_type must be internal or external, not \"{$type}\".";
+
+                continue;
+            }
+
+            foreach (['examiner_name' => $name, 'examiner_email' => $email] as $column => $value) {
+                if ($value === '') {
+                    $problems[] = "Row {$line}: {$column} is empty.";
+                }
+            }
+
+            if ($email !== '' && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $problems[] = "Row {$line}: \"{$email}\" is not an email address.";
+            }
+
+            // The same examiner twice on one panel is a typo, and it would
+            // send them the same appointment twice.
+            $key = $matric.'|'.strtolower($email);
+
+            if (isset($seen[$key])) {
+                $problems[] = "Row {$line}: {$email} is already on this candidate's panel (row {$seen[$key]}).";
+            }
+
+            $seen[$key] = $line;
+
+            $candidates[$matric] ??= [
+                'student' => $student,
+                // The candidate's own columns repeat down their rows; the
+                // first row that carries them wins.
+                'degree' => $degree,
+                'programme' => $programme,
+                'supervisor_name' => $supervisor,
+                'thesis_title' => $title,
+                'examiners' => [],
+            ];
+
+            $candidates[$matric]['examiners'][] = [
+                'examiner_type' => $kind,
+                'examiner_name' => $name,
+                'examiner_institution' => $institution,
+                'examiner_email' => $email,
+                'examiner_address' => $address,
+                'letter_ref_no' => 'UTP/'.($kind === AppointmentExaminer::TYPE_INTERNAL ? 'CGS' : 'PGS')."/AD/{$matric}",
+            ];
+        }
+
+        // A panel is an internal and an external examiner at minimum, the
+        // same rule the letters themselves assume.
+        foreach ($candidates as $matric => $candidate) {
+            $kinds = array_unique(array_column($candidate['examiners'], 'examiner_type'));
+
+            if (count($kinds) < 2) {
+                $problems[] = "{$matric}: a panel needs at least one internal and one external examiner.";
+            }
+
+            foreach (AppointmentSheet::CANDIDATE_COLUMNS as $column) {
+                if (($candidate[$column] ?? '') === '') {
+                    $problems[] = "{$matric}: {$column} is empty.";
+                }
+            }
+        }
+
+        return [$candidates, $problems];
     }
 
     public function queue(Request $request, WorkflowEngine $engine, ModuleRegistry $registry)
@@ -390,10 +521,7 @@ class AppointmentLetterController extends Controller
 
             $this->dispatchPacks($application);
 
-            $application->student?->notify(new ExaminersAppointed(
-                $application,
-                $this->examinerLines(AppointmentExaminer::where('application_id', $application->id)->get()),
-            ));
+            $this->announceAppointment($application);
         }
 
         $verb = $approved ? 'approved' : 'rejected';
@@ -449,6 +577,35 @@ class AppointmentLetterController extends Controller
 
         return back()->with('status',
             "Appointment pack queued again for {$examiner->examiner_name} ({$examiner->examiner_email}).");
+    }
+
+    /**
+     * Tells everyone the appointment concerns: the candidate, their
+     * supervisor, the Academic Executive and CGS.
+     *
+     * The engine notifies the candidate on every decision and nobody else,
+     * which is right for a chain a student files. This one is filed by CGS
+     * off the back of a decision taken upstream, so the people who chose the
+     * panel and who will run the viva have to hear that it is now real. One
+     * notification class, worded from the recipient's side.
+     */
+    protected function announceAppointment(Application $application): void
+    {
+        $lines = $this->examinerLines(AppointmentExaminer::where('application_id', $application->id)->get());
+        $student = $application->student;
+
+        $recipients = collect([$student, $student?->supervisor])
+            ->merge(User::whereIn('role', [Role::ACADEMIC_EXEC, Role::NON_EXEC_CGS])
+                ->when($student?->department, fn ($q, $department) => $q->where(
+                    fn ($inner) => $inner->where('department', $department)->orWhere('role', Role::NON_EXEC_CGS)
+                ))
+                ->get())
+            ->filter()
+            ->unique('id');
+
+        foreach ($recipients as $recipient) {
+            $recipient->notify(new ExaminersAppointed($application, $lines));
+        }
     }
 
     /**

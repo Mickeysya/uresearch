@@ -9,24 +9,27 @@ use App\Modules\Jason\Listeners\RecordExaminerPackDelivery;
 use App\Modules\Jason\Mail\AppointmentLetterMail;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
-use App\Modules\Jason\Models\PoolExaminer;
+use App\Modules\Jason\Support\AppointmentSheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
- * Appointment Letter — the two rules that live outside the workflow engine,
- * and so have nothing else watching them.
+ * Appointment Letter: what the module enforces now that examiner selection
+ * happens before it.
  *
- * 1. An examiner the Dean has appointed is unavailable for three months. The
- *    nomination form greys them out, but a disabled <option> is only a
- *    courtesy, so the rule has to hold against a posted form as well.
- * 2. A pack counts as delivered only when the mail transport accepts it.
- *    Dispatch happens after the engine has committed the Dean's approval, so
- *    a failure there leaves an approved nomination whose examiner received
- *    nothing — which is exactly what the Issued Appointments page is for.
+ * The chain begins with CGS importing the finalised list, so the import is
+ * where a bad list has to be caught — a half-imported sheet leaves CGS
+ * working out which candidates made it — and ends with the Dean, where the
+ * packs go out and four different people have to be told.
+ *
+ * A pack counts as delivered only when the mail transport accepts it.
+ * Dispatch happens after the engine has committed the Dean's approval and
+ * cannot be rolled back into it, so nothing else would notice a pack that
+ * never went.
  */
 class JasonAppointmentLetterTest extends TestCase
 {
@@ -39,141 +42,224 @@ class JasonAppointmentLetterTest extends TestCase
         // phpunit.xml asks for the sync queue, but an env var already set in
         // the container wins over it, so QUEUE_CONNECTION stays on redis and
         // a queued mailable would be handed to the dev worker instead of
-        // being sent here. AppointmentLetterMail is ShouldQueue, and these
-        // tests are about what happens once it is actually sent.
+        // being sent here. AppointmentLetterMail is ShouldQueue.
         config(['queue.default' => 'sync']);
     }
 
-    protected function chair(): User
+    protected function cgs(): User
     {
-        return User::firstOrCreate(['email' => 'chair@test.my'], [
-            'name' => 'Dr Chair',
+        return User::firstOrCreate(['email' => 'cgs@test.my'], [
+            'name' => 'Puan Waheeda',
             'password' => 'password',
-            'role' => Role::CHAIR,
-            'department' => 'Civil Engineering',
+            'role' => Role::NON_EXEC_CGS,
+            'department' => 'CGS',
         ]);
     }
 
-    protected function candidate(string $email = 'cand@test.my'): User
+    protected function candidate(string $matric = '22001001', string $email = 'cand@test.my'): User
     {
         return User::firstOrCreate(['email' => $email], [
             'name' => 'Ahmad Danial',
             'password' => 'password',
             'role' => Role::STUDENT,
-            // Unique per candidate: the column is unique, and some of these
-            // tests build more than one.
-            'matric_no' => '2200'.substr(md5($email), 0, 4),
-            'department' => 'Civil Engineering',
+            'matric_no' => $matric,
+            'department' => 'Computer & Information Sciences',
         ]);
     }
 
-    protected function poolExaminer(string $type, string $email): PoolExaminer
+    /** A sheet with the header row and whatever rows are given. */
+    protected function sheet(array $rows, string $name = 'examiner-list.csv'): UploadedFile
     {
-        return PoolExaminer::create([
-            'name' => 'Prof '.ucfirst($type),
-            'examiner_type' => $type,
-            'institution' => $type === AppointmentExaminer::TYPE_INTERNAL ? 'UTP' : 'UM',
-            'email' => $email,
-            'expertise' => 'Structural Engineering',
-            'is_active' => true,
-        ]);
+        $csv = implode(',', AppointmentSheet::COLUMNS)."\n";
+
+        foreach ($rows as $row) {
+            $csv .= implode(',', array_map(fn ($c) => '"'.str_replace('"', '""', (string) $c).'"', $row))."\n";
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'exam').'.csv';
+        file_put_contents($path, $csv);
+
+        return new UploadedFile($path, $name, 'text/csv', null, true);
+    }
+
+    /** One good row. */
+    protected function row(string $matric, string $type, string $email, array $overrides = []): array
+    {
+        return array_replace([
+            $matric, 'MSc in Computer & Information Sciences', 'Computer & Information Sciences',
+            'Dr. Aisyah Rahman', 'A Study of Something',
+            $type, 'Prof '.ucfirst($type), ucfirst($type).' Institution', $email, 'Somewhere',
+        ], $overrides);
+    }
+
+    /** A full, valid panel for one candidate. */
+    protected function panelFor(string $matric): array
+    {
+        return [
+            $this->row($matric, 'internal', "int-{$matric}@test.my"),
+            $this->row($matric, 'external', "ext-{$matric}@test.my"),
+        ];
     }
 
     /* -----------------------------------------------------------------
-     | The three-month cooldown
+     | The import
      |------------------------------------------------------------------*/
 
-    public function test_an_examiner_is_available_until_an_appointment_is_made(): void
+    public function test_a_list_opens_one_appointment_per_candidate(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
+        $this->candidate('22001001', 'a@test.my');
+        $this->candidate('22001002', 'b@test.my');
 
-        $this->assertTrue($examiner->isAvailable());
-        $this->assertNull($examiner->unavailableLabel());
-    }
-
-    public function test_an_appointment_makes_an_examiner_unavailable_for_three_months(): void
-    {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $application = $this->nomination($examiner);
-
-        AppointmentExaminer::where('application_id', $application->id)
-            ->update(['appointed_at' => now()]);
-
-        $this->assertFalse($examiner->fresh()->isAvailable());
-        $this->assertStringContainsString('on an appointment until', $examiner->fresh()->unavailableLabel());
-    }
-
-    public function test_the_cooldown_lapses_on_its_own(): void
-    {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $application = $this->nomination($examiner);
-
-        // One day past the cooldown: nobody has to reinstate them.
-        AppointmentExaminer::where('application_id', $application->id)->update([
-            'appointed_at' => now()->subMonths(PoolExaminer::COOLDOWN_MONTHS)->subDay(),
-        ]);
-
-        $this->assertTrue($examiner->fresh()->isAvailable());
-    }
-
-    public function test_a_nomination_only_counts_once_the_dean_has_appointed(): void
-    {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $this->nomination($examiner);
-
-        // Nominated but not yet approved -- appointed_at is still null, so
-        // the cooldown has not started.
-        $this->assertTrue($examiner->fresh()->isAvailable());
-    }
-
-    public function test_an_unavailable_examiner_is_refused_even_when_the_form_is_bypassed(): void
-    {
-        Notification::fake();
-
-        $chair = $this->chair();
-        $candidate = $this->candidate();
-        $internal = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $external = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        $application = $this->nomination($internal);
-        AppointmentExaminer::where('application_id', $application->id)
-            ->update(['appointed_at' => now()]);
-
-        // A hand-built POST, exactly what a disabled <option> cannot stop.
-        $this->actingAs($chair)
-            ->post(route('appointment-letter.store'), [
-                'student_id' => $candidate->id,
-                'examiners' => [['pool_id' => $internal->id], ['pool_id' => $external->id]],
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet(array_merge($this->panelFor('22001001'), $this->panelFor('22001002'))),
             ])
-            ->assertSessionHasErrors('examiners');
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('appointment-letter.queue'));
 
-        $this->assertSame(1, Application::where('module_type', 'appointment_letter')->count());
+        $applications = Application::where('module_type', 'appointment_letter')->get();
+
+        $this->assertCount(2, $applications, 'One appointment per candidate, not per row.');
+
+        foreach ($applications as $application) {
+            // Straight onto the CGS preparation stage: the decision that
+            // produced this list was taken before it arrived.
+            $this->assertSame('cgs_prep', $application->current_stage);
+            $this->assertSame(2, AppointmentExaminer::where('application_id', $application->id)->count());
+
+            $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
+            $this->assertSame('A Study of Something', $detail->thesis_title);
+            $this->assertSame('Dr. Aisyah Rahman', $detail->supervisor_name);
+        }
     }
 
-    public function test_an_available_panel_is_accepted(): void
+    public function test_the_candidate_columns_may_repeat_down_the_rows(): void
     {
-        Notification::fake();
+        $this->candidate('22001001', 'a@test.my');
 
-        $chair = $this->chair();
-        $candidate = $this->candidate();
-        $internal = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $external = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        $this->actingAs($chair)
-            ->post(route('appointment-letter.store'), [
-                'student_id' => $candidate->id,
-                'examiners' => [['pool_id' => $internal->id], ['pool_id' => $external->id]],
-            ])
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), ['sheet' => $this->sheet($this->panelFor('22001001'))])
             ->assertSessionHasNoErrors();
 
         $application = Application::where('module_type', 'appointment_letter')->firstOrFail();
 
-        // The snapshot keeps the link back to the list entry, which is what
-        // the availability check counts against.
-        $this->assertEqualsCanonicalizing(
-            [$internal->id, $external->id],
+        $this->assertSame(
+            ['external', 'internal'],
             AppointmentExaminer::where('application_id', $application->id)
-                ->pluck('pool_examiner_id')->all(),
+                ->pluck('examiner_type')->sort()->values()->all(),
+        );
+    }
+
+    /**
+     * A list is approved as a whole before it reaches CGS, so importing
+     * half of it would leave them working out which candidates made it —
+     * and the rows that failed are named, because the person repairing the
+     * file is looking at row numbers.
+     */
+    public function test_a_bad_row_imports_nothing_and_says_which_row(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet(array_merge(
+                    $this->panelFor('22001001'),
+                    // A candidate nobody has heard of.
+                    [$this->row('99999999', 'internal', 'ghost@test.my')],
+                )),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+        $this->assertStringContainsString('Row 4', session('error'));
+    }
+
+    public function test_a_panel_needs_an_internal_and_an_external_examiner(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([
+                    $this->row('22001001', 'internal', 'one@test.my'),
+                    $this->row('22001001', 'internal', 'two@test.my'),
+                ]),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+        $this->assertStringContainsString('internal and one external', session('error'));
+    }
+
+    public function test_the_same_examiner_cannot_appear_twice_on_one_panel(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([
+                    $this->row('22001001', 'internal', 'same@test.my'),
+                    $this->row('22001001', 'external', 'same@test.my'),
+                ]),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+    }
+
+    /**
+     * A reordered sheet is a different file, and importing it by position
+     * would put an examiner's email in the address field.
+     */
+    public function test_a_sheet_with_the_wrong_header_is_refused(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+
+        $path = tempnam(sys_get_temp_dir(), 'exam').'.csv';
+        file_put_contents($path, "matric_no,examiner_name,degree\n22001001,Prof Somebody,MSc\n");
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => new UploadedFile($path, 'wrong.csv', 'text/csv', null, true),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+    }
+
+    public function test_the_examiner_kind_is_read_forgivingly_but_not_guessed(): void
+    {
+        $this->assertSame('internal', AppointmentSheet::parseType('Internal'));
+        $this->assertSame('internal', AppointmentSheet::parseType(' INTERNAL '));
+        $this->assertSame('external', AppointmentSheet::parseType('External Examiner'));
+
+        // Anything else is refused by name rather than defaulted, because
+        // the kind decides which letter template the examiner receives.
+        $this->assertNull(AppointmentSheet::parseType('panel member'));
+        $this->assertNull(AppointmentSheet::parseType(''));
+    }
+
+    public function test_only_cgs_may_import_a_list(): void
+    {
+        $chair = User::create([
+            'name' => 'Dr Chair', 'email' => 'chair@test.my', 'password' => 'password',
+            'role' => Role::CHAIR, 'department' => 'Computer & Information Sciences',
+        ]);
+
+        $this->actingAs($chair)->get(route('appointment-letter.import'))->assertForbidden();
+        $this->actingAs($chair)->get(route('appointment-letter.issued'))->assertForbidden();
+    }
+
+    public function test_the_template_is_downloadable_and_matches_the_importer(): void
+    {
+        $response = $this->actingAs($this->cgs())
+            ->get(route('appointment-letter.template', ['format' => 'csv']))
+            ->assertOk();
+
+        // A streamed download is not in the response body until it is read.
+        $this->assertStringContainsString(
+            implode(',', AppointmentSheet::COLUMNS),
+            $response->streamedContent(),
         );
     }
 
@@ -183,8 +269,7 @@ class JasonAppointmentLetterTest extends TestCase
 
     public function test_a_pack_is_marked_delivered_only_when_the_transport_accepts_it(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-        $application = $this->nomination($examiner);
+        $application = $this->imported();
         $row = AppointmentExaminer::where('application_id', $application->id)->firstOrFail();
 
         $this->assertFalse($row->packSent());
@@ -198,8 +283,7 @@ class JasonAppointmentLetterTest extends TestCase
 
     public function test_mail_from_other_modules_is_left_alone(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-        $application = $this->nomination($examiner);
+        $application = $this->imported();
         $row = AppointmentExaminer::where('application_id', $application->id)->firstOrFail();
 
         // Any other message in the portal reaches the same listener; it must
@@ -209,97 +293,17 @@ class JasonAppointmentLetterTest extends TestCase
         $this->assertFalse($row->fresh()->packSent());
     }
 
-    /* -----------------------------------------------------------------
-     | The two screens
-     |------------------------------------------------------------------*/
-
-    public function test_the_nomination_form_leaves_an_unavailable_examiner_out(): void
-    {
-        $this->candidate();
-        $busy = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'busy@test.my');
-        $free = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'free@test.my');
-        $free->update(['name' => 'Prof Free Internal']);
-        $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        $application = $this->nomination($busy);
-        AppointmentExaminer::where('application_id', $application->id)
-            ->update(['appointed_at' => now()]);
-
-        $this->actingAs($this->chair())
-            ->get(route('appointment-letter.create'))
-            ->assertOk()
-            ->assertSee('Prof Free Internal')
-            // Not in the dropdown, but the page says how many are missing and
-            // where to look them up, so a Chair searching for a name they
-            // expected finds out why it is gone.
-            ->assertDontSee($busy->name)
-            ->assertSee('on an appointment and')
-            ->assertSee('not listed below');
-    }
-
-    public function test_the_form_offers_both_kinds_of_examiner(): void
-    {
-        $this->candidate();
-        $internal = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $external = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        // Both kinds live in one dropdown, and with a hundred examiners on
-        // the list the external group sits far below the fold -- which is
-        // exactly how it came to look as though there were no external
-        // examiners at all. The second slot therefore starts on External,
-        // and each row picks its kind before its person.
-        $response = $this->actingAs($this->chair())
-            ->get(route('appointment-letter.create'))
-            ->assertOk()
-            ->assertSee($internal->name)
-            ->assertSee($external->name)
-            ->assertSee('Internal Examiners (UTP)')
-            ->assertSee('External Examiners');
-
-        $rows = $response->getContent();
-        preg_match_all('/<select class="examiner-type".*?<\/select>/s', $rows, $types);
-
-        $this->assertCount(2, $types[0], 'Both slots should offer a kind to pick.');
-        $this->assertStringContainsString('value="internal" selected', $types[0][0]);
-        $this->assertStringContainsString('value="external" selected', $types[0][1]);
-    }
-
-    public function test_the_form_explains_itself_when_every_examiner_of_one_kind_is_busy(): void
-    {
-        $this->candidate();
-        $internal = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-
-        $application = $this->nomination($internal);
-        AppointmentExaminer::where('application_id', $application->id)
-            ->update(['appointed_at' => now()]);
-
-        // Hiding the unavailable would otherwise leave an empty Internal group
-        // and no hint why -- the Chair would fill the form in and only find
-        // out on submit.
-        $this->actingAs($this->chair())
-            ->get(route('appointment-letter.create'))
-            ->assertOk()
-            ->assertSee('The only internal examiner on the list is on an appointment until')
-            ->assertSee(now()->addMonths(PoolExaminer::COOLDOWN_MONTHS)->format('j M Y'))
-            ->assertDontSee('Submit Nomination');
-    }
-
     public function test_cgs_sees_an_undelivered_pack_and_can_resend_it(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-        $application = $this->nomination($examiner);
+        Storage::fake('local');
+
+        $application = $this->imported();
         $application->update(['status' => Application::STATUS_APPROVED]);
 
         $row = AppointmentExaminer::where('application_id', $application->id)->firstOrFail();
         $row->update(['appointed_at' => now()]);
 
-        $cgs = User::create([
-            'name' => 'Puan Waheeda',
-            'email' => 'cgs@test.my',
-            'password' => 'password',
-            'role' => Role::NON_EXEC_CGS,
-        ]);
+        $cgs = $this->cgs();
 
         $this->actingAs($cgs)
             ->get(route('appointment-letter.issued'))
@@ -308,36 +312,21 @@ class JasonAppointmentLetterTest extends TestCase
             ->assertSee('Resend');
 
         // Nothing was ever prepared for this nomination, so there is nothing
-        // to resend -- and CGS is told that rather than shown a false success.
+        // to resend — and CGS is told that rather than shown a false success.
         $this->actingAs($cgs)
             ->post(route('appointment-letter.resend', [$application, $row]))
             ->assertSessionHas('error');
     }
 
-    public function test_a_chair_cannot_reach_the_issued_page(): void
+    /** An imported appointment, sitting on the CGS preparation stage. */
+    protected function imported(): Application
     {
-        $this->actingAs($this->chair())
-            ->get(route('appointment-letter.issued'))
-            ->assertForbidden();
+        $this->candidate('22001001', 'a@test.my');
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), ['sheet' => $this->sheet($this->panelFor('22001001'))])
+            ->assertSessionHasNoErrors();
+
+        return Application::where('module_type', 'appointment_letter')->firstOrFail();
     }
-
-    /**
-     * A nomination for one examiner, straight into the database -- these
-     * tests are about what happens to it afterwards, not about the form.
-     */
-    protected function nomination(PoolExaminer $examiner): Application
-    {
-        $application = Application::create([
-            'student_id' => $this->candidate('cand-'.$examiner->id.'@test.my')->id,
-            'submitted_by_id' => $this->chair()->id,
-            'module_type' => 'appointment_letter',
-            'status' => Application::STATUS_DRAFT,
-        ]);
-
-        AppointmentDetail::create(['application_id' => $application->id]);
-        AppointmentExaminer::create(['application_id' => $application->id] + $examiner->toSnapshot());
-
-        return $application;
-    }
-
 }

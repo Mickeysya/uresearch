@@ -13,9 +13,13 @@ use App\Modules\Jason\Models\AppointmentExaminer;
 /**
  * Examiner appointment letters.
  *
- * The Chair of Department nominates an examiner panel -- at least one
- * internal and one external examiner -- for one of the department's
- * candidates. The Academic Executive endorses (or rejects with comments).
+ * Examiner SELECTION happens before this module: the supervisor chooses the
+ * panel, the Academic Executive compiles it, and CGS, the Senior Director,
+ * the Chair and the Dean settle the list between them. That is Hani's
+ * Examiner Nomination chain. What arrives here is the finalised list, as a
+ * spreadsheet, and this module starts by importing it -- one appointment per
+ * candidate on it, each carrying its own panel.
+ *
  * The Non-Executive CGS then prepares the pack: the candidate's degree,
  * programme, supervisor and thesis title, auto-filled from the candidate's
  * own record wherever one exists, plus each examiner's address and reference
@@ -27,8 +31,10 @@ use App\Modules\Jason\Models\AppointmentExaminer;
  * WorkflowEngine/ApplicationDecided path.
  * See AppointmentLetterController::generatePack() and dispatchPacks().
  *
- * A straight linear chain, no conditional routing -- the closest analogue is
- * Hani's ExaminerNominationWorkflow, not Norhanis' branching TravelWorkflow.
+ * Two stages, no conditional routing. It was three until 2026-09-30: the
+ * Chair filed a nomination and the Academic Executive endorsed it, which is
+ * the work that now happens upstream in Hani's chain. Keeping it here would
+ * have meant the same panel being chosen twice.
  */
 class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
 {
@@ -46,18 +52,11 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
     {
         return [
             new Stage(
-                key: 'academic_exec',
-                label: 'Academic Executive',
-                role: Role::ACADEMIC_EXEC,
-                decision: 'endorsed',
-                queueTitle: 'Pending My Endorsement',
-            ),
-            new Stage(
                 key: 'cgs_prep',
                 label: 'Non-Executive CGS',
                 role: Role::NON_EXEC_CGS,
                 decision: 'prepared',
-                queueTitle: 'Letters to Prepare',
+                queueTitle: 'Packs to Prepare',
             ),
             new Stage(
                 key: 'dean',
@@ -86,8 +85,9 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
 
     public function createRoute(): ?string
     {
-        // Filed by the Chair of Department, not by students, so it never
-        // appears under a student's "New Application" list.
+        // Opened by CGS importing the finalised list, not by anybody filling
+        // in a form, so it never appears under a student's "New
+        // Application" list.
         return null;
     }
 
@@ -97,23 +97,23 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
     }
 
     /**
-     * The Chair owns no stage in this chain (nomination is stage zero, filed
-     * before the chain starts), so without this the nomination form would
-     * never appear in their sidebar. Same shape as Hani's supervisor link
-     * for Examiner Nomination.
+     * Importing the list is stage zero -- it happens before the chain
+     * starts, so no stage owns it and it would otherwise appear in nobody's
+     * sidebar.
      */
     public function links(User $user): array
     {
         return match ($user->role) {
+            Role::NON_EXEC_CGS => [
+                ['label' => 'Import Examiner List', 'route' => 'appointment-letter.import'],
+                ['label' => 'Issued Appointments', 'route' => 'appointment-letter.issued'],
+            ],
+            // A shim, like the route it points at: Core's Chair dashboard
+            // expects this entry, and dropping it silently would leave a
+            // Chair who used to file panels with nothing explaining where
+            // the work went. Goes when Core's Chair partials are updated.
             Role::CHAIR => [
                 ['label' => 'Nominate Examiner Panel', 'route' => 'appointment-letter.create'],
-                ['label' => 'Examiner List', 'route' => 'appointment-letter.examiners'],
-            ],
-            // CGS keeps the list too, so a new examiner can be registered
-            // by whoever hears of them first.
-            Role::NON_EXEC_CGS => [
-                ['label' => 'Examiner List', 'route' => 'appointment-letter.examiners'],
-                ['label' => 'Issued Appointments', 'route' => 'appointment-letter.issued'],
             ],
             default => [],
         };

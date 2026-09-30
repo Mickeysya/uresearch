@@ -98,6 +98,17 @@
 
 ---
 
+> **Rescoped with Hani, 30 September 2026.** Examiner *selection* is not this
+> module's. The supervisor chooses the panel, the Academic Executive compiles
+> it, and the list is settled between CGS, the Senior Director, the Chair and
+> the Dean — Hani's Examiner Nomination chain. This module starts from that
+> finished list: CGS imports the spreadsheet, one appointment opens per
+> candidate, CGS prepares each candidate's four-document pack, the Dean
+> approves, and the candidate, their supervisor, the Academic Executive and
+> CGS are notified. The Chair's nomination form, this module's own examiner
+> list and the Academic Executive stage were retired with the old boundary.
+> What is built follows this note; the rest of §4 is the earlier reading.
+
 ## 4. Module C: Appointment Letter & Report Management
 *Workflow: Faculty Dept Nomination -> Faculty Academic Endorsement -> Dean Approval -> Auto-Dispatch Letter -> Archiving.*
 

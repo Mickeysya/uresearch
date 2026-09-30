@@ -1040,11 +1040,16 @@ Hani originally pitched Hardbound Submission and Appointment Letters and
 handed both off after workshops with CGS — this module folder is that
 handoff, not a duplicate of her scope.
 
-None of the three chains need a new `Support\Role` entry — `chair`,
-`non_exec_cgs`, `senior_exec_cgs`, `academic_exec` and `dean_pgr` already
-exist and already carry this shape of chain elsewhere. `senior_exec_cgs` is
-used by exactly one built stage — this module's appeal ruling — and was
-unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
+None of the three chains need a new `Support\Role` entry. After the two
+rescopings (the appeal on 2026-09-23, Appointment Letter on 2026-09-30) the
+roles actually holding a stage here are `supervisor`, `chair`,
+`non_exec_cgs` and `dean_pgr`. Two are no longer used by this module at all:
+`academic_exec`, whose stage moved to Hani's chain, and `senior_exec_cgs`,
+whose only stage anywhere was this module's old appeal ruling — so
+`seniorexec@utp.edu.my` is now a seeded account with nothing to do, and
+README's "rules on hardbound appeals" against it is stale. `cgs_approve` is
+likewise still listed under "Stage keys in use" in `docs/module-keys.md`
+while no workflow declares it.
 
 - [x] **Hardbound Submission** (`hardbound_submission`) — Supervisor →
       Chairman of the Viva Voce Examination (the `chair` role) → Non-Executive
@@ -1182,26 +1187,39 @@ unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
         deleted whenever convenient.
 
 - [x] **Appointment Letter & Report Management** (`appointment_letter`) —
-      Chair of Department (the spec's "Faculty Department") → Academic
-      Executive (the spec's "Faculty Academic") → Dean of PGR
-  - [x] A nomination is the candidate's **examiner panel**, not one
-        examiner: `appointment_details` holds the candidate side (degree,
-        programme, supervisor, thesis title) and `appointment_examiners`
-        holds one row per panel member — at least one internal and one
-        external, enforced at nomination. The student it's for is
-        `applications.student_id` (the candidate), same pattern as Hani's
-        `examiner_nominations` — no second student FK on the detail table.
-  - [x] Chair picks the panel from an examiner list
-        (`appointment_examiner_pool`, kept by Chairs and CGS at
-        "Examiner List") the same way they pick the candidate; a new examiner
-        is registered there first. Deliberately separate from Hani's
-        `examiners` pool so a change to hers cannot break a letter here.
-        Nominations copy the chosen rows, so editing or removing a list
-        entry never rewrites a letter already issued.
-  - [x] Nomination is filed against the chain, not a stage of it — same
-        shape as Hani's supervisor nomination; AE endorse or
-        reject-with-comments; Non-Exec CGS prepares the pack; Dean
-        approve/reject
+      Non-Executive CGS (imports the list, prepares the packs) → Dean of PGR.
+  - [x] **Rescoped 2026-09-30, by agreement with Hani.** Examiner
+        *selection* is not this module's any more. The supervisor chooses the
+        panel, the Academic Executive compiles it, and the list is settled
+        between CGS, the Senior Director, the Chair and the Dean — all of
+        that is Hani's Examiner Nomination chain. This module starts from the
+        finished list. Retired with the old boundary: the Chair's nomination
+        form, the module's own examiner list (`appointment_examiner_pool`,
+        100 seeded examiners, the three-month cooldown, the kind-and-filter
+        picker) and the `academic_exec` stage. Keeping them would have meant
+        the same panel being chosen twice, in two people's modules.
+  - [x] **CGS imports the finalised list** at "Import Examiner List":
+        `Support\AppointmentSheet` holds the columns, the template CGS
+        downloads (.xlsx or .csv, with two worked examples) and the header
+        check, so a column cannot be added to the template without the
+        importer knowing. **One row per examiner**, grouped on `matric_no` —
+        a candidate's own columns repeat down their rows — and each candidate
+        becomes one application carrying its own panel. Read through
+        `maatwebsite/excel`, already a dependency for Nureen's attendance
+        import, so no new package. **Nothing is imported unless every row is
+        good**, and each problem is reported with its row number: a list is
+        approved as a whole upstream, so a half-import would leave CGS
+        working out which candidates made it. Caught at import: an unknown
+        matric number, an examiner kind that is neither internal nor
+        external, a missing name or email, a malformed email, the same
+        examiner twice on one panel, a panel without one of each kind, and a
+        reordered header.
+  - [x] `appointment_details` holds the candidate side (degree, programme,
+        supervisor, thesis title) and `appointment_examiners` one row per
+        panel member, both filled from the sheet, so the CGS preparation
+        screen opens pre-filled and is in practice a confirmation. Reference
+        numbers are derived on import — `UTP/PGS/AD/<matric>` external,
+        `UTP/CGS/AD/<matric>` internal.
   - [x] CGS preparation generates **two documents per examiner** from the
         CGS templates — the Appointment Letter (internal and external
         variants, with acknowledgement slip, conflict-of-interest declaration
@@ -1221,37 +1239,23 @@ unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
         **internal** template has not been reissued, so it keeps the older
         wording and the 025 code — the two are separate branches of
         `$conflicts` in `letter.blade.php`, so swap the internal one when CGS
-        issues it. Nothing else in the chain changed.
+        issues it.
+  - [x] **On the Dean's approval, four people are told**, which is where the
+        flowchart ends: the candidate, their supervisor, the Academic
+        Executive and CGS. One `ExaminersAppointed` class worded from the
+        recipient's side — "your thesis" to the candidate, the candidate's
+        name to everybody else — and the "view the documents" button only for
+        the candidate, since nobody else can open their application. The
+        engine's own `ApplicationDecided` still goes to the candidate alone,
+        which is why this exists.
   - [x] **Open question, resolved:** every other module's notification goes
-        to the student, a system user with an account. This one's final
-        recipient is an external examiner with no login, so the PDF is sent
-        with a plain `Mail\AppointmentLetterMail`, not the
-        `ApplicationDecided` notification path. The engine's built-in
-        `ApplicationDecided` still fires to the candidate only on every
-        decision, same as the trait's default — the Chair (the nomination's
-        filer, who owns no stage in the chain) is not separately notified.
+        to a system user with an account. The appointment pack's recipient is
+        an external examiner with no login, so it is sent with a plain
+        `Mail\AppointmentLetterMail`, not the `ApplicationDecided` path.
   - [x] Archive the generated letter as an `ApplicationDocument` (written
         directly to the private disk — `DocumentStore::attach()` only takes
         an already-uploaded file, not generated bytes) so the existing
         download route and permission check apply
-  - [x] **An examiner is unavailable for three months after being
-        appointed** (`PoolExaminer::COOLDOWN_MONTHS`). The cooldown starts at
-        the Dean's approval — the point the appointment becomes real — which
-        the nomination records as `appointment_examiners.appointed_at`.
-        Unavailable examiners are **left out of the nomination dropdown**
-        entirely — with the list at 100 people, names that cannot be picked
-        are noise. The form says how many are hidden and links to the
-        Examiner List, which shows all 100 with each one's availability and
-        the date they come free, so a Chair looking for a particular name
-        still finds out why it is gone rather than assuming the list is
-        broken. If every internal (or external) examiner is on an
-        appointment, the form says so up front with the earliest free date
-        instead of offering an empty group. `store()` refuses an unavailable
-        examiner even when the form is bypassed — hiding an `<option>` is
-        only a courtesy. Nothing reinstates anyone: the cooldown lapses on
-        its own. `appointed_at` is the timestamp to move if examiner *acceptance*
-        is ever tracked — that is the more accurate start, and it needs
-        Report Management (below) to exist first.
   - [x] **A pack counts as sent only when the mail transport accepts it.**
         Dispatch happens after the engine has committed the Dean's approval
         and cannot be rolled back into it, so a failure there used to leave
@@ -1267,23 +1271,31 @@ unseeded until 2026-09-17; it is `seniorexec@utp.edu.my` now.
         nomination with each pack's delivery state and resends the ones that
         never went. A resend posts the same archived bytes the Dean
         approved, so it can never differ from the original.
-  - [x] `Database\Seeders\ExaminerPoolSeeder` — 100 fictional examiners, 50
-        internal across UTP's departments and 50 external across Malaysian
-        public universities, the private and branch campuses, and regional
-        and international institutions. At that size one long dropdown stops
-        working — the external group starts at option 47, below the fold, so
-        the form looked as though it offered internal examiners only. Each
-        slot now picks its **kind** first (slot 1 internal, slot 2 external,
-        the minimum valid panel) and carries a filter box that narrows the
-        names by person, institution or expertise. Matched on email, so it adds only
-        what is missing and never disturbs an examiner who already has
-        appointment history. Run it with
-        `php artisan db:seed --class="App\Modules\Jason\Database\Seeders\ExaminerPoolSeeder"`.
-        Deliberately not called from Core's `DatabaseSeeder` — that file
-        belongs to the whole team, and 100 examiners are only useful here.
+  - [ ] **Needs a Core change, and it is not mine to make.** Core's Chair
+        dashboard was built around the retired nomination form:
+        `dashboard/partials/chair-nominations.blade.php` and
+        `chair-stat-cards.blade.php` both call
+        `route('appointment-letter.create')` unconditionally, and `route()`
+        throws on a name that does not exist — so removing it outright **500s
+        the whole dashboard for every Chair**. Until the team updates those
+        two partials, the route name keeps answering from this module with a
+        page saying where nomination went, and `links()` keeps the Chair's
+        quick action pointing at it. `ChairDashboardTest::
+        test_panels_the_chair_filed_are_visible_to_them` still fails: it
+        builds an `appointment_letter` application on the `academic_exec`
+        stage and asserts the label renders, and that stage no longer exists
+        in this chain. Both the panel and that test properly belong to Hani's
+        chain now — a Chair does still settle a panel, just not here.
+  - [ ] The cooldown rule is printed on the appointment letter itself ("The
+        examiner can be assigned one (1) assignment at one (1) time") and the
+        code that enforced it went with the examiner list. The import could
+        warn CGS when a name on the sheet is already on an appointment
+        inside three months — `appointment_examiners.appointed_at` is still
+        stamped on the Dean's approval, so the data is there.
   - [x] Covered by `tests/Feature/JasonAppointmentLetterTest.php` — the
-        cooldown, the bypassed-form POST, the delivery listener (including
-        that it ignores every other module's mail), and both screens.
+        import's seven failure modes, the template matching the importer,
+        the role gate, the delivery listener (including that it ignores every
+        other module's mail) and the resend page.
 
 Not Jason's to (re)build — already exists in Core, or already tracked
 elsewhere in this file:

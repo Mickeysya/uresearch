@@ -2,7 +2,6 @@
 
 use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Http\Controllers\AppointmentLetterController;
-use App\Modules\Jason\Http\Controllers\ExaminerPoolController;
 use App\Modules\Jason\Http\Controllers\HardboundAppealController;
 use App\Modules\Jason\Http\Controllers\HardboundSubmissionController;
 use Illuminate\Support\Facades\Route;
@@ -16,45 +15,35 @@ Route::middleware('auth')->group(function () {
 
     // ---- Appointment Letter --------------------------------------------
 
-    // The examiner list the Chair nominates from. Chairs and CGS both keep it.
-    // The list and the add form are two pages, not one: adding is an action,
-    // not a second view of the list, and the wizard wants a card of its own
-    // (core::partials.form-stepper re-casts whatever .card it finds the form
-    // in). Same shape as Hani's examiner pool, /examiners and /examiners/new.
-    Route::middleware('role:'.implode(',', [Role::CHAIR, Role::NON_EXEC_CGS]))->group(function () {
-        Route::get('/appointment-letter/examiners', [ExaminerPoolController::class, 'index'])
-            ->name('appointment-letter.examiners');
-        Route::get('/appointment-letter/examiners/new', [ExaminerPoolController::class, 'create'])
-            ->name('appointment-letter.examiners.create');
-        Route::post('/appointment-letter/examiners', [ExaminerPoolController::class, 'store'])
-            ->name('appointment-letter.examiners.store');
-        Route::post('/appointment-letter/examiners/{examiner}/toggle', [ExaminerPoolController::class, 'toggle'])
-            ->name('appointment-letter.examiners.toggle');
-    });
-
+    // Examiner selection is settled before this module: the finalised list
+    // arrives as a spreadsheet and CGS imports it. There is no nomination
+    // form here any more, and no examiner list of our own -- both were
+    // retired on 2026-09-30 when the boundary with Hani's chain was agreed.
+    // Core's Chair dashboard links here -- "Panels you filed" and its stat
+    // card both call route('appointment-letter.create') unconditionally, so
+    // retiring the name outright 500s the whole dashboard for every Chair.
+    // Those two partials belong to the team, so rather than edit them this
+    // keeps the name answering and tells the Chair where nomination went.
+    // Delete this, and the view, once Core's partials are updated.
     Route::middleware('role:'.Role::CHAIR)->group(function () {
-        Route::get('/appointment-letter/new', [AppointmentLetterController::class, 'create'])
+        Route::get('/appointment-letter/new', [AppointmentLetterController::class, 'nominationMoved'])
             ->name('appointment-letter.create');
-        Route::post('/appointment-letter', [AppointmentLetterController::class, 'store'])
-            ->name('appointment-letter.store');
     });
 
-    // All three stages of the chain share one queue screen; ?stage= selects
-    // which. The engine re-checks the role against the application's actual
-    // stage before allowing any decision, same as every other module.
-    Route::middleware('role:'.implode(',', [Role::ACADEMIC_EXEC, Role::NON_EXEC_CGS, Role::DEAN_PGR]))->group(function () {
-        Route::get('/appointment-letter/queue', [AppointmentLetterController::class, 'queue'])
-            ->name('appointment-letter.queue');
-        Route::post('/appointment-letter/{application}/decide', [AppointmentLetterController::class, 'decide'])
-            ->name('appointment-letter.decide');
-    });
-
-    // Pack preparation, the Non-Executive CGS's stage. Approving out of that
-    // stage happens here rather than through the generic decide() button,
-    // because this is what writes and generates the documents the Dean then
-    // approves. The Dean reads them through the queue's document list --
-    // they are ordinary ApplicationDocuments, served by Core's download route.
     Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+        Route::get('/appointment-letter/import', [AppointmentLetterController::class, 'importForm'])
+            ->name('appointment-letter.import');
+        Route::post('/appointment-letter/import', [AppointmentLetterController::class, 'import'])
+            ->name('appointment-letter.import.store');
+        Route::get('/appointment-letter/template', [AppointmentLetterController::class, 'template'])
+            ->name('appointment-letter.template');
+
+        // Pack preparation, the Non-Executive CGS's stage. Approving out of
+        // that stage happens here rather than through the generic decide()
+        // button, because this is what writes and generates the documents
+        // the Dean then approves. The Dean reads them through the queue's
+        // document list -- they are ordinary ApplicationDocuments, served by
+        // Core's download route.
         Route::get('/appointment-letter/{application}/prepare', [AppointmentLetterController::class, 'prepare'])
             ->name('appointment-letter.prepare');
         Route::post('/appointment-letter/{application}/prepare', [AppointmentLetterController::class, 'savePreparation'])
@@ -67,6 +56,16 @@ Route::middleware('auth')->group(function () {
             ->name('appointment-letter.issued');
         Route::post('/appointment-letter/{application}/resend/{examiner}', [AppointmentLetterController::class, 'resend'])
             ->name('appointment-letter.resend');
+    });
+
+    // Both stages share one queue screen; ?stage= selects which. The engine
+    // re-checks the role against the application's actual stage before
+    // allowing any decision, same as every other module.
+    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::DEAN_PGR]))->group(function () {
+        Route::get('/appointment-letter/queue', [AppointmentLetterController::class, 'queue'])
+            ->name('appointment-letter.queue');
+        Route::post('/appointment-letter/{application}/decide', [AppointmentLetterController::class, 'decide'])
+            ->name('appointment-letter.decide');
     });
 
     // ---- Hardbound Submission ------------------------------------------
