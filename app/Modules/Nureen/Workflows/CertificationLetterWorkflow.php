@@ -2,6 +2,7 @@
 
 namespace App\Modules\Nureen\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
@@ -17,7 +18,7 @@ use App\Modules\Nureen\Models\GaCertificationDetail;
  * approval is also what triggers PDF generation; see
  * CertificationController::decide().
  */
-class CertificationLetterWorkflow implements WorkflowModule
+class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime
 {
     public function key(): string
     {

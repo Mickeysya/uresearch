@@ -109,8 +109,9 @@ This module deliberately does **not** use the shared
 `ApprovesApplications::decide()` (it only accepts approve/reject) — the
 controller has its own `decide()` that also accepts `return`, and uses only
 `queueFor()` from the trait. The queue view uses `core::partials.queue` with
-`'allowReturn' => true` for the Return button and `'bulk' => false`: Core's
-bulk decide calls the engine directly, so it would skip this controller's
+`'allowReturn' => true` for the Return button. The workflow implements
+`Core\Contracts\DecidesOneAtATime`, which turns off bulk decide: Core's bulk
+decide calls the engine directly, so it would skip this controller's
 rejection lock and the Dean's expiry-date update.
 
 **Return vs Reject are different outcomes, not two names for the same

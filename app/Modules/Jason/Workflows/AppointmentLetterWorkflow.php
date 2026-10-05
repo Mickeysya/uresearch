@@ -3,6 +3,7 @@
 namespace App\Modules\Jason\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -30,7 +31,7 @@ use App\Modules\Jason\Models\AppointmentExaminer;
  *
  * A straight linear chain, no conditional routing.
  */
-class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
+class AppointmentLetterWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLinks
 {
     public function key(): string
     {

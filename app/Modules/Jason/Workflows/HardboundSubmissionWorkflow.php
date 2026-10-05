@@ -4,6 +4,7 @@ namespace App\Modules\Jason\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesDashboardAlerts;
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -36,7 +37,7 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
  * to an engine change. There is no separate "rejected outright" ending: the
  * student may either resubmit or take it to Appeal Hardbound Submission.
  */
-class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks, ProvidesDashboardAlerts
+class HardboundSubmissionWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLinks, ProvidesDashboardAlerts
 {
     public function key(): string
     {

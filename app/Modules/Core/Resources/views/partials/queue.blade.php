@@ -20,11 +20,10 @@
               WorkflowEngine::resubmit()). Your decide route must accept
               'return'. Not the same as $returnRoute, which sends it back to
               an earlier approver stage.
-              $bulk -- false hides tick-and-decide-many. Pass it when your
-              decide() does more than call the engine (grants an extension,
-              writes a record, checks who the row names): bulk decisions go
-              through Core's QueueController straight to the engine, so none
-              of that would run.
+
+    Tick-and-decide-many is offered unless the module implements
+    Core\Contracts\DecidesOneAtATime -- declare it there, on the workflow,
+    not here: the same marker makes QueueController refuse the bulk POST.
 
     WHAT CHANGED, AND WHY (2026-09-17)
 
@@ -53,7 +52,7 @@
     $total = $applications->total();
     $overdueAfter = 14;   // days waiting before a row is called out
     $criticalAfter = 30;
-    $bulk = $bulk ?? true;
+    $bulk = ! $module instanceof \App\Modules\Core\Contracts\DecidesOneAtATime;
 @endphp
 
 @php

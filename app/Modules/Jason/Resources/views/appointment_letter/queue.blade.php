@@ -20,7 +20,6 @@
     @include('core::partials.queue', [
         'moduleLabel' => 'Appointment Letter',
         'decideRoute' => 'appointment-letter.decide',
-        'bulk' => false, // decide() does more than the engine; Core's bulk path would skip it
         'detailView' => 'jason::appointment_letter._detail',
         'intro' => $intro,
     ])

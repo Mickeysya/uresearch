@@ -29,7 +29,7 @@ as the work it describes.
 | Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | **built** (merged 2026-09-27) · 4 open defects, see her section |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started (scaffold only) |
 | **Cross-module overlaps** | **3 unresolved** (#2 settled by Chloe's build) — see below |
-| **Bulk decide skips module rules** | **open, 8 queues affected, one is an authorisation hole** — see the fourth pass |
+| Bulk decide skips module rules | fixed 2026-10-05 — `DecidesOneAtATime`, see the fourth pass |
 | Automated tests | **217**, all green (run in the app container, 2026-09-27) — Core 108 · Norhanis 24 · Hani 24 · Nureen 23 · Jason 18 · Chloe 16 · Unit 4. Covers the engine (both return paths: `returnTo()` and `decide('return')` + `resubmit()`), the seams, the CSP, the import, the profile, RPD's three flows, Travel's branch, every teammate's chain, the admin screens, and Chloe's appeal and reminder rules. **Workstation and Dismissal have none.** |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12; Chloe's pages rendered through a full appeal lifecycle 2026-09-27 |
 | Last reviewed | **2026-09-27** — full audit after Chloe's merge: hard rules, routes, open Core items, Chloe against `chloe.md`, unmerged branches. See the fourth pass. Before that 2026-09-23 (account administration, gauge start, CGS Actions tree) |
@@ -256,7 +256,7 @@ screens every signed-in role shares. No pending migrations. 217 tests pass.
       block-picker step is gone (the route stays, for old links). A held seat
       is a status strip with the seat number, locker key and actions. Gender
       is a small setting in the header instead of a sentence in the body.
-- [x] **The shared queue takes `allowReturn` and `bulk`** (Core change,
+- [x] **The shared queue takes `allowReturn`** (bulk is now `DecidesOneAtATime`; Core change,
       opt-in, defaults unchanged). Chloe's appeal queue now uses
       `core::partials.queue` instead of a copy of it. Also fixed: the Order
       dropdown's auto-submit was wired after an early return that fires when
@@ -264,7 +264,7 @@ screens every signed-in role shares. No pending migrations. 217 tests pass.
 
 **Open, found in this pass:**
 
-- [ ] **Bulk decide skips each module's own `decide()`.** `QueueController::decideBulk()`
+- [x] **Bulk decide skips each module's own `decide()`.** `QueueController::decideBulk()`
       calls `WorkflowEngine::decide()` directly, so any rule a module enforces
       in its own controller does not run for a ticked row. That is eight live
       queues:
@@ -278,15 +278,17 @@ screens every signed-in role shares. No pending migrations. 217 tests pass.
       | Examiner Nomination (Hani) | tying up the examiners |
       | Hardbound, Hardbound Appeal (Jason) | the stage rules and required remarks |
       | Appointment Letter (Jason) | its stage checks |
-      | Candidacy Appeal (Chloe) | *already off*, `'bulk' => false` |
+      | Candidacy Appeal (Chloe) | the rejection lock and the Dean's expiry update |
 
-      Quick fix **applied 2026-10-05**: `'bulk' => false` in all eight
-      `queue.blade.php` files, so the checkboxes are gone. **That only hides
-      the UI.** `POST /queue/{module}/decide` (`QueueController::decideBulk()`)
-      still accepts a hand-built request for any module, so the Supervision
-      hole is closed to clicks but not to a crafted POST. Proper fix (Core):
-      `decideBulk()` refuses a module that opts out, or bulk goes through each
-      module's decide route, one row at a time.
+      **Fixed 2026-10-05 (Core change).** New marker interface
+      `Core\Contracts\DecidesOneAtATime`; the nine workflows above implement
+      it. `QueueController::decideBulk()` answers a 403 for such a module, so
+      a hand-built POST cannot get round the module's rules, and
+      `core::partials.queue` hides the checkboxes based on the same marker
+      (the per-view `'bulk' => false` option is gone). Test:
+      `QueueTest::test_bulk_deciding_a_module_that_decides_one_at_a_time_is_refused`.
+      **Any new module whose `decide()` does more than call the engine must
+      implement it.** Bulk still works for the other six queues.
 - [ ] **The two page guards never scan nested views.** `PageShellTest` and
       `ProseTest` glob `views/**/*.blade.php`, and PHP's `glob()` does not
       recurse, so `**` means exactly one folder. **46 views** were never
@@ -2855,10 +2857,8 @@ are what to reach for when touching the file anyway.
    chain's prose was corrected to match the code, and his three rules have
    tests. The "return to student" engine question was settled without a Core
    change (see his section).
-9. **Close the bulk-decide gap first** (fourth pass). Supervision's is an
-   authorisation hole that exists today; `'bulk' => false` in the eight
-   affected `queue.blade.php` files is ten minutes, and buys time for the
-   proper fix.
+9. ~~Close the bulk-decide gap~~ Done 2026-10-05: `DecidesOneAtATime`
+   (fourth pass).
 10. **Chloe's four defects**: supervisor scoping on her appeal, the
     month-end overflow, reminders after an extension, and the seat check
     outside the lock. Each is small, and the first two are one-liners copied

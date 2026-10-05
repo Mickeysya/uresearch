@@ -6,7 +6,6 @@
     @include('core::partials.queue', [
         'moduleLabel' => 'Examiner Nomination',
         'decideRoute' => 'examiner-nomination.decide',
-        'bulk' => false, // decide() does more than the engine; Core's bulk path would skip it
         'detailView' => 'hani::examiner_nomination._detail',
         'tools' => 'hani::examiner_nomination._tools',
     ] + ($canReturn ? [

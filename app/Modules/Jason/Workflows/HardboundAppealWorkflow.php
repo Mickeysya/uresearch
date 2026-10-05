@@ -2,6 +2,7 @@
 
 namespace App\Modules\Jason\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
@@ -21,7 +22,7 @@ use App\Modules\Jason\Models\HardboundAppealDetail;
  * Instead an approved appeal unlocks the resubmission form for the
  * submission it names -- see HardboundSubmissionController::resubmittableDetail().
  */
-class HardboundAppealWorkflow implements WorkflowModule
+class HardboundAppealWorkflow implements WorkflowModule, DecidesOneAtATime
 {
     public function key(): string
     {

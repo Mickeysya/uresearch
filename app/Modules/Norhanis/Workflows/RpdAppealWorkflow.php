@@ -4,6 +4,7 @@ namespace App\Modules\Norhanis\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -24,7 +25,7 @@ use Carbon\CarbonInterface;
  * moves the masterlist deadline on the Dean's approval. This class only says
  * who signs.
  */
-class RpdAppealWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
+class RpdAppealWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLinks, SuppliesCalendarEvents
 {
     public function key(): string
     {

@@ -3,6 +3,7 @@
 namespace App\Modules\Chloe\Workflows;
 
 use App\Modules\Chloe\Models\CandidacyAppealDetail;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
@@ -18,7 +19,7 @@ use App\Modules\Core\Support\Stage;
  * and `dean`/`dean_pgr` pairing already listed in docs/module-keys.md's
  * stage-key table, put there for exactly this chain.
  */
-class CandidacyAppealWorkflow implements WorkflowModule
+class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime
 {
     public function key(): string
     {
