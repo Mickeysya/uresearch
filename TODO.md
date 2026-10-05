@@ -26,7 +26,7 @@ as the work it describes.
 | Notification feed (`/notifications`) | done |
 | Audit log (`/admin/audit-logs`, spatie/activitylog) | done |
 | Jason — Hardbound Submission · Appeal · Appointment Letters | done |
-| Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | **built** (merged 2026-09-27) · 4 open defects, see her section |
+| Chloe — Workstation · Candidacy Reminder / Appeal / Dismissal | **built** (merged 2026-09-27) · 4 defects fixed 2026-10-05 |
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started (scaffold only) |
 | **Cross-module overlaps** | **3 unresolved** (#2 settled by Chloe's build) — see below |
 | Bulk decide skips module rules | fixed 2026-10-05 — `DecidesOneAtATime`, see the fourth pass |
@@ -1633,7 +1633,10 @@ Norhanis' `candidacies`, which settles overlap #2 as two implementations.
         CGS can correct a student's gender designation
   - [x] Rebuilt 2026-09-27: every room on the first screen with a free-seat
         bar, held seat as a status strip (see the fourth pass)
-  - [ ] **One seat per student is checked outside the lock.**
+  - [x] **Fixed 2026-10-05:** the one-seat check is inside
+        `WorkstationAllocator::request()`'s transaction, under a lock on the
+        student's row (`WorkstationAllocatorTest`). Was: **one seat per
+        student checked outside the lock.**
         `WorkstationController::store()` asks "already holding?" before
         `WorkstationAllocator::request()` opens its transaction, so a double
         submit on two *different* seats can confirm both. Move the check
@@ -1648,7 +1651,9 @@ Norhanis' `candidacies`, which settles overlap #2 as two implementations.
         their own history on My Candidacy
   - [x] Stops on an open appeal, and for any candidacy not `active`
         (softbound, inactive, dismissed, completed)
-  - [ ] **Reminders stop for good after an extension.** The sent log is keyed
+  - [x] **Fixed 2026-10-05:** `applyDeanApproval()` clears the reminder
+        log (this also drops the old cycle from the student's history). Was:
+        **reminders stop for good after an extension.** The sent log is keyed
         by reminder number and never cleared, so once 1, 2 and 3 have gone out
         the new expiry date gets none. Norhanis hit the same thing:
         `RpdAppealController::grantExtension()` clears her log inside the
@@ -1671,12 +1676,15 @@ Norhanis' `candidacies`, which settles overlap #2 as two implementations.
         `resubmit()`; resubmission goes back to the same stage
   - [x] A rejection at any stage blocks further appeals; the Dean's approval
         extends the expiry and emails the student
-  - [ ] **Any supervisor can endorse any student's appeal.** The student
+  - [x] **Fixed 2026-10-05:** queue scope closure plus the same check in
+        `decide()`, as in Supervision. Was: **any supervisor can endorse any
+        student's appeal.** The student
         names a supervisor (`candidacy_appeal_details.supervisor_id`), but
         neither the queue nor `decide()` checks it. Nureen's Supervision
         module is the pattern: a `queueFor()` scope closure plus the same
         check in `decide()`.
-  - [ ] **Extensions overflow the month end.** `applyDeanApproval()` uses
+  - [x] **Fixed 2026-10-05:** `addMonthsNoOverflow()`. Was: **extensions
+        overflow the month end.** `applyDeanApproval()` uses
         `addMonths()`: 31 Aug plus 6 months is **3 Mar**, not 28 Feb, so a
         student gains days nobody granted. Norhanis uses
         `addMonthsNoOverflow()`; one word to change.
@@ -2859,10 +2867,8 @@ are what to reach for when touching the file anyway.
    change (see his section).
 9. ~~Close the bulk-decide gap~~ Done 2026-10-05: `DecidesOneAtATime`
    (fourth pass).
-10. **Chloe's four defects**: supervisor scoping on her appeal, the
-    month-end overflow, reminders after an extension, and the seat check
-    outside the lock. Each is small, and the first two are one-liners copied
-    from Nureen and Norhanis. Then Workstation and Dismissal tests.
+10. ~~Chloe's four defects~~ Done 2026-10-05. Still to do: more
+    Workstation tests (locker keys, CGS overrides) and Dismissal tests.
 11. **Before Haziq writes any code, hold the overlap meeting**: #1 (his GRA/GA
     against Nureen's shipped modules), #3 and #4. Chloe's build settled #2.
 12. ~~The "return with comment" engine outcome~~ Done: both

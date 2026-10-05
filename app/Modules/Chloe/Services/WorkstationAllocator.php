@@ -29,6 +29,18 @@ class WorkstationAllocator
     public function request(User $student, Workstation $seat): array
     {
         $result = DB::transaction(function () use ($student, $seat) {
+            // One seat per student, checked under a lock on the STUDENT. The
+            // seat lock below only serialises two students on one seat; a
+            // double submit on two different seats would lock two different
+            // rows and confirm both.
+            User::whereKey($student->id)->lockForUpdate()->first();
+
+            if (WorkstationRequest::where('student_id', $student->id)
+                ->where('status', WorkstationRequest::STATUS_CONFIRMED)
+                ->exists()) {
+                throw new RuntimeException('You already have a workstation. Release it before selecting another.');
+            }
+
             $locked = Workstation::whereKey($seat->id)->lockForUpdate()->first();
 
             if (! $locked || $locked->status !== Workstation::STATUS_AVAILABLE) {

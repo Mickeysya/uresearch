@@ -10,6 +10,7 @@ use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Core\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 /**
  * Home (choose block) -> Room (choose room, filtered by the student's own
@@ -110,16 +111,12 @@ class WorkstationController extends Controller
 
     public function store(Request $request, Workstation $workstation, WorkstationAllocator $allocator)
     {
-        $alreadyHolding = WorkstationRequest::where('student_id', $request->user()->id)
-            ->where('status', WorkstationRequest::STATUS_CONFIRMED)
-            ->exists();
-
-        if ($alreadyHolding) {
+        try {
+            $result = $allocator->request($request->user(), $workstation);
+        } catch (RuntimeException $e) {
             return redirect()->route('workstation.seats', $workstation->workstation_location_id)
-                ->with('error', 'You already have a workstation. Release it before selecting another.');
+                ->with('error', $e->getMessage());
         }
-
-        $result = $allocator->request($request->user(), $workstation);
 
         if (! $result['allocated']) {
             return redirect()->route('workstation.seats', $workstation->workstation_location_id)

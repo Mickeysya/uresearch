@@ -298,4 +298,51 @@ class CandidacyAppealTest extends TestCase
             ->get(route('candidacy-appeal.edit', $application))
             ->assertForbidden();
     }
+    public function test_only_the_named_supervisor_sees_and_can_endorse_the_appeal(): void
+    {
+        $student = $this->user(Role::STUDENT, 'student@test.my');
+        $named = $this->user(Role::SUPERVISOR, 'named@test.my');
+        $other = $this->user(Role::SUPERVISOR, 'other@test.my');
+        $this->candidacyFor($student);
+
+        $this->actingAs($student)->post(route('candidacy-appeal.store'), $this->validPayload($named));
+        $application = Application::where('module_type', 'candidacy_appeal')->sole();
+
+        $this->actingAs($other)->get(route('candidacy-appeal.queue'))
+            ->assertOk()->assertSee('Nothing is waiting on you right now.');
+        $this->actingAs($named)->get(route('candidacy-appeal.queue'))
+            ->assertOk()->assertSee('#'.$application->id);
+
+        $this->actingAs($other)
+            ->post(route('candidacy-appeal.decide', $application), ['decision' => 'approve'])
+            ->assertForbidden();
+
+        $this->assertSame('supervisor', $application->fresh()->current_stage);
+    }
+
+    public function test_the_deans_approval_clamps_the_month_end_and_restarts_reminders(): void
+    {
+        $student = $this->user(Role::STUDENT, 'student@test.my');
+        $supervisor = $this->user(Role::SUPERVISOR, 'supervisor@test.my');
+        $dean = $this->user(Role::DEAN_PGR, 'dean@test.my');
+        $candidacy = $this->candidacyFor($student);
+
+        $this->actingAs($student)->post(route('candidacy-appeal.store'), $this->validPayload($supervisor));
+        $application = Application::where('module_type', 'candidacy_appeal')->sole();
+
+        // Fixture only: skip the three middle stages, which other tests walk.
+        Application::whereKey($application->id)->update(['current_stage' => 'dean']);
+        $candidacy->update(['candidacy_expiry_date' => '2028-08-31']);
+        foreach ([1, 2, 3] as $n) {
+            $candidacy->reminders()->create(['reminder_number' => $n, 'sent_at' => now()]);
+        }
+
+        $this->actingAs($dean)->post(route('candidacy-appeal.decide', $application), ['decision' => 'approve']);
+
+        $candidacy->refresh();
+        $this->assertSame(Application::STATUS_APPROVED, $application->fresh()->status);
+        // 31 Aug + 6 months: 28 Feb, not 3 Mar.
+        $this->assertSame('2029-02-28', $candidacy->candidacy_expiry_date->toDateString());
+        $this->assertSame(0, $candidacy->reminders()->count());
+    }
 }

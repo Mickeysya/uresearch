@@ -13,6 +13,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
+use App\Modules\Core\Support\Stage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\UnauthorizedException;
@@ -145,7 +146,19 @@ class CandidacyAppealController extends Controller
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
-        $queue = $this->queueFor($request, $engine, ['documents']);
+        // The engine's queue is role-scoped: every supervisor would see every
+        // appeal at the supervisor stage. Narrow it to the supervisor the
+        // student named, on the query (same pattern as Nureen's Supervision).
+        $queue = $this->queueFor($request, $engine, ['documents'],
+            function ($query, Stage $stage) use ($request) {
+                if ($stage->key !== 'supervisor') {
+                    return;
+                }
+
+                $query->whereIn('id', CandidacyAppealDetail::query()
+                    ->where('supervisor_id', $request->user()->id)
+                    ->select('application_id'));
+            });
 
         $details = CandidacyAppealDetail::whereIn('application_id', $queue['applications']->pluck('id'))
             ->with('candidacy', 'supervisor', 'publications')
@@ -157,6 +170,12 @@ class CandidacyAppealController extends Controller
     public function decide(Request $request, Application $application, WorkflowEngine $engine)
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        // The queue hides other supervisors' appeals; this stops a direct POST.
+        if ($engine->currentStage($application)?->key === 'supervisor'
+            && CandidacyAppealDetail::where('application_id', $application->id)->value('supervisor_id') !== $request->user()->id) {
+            abort(403, 'This appeal names a different supervisor.');
+        }
 
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject,return'],
@@ -203,7 +222,9 @@ class CandidacyAppealController extends Controller
         }
 
         $candidacy = $detail->candidacy;
-        $newExpiry = $candidacy->candidacy_expiry_date->copy()->addMonths($detail->requested_extension_months);
+        // NoOverflow: 31 Aug + 6 months is 28 Feb, not 3 Mar. Same as
+        // Norhanis' RpdAppealController::grantExtension().
+        $newExpiry = $candidacy->candidacy_expiry_date->copy()->addMonthsNoOverflow($detail->requested_extension_months);
 
         $detail->update(['new_expiry_date' => $newExpiry]);
 
@@ -211,6 +232,13 @@ class CandidacyAppealController extends Controller
             'candidacy_expiry_date' => $newExpiry,
             'cumulative_extension_months' => $candidacy->cumulative_extension_months + $detail->requested_extension_months,
         ]);
+
+        // The reminder log is keyed by reminder number, so 1-3 already sent
+        // for the old date would block every reminder for the new one. Clear
+        // it, as Norhanis' grantExtension() does. ponytail: this also drops
+        // the old cycle from the student's history; add a cycle column if
+        // CGS wants that kept.
+        $candidacy->reminders()->delete();
 
         $candidacy->student?->notify(new CandidacyAppealApproved($detail->fresh()));
     }
