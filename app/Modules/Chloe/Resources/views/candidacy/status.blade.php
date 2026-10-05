@@ -86,9 +86,6 @@
                 @if ($appeals->isEmpty())
                     <div class="empty-state">
                         <p>You have not submitted a study candidacy appeal.</p>
-                        @if ($candidacy->canAppeal() && ! $candidacy->hasOpenAppeal())
-                            <a href="{{ route('candidacy-appeal.create') }}" class="btn-secondary">Submit an appeal</a>
-                        @endif
                     </div>
                 @else
                     <div class="table-scroll">

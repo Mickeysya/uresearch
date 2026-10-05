@@ -27,13 +27,22 @@ class WorkstationController extends Controller
         $activeRequest = $this->activeRequestFor($request);
         $gender = $this->genderFor($request);
 
-        $blocks = WorkstationLocation::query()
-            ->select('block')
-            ->distinct()
-            ->orderBy('block')
-            ->pluck('block');
+        // Every room this student may use, grouped by block, so the home
+        // screen goes straight to rooms rather than making them pick a block
+        // first. rooms() below still serves one block for old links.
+        $roomsByBlock = $gender
+            ? WorkstationLocation::where('gender', $gender)
+                ->withCount([
+                    'workstations',
+                    'workstations as available_count' => fn ($q) => $q->where('status', Workstation::STATUS_AVAILABLE),
+                ])
+                ->orderBy('block')
+                ->orderBy('room_code')
+                ->get()
+                ->groupBy('block')
+            : collect();
 
-        return view('chloe::workstation.select', compact('activeRequest', 'blocks', 'gender'));
+        return view('chloe::workstation.select', compact('activeRequest', 'roomsByBlock', 'gender'));
     }
 
     public function setGender(Request $request)

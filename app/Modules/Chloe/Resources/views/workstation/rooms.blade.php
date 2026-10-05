@@ -26,6 +26,9 @@
                 @foreach ($rooms as $room)
                     <a href="{{ route('workstation.seats', $room) }}" class="chloe-tile">
                         <span class="chloe-tile-title">{{ $room->name }}</span>
+                        @if ($room->room_code !== $room->name)
+                            <span class="chloe-tile-meta">{{ $room->room_code }}</span>
+                        @endif
                         <span><span class="status-badge draft">{{ $room->genderLabel() }}</span></span>
                         <span class="chloe-tile-meta">{{ $room->available_count }} of {{ $room->workstations_count }} seats available</span>
                     </a>

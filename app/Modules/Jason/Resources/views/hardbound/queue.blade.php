@@ -41,6 +41,7 @@
     @include('core::partials.queue', [
         'moduleLabel' => 'Hardbound Submission',
         'decideRoute' => 'hardbound.decide',
+        'bulk' => false, // decide() does more than the engine; Core's bulk path would skip it
         'detailView' => 'jason::hardbound._detail',
         'intro' => $intro,
     ])

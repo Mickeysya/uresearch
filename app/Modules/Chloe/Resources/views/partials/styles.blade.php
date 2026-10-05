@@ -8,7 +8,12 @@
 <style>
     /* Cards stacked down a page. */
     .chloe-stack { display: grid; gap: var(--space-6); }
-    .chloe-stack > .card { margin: 0; }
+    /* Two classes to beat uresearch.css's 680px .card-wide cap. layout.css
+       lifts it only for a card that is a DIRECT child of
+       .card-container-inline; inside this wrapper a card is a grandchild,
+       and without this it snaps back to 680px on a 1900px screen. */
+    .chloe-stack > .card,
+    .chloe-stack > .card.card-wide { margin: 0; max-width: none; width: 100%; }
     .chloe-stack .card > h3:first-child { margin-top: 0; }
 
     .chloe-stats { --sdash-gap: var(--space-4); justify-content: flex-start; margin-bottom: var(--space-6); }
@@ -59,6 +64,54 @@
     .chloe-tile-title { font-size: var(--text-lg); font-weight: var(--weight-semi); color: var(--navy); }
     .chloe-tile-meta { font-size: var(--text-sm); color: var(--text-grey); }
 
+    .chloe-tile-foot { display: flex; align-items: baseline; gap: var(--space-2); margin-top: auto; }
+    .chloe-tile-count { font-size: var(--text-lg); font-weight: var(--weight-semi); font-variant-numeric: tabular-nums; }
+    .chloe-tile-count.tone-good     { color: var(--success-fg); }
+    .chloe-tile-count.tone-warn     { color: var(--warning-fg); }
+    .chloe-tile-count.tone-critical { color: var(--danger-fg); }
+
+    /* Free-seat bar on a room tile. */
+    .chloe-meter { display: block; height: 6px; background: var(--surface-sunken); border-radius: var(--radius-full); overflow: hidden; }
+    .chloe-meter > span { display: block; height: 100%; border-radius: inherit; }
+    .chloe-meter.tone-good > span     { background: var(--success-fg); }
+    .chloe-meter.tone-warn > span     { background: var(--warning-fg); }
+    .chloe-meter.tone-critical > span { background: var(--danger-fg); }
+
+    /* One block of rooms on the Workstation home screen. */
+    .chloe-block { margin-bottom: var(--space-8); }
+    .chloe-block-head {
+        display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap;
+        margin-bottom: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border-subtle);
+    }
+    .chloe-block-head h3 { margin: 0; font-size: var(--text-lg); color: var(--text-dark); }
+
+    /* The seat a student holds: one strip, seat number large on the left. */
+    .chloe-held {
+        display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-6);
+        margin-bottom: var(--space-6); padding: var(--space-5) var(--space-6);
+        background: var(--surface); border: 1px solid var(--border-subtle);
+        border-left: 4px solid var(--success-fg); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+    }
+    .chloe-held-seat { display: flex; flex-direction: column; }
+    .chloe-held-seat .chloe-eyebrow { margin: 0; }
+    .chloe-held-code { font-size: var(--text-3xl); font-weight: var(--weight-bold); color: var(--navy); line-height: 1; font-variant-numeric: tabular-nums; }
+    .chloe-held-facts { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-8); margin: 0; flex: 1 1 320px; }
+    .chloe-held-facts dt { font-size: var(--text-xs); color: var(--text-grey); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+    .chloe-held-facts dd { margin: 0; font-weight: var(--weight-semi); color: var(--text-dark); }
+    .chloe-held-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+    .chloe-held-actions form { margin: 0; }
+
+    /* A small setting tucked into the page header (the gender filter). */
+    .chloe-setting { position: relative; }
+    .chloe-setting > summary { list-style: none; }
+    .chloe-setting > summary::-webkit-details-marker { display: none; }
+    .chloe-setting[open] > form {
+        position: absolute; right: 0; top: calc(100% + var(--space-2)); z-index: var(--z-overlay);
+        padding: var(--space-3); background: var(--surface-raised);
+        border: 1px solid var(--border-grey); border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+        flex-wrap: nowrap;
+    }
+
     /* A room, collapsed, on the CGS operations screen. */
     .chloe-room { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); margin-bottom: var(--space-3); }
     .chloe-room > summary {
@@ -98,8 +151,12 @@
         border: 1px solid var(--border-subtle);
         border-radius: var(--radius-md);
     }
-    .seat-cluster { display: flex; flex-wrap: wrap; gap: var(--space-2); align-content: flex-start; }
+    .seat-cluster { display: flex; flex-wrap: wrap; gap: var(--space-2); align-content: flex-start; align-items: flex-start; }
     .seat-map .seat-cluster { gap: var(--space-1); }
     .seat-map .seat { min-width: 24px; height: 22px; padding: 0 var(--space-1); font-size: var(--text-2xs); }
-    .seat-cluster form { margin: 0; }
+    .seat-cluster form { margin: 0; display: flex; }
+    button.seat { margin: 0; }
+
+    /* A notice above the room list needs air before the first block. */
+    .card-container-inline > .message-info { margin-bottom: var(--space-6); }
 </style>

@@ -14,6 +14,17 @@
               to an earlier one instead of rejecting it outright.
               $tools -- a partial rendered beside the search box, for a screen
               that offers something more than deciding (an export, say).
+              $allowReturn -- true adds a Return button to each row's
+              decision form: WorkflowEngine::decide()'s 'return', which sends
+              the application back to the STUDENT for revision (see
+              WorkflowEngine::resubmit()). Your decide route must accept
+              'return'. Not the same as $returnRoute, which sends it back to
+              an earlier approver stage.
+              $bulk -- false hides tick-and-decide-many. Pass it when your
+              decide() does more than call the engine (grants an extension,
+              writes a record, checks who the row names): bulk decisions go
+              through Core's QueueController straight to the engine, so none
+              of that would run.
 
     WHAT CHANGED, AND WHY (2026-09-17)
 
@@ -42,6 +53,7 @@
     $total = $applications->total();
     $overdueAfter = 14;   // days waiting before a row is called out
     $criticalAfter = 30;
+    $bulk = $bulk ?? true;
 @endphp
 
 @php
@@ -108,6 +120,7 @@
 @else
     {{-- The bulk form owns nothing visually until something is ticked. It is
          a sibling of the rows, never a parent: see the note at the top. --}}
+    @if ($bulk)
     <form method="POST" action="{{ route('queue.decide-bulk', $module->key()) }}" id="queue-bulk">
         @csrf
     </form>
@@ -124,14 +137,17 @@
         <button type="submit" name="decision" value="approve" form="queue-bulk">Approve selected</button>
         <button type="submit" name="decision" value="reject" form="queue-bulk" class="btn-reject">Reject selected</button>
     </div>
+    @endif
 
     <div class="queue-list">
+        @if ($bulk)
         <div class="queue-list-head">
             <label class="queue-check">
                 <input type="checkbox" data-queue-all aria-label="Select every application on this page">
                 <span>Select all on this page</span>
             </label>
         </div>
+        @endif
 
         @foreach ($applications as $application)
             @php
@@ -151,11 +167,13 @@
                          nicer, but a checkbox inside one works as long as the
                          click does not also toggle the row; the script below
                          stops that. --}}
+                    @if ($bulk)
                     <label class="queue-check" data-queue-check-wrap>
                         <input type="checkbox" name="ids[]" value="{{ $application->id }}"
                                form="queue-bulk" data-queue-check
                                aria-label="Select application #{{ $application->id }}">
                     </label>
+                    @endif
 
                     <span class="queue-row-id">#{{ $application->id }}</span>
 
@@ -213,6 +231,7 @@
                     <x-core::decision-form
                         :application="$application"
                         :route="route($decideRoute, $application)"
+                        :allow-return="$allowReturn ?? false"
                         :return-action="isset($returnRoute)
                             ? ['route' => route($returnRoute, $application), 'label' => $returnLabel ?? 'Send back']
                             : null" />
@@ -226,6 +245,12 @@
 
 <script @cspNonce>
     (function () {
+        // Before the early return below: a queue with bulk turned off has no
+        // checkboxes, and its sort should still submit on change.
+        document.querySelectorAll('[data-queue-autosubmit]').forEach(function (field) {
+            field.addEventListener('change', function () { field.form.submit(); });
+        });
+
         var boxes = Array.prototype.slice.call(document.querySelectorAll('[data-queue-check]'));
         if (! boxes.length) return;
 
@@ -261,10 +286,6 @@
                 refresh();
             });
         }
-
-        document.querySelectorAll('[data-queue-autosubmit]').forEach(function (field) {
-            field.addEventListener('change', function () { field.form.submit(); });
-        });
 
         refresh();
     })();

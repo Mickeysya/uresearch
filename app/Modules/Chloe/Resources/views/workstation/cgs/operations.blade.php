@@ -51,7 +51,7 @@
                     <tbody>
                         @foreach ($rooms as $room)
                             <tr>
-                                <td>{{ $room->name }} <span class="queue-meta">{{ $room->room_code }}</span></td>
+                                <td>{{ $room->name }} @if ($room->room_code !== $room->name)<span class="queue-meta">{{ $room->room_code }}</span>@endif</td>
                                 <td>{{ $room->block }}</td>
                                 <td><span class="status-badge draft">{{ $room->genderLabel() }}</span></td>
                                 <td class="rpd-num">{{ $room->available_count }} / {{ $room->workstations_count }}</td>
@@ -107,8 +107,8 @@
             @foreach ($rooms as $room)
                 <details class="chloe-room">
                     <summary>
-                        <span>{{ $room->name }} <span class="queue-meta">{{ $room->room_code }}</span></span>
-                        <span class="queue-meta">{{ $room->available_count }} of {{ $room->workstations_count }} available</span>
+                        <span>{{ $room->name }} @if ($room->room_code !== $room->name)<span class="queue-meta">{{ $room->room_code }}</span>@endif</span>
+                        <span class="chloe-tile-meta">{{ $room->available_count }} of {{ $room->workstations_count }} available</span>
                     </summary>
 
                     <div class="table-scroll">

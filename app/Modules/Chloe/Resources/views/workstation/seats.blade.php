@@ -13,13 +13,14 @@
 <div class="card-container-inline">
     <x-core::page-header :title="$workstationLocation->name">
         <x-slot:subtitle>
-            {{ $workstationLocation->room_code }} · Block {{ $workstationLocation->block }} · {{ $workstationLocation->genderLabel() }}
+            @if ($workstationLocation->room_code !== $workstationLocation->name){{ $workstationLocation->room_code }} · @endif
+            Block {{ $workstationLocation->block }} · {{ $workstationLocation->genderLabel() }}
             @if ($workstationLocation->description)
                 · {{ $workstationLocation->description }}
             @endif
         </x-slot:subtitle>
 
-        <a href="{{ route('workstation.rooms', $workstationLocation->block) }}" class="btn-secondary">Block {{ $workstationLocation->block }}</a>
+        <a href="{{ route('workstation.select') }}" class="btn-secondary">All rooms</a>
     </x-core::page-header>
 
     @if ($heldElsewhere)
