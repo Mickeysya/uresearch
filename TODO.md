@@ -30,7 +30,7 @@ as the work it describes.
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started (scaffold only) |
 | **Cross-module overlaps** | **3 unresolved** (#2 settled by Chloe's build) — see below |
 | Bulk decide skips module rules | fixed 2026-10-05 — `DecidesOneAtATime`, see the fourth pass |
-| Automated tests | **217**, all green (run in the app container, 2026-09-27) — Core 108 · Norhanis 24 · Hani 24 · Nureen 23 · Jason 18 · Chloe 16 · Unit 4. Covers the engine (both return paths: `returnTo()` and `decide('return')` + `resubmit()`), the seams, the CSP, the import, the profile, RPD's three flows, Travel's branch, every teammate's chain, the admin screens, and Chloe's appeal and reminder rules. **Workstation and Dismissal have none.** |
+| Automated tests | **237**, all green (run in the app container, 2026-10-05) — Core 109 · Chloe 35 · Norhanis 24 · Hani 24 · Nureen 23 · Jason 18 · Unit 4. Covers the engine (both return paths: `returnTo()` and `decide('return')` + `resubmit()`), the seams, the CSP, the import, the profile, RPD's three flows, Travel's branch, every teammate's chain, the admin screens, bulk decide refusing `DecidesOneAtATime` modules, and all four of Chloe's modules. |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12; Chloe's pages rendered through a full appeal lifecycle 2026-09-27 |
 | Last reviewed | **2026-09-27** — full audit after Chloe's merge: hard rules, routes, open Core items, Chloe against `chloe.md`, unmerged branches. See the fourth pass. Before that 2026-09-23 (account administration, gauge start, CGS Actions tree) |
 
@@ -1641,8 +1641,10 @@ Norhanis' `candidacies`, which settles overlap #2 as two implementations.
         `WorkstationAllocator::request()` opens its transaction, so a double
         submit on two *different* seats can confirm both. Move the check
         inside the transaction, or add a unique index on confirmed requests.
-  - [ ] **No tests at all** for booking, the race, locker keys or the CGS
-        overrides.
+  - [x] **Tests, 2026-10-05:** `tests/Feature/Chloe/WorkstationTest.php`,
+        11 tests: booking, seat taken first, one seat per student, gender
+        designation, release, locker key lifecycle and reminder, CGS
+        force-assign / force-release, students locked out of CGS routes.
 
 - [x] **Study Candidacy Reminder** (`candidacy_reminder`)
   - [x] Daily `candidacy:remind` (07:00); three reminders at 3/2/1 months
@@ -1694,7 +1696,10 @@ Norhanis' `candidacies`, which settles overlap #2 as two implementations.
         three reasons: expired with no appeal, extension exhausted, appeal
         rejected. CGS reviews and confirms.
   - [x] Registry submission stays manual; confirming notifies the student
-  - [ ] No tests.
+  - [x] **Tests, 2026-10-05:** `tests/Feature/Chloe/CandidacyDismissalTest.php`,
+        6 tests: the three reasons and their precedence, in-date / inactive /
+        open-appeal candidacies left off, no duplicates, CGS refresh and
+        confirm (candidacy dismissed, one email), students locked out.
 
 - [x] CGS screens: Workstation Management, Seat Catalogue, Candidacy
       Management, Dismissal List. Pending appeals and workstation occupancy
@@ -2815,10 +2820,9 @@ are what to reach for when touching the file anyway.
       CGS Attendance student list, CGS Reports, Help and Support, Settings.
       All are `PageController::PAGES` entries. Help and Support is linked
       from every role's sidebar, so it is the one a demo audience will click.
-- [~] Automated tests — **217 pass as of 2026-09-27** (Core 108 · Norhanis 24 ·
-      Hani 24 · Nureen 23 · Jason 18 · Chloe 16 · Unit 4). Still missing:
-      Chloe's Workstation and Dismissal, and Conflict Detection and
-      `DocumentStore`'s allow-list (below). The history of this line: the harness
+- [~] Automated tests — **237 pass as of 2026-10-05** (Core 109 · Chloe 35 ·
+      Norhanis 24 · Hani 24 · Nureen 23 · Jason 18 · Unit 4). Still missing:
+      Conflict Detection and `DocumentStore`'s allow-list (below). The history of this line: the harness
       once had **102 passing** (98 feature, 4
       unit), covering the parts that break quietly: both authorisation locks,
       approve/reject outcomes, Travel's conditional routing, the
@@ -2867,8 +2871,8 @@ are what to reach for when touching the file anyway.
    change (see his section).
 9. ~~Close the bulk-decide gap~~ Done 2026-10-05: `DecidesOneAtATime`
    (fourth pass).
-10. ~~Chloe's four defects~~ Done 2026-10-05. Still to do: more
-    Workstation tests (locker keys, CGS overrides) and Dismissal tests.
+10. ~~Chloe's four defects~~, ~~Workstation tests~~ and ~~Dismissal tests~~
+    Done 2026-10-05.
 11. **Before Haziq writes any code, hold the overlap meeting**: #1 (his GRA/GA
     against Nureen's shipped modules), #3 and #4. Chloe's build settled #2.
 12. ~~The "return with comment" engine outcome~~ Done: both
