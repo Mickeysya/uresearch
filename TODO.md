@@ -315,6 +315,57 @@ screens every signed-in role shares. No pending migrations. 217 tests pass.
       `nureen-cgs-modules-temp` and `fix-missing-file-extensions` are
       pre-rewrite (2026-09-03) and can be deleted.
 
+
+### Fifth pass — 2026-10-06 (after the 2026-10-05 fixes)
+
+**Done since the fourth pass** (all on `develop`, 237 tests green):
+bulk decide refuses modules that implement `DecidesOneAtATime` (Core); Chloe's
+four defects; Workstation (11) and Dismissal (6) test suites; page guards scan
+all 155 views. Docs updated to match: `architecture.md`, `adding-a-module.md`,
+`conventions.md`, the stack report, `CLAUDE.md`, Chloe's README.
+
+**Hard rules, re-checked: clean.** Every `status` / `current_stage` hit outside
+the engine is a read. The one `{!! !!}` outside Jason's letter templates is
+the queue's `intro`, fed only fixed strings or messages already passed
+through `e()`. No `$_POST`, no raw uploads, no migration on a shared table.
+
+**Still open, verified against the code today:**
+
+- [ ] Validation errors: `partials/flash` still never renders `$errors`;
+      Jason's three queues work round it by hand. One block fixes every
+      module. (Core)
+- [ ] Student sidebar drops `ProvidesLinks` links (`sidebar.blade.php:50`
+      does not pass `$extraLinks`). One line. (Core)
+- [ ] Supervisors are not scoped in the shared queue; only modules that scope
+      themselves (Supervision, Candidacy Appeal) are. Needs a team decision.
+- [ ] Tracking page is an unpaginated `->get()`
+      (`ApplicationTrackingController:24`).
+- [ ] Six placeholder screens, Help and Support first.
+- [ ] Chloe: CGS cannot see reminder status; reminder sent before its log row,
+      no unique index on `(study_candidacy_id, reminder_number)`.
+- [ ] Four loose test files in `tests/Feature/` (two Chloe, one Jason, one
+      Core); move each into its owner's folder.
+- [ ] Haziq: scaffold only. Overlaps #1, #3, #4 still need the meeting.
+- [ ] Branches: do not merge `feature/norhanis-rpd` or
+      `feature/hanis-remaining-module` (see fourth pass); delete
+      `nureen-cgs-modules-temp`, `fix-missing-file-extensions`,
+      `feature/jason-remaining-module`.
+- [ ] No password reset, no student withdraw action.
+
+**Over-engineering audit (ponytail):** four runtime deps, all used; no
+unreferenced classes or views. What could go:
+
+- [ ] `WorkstationController::rooms()`, its route and `rooms.blade.php`:
+      nothing links to them since the home redesign, and there are no
+      external "old links" to preserve.
+- [ ] This file: ~2,900 lines, most of it closed history that git already
+      holds. Collapse closed passes to one line each.
+- [ ] Chloe's two follow-up migrations could fold into her create migrations
+      before any production database exists.
+- [ ] Two candidacy engines (Norhanis' `candidacies`, Chloe's
+      `study_candidacies`) already drift. Not worth merging this late; say so
+      in the report.
+
 ---
 
 ## Done
@@ -1639,7 +1690,7 @@ Norhanis' `candidacies`, which settles overlap #2 as two implementations.
         bar, held seat as a status strip (see the fourth pass)
   - [x] **Fixed 2026-10-05:** the one-seat check is inside
         `WorkstationAllocator::request()`'s transaction, under a lock on the
-        student's row (`WorkstationAllocatorTest`). Was: **one seat per
+        student's row (`tests/Feature/Chloe/WorkstationTest.php`). Was: **one seat per
         student checked outside the lock.**
         `WorkstationController::store()` asks "already holding?" before
         `WorkstationAllocator::request()` opens its transaction, so a double

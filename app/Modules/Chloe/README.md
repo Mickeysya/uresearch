@@ -51,8 +51,10 @@ It is not an approval chain, so it does not implement `WorkflowModule` and
 never touches `WorkflowEngine` or an `Application` row — it is a real-time
 seat booking system with its own tables (`workstation_locations`,
 `workstations`, `workstation_requests`, `locker_keys`), guarded against a
-double-booking race by `Services\WorkstationAllocator` (a row lock inside a
-transaction). See `Http/Controllers/WorkstationController.php` and
+double-booking race by `Services\WorkstationAllocator`: inside one
+transaction it locks the student's row (so a double submit on two different
+seats cannot confirm both; one seat per student) and then the seat's row (so
+two students on one seat get one confirmation and one rejection). See `Http/Controllers/WorkstationController.php` and
 `Http/Controllers/Cgs/` for the student and CGS-staff sides.
 
 Because it registers no `WorkflowModule`, it cannot reach the sidebar or the
@@ -91,6 +93,15 @@ it isn't a shared Core table with Norhanis' unbuilt RPD trio).
   new column is nullable/defaulted so the one appeal submitted through the
   earlier form still loads. The official appeal form upload is optional, not
   required, per the digitised spec. See `tests/Feature/CandidacyAppealTest.php`.
+
+  **The supervisor stage is scoped to the supervisor the student named**
+  (`candidacy_appeal_details.supervisor_id`): `queue()` passes a scope
+  closure to `queueFor()`, and `decide()` returns 403 if anyone else posts.
+  Same pattern as Nureen's Supervision. **The Dean's approval** extends the
+  expiry with `addMonthsNoOverflow()` (31 Aug + 6 months is 28 Feb, not
+  3 Mar) and clears the reminder log, so the new expiry gets its three
+  reminders. That also removes the old cycle from the student's reminder
+  history; keeping it would need a cycle column.
 
 **Two Core changes, both additive, both covered by `tests/Feature/WorkflowReturnTest.php`:**
 `WorkflowEngine::decide()` gained a third `'return'` outcome alongside the
@@ -136,3 +147,15 @@ so a dynamic segment at the same depth must always be added after every
 static route at that depth, or it swallows the static one first (a student
 route can't reach an approver-only route anyway, but the queue route needs
 to bind before the dynamic one gets a chance to).
+
+## Tests
+
+| File | Covers |
+|---|---|
+| `tests/Feature/Chloe/WorkstationTest.php` | booking, seat taken first, one seat per student, gender designation, release, locker key lifecycle and reminder, CGS force-assign / force-release, students locked out of CGS routes |
+| `tests/Feature/Chloe/CandidacyDismissalTest.php` | the three reasons and which wins, who is left off (in date, inactive, appeal open), no duplicates, CGS refresh and confirm, students locked out |
+| `tests/Feature/CandidacyAppealTest.php` | the Section A-D form, the 12-month cap, Return vs Reject, named-supervisor scoping, the Dean's month-end clamp and reminder reset |
+| `tests/Feature/CandidacyReminderTest.php` | the 3/2/1-month reminders and their stop conditions |
+
+The last two predate the one-folder-per-person layout and should move into
+`tests/Feature/Chloe/` (namespace `Tests\Feature\Chloe`).

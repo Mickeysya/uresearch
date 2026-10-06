@@ -84,15 +84,18 @@ own database.
 
 ```
 tests/
-  Support/        helpers shared across files — MakesUsers is the cast
+  Support/        helpers shared across files — MakesUsers is the cast,
+                  FindsViews walks every module's views at any depth
   Feature/
     Core/         the engine, the seams, CSP, the pages, the profile,
                   the demo seeder — the team's
     Norhanis/     ClaimsTest, PublicationTest, RpdTest, TravelTest
     Nureen/       AttendanceTest, AttendanceAppealTest, GaExtensionTest,
                   SupervisionTest, CertificationTest
-    Hani/         ExaminerNominationTest, ReVivaTest
-    Jason/ Chloe/ Haziq/     — when you write your first one
+    Hani/         ExaminerNominationTest, ExaminerPoolTest, ReVivaTest
+    Jason/        FormsTest, HardboundRulesTest
+    Chloe/        WorkstationTest, CandidacyDismissalTest
+    Haziq/        — when you write your first one
   Unit/           pure functions, no database
 ```
 
@@ -110,6 +113,15 @@ override `student()` in your own class and call `$this->user()`.
 Fixtures only your own module needs — a CSV builder, an examiner row — stay a
 `protected` method on your test class. They only move to `Tests\Support` once
 a second person actually needs them.
+
+Four files still sit loose in `tests/Feature/` from before this layout:
+`CandidacyAppealTest` and `CandidacyReminderTest` (Chloe's),
+`JasonAppointmentLetterTest` (Jason's) and `WorkflowReturnTest` (Core's).
+Move yours into your folder when you next touch it.
+
+Need to scan views in a test? `use Tests\Support\FindsViews` and call
+`$this->bladeViews()` (or `bladeViews('queue.blade.php')`). Not `glob()`:
+PHP's `glob()` has no `**`, so `views/**/*.blade.php` is one folder deep only.
 
 **Test what breaks quietly**, not every method: authorisation, anything derived
 server-side from what a form posted, and anything read before `validate()`.
@@ -466,7 +478,8 @@ Two things this does *not* ban, both of which are ordinary typography:
 - The **en dash** in a range: `75% – 84%`, `Jan – Mar`.
 - A bare **em dash standing in for an empty cell**: `{{ $x ?? '—' }}`.
 
-`tests/Feature/Core/ProseTest.php` scans every Blade view in the repo for the
+`tests/Feature/Core/ProseTest.php` scans every Blade view in the repo, at any
+depth, for the
 spaced em dash and `&mdash;`, ignoring Blade comments, `@php` blocks, `<style>`,
 `<script>` and code comments. It fails with the file and line.
 
