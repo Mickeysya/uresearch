@@ -289,7 +289,11 @@ screens every signed-in role shares. No pending migrations. 217 tests pass.
       `QueueTest::test_bulk_deciding_a_module_that_decides_one_at_a_time_is_refused`.
       **Any new module whose `decide()` does more than call the engine must
       implement it.** Bulk still works for the other six queues.
-- [ ] **The two page guards never scan nested views.** `PageShellTest` and
+- [x] **Fixed 2026-10-05:** both guards use `Tests\Support\FindsViews`
+      (a `RecursiveDirectoryIterator`) and now scan all 155 views, up from 109;
+      the departments cell is a literal `—`. Also fixed: `ProseTest` joined its
+      two globs with `+`, which merges by index and dropped the top-level views.
+      Was: **the two page guards never scan nested views.** `PageShellTest` and
       `ProseTest` glob `views/**/*.blade.php`, and PHP's `glob()` does not
       recurse, so `**` means exactly one folder. **46 views** were never
       checked (all of `admin/*`, `candidacy/appeal/*`, `workstation/cgs/*`…).
@@ -2878,5 +2882,4 @@ are what to reach for when touching the file anyway.
 12. ~~The "return with comment" engine outcome~~ Done: both
     `returnTo()` and `decide('return')` exist (see Core). Jason can drop
     Hardbound's reject-and-clone when he next touches it.
-13. Make the page guards recursive (fourth pass), so the 46 nested views are
-    actually checked.
+13. ~~Make the page guards recursive~~ Done 2026-10-05.

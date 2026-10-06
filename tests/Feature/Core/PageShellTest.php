@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Core;
 
+use Tests\Support\FindsViews;
 use Tests\TestCase;
 
 /**
@@ -19,6 +20,8 @@ use Tests\TestCase;
  */
 class PageShellTest extends TestCase
 {
+    use FindsViews;
+
     /**
      * Screens that are deliberately not on the shell.
      *
@@ -46,9 +49,7 @@ class PageShellTest extends TestCase
     {
         $views = [];
 
-        foreach (glob(base_path('app/Modules/*/Resources/views/**/*.blade.php'), GLOB_BRACE) as $view) {
-            $name = str_replace(base_path().'/', '', $view);
-
+        foreach ($this->bladeViews() as $name => $view) {
             if (in_array($name, self::EXEMPT, true)) {
                 continue;
             }
@@ -129,7 +130,7 @@ class PageShellTest extends TestCase
     {
         $offenders = [];
 
-        foreach (glob(base_path('app/Modules/*/Resources/views/**/queue.blade.php'), GLOB_BRACE) as $view) {
+        foreach ($this->bladeViews('queue.blade.php') as $name => $view) {
             $source = file_get_contents($view);
 
             if (! str_contains($source, 'core::partials.queue')) {
@@ -147,7 +148,7 @@ class PageShellTest extends TestCase
             $between = preg_replace('/@php\b.*?@endphp/s', '', $between);
 
             if (preg_match('/<(p|div|h[1-6]|section|table|ul)\b/', $between)) {
-                $offenders[] = str_replace(base_path().'/', '', $view);
+                $offenders[] = $name;
             }
         }
 
