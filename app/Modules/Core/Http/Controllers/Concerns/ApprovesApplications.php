@@ -5,6 +5,7 @@ namespace App\Modules\Core\Http\Controllers\Concerns;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Role;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\UnauthorizedException;
@@ -101,6 +102,16 @@ trait ApprovesApplications
         $sort = $request->query('sort') === 'newest' ? 'newest' : 'oldest';
 
         $query = $engine->queue($this->moduleKey(), $match['stage']->key)->with($with);
+
+        // Chair of Department and Academic Executive each own one
+        // department's desk, not every department's at once -- see
+        // Role::isDepartmentScoped(). Applied to the query, same reasoning
+        // as the module $scope below: filtering the page after it is
+        // fetched would report the wrong total and page over rows this
+        // approver will never be shown.
+        if (Role::isDepartmentScoped($request->user()->role)) {
+            $query->whereHas('student', fn ($s) => $s->where('department', $request->user()->department));
+        }
 
         // A module narrowing its own queue, applied to the QUERY and so
         // before the count and the page. The engine's queue is role-scoped,

@@ -85,7 +85,14 @@ class ModuleRegistry
      * Extra sidebar links declared by modules for this user, beyond the ones
      * derived from approval chains.
      *
-     * @return array<int, array{label: string, route: string, params?: array}>
+     * Each link is tagged with the module that declared it, the same shape
+     * queuesForRole() returns. The sidebar groups by it -- Non-Executive CGS
+     * is handed eight of these from five modules -- and the six
+     * implementers never had to say which module they were: the registry is
+     * already looping over exactly that. A link that names its own `module`
+     * keeps it.
+     *
+     * @return array<int, array{label: string, route: string, params?: array, module: WorkflowModule}>
      */
     public function linksFor(\App\Modules\Core\Models\User $user): array
     {
@@ -93,7 +100,9 @@ class ModuleRegistry
 
         foreach ($this->modules as $module) {
             if ($module instanceof ProvidesLinks) {
-                $links = array_merge($links, $module->links($user));
+                foreach ($module->links($user) as $link) {
+                    $links[] = $link + ['module' => $module];
+                }
             }
         }
 

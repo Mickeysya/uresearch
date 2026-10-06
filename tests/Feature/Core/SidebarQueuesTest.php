@@ -78,6 +78,57 @@ class SidebarQueuesTest extends TestCase
     }
 
     /**
+     * CGS's loose tools collapse into one tree, grouped by the module that
+     * declared them. Eight links from five modules -- the examiner pool, the
+     * appointment list, a signature, the RPD masterlist -- were stacked flat
+     * under one label, which is a list nobody reads to the bottom of. Same
+     * rule as the queue tree: one link stays a link, two or more become a
+     * sub-tree named after the module.
+     */
+    public function test_the_cgs_actions_list_is_a_tree_grouped_by_module(): void
+    {
+        $cgs = $this->cgs();
+
+        $actions = collect(app(ModuleRegistry::class)->linksFor($cgs))
+            ->reject(fn ($l) => in_array($l['route'], ['attendance.upload.form', 'attendance.at-risk'], true));
+
+        $this->assertGreaterThan(3, $actions->count(), 'This is a tree because CGS owns more than a handful.');
+
+        $html = $this->actingAs($cgs)->get(route('dashboard'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('class="nav-item nav-tree-trigger" title="Actions"', $html);
+        $this->assertStringNotContainsString('nav-item-flat', $html, 'CGS should have no flat action links left.');
+
+        // Just the Actions tree: it is the last thing the CGS nav renders,
+        // so everything between its trigger and the divider is its own.
+        $panel = substr($html, strpos($html, 'title="Actions"'));
+        $panel = substr($panel, 0, strpos($panel, 'nav-divider'));
+
+        $groups = $actions->groupBy(fn ($l) => $l['module']->key());
+
+        $this->assertSame(
+            $groups->filter(fn ($g) => $g->count() > 1)->count(),
+            substr_count($panel, 'nav-tree-nested'),
+            'One sub-tree per module with more than one tool, and none for the rest.'
+        );
+
+        foreach ($groups as $group) {
+            if ($group->count() > 1) {
+                $this->assertStringContainsString(
+                    '>'.$group->first()['module']->label().'<',
+                    $panel,
+                    'A module with several tools is named once, as the group.'
+                );
+            }
+
+            // Collapsed, not dropped.
+            foreach ($group as $link) {
+                $this->assertStringContainsString($link['label'], $panel, "'{$link['label']}' must still be reachable.");
+            }
+        }
+    }
+
+    /**
      * Flat-or-collapsed counts MODULES, not stages: the Academic Executive
      * owns six stages across three modules, which reads as three items.
      */
@@ -93,5 +144,23 @@ class SidebarQueuesTest extends TestCase
             ->assertOk()
             // Fewer than four modules, so the flat branch, not the outer tree.
             ->assertSee('nav-flat-queues', false);
+    }
+
+    public function test_a_students_module_links_reach_the_sidebar(): void
+    {
+        // RpdAppealWorkflow::links() gives students "RPD Candidacy". Until
+        // 2026-10-06 the student sidebar never rendered $extraLinks, so no
+        // module's student link appeared at all.
+        $html = $this->actingAs($this->student())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->getContent();
+
+        $sidebar = substr($html, strpos($html, 'id="app-sidebar"'));
+
+        $this->assertStringContainsString('>RPD Candidacy<', $sidebar);
+        $this->assertStringContainsString(route('candidacies.mine'), $sidebar);
+        // Chloe's study-candidacy link keeps its own name, once.
+        $this->assertSame(1, substr_count($sidebar, 'title="My Candidacy"'));
     }
 }

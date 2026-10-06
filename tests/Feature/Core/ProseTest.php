@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Core;
 
+use Tests\Support\FindsViews;
 use Tests\TestCase;
 
 /**
@@ -25,6 +26,8 @@ use Tests\TestCase;
  */
 class ProseTest extends TestCase
 {
+    use FindsViews;
+
     /**
      * Blade comments, @php blocks, CSS, JS and code comments: none of it
      * reaches the page. Replaced with blank lines rather than removed, so a
@@ -46,16 +49,13 @@ class ProseTest extends TestCase
 
     public function test_no_page_uses_an_em_dash_as_a_sentence_connector(): void
     {
-        $views = glob(base_path('app/Modules/*/Resources/views/**/*.blade.php'), GLOB_BRACE)
-            + glob(base_path('app/Modules/*/Resources/views/*.blade.php'));
+        $views = $this->bladeViews();
 
-        $this->assertNotEmpty($views, 'Found no Blade views to scan, so the glob is wrong.');
+        $this->assertNotEmpty($views, 'Found no Blade views to scan, so FindsViews is wrong.');
 
         $offenders = [];
 
-        foreach ($views as $view) {
-            $name = str_replace(base_path().'/', '', $view);
-
+        foreach ($views as $name => $view) {
             foreach (explode("\n", $this->renderedText(file_get_contents($view))) as $i => $line) {
                 // A line that is nothing but an em dash is the empty-cell
                 // placeholder written across an @if, not prose.

@@ -11,7 +11,7 @@ use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
- * GA Extension & VISA — `docs/scope/nureen.md` Module 2.
+ * GA Extension — `docs/scope/nureen.md` Module 2.
  *
  * The scope calls document completeness "the point of the module": an
  * extension may not reach CGS without its supporting paperwork and a real

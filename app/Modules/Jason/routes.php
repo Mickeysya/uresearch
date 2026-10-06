@@ -33,18 +33,9 @@ Route::middleware('auth')->group(function () {
     // Examiner selection is settled before this module: the finalised list
     // arrives as a spreadsheet and CGS imports it. There is no nomination
     // form here any more, and no examiner list of our own -- both were
-    // retired on 2026-09-30 when the boundary with Hani's chain was agreed.
-    // Core's Chair dashboard links here -- "Panels you filed" and its stat
-    // card both call route('appointment-letter.create') unconditionally, so
-    // retiring the name outright 500s the whole dashboard for every Chair.
-    // Those two partials belong to the team, so rather than edit them this
-    // keeps the name answering and tells the Chair where nomination went.
-    // Delete this, and the view, once Core's partials are updated.
-    Route::middleware('role:'.Role::CHAIR)->group(function () {
-        Route::get('/appointment-letter/new', [AppointmentLetterController::class, 'nominationMoved'])
-            ->name('appointment-letter.create');
-    });
-
+    // retired on 2026-09-30 when the boundary with Hani's chain was agreed,
+    // and develop has since taken the Chair's nomination panel out of the
+    // dashboard, so nothing links to the retired route any more either.
     Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/appointment-letter/import', [AppointmentLetterController::class, 'importForm'])
             ->name('appointment-letter.import');

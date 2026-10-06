@@ -3,15 +3,6 @@
 @section('title', 'Appeal Hardbound Submission: ' . $stage->queueTitle())
 
 @section('content')
-    {{-- Core's layout flashes session messages but never renders the
-         validation error bag, and nothing may print above the page header,
-         so a failed rule is folded into the intro the partial renders. --}}
-    @php
-        $errorLine = $errors->any()
-            ? '<b class="field-error">'.e(implode(' ', $errors->all())).'</b> '
-            : '';
-    @endphp
-
     {{-- Into the partial, not above it: see the note in hardbound/queue. --}}
     @php
         $intro = $stage->key === 'cgs_review'
@@ -28,6 +19,6 @@
         'moduleLabel' => 'Appeal Hardbound Submission',
         'decideRoute' => 'hardbound-appeal.decide',
         'detailView' => 'jason::hardbound_appeal._detail',
-        'intro' => $errorLine.$intro,
+        'intro' => $intro,
     ])
 @endsection

@@ -80,6 +80,29 @@ final class Role
         return in_array($role, self::cgsTeam(), true);
     }
 
+    /**
+     * True for a role whose queue is one department's business, not the
+     * whole institution's.
+     *
+     * Chair of Department and Academic Executive are both scoped, and were
+     * always meant to be: TODO.md flagged that neither queue was actually
+     * filtered by department, which only stayed invisible while the seeder's
+     * Chair, Academic Executive and every student shared one department.
+     * Consulted from ApprovesApplications::queueFor() and
+     * WorkflowEngine::decide(), so both reading a queue and acting on a row
+     * outside it are covered from the one place.
+     */
+    public static function isDepartmentScoped(string $role): bool
+    {
+        return in_array($role, [self::CHAIR, self::ACADEMIC_EXEC], true);
+    }
+
+    /** Every role but the student's, for the admin/CGS "create an account" screens. */
+    public static function staffRoles(): array
+    {
+        return array_values(array_diff(self::all(), [self::STUDENT]));
+    }
+
     public static function label(string $role): string
     {
         return match ($role) {

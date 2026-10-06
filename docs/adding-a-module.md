@@ -246,6 +246,24 @@ The partial gives you the page header, search, sort, pagination, the rows as
 a collapsed list with how long each has waited, and bulk approve/reject. You
 supply the detail lines and nothing else.
 
+Two opt-ins, only if you need them:
+
+- **Return to the student for revision:** pass `'allowReturn' => true`, and
+  have your decide route accept `return` (see Chloe's
+  `CandidacyAppealController`). Sending it back to an earlier *approver* is
+  `$returnRoute` instead (see Hani's `ExaminerNominationWorkflow`).
+- **Your `decide()` does more than call the engine** (checks which supervisor
+  the row names, moves a deadline, writes a record, sends a letter): add
+  `DecidesOneAtATime` to your workflow's `implements` list. Bulk decide goes
+  straight to the engine and would skip all of that, so the marker turns it
+  off for your module, both the checkboxes and the route.
+
+```php
+use App\Modules\Core\Contracts\DecidesOneAtATime;
+
+class ConferenceWorkflow implements WorkflowModule, DecidesOneAtATime
+```
+
 **Do not print anything above the include.** The partial renders the page
 header, so a `<p>` written before it lands above the page title and the screen
 reads as though it has no heading. That is what `intro` is for, and

@@ -61,6 +61,7 @@ that did not contain it.
 ```php
 $engine->submit($application);                              // onto stage 1
 $engine->decide($application, $user, 'approve', $remarks);  // advance or finish
+$engine->returnTo($application, $user, 'academic_exec', $why);  // send it back
 $engine->queue('travel', 'chair');                          // who is waiting
 $engine->progress($application);                            // for the stepper
 ```
@@ -71,6 +72,35 @@ application approved when the chain runs out), and notifies the student.
 
 Rejection sets `status = rejected` and **leaves `current_stage` where it was**,
 so the stepper can show the student exactly where it stopped.
+
+### Sending an application back (`returnTo`)
+
+Some stages do not want either answer. A Senior Director who will not sign off
+a compiled examiner list is not refusing the candidate — one department has to
+choose again, and everything above that department has to see the replacement.
+Rejecting there would end the application and split the audit trail across two
+of them.
+
+`returnTo()` records the decision as `returned` at the stage doing the sending,
+moves `current_stage` **backwards** to a named earlier stage, and leaves the
+application `pending`. The chain then replays forward through every stage in
+between. Remarks are **mandatory**, unlike on approve and reject: somebody is
+being asked to redo work.
+
+It refuses a forward jump — it exists to undo progress, not to skip a stage,
+and moving an application forward this way would bypass the authorisation on
+every stage in between.
+
+Two audiences are notified, which is the other thing that makes it different:
+the student, as always, and whoever now has to act, since work has gone
+backwards to a desk that had already cleared it. A department-scoped target
+stage (`Role::isDepartmentScoped()`) is narrowed to that application's own
+department, so one department's list does not email eleven Academic
+Executives.
+
+A module opts in by passing `$returnRoute` and `$returnLabel` to
+`core::partials.queue`; a module that does not renders exactly what it did
+before. `ExaminerNominationWorkflow` is the worked example.
 
 `queue()` returns a **Builder**, not a collection, and
 `Concerns\ApprovesApplications::queueFor()` paginates it (20 a page), searches
@@ -85,6 +115,23 @@ not add a route for it. It loops `decide()` one row at a time rather than
 doing anything clever: that keeps the engine the only writer, re-checks the
 actor against each row's own stage, and means a row someone else already
 decided cannot roll back the rest of the batch.
+
+Because bulk goes straight to the engine, it skips anything a module's own
+`decide()` does on top: checking that the row names *this* supervisor,
+moving a deadline, generating a letter. A module like that implements the
+marker interface `Core\Contracts\DecidesOneAtATime` (no methods).
+`QueueController` then answers 403 for that module, so a hand-built POST
+cannot get round its rules, and `core::partials.queue` hides the checkboxes
+for it. Nine workflows implement it today (Supervision, Certification, RPD
+Appeal, RPD Dismissal, Examiner Nomination, Hardbound, Hardbound Appeal,
+Appointment Letter, Candidacy Appeal); the other six keep bulk.
+
+There are two ways to send work back, and the queue offers each separately.
+`$returnRoute` posts to `WorkflowEngine::returnTo()`: back to an earlier
+*approver* stage, still pending. `'allowReturn' => true` adds a Return button
+that calls `decide('return')`: back to the *student*, `status = returned`,
+and `WorkflowEngine::resubmit()` puts it back on the same stage. Chloe's
+candidacy appeal uses the second.
 
 ### Conditional routing
 
@@ -162,6 +209,15 @@ state — "nothing to show" and "could not load" mean different things to a
 student looking at their own record — and one dead query costs that panel
 rather than the whole page.
 
+Attendance has a third state, and the gauge tells all three apart. *Could not
+load*, or no module supplying attendance at all, holds the skeleton: the
+figure is unknown. *Nothing uploaded yet* is not unknown and it is not zero —
+a student who has had no session recorded has missed none either — so the dial
+opens full, at `StudentDashboard::STARTING_PERCENTAGE`, and comes down as
+absences arrive. Opening at zero put every new account in the Critical band on
+its first day. The panel still says nothing has been uploaded; only the number
+starts optimistic.
+
 **It names no module.** Attendance belongs to `app/Modules/Nureen`, and this
 service used to import its Eloquent models directly behind a `class_exists()`
 guard — the one place Core reached into someone else's folder. It now asks for
@@ -193,14 +249,17 @@ with no edit.
 
 Four tests in `tests/Feature/Core/` scan every Blade view in the repo rather
 than only the screens a test happens to render, because the failures they
-catch all render perfectly:
+catch all render perfectly. The view scans go through
+`Tests\Support\FindsViews`, which walks every module's `views` folder at any
+depth. (They used `glob('views/**/*.blade.php')` until 2026-10-05, and PHP's
+`glob()` has no `**`: 46 nested views were never checked.)
 
 | Test | Catches |
 |---|---|
 | `ContentSecurityPolicyTest` | an inline `<script>` without `@cspNonce`, or a CDN tag — the browser refuses it and the page still returns 200 |
 | `PageShellTest` | a screen with its own heading, its own page width, or markup above a queue's page header; a dashboard panel that declares neither `approver-scroll` nor `approver-fit`; a single-class `.sdash-*` override in `layout.css`; a dashboard that has lost its `.sdash` root |
 | `ProseTest` | an em dash used as a sentence connector |
-| `QueueTest` | the queue paging, searching, sorting and bulk-deciding, including rows that are not yours |
+| `QueueTest` | the queue paging, searching, sorting and bulk-deciding, including rows that are not yours and modules that implement `DecidesOneAtATime` |
 
 ## Stylesheets
 
@@ -284,11 +343,17 @@ Nothing central lists the modules, which is why adding one causes no conflict.
 Two independent locks:
 
 1. `role:` middleware on the route — a wrong role never reaches the controller.
-2. `WorkflowEngine::decide()` re-checks the actor's role against the stage the
-   application is **actually** on.
+2. `WorkflowEngine::decide()` (and `::returnTo()`) re-checks the actor's role
+   against the stage the application is **actually** on.
 
 The second matters because one queue route serves every stage of a chain. A
 Chair can open the travel queue, but cannot act on a row sitting at the Dean.
+Examiner Nomination is the case that makes this load-bearing: one route serves
+all six of its stages, and five different roles can reach it.
+
+A department-scoped role (`Role::isDepartmentScoped()` — Chair and Academic
+Executive) gets a third check in the same place: holding the role is not the
+same as this being your department's row.
 
 ## Uploads
 

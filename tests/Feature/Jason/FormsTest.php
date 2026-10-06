@@ -4,8 +4,6 @@ namespace Tests\Feature\Jason;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
-use App\Modules\Core\Services\WorkflowEngine;
-use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
 use App\Modules\Jason\Support\AppointmentSheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -132,25 +130,6 @@ class FormsTest extends TestCase
         );
     }
 
-    /**
-     * Core's Chair dashboard still links to the nomination form this module
-     * used to own. `route()` throws on a name that does not exist, so the
-     * name has to keep answering until Core's two Chair partials are
-     * updated -- and what it answers with has to say where the work went.
-     */
-    public function test_the_retired_nomination_route_explains_itself_to_a_chair(): void
-    {
-        $chair = $this->user(Role::CHAIR, [
-            'name' => 'Dr. Lim Wei Chun',
-            'email' => 'chair@test.my',
-            'department' => 'Civil & Environmental Engineering',
-        ]);
-
-        $this->actingAs($chair)->get(route('appointment-letter.create'))
-            ->assertOk()
-            ->assertSee('no longer nominated here');
-    }
-
     public function test_the_signature_preview_stays_inside_the_content_security_policy(): void
     {
         $html = $this->actingAs($this->chair())
@@ -163,6 +142,11 @@ class FormsTest extends TestCase
         $this->assertStringNotContainsString('createObjectURL(', $html);
     }
 
+    /**
+     * The workload chart used to load Chart.js from jsdelivr and run an
+     * un-nonced inline script — both refused by `script-src 'self' <nonce>`,
+     * so the chart silently never drew.
+     */
     public function test_the_queue_chart_is_served_and_nonced_from_this_app(): void
     {
         $this->actingAs($this->cgs());

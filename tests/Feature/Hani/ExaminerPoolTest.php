@@ -140,7 +140,7 @@ class ExaminerPoolTest extends TestCase
 
         ExaminerNomination::create([
             'application_id' => $application->id,
-            'main_examiner_id' => $examiner->id,
+            'external_main_id' => $examiner->id,
             'thesis_title' => 'A Study of Something',
         ]);
 

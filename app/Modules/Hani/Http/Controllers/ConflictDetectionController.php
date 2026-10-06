@@ -21,7 +21,10 @@ class ConflictDetectionController extends Controller
 {
     public function index()
     {
-        $nominations = ExaminerNomination::with(['mainExaminer', 'backupExaminer', 'application.student'])
+        $nominations = ExaminerNomination::with(array_merge(
+            ExaminerNomination::slotRelations(),
+            ['application.student']
+        ))
             ->whereHas('application', fn ($q) => $q->where('module_type', 'examiner_nomination')
                 ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED]))
             ->get();
@@ -30,11 +33,8 @@ class ConflictDetectionController extends Controller
         // at which department lists get compiled -- then flag any examiner
         // whose nominations span more than one department within it.
         $byFaculty = $nominations
-            ->flatMap(fn (ExaminerNomination $nomination) => collect([
-                ['examiner' => $nomination->mainExaminer, 'nomination' => $nomination],
-                ['examiner' => $nomination->backupExaminer, 'nomination' => $nomination],
-            ]))
-            ->filter(fn ($row) => $row['examiner'] !== null)
+            ->flatMap(fn (ExaminerNomination $nomination) => $nomination->examiners()
+                ->map(fn ($examiner) => ['examiner' => $examiner, 'nomination' => $nomination]))
             ->groupBy(fn ($row) => $row['examiner']->faculty ?? 'Unassigned Faculty')
             ->map(function ($rows) {
                 return $rows

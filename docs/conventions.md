@@ -38,8 +38,12 @@ and safe to reword.
 ## Rules
 
 **1. Never write `status` or `current_stage` yourself.**
-`WorkflowEngine::submit()` and `::decide()`. This is the single most important
-rule — it is what stops the modules drifting apart again.
+`WorkflowEngine::submit()`, `::decide()` and `::returnTo()`. This is the single
+most important rule — it is what stops the modules drifting apart again.
+`returnTo()` is the one to reach for when a late stage needs the work redone
+rather than refused: it sends the application back to a named earlier stage
+with a mandatory reason, and the chain replays forward from there. See
+`docs/architecture.md`.
 
 **2. `stages(null)` must return every stage you can ever use.**
 The registry calls it that way to build the sidebar and gate the approval
@@ -80,15 +84,18 @@ own database.
 
 ```
 tests/
-  Support/        helpers shared across files — MakesUsers is the cast
+  Support/        helpers shared across files — MakesUsers is the cast,
+                  FindsViews walks every module's views at any depth
   Feature/
     Core/         the engine, the seams, CSP, the pages, the profile,
                   the demo seeder — the team's
     Norhanis/     ClaimsTest, PublicationTest, RpdTest, TravelTest
     Nureen/       AttendanceTest, AttendanceAppealTest, GaExtensionTest,
                   SupervisionTest, CertificationTest
-    Hani/         ExaminerNominationTest, ReVivaTest
-    Jason/ Chloe/ Haziq/     — when you write your first one
+    Hani/         ExaminerNominationTest, ExaminerPoolTest, ReVivaTest
+    Jason/        FormsTest, HardboundRulesTest
+    Chloe/        WorkstationTest, CandidacyDismissalTest
+    Haziq/        — when you write your first one
   Unit/           pure functions, no database
 ```
 
@@ -106,6 +113,15 @@ override `student()` in your own class and call `$this->user()`.
 Fixtures only your own module needs — a CSV builder, an examiner row — stay a
 `protected` method on your test class. They only move to `Tests\Support` once
 a second person actually needs them.
+
+Four files still sit loose in `tests/Feature/` from before this layout:
+`CandidacyAppealTest` and `CandidacyReminderTest` (Chloe's),
+`JasonAppointmentLetterTest` (Jason's) and `WorkflowReturnTest` (Core's).
+Move yours into your folder when you next touch it.
+
+Need to scan views in a test? `use Tests\Support\FindsViews` and call
+`$this->bladeViews()` (or `bladeViews('queue.blade.php')`). Not `glob()`:
+PHP's `glob()` has no `**`, so `views/**/*.blade.php` is one folder deep only.
 
 **Test what breaks quietly**, not every method: authorisation, anything derived
 server-side from what a form posted, and anything read before `validate()`.
@@ -338,6 +354,19 @@ So a stage label is user-facing in two places, not one: the queue page's title
 and the sidebar. `Stage::$label` is display-only and safe to reword;
 `Stage::$key` is stored in `applications.current_stage` and is not.
 
+**Your `ProvidesLinks` links group the same way.** On the CGS sidebar, where
+they add up — Non-Executive CGS is handed eight of them from five modules —
+they sit inside one collapsible **Actions** tree, grouped by the module that
+declared them: two or more links from your module become a sub-tree named
+after it, one stays a plain link labelled by the link itself. You declare
+nothing extra for this. `ModuleRegistry::linksFor()` tags each link with the
+module it came from, so `links()` keeps returning `{label, route, params?}`.
+Every other approver owns two or three links and keeps the flat list — three
+links are not a list worth collapsing. Students get the same flat **Actions**
+list (since 2026-10-06; before that their links were silently dropped). Give
+a student link a label no hardcoded nav item already uses: Norhanis' RPD page
+is "RPD Candidacy" because Chloe's study-candidacy page is "My Candidacy".
+
 ### Dashboard panels
 
 A dashboard is locked to one viewport on a desktop (`dashboard-student.css`,
@@ -452,11 +481,19 @@ Two things this does *not* ban, both of which are ordinary typography:
 - The **en dash** in a range: `75% – 84%`, `Jan – Mar`.
 - A bare **em dash standing in for an empty cell**: `{{ $x ?? '—' }}`.
 
-`tests/Feature/Core/ProseTest.php` scans every Blade view in the repo for the
+`tests/Feature/Core/ProseTest.php` scans every Blade view in the repo, at any
+depth, for the
 spaced em dash and `&mdash;`, ignoring Blade comments, `@php` blocks, `<style>`,
 `<script>` and code comments. It fails with the file and line.
 
 ### Forms
+
+**Validation errors show themselves.** The layout's `partials/flash` lists
+every message in the error bag at the top of the page, on every signed-in
+screen. Keep your per-field `@error(...)` lines beside each field as well;
+the summary is what makes an error on a queue, a CGS screen or another wizard
+step visible at all. Do not render `$errors->all()` yourself, or it shows
+twice.
 
 A form past about eight fields should be a wizard rather than one long
 scroll. Add `data-stepper` to the `<form>`, wrap each section in a
@@ -523,9 +560,10 @@ One branch per person: `feature/<name>-<module>`, e.g. `feature/nureen-attendanc
 checkout in a state the app cannot run in, and none of it is obvious:
 `composer.lock` may have changed, a teammate may have added a key to
 `.env.example` that your git-ignored `.env` does not have, there may be pending
-migrations, compiled Blade views from the previous branch are still being
-served, and `queue:work` holds the app in memory so the queue worker is still
-running pre-pull code. `./sync.sh --check` reports all of that without changing
+migrations, a migration may have added a column the seeder is what actually
+fills (the department list is the usual one), compiled Blade views from the
+previous branch are still being served, and `queue:work` holds the app in
+memory so the queue worker is still running pre-pull code. `./sync.sh --check` reports all of that without changing
 anything.
 
 Because you only touch your own folder, conflicts should be rare. If you hit

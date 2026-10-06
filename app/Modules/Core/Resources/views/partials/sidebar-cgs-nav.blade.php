@@ -22,6 +22,7 @@
     $queueRoutes = collect($queues)->map(fn ($q) => $q['module']->queueRoute())->unique();
     $applicationsOpen = $queueRoutes->contains(fn ($r) => request()->routeIs($r));
     $attendanceOpen = request()->routeIs('attendance.*') || request()->routeIs('cgs.attendance.*');
+    $candidacyOpen = request()->routeIs('candidacy.cgs.*');
 
     // Attendance links a module declared through ProvidesLinks (the CSV
     // upload and the at-risk list) belong in the Attendance tree, not loose
@@ -101,12 +102,64 @@
     <span class="nav-label">Documents</span>
 </a>
 
+{{-- Workstation Management (Chloe) — not an approval chain, so it carries no
+     queue and is not driven by ModuleRegistry; a fixed link like Students
+     and Documents above. --}}
+<a href="{{ route('workstation.cgs.operations') }}" class="nav-item @if(request()->routeIs('workstation.cgs.*')) active @endif" title="Workstation Management">
+    <span class="nav-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+    </span>
+    <span class="nav-label">Workstation Management</span>
+</a>
+
+{{-- Candidacy Management (Chloe) — the Reminder/Dismiss screens, which
+     unlike Appeal are not WorkflowModule queues, so they get a fixed tree
+     the same way Attendance Monitoring does. The CGS Verification appeal
+     queue itself already appears in the Applications tree above, driven by
+     ModuleRegistry — nothing added here for that part. --}}
+<div class="nav-tree @if($candidacyOpen) open @endif">
+    <button type="button" class="nav-item nav-tree-trigger" title="Candidacy Management"
+            aria-expanded="@if($candidacyOpen) true @else false @endif">
+        <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+        </span>
+        <span class="nav-label">Candidacy Management</span>
+        <span class="nav-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </span>
+    </button>
+    <div class="nav-tree-panel">
+        <div class="nav-tree-items">
+            <a href="{{ route('candidacy.cgs.operations') }}" class="nav-subitem @if(request()->routeIs('candidacy.cgs.operations')) active @endif">Operations</a>
+            <a href="{{ route('candidacy.cgs.dismissals') }}" class="nav-subitem @if(request()->routeIs('candidacy.cgs.dismissals')) active @endif">Dismissal List</a>
+        </div>
+    </div>
+</div>
+
 <a href="{{ route('cgs.reports.index') }}" class="nav-item @if(request()->routeIs('cgs.reports.*')) active @endif" title="Reports and Analytics">
     <span class="nav-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>
     </span>
     <span class="nav-label">Reports and Analytics</span>
 </a>
+
+{{-- ---- Administration --------------------------------------------------
+     Non-Executive CGS only (route middleware enforces this regardless), and
+     read-only: the department list says who covers each department's
+     Academic Executive queue, which is a fact CGS works from daily. Adding
+     or retiring a department, and everything on Users and Roles, belongs to
+     the administrator -- so no link to either is placed here.
+     See Role::isDepartmentScoped() and routes.php's admin.* groups. --}}
+@if (auth()->user()?->role === \App\Modules\Core\Support\Role::NON_EXEC_CGS)
+    <div class="nav-section-label"><span class="nav-label">Administration</span></div>
+
+    <a href="{{ route('admin.departments.index') }}" class="nav-item @if(request()->routeIs('admin.departments.*')) active @endif" title="Departments">
+        <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+        </span>
+        <span class="nav-label">Departments</span>
+    </a>
+@endif
 
 {{-- Anything a module declared that is NOT already placed in a tree above,
      so a teammate's new ProvidesLinks entry still reaches CGS. --}}
@@ -115,10 +168,68 @@
         ->reject(fn ($l) => in_array($l['route'], $attendanceLinkRoutes, true));
 @endphp
 @if ($unplacedLinks->isNotEmpty())
-    <div class="nav-section-label"><span class="nav-label">Actions</span></div>
-    @foreach ($unplacedLinks as $link)
-        <a href="{{ route($link['route'], $link['params'] ?? []) }}" class="nav-item nav-item-flat" title="{{ $link['label'] }}">
-            <span class="nav-label">{{ $link['label'] }}</span>
-        </a>
-    @endforeach
+    {{-- A tree, not the flat list the generic approver nav uses. An approver
+         owns two or three of these and a list of three is just three links;
+         Non-Executive CGS owns eight, from five modules, and eight unrelated
+         tools stacked under one label is where the sidebar stopped being
+         scannable. Grouped by module inside, so it reads as five rows rather
+         than eight. Opens itself when you are on one of its pages, like every
+         other tree here. --}}
+    @php
+        $actionsOpen = $unplacedLinks->contains(fn ($l) => request()->routeIs($l['route']));
+
+        // Grouped by the module that declared each link (ModuleRegistry
+        // tags them). A link with no module -- nothing produces one today --
+        // falls into a group of its own and renders as a plain item.
+        $byModule = $unplacedLinks->groupBy(fn ($l) => isset($l['module']) ? $l['module']->key() : $l['route']);
+    @endphp
+    <div class="nav-tree @if($actionsOpen) open @endif">
+        <button type="button" class="nav-item nav-tree-trigger" title="Actions"
+                aria-expanded="@if($actionsOpen) true @else false @endif">
+            <span class="nav-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </span>
+            <span class="nav-label">Actions</span>
+            <span class="nav-chevron">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+            </span>
+        </button>
+        <div class="nav-tree-panel">
+            <div class="nav-tree-items">
+                {{-- Same rule as the queue tree above (core::partials.queue-links):
+                     one module, one link, stays a link -- naming the module as
+                     well would just say "Hardbound Submission: My Signature".
+                     Two or more get a nested tree named after the module. --}}
+                @foreach ($byModule as $group)
+                    @if ($group->count() === 1)
+                        @php($link = $group->first())
+                        <a href="{{ route($link['route'], $link['params'] ?? []) }}"
+                           class="nav-subitem @if(request()->routeIs($link['route'])) active @endif"
+                           title="{{ $link['label'] }}">{{ $link['label'] }}</a>
+                    @else
+                        @php($groupOpen = $group->contains(fn ($l) => request()->routeIs($l['route'])))
+                        <div class="nav-tree nav-tree-nested @if($groupOpen) open @endif">
+                            <button type="button" class="nav-item nav-tree-trigger" title="{{ $group->first()['module']->label() }}"
+                                    aria-expanded="@if($groupOpen) true @else false @endif">
+                                <span class="nav-label">{{ $group->first()['module']->label() }}</span>
+                                <span class="nav-count">{{ $group->count() }}</span>
+                                <span class="nav-chevron">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+                                </span>
+                            </button>
+                            <div class="nav-tree-panel">
+                                <div class="nav-tree-items">
+                                    @foreach ($group as $link)
+                                        <a href="{{ route($link['route'], $link['params'] ?? []) }}"
+                                           class="nav-subitem @if(request()->routeIs($link['route'])) active @endif"
+                                           title="{{ $group->first()['module']->label() }}: {{ $link['label'] }}">{{ $link['label'] }}</a>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                @endforeach
+            </div>
+        </div>
+    </div>
 @endif

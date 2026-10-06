@@ -34,7 +34,7 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents
 
     public function label(): string
     {
-        return 'GA Extension & VISA';
+        return 'GA Extension';
     }
 
     public function stages(?Application $application = null): array

@@ -56,9 +56,16 @@ application, so conditional routing is just an `if` — see `TravelWorkflow`,
 where international travel returns four stages and local travel two.
 
 `WorkflowEngine` is the **only** code that writes `applications.status` or
-`applications.current_stage`. Call `submit()` and `decide()`; never set those
-columns directly. This is the rule that keeps the modules from drifting apart
-the way the legacy app's did.
+`applications.current_stage`. Call `submit()`, `decide()` or `returnTo()`;
+never set those columns directly. (`returnTo()` sends an application back to an
+earlier stage with a mandatory reason instead of ending it — the Senior
+Director and the Dean use it on examiner lists.) This is the rule that keeps
+the modules from drifting apart the way the legacy app's did.
+
+If a module's own `decide()` does more than call the engine (checks which
+supervisor a row names, moves a deadline, sends a letter), its workflow must
+implement `Core\Contracts\DecidesOneAtATime`. Core's bulk decide goes straight
+to the engine; the marker makes it refuse that module.
 
 ## Publishing — the human's call
 
@@ -100,6 +107,7 @@ Also: do not commit on `main`. Branch first.
 | Doc | Covers |
 |---|---|
 | `README.md` | setup, test accounts, commands |
+| `docs/test-accounts.md` | every seeded login, by role, with department and supervisor |
 | `sync.sh` | run it after any `git pull` or branch switch; `--check` to dry-run |
 | `TODO.md` | what is built, what is not, and the agreed order of work |
 | `docs/architecture.md` | layers, engine, data model |
@@ -116,7 +124,8 @@ at it, and copy its patterns rather than inventing new ones.
 
 ## Test accounts
 
-Password for all: `password`. See the table in `README.md`.
+Password for all: `password`. The handful a walkthrough needs are in
+`README.md`; every account is in `docs/test-accounts.md`.
 `student@utp.edu.my` → `supervisor@utp.edu.my` → `chair@utp.edu.my` walks a
 full local-travel chain.
 

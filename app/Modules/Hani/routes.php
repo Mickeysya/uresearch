@@ -22,11 +22,35 @@ Route::middleware('auth')->group(function () {
             ->name('examiner-nomination.store');
     });
 
-    Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
+    // The chain above the department. Every stage from the Academic Executive
+    // up reads the same queue screen and posts to the same decide route --
+    // WorkflowEngine decides what each of them is allowed to do with it, so
+    // one route per action is enough for all six stages. See
+    // ExaminerNominationWorkflow for the chain itself.
+    Route::middleware('role:'.implode(',', [
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS,
+        Role::DEAN_PGR, Role::NON_EXEC_CGS,
+    ]))->group(function () {
         Route::get('/examiner-nomination/queue', [ExaminerNominationController::class, 'queue'])
             ->name('examiner-nomination.queue');
         Route::post('/examiner-nomination/{application}/decide', [ExaminerNominationController::class, 'decide'])
             ->name('examiner-nomination.decide');
+
+        // Sends a list back to the department instead of ending it. The route
+        // is open to the whole chain and the engine refuses it anywhere but
+        // the Senior Director's and the Dean's stage -- authorisation belongs
+        // to WorkflowEngine::returnTo(), not to a middleware list.
+        Route::post('/examiner-nomination/{application}/return', [ExaminerNominationController::class, 'returnToDepartment'])
+            ->name('examiner-nomination.return');
+
+        // The compiled list, and the same rows as a file.
+        Route::get('/examiner-nomination/report', [ExaminerNominationController::class, 'report'])
+            ->name('examiner-nomination.report');
+        Route::get('/examiner-nomination/report/export', [ExaminerNominationController::class, 'export'])
+            ->name('examiner-nomination.export');
+    });
+
+    Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
 
         // Closing the lifecycle: mark an approved nomination's evaluation done.
         Route::get('/examiner-nomination/pending-evaluation', [ExaminerNominationController::class, 'pendingEvaluation'])

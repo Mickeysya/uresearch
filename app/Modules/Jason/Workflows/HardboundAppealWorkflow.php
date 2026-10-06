@@ -2,6 +2,7 @@
 
 namespace App\Modules\Jason\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
@@ -35,7 +36,7 @@ use App\Modules\Jason\Models\HardboundAppealDetail;
  * means an extension request by it. The scope document is the older
  * understanding; this is the workshop one.
  */
-class HardboundAppealWorkflow implements WorkflowModule
+class HardboundAppealWorkflow implements WorkflowModule, DecidesOneAtATime
 {
     public function key(): string
     {

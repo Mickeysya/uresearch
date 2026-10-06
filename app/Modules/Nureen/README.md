@@ -14,6 +14,10 @@
   early-warning logic (threshold + declining-trend) and
   `Notifications\AttendanceAtRisk` for the proactive alert. The appeal chain
   (`attendance_appeal`) is a single stage straight to Non-Executive CGS.
+  A student with no rows yet reads **100%** on the dashboard gauge rather
+  than 0% or a dash — that default is Core's
+  (`StudentDashboard::STARTING_PERCENTAGE`), and `latestFor()` still returns
+  `null`, so nothing is invented in these tables.
 
 - **Supervision** — complete. Supervisor → CGS eligibility review. CGS's
   approval sets `users.supervisor_id`. Because the engine can't yet scope a

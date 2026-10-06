@@ -420,3 +420,67 @@
     .adm-share { display: none; }
 }
 
+/* =====================================================================
+   Application Overview — what happens when it does not fit.
+
+   The legend grows a row per module and the modules keep coming, so on a
+   laptop the panel wants more height than the grid row can give it. Every
+   ancestor already carried `min-height: 0` to be squeezed; nothing said
+   what to do once they were, so the rows ran out of the sunken panel and
+   were cut off by the card's own `overflow: hidden`.
+
+   The cross axis is the catch: .adm-mix-body is a ROW flex, so the
+   legend's `flex: 1 1 auto; min-height: 0` govern its WIDTH. Its height
+   came from `align-items: center`, which means content height — nothing
+   to scroll against. Stretch it, then it can scroll.
+   ===================================================================== */
+
+.adm-mix-body { align-items: stretch; }
+
+.adm-mix-legend {
+    /* The room this panel is short of is vertical; the room it has going
+       spare is horizontal. auto-fit spends the second on the first: one
+       column when the card is narrow, two when it is wide, three once the
+       doughnut stands down below -- six modules in two rows instead of six.
+       No media query, and it keeps working as modules are added. */
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    column-gap: clamp(10px, 1.2vw, 22px);
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+    /* Short list, tall panel: stay level with the doughnut as before.
+       `safe` so a list too tall to fit still starts at row one instead of
+       overflowing equally off both ends with the top unreachable. */
+    align-content: safe center;
+    /* The rows bleed either side so their hover fill is wider than the text
+       (charts.css lands on -4px, last sheet wins). Match that here, or
+       `overflow-y` turns `overflow-x` into `auto` too and the bleed becomes
+       a sideways scroll. */
+    margin: 0 -4px;
+    padding: 0 4px;
+}
+
+.adm-mix-legend::-webkit-scrollbar { display: none; }
+
+/* Two columns halve the width each row gets, and the share bar's 1.1fr was
+   taking it out of the module name. The bar is a sense of scale, the name is
+   the data -- so the name gets the slack now and the bar keeps a floor. */
+.adm-mix-legend li { grid-template-columns: 9px minmax(0, 1.5fr) minmax(36px, 0.8fr) auto; }
+
+/* Keeps the shrink pressure on the list rather than on the heading above it. */
+.adm-mix-title { flex-shrink: 0; }
+
+/* The doughnut is sized in vh, which assumes a share of the viewport this
+   panel does not actually get -- the health tiles take theirs first. Cap it
+   to the room there is: Chart.js draws to the smaller dimension, so a capped
+   box is a smaller circle, still centred under its total. */
+.adm-donut-wrap { max-height: 100%; }
+
+/* Under ~900px of viewport the panel's share of the card is shorter than the
+   doughnut's own minimum, so it stands down rather than being squashed into
+   an oval under its own total -- the same call .adm-share makes when the
+   width runs out. The legend takes the freed width as a third column. */
+@media (min-width: 1201px) and (max-height: 899px) {
+    .adm-donut-wrap { display: none; }
+}

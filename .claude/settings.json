@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(docker info *)",
+      "Bash(./vendor/bin/sail up *)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {

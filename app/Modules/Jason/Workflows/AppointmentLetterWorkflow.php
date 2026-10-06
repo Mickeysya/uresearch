@@ -2,6 +2,7 @@
 
 namespace App\Modules\Jason\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
@@ -36,7 +37,7 @@ use App\Modules\Jason\Models\AppointmentExaminer;
  * the work that now happens upstream in Hani's chain. Keeping it here would
  * have meant the same panel being chosen twice.
  */
-class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
+class AppointmentLetterWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLinks
 {
     public function key(): string
     {
@@ -107,13 +108,6 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
             Role::NON_EXEC_CGS => [
                 ['label' => 'Import Examiner List', 'route' => 'appointment-letter.import'],
                 ['label' => 'Issued Appointments', 'route' => 'appointment-letter.issued'],
-            ],
-            // A shim, like the route it points at: Core's Chair dashboard
-            // expects this entry, and dropping it silently would leave a
-            // Chair who used to file panels with nothing explaining where
-            // the work went. Goes when Core's Chair partials are updated.
-            Role::CHAIR => [
-                ['label' => 'Nominate Examiner Panel', 'route' => 'appointment-letter.create'],
             ],
             default => [],
         };

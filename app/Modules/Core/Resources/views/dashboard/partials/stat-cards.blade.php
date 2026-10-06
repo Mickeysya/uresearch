@@ -20,7 +20,12 @@
             'panel' => 'attendance',
             'icon' => 'pulse',
             'label' => 'Attendance',
-            'value' => $attendance?->percentage !== null ? rtrim(rtrim(number_format((float) $attendance->percentage, 1), '0'), '.').'%' : null,
+            // Starts full, like the gauge below it -- StudentDashboard::STARTING_PERCENTAGE.
+            // The pill still says nothing has been uploaded, so the figure is
+            // not mistaken for a measured one.
+            'value' => rtrim(rtrim(number_format(
+                $attendance !== null ? (float) $attendance->percentage : StudentDashboard::STARTING_PERCENTAGE, 1
+            ), '0'), '.').'%',
             'note' => 'Current Attendance',
             'pill' => $attendance
                 ? ($attendance->at_risk ? 'Needs Attention' : 'Good Standing')

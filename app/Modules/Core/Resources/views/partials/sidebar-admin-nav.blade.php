@@ -17,8 +17,12 @@
     read-only: `queuesForRole('admin')` is empty by design, so the admin never
     acts on an application. Acting on one is CGS's job.
 
-    Users and Roles, System Settings and Audit Logs are the administrator's
-    actual scope, per technical.md and jason.md §5.5.
+    Departments, Users and Roles, System Settings and Audit Logs are the
+    administrator's actual scope, per technical.md and jason.md §5.5.
+    Non-Executive CGS reaches Departments and Users and Roles too, from
+    sidebar-cgs-nav.blade.php's own Administration section, since a second
+    Chair or Academic Executive for a department is CGS's day-to-day
+    request, not the administrator's.
 --}}
 @php
     $applicationsOpen = request()->routeIs('admin.applications.*');
@@ -99,6 +103,13 @@
 
 {{-- ---- The administrator's own scope ------------------------------------ --}}
 <div class="nav-section-label"><span class="nav-label">Administration</span></div>
+
+<a href="{{ route('admin.departments.index') }}" class="nav-item @if(request()->routeIs('admin.departments.*')) active @endif" title="Departments">
+    <span class="nav-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+    </span>
+    <span class="nav-label">Departments</span>
+</a>
 
 <a href="{{ route('admin.users.index') }}" class="nav-item @if(request()->routeIs('admin.users.*')) active @endif" title="Users and Roles">
     <span class="nav-icon">

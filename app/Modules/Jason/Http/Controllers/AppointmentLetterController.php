@@ -44,20 +44,6 @@ class AppointmentLetterController extends Controller
     }
 
     /**
-     * Nomination moved out of this module on 2026-09-30.
-     *
-     * Core's Chair dashboard still links here, and `route()` throws on a
-     * name that no longer exists, so removing it outright takes the whole
-     * Chair dashboard down. This answers instead, and says where the work
-     * went. It goes when Core's two Chair partials are updated -- see
-     * TODO.md.
-     */
-    public function nominationMoved()
-    {
-        return view('jason::appointment_letter.moved');
-    }
-
-    /**
      * Where CGS starts: the finalised examiner list arrives as a
      * spreadsheet, and this is the screen that takes it.
      */
@@ -611,7 +597,7 @@ class AppointmentLetterController extends Controller
     /**
      * "Name (internal)" per examiner, internal first, for the candidate's notices.
      *
-     * @param  \Illuminate\Support\Collection<int, PoolExaminer|AppointmentExaminer>  $examiners
+     * @param  \Illuminate\Support\Collection<int, AppointmentExaminer>  $examiners
      * @return array<int, string>
      */
     protected function examinerLines($examiners): array

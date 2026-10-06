@@ -32,6 +32,47 @@ Nur Hani’s scope tackles the highly complex, rule-heavy processes of examiner 
   * Level 4: Loop back into a further re-viva cycle.
   * Level 5: Dismissal (Terminal state).
 
+### 2b. The confirmed end-to-end flow (2026-09-22)
+
+CGS walked the real process through and it is longer than the proposal
+describes. This section is the authority where it differs from §2 above; §2 is
+kept as written, because it is the scope the proposal was defended on.
+
+1. **The supervisor names four seats**, not two: internal main and backup,
+   external main and backup. The internal pair must come from **the
+   candidate's own department** — that is what makes them internal — and the
+   system refuses anyone else.
+2. **The Academic Executive** sees which examiners have been assigned to which
+   of their department's candidates, and clears them.
+3. They can **take their department's list away as a file** (Excel or CSV) or
+   **submit it to CGS**, which is the same act as approving it on.
+4. Every department's Academic Executive does this independently, so CGS
+   receives one list per department.
+5. **CGS (Senior Executive, Puan Waheeda) merges them into one report** and
+   checks it — this is Touchpoint 2, cross-department duplicates, and it is
+   flagged inline on the compiled screen as well as on
+   `/examiner-nomination/conflicts`.
+6. The compiled report goes to **the Senior Director**, on screen or as a
+   file.
+7. **The Senior Director rechecks it.** A problem goes **back to the Academic
+   Executive of that department** to choose again, and CGS is told; the list
+   then replays forward. No problem, and it goes to the Dean.
+8. **The Dean of PGR** approves, or sends it back the same way. Approved, it
+   returns to CGS.
+9. **CGS holds the finalised report** — the final examiner list.
+10. It is released to **the Non-Executive (M Syahmi Ifwat M Jafri)**, who reads
+    it on screen or takes the Excel or the CSV.
+
+Built as `ExaminerNominationWorkflow`'s six stages, with
+`WorkflowEngine::returnTo()` for steps 7 and 8 — a rejection would end the
+candidate's nomination outright and split its audit trail, which is not what
+"send it back" means here. The loop is genuinely a loop: a list can go round
+as many times as it takes, on one application.
+
+**Staffing note:** Puan Waheeda is Senior Executive CGS and M Syahmi Ifwat M
+Jafri is Non-Executive CGS. The seeder had these the other way round until
+2026-09-22.
+
 ### 3. Key Technical Contributions
 * **Complex Query Logic:** Utilizing Laravel/PHP Eloquent (or raw MySQL queries) to calculate the 90-day gap dates dynamically and check for overlapping nominations across different faculty databases.
 * **Automated Letter Generation:** (Initially in scope, later refined) Generating re-appointment letters and evaluation report PDFs via `Dompdf` to send to external panel examiners via `PHPMailer`.

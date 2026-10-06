@@ -15,6 +15,11 @@
 
         Four fixed figures, then blocking alerts, then two panel rows. Every
         panel is its own partial, so changing one never touches another.
+
+        The aside row used to pair Quick Actions with "Panels you filed" --
+        examiner-panel nominations, which went with the Chair's ability to
+        file one. It now shares the same "Your recent decisions" panel the
+        generic Approver and Supervisor screens already use.
     --}}
     <div class="sdash sdash-chair">
         <x-core::welcome-banner
@@ -35,7 +40,7 @@
         </div>
 
         <div class="approver-row approver-row-aside">
-            @include('core::dashboard.partials.chair-nominations')
+            @include('core::dashboard.partials.approver-decisions')
             @include('core::dashboard.partials.approver-shortcuts')
         </div>
     </div>

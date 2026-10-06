@@ -2,6 +2,7 @@
 
 namespace App\Modules\Nureen\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
@@ -17,7 +18,7 @@ use App\Modules\Nureen\Models\SupervisionDetail;
  * rather than in this class, since that write is a side effect of a
  * decision, not part of the chain itself.
  */
-class SupervisionWorkflow implements WorkflowModule
+class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime
 {
     public function key(): string
     {
