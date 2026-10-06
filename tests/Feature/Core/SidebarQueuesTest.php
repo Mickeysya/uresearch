@@ -145,4 +145,22 @@ class SidebarQueuesTest extends TestCase
             // Fewer than four modules, so the flat branch, not the outer tree.
             ->assertSee('nav-flat-queues', false);
     }
+
+    public function test_a_students_module_links_reach_the_sidebar(): void
+    {
+        // RpdAppealWorkflow::links() gives students "RPD Candidacy". Until
+        // 2026-10-06 the student sidebar never rendered $extraLinks, so no
+        // module's student link appeared at all.
+        $html = $this->actingAs($this->student())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->getContent();
+
+        $sidebar = substr($html, strpos($html, 'id="app-sidebar"'));
+
+        $this->assertStringContainsString('>RPD Candidacy<', $sidebar);
+        $this->assertStringContainsString(route('candidacies.mine'), $sidebar);
+        // Chloe's study-candidacy link keeps its own name, once.
+        $this->assertSame(1, substr_count($sidebar, 'title="My Candidacy"'));
+    }
 }

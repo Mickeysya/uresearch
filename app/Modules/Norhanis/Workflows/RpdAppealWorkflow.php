@@ -89,7 +89,8 @@ class RpdAppealWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLi
     {
         return match ($user->role) {
             Role::STUDENT => [
-                ['label' => 'My Candidacy', 'route' => 'candidacies.mine'],
+                // Not 'My Candidacy': Chloe's study-candidacy page has that name.
+                ['label' => 'RPD Candidacy', 'route' => 'candidacies.mine'],
             ],
             Role::NON_EXEC_CGS => [
                 ['label' => 'RPD Masterlist', 'route' => 'candidacies.index'],

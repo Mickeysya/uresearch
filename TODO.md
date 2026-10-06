@@ -30,7 +30,7 @@ as the work it describes.
 | Haziq — GRA · GA · Stage Gates · Allowance | scoped, not started (scaffold only) |
 | **Cross-module overlaps** | **3 unresolved** (#2 settled by Chloe's build) — see below |
 | Bulk decide skips module rules | fixed 2026-10-05 — `DecidesOneAtATime`, see the fourth pass |
-| Automated tests | **237**, all green (run in the app container, 2026-10-05) — Core 109 · Chloe 35 · Norhanis 24 · Hani 24 · Nureen 23 · Jason 18 · Unit 4. Covers the engine (both return paths: `returnTo()` and `decide('return')` + `resubmit()`), the seams, the CSP, the import, the profile, RPD's three flows, Travel's branch, every teammate's chain, the admin screens, bulk decide refusing `DecidesOneAtATime` modules, and all four of Chloe's modules. |
+| Automated tests | **240**, all green (run in the app container, 2026-10-06) — Core 112 · Chloe 35 · Norhanis 24 · Hani 24 · Nureen 23 · Jason 18 · Unit 4. Covers the engine (both return paths: `returnTo()` and `decide('return')` + `resubmit()`), the seams, the CSP, the import, the profile, RPD's three flows, Travel's branch, every teammate's chain, the admin screens, bulk decide refusing `DecidesOneAtATime` modules, and all four of Chloe's modules. |
 | **Runs end to end** | yes — verified 2026-09-09, re-verified 2026-09-12; Chloe's pages rendered through a full appeal lifecycle 2026-09-27 |
 | Last reviewed | **2026-09-27** — full audit after Chloe's merge: hard rules, routes, open Core items, Chloe against `chloe.md`, unmerged branches. See the fourth pass. Before that 2026-09-23 (account administration, gauge start, CGS Actions tree) |
 
@@ -331,11 +331,12 @@ through `e()`. No `$_POST`, no raw uploads, no migration on a shared table.
 
 **Still open, verified against the code today:**
 
-- [ ] Validation errors: `partials/flash` still never renders `$errors`;
-      Jason's three queues work round it by hand. One block fixes every
-      module. (Core)
-- [ ] Student sidebar drops `ProvidesLinks` links (`sidebar.blade.php:50`
-      does not pass `$extraLinks`). One line. (Core)
+- [x] **Fixed 2026-10-06:** `partials/flash` renders the error bag (escaped,
+      `role="alert"`); Jason's three hand-rolled copies removed. `FlashTest`.
+- [x] **Fixed 2026-10-06:** students get module links under **Actions**, the
+      same block approvers use. Norhanis' student link relabelled "RPD
+      Candidacy" so it no longer collides with Chloe's "My Candidacy".
+      `SidebarQueuesTest::test_a_students_module_links_reach_the_sidebar`.
 - [ ] Supervisors are not scoped in the shared queue; only modules that scope
       themselves (Supervision, Candidacy Appeal) are. Needs a team decision.
 - [ ] Tracking page is an unpaginated `->get()`
@@ -1659,8 +1660,8 @@ rather than the code — read it before assuming the appeal chain changed):
       *message*, because the shared backstop below it also returns 403 and a
       status-only assertion would not notice the guard going missing.
 
-Known and tracked elsewhere: the student sidebar drops his "Resubmit #N"
-links (Core gap below; worked around by putting them on the Hardbound page).
+His "Resubmit #N" links show in the student sidebar again since the
+2026-10-06 Core fix, as well as on the Hardbound page.
 Deliberately out of scope and correctly so: the Senior Exec sign-off on
 Hardbound (dropped 2026-09-14), the Admin Dashboard (§5.5, unowned) and the
 CGS Lifecycle Monitor (§5.3, blocked on overlap #3). The audit viewer
@@ -2555,7 +2556,8 @@ audited in full; the rest fell out of the same query.
       all the screens there are.
 
 ### Correctness gaps in Core worth closing
-- [ ] **Validation errors are invisible.** `core::partials.flash` renders
+- [x] **Fixed 2026-10-06** (see the fifth pass). Was: **validation errors
+      are invisible.** `core::partials.flash` renders
       `session('status'|'warning'|'error')` but never `$errors`, and no page
       layout renders the bag either — so any `$request->validate()` failure
       bounces the user back to an unchanged page with no explanation. This
@@ -2565,7 +2567,10 @@ audited in full; the rest fell out of the same query.
       the real fix is one `@if ($errors->any())` block in `partials/flash`,
       which would cover every module at once. **Re-checked 2026-09-27: still
       open.** Only `login` and Jason's three queues render `$errors`.
-- [ ] **The student sidebar drops module links.** `sidebar.blade.php` passes
+- [x] **Fixed 2026-10-06** (see the fifth pass). Jason's "Resubmit
+      Hardbound #N" links now show in the student sidebar again, as well as
+      on the Hardbound page. Was: **the student sidebar drops module links.**
+      `sidebar.blade.php` passes
       `$extraLinks` to the CGS and approver partials but not to
       `sidebar-student-nav`, so anything a module returns from
       `ProvidesLinks::links()` for a student is never rendered. Jason's
@@ -2875,7 +2880,7 @@ are what to reach for when touching the file anyway.
       CGS Attendance student list, CGS Reports, Help and Support, Settings.
       All are `PageController::PAGES` entries. Help and Support is linked
       from every role's sidebar, so it is the one a demo audience will click.
-- [~] Automated tests — **237 pass as of 2026-10-05** (Core 109 · Chloe 35 ·
+- [~] Automated tests — **240 pass as of 2026-10-06** (Core 112 · Chloe 35 ·
       Norhanis 24 · Hani 24 · Nureen 23 · Jason 18 · Unit 4). Still missing:
       Conflict Detection and `DocumentStore`'s allow-list (below). The history of this line: the harness
       once had **102 passing** (98 feature, 4
