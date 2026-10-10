@@ -7,6 +7,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
 use App\Modules\Jason\Support\AppointmentSheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\UploadedFile;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
@@ -101,15 +102,25 @@ class FormsTest extends TestCase
 
         // Importing the finalised list is what puts a candidate on the CGS
         // preparation desk; nobody fills in a nomination form any more.
-        $csv = implode(',', AppointmentSheet::COLUMNS)."\n";
+        DB::table('examiners')->insert([
+            // Every row needs the same keys: a batch insert builds one
+            // statement, so a row missing a column breaks the whole thing.
+            ['name' => 'Dr. Internal', 'email' => 'internal@utp.edu.my', 'department' => 'Civil',
+             'faculty' => 'FOE', 'institution' => null, 'type' => 'internal', 'is_active' => true,
+             'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Dr. External', 'email' => 'external@usm.edu.my', 'department' => 'Civil',
+             'faculty' => 'USM', 'institution' => 'Universiti Sains Malaysia', 'type' => 'external',
+             'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+        ]);
 
-        foreach ([['internal', 'int@test.my'], ['external', 'ext@test.my']] as [$type, $email]) {
-            $csv .= implode(',', [
-                $candidate->matric_no, 'MSc in Civil Engineering', 'Civil Engineering',
-                'Dr. Aisyah Rahman', 'A Study of Something',
-                $type, 'Prof '.ucfirst($type), 'Somewhere', $email, 'An address',
+        $csv = implode(',', AppointmentSheet::TEMPLATE_HEADINGS)."\n"
+            .implode(',', [
+                '2', 'FOE', 'Civil Engineering', $candidate->name, $candidate->matric_no,
+                'MSc Full-Time', 'A Study of Something', 'Dr. Aisyah Rahman',
+                'Dr. Internal', 'Civil Engineering', '',
+                'Dr. External', 'Universiti Sains Malaysia', '',
+                '-', 'Approved', '2026-09-14',
             ])."\n";
-        }
 
         $path = tempnam(sys_get_temp_dir(), 'list').'.csv';
         file_put_contents($path, $csv);

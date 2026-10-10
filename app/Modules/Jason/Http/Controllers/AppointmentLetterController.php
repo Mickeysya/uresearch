@@ -18,6 +18,7 @@ use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
 use App\Modules\Jason\Notifications\ExaminersAppointed;
 use App\Modules\Jason\Support\AppointmentSheet;
+use App\Modules\Jason\Support\ExaminerDirectory;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
@@ -50,7 +51,8 @@ class AppointmentLetterController extends Controller
     public function importForm(Request $request)
     {
         return view('jason::appointment_letter.import', [
-            'columns' => AppointmentSheet::COLUMNS,
+            'columns' => AppointmentSheet::TEMPLATE_HEADINGS,
+            'poolAvailable' => ExaminerDirectory::available(),
         ]);
     }
 
@@ -64,7 +66,7 @@ class AppointmentLetterController extends Controller
         if ($request->query('format') === 'csv') {
             return response()->streamDownload(function () {
                 $out = fopen('php://output', 'w');
-                fputcsv($out, AppointmentSheet::COLUMNS);
+                fputcsv($out, AppointmentSheet::TEMPLATE_HEADINGS);
                 foreach (AppointmentSheet::sampleRows() as $row) {
                     fputcsv($out, $row);
                 }
@@ -106,15 +108,15 @@ class AppointmentLetterController extends Controller
         }
 
         $rows = $sheets[0] ?? [];
-        $header = array_map(fn ($h) => strtolower(trim((string) $h)), array_shift($rows) ?? []);
-        $expected = AppointmentSheet::COLUMNS;
+        $columns = AppointmentSheet::mapHeader(array_shift($rows) ?? []);
 
-        if (array_slice($header, 0, count($expected)) !== $expected) {
-            return back()->with('error', 'The first row must be exactly: '.implode(', ', $expected)
-                .'. Download the template on this page to start from a correct file.');
+        if (! isset($columns['matric_no'])) {
+            return back()->with('error', 'That sheet has no "Matric No" column, so its rows cannot be '
+                .'matched to candidates. Columns are read by name in any order; download the template '
+                .'on this page to see the headings this expects.');
         }
 
-        [$candidates, $problems] = $this->readSheet($rows);
+        [$candidates, $problems] = $this->readSheet($rows, $columns);
 
         if ($problems !== []) {
             return back()->with('error', 'Nothing was imported. '.implode(' ', array_slice($problems, 0, 6))
@@ -152,10 +154,12 @@ class AppointmentLetterController extends Controller
         });
 
         $count = count($opened);
+        $packs = collect($candidates)->sum(fn ($c) => count($c['examiners']));
 
         return redirect()
             ->route('appointment-letter.queue')
-            ->with('status', "{$count} ".Str::plural('candidate', $count).' imported. '
+            ->with('status', "{$count} ".Str::plural('candidate', $count).' imported, '
+                ."{$packs} ".Str::plural('examiner', $packs).' in all. '
                 .'Prepare each pack, then send it to the Dean.');
     }
 
@@ -163,29 +167,37 @@ class AppointmentLetterController extends Controller
      * Turns the sheet's rows into one entry per candidate, or into a list of
      * what is wrong with them.
      *
+     * One row IS one candidate: the panel arrives in four named slots rather
+     * than on four rows. Each slot carries a name, and the rest of what a
+     * letter needs -- an email to send it to, an institution for the address
+     * block -- is read from the examiner records the nomination chain keeps.
+     * Where the row carries the nomination's application number that lookup
+     * is exact; otherwise the names are matched.
+     *
      * Every problem is reported with its row number, because the person
-     * repairing the file is looking at row numbers -- being told only how
-     * many rows failed is what makes an import unusable.
+     * repairing the file is looking at row numbers.
      *
      * @param  array<int, array<int, mixed>>  $rows
+     * @param  array<string, int>  $columns
      * @return array{0: array<string, array<string, mixed>>, 1: array<int, string>}
      */
-    protected function readSheet(array $rows): array
+    protected function readSheet(array $rows, array $columns): array
     {
         $candidates = [];
         $problems = [];
-        $seen = [];
 
         foreach ($rows as $i => $row) {
             // +2: the header is row 1 and spreadsheets count from 1.
             $line = $i + 2;
-            $row = array_map(fn ($cell) => trim((string) $cell), array_pad(array_slice($row, 0, 10), 10, ''));
-            [$matric, $degree, $programme, $supervisor, $title, $type, $name, $institution, $email, $address] = $row;
+            $cell = fn (string $key) => isset($columns[$key])
+                ? trim((string) ($row[$columns[$key]] ?? ''))
+                : '';
 
-            if (implode('', $row) === '') {
+            if (trim(implode('', array_map('strval', $row))) === '') {
                 continue;
             }
 
+            $matric = $cell('matric_no');
             $student = $matric === '' ? null : User::where('role', Role::STUDENT)->where('matric_no', $matric)->first();
 
             if (! $student) {
@@ -194,72 +206,141 @@ class AppointmentLetterController extends Controller
                 continue;
             }
 
-            $kind = AppointmentSheet::parseType($type);
-
-            if (! $kind) {
-                $problems[] = "Row {$line}: examiner_type must be internal or external, not \"{$type}\".";
+            if (isset($candidates[$matric])) {
+                $problems[] = "Row {$line}: {$matric} is on this sheet twice.";
 
                 continue;
             }
 
-            foreach (['examiner_name' => $name, 'examiner_email' => $email] as $column => $value) {
-                if ($value === '') {
-                    $problems[] = "Row {$line}: {$column} is empty.";
-                }
+            $examiners = $this->readPanel($cell, $line, $problems);
+
+            if ($examiners === []) {
+                continue;
             }
 
-            if ($email !== '' && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $problems[] = "Row {$line}: \"{$email}\" is not an email address.";
-            }
-
-            // The same examiner twice on one panel is a typo, and it would
-            // send them the same appointment twice.
-            $key = $matric.'|'.strtolower($email);
-
-            if (isset($seen[$key])) {
-                $problems[] = "Row {$line}: {$email} is already on this candidate's panel (row {$seen[$key]}).";
-            }
-
-            $seen[$key] = $line;
-
-            $candidates[$matric] ??= [
-                'student' => $student,
-                // The candidate's own columns repeat down their rows; the
-                // first row that carries them wins.
-                'degree' => $degree,
-                'programme' => $programme,
-                'supervisor_name' => $supervisor,
-                'thesis_title' => $title,
-                'examiners' => [],
-            ];
-
-            $candidates[$matric]['examiners'][] = [
-                'examiner_type' => $kind,
-                'examiner_name' => $name,
-                'examiner_institution' => $institution,
-                'examiner_email' => $email,
-                'examiner_address' => $address,
-                'letter_ref_no' => 'UTP/'.($kind === AppointmentExaminer::TYPE_INTERNAL ? 'CGS' : 'PGS')."/AD/{$matric}",
-            ];
-        }
-
-        // A panel is an internal and an external examiner at minimum, the
-        // same rule the letters themselves assume.
-        foreach ($candidates as $matric => $candidate) {
-            $kinds = array_unique(array_column($candidate['examiners'], 'examiner_type'));
+            $kinds = array_unique(array_column($examiners, 'examiner_type'));
 
             if (count($kinds) < 2) {
-                $problems[] = "{$matric}: a panel needs at least one internal and one external examiner.";
+                $problems[] = "Row {$line}: a panel needs at least one internal and one external examiner.";
+
+                continue;
             }
 
-            foreach (AppointmentSheet::CANDIDATE_COLUMNS as $column) {
-                if (($candidate[$column] ?? '') === '') {
-                    $problems[] = "{$matric}: {$column} is empty.";
-                }
-            }
+            $candidates[$matric] = [
+                'student' => $student,
+                // The export calls the study mode "Programme" (MSc
+                // Full-Time) and the field "Department" (Computing). The
+                // letter wants them the other way round: "MSc in Computing"
+                // as the degree, "Computing" as the programme. CGS still
+                // confirms both when preparing.
+                'degree' => $this->degreeFrom($cell('programme'), $cell('department')),
+                'programme' => $cell('department') ?: $cell('programme') ?: null,
+                'supervisor_name' => $cell('supervisor_name') ?: $student->supervisor?->name,
+                'thesis_title' => $cell('thesis_title') ?: null,
+                'examiners' => $examiners,
+            ];
         }
 
         return [$candidates, $problems];
+    }
+
+    /**
+     * "MSc Full-Time" + "Computing" becomes "MSc in Computing".
+     *
+     * The letter names a degree, not a mode of study. Anything the mode is
+     * not recognised as leaves this null, and CGS writes it on the
+     * preparation screen rather than the letter carrying a guess.
+     */
+    protected function degreeFrom(string $mode, string $field): ?string
+    {
+        $level = match (true) {
+            str_contains(strtolower($mode), 'phd') => 'PhD',
+            str_contains(strtolower($mode), 'msc'),
+            str_contains(strtolower($mode), 'master') => 'MSc',
+            default => null,
+        };
+
+        if (! $level) {
+            return null;
+        }
+
+        return $field !== '' ? "{$level} in {$field}" : $level;
+    }
+
+    /**
+     * The four panel slots on one row.
+     *
+     * A slot left blank is simply not on the panel -- a list that names only
+     * a main examiner each side is a complete list. A slot that names
+     * somebody the portal cannot find is a problem, because an appointment
+     * letter with no address to go to is worse than no appointment.
+     *
+     * @param  array<int, string>  $problems
+     * @return array<int, array<string, string>>
+     */
+    protected function readPanel(callable $cell, int $line, array &$problems): array
+    {
+        // The exact path first: the nomination's own row names its four
+        // examiners by id, so two people with the same name cannot be
+        // confused for one another.
+        if ($panel = ExaminerDirectory::panelForNomination($cell('nomination_id'))) {
+            return array_map(fn (array $e) => $this->examinerRow($e), $panel);
+        }
+
+        $examiners = [];
+
+        foreach (AppointmentSheet::SLOTS as [$nameKey, $detailKey, $type, $role]) {
+            $name = $cell($nameKey);
+
+            if ($name === '') {
+                continue;
+            }
+
+            $known = ExaminerDirectory::byName($name);
+
+            if (! $known) {
+                $problems[] = "Row {$line}: \"{$name}\" is not in the examiner records, so there is no "
+                    .'address to send their appointment to.';
+
+                continue;
+            }
+
+            $examiners[] = $this->examinerRow($known + [
+                'examiner_type' => $type,
+                'examiner_role' => $role,
+                // What the sheet says about them wins over the record: the
+                // list is the document the Dean approved.
+                'examiner_department' => $cell($detailKey) ?: ($known['examiner_department'] ?? ''),
+            ]);
+        }
+
+        return $examiners;
+    }
+
+    /**
+     * One `appointment_examiners` row, as the letters need it.
+     *
+     * @param  array<string, string>  $examiner
+     * @return array<string, string>
+     */
+    protected function examinerRow(array $examiner): array
+    {
+        $institution = $examiner['examiner_institution'] ?? '';
+        $department = $examiner['examiner_department'] ?? '';
+
+        return [
+            'examiner_type' => $examiner['examiner_type'],
+            'examiner_role' => $examiner['examiner_role'],
+            'examiner_name' => $examiner['examiner_name'],
+            'examiner_institution' => $department !== '' && $examiner['examiner_type'] === AppointmentExaminer::TYPE_INTERNAL
+                ? $department.', UTP'
+                : ($institution ?: $department),
+            'examiner_email' => $examiner['examiner_email'],
+            // The address block on the letter. CGS can still adjust it when
+            // preparing, which is where a postal address gets added for an
+            // external examiner the records hold only an institution for.
+            'examiner_address' => trim(implode("\n", array_filter([$department, $institution]))),
+        ];
     }
 
     public function queue(Request $request, WorkflowEngine $engine, ModuleRegistry $registry)

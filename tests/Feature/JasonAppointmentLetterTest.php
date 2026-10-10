@@ -13,6 +13,7 @@ use App\Modules\Jason\Support\AppointmentSheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Mail\Events\MessageSent;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -67,10 +68,10 @@ class JasonAppointmentLetterTest extends TestCase
         ]);
     }
 
-    /** A sheet with the header row and whatever rows are given. */
+    /** A sheet with the export's header row and whatever rows are given. */
     protected function sheet(array $rows, string $name = 'examiner-list.csv'): UploadedFile
     {
-        $csv = implode(',', AppointmentSheet::COLUMNS)."\n";
+        $csv = implode(',', AppointmentSheet::TEMPLATE_HEADINGS)."\n";
 
         foreach ($rows as $row) {
             $csv .= implode(',', array_map(fn ($c) => '"'.str_replace('"', '""', (string) $c).'"', $row))."\n";
@@ -82,108 +83,155 @@ class JasonAppointmentLetterTest extends TestCase
         return new UploadedFile($path, $name, 'text/csv', null, true);
     }
 
-    /** One good row. */
-    protected function row(string $matric, string $type, string $email, array $overrides = []): array
+    /** An examiner in the records the nomination chain keeps. */
+    protected function knownExaminer(string $name, string $type, string $email, ?string $institution = null): void
     {
-        return array_replace([
-            $matric, 'MSc in Computer & Information Sciences', 'Computer & Information Sciences',
-            'Dr. Aisyah Rahman', 'A Study of Something',
-            $type, 'Prof '.ucfirst($type), ucfirst($type).' Institution', $email, 'Somewhere',
-        ], $overrides);
+        DB::table('examiners')->insert([
+            'name' => $name,
+            'email' => $email,
+            'department' => 'Computing',
+            'faculty' => 'FSMC',
+            'institution' => $institution,
+            'type' => $type,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
-    /** A full, valid panel for one candidate. */
-    protected function panelFor(string $matric): array
+    /** The four examiners the sample rows name. */
+    protected function knownPanel(): void
     {
-        return [
-            $this->row($matric, 'internal', "int-{$matric}@test.my"),
-            $this->row($matric, 'external', "ext-{$matric}@test.my"),
-        ];
+        $this->knownExaminer('Dr. Chandra Segaran', 'internal', 'chandra@utp.edu.my');
+        $this->knownExaminer('Prof. Dr. Rosli Hamid', 'internal', 'rosli@utp.edu.my');
+        $this->knownExaminer('Assoc Prof Dr Azimah Binti Hussin', 'external', 'azimah@ukm.edu.my', 'Universiti Kebangsaan Malaysia');
+        $this->knownExaminer('Professor Ir Ts Dr Muzamir Bin Isa', 'external', 'muzamir@unimap.edu.my', 'Universiti Malaysia Perlis');
+    }
+
+    /**
+     * One candidate's row, in the export's column order.
+     *
+     * @param  array<int, string>  $overrides  by column index
+     */
+    protected function row(string $matric, array $overrides = []): array
+    {
+        return array_replace([
+            '2', 'FSMC', 'Computing', 'Ahmad Danial', $matric, 'MSc Full-Time',
+            'Introduction to IoT', 'Dr. Aisyah Rahman',
+            'Dr. Chandra Segaran', 'Civil & Environmental Engineering',
+            'Prof. Dr. Rosli Hamid',
+            'Assoc Prof Dr Azimah Binti Hussin', 'Universiti Kebangsaan Malaysia',
+            'Professor Ir Ts Dr Muzamir Bin Isa',
+            '—', 'Approved', '2026-09-14',
+        ], $overrides);
     }
 
     /* -----------------------------------------------------------------
      | The import
      |------------------------------------------------------------------*/
 
-    public function test_a_list_opens_one_appointment_per_candidate(): void
+    public function test_a_row_opens_one_appointment_carrying_the_whole_panel(): void
     {
         $this->candidate('22001001', 'a@test.my');
         $this->candidate('22001002', 'b@test.my');
+        $this->knownPanel();
 
         $this->actingAs($this->cgs())
             ->post(route('appointment-letter.import.store'), [
-                'sheet' => $this->sheet(array_merge($this->panelFor('22001001'), $this->panelFor('22001002'))),
+                'sheet' => $this->sheet([$this->row('22001001'), $this->row('22001002')]),
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('appointment-letter.queue'));
 
         $applications = Application::where('module_type', 'appointment_letter')->get();
 
-        $this->assertCount(2, $applications, 'One appointment per candidate, not per row.');
+        $this->assertCount(2, $applications, 'One appointment per candidate, one row per candidate.');
 
         foreach ($applications as $application) {
             // Straight onto the CGS preparation stage: the decision that
             // produced this list was taken before it arrived.
             $this->assertSame('cgs_prep', $application->current_stage);
-            $this->assertSame(2, AppointmentExaminer::where('application_id', $application->id)->count());
 
-            $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
-            $this->assertSame('A Study of Something', $detail->thesis_title);
-            $this->assertSame('Dr. Aisyah Rahman', $detail->supervisor_name);
+            $panel = AppointmentExaminer::where('application_id', $application->id)->get();
+
+            // Main and backup, both sides, all appointed.
+            $this->assertSame(4, $panel->count());
+            $this->assertEqualsCanonicalizing(
+                ['internal main', 'internal backup', 'external main', 'external backup'],
+                $panel->map(fn ($e) => $e->examiner_type.' '.$e->examiner_role)->all(),
+            );
         }
     }
 
-    public function test_the_candidate_columns_may_repeat_down_the_rows(): void
+    /**
+     * The sheet names its examiners and nothing else about them. An
+     * appointment letter with no address to go to is worse than none, so
+     * the email and institution come from the records the nomination chain
+     * keeps.
+     */
+    public function test_each_examiner_is_filled_in_from_the_examiner_records(): void
     {
         $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
 
         $this->actingAs($this->cgs())
-            ->post(route('appointment-letter.import.store'), ['sheet' => $this->sheet($this->panelFor('22001001'))])
+            ->post(route('appointment-letter.import.store'), ['sheet' => $this->sheet([$this->row('22001001')])])
             ->assertSessionHasNoErrors();
 
         $application = Application::where('module_type', 'appointment_letter')->firstOrFail();
 
-        $this->assertSame(
-            ['external', 'internal'],
-            AppointmentExaminer::where('application_id', $application->id)
-                ->pluck('examiner_type')->sort()->values()->all(),
-        );
+        $azimah = AppointmentExaminer::where('application_id', $application->id)
+            ->where('examiner_name', 'Assoc Prof Dr Azimah Binti Hussin')
+            ->firstOrFail();
+
+        $this->assertSame('azimah@ukm.edu.my', $azimah->examiner_email);
+        $this->assertSame('external', $azimah->examiner_type);
+        $this->assertSame('main', $azimah->examiner_role);
     }
 
-    /**
-     * A list is approved as a whole before it reaches CGS, so importing
-     * half of it would leave them working out which candidates made it —
-     * and the rows that failed are named, because the person repairing the
-     * file is looking at row numbers.
-     */
-    public function test_a_bad_row_imports_nothing_and_says_which_row(): void
+    public function test_an_examiner_the_records_do_not_know_stops_the_import(): void
     {
         $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
 
         $this->actingAs($this->cgs())
             ->post(route('appointment-letter.import.store'), [
-                'sheet' => $this->sheet(array_merge(
-                    $this->panelFor('22001001'),
-                    // A candidate nobody has heard of.
-                    [$this->row('99999999', 'internal', 'ghost@test.my')],
-                )),
+                'sheet' => $this->sheet([$this->row('22001001', [8 => 'Dr Nobody At All'])]),
             ])
             ->assertSessionHas('error');
 
         $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
-        $this->assertStringContainsString('Row 4', session('error'));
+        $this->assertStringContainsString('Dr Nobody At All', session('error'));
+    }
+
+    /**
+     * A list is approved as a whole upstream, so importing half of it would
+     * leave CGS working out which candidates made it.
+     */
+    public function test_a_bad_row_imports_nothing_and_says_which_row(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([$this->row('22001001'), $this->row('99999999')]),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+        $this->assertStringContainsString('Row 3', session('error'));
     }
 
     public function test_a_panel_needs_an_internal_and_an_external_examiner(): void
     {
         $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
 
+        // Both external slots cleared.
         $this->actingAs($this->cgs())
             ->post(route('appointment-letter.import.store'), [
-                'sheet' => $this->sheet([
-                    $this->row('22001001', 'internal', 'one@test.my'),
-                    $this->row('22001001', 'internal', 'two@test.my'),
-                ]),
+                'sheet' => $this->sheet([$this->row('22001001', [11 => '', 13 => ''])]),
             ])
             ->assertSessionHas('error');
 
@@ -191,16 +239,31 @@ class JasonAppointmentLetterTest extends TestCase
         $this->assertStringContainsString('internal and one external', session('error'));
     }
 
-    public function test_the_same_examiner_cannot_appear_twice_on_one_panel(): void
+    /** A main examiner with no backup beside them is a complete panel. */
+    public function test_an_empty_backup_slot_is_not_a_problem(): void
     {
         $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
 
         $this->actingAs($this->cgs())
             ->post(route('appointment-letter.import.store'), [
-                'sheet' => $this->sheet([
-                    $this->row('22001001', 'internal', 'same@test.my'),
-                    $this->row('22001001', 'external', 'same@test.my'),
-                ]),
+                'sheet' => $this->sheet([$this->row('22001001', [10 => '', 13 => ''])]),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $application = Application::where('module_type', 'appointment_letter')->firstOrFail();
+
+        $this->assertSame(2, AppointmentExaminer::where('application_id', $application->id)->count());
+    }
+
+    public function test_the_same_candidate_cannot_appear_twice_on_one_sheet(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([$this->row('22001001'), $this->row('22001001')]),
             ])
             ->assertSessionHas('error');
 
@@ -208,35 +271,51 @@ class JasonAppointmentLetterTest extends TestCase
     }
 
     /**
-     * A reordered sheet is a different file, and importing it by position
-     * would put an examiner's email in the address field.
+     * An export gains and loses trailing columns as the nomination screen
+     * changes, and a list that is right in every way except column order is
+     * still the right list.
      */
-    public function test_a_sheet_with_the_wrong_header_is_refused(): void
+    public function test_columns_are_read_by_name_in_any_order(): void
     {
         $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
+
+        $csv = "Thesis Title,Matric No,External Main,Internal Main,Supervisor,Something We Do Not Know\n"
+            .'"Introduction to IoT",22001001,"Assoc Prof Dr Azimah Binti Hussin",'
+            .'"Dr. Chandra Segaran","Dr. Aisyah Rahman","ignored"'."\n";
 
         $path = tempnam(sys_get_temp_dir(), 'exam').'.csv';
-        file_put_contents($path, "matric_no,examiner_name,degree\n22001001,Prof Somebody,MSc\n");
+        file_put_contents($path, $csv);
 
         $this->actingAs($this->cgs())
             ->post(route('appointment-letter.import.store'), [
-                'sheet' => new UploadedFile($path, 'wrong.csv', 'text/csv', null, true),
+                'sheet' => new UploadedFile($path, 'reordered.csv', 'text/csv', null, true),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $application = Application::where('module_type', 'appointment_letter')->firstOrFail();
+
+        $this->assertSame(2, AppointmentExaminer::where('application_id', $application->id)->count());
+        $this->assertSame(
+            'Introduction to IoT',
+            AppointmentDetail::where('application_id', $application->id)->value('thesis_title'),
+        );
+    }
+
+    /** Matric No is the one column that ties a row to a candidate. */
+    public function test_a_sheet_without_a_matric_column_is_refused(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'exam').'.csv';
+        file_put_contents($path, "Candidate,Internal Main\nAhmad Danial,Dr. Chandra Segaran\n");
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => new UploadedFile($path, 'no-matric.csv', 'text/csv', null, true),
             ])
             ->assertSessionHas('error');
 
         $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
-    }
-
-    public function test_the_examiner_kind_is_read_forgivingly_but_not_guessed(): void
-    {
-        $this->assertSame('internal', AppointmentSheet::parseType('Internal'));
-        $this->assertSame('internal', AppointmentSheet::parseType(' INTERNAL '));
-        $this->assertSame('external', AppointmentSheet::parseType('External Examiner'));
-
-        // Anything else is refused by name rather than defaulted, because
-        // the kind decides which letter template the examiner receives.
-        $this->assertNull(AppointmentSheet::parseType('panel member'));
-        $this->assertNull(AppointmentSheet::parseType(''));
+        $this->assertStringContainsString('Matric No', session('error'));
     }
 
     public function test_only_cgs_may_import_a_list(): void
@@ -257,10 +336,19 @@ class JasonAppointmentLetterTest extends TestCase
             ->assertOk();
 
         // A streamed download is not in the response body until it is read.
-        $this->assertStringContainsString(
-            implode(',', AppointmentSheet::COLUMNS),
-            $response->streamedContent(),
-        );
+        $csv = $response->streamedContent();
+
+        // fputcsv quotes any heading with a space in it, so each is checked
+        // on its own rather than as one joined line.
+        foreach (AppointmentSheet::TEMPLATE_HEADINGS as $heading) {
+            $this->assertStringContainsString($heading, $csv);
+        }
+
+        // The headings the template ships with are ones the importer knows.
+        $mapped = AppointmentSheet::mapHeader(AppointmentSheet::TEMPLATE_HEADINGS);
+        $this->assertArrayHasKey('matric_no', $mapped);
+        $this->assertArrayHasKey('internal_main', $mapped);
+        $this->assertArrayHasKey('external_backup', $mapped);
     }
 
     /* -----------------------------------------------------------------
@@ -322,9 +410,10 @@ class JasonAppointmentLetterTest extends TestCase
     protected function imported(): Application
     {
         $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
 
         $this->actingAs($this->cgs())
-            ->post(route('appointment-letter.import.store'), ['sheet' => $this->sheet($this->panelFor('22001001'))])
+            ->post(route('appointment-letter.import.store'), ['sheet' => $this->sheet([$this->row('22001001')])])
             ->assertSessionHasNoErrors();
 
         return Application::where('module_type', 'appointment_letter')->firstOrFail();

@@ -16,9 +16,21 @@
         </p>
 
         <p class="queue-meta">
-            <b>One row per examiner</b>, not per candidate. A candidate's own columns repeat on
-            each of their rows, and the rows are grouped on <code>matric_no</code>. Every panel
-            needs at least one internal and one external examiner.
+            <b>One row per candidate</b>, with the panel in four named slots: internal main and
+            backup, external main and backup. A row is tied to a candidate by its
+            <code>Matric No</code>, and every panel needs at least one internal and one external
+            examiner. All four named examiners are appointed and all four receive a pack.
+        </p>
+
+        <p class="queue-meta">
+            Columns are read <b>by name, in any order</b>, and anything unrecognised is ignored,
+            so an export with extra or reordered columns still imports. Each examiner's email and
+            institution are read from the examiner records the nomination chain keeps, so the
+            sheet only has to name them.
+            @unless ($poolAvailable)
+                <b class="field-error">Those records are not on this database, so an import will
+                only succeed for examiners the sheet fully describes.</b>
+            @endunless
         </p>
 
         <form method="POST" action="{{ route('appointment-letter.import.store') }}"
@@ -34,10 +46,10 @@
             </a>
             <p class="queue-meta">
                 Or <a href="{{ route('appointment-letter.template', ['format' => 'csv']) }}">download it as .csv</a>.
-                The first row must be exactly:
+                The headings it is written with, which a real export may extend or reorder:
             </p>
             <p class="queue-meta" style="margin-top: -6px;">
-                <code>{{ implode(', ', $columns) }}</code>
+                <code>{{ implode(' · ', $columns) }}</code>
             </p>
             </fieldset>
 
@@ -53,7 +65,8 @@
             @error('sheet') <p class="field-error">{{ $message }}</p> @enderror
             <p class="queue-meta" style="margin-top: -8px;">
                 .xlsx or .csv, up to 5 MB. A candidate already imported gets a second
-                appointment, so import each list once.
+                appointment, so import each list once. A candidate listed twice on the same
+                sheet is reported rather than imported twice.
             </p>
             </fieldset>
 

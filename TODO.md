@@ -1517,22 +1517,50 @@ while no workflow declares it.
         100 seeded examiners, the three-month cooldown, the kind-and-filter
         picker) and the `academic_exec` stage. Keeping them would have meant
         the same panel being chosen twice, in two people's modules.
-  - [x] **CGS imports the finalised list** at "Import Examiner List":
-        `Support\AppointmentSheet` holds the columns, the template CGS
-        downloads (.xlsx or .csv, with two worked examples) and the header
-        check, so a column cannot be added to the template without the
-        importer knowing. **One row per examiner**, grouped on `matric_no` —
-        a candidate's own columns repeat down their rows — and each candidate
-        becomes one application carrying its own panel. Read through
-        `maatwebsite/excel`, already a dependency for Nureen's attendance
-        import, so no new package. **Nothing is imported unless every row is
-        good**, and each problem is reported with its row number: a list is
-        approved as a whole upstream, so a half-import would leave CGS
-        working out which candidates made it. Caught at import: an unknown
-        matric number, an examiner kind that is neither internal nor
-        external, a missing name or email, a malformed email, the same
-        examiner twice on one panel, a panel without one of each kind, and a
-        reordered header.
+  - [x] **CGS imports the finalised list** at "Import Examiner List".
+        Reshaped 2026-10-10 to the real export from the nomination chain:
+        **one row per candidate**, with the panel in four named slots —
+        internal main and backup, external main and backup — alongside the
+        candidate's own details and the nomination's application number,
+        stage and status. (It was one row per examiner, grouped on matric
+        number, which is not what the export looks like.)
+  - [x] **Columns are read by name, case- and spacing-insensitively, in any
+        order**, and anything unrecognised is ignored. `Matric No` is the only
+        one the import cannot do without: it is what ties a row to a candidate
+        here. An export gains and loses trailing columns as the nomination
+        screen changes, and a list that is right in every way except column
+        order is still the right list. `Support\AppointmentSheet` holds the
+        aliases, the four slots and the template headings in one place.
+  - [x] **All four named examiners are appointed**, main and backup alike, so
+        a candidate's pack is eight documents rather than four. Which is which
+        is kept on `appointment_examiners.examiner_role`: the letter does not
+        change, but a queue that cannot tell a backup from a main cannot show
+        CGS who is expected to return a report. A blank backup slot is a
+        complete panel, not an error.
+  - [x] **Each examiner is filled in from the nomination chain's own
+        records.** The list names its examiners and little else, and a letter
+        with no address to send it to is worse than no letter, so the email
+        and institution are read from Hani's `examiners` table.
+        `Support\ExaminerDirectory` is a thin read-only query-builder gateway
+        — nothing imports from `App\Modules\Hani`, so her models and
+        relations stay hers, and if her tables are absent every method returns
+        nothing and the import says so rather than failing obscurely. Where
+        the row carries the nomination's application number the panel is read
+        straight from `examiner_nominations`, which is exact; otherwise names
+        are matched, and an ambiguous name matches nothing rather than
+        guessing between two people.
+  - [x] **Nothing is imported unless every row is good**, and each problem is
+        reported with its row number: a list is approved as a whole upstream,
+        so a half-import would leave CGS working out which candidates made it.
+        Caught at import: a missing `Matric No` column, an unknown matric
+        number, a candidate listed twice on one sheet, an examiner the records
+        do not know, and a panel without one of each kind.
+  - [x] The export calls the study mode "Programme" (*MSc Full-Time*) and the
+        field "Department" (*Computing*); the letter wants them the other way
+        round, so the import derives *MSc in Computing* as the degree and
+        keeps *Computing* as the programme. A mode it does not recognise
+        leaves the degree blank for CGS rather than the letter carrying a
+        guess.
   - [x] `appointment_details` holds the candidate side (degree, programme,
         supervisor, thesis title) and `appointment_examiners` one row per
         panel member, both filled from the sheet, so the CGS preparation

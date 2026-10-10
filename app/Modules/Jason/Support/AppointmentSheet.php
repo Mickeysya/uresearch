@@ -2,55 +2,125 @@
 
 namespace App\Modules\Jason\Support;
 
-use App\Modules\Jason\Models\AppointmentExaminer;
-
 /**
- * The shape of the finalised examiner list CGS receives, in one place.
+ * The shape of the finalised examiner list CGS receives.
  *
- * The template CGS downloads, the header check the importer runs and the
- * row parsing all read from here, so a column cannot be added to the
- * template without the importer knowing about it.
+ * It is an export of the nomination chain: ONE ROW PER CANDIDATE, with the
+ * panel in four named slots -- internal main and backup, external main and
+ * backup -- plus the candidate's own details and the nomination's own
+ * application number, stage and status.
  *
- * ONE ROW PER EXAMINER, not per candidate. A candidate has at least two
- * examiners, so their details repeat down the rows and the importer groups
- * on `matric_no` -- which is how the list arrives from the faculty side,
- * and how anybody would type it into a spreadsheet.
+ * Columns are matched BY NAME, case- and spacing-insensitively, in any
+ * order, and anything unrecognised is ignored. An export gains and loses
+ * trailing columns as the nomination screen changes, and a list that is
+ * right in every way except column order is still the right list.
+ *
+ * Only `matric no` is required: it is what ties a row to a candidate in this
+ * portal. Everything else is either filled in from the row where it is
+ * present, or read from the examiner records the nomination chain keeps --
+ * see ExaminerDirectory -- or confirmed by CGS on the preparation screen.
  */
 final class AppointmentSheet
 {
+    /** The only column the importer cannot do without. */
+    public const REQUIRED = 'matric no';
+
     /**
-     * The columns, in order. The importer requires exactly these as the
-     * first row; anything after them is ignored, so a list carrying extra
-     * trailing columns still imports.
+     * What the importer looks for, and the aliases each is known by.
+     *
+     * The key is how the rest of this module refers to the value; the
+     * aliases are what the heading may actually say.
      */
     public const COLUMNS = [
-        'matric_no',
-        'degree',
-        'programme',
-        'supervisor_name',
-        'thesis_title',
-        'examiner_type',
-        'examiner_name',
-        'examiner_institution',
-        'examiner_email',
-        'examiner_address',
+        'nomination_id' => ['application', 'application no', 'application id', 'nomination'],
+        'faculty' => ['faculty'],
+        'department' => ['department', 'dept'],
+        'candidate' => ['candidate', 'candidate name', 'student', 'name'],
+        'matric_no' => ['matric no', 'matric', 'matric number', 'matric_no'],
+        'programme' => ['programme', 'program', 'mode of study'],
+        'thesis_title' => ['thesis title', 'title of thesis', 'title'],
+        'supervisor_name' => ['supervisor', 'supervisor name', 'main supervisor'],
+        'internal_main' => ['internal main', 'internal main examiner', 'internal examiner'],
+        'internal_main_dept' => ['internal main dept', 'internal main department'],
+        'internal_backup' => ['internal backup', 'internal backup examiner'],
+        'internal_backup_dept' => ['internal backup dept', 'internal backup department'],
+        'external_main' => ['external main', 'external main examiner', 'external examiner'],
+        'external_main_inst' => [
+            'external main inst', 'external main institution', 'external main dept',
+            'external main department', 'external main university',
+        ],
+        'external_backup' => ['external backup', 'external backup examiner'],
+        'external_backup_inst' => [
+            'external backup inst', 'external backup institution', 'external backup dept',
+            'external backup department', 'external backup university',
+        ],
+        'stage' => ['stage'],
+        'status' => ['status'],
+        'submitted' => ['submitted', 'submitted at', 'submitted on'],
     ];
 
     /**
-     * The candidate's own columns. Repeated on every row for that
-     * candidate, so the importer takes them from the first row it sees and
-     * ignores the rest.
+     * The four panel slots, as [name column, detail column, kind, role].
+     *
+     * Main and backup both receive an appointment letter and a thesis
+     * evaluation report: CGS appoints the full panel, and a backup who is
+     * never called on simply never returns a report.
      */
-    public const CANDIDATE_COLUMNS = ['degree', 'programme', 'supervisor_name', 'thesis_title'];
+    public const SLOTS = [
+        ['internal_main', 'internal_main_dept', 'internal', 'main'],
+        ['internal_backup', 'internal_backup_dept', 'internal', 'backup'],
+        ['external_main', 'external_main_inst', 'external', 'main'],
+        ['external_backup', 'external_backup_inst', 'external', 'backup'],
+    ];
+
+    /** The headings the template is written with, in the export's order. */
+    public const TEMPLATE_HEADINGS = [
+        'Application', 'Faculty', 'Department', 'Candidate', 'Matric No', 'Programme',
+        'Thesis Title', 'Supervisor', 'Internal Main', 'Internal Main Dept', 'Internal Backup',
+        'External Main', 'External Main Inst', 'External Backup', 'Stage', 'Status', 'Submitted',
+    ];
 
     /**
-     * Four filled-in rows: two candidates, one internal and one external
-     * examiner each, so whoever opens the template can see both that the
-     * candidate columns repeat and that the panel is at least one of each.
+     * Maps a sheet's header row onto the keys above.
      *
-     * Real seeded matric numbers, so a download-fill-upload round trip
-     * lands on a student on a fresh database instead of silently skipping
-     * every row.
+     * @param  array<int, mixed>  $header
+     * @return array<string, int>  key => column index
+     */
+    public static function mapHeader(array $header): array
+    {
+        $seen = [];
+
+        foreach ($header as $index => $heading) {
+            $heading = self::normalise($heading);
+
+            if ($heading === '') {
+                continue;
+            }
+
+            foreach (self::COLUMNS as $key => $aliases) {
+                // First column to claim a key keeps it, so a later
+                // near-duplicate heading cannot displace the real one.
+                if (! isset($seen[$key]) && in_array($heading, $aliases, true)) {
+                    $seen[$key] = $index;
+                    break;
+                }
+            }
+        }
+
+        return $seen;
+    }
+
+    /** Lower-cased, trimmed, single-spaced, without a trailing colon or asterisk. */
+    public static function normalise(mixed $value): string
+    {
+        $value = preg_replace('/\s+/', ' ', trim((string) $value));
+
+        return mb_strtolower(rtrim($value, " :*"));
+    }
+
+    /**
+     * Two filled-in rows, so the person opening the template can see both
+     * the four slots and that one row is one candidate.
      *
      * @return array<int, array<int, string>>
      */
@@ -58,58 +128,23 @@ final class AppointmentSheet
     {
         return [
             [
-                '22001001', 'MSc in Petroleum Engineering', 'Petroleum Engineering',
-                'Assoc Prof Dr Mysara Eissa Mohyaldinn',
-                'Analysis and Prediction of Impure CO2 Trapping Efficiency in Sandstone Deep Saline Aquifers',
-                'internal', 'Dr Aisyah Binti Kamaruddin', 'Department of Petroleum Engineering, UTP',
-                'aisyah.kamaruddin@utp.edu.my',
-                "Department of Petroleum Engineering\nUniversiti Teknologi PETRONAS\n32610 Seri Iskandar, Perak",
+                '2', 'FSMC', 'Computing', 'Ahmad Danial', '22001001', 'MSc Full-Time',
+                'Introduction to IoT', 'Dr. Aisyah Rahman',
+                'Dr. Chandra Segaran', 'Civil & Environmental Engineering',
+                'Prof. Dr. Rosli Hamid',
+                'Assoc Prof Dr Azimah Binti Hussin', 'Universiti Kebangsaan Malaysia',
+                'Professor Ir Ts Dr Muzamir Bin Isa',
+                '—', 'Approved', '2026-09-14',
             ],
             [
-                '22001001', 'MSc in Petroleum Engineering', 'Petroleum Engineering',
-                'Assoc Prof Dr Mysara Eissa Mohyaldinn',
-                'Analysis and Prediction of Impure CO2 Trapping Efficiency in Sandstone Deep Saline Aquifers',
-                'external', 'Assoc Prof Dr Azimah Binti Hussin', 'Universiti Kebangsaan Malaysia',
-                'azimah@ukm.edu.my',
-                "Department of Earth Sciences and Environment\nUniversiti Kebangsaan Malaysia\n43600 Bangi\nSelangor",
-            ],
-            [
-                '22001002', 'PhD in Electrical and Electronic Engineering', 'Electrical and Electronic Engineering',
-                'Assoc Prof Ir Dr Nursyarizal Bin Mohd Nor',
-                'Data-Centric and Risk-Informed Machine Learning Framework for Fault Diagnosis of Oil-Filled Transformers',
-                'internal', 'Dr Muhammad Faris Bin Zulkifli',
-                'Department of Electrical & Electronic Engineering, UTP', 'faris.zulkifli@utp.edu.my',
-                "Department of Electrical & Electronic Engineering\nUniversiti Teknologi PETRONAS\n32610 Seri Iskandar, Perak",
-            ],
-            [
-                '22001002', 'PhD in Electrical and Electronic Engineering', 'Electrical and Electronic Engineering',
-                'Assoc Prof Ir Dr Nursyarizal Bin Mohd Nor',
-                'Data-Centric and Risk-Informed Machine Learning Framework for Fault Diagnosis of Oil-Filled Transformers',
-                'external', 'Professor Ir Ts Dr Muzamir Bin Isa', 'Universiti Malaysia Perlis',
-                'muzamir@unimap.edu.my',
-                "School of Electrical System Engineering\nUniversiti Malaysia Perlis\n02600 Arau\nPerlis",
+                '3', 'FOE', 'Petroleum Engineering', 'Nur Farah Adilah', '22001002', 'PhD Full-Time',
+                'Impure CO2 Trapping Efficiency in Sandstone Aquifers', 'Dr. Aisyah Rahman',
+                'Dr Hafizah Binti Mohd Yusof', 'Computer & Information Sciences',
+                'Prof. Dr. Rosli Hamid',
+                'Prof Dr Ravi Shankar A/L Krishnan', 'Universiti Putra Malaysia',
+                'Dr Sarah Mitchell',
+                '—', 'Approved', '2026-09-14',
             ],
         ];
-    }
-
-    /**
-     * Normalise whatever the spreadsheet handed back for the examiner kind.
-     *
-     * The list is typed by people, so "Internal", "INTERNAL", "internal "
-     * and "Internal Examiner" all have to land on the same value -- and
-     * anything else has to be rejected by name rather than quietly imported
-     * as an external examiner, because the kind decides which letter
-     * template the examiner receives.
-     */
-    public static function parseType(mixed $value): ?string
-    {
-        $value = strtolower(trim((string) $value));
-
-        return match (true) {
-            $value === '' => null,
-            str_starts_with($value, 'int') => AppointmentExaminer::TYPE_INTERNAL,
-            str_starts_with($value, 'ext') => AppointmentExaminer::TYPE_EXTERNAL,
-            default => null,
-        };
     }
 }

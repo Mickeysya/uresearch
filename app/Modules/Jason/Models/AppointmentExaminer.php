@@ -13,7 +13,7 @@ class AppointmentExaminer extends Model
     public const TYPE_EXTERNAL = 'external';
 
     protected $fillable = [
-        'application_id', 'pool_examiner_id', 'examiner_type', 'examiner_name', 'examiner_institution',
+        'application_id', 'pool_examiner_id', 'examiner_type', 'examiner_role', 'examiner_name', 'examiner_institution',
         'examiner_address', 'examiner_email', 'examiner_expertise', 'letter_ref_no',
         'appointed_at', 'pack_sent_at',
     ];
@@ -39,6 +39,15 @@ class AppointmentExaminer extends Model
         return $this->pack_sent_at !== null;
     }
 
+    public const ROLE_MAIN = 'main';
+
+    public const ROLE_BACKUP = 'backup';
+
+    public function isBackup(): bool
+    {
+        return $this->examiner_role === self::ROLE_BACKUP;
+    }
+
     public function isInternal(): bool
     {
         return $this->examiner_type === self::TYPE_INTERNAL;
@@ -47,6 +56,12 @@ class AppointmentExaminer extends Model
     public function typeLabel(): string
     {
         return $this->isInternal() ? 'Internal Examiner' : 'External Examiner';
+    }
+
+    /** "Internal Examiner (backup)", for screens that list a whole panel. */
+    public function panelLabel(): string
+    {
+        return $this->typeLabel().($this->examiner_role ? " ({$this->examiner_role})" : '');
     }
 
     /**
