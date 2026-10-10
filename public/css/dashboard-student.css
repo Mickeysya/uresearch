@@ -1,10 +1,11 @@
 /* ============================================================
-   dashboard-student.css — the student dashboard's one-screen grid
+   dashboard-student.css — the student dashboard's natural-height grid
 
-   Stat cards, pills, the four panels, the rows inside them, and the
-   responsive reflow that releases the one-screen promise below 1100px.
-   The responsive block stays last in this file: it overrides the base
-   rules above it.
+   Stat cards, pills, the four panels and the rows inside them, all
+   auto-height -- see the note just below. Also carries the one-screen,
+   viewport-pinned rules for the CGS and Admin dashboards (same .sdash
+   shell, different requirement), scoped to .sdash-cgs/.sdash-admin at the
+   bottom of the file so they don't reach the student grid.
 
    Split out of dashboard.css on 2026-09-12. The sheets are linked
    in a fixed order by layouts/app.blade.php and concatenate back to
@@ -169,18 +170,19 @@
 
 /* ---- the four panels ---- */
 
+/* One grid, four direct children (see student.blade.php) -- not two
+   independently-stacked columns. That is what makes a row's two cards
+   share a single grid row track: application-status and
+   attendance-overview size to the taller of the two, and so do
+   notifications and upcoming-tasks, via the grid's default
+   align-items: stretch. Two nested per-column grids could never do this --
+   each would size its own rows from only its own two cards, blind to what
+   sits beside them. */
 .sdash-panels {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
     gap: var(--sdash-gap);
-}
-
-.sdash-col {
-    display: grid;
-    gap: var(--sdash-gap);
-    /* Each card is exactly as tall as its own content -- see the note on
-       .sdash above. */
-    grid-template-rows: auto auto;
 }
 
 .sdash-card {
@@ -501,25 +503,24 @@
 
 
 /* ---- one screen at desktop size -------------------------------------
-   Shared by all three .sdash dashboards (student, CGS, admin).
+   CGS and Admin only -- "single screen, by requirement" per their own
+   .blade.php files. The student dashboard used to be pinned here too, but
+   that is what caused the nested scrolling / clipping this file's header
+   comment now warns about: a fixed share of a fixed height has no setting
+   where "gauge + legend + facts + a footer note" and "every application in
+   the list" both fit, so something always scrolled inside a cramped box or
+   got cut off outright. The student grid stays natural-height at every
+   size now -- the whole page scrolls instead.
 
-   Everything above is natural-height: the page grows and scrolls. Above
-   1200px wide and 700px tall -- a maximised desktop window, which is
-   also where the panels sit side by side rather than stacked -- the grid
-   is pinned to the viewport instead and the panel bodies scroll inside
-   themselves.
+   For CGS/Admin: above 1200px wide and 700px tall -- a maximised desktop
+   window, which is also where their panels sit side by side rather than
+   stacked -- the grid is pinned to the viewport and the panel bodies
+   scroll inside themselves. A panel that outgrows its share gets a
+   scrollbar, never a cut edge -- see .sdash-card-body below.
 
-   This is NOT the fixed-budget layout that was reverted. That one put
-   the grid at overflow: hidden with no internal scroll, so a panel with
-   more rows than usual was silently cut off. The difference is the last
-   rule in this block: .sdash-card-body scrolls. A panel that outgrows
-   its share gets a scrollbar, never a cut edge -- which is what makes
-   pinning the height safe this time.
-
-   Below either threshold the query stops applying and the page goes
-   back to natural height. That is the right answer on a laptop in a
-   split window or a phone: no layout fits four panels into 500px and
-   stays readable.
+   Below either threshold the query stops applying and the page goes back
+   to natural height. That is the right answer on a laptop in a split
+   window or a phone.
 
    --sdash-chrome is the calibration knob: the 64px sticky header, its
    24px margin-bottom, and .main-content's 32px bottom padding. Change
@@ -527,37 +528,20 @@
    -------------------------------------------------------------------- */
 
 @media (min-width: 1201px) and (min-height: 700px) {
-    .sdash {
+    .sdash.sdash-cgs,
+    .sdash.sdash-admin {
         --sdash-chrome: 120px;
         height: calc(100dvh - var(--sdash-chrome));
+        /* minmax(0, 1fr) rather than 1fr: a grid row's default minimum is
+           auto, which lets a tall panel push the grid past the viewport
+           and brings the page scrollbar straight back. */
+        grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 1fr);
     }
 
-    /* The panel rows take whatever the banner and stat cards leave.
-       minmax(0, 1fr) rather than 1fr: a grid row's default minimum is
-       auto, which lets a tall panel push the grid past the viewport and
-       brings the page scrollbar straight back. */
-    .sdash             { grid-template-rows: auto auto minmax(0, 1fr); }
-
-    .sdash.sdash-cgs,
-    .sdash.sdash-admin { grid-template-rows: auto auto minmax(0, 1fr) minmax(0, 1fr); }
-
-    .sdash-panels { min-height: 0; }
-
-    .sdash-col {
+    .sdash.sdash-cgs .sdash-card,
+    .sdash.sdash-admin .sdash-card {
         min-height: 0;
-        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
     }
-
-    /* Attendance Overview carries a gauge, a three-band legend, two
-       figures and a footer note; Upcoming Tasks carries a handful of
-       rows and then stops. An even split starved the first and left the
-       second half empty, so the right column is weighted rather than
-       halved. */
-    .sdash-col.sdash-col-right {
-        grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr);
-    }
-
-    .sdash-card { min-height: 0; }
 
     /* The rule that makes all of the above safe: a panel with more rows
        than its share scrolls instead of being cut off.
@@ -566,11 +550,13 @@
        in layout.css. scrollbar-width covers Firefox, ::-webkit-scrollbar
        covers Chrome and Safari; the content still scrolls by wheel,
        trackpad, touch and keyboard, there is just nothing drawn. */
-    .sdash-card-body {
+    .sdash.sdash-cgs .sdash-card-body,
+    .sdash.sdash-admin .sdash-card-body {
         min-height: 0;
         overflow-y: auto;
         scrollbar-width: none;
     }
 
-    .sdash-card-body::-webkit-scrollbar { display: none; }
+    .sdash.sdash-cgs .sdash-card-body::-webkit-scrollbar,
+    .sdash.sdash-admin .sdash-card-body::-webkit-scrollbar { display: none; }
 }
