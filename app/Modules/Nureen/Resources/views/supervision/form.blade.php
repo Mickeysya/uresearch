@@ -37,19 +37,14 @@
 
             </fieldset>
 
-            <fieldset class="fstep" data-label="Supporting document">
+            <fieldset class="fstep" data-label="Supporting documents">
             <p class="fstep-hint">Required. Checked for completeness here rather than after it reaches your prospective supervisor.</p>
 
-            <label for="supporting_document"> <span style="color: var(--text-grey)">(required)</span></label>
-            <input type="file" name="supporting_document" id="supporting_document" required
-                   class="@error('supporting_document') is-invalid @enderror">
-            @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
-            <p class="queue-meta" style="margin-top: -8px;">
-                Your research proposal, or whatever your department asks for with a
-                supervision request. PDF, image or Office document, up to 10&nbsp;MB.
-                The request is checked for completeness here rather than after it
-                reaches your prospective supervisor.
-            </p>
+            <x-nureen::multi-file-upload
+                name="supporting_documents"
+                label="Supporting Documents"
+                :required="true"
+                hint="Your research proposal, or whatever your department asks for with a supervision request." />
             </fieldset>
 
             <button type="submit">Submit Request</button>

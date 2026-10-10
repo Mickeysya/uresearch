@@ -33,17 +33,13 @@
 
             </fieldset>
 
-            <fieldset class="fstep" data-label="Supporting document">
-            <p class="fstep-hint">Required. An application without it is rejected here rather than reaching CGS.</p>
+            <fieldset class="fstep" data-label="Supporting documents">
+            <p class="fstep-hint">Required. An application without them is rejected here rather than reaching CGS.</p>
 
-            <label for="supporting_document"> <span style="color: var(--text-grey)">(required)</span></label>
-            <input type="file" name="supporting_document" id="supporting_document" required
-                   class="@error('supporting_document') is-invalid @enderror">
-            @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
-            <p class="queue-meta" style="margin-top: -8px;">
-                PDF, image or Office document, up to 10&nbsp;MB. Incomplete applications
-                are rejected here rather than reaching CGS.
-            </p>
+            <x-nureen::multi-file-upload
+                name="supporting_documents"
+                label="Supporting Documents"
+                :required="true" />
             </fieldset>
 
             <button type="submit">Submit Application</button>

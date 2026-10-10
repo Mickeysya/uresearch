@@ -35,19 +35,102 @@ class GaExtensionTest extends TestCase
             'requested_new_end_date' => now()->addMonths(7)->toDateString(),
             'reason_for_extension' => 'Fieldwork at the Gurun plant slipped two semesters '
                 .'and the remaining analysis needs the assistantship to continue.',
-            'supporting_document' => UploadedFile::fake()->create('supervisor-letter.pdf', 90, 'application/pdf'),
+            'supporting_documents' => [UploadedFile::fake()->create('supervisor-letter.pdf', 90, 'application/pdf')],
         ];
     }
 
-    public function test_the_supporting_document_is_mandatory(): void
+    public function test_at_least_one_supporting_document_is_mandatory(): void
     {
         Storage::fake('local');
 
         $this->actingAs($this->student())
-            ->post(route('ga-extension.store'), $this->payload(['supporting_document' => null]))
-            ->assertSessionHasErrors('supporting_document');
+            ->post(route('ga-extension.store'), $this->payload(['supporting_documents' => null]))
+            ->assertSessionHasErrors('supporting_documents');
 
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
+    }
+
+    public function test_more_than_five_files_is_rejected(): void
+    {
+        Storage::fake('local');
+
+        $files = array_map(
+            fn ($i) => UploadedFile::fake()->create("doc-{$i}.pdf", 50, 'application/pdf'),
+            range(1, 6),
+        );
+
+        $this->actingAs($this->student())
+            ->post(route('ga-extension.store'), $this->payload(['supporting_documents' => $files]))
+            ->assertSessionHasErrors('supporting_documents');
+
+        $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
+    }
+
+    public function test_a_file_over_5mb_is_rejected(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->student())
+            ->post(route('ga-extension.store'), $this->payload([
+                'supporting_documents' => [UploadedFile::fake()->create('big.pdf', 6000, 'application/pdf')],
+            ]))
+            ->assertSessionHasErrors('supporting_documents.0');
+
+        $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
+    }
+
+    public function test_files_totalling_over_20mb_are_rejected(): void
+    {
+        Storage::fake('local');
+
+        // Four files at 4.5 MB each sit under the 5 MB per-file cap but add
+        // up to 18 MB; a fifth pushes the combined total past 20 MB.
+        $files = array_map(
+            fn ($i) => UploadedFile::fake()->create("doc-{$i}.pdf", 4500, 'application/pdf'),
+            range(1, 5),
+        );
+
+        $this->actingAs($this->student())
+            ->post(route('ga-extension.store'), $this->payload(['supporting_documents' => $files]))
+            ->assertSessionHasErrors('supporting_documents');
+
+        $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
+    }
+
+    public function test_a_disallowed_file_type_is_rejected(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->student())
+            ->post(route('ga-extension.store'), $this->payload([
+                'supporting_documents' => [UploadedFile::fake()->create('macro.xlsx', 90, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+            ]))
+            ->assertSessionHasErrors('supporting_documents.0');
+
+        $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
+    }
+
+    public function test_several_valid_files_are_all_attached(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->student())
+            ->post(route('ga-extension.store'), $this->payload([
+                'supporting_documents' => [
+                    UploadedFile::fake()->create('letter.pdf', 90, 'application/pdf'),
+                    UploadedFile::fake()->create('photo.jpg', 200, 'image/jpeg'),
+                    UploadedFile::fake()->create('form.docx', 50, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+                ],
+            ]))
+            ->assertRedirect(route('applications.index'));
+
+        $application = Application::where('module_type', 'ga_extension')->sole();
+
+        $this->assertSame(3, $application->documents()->count());
+        $this->assertEqualsCanonicalizing(
+            ['letter.pdf', 'photo.jpg', 'form.docx'],
+            $application->documents()->pluck('original_name')->all(),
+        );
     }
 
     public function test_the_new_end_date_must_be_after_the_current_one(): void
