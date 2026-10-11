@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Core\Support\Role;
+use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Http\Controllers\CandidacyController;
 use App\Modules\Norhanis\Http\Controllers\ClaimsController;
 use App\Modules\Norhanis\Http\Controllers\PublicationCertificationController;
@@ -19,6 +20,13 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware('auth')->group(function () {
+
+    // ---- Travel, Claims and Publication, in one list ----------------------
+    // Read-only, for every role that approves any of the three: has this
+    // student applied, and where has it reached? Decisions stay in the queues.
+    Route::middleware('role:'.implode(',', ApplicationOverviewController::ROLES))->group(function () {
+        Route::get('/applications-overview', [ApplicationOverviewController::class, 'index'])->name('norhanis.overview');
+    });
 
     // ---- Travel -------------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {

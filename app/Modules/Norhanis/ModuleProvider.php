@@ -3,6 +3,7 @@
 namespace App\Modules\Norhanis;
 
 use App\Modules\Core\Services\ModuleRegistry;
+use App\Modules\Norhanis\Console\Commands\SeedDemoApplications;
 use App\Modules\Norhanis\Console\Commands\SendRpdReminders;
 use App\Modules\Norhanis\Workflows\ClaimsWorkflow;
 use App\Modules\Norhanis\Workflows\PublicationWorkflow;
@@ -36,6 +37,8 @@ class ModuleProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 SendRpdReminders::class,
+                // Example students and applications, for development only.
+                SeedDemoApplications::class,
             ]);
         }
     }

@@ -2,12 +2,14 @@
 
 namespace App\Modules\Norhanis\Workflows;
 
+use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\TravelDetail;
 use Carbon\CarbonInterface;
 
@@ -22,7 +24,7 @@ use Carbon\CarbonInterface;
  * a chain instead means the student's stepper shows the correct number of
  * steps from the moment they submit, and nothing has to be kept in sync.
  */
-class TravelWorkflow implements WorkflowModule, SuppliesCalendarEvents
+class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
 {
     /** @var array<int, bool> memoised per application, keyed by id */
     protected array $internationalCache = [];
@@ -82,6 +84,18 @@ class TravelWorkflow implements WorkflowModule, SuppliesCalendarEvents
     public function queueRoute(): string
     {
         return 'travel.queue';
+    }
+
+    /**
+     * The one list of Travel, Claims and Publication applications, for every
+     * role that approves any of them. Declared here rather than on all three
+     * workflows so the link appears once.
+     */
+    public function links(User $user): array
+    {
+        return in_array($user->role, ApplicationOverviewController::ROLES, true)
+            ? [['label' => 'Travel, Claims & Publication', 'route' => 'norhanis.overview']]
+            : [];
     }
 
     protected function isInternational(Application $application): bool
