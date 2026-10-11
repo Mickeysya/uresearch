@@ -5,6 +5,7 @@ use App\Modules\Norhanis\Http\Controllers\CandidacyController;
 use App\Modules\Norhanis\Http\Controllers\ClaimsController;
 use App\Modules\Norhanis\Http\Controllers\PublicationCertificationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationController;
+use App\Modules\Norhanis\Http\Controllers\PublicationEvaluationController;
 use App\Modules\Norhanis\Http\Controllers\RpdAppealController;
 use App\Modules\Norhanis\Http\Controllers\RpdDismissalController;
 use App\Modules\Norhanis\Http\Controllers\TravelController;
@@ -69,6 +70,17 @@ Route::middleware('auth')->group(function () {
         Route::post('/publication/{application}/authors/{author}/remind', [PublicationCertificationController::class, 'remind'])
             ->middleware('throttle:6,1')
             ->name('publication.authors.remind');
+
+        // The same for the internal reviewers' Paper Evaluation Sheets, plus
+        // asking a different reviewer and answering "with corrections".
+        Route::post('/publication/{application}/evaluations/{evaluation}/remind', [PublicationEvaluationController::class, 'remind'])
+            ->middleware('throttle:6,1')
+            ->name('publication.evaluations.remind');
+        Route::post('/publication/{application}/evaluations/{evaluation}/replace', [PublicationEvaluationController::class, 'replace'])
+            ->middleware('throttle:6,1')
+            ->name('publication.evaluations.replace');
+        Route::post('/publication/{application}/evaluations/{evaluation}/respond', [PublicationEvaluationController::class, 'respond'])
+            ->name('publication.evaluations.respond');
     });
 
     Route::middleware('role:'.implode(',', [
@@ -127,13 +139,23 @@ Route::middleware('auth')->group(function () {
 
 });
 
-// ---- Publication: a co-author signs the Authorship Certification ----------
-// Deliberately outside `auth`: a co-author is often outside UTP and has no
-// account. The signed link emailed to them is the credential, and it names
-// exactly one author row -- see PublicationSignOffs::signingUrl().
+// ---- Publication: sign-offs from people without an account ---------------
+// Deliberately outside `auth`: a co-author is often outside UTP, and a
+// reviewer need not have a portal account. The signed link emailed to them is
+// the credential, and it names exactly one author or evaluation row -- see
+// PublicationSignOffs::signedUrl().
 Route::middleware(['signed:relative', 'throttle:30,1'])->group(function () {
     Route::get('/publication/certify/{author}', [PublicationCertificationController::class, 'show'])
         ->name('publication.certify');
     Route::post('/publication/certify/{author}', [PublicationCertificationController::class, 'sign'])
         ->name('publication.certify.sign');
+
+    Route::get('/publication/evaluate/{evaluation}', [PublicationEvaluationController::class, 'show'])
+        ->name('publication.evaluate');
+    Route::get('/publication/evaluate/{evaluation}/paper', [PublicationEvaluationController::class, 'paper'])
+        ->name('publication.evaluate.paper');
+    Route::post('/publication/evaluate/{evaluation}', [PublicationEvaluationController::class, 'submit'])
+        ->name('publication.evaluate.submit');
+    Route::post('/publication/evaluate/{evaluation}/decline', [PublicationEvaluationController::class, 'decline'])
+        ->name('publication.evaluate.decline');
 });

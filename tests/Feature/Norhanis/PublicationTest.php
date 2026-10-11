@@ -6,27 +6,28 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Norhanis\Http\Controllers\PublicationController;
 use App\Modules\Norhanis\Models\PublicationDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Tests\Feature\Norhanis\Concerns\FilesPublications;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
  * Publication funding — `docs/scope/norhanis.md`.
  *
- * One narrow thing, for now: the author list is read *before* validate() runs,
- * because its size decides whether the Authorship Contribution Form is
- * mandatory. Anything read before validation is unchecked input, and this is
- * the only place in the portal that does it.
+ * The form itself: what it insists on before anything is saved. The author
+ * list and the publication type are both read *before* validate() runs,
+ * because they decide what else is required, and anything read before
+ * validation is unchecked input.
+ *
+ * What happens after filing is in PublicationCertificationTest (authors) and
+ * PublicationEvaluationTest (reviewers).
  */
 class PublicationTest extends TestCase
 {
+    use FilesPublications;
     use MakesUsers;
     use RefreshDatabase;
-
-    /** A 1x1 PNG, as the signature box would post it. */
-    public const SIGNATURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
     public function test_a_scalar_author_list_is_a_validation_error_not_a_server_error(): void
     {
@@ -46,38 +47,39 @@ class PublicationTest extends TestCase
             ->assertSessionHasErrors('authors');
     }
 
-    public function test_every_document_is_required_except_the_grant_memo_and_the_contribution_form(): void
+    public function test_the_documents_that_are_required_when_filing(): void
     {
         $response = $this->actingAs($this->student())
-            ->post(route('publication.store'), $this->payload());
+            ->post(route('publication.store'), array_diff_key($this->payload(), $this->documents()));
 
         $response->assertSessionHasErrors([
             'invoice', 'index_proof', 'turnitin_report', 'letter_of_acceptance',
-            'conference_journal_details',
-            'response_to_reviewer_comment', 'corrected_conference_journal_paper',
-            'paper_evaluation_sheet_1', 'paper_evaluation_sheet_2',
+            'conference_journal_details', 'manuscript',
         ]);
         $response->assertSessionDoesntHaveErrors([
-            'approved_memo_for_utilizing_grant', 'authorship_contribution_form', 'paper_evaluation_sheet_3',
+            'approved_memo_for_utilizing_grant', 'authorship_contribution_form',
+            'response_to_reviewer_comment', 'corrected_conference_journal_paper',
         ]);
     }
 
-    public function test_a_journal_is_submitted_with_two_evaluation_sheets_and_no_grant_memo(): void
+    public function test_a_journal_is_filed_with_two_reviewers_and_waits_for_them(): void
     {
         Storage::fake('local');
         Notification::fake();
 
-        $this->supervisor();
-
-        $this->actingAs($this->student())
-            ->post(route('publication.store'), $this->payload($this->documents()))
+        $this->actingAs($student = $this->student())
+            ->post(route('publication.store'), $this->payload(['venue' => 'Online']))
             ->assertSessionHasNoErrors()
-            ->assertRedirect(route('applications.index'));
+            ->assertRedirect(route('publication.sign-offs', Application::sole()));
 
         $application = Application::where('module_type', 'publication')->sole();
+        $detail = PublicationDetail::where('application_id', $application->id)->sole();
 
-        $this->assertNull(PublicationDetail::where('application_id', $application->id)->sole()->conference_scope);
-        $this->assertSame(2, $application->documents()->where('doc_type', 'like', 'Paper Evaluation Sheet%')->count());
+        $this->assertSame(Application::STATUS_DRAFT, $application->status);
+        $this->assertNull($detail->conference_scope);
+        $this->assertSame('Online', $detail->venue);
+        $this->assertSame([1, 2], $detail->activeEvaluations->pluck('position')->all());
+        $this->assertSame(1, $application->documents()->where('doc_type', 'Manuscript for Review')->count());
         $this->assertSame(0, $application->documents()->where('doc_type', 'Approved Memo for Utilizing Grant')->count());
     }
 
@@ -88,45 +90,76 @@ class PublicationTest extends TestCase
             ->assertSessionHasErrors('conference_scope');
     }
 
-    public function test_an_international_conference_needs_a_third_evaluation_sheet(): void
+    public function test_an_international_conference_needs_a_third_reviewer(): void
     {
         Storage::fake('local');
         Notification::fake();
 
-        $this->supervisor();
         $student = $this->student();
-
         $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'international'];
 
         $this->actingAs($student)
-            ->post(route('publication.store'), $this->payload($conference + $this->documents()))
-            ->assertSessionHasErrors('paper_evaluation_sheet_3');
+            ->post(route('publication.store'), $this->payload($conference))
+            ->assertSessionHasErrors('reviewers');
 
         $this->actingAs($student)
-            ->post(route('publication.store'), $this->payload($conference + $this->documents() + [
-                'paper_evaluation_sheet_3' => $this->pdf('sheet-3.pdf'),
-            ]))
+            ->post(route('publication.store'), $this->payload($conference + ['reviewers' => $this->reviewers(3)]))
             ->assertSessionHasNoErrors();
 
-        $application = Application::where('module_type', 'publication')->sole();
+        $detail = PublicationDetail::sole();
 
-        $this->assertSame('international', PublicationDetail::where('application_id', $application->id)->sole()->conference_scope);
-        $this->assertSame(3, $application->documents()->where('doc_type', 'like', 'Paper Evaluation Sheet%')->count());
+        $this->assertSame('international', $detail->conference_scope);
+        $this->assertSame(3, $detail->activeEvaluations()->count());
     }
 
-    public function test_a_local_conference_needs_only_two_evaluation_sheets(): void
+    public function test_a_local_conference_keeps_only_two_reviewers(): void
     {
         Storage::fake('local');
         Notification::fake();
 
-        $this->supervisor();
-
+        // A third reviewer posted for a two-reviewer publication is dropped.
         $this->actingAs($this->student())
             ->post(route('publication.store'), $this->payload([
                 'type_of_request' => 'publication_conference',
                 'conference_scope' => 'local',
-            ] + $this->documents()))
+                'reviewers' => $this->reviewers(3),
+            ]))
             ->assertSessionHasNoErrors();
+
+        $this->assertSame(2, PublicationDetail::sole()->activeEvaluations()->count());
+    }
+
+    public function test_a_reviewer_must_be_utp_staff_and_not_an_author_or_named_twice(): void
+    {
+        $student = $this->student();
+        $file = fn (array $reviewers) => $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload(['reviewers' => $reviewers]));
+
+        $file([
+            ['name' => 'Dr. Siti Mariam', 'email' => 'siti.mariam@utp.edu.my'],
+            ['name' => 'Prof. Outside', 'email' => 'outside@example.edu'],
+        ])->assertSessionHasErrors('reviewers.1.email');
+
+        $file([
+            ['name' => 'Dr. Siti Mariam', 'email' => 'siti.mariam@utp.edu.my'],
+            ['name' => 'Dr. Siti M.', 'email' => 'Siti.Mariam@utp.edu.my'],
+        ])->assertSessionHasErrors('reviewers.0.email');
+
+        // The student's own address is a UTP one here, so only the
+        // author-as-reviewer rule can be what refuses it.
+        $utpStudent = $this->student('22001009', 'ahmad@utp.edu.my');
+
+        $this->actingAs($utpStudent)
+            ->post(route('publication.store'), $this->payload([
+                'authors' => [['author_name' => 'Ahmad Danial', 'email' => 'ahmad@utp.edu.my']],
+                'reviewers' => [
+                    ['name' => 'Dr. Siti Mariam', 'email' => 'siti.mariam@utp.edu.my'],
+                    ['name' => 'Ahmad Danial', 'email' => 'ahmad@utp.edu.my'],
+                ],
+            ]))
+            ->assertSessionHasErrors('reviewers');
+
+        $this->assertSame(0, Application::count());
     }
 
     public function test_the_form_offers_the_blank_templates_and_each_one_downloads(): void
@@ -145,44 +178,5 @@ class PublicationTest extends TestCase
         }
 
         $this->actingAs($student)->get(route('publication.template', 'something-else'))->assertNotFound();
-    }
-
-    /** A valid journal application, minus its documents. */
-    protected function payload(array $overrides = []): array
-    {
-        return $overrides + [
-            'type_of_request' => 'publication_journal',
-            'title_of_paper' => 'Reservoir Simulation with Graph Networks',
-            'title_of_conference_journal' => 'Journal of Petroleum Science',
-            'organizer_publisher' => 'Elsevier',
-            'conference_journal_fee' => '2500.00',
-            'currency_type' => 'MYR',
-            'cost_centre' => 'CGS(015BD1-001)',
-            'conference_start_date' => now()->addDays(30)->toDateString(),
-            'conference_end_date' => now()->addDays(32)->toDateString(),
-            // The student is the only author, and signs on the form, so the
-            // application is complete the moment it is filed.
-            'authors' => [['author_name' => 'Ahmad Danial', 'email' => 'student@test.my']],
-            'applicant_certifies' => '1',
-            'applicant_signature' => self::SIGNATURE,
-        ];
-    }
-
-    /** Every document a two-reviewer publication must carry. */
-    protected function documents(): array
-    {
-        $fields = [
-            'invoice', 'index_proof', 'turnitin_report', 'letter_of_acceptance',
-            'conference_journal_details',
-            'response_to_reviewer_comment', 'corrected_conference_journal_paper',
-            'paper_evaluation_sheet_1', 'paper_evaluation_sheet_2',
-        ];
-
-        return array_combine($fields, array_map(fn ($field) => $this->pdf($field.'.pdf'), $fields));
-    }
-
-    protected function pdf(string $name): UploadedFile
-    {
-        return UploadedFile::fake()->create($name, 40, 'application/pdf');
     }
 }

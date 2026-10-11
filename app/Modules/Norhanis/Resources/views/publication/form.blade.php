@@ -9,18 +9,18 @@
 
     @foreach ($awaitingSignOffs as $waiting)
         <p class="message-success">
-            Publication Application #{{ $waiting->id }} is waiting for your co-authors to sign.
+            Publication Application #{{ $waiting->id }} is waiting for sign-offs from your co-authors and reviewers.
             <a href="{{ route('publication.sign-offs', $waiting) }}">See who has signed</a>
         </p>
     @endforeach
 
     <div class="card card-wide">
         <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data" class="app-form" data-stepper
-              data-stepper-review="Check everything below, then submit. Your co-authors are emailed a link to sign the Authorship Certification, and the application goes to your supervisor once every author has signed. You cannot edit it after this.">
+              data-stepper-review="Check everything below, then submit. Your co-authors are emailed a link to sign the Authorship Certification, and your reviewers a link to the Paper Evaluation Sheet. The application goes to your supervisor once all of them have signed. You cannot edit it after this.">
             @csrf
 
             <fieldset class="fstep" data-label="Paper">
-            <p class="fstep-hint">Students are required to download the 2 files, fill them in, get endorsement from internal reviewers, and upload them at the Documents step. The Authorship Certification is signed online at the Authors step.</p>
+            <p class="fstep-hint">The Authorship Certification and the Paper Evaluation Sheet are completed online: you name your co-authors and internal reviewers on the next steps, and each is emailed a link. Only the memo below is still downloaded, and only when the fee is above the RM3000 the CGS fund covers.</p>
 
             <p style="display: flex; flex-wrap: wrap; gap: 8px;">
                 @foreach ($templates as $slug => [$file, $downloadName, $linkText])
@@ -38,9 +38,9 @@
             </select>
             @error('type_of_request') <p class="field-error">{{ $message }}</p> @enderror
 
-            {{-- Conference only. It sets how many internal reviewers must sign
-                 a Paper Evaluation Sheet, and so how many upload slots the
-                 Documents step shows. --}}
+            {{-- Conference only. It sets how many internal reviewers must
+                 complete a Paper Evaluation Sheet, and so how many reviewers
+                 the Reviewers step asks for. --}}
             <label for="conference_scope" data-conference-only>Local or International Conference</label>
             <select name="conference_scope" id="conference_scope" data-conference-only
                     class="@error('conference_scope') is-invalid @enderror">
@@ -68,6 +68,11 @@
                    value="{{ old('organizer_publisher') }}"
                    class="@error('organizer_publisher') is-invalid @enderror">
             @error('organizer_publisher') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="venue">Venue <span style="color: var(--text-grey)">(conference only, e.g. the city and hall)</span></label>
+            <input type="text" name="venue" id="venue" value="{{ old('venue') }}"
+                   class="@error('venue') is-invalid @enderror">
+            @error('venue') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="conference_start_date">Conference / Publication Start Date</label>
             <input type="date" name="conference_start_date" id="conference_start_date" required
@@ -169,6 +174,37 @@
 
             </fieldset>
 
+            <fieldset class="fstep" data-label="Reviewers">
+            <p class="fstep-hint">Your internal reviewers: two for a journal or a local conference, three for an international conference. Each is emailed a link to read the paper and complete the Paper Evaluation Sheet online, so nobody prints or uploads it. A reviewer must be UTP staff and cannot be one of the authors.</p>
+
+            <label for="manuscript" style="margin-top: 0;">Paper for the reviewers to read</label>
+            <input type="file" name="manuscript" id="manuscript" required class="@error('manuscript') is-invalid @enderror">
+            @error('manuscript') <p class="field-error">{{ $message }}</p> @enderror
+
+            @error('reviewers') <p class="field-error">{{ $message }}</p> @enderror
+            @error('reviewers.*.name') <p class="field-error">{{ $message }}</p> @enderror
+            @error('reviewers.*.email') <p class="field-error">{{ $message }}</p> @enderror
+
+            {{-- The third reviewer is switched on by the script below, only
+                 for an international conference; the controller enforces the
+                 same count. --}}
+            @foreach ([0, 1, 2] as $index)
+                <div class="claim-item-row" @if ($index === 2) data-third-reviewer @endif>
+                    <p class="queue-meta">Reviewer {{ $index + 1 }}@if ($index === 2) (international conference only) @endif</p>
+
+                    <label for="reviewer_name_{{ $index }}">Name</label>
+                    <input type="text" name="reviewers[{{ $index }}][name]" id="reviewer_name_{{ $index }}"
+                           value="{{ old("reviewers.$index.name") }}"
+                           @if ($index === 2) data-third-reviewer @else required @endif>
+
+                    <label for="reviewer_email_{{ $index }}">UTP email</label>
+                    <input type="email" name="reviewers[{{ $index }}][email]" id="reviewer_email_{{ $index }}"
+                           value="{{ old("reviewers.$index.email") }}" placeholder="name@utp.edu.my"
+                           @if ($index === 2) data-third-reviewer @else required @endif>
+                </div>
+            @endforeach
+            </fieldset>
+
             <fieldset class="fstep" data-label="Documents">
             <label for="invoice" style="margin-top: 0;">Invoice</label>
             <input type="file" name="invoice" id="invoice" required class="@error('invoice') is-invalid @enderror">
@@ -190,31 +226,13 @@
             <input type="file" name="conference_journal_details" id="conference_journal_details" required class="@error('conference_journal_details') is-invalid @enderror">
             @error('conference_journal_details') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="response_to_reviewer_comment">Response to Reviewer Comment</label>
-            <input type="file" name="response_to_reviewer_comment" id="response_to_reviewer_comment" required class="@error('response_to_reviewer_comment') is-invalid @enderror">
+            <label for="response_to_reviewer_comment">Response to Reviewer Comment <span style="color: var(--text-grey)">(optional: for comments the paper has already received. Your internal reviewers' comments are answered later, on your sign-off page)</span></label>
+            <input type="file" name="response_to_reviewer_comment" id="response_to_reviewer_comment" class="@error('response_to_reviewer_comment') is-invalid @enderror">
             @error('response_to_reviewer_comment') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="corrected_conference_journal_paper">Corrected Conference/Journal Paper</label>
-            <input type="file" name="corrected_conference_journal_paper" id="corrected_conference_journal_paper" required class="@error('corrected_conference_journal_paper') is-invalid @enderror">
+            <label for="corrected_conference_journal_paper">Corrected Conference/Journal Paper <span style="color: var(--text-grey)">(optional, as above)</span></label>
+            <input type="file" name="corrected_conference_journal_paper" id="corrected_conference_journal_paper" class="@error('corrected_conference_journal_paper') is-invalid @enderror">
             @error('corrected_conference_journal_paper') <p class="field-error">{{ $message }}</p> @enderror
-
-            {{-- One sheet per internal reviewer: two for a local conference or a
-                 journal, three for an international conference. The third slot
-                 is switched on by the script below; the controller enforces
-                 the same count. --}}
-            @foreach ([1, 2, 3] as $reviewer)
-                <label for="paper_evaluation_sheet_{{ $reviewer }}" @if ($reviewer === 3) data-third-reviewer @endif>Paper Evaluation Sheet, Reviewer {{ $reviewer }}
-                    @if ($reviewer === 1)
-                        <span style="color: var(--text-grey)">(2 reviewers for local conference, 3 reviewers for international conference, 2 reviewers for journal)</span>
-                    @elseif ($reviewer === 3)
-                        <span style="color: var(--text-grey)">(international conference only)</span>
-                    @endif
-                </label>
-                <input type="file" name="paper_evaluation_sheet_{{ $reviewer }}" id="paper_evaluation_sheet_{{ $reviewer }}"
-                       @if ($reviewer === 3) data-third-reviewer @else required @endif
-                       class="@error('paper_evaluation_sheet_'.$reviewer) is-invalid @enderror">
-                @error('paper_evaluation_sheet_'.$reviewer) <p class="field-error">{{ $message }}</p> @enderror
-            @endforeach
 
             <label for="authorship_contribution_form">Authorship Contribution Form
                 <span style="color: var(--text-grey)">(required only if more than {{ $authorshipContributionThreshold }} authors are listed)</span></label>
@@ -271,8 +289,8 @@
 
     // Mirrors what PublicationController::store() enforces, so the student
     // is told on the step itself rather than after a round trip: the scope
-    // question only for a conference, a third Paper Evaluation Sheet only for
-    // an international one, and the Authorship Contribution Form only above
+    // question only for a conference, a third reviewer only for an
+    // international one, and the Authorship Contribution Form only above
     // the author threshold. A switched-off control is disabled as well as
     // hidden, so it is neither validated by the browser nor submitted.
     const typeOfRequest = document.getElementById('type_of_request');

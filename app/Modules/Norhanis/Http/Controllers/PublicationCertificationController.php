@@ -4,8 +4,8 @@ namespace App\Modules\Norhanis\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
+use App\Modules\Norhanis\Http\Controllers\Concerns\OwnsPublication;
 use App\Modules\Norhanis\Models\PublicationAuthor;
-use App\Modules\Norhanis\Models\PublicationDetail;
 use App\Modules\Norhanis\Notifications\AuthorshipCertificationSigned;
 use App\Modules\Norhanis\Support\PublicationSignOffs;
 use App\Modules\Norhanis\Support\SignatureImage;
@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\URL;
  */
 class PublicationCertificationController extends Controller
 {
+    use OwnsPublication;
+
     // ---- Co-author (signed link, no account) ------------------------------
 
     public function show(PublicationAuthor $author)
@@ -64,7 +66,7 @@ class PublicationCertificationController extends Controller
             $request->ip(),
         );
 
-        $detail = $author->publicationDetail()->with('authors', 'application.student')->firstOrFail();
+        $detail = $author->publicationDetail()->with('authors', 'activeEvaluations', 'application.student')->firstOrFail();
         $form = $signOffs->finishIfComplete($detail->application);
 
         $detail->application->student?->notify(new AuthorshipCertificationSigned(
@@ -93,7 +95,15 @@ class PublicationCertificationController extends Controller
         return view('norhanis::publication.sign_offs', [
             'application' => $application,
             'detail' => $detail,
-            'form' => $application->documents()->where('doc_type', 'Authorship Certification Form')->latest('id')->first(),
+            // Keyed by label, so the view can link each generated PDF.
+            'generated' => $application->documents()
+                ->where(fn ($query) => $query
+                    ->where('doc_type', 'Authorship Certification Form')
+                    ->orWhere('doc_type', 'like', 'Paper Evaluation Sheet%'))
+                ->oldest('id')
+                ->get()
+                ->keyBy('doc_type'),
+            'replaced' => $detail->evaluations()->whereNotNull('replaced_at')->get(),
         ]);
     }
 
@@ -111,14 +121,5 @@ class PublicationCertificationController extends Controller
         $signOffs->invite($author, $detail, $request->user()->name);
 
         return back()->with('status', "Reminder sent to {$author->author_name}.");
-    }
-
-    /** The publication behind an application, only for the student who filed it. */
-    protected function ownDetail(Request $request, Application $application): PublicationDetail
-    {
-        abort_unless($application->module_type === 'publication', 404);
-        abort_unless($application->student_id === $request->user()->id, 403);
-
-        return PublicationDetail::where('application_id', $application->id)->with('authors')->firstOrFail();
     }
 }

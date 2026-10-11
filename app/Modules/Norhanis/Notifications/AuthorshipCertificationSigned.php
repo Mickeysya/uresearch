@@ -6,6 +6,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApplicationDocument;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Mail\Attachment;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -42,23 +43,22 @@ class AuthorshipCertificationSigned extends Notification implements ShouldQueue
 
         if ($this->form === null) {
             return $mail
-                ->line('Your application will go to your supervisor once every author has signed.')
+                ->line('Your application will go to your supervisor once every author and reviewer has signed.')
                 ->action('See who has signed', route('publication.sign-offs', $this->application))
                 ->line('Thank you for using UResearch 2.0.');
         }
 
-        $mail->line('Every author has now signed. The completed form is attached, and your application has been sent to your supervisor.')
+        $mail->line('Every sign-off is now in. The completed Authorship Certification Form is attached, and your application has been sent to your supervisor.')
             ->action('Track your application', route('applications.show', $this->application))
             ->line('Thank you for using UResearch 2.0.');
 
-        // Guarded for the same reason as Nureen's CertificationIssued: a
-        // missing file should not cost the student the notification.
+        // Guarded: the queue may run this while the file is unreadable, and a
+        // missing attachment should not cost the student the notification.
         if ($this->form->exists()) {
-            $mail->attachFromStorageDisk(
-                'local',
-                $this->form->path,
-                $this->form->original_name,
-                ['mime' => $this->form->mime_type ?? 'application/pdf'],
+            $mail->attach(
+                Attachment::fromStorageDisk('local', $this->form->path)
+                    ->as($this->form->original_name)
+                    ->withMime($this->form->mime_type ?? 'application/pdf'),
             );
         }
 
@@ -79,6 +79,6 @@ class AuthorshipCertificationSigned extends Notification implements ShouldQueue
     {
         return $this->form === null
             ? "{$this->authorName} signed ({$this->signed} of {$this->total})"
-            : 'all authors have signed';
+            : 'every sign-off is in';
     }
 }

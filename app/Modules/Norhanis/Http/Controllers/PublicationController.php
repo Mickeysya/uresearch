@@ -9,6 +9,7 @@ use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Models\PublicationAuthor;
 use App\Modules\Norhanis\Models\PublicationDetail;
+use App\Modules\Norhanis\Models\PublicationEvaluation;
 use App\Modules\Norhanis\Support\PublicationSignOffs;
 use App\Modules\Norhanis\Support\SignatureImage;
 use Illuminate\Http\Request;
@@ -36,9 +37,7 @@ class PublicationController extends Controller
         'approved_memo_for_utilizing_grant' => 'Approved Memo for Utilizing Grant',
         'corrected_conference_journal_paper' => 'Corrected Conference/Journal Paper',
         'authorship_contribution_form' => 'Authorship Contribution Form',
-        'paper_evaluation_sheet_1' => 'Paper Evaluation Sheet (Reviewer 1)',
-        'paper_evaluation_sheet_2' => 'Paper Evaluation Sheet (Reviewer 2)',
-        'paper_evaluation_sheet_3' => 'Paper Evaluation Sheet (Reviewer 3)',
+        'manuscript' => PublicationSignOffs::MANUSCRIPT,
     ];
 
     /**
@@ -46,14 +45,14 @@ class PublicationController extends Controller
      * name, link text]. The files sit in Resources/templates/publication,
      * outside public/, and are only ever read by the fixed names here.
      *
-     * The Authorship Certification Form is no longer one of them: authors
-     * sign it online (PublicationSignOffs) and the system generates the PDF.
+     * The Authorship Certification Form and the Paper Evaluation Sheet are
+     * no longer among them: authors and reviewers complete those online
+     * (PublicationSignOffs) and the system generates the PDFs.
      *
      * @var array<string, array{0: string, 1: string, 2: string}>
      */
     public const TEMPLATES = [
         'memo-request-split-budget' => ['memo-request-split-budget.pdf', 'Memo-Request-Split-Budget.pdf', 'Memo Request Split Budget'],
-        'paper-evaluation-sheet' => ['paper-evaluation-sheet.pdf', 'Paper-Evaluation-Sheet.pdf', 'Paper Evaluation Sheet'],
     ];
 
     /** Above this many authors, the Authorship Contribution Form stops being optional. */
@@ -67,8 +66,8 @@ class PublicationController extends Controller
     public function create(Request $request)
     {
         return view('norhanis::publication.form', [
-            // Applications already filed that are still waiting on authors'
-            // signatures, so the student can get back to their sign-off page.
+            // Applications already filed that are still waiting on authors or
+            // reviewers, so the student can get back to their sign-off page.
             'awaitingSignOffs' => Application::for($this->moduleKey())
                 ->where('student_id', $request->user()->id)
                 ->where('status', Application::STATUS_DRAFT)
@@ -108,10 +107,10 @@ class PublicationController extends Controller
         $authorCount = count((array) $request->input('authors', []));
         $requiresAuthorshipContribution = $authorCount > self::AUTHORSHIP_CONTRIBUTION_THRESHOLD;
 
-        // Likewise read early: the publication type decides how many Paper
-        // Evaluation Sheets are owed, one per internal reviewer. Anything
-        // that is not a string compares false below and falls back to two,
-        // and validate() then rejects the bad value itself.
+        // Likewise read early: the publication type decides how many internal
+        // reviewers must be named. Anything that is not a string compares
+        // false below and falls back to two, and validate() then rejects the
+        // bad value itself.
         $reviewersRequired = PublicationDetail::reviewersRequired(
             is_string($request->input('type_of_request')) ? $request->input('type_of_request') : null,
             is_string($request->input('conference_scope')) ? $request->input('conference_scope') : null,
@@ -130,6 +129,7 @@ class PublicationController extends Controller
             'title_of_paper' => ['required', 'string', 'max:255'],
             'title_of_conference_journal' => ['required', 'string', 'max:255'],
             'organizer_publisher' => ['required', 'string', 'max:255'],
+            'venue' => ['nullable', 'string', 'max:255'],
             'conference_journal_fee' => ['required', 'numeric', 'min:0'],
             'currency_type' => ['required', 'string', 'max:10'],
             'cost_centre' => ['required', 'string', 'max:100'],
@@ -147,21 +147,29 @@ class PublicationController extends Controller
             'applicant_certifies' => ['accepted'],
             'applicant_signature' => ['required'],
             'applicant_conflict_disclosure' => ['nullable', 'string', 'max:2000'],
-            // Every document is required. Two exceptions: the grant memo is
-            // only needed when the fee exceeds the RM3000 the CGS fund covers,
-            // and the Authorship Contribution Form only above five authors.
+            // One internal reviewer per Paper Evaluation Sheet owed. Each is
+            // emailed a link, so one address cannot stand for two reviewers.
+            'reviewers' => ['required', 'array', 'min:'.$reviewersRequired],
+            'reviewers.*.name' => ['required', 'string', 'max:150'],
+            'reviewers.*.email' => [
+                'required', 'email', 'max:255', 'distinct:ignore_case',
+                'ends_with:'.PublicationEvaluation::REVIEWER_EMAIL_DOMAIN,
+            ],
+            'manuscript' => DocumentStore::rules(true),
+            // The grant memo is only needed when the fee exceeds the RM3000
+            // the CGS fund covers, and the Authorship Contribution Form only
+            // above five authors. The response and the corrected paper are
+            // for comments the paper already has when it is filed; an internal
+            // reviewer's corrections are answered later, on the sign-off page.
             'invoice' => DocumentStore::rules(true),
             'index_proof' => DocumentStore::rules(true),
             'turnitin_report' => DocumentStore::rules(true),
             'letter_of_acceptance' => DocumentStore::rules(true),
             'conference_journal_details' => DocumentStore::rules(true),
-            'response_to_reviewer_comment' => DocumentStore::rules(true),
+            'response_to_reviewer_comment' => DocumentStore::rules(),
             'approved_memo_for_utilizing_grant' => DocumentStore::rules(),
-            'corrected_conference_journal_paper' => DocumentStore::rules(true),
+            'corrected_conference_journal_paper' => DocumentStore::rules(),
             'authorship_contribution_form' => DocumentStore::rules($requiresAuthorshipContribution),
-            'paper_evaluation_sheet_1' => DocumentStore::rules(true),
-            'paper_evaluation_sheet_2' => DocumentStore::rules(true),
-            'paper_evaluation_sheet_3' => DocumentStore::rules($reviewersRequired >= 3),
         ], [
             'conference_end_date.after_or_equal' => 'The end date must fall on or after the start date.',
             'authors.required' => 'Add at least one author.',
@@ -171,7 +179,13 @@ class PublicationController extends Controller
             'applicant_certifies.accepted' => 'Tick the box to certify the authorship.',
             'applicant_signature.required' => 'Sign in the box, or upload an image of your signature.',
             'conference_scope.required_if' => 'Select whether the conference is local or international.',
-            'paper_evaluation_sheet_3.required' => 'An international conference needs a Paper Evaluation Sheet from three internal reviewers.',
+            'reviewers.required' => 'Name your internal reviewers.',
+            'reviewers.min' => $reviewersRequired === 3
+                ? 'An international conference needs three internal reviewers.'
+                : 'Name two internal reviewers.',
+            'reviewers.*.email.ends_with' => 'An internal reviewer must have a UTP email address ('.PublicationEvaluation::REVIEWER_EMAIL_DOMAIN.').',
+            'reviewers.*.email.distinct' => 'Each reviewer must be a different person.',
+            'manuscript.required' => 'Upload the paper for your reviewers to read.',
             'authorship_contribution_form.required' => 'The Authorship Contribution Form is required when more than '.self::AUTHORSHIP_CONTRIBUTION_THRESHOLD.' authors are listed.',
         ]);
 
@@ -186,7 +200,17 @@ class PublicationController extends Controller
             ]);
         }
 
-        $application = DB::transaction(function () use ($request, $data, $documents, $signOffs, $reviewersRequired, $signature, $isApplicant) {
+        // A reviewer posted beyond the number owed is not part of the
+        // application, so it is not kept.
+        $reviewers = array_slice(array_values($data['reviewers']), 0, $reviewersRequired);
+
+        PublicationSignOffs::assertEligibleReviewers(
+            array_column($data['authors'], 'email'),
+            array_column($reviewers, 'email'),
+            'reviewers',
+        );
+
+        $application = DB::transaction(function () use ($request, $data, $documents, $signOffs, $reviewers, $signature, $isApplicant) {
             $application = Application::create([
                 'student_id' => $request->user()->id,
                 'module_type' => $this->moduleKey(),
@@ -203,6 +227,7 @@ class PublicationController extends Controller
                 'title_of_paper' => $data['title_of_paper'],
                 'title_of_conference_journal' => $data['title_of_conference_journal'],
                 'organizer_publisher' => $data['organizer_publisher'],
+                'venue' => $data['venue'] ?? null,
                 'conference_journal_fee' => $data['conference_journal_fee'],
                 'currency_type' => $data['currency_type'],
                 'cost_centre' => $data['cost_centre'],
@@ -225,13 +250,15 @@ class PublicationController extends Controller
                 }
             }
 
-            foreach (self::DOCUMENT_FIELDS as $field => $label) {
-                // A third sheet posted for a two-reviewer publication is not
-                // part of the application, so it is not kept.
-                if ($field === 'paper_evaluation_sheet_3' && $reviewersRequired < 3) {
-                    continue;
-                }
+            foreach ($reviewers as $index => $reviewer) {
+                $publicationDetail->evaluations()->create([
+                    'position' => $index + 1,
+                    'reviewer_name' => $reviewer['name'],
+                    'reviewer_email' => strtolower($reviewer['email']),
+                ]);
+            }
 
+            foreach (self::DOCUMENT_FIELDS as $field => $label) {
                 if ($request->hasFile($field)) {
                     $documents->attach($application, $request->file($field), $label);
                 }
@@ -239,41 +266,38 @@ class PublicationController extends Controller
 
             // Left as a draft. It is handed to the first approver by
             // PublicationSignOffs::finishIfComplete(), once every author has
-            // signed -- which is straight away when the student is the only one.
+            // signed and every reviewer's evaluation is in.
             return $application;
         });
 
         // After the transaction, so nobody is emailed about rows that a
         // rollback then removes.
-        $detail = PublicationDetail::where('application_id', $application->id)->with('authors')->firstOrFail();
-        $waiting = $detail->authors->reject(fn (PublicationAuthor $author) => $author->hasSigned());
+        $detail = PublicationDetail::where('application_id', $application->id)
+            ->with('authors', 'activeEvaluations')
+            ->firstOrFail();
 
-        foreach ($waiting as $author) {
+        foreach ($detail->authors->reject(fn (PublicationAuthor $author) => $author->hasSigned()) as $author) {
             $signOffs->invite($author, $detail, $request->user()->name);
         }
 
-        if ($signOffs->finishIfComplete($application)) {
-            return redirect()
-                ->route('applications.index')
-                ->with('status', "Publication application #{$application->id} submitted. Your supervisor has been notified.");
+        foreach ($detail->activeEvaluations as $evaluation) {
+            $signOffs->inviteReviewer($evaluation, $detail, $request->user()->name);
         }
 
         return redirect()
             ->route('publication.sign-offs', $application)
-            ->with('status', "Publication application #{$application->id} saved. "
-                .$waiting->count().' '.str('co-author')->plural($waiting->count())
-                .' '.($waiting->count() === 1 ? 'has' : 'have').' been emailed a link to sign. '
-                .'It goes to your supervisor once everyone has signed.');
+            ->with('status', "Publication application #{$application->id} saved. Your reviewers and co-authors "
+                .'have been emailed their links. It goes to your supervisor once every one of them has signed.');
     }
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
         $queue = $this->queueFor($request, $engine, ['documents']);
 
-        // One query for all publication rows, eager-loading authors so the
-        // queue view can list each publication's authors without an N+1 query.
+        // One query for all publication rows, eager-loading authors and
+        // evaluations so the queue view can list them without an N+1 query.
         $details = PublicationDetail::whereIn('application_id', $queue['applications']->pluck('id'))
-            ->with('authors')
+            ->with('authors', 'evaluations')
             ->get()
             ->keyBy('application_id');
 

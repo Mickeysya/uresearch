@@ -11,7 +11,7 @@ class PublicationDetail extends Model
 {
     protected $fillable = [
         'application_id', 'type_of_request', 'conference_scope', 'title_of_paper', 'title_of_conference_journal',
-        'organizer_publisher', 'conference_journal_fee', 'currency_type', 'cost_centre',
+        'organizer_publisher', 'venue', 'conference_journal_fee', 'currency_type', 'cost_centre',
         'wants_letter_of_undertaking', 'conference_start_date', 'conference_end_date',
     ];
 
@@ -35,6 +35,18 @@ class PublicationDetail extends Model
         return $this->hasMany(PublicationAuthor::class);
     }
 
+    /** Every reviewer ever asked, including those since replaced. */
+    public function evaluations(): HasMany
+    {
+        return $this->hasMany(PublicationEvaluation::class)->orderBy('position')->orderBy('id');
+    }
+
+    /** The reviewers currently being asked: one per position. */
+    public function activeEvaluations(): HasMany
+    {
+        return $this->evaluations()->whereNull('replaced_at');
+    }
+
     /** @return array<string, string> */
     public static function requestTypes(): array
     {
@@ -54,10 +66,9 @@ class PublicationDetail extends Model
     }
 
     /**
-     * How many internal reviewers must each sign a Paper Evaluation Sheet
+     * How many internal reviewers must each complete a Paper Evaluation Sheet
      * (UTP/CGS/040): three for an international conference, two for a local
-     * conference or a journal. One sheet per reviewer, so this is also the
-     * number of sheets the student uploads.
+     * conference or a journal.
      */
     public static function reviewersRequired(?string $typeOfRequest, ?string $conferenceScope): int
     {
