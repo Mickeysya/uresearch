@@ -7,12 +7,20 @@
     <x-core::page-header
         title="Publication Funding Application" />
 
+    @foreach ($awaitingSignOffs as $waiting)
+        <p class="message-success">
+            Publication Application #{{ $waiting->id }} is waiting for your co-authors to sign.
+            <a href="{{ route('publication.sign-offs', $waiting) }}">See who has signed</a>
+        </p>
+    @endforeach
+
     <div class="card card-wide">
-        <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
+        <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data" class="app-form" data-stepper
+              data-stepper-review="Check everything below, then submit. Your co-authors are emailed a link to sign the Authorship Certification, and the application goes to your supervisor once every author has signed. You cannot edit it after this.">
             @csrf
 
             <fieldset class="fstep" data-label="Paper">
-            <p class="fstep-hint">Students are required to download the 3 files, fill them in, get endorsement from internal reviewers, and upload them at the Documents step.</p>
+            <p class="fstep-hint">Students are required to download the 2 files, fill them in, get endorsement from internal reviewers, and upload them at the Documents step. The Authorship Certification is signed online at the Authors step.</p>
 
             <p style="display: flex; flex-wrap: wrap; gap: 8px;">
                 @foreach ($templates as $slug => [$file, $downloadName, $linkText])
@@ -106,7 +114,7 @@
             </fieldset>
 
             <fieldset class="fstep" data-label="Authors">
-            <p class="fstep-hint">Everyone credited on the paper. List more than five and the Authorship Contribution Form becomes mandatory on the next step.</p>
+            <p class="fstep-hint">Everyone credited on the paper, in the order listed on the manuscript, yourself included. Each co-author is emailed a link to sign the Authorship Certification online, so nobody prints or uploads it. List more than five and the Authorship Contribution Form becomes mandatory on the next step.</p>
 
             @error('authors') <p class="field-error">{{ $message }}</p> @enderror
 
@@ -115,8 +123,11 @@
                     <p class="queue-meta">Author 1</p>
 
                     <label>Name</label>
-                    <input type="text" name="authors[0][author_name]" value="{{ old('authors.0.author_name') }}">
+                    <input type="text" name="authors[0][author_name]" value="{{ old('authors.0.author_name', auth()->user()->name) }}">
                     @error('authors.0.author_name') <p class="field-error">{{ $message }}</p> @enderror
+
+                    <label>Email</label>
+                    <input type="email" name="authors[0][email]" required value="{{ old('authors.0.email', auth()->user()->email) }}">
 
                     <label>Designation</label>
                     <input type="text" name="authors[0][designation]" value="{{ old('authors.0.designation') }}"
@@ -133,6 +144,28 @@
             <button type="button" id="add-author-btn" class="btn-secondary" style="margin-top: 12px;">
                 + Add Another Author
             </button>
+
+            @error('authors.*.email') <p class="field-error">{{ $message }}</p> @enderror
+
+            {{-- The student's own line of the Authorship Certification Form.
+                 Their co-authors sign the same statement from an emailed
+                 link; see PublicationCertificationController. --}}
+            <p style="margin-top: 20px;"><b>Your certification</b></p>
+            <p class="fstep-hint">Every listed author has made a substantial contribution to the conception and design, or analysis and interpretation of data; drafted the article or revised it critically; and approved the final version. No part of the work has been published before or is under consideration elsewhere.</p>
+
+            <label for="applicant_conflict_disclosure">Conflict of interest to disclose <span style="color: var(--text-grey)">(leave blank if none)</span></label>
+            <textarea name="applicant_conflict_disclosure" id="applicant_conflict_disclosure" rows="2"
+                      class="@error('applicant_conflict_disclosure') is-invalid @enderror">{{ old('applicant_conflict_disclosure') }}</textarea>
+            @error('applicant_conflict_disclosure') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label>Your signature</label>
+            @include('norhanis::publication._signature_pad', ['name' => 'applicant_signature'])
+
+            <div class="checkbox-row" style="margin-top: 12px;">
+                <input type="checkbox" name="applicant_certifies" id="applicant_certifies" value="1" required>
+                <label for="applicant_certifies">I certify that the work submitted is in full accordance with the Authorship Policy of Universiti Teknologi PETRONAS, and I agree on the author order listed above.</label>
+            </div>
+            @error('applicant_certifies') <p class="field-error">{{ $message }}</p> @enderror
 
             </fieldset>
 
@@ -156,10 +189,6 @@
             <label for="conference_journal_details">Conference/Journal Details</label>
             <input type="file" name="conference_journal_details" id="conference_journal_details" required class="@error('conference_journal_details') is-invalid @enderror">
             @error('conference_journal_details') <p class="field-error">{{ $message }}</p> @enderror
-
-            <label for="authorship_certification_form">Authorship Certification Form</label>
-            <input type="file" name="authorship_certification_form" id="authorship_certification_form" required class="@error('authorship_certification_form') is-invalid @enderror">
-            @error('authorship_certification_form') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="response_to_reviewer_comment">Response to Reviewer Comment</label>
             <input type="file" name="response_to_reviewer_comment" id="response_to_reviewer_comment" required class="@error('response_to_reviewer_comment') is-invalid @enderror">
@@ -209,6 +238,8 @@
         <p class="queue-meta">Author __LABEL__</p>
         <label>Name</label>
         <input type="text" name="authors[__INDEX__][author_name]">
+        <label>Email</label>
+        <input type="email" name="authors[__INDEX__][email]" required>
         <label>Designation</label>
         <input type="text" name="authors[__INDEX__][designation]" placeholder="e.g. PhD Student, Co-Supervisor, External Collaborator">
         <label>Organisation</label>
@@ -267,6 +298,15 @@
         authorshipContribution.required =
             document.querySelectorAll('#authors-container .claim-item-row').length > {{ $authorshipContributionThreshold }};
     }
+
+    // The signature lives in a hidden field, which the stepper's per-step
+    // check skips. Hanging the message on the certify box instead means
+    // Continue stops here, with a reason, until the box above is signed.
+    const certifies = document.getElementById('applicant_certifies');
+    certifies.setCustomValidity('Sign in the box above first.');
+    document.addEventListener('signature:change', function (e) {
+        certifies.setCustomValidity(e.detail.signed ? '' : 'Sign in the box above first.');
+    });
 
     typeOfRequest.addEventListener('change', syncDocuments);
     conferenceScope.addEventListener('change', syncDocuments);

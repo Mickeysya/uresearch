@@ -3,6 +3,7 @@
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Http\Controllers\CandidacyController;
 use App\Modules\Norhanis\Http\Controllers\ClaimsController;
+use App\Modules\Norhanis\Http\Controllers\PublicationCertificationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationController;
 use App\Modules\Norhanis\Http\Controllers\RpdAppealController;
 use App\Modules\Norhanis\Http\Controllers\RpdDismissalController;
@@ -60,6 +61,14 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/publication/new', [PublicationController::class, 'create'])->name('publication.create');
         Route::post('/publication', [PublicationController::class, 'store'])->name('publication.store');
+
+        // Who has signed the online Authorship Certification, and a nudge
+        // for whoever has not. Throttled so it cannot be used to flood an inbox.
+        Route::get('/publication/{application}/sign-offs', [PublicationCertificationController::class, 'signOffs'])
+            ->name('publication.sign-offs');
+        Route::post('/publication/{application}/authors/{author}/remind', [PublicationCertificationController::class, 'remind'])
+            ->middleware('throttle:6,1')
+            ->name('publication.authors.remind');
     });
 
     Route::middleware('role:'.implode(',', [
@@ -116,4 +125,15 @@ Route::middleware('auth')->group(function () {
         Route::post('/rpd-dismissal/{application}/decide', [RpdDismissalController::class, 'decide'])->name('rpd-dismissal.decide');
     });
 
+});
+
+// ---- Publication: a co-author signs the Authorship Certification ----------
+// Deliberately outside `auth`: a co-author is often outside UTP and has no
+// account. The signed link emailed to them is the credential, and it names
+// exactly one author row -- see PublicationSignOffs::signingUrl().
+Route::middleware(['signed:relative', 'throttle:30,1'])->group(function () {
+    Route::get('/publication/certify/{author}', [PublicationCertificationController::class, 'show'])
+        ->name('publication.certify');
+    Route::post('/publication/certify/{author}', [PublicationCertificationController::class, 'sign'])
+        ->name('publication.certify.sign');
 });

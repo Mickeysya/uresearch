@@ -18,6 +18,7 @@
             <th>Designation</th>
             <th>Organisation</th>
             <th>Role / Contribution</th>
+            <th>Certification Signed</th>
         </tr>
         @foreach ($detail->authors as $author)
             <tr>
@@ -25,6 +26,7 @@
                 <td>{{ $author->designation ?? '—' }}</td>
                 <td>{{ $author->organisation ?? '—' }}</td>
                 <td>{{ $author->role_contribution ?? '—' }}</td>
+                <td>{{ $author->signed_at?->format('j M Y, g:ia') ?? '—' }}</td>
             </tr>
         @endforeach
     </table>

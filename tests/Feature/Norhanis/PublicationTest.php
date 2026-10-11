@@ -25,6 +25,9 @@ class PublicationTest extends TestCase
     use MakesUsers;
     use RefreshDatabase;
 
+    /** A 1x1 PNG, as the signature box would post it. */
+    public const SIGNATURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
     public function test_a_scalar_author_list_is_a_validation_error_not_a_server_error(): void
     {
         // count() on a string is a TypeError in PHP 8, so an unvalidated
@@ -50,7 +53,7 @@ class PublicationTest extends TestCase
 
         $response->assertSessionHasErrors([
             'invoice', 'index_proof', 'turnitin_report', 'letter_of_acceptance',
-            'conference_journal_details', 'authorship_certification_form',
+            'conference_journal_details',
             'response_to_reviewer_comment', 'corrected_conference_journal_paper',
             'paper_evaluation_sheet_1', 'paper_evaluation_sheet_2',
         ]);
@@ -126,7 +129,7 @@ class PublicationTest extends TestCase
             ->assertSessionHasNoErrors();
     }
 
-    public function test_the_form_offers_the_three_templates_and_each_one_downloads(): void
+    public function test_the_form_offers_the_blank_templates_and_each_one_downloads(): void
     {
         $student = $this->student();
 
@@ -157,7 +160,11 @@ class PublicationTest extends TestCase
             'cost_centre' => 'CGS(015BD1-001)',
             'conference_start_date' => now()->addDays(30)->toDateString(),
             'conference_end_date' => now()->addDays(32)->toDateString(),
-            'authors' => [['author_name' => 'Ahmad Danial']],
+            // The student is the only author, and signs on the form, so the
+            // application is complete the moment it is filed.
+            'authors' => [['author_name' => 'Ahmad Danial', 'email' => 'student@test.my']],
+            'applicant_certifies' => '1',
+            'applicant_signature' => self::SIGNATURE,
         ];
     }
 
@@ -166,7 +173,7 @@ class PublicationTest extends TestCase
     {
         $fields = [
             'invoice', 'index_proof', 'turnitin_report', 'letter_of_acceptance',
-            'conference_journal_details', 'authorship_certification_form',
+            'conference_journal_details',
             'response_to_reviewer_comment', 'corrected_conference_journal_paper',
             'paper_evaluation_sheet_1', 'paper_evaluation_sheet_2',
         ];
