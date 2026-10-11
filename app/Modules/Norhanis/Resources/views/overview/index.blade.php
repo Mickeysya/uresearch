@@ -32,6 +32,23 @@
         @endforeach
     </table>
 
+    {{-- The pending ones, by whose stage they are waiting on. The reader's
+         own stage is marked, since that is the pile that is theirs to clear. --}}
+    <table class="recent-activity-table" style="margin-top: 12px;">
+        <tr>
+            <th>Pending, waiting for</th>
+            @foreach ($stages as $stageRole => $stageLabel)
+                <th>{{ $stageLabel }}@if ($stageRole === $role) (you)@endif</th>
+            @endforeach
+        </tr>
+        <tr>
+            <td>Applications</td>
+            @foreach ($stages as $stageRole => $stageLabel)
+                <td><a href="{{ route('norhanis.overview', ['module' => $scope, 'stage' => $stageRole]) }}">{{ $waiting[$stageRole] }}</a></td>
+            @endforeach
+        </tr>
+    </table>
+
     <form method="GET" action="{{ route('norhanis.overview', ['module' => $scope]) }}" class="queue-tools" style="margin-top: 20px;">
         <div class="queue-tool-field">
             <label for="overview-q">Student name, matric no. or application no.</label>
@@ -56,6 +73,16 @@
                 <option value="">Any</option>
                 @foreach ($statuses as $status)
                     <option value="{{ $status }}" @selected($filters['status'] === $status)>{{ ucfirst($status) }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div class="queue-tool-field">
+            <label for="overview-stage">Waiting for</label>
+            <select name="stage" id="overview-stage">
+                <option value="">Anyone</option>
+                @foreach ($stages as $stageRole => $stageLabel)
+                    <option value="{{ $stageRole }}" @selected($filters['stage'] === $stageRole)>{{ $stageLabel }}@if ($stageRole === $role) (my stage)@endif</option>
                 @endforeach
             </select>
         </div>

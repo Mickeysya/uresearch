@@ -114,6 +114,33 @@ class ApplicationOverviewTest extends TestCase
         $this->actingAs($dean)->get(route('norhanis.overview'))->assertOk()->assertDontSee('Aina Zulkifli');
     }
 
+    public function test_the_list_filters_by_whose_stage_an_application_is_waiting_on(): void
+    {
+        $supervisor = $this->supervisor();
+        $this->chair();
+        $cgs = $this->cgs();
+
+        $this->claim($this->student('22001001', 'aina@test.my', ['name' => 'Aina Zulkifli']));
+        $further = $this->claim($this->student('22001002', 'hakim@test.my', ['name' => 'Hakim Osman']));
+
+        // Hakim's claim moves on to the Chair; Aina's stays with the supervisor.
+        app(WorkflowEngine::class)->decide($further, $supervisor, 'approve');
+
+        $list = fn (array $query) => $this->actingAs($cgs)->get(route('norhanis.overview', ['module' => 'claims'] + $query))->assertOk();
+
+        $list(['stage' => 'supervisor'])->assertSee('Aina Zulkifli')->assertDontSee('Hakim Osman');
+        $list(['stage' => 'chair'])->assertSee('Hakim Osman')->assertDontSee('Aina Zulkifli');
+        $list(['stage' => 'non_exec_cgs'])->assertSee('No applications match');
+
+        // The reader's own stage is pointed out, and each stage has a count.
+        $list([])->assertSee('Non-Executive CGS (my stage)')->assertSee('Pending, waiting for');
+
+        // The Dean has no stage in the claims chain, so it is not a choice.
+        $this->actingAs($cgs)
+            ->get(route('norhanis.overview', ['module' => 'claims', 'stage' => 'dean_pgr']))
+            ->assertSessionHasErrors('stage');
+    }
+
     public function test_the_list_is_paged(): void
     {
         $student = $this->student();

@@ -62,16 +62,19 @@ class ApplicationOverviewController extends Controller
             abort_unless(isset($allowed[$module]), 403);
         }
 
+        // On a module's own list the module is fixed by the URL. On the
+        // combined one it is an optional filter.
+        $shown = $module !== null ? [$module => $allowed[$module]] : $allowed;
+        $stages = $this->stagesOf($registry, $shown);
+
         $filters = $request->validate([
             'module' => ['nullable', 'in:'.implode(',', array_keys(self::MODULES))],
             'status' => ['nullable', 'in:'.implode(',', self::STATUSES)],
+            'stage' => ['nullable', 'in:'.implode(',', array_keys($stages))],
             'q' => ['nullable', 'string', 'max:100'],
             'sort' => ['nullable', 'in:newest,oldest'],
         ]);
 
-        // On a module's own list the module is fixed by the URL. On the
-        // combined one it is an optional filter.
-        $shown = $module !== null ? [$module => $allowed[$module]] : $allowed;
         $picked = $module ?? ($filters['module'] ?? null);
         $search = trim($filters['q'] ?? '');
 
@@ -84,12 +87,29 @@ class ApplicationOverviewController extends Controller
             ->groupBy('module_type')
             ->map(fn ($rows) => $rows->pluck('total', 'status'));
 
+        // And the pending ones again, by whose stage they are waiting on.
+        $waiting = array_fill_keys(array_keys($stages), 0);
+
+        $this->visibleTo($request, $shown)
+            ->where('status', Application::STATUS_PENDING)
+            ->selectRaw('module_type, current_stage, count(*) as total')
+            ->groupBy('module_type', 'current_stage')
+            ->get()
+            ->each(function ($row) use (&$waiting, $registry) {
+                $stage = collect($registry->get($row->module_type)->stages())->firstWhere('key', $row->current_stage);
+
+                if ($stage && isset($waiting[$stage->role])) {
+                    $waiting[$stage->role] += $row->total;
+                }
+            });
+
         $applications = $this->visibleTo($request, $shown)
             ->with('student')
             // A module on the combined list that this reader has no part in
             // matches nothing, rather than showing them someone else's list.
             ->when($picked, fn (Builder $query) => $query->where('module_type', $shown[$picked] ?? ''))
             ->when($filters['status'] ?? null, fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($filters['stage'] ?? null, fn (Builder $query, string $role) => $this->waitingFor($query, $registry, $shown, $role))
             ->when($search !== '', function (Builder $query) use ($search) {
                 // Student name, matric number or application number: what an
                 // approver is given when someone asks "what happened to mine?".
@@ -117,7 +137,12 @@ class ApplicationOverviewController extends Controller
             'modules' => array_map(fn (string $key) => $registry->get($key)->label(), $shown),
             'keys' => $shown,
             'scope' => $module,
-            'filters' => ['module' => $picked ?? '', 'status' => $filters['status'] ?? '', 'q' => $search, 'sort' => $filters['sort'] ?? 'newest'],
+            'stages' => $stages,
+            'waiting' => $waiting,
+            'filters' => [
+                'module' => $picked ?? '', 'status' => $filters['status'] ?? '', 'stage' => $filters['stage'] ?? '',
+                'q' => $search, 'sort' => $filters['sort'] ?? 'newest',
+            ],
             'role' => $request->user()->role,
             'ownStudentsOnly' => $request->user()->role === Role::SUPERVISOR,
         ]);
@@ -142,6 +167,48 @@ class ApplicationOverviewController extends Controller
             'route' => 'norhanis.overview',
             'params' => ['module' => $slug],
         ]];
+    }
+
+    /**
+     * Every approval stage the given modules use, in chain order: the role
+     * that holds it => its label. Keyed by role because the same approver's
+     * stage has a different key from one module to the next.
+     *
+     * @param  array<string, string>  $modules
+     * @return array<string, string>
+     */
+    protected function stagesOf(ModuleRegistry $registry, array $modules): array
+    {
+        $stages = [];
+
+        foreach ($modules as $key) {
+            foreach ($registry->get($key)->stages() as $stage) {
+                $stages[$stage->role] ??= $stage->label;
+            }
+        }
+
+        return $stages;
+    }
+
+    /**
+     * Narrow to applications waiting on the stage that $role holds.
+     *
+     * @param  array<string, string>  $modules
+     */
+    protected function waitingFor(Builder $query, ModuleRegistry $registry, array $modules, string $role): void
+    {
+        $query->where('status', Application::STATUS_PENDING)->where(function (Builder $outer) use ($registry, $modules, $role) {
+            // Never left empty: an empty group would match every row.
+            $outer->whereRaw('1 = 0');
+
+            foreach ($modules as $key) {
+                $keys = collect($registry->get($key)->stages())->where('role', $role)->pluck('key')->all();
+
+                if ($keys !== []) {
+                    $outer->orWhere(fn (Builder $inner) => $inner->where('module_type', $key)->whereIn('current_stage', $keys));
+                }
+            }
+        });
     }
 
     /** Does this user's role own a stage anywhere in the module's chain? */
