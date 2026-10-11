@@ -77,10 +77,41 @@ class ApplicationOverviewTest extends TestCase
         $list(['q' => '22001002'])->assertSee('Hakim Osman')->assertDontSee('Aina Zulkifli');
         $list(['q' => '#'.$rejected->id])->assertSee('Hakim Osman')->assertDontSee('Aina Zulkifli');
         $list(['status' => 'rejected'])->assertSee('Hakim Osman')->assertDontSee('Aina Zulkifli');
-        $list(['module' => 'travel'])->assertSee('No applications match');
 
-        // A filter value that is not one of the choices is refused, not queried.
-        $this->actingAs($cgs)->get(route('norhanis.overview', ['module' => 'hardbound']))->assertSessionHasErrors('module');
+        // Each module also has its own list, and a module that is not one of
+        // the three is not a page at all.
+        $list(['module' => 'claims'])->assertSee('Student Claims Applications')->assertSee('Aina Zulkifli');
+        $list(['module' => 'travel'])->assertSee('Travel Applications')->assertSee('No applications match');
+        $this->actingAs($cgs)->get('/applications-overview/hardbound')->assertNotFound();
+
+        // On the combined list, a filter value that is not a choice is refused.
+        $this->actingAs($cgs)->get('/applications-overview?module=hardbound')->assertSessionHasErrors('module');
+    }
+
+    public function test_each_role_gets_a_separate_link_and_list_for_the_modules_it_approves(): void
+    {
+        $registry = app(\App\Modules\Core\Services\ModuleRegistry::class);
+        $labels = fn ($user) => collect($registry->linksFor($user))->pluck('label')->all();
+
+        $dean = $this->dean();
+        $cgs = $this->cgs();
+
+        // CGS reviews all three; the Dean only has a part in travel.
+        foreach (['Travel Applications', 'Claims Applications', 'Publication Applications'] as $label) {
+            $this->assertContains($label, $labels($cgs));
+        }
+
+        $this->assertContains('Travel Applications', $labels($dean));
+        $this->assertNotContains('Claims Applications', $labels($dean));
+        $this->assertNotContains('Publication Applications', $labels($dean));
+        $this->assertNotContains('Travel Applications', $labels($this->student()));
+
+        $this->actingAs($dean)->get(route('norhanis.overview', ['module' => 'travel']))->assertOk();
+        $this->actingAs($dean)->get(route('norhanis.overview', ['module' => 'claims']))->assertForbidden();
+
+        // And the combined list shows the Dean nothing from the other two.
+        $this->claim($this->student('22001005', 'aina@test.my', ['name' => 'Aina Zulkifli']));
+        $this->actingAs($dean)->get(route('norhanis.overview'))->assertOk()->assertDontSee('Aina Zulkifli');
     }
 
     public function test_the_list_is_paged(): void

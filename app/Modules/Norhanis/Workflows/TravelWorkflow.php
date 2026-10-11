@@ -86,16 +86,10 @@ class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
         return 'travel.queue';
     }
 
-    /**
-     * The one list of Travel, Claims and Publication applications, for every
-     * role that approves any of them. Declared here rather than on all three
-     * workflows so the link appears once.
-     */
+    /** "Travel Applications": everyone who has applied, for those who approve travel. */
     public function links(User $user): array
     {
-        return in_array($user->role, ApplicationOverviewController::ROLES, true)
-            ? [['label' => 'Travel, Claims & Publication', 'route' => 'norhanis.overview']]
-            : [];
+        return ApplicationOverviewController::link($this, $user);
     }
 
     protected function isInternational(Application $application): bool

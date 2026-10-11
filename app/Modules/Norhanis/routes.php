@@ -21,11 +21,15 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function () {
 
-    // ---- Travel, Claims and Publication, in one list ----------------------
-    // Read-only, for every role that approves any of the three: has this
-    // student applied, and where has it reached? Decisions stay in the queues.
+    // ---- Travel, Claims and Publication: who has applied -----------------
+    // Read-only, for the roles that approve them: has this student applied,
+    // and where has it reached? One list per module (/travel, /claims,
+    // /publication), or all together without one. Which of them a role may
+    // open is decided in the controller, from each module's own chain.
     Route::middleware('role:'.implode(',', ApplicationOverviewController::ROLES))->group(function () {
-        Route::get('/applications-overview', [ApplicationOverviewController::class, 'index'])->name('norhanis.overview');
+        Route::get('/applications-overview/{module?}', [ApplicationOverviewController::class, 'index'])
+            ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
+            ->name('norhanis.overview');
     });
 
     // ---- Travel -------------------------------------------------------

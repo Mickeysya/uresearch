@@ -2,10 +2,13 @@
 
 namespace App\Modules\Norhanis\Workflows;
 
+use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 
 /**
@@ -24,7 +27,7 @@ use App\Modules\Norhanis\Models\ClaimsDetail;
  * the Project Director happens after approval and outside this app, so it
  * is not modelled as a Stage.
  */
-class ClaimsWorkflow implements WorkflowModule
+class ClaimsWorkflow implements WorkflowModule, ProvidesLinks
 {
     public function key(): string
     {
@@ -55,6 +58,12 @@ class ClaimsWorkflow implements WorkflowModule
         }
 
         return 'Journal claim · RM '.number_format($detail->total_claims, 2).' · '.$detail->bank_name;
+    }
+
+    /** "Claims Applications": everyone who has applied, for those who approve claims. */
+    public function links(User $user): array
+    {
+        return ApplicationOverviewController::link($this, $user);
     }
 
     public function createRoute(): ?string

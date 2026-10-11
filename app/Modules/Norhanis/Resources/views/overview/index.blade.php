@@ -1,18 +1,17 @@
 @extends('core::layouts.app')
 
-@section('title', 'Travel, Claims & Publication Applications')
+@php($title = $scope ? $modules[$scope].' Applications' : 'Travel, Claims & Publication Applications')
+
+@section('title', $title)
 
 @section('content')
-    @php($registry = app(\App\Modules\Core\Services\ModuleRegistry::class))
-    @php($moduleKeys = \App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController::MODULES)
-
-    <x-core::page-header title="Travel, Claims & Publication Applications"
+    <x-core::page-header title="{{ $title }}"
                          subtitle="{{ $ownStudentsOnly
                              ? 'Every application your students have submitted, and where each one has reached.'
                              : 'Every application submitted, and where each one has reached.' }}" />
 
-    {{-- How many of each, by where they stand. Each figure is a link that
-         filters the list below to exactly those rows. --}}
+    {{-- How many, by where they stand. Each figure is a link that filters the
+         list below to exactly those rows. --}}
     <table class="recent-activity-table">
         <tr>
             <th>Module</th>
@@ -21,33 +20,35 @@
             @endforeach
             <th>Total</th>
         </tr>
-        @foreach ($moduleKeys as $key)
-            @php($row = $counts->get($key, collect()))
+        @foreach ($modules as $slug => $label)
+            @php($row = $counts->get($keys[$slug], collect()))
             <tr>
-                <td><a href="{{ route('norhanis.overview', ['module' => $key]) }}">{{ $registry->get($key)->label() }}</a></td>
+                <td><a href="{{ route('norhanis.overview', ['module' => $slug]) }}">{{ $label }}</a></td>
                 @foreach ($statuses as $status)
-                    <td><a href="{{ route('norhanis.overview', ['module' => $key, 'status' => $status]) }}">{{ $row->get($status, 0) }}</a></td>
+                    <td><a href="{{ route('norhanis.overview', ['module' => $slug, 'status' => $status]) }}">{{ $row->get($status, 0) }}</a></td>
                 @endforeach
                 <td><b>{{ $row->sum() }}</b></td>
             </tr>
         @endforeach
     </table>
 
-    <form method="GET" class="queue-tools" style="margin-top: 20px;">
+    <form method="GET" action="{{ route('norhanis.overview', ['module' => $scope]) }}" class="queue-tools" style="margin-top: 20px;">
         <div class="queue-tool-field">
             <label for="overview-q">Student name, matric no. or application no.</label>
             <input type="search" name="q" id="overview-q" value="{{ $filters['q'] }}" placeholder="e.g. Aina, 22001001 or #42">
         </div>
 
-        <div class="queue-tool-field">
-            <label for="overview-module">Module</label>
-            <select name="module" id="overview-module">
-                <option value="">All three</option>
-                @foreach ($moduleKeys as $key)
-                    <option value="{{ $key }}" @selected($filters['module'] === $key)>{{ $registry->get($key)->label() }}</option>
-                @endforeach
-            </select>
-        </div>
+        @unless ($scope)
+            <div class="queue-tool-field">
+                <label for="overview-module">Module</label>
+                <select name="module" id="overview-module">
+                    <option value="">All</option>
+                    @foreach ($modules as $slug => $label)
+                        <option value="{{ $slug }}" @selected($filters['module'] === $slug)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+        @endunless
 
         <div class="queue-tool-field">
             <label for="overview-status">Status</label>
@@ -68,7 +69,7 @@
         </div>
 
         <button type="submit">Show</button>
-        <a href="{{ route('norhanis.overview') }}" class="queue-clear">Clear</a>
+        <a href="{{ route('norhanis.overview', ['module' => $scope]) }}" class="queue-clear">Clear</a>
     </form>
 
     <p class="queue-meta" style="margin-top: 12px;">
@@ -85,7 +86,7 @@
                 <tr>
                     <th>No.</th>
                     <th>Student</th>
-                    <th>Module</th>
+                    @unless ($scope) <th>Module</th> @endunless
                     <th>Application</th>
                     <th>Status</th>
                     <th>Now with</th>
@@ -103,7 +104,7 @@
                                 <br><span style="color: var(--text-grey);">{{ $application->student->matric_no }}</span>
                             @endif
                         </td>
-                        <td>{{ $module->label() }}</td>
+                        @unless ($scope) <td>{{ $module->label() }}</td> @endunless
                         <td>{{ $module->summary($application) }}</td>
                         <td><x-core::status-badge :status="$application->status" /></td>
                         <td>{{ $stage?->label ?? 'Closed' }}</td>
