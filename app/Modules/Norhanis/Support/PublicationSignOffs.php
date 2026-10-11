@@ -84,10 +84,13 @@ class PublicationSignOffs
                 return null;
             }
 
-            $pdf = Pdf::loadView('norhanis::publication.certification_pdf', [
-                'application' => $application,
-                'detail' => $detail,
-            ]);
+            // Subsetting embeds only the letters used, not the whole font:
+            // the difference between a 900 KB attachment and a small one.
+            $pdf = Pdf::setOption('isFontSubsettingEnabled', true)
+                ->loadView('norhanis::publication.certification_pdf', [
+                    'application' => $application,
+                    'detail' => $detail,
+                ]);
 
             $form = $this->documents->storeGenerated(
                 $application,
@@ -95,6 +98,14 @@ class PublicationSignOffs
                 "authorship-certification-{$application->id}.pdf",
                 'Authorship Certification Form',
             );
+
+            // storeGenerated() does not report a failed write. Without the
+            // form the application must not reach an approver, so stop here:
+            // the transaction rolls back and it stays a draft, to be retried
+            // the next time the student opens the sign-off page.
+            if (! $form->exists()) {
+                throw new \RuntimeException("Could not save the Authorship Certification Form for application #{$application->id}.");
+            }
 
             $this->engine->submit($application);
 

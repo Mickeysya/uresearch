@@ -80,9 +80,15 @@ class PublicationCertificationController extends Controller
 
     // ---- Student ----------------------------------------------------------
 
-    public function signOffs(Request $request, Application $application)
+    public function signOffs(Request $request, Application $application, PublicationSignOffs $signOffs)
     {
         $detail = $this->ownDetail($request, $application);
+
+        // Normally a no-op: the last signature already submitted it. This
+        // picks up an application whose form could not be saved at that moment.
+        if ($signOffs->finishIfComplete($application)) {
+            $application->refresh();
+        }
 
         return view('norhanis::publication.sign_offs', [
             'application' => $application,
