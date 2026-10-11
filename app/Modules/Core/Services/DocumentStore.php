@@ -54,46 +54,52 @@ class DocumentStore
 
     /**
      * The same idea as rules(), for a field that accepts several files at
-     * once (`name="field[]" multiple`) -- a minimum count, a maximum count,
-     * a per-file size cap, an allowed-type list, and a combined size cap
-     * Laravel has no rule string for, so it is a closure here.
+     * once (`name="field[]" multiple`): the MULTI_* limits above, plus a
+     * combined-size cap Laravel has no rule string for, so it is a closure.
      *
-     * Returns both keys `validate()` needs: the array field itself
-     * (required/nullable, array, min, max count, the combined-size check)
-     * and `{$field}.*` (each file: must be a file, the allowed types, the
-     * per-file size). Merge the result into your own rules array.
+     * Returns both keys `validate()` needs -- the array field and
+     * `{$field}.*` -- so spread it into your own rules array.
      *
      * @return array<string, array<int, mixed>>
      */
-    public static function manyRules(
-        string $field,
-        bool $required = true,
-        int $maxFiles = self::MULTI_MAX_FILES,
-        int $maxFileKb = self::MULTI_MAX_FILE_KB,
-        int $maxTotalKb = self::MULTI_MAX_TOTAL_KB,
-        array $allowed = self::MULTI_ALLOWED,
-    ): array {
+    public static function manyRules(string $field, bool $required = true): array
+    {
         return [
             $field => [
                 $required ? 'required' : 'nullable',
                 'array',
-                'min:1',
-                'max:'.$maxFiles,
-                function (string $attribute, $value, \Closure $fail) use ($maxTotalKb) {
+                'max:'.self::MULTI_MAX_FILES,
+                function (string $attribute, $value, \Closure $fail) {
                     $totalKb = collect($value)
                         ->filter(fn ($file) => $file instanceof UploadedFile)
                         ->sum(fn (UploadedFile $file) => $file->getSize()) / 1024;
 
-                    if ($totalKb > $maxTotalKb) {
-                        $fail('The combined size of all files must not exceed '.round($maxTotalKb / 1024).' MB.');
+                    if ($totalKb > self::MULTI_MAX_TOTAL_KB) {
+                        $fail('The combined size of all files must not exceed '.(self::MULTI_MAX_TOTAL_KB / 1024).' MB.');
                     }
                 },
             ],
             $field.'.*' => [
                 'file',
-                'mimes:'.implode(',', $allowed),
-                'max:'.$maxFileKb,
+                'mimes:'.implode(',', self::MULTI_ALLOWED),
+                'max:'.self::MULTI_MAX_FILE_KB,
             ],
+        ];
+    }
+
+    /**
+     * Readable messages for manyRules(), built from the same constants so
+     * the numbers in them cannot drift. Laravel's defaults name the field
+     * "supporting_documents.0", which is no use to a student.
+     *
+     * @return array<string, string>
+     */
+    public static function manyMessages(string $field): array
+    {
+        return [
+            $field.'.max' => 'You may attach at most '.self::MULTI_MAX_FILES.' files.',
+            $field.'.*.mimes' => 'Each file must be one of: '.strtoupper(implode(', ', self::MULTI_ALLOWED)).'.',
+            $field.'.*.max' => 'Each file must be '.(self::MULTI_MAX_FILE_KB / 1024).' MB or smaller.',
         ];
     }
 

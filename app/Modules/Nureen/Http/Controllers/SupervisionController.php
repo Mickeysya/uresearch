@@ -47,9 +47,7 @@ class SupervisionController extends Controller
         ], [
             'justification.min' => 'Please give a sentence or two on why you are requesting this supervisor.',
             'supporting_documents.required' => 'Attach your research proposal or supporting document.',
-            'supporting_documents.max' => 'You may attach at most 5 files.',
-            'supporting_documents.*.mimes' => 'Each file must be a PDF, JPG, PNG or DOCX.',
-            'supporting_documents.*.max' => 'Each file must be 5 MB or smaller.',
+            ...DocumentStore::manyMessages('supporting_documents'),
         ]);
 
         // The dropdown only ever lists supervisors, but the id is still

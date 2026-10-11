@@ -29,18 +29,20 @@
     'hint' => null,
 ])
 @php
-    $maxFiles = \App\Modules\Core\Services\DocumentStore::MULTI_MAX_FILES;
-    $maxFileMb = \App\Modules\Core\Services\DocumentStore::MULTI_MAX_FILE_KB / 1024;
-    $maxTotalMb = \App\Modules\Core\Services\DocumentStore::MULTI_MAX_TOTAL_KB / 1024;
-    $allowed = \App\Modules\Core\Services\DocumentStore::MULTI_ALLOWED;
+    use App\Modules\Core\Services\DocumentStore;
+
+    $maxFiles = DocumentStore::MULTI_MAX_FILES;
+    $maxFileKb = DocumentStore::MULTI_MAX_FILE_KB;
+    $maxTotalKb = DocumentStore::MULTI_MAX_TOTAL_KB;
+    $allowed = DocumentStore::MULTI_ALLOWED;
     $accept = implode(',', array_map(fn ($ext) => ".{$ext}", $allowed));
     $inputId = $name.'-input-'.uniqid();
 @endphp
 
 <div class="doc-upload" data-doc-upload
      data-max-files="{{ $maxFiles }}"
-     data-max-file-bytes="{{ $maxFileMb * 1024 * 1024 }}"
-     data-max-total-bytes="{{ $maxTotalMb * 1024 * 1024 }}"
+     data-max-file-bytes="{{ $maxFileKb * 1024 }}"
+     data-max-total-bytes="{{ $maxTotalKb * 1024 }}"
      data-allowed="{{ implode(',', $allowed) }}">
 
     <label for="{{ $inputId }}">
@@ -73,11 +75,12 @@
         <p class="queue-meta" style="margin-top: -8px;">{{ $hint }}</p>
     @endif
     <p class="queue-meta" style="margin-top: -8px;">
-        PDF, JPG, PNG or DOCX. Up to {{ $maxFiles }} files, {{ rtrim(rtrim(number_format($maxFileMb, 1), '0'), '.') }}&nbsp;MB
-        each, {{ rtrim(rtrim(number_format($maxTotalMb, 1), '0'), '.') }}&nbsp;MB total.
+        PDF, JPG, PNG or DOCX. Up to {{ $maxFiles }} files, {{ $maxFileKb / 1024 }}&nbsp;MB
+        each, {{ $maxTotalKb / 1024 }}&nbsp;MB total.
     </p>
 </div>
 
+@once
 <style>
     .doc-upload-list {
         list-style: none;
@@ -138,7 +141,6 @@
     }
 </style>
 
-@once
     @push('scripts')
         <script @cspNonce>
         (function () {

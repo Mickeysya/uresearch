@@ -40,9 +40,7 @@ class GaExtensionController extends Controller
             'requested_new_end_date.after' => 'The new end date must be later than the current one.',
             'reason_for_extension.min' => 'Please give CGS at least a sentence or two of justification.',
             'supporting_documents.required' => 'At least one supporting document is required for GA extensions.',
-            'supporting_documents.max' => 'You may attach at most 5 files.',
-            'supporting_documents.*.mimes' => 'Each file must be a PDF, JPG, PNG or DOCX.',
-            'supporting_documents.*.max' => 'Each file must be 5 MB or smaller.',
+            ...DocumentStore::manyMessages('supporting_documents'),
         ]);
 
         $application = DB::transaction(function () use ($request, $data, $engine, $documents) {
