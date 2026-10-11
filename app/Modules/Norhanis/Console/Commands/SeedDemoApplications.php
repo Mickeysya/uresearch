@@ -3,6 +3,7 @@
 namespace App\Modules\Norhanis\Console\Commands;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
@@ -236,6 +237,28 @@ class SeedDemoApplications extends Command
 
         if ($rejects) {
             $engine->decide($application, $this->approver($application), 'reject', 'Demo: incomplete supporting documents.');
+        }
+
+        $this->spreadDecisions($application);
+    }
+
+    /**
+     * The engine dated every decision "now", all in the same second. Move
+     * each one to a believable day between submission and today, so the
+     * report's time-per-stage figures have something to show. The later
+     * stages are made the slower ones, as a queue further up a chain is.
+     */
+    protected function spreadDecisions(Application $application): void
+    {
+        $at = $application->submitted_at->copy();
+
+        foreach (ApprovalHistory::where('application_id', $application->id)->orderBy('id')->get() as $step => $entry) {
+            $at = $at->copy()->addHours(mt_rand(6, 48) * ($step + 1));
+
+            // Never in the future, and never out of order.
+            $at = $at->min(now()->subMinutes(5 - min($step, 4)));
+
+            ApprovalHistory::whereKey($entry->id)->update(['created_at' => $at, 'updated_at' => $at]);
         }
     }
 

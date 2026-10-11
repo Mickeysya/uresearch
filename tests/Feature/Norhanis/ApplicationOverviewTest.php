@@ -141,6 +141,67 @@ class ApplicationOverviewTest extends TestCase
             ->assertSessionHasErrors('stage');
     }
 
+    public function test_the_report_counts_outcomes_waiting_and_days_per_stage(): void
+    {
+        $supervisor = $this->supervisor();
+        $this->chair();
+        $cgs = $this->cgs();
+        $engine = app(WorkflowEngine::class);
+
+        // Aina: submitted 10 days ago, endorsed by the supervisor 6 days ago,
+        // so 4 days on the supervisor's stage and now waiting on the Chair.
+        $aina = $this->claim($this->student('22001001', 'aina@test.my', ['name' => 'Aina Zulkifli']));
+        $aina->forceFill(['submitted_at' => now()->subDays(10)])->save();
+        $engine->decide($aina, $supervisor, 'approve');
+        $aina->history()->update(['created_at' => now()->subDays(6)]);
+
+        // Hakim: rejected by the supervisor. Farah: still with the supervisor.
+        $engine->decide($this->claim($this->student('22001002', 'hakim@test.my', ['name' => 'Hakim Osman'])), $supervisor, 'reject');
+        $this->claim($this->student('22001003', 'farah@test.my', ['name' => 'Farah Lee']));
+
+        $view = $this->actingAs($cgs)->get(route('norhanis.report', ['module' => 'claims']))->assertOk();
+
+        $this->assertSame(['pending' => 2, 'approved' => 0, 'rejected' => 1], $view->viewData('totals')['claims']);
+        $this->assertSame(1, $view->viewData('waiting')['claims']['supervisor']);
+        $this->assertSame(1, $view->viewData('waiting')['claims']['chair']);
+        // Two decisions on the supervisor's stage: 4 days and none at all.
+        $this->assertSame(2.0, $view->viewData('average')['claims']['supervisor']);
+        $this->assertNull($view->viewData('average')['claims']['chair']);
+        $this->assertSame(3, array_sum($view->viewData('months')['series']['claims']));
+
+        // Aina has waited longest on her current stage, and is named.
+        $this->assertSame('Aina Zulkifli', $view->viewData('longest')->first()['application']->student->name);
+        $view->assertSee('Aina Zulkifli')->assertSee('Export as CSV');
+
+        // A period that leaves her out leaves her out of every figure.
+        $recent = $this->actingAs($cgs)->get(route('norhanis.report', ['module' => 'claims', 'period' => 30]))->assertOk();
+        $this->assertSame(3, array_sum($recent->viewData('totals')['claims']));
+        $this->actingAs($cgs)->get(route('norhanis.report', ['period' => 7]))->assertSessionHasErrors('period');
+    }
+
+    public function test_the_report_and_its_export_follow_the_same_visibility_as_the_lists(): void
+    {
+        $supervisor = $this->supervisor();
+        $other = $this->supervisor('other.sup@test.my');
+
+        $this->claim($this->student('22001001', 'aina@test.my', ['name' => 'Aina Zulkifli', 'supervisor_id' => $supervisor->id]));
+        $this->claim($this->student('22001002', 'hakim@test.my', ['name' => '=HYPERLINK("http://x")', 'supervisor_id' => $other->id]));
+
+        $csv = $this->actingAs($supervisor)->get(route('norhanis.report.export'))->assertOk()->streamedContent();
+
+        $this->assertStringContainsString('Aina Zulkifli', $csv);
+        $this->assertStringNotContainsString('HYPERLINK', $csv);
+
+        // For CGS the row is there, with the formula defused.
+        $all = $this->actingAs($this->cgs())->get(route('norhanis.report.export', ['module' => 'claims']))->streamedContent();
+        $this->assertStringContainsString("'=HYPERLINK", $all);
+
+        $dean = $this->dean();
+        $this->actingAs($dean)->get(route('norhanis.report', ['module' => 'claims']))->assertForbidden();
+        $this->actingAs($dean)->get(route('norhanis.report.export', ['module' => 'claims']))->assertForbidden();
+        $this->actingAs($this->student('22001009', 's9@test.my'))->get(route('norhanis.report'))->assertForbidden();
+    }
+
     public function test_the_list_is_paged(): void
     {
         $student = $this->student();

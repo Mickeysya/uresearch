@@ -49,18 +49,7 @@ class ApplicationOverviewController extends Controller
 
     public function index(Request $request, ModuleRegistry $registry, ?string $module = null)
     {
-        // Only the modules whose chain this reader's role is part of. The
-        // Dean approves travel but has no part in claims, so has no claims list.
-        $allowed = array_filter(
-            self::MODULES,
-            fn (string $key) => self::approves($registry->get($key), $request->user()),
-        );
-
-        abort_if($allowed === [], 403);
-
-        if ($module !== null) {
-            abort_unless(isset($allowed[$module]), 403);
-        }
+        $allowed = $this->allowedModules($request, $registry, $module);
 
         // On a module's own list the module is fixed by the URL. On the
         // combined one it is an optional filter.
@@ -146,6 +135,29 @@ class ApplicationOverviewController extends Controller
             'role' => $request->user()->role,
             'ownStudentsOnly' => $request->user()->role === Role::SUPERVISOR,
         ]);
+    }
+
+    /**
+     * Only the modules whose chain this reader's role is part of: the Dean
+     * approves travel but has no part in claims, so has no claims list.
+     * Refuses a reader with none, or one asking for a module that is not theirs.
+     *
+     * @return array<string, string>
+     */
+    protected function allowedModules(Request $request, ModuleRegistry $registry, ?string $module): array
+    {
+        $allowed = array_filter(
+            self::MODULES,
+            fn (string $key) => self::approves($registry->get($key), $request->user()),
+        );
+
+        abort_if($allowed === [], 403);
+
+        if ($module !== null) {
+            abort_unless(isset($allowed[$module]), 403);
+        }
+
+        return $allowed;
     }
 
     /**

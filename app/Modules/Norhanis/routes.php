@@ -2,6 +2,7 @@
 
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
+use App\Modules\Norhanis\Http\Controllers\ApplicationReportController;
 use App\Modules\Norhanis\Http\Controllers\CandidacyController;
 use App\Modules\Norhanis\Http\Controllers\ClaimsController;
 use App\Modules\Norhanis\Http\Controllers\PublicationCertificationController;
@@ -30,6 +31,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/applications-overview/{module?}', [ApplicationOverviewController::class, 'index'])
             ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
             ->name('norhanis.overview');
+
+        // The same applications, counted: totals, where they are waiting and
+        // how long each stage takes, with a CSV of the rows behind it.
+        Route::get('/applications-report/{module?}', [ApplicationReportController::class, 'index'])
+            ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
+            ->name('norhanis.report');
+        Route::get('/applications-report-export/{module?}', [ApplicationReportController::class, 'export'])
+            ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
+            ->name('norhanis.report.export');
     });
 
     // ---- Travel -------------------------------------------------------

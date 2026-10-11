@@ -8,7 +8,9 @@
     <x-core::page-header title="{{ $title }}"
                          subtitle="{{ $ownStudentsOnly
                              ? 'Every application your students have submitted, and where each one has reached.'
-                             : 'Every application submitted, and where each one has reached.' }}" />
+                             : 'Every application submitted, and where each one has reached.' }}">
+        <a href="{{ route('norhanis.report', ['module' => $scope]) }}" class="btn-secondary">Reports &amp; analytics</a>
+    </x-core::page-header>
 
     {{-- How many, by where they stand. Each figure is a link that filters the
          list below to exactly those rows. --}}
