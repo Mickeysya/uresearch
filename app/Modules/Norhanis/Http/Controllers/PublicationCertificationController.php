@@ -99,7 +99,8 @@ class PublicationCertificationController extends Controller
             'generated' => $application->documents()
                 ->where(fn ($query) => $query
                     ->where('doc_type', 'Authorship Certification Form')
-                    ->orWhere('doc_type', 'like', 'Paper Evaluation Sheet%'))
+                    ->orWhere('doc_type', 'like', 'Paper Evaluation Sheet%')
+                    ->orWhereIn('doc_type', ['Memo Request Split Budget', 'Approved Memo for Utilizing Grant']))
                 ->oldest('id')
                 ->get()
                 ->keyBy('doc_type'),

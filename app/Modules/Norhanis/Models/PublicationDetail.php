@@ -6,6 +6,7 @@ use App\Modules\Core\Models\Application;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class PublicationDetail extends Model
 {
@@ -33,6 +34,12 @@ class PublicationDetail extends Model
     public function authors(): HasMany
     {
         return $this->hasMany(PublicationAuthor::class);
+    }
+
+    /** The split budget memo, only when the fee is above the CGS cap. */
+    public function memo(): HasOne
+    {
+        return $this->hasOne(PublicationMemo::class);
     }
 
     /** Every reviewer ever asked, including those since replaced. */

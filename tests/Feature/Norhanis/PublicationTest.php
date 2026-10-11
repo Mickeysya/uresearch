@@ -3,7 +3,6 @@
 namespace Tests\Feature\Norhanis;
 
 use App\Modules\Core\Models\Application;
-use App\Modules\Norhanis\Http\Controllers\PublicationController;
 use App\Modules\Norhanis\Models\PublicationDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -57,8 +56,8 @@ class PublicationTest extends TestCase
             'conference_journal_details', 'manuscript',
         ]);
         $response->assertSessionDoesntHaveErrors([
-            'approved_memo_for_utilizing_grant', 'authorship_contribution_form',
-            'response_to_reviewer_comment', 'corrected_conference_journal_paper',
+            'authorship_contribution_form', 'response_to_reviewer_comment',
+            'corrected_conference_journal_paper', 'memo.grant_name',
         ]);
     }
 
@@ -80,7 +79,17 @@ class PublicationTest extends TestCase
         $this->assertSame('Online', $detail->venue);
         $this->assertSame([1, 2], $detail->activeEvaluations->pluck('position')->all());
         $this->assertSame(1, $application->documents()->where('doc_type', 'Manuscript for Review')->count());
-        $this->assertSame(0, $application->documents()->where('doc_type', 'Approved Memo for Utilizing Grant')->count());
+        // RM2500 is within what the CGS fund covers, so there is no memo.
+        $this->assertNull($detail->memo);
+    }
+
+    public function test_the_form_renders_with_no_downloads_left_on_it(): void
+    {
+        $this->actingAs($this->student())
+            ->get(route('publication.create'))
+            ->assertOk()
+            ->assertSee('Split budget memo')
+            ->assertDontSee('Download');
     }
 
     public function test_a_conference_must_say_whether_it_is_local_or_international(): void
@@ -160,23 +169,5 @@ class PublicationTest extends TestCase
             ->assertSessionHasErrors('reviewers');
 
         $this->assertSame(0, Application::count());
-    }
-
-    public function test_the_form_offers_the_blank_templates_and_each_one_downloads(): void
-    {
-        $student = $this->student();
-
-        $page = $this->actingAs($student)->get(route('publication.create'))->assertOk();
-
-        foreach (array_keys(PublicationController::TEMPLATES) as $slug) {
-            $page->assertSee(route('publication.template', $slug));
-
-            $this->actingAs($student)
-                ->get(route('publication.template', $slug))
-                ->assertOk()
-                ->assertDownload();
-        }
-
-        $this->actingAs($student)->get(route('publication.template', 'something-else'))->assertNotFound();
     }
 }

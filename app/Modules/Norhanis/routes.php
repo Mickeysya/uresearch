@@ -6,6 +6,8 @@ use App\Modules\Norhanis\Http\Controllers\ClaimsController;
 use App\Modules\Norhanis\Http\Controllers\PublicationCertificationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationEvaluationController;
+use App\Modules\Norhanis\Http\Controllers\PublicationMemoController;
+use App\Modules\Norhanis\Models\PublicationMemo;
 use App\Modules\Norhanis\Http\Controllers\RpdAppealController;
 use App\Modules\Norhanis\Http\Controllers\RpdDismissalController;
 use App\Modules\Norhanis\Http\Controllers\TravelController;
@@ -56,10 +58,6 @@ Route::middleware('auth')->group(function () {
 
     // ---- Publication -----------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
-        // The blank CGS forms the student downloads, completes and uploads back.
-        Route::get('/publication/templates/{template}', [PublicationController::class, 'template'])
-            ->name('publication.template');
-
         Route::get('/publication/new', [PublicationController::class, 'create'])->name('publication.create');
         Route::post('/publication', [PublicationController::class, 'store'])->name('publication.store');
 
@@ -81,6 +79,15 @@ Route::middleware('auth')->group(function () {
             ->name('publication.evaluations.replace');
         Route::post('/publication/{application}/evaluations/{evaluation}/respond', [PublicationEvaluationController::class, 'respond'])
             ->name('publication.evaluations.respond');
+
+        // And for the split budget memo: a nudge for whoever's turn it is to
+        // sign, and correcting it after a signer sends it back.
+        Route::post('/publication/{application}/memo/remind', [PublicationMemoController::class, 'remind'])
+            ->middleware('throttle:6,1')
+            ->name('publication.memo.remind');
+        Route::post('/publication/{application}/memo/revise', [PublicationMemoController::class, 'revise'])
+            ->middleware('throttle:6,1')
+            ->name('publication.memo.revise');
     });
 
     Route::middleware('role:'.implode(',', [
@@ -158,4 +165,15 @@ Route::middleware(['signed:relative', 'throttle:30,1'])->group(function () {
         ->name('publication.evaluate.submit');
     Route::post('/publication/evaluate/{evaluation}/decline', [PublicationEvaluationController::class, 'decline'])
         ->name('publication.evaluate.decline');
+
+    // {signer} is part of the signed path, so the supervisor's link cannot be
+    // turned into the centre head's.
+    Route::whereIn('signer', array_keys(PublicationMemo::SIGNERS))->group(function () {
+        Route::get('/publication/memo/{memo}/{signer}', [PublicationMemoController::class, 'show'])
+            ->name('publication.memo');
+        Route::post('/publication/memo/{memo}/{signer}', [PublicationMemoController::class, 'sign'])
+            ->name('publication.memo.sign');
+        Route::post('/publication/memo/{memo}/{signer}/decline', [PublicationMemoController::class, 'decline'])
+            ->name('publication.memo.decline');
+    });
 });

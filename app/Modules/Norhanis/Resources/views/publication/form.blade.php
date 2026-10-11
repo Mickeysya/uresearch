@@ -16,17 +16,11 @@
 
     <div class="card card-wide">
         <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data" class="app-form" data-stepper
-              data-stepper-review="Check everything below, then submit. Your co-authors are emailed a link to sign the Authorship Certification, and your reviewers a link to the Paper Evaluation Sheet. The application goes to your supervisor once all of them have signed. You cannot edit it after this.">
+              data-stepper-review="Check everything below, then submit. Your co-authors, your reviewers and, if there is a split budget memo, its signers are each emailed a link. The application goes to your supervisor once all of them have signed. You cannot edit it after this.">
             @csrf
 
             <fieldset class="fstep" data-label="Paper">
-            <p class="fstep-hint">The Authorship Certification and the Paper Evaluation Sheet are completed online: you name your co-authors and internal reviewers on the next steps, and each is emailed a link. Only the memo below is still downloaded, and only when the fee is above the RM3000 the CGS fund covers.</p>
-
-            <p style="display: flex; flex-wrap: wrap; gap: 8px;">
-                @foreach ($templates as $slug => [$file, $downloadName, $linkText])
-                    <a href="{{ route('publication.template', $slug) }}" class="btn-secondary">Download {{ $linkText }}</a>
-                @endforeach
-            </p>
+            <p class="fstep-hint">Nothing here is downloaded, printed or signed by hand. The Authorship Certification, the Paper Evaluation Sheet and, when the fee is above RM{{ number_format($cgsCap) }}, the split budget memo are all completed online: you name the people on the next steps, and each is emailed a link to sign.</p>
 
             <label for="type_of_request">Type of Request</label>
             <select name="type_of_request" id="type_of_request" required
@@ -104,11 +98,63 @@
             </select>
             @error('currency_type') <p class="field-error">{{ $message }}</p> @enderror
 
+            {{-- Only for a fee that is not in ringgit: the CGS cap is in
+                 ringgit, so the comparison needs the ringgit amount. --}}
+            <label for="fee_in_myr" data-foreign-only>Fee in Ringgit (MYR) <span style="color: var(--text-grey)">(the amount on the invoice converted to ringgit)</span></label>
+            <input type="number" step="0.01" min="0" name="fee_in_myr" id="fee_in_myr" data-foreign-only
+                   value="{{ old('fee_in_myr') }}" class="@error('fee_in_myr') is-invalid @enderror">
+            @error('fee_in_myr') <p class="field-error">{{ $message }}</p> @enderror
+
             <label for="cost_centre">Cost Centre (for CGS cost centre only)</label>
             <input type="text" name="cost_centre" id="cost_centre" required
                    value="{{ old('cost_centre') }}" placeholder="e.g. CGS(015BD1-001)"
                    class="@error('cost_centre') is-invalid @enderror">
             @error('cost_centre') <p class="field-error">{{ $message }}</p> @enderror
+
+            {{-- The Memo Request Split Budget. Shown by the script below only
+                 when the fee is above the cap; PublicationController::store()
+                 makes the same decision from the same two fields. --}}
+            <div data-split-only style="margin-top: 16px;">
+                <p><b>Split budget memo</b></p>
+                <p class="fstep-hint">The CGS fund covers up to RM{{ number_format($cgsCap) }}. This fee is above that, so the rest has to come from a research grant. Give the grant below and the system writes the memo: your supervisor signs it, then the head of the centre that holds the grant, and the Senior Director approves it with your application.</p>
+
+                <table class="recent-activity-table">
+                    <tr><th>Paid by</th><th>Amount</th><th>Percentage %</th></tr>
+                    <tr><td>CGS fund</td><td>RM <span data-split="cgs"></span></td><td data-split="cgs-pct"></td></tr>
+                    <tr><td>Research grant</td><td>RM <span data-split="grant"></span></td><td data-split="grant-pct"></td></tr>
+                    <tr><td><b>Total</b></td><td><b>RM <span data-split="total"></span></b></td><td><b>100</b></td></tr>
+                </table>
+            </div>
+
+            @foreach ([
+                'grant_name' => ['Grant name', 'text', 'e.g. YUTP-FRG 1/2026'],
+                'grant_cost_centre' => ['Grant cost centre', 'text', 'e.g. 015LC0-312'],
+                'centre_name' => ['Research centre that holds the grant', 'text', ''],
+                'head_name' => ['Head of that centre', 'text', ''],
+                'head_email' => ["Centre head's email", 'email', ''],
+            ] as $field => [$label, $type, $placeholder])
+                <label for="memo_{{ $field }}" data-split-only>{{ $label }}</label>
+                <input type="{{ $type }}" name="memo[{{ $field }}]" id="memo_{{ $field }}" data-split-only
+                       value="{{ old('memo.'.$field) }}" placeholder="{{ $placeholder }}"
+                       class="@error('memo.'.$field) is-invalid @enderror">
+                @error('memo.'.$field) <p class="field-error" data-split-only>{{ $message }}</p> @enderror
+            @endforeach
+
+            @if ($supervisor)
+                <p class="queue-meta" data-split-only>The memo will be from your supervisor, {{ $supervisor->name }} ({{ $supervisor->email }}).</p>
+            @else
+                {{-- No supervisor is recorded for this student, so the memo
+                     cannot name one by itself. --}}
+                <label for="memo_supervisor_name" data-split-only>Your supervisor's name</label>
+                <input type="text" name="memo[supervisor_name]" id="memo_supervisor_name" data-split-only
+                       value="{{ old('memo.supervisor_name') }}" class="@error('memo.supervisor_name') is-invalid @enderror">
+                @error('memo.supervisor_name') <p class="field-error" data-split-only>{{ $message }}</p> @enderror
+
+                <label for="memo_supervisor_email" data-split-only>Your supervisor's email</label>
+                <input type="email" name="memo[supervisor_email]" id="memo_supervisor_email" data-split-only
+                       value="{{ old('memo.supervisor_email') }}" class="@error('memo.supervisor_email') is-invalid @enderror">
+                @error('memo.supervisor_email') <p class="field-error" data-split-only>{{ $message }}</p> @enderror
+            @endif
 
             <div class="checkbox-row" style="margin-top: 12px;">
                 <input type="checkbox" name="wants_letter_of_undertaking" id="wants_letter_of_undertaking" value="1"
@@ -239,9 +285,6 @@
             <input type="file" name="authorship_contribution_form" id="authorship_contribution_form" class="@error('authorship_contribution_form') is-invalid @enderror">
             @error('authorship_contribution_form') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="approved_memo_for_utilizing_grant">Approved Memo for Utilizing Grant <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="approved_memo_for_utilizing_grant" id="approved_memo_for_utilizing_grant" class="@error('approved_memo_for_utilizing_grant') is-invalid @enderror">
-            @error('approved_memo_for_utilizing_grant') <p class="field-error">{{ $message }}</p> @enderror
             </fieldset>
 
             <button type="submit">Submit Application</button>
@@ -325,6 +368,38 @@
     document.addEventListener('signature:change', function (e) {
         certifies.setCustomValidity(e.detail.signed ? '' : 'Sign in the box above first.');
     });
+
+    // The split budget memo. Mirrors PublicationController::store(): a fee
+    // not in ringgit is compared by its ringgit amount, and the memo fields
+    // are only asked for (and only submitted) above the cap.
+    const cgsCap = {{ $cgsCap }};
+    const fee = document.getElementById('conference_journal_fee');
+    const currency = document.getElementById('currency_type');
+    const feeInMyr = document.getElementById('fee_in_myr');
+    const money = function (n) { return n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+
+    function syncSplit() {
+        const foreign = currency.value !== 'MYR';
+        toggle('[data-foreign-only]', foreign);
+
+        const total = parseFloat(foreign ? feeInMyr.value : fee.value) || 0;
+        const split = total > cgsCap;
+        toggle('[data-split-only]', split);
+
+        if (! split) return;
+
+        const show = function (key, text) { document.querySelector('[data-split="' + key + '"]').textContent = text; };
+        const cgsShare = Math.round(cgsCap / total * 1000) / 10;
+
+        show('cgs', money(cgsCap));
+        show('grant', money(total - cgsCap));
+        show('total', money(total));
+        show('cgs-pct', cgsShare.toFixed(1));
+        show('grant-pct', (100 - cgsShare).toFixed(1));
+    }
+
+    [fee, currency, feeInMyr].forEach(function (el) { el.addEventListener('input', syncSplit); });
+    syncSplit();
 
     typeOfRequest.addEventListener('change', syncDocuments);
     conferenceScope.addEventListener('change', syncDocuments);

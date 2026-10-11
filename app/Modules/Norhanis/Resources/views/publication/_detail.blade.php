@@ -32,6 +32,14 @@
         @endforeach
     </table>
 
+    @if ($memo = $detail->memo)
+        <p style="margin-top: 12px;"><b>Split Budget Memo:</b>
+            from {{ $memo->supervisor_name }} (signed {{ $memo->supervisor_signed_at?->format('j M Y') ?? 'not yet' }}),
+            through {{ $memo->head_name }}, {{ $memo->centre_name }} (signed {{ $memo->head_signed_at?->format('j M Y') ?? 'not yet' }}).
+            Final approval of this application approves the memo.</p>
+        @include('norhanis::publication._memo_split')
+    @endif
+
     {{-- Every reviewer ever asked, replaced ones included, so a rejection
          the student moved past is still in front of the approver. --}}
     @if ($detail->evaluations->isNotEmpty())
