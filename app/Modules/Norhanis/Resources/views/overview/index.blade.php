@@ -121,8 +121,8 @@
             </table>
         </div>
 
-        <div style="margin-top: 16px;">
-            {{ $applications->links() }}
-        </div>
+        {{-- The app's own pager, as the queues use. Laravel's default one is
+             Tailwind markup, and without Tailwind its arrow icons fill the page. --}}
+        @include('core::partials.pagination', ['paginator' => $applications, 'label' => 'Application pages'])
     @endif
 @endsection
