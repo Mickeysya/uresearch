@@ -9,11 +9,15 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 
 /**
- * Student Claims (reimbursements).
+ * Student Claims — journal publication claims only.
  *
- * External Claims were explicitly excluded from scope after confirming with
- * the Academic Executive that they are handled outside the student portal —
- * this module only ever produces `claims_student` applications.
+ * Confirmed with CGS: no expense-item breakdown and no cash advance, which
+ * both belonged to travel reimbursement and are out of scope here. The
+ * student enters total_claims directly; approvers check it against the
+ * attached proof of payment. External Claims were also explicitly excluded
+ * from scope after confirming with the Academic Executive that they are
+ * handled outside the student portal — this module only ever produces
+ * `claims_student` applications.
  *
  * One fixed chain, no conditional routing: Supervisor -> Chair -> Non-Exec
  * CGS -> Manager CGS. Manager CGS has the final say; payment processing by
@@ -50,7 +54,7 @@ class ClaimsWorkflow implements WorkflowModule
             return 'Student Claims application';
         }
 
-        return $detail->purpose_of_claim.', RM '.number_format($detail->total_claim_amount, 2);
+        return 'Journal claim · RM '.number_format($detail->total_claims, 2).' · '.$detail->bank_name;
     }
 
     public function createRoute(): ?string

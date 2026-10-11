@@ -10,11 +10,28 @@ use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class ClaimsController extends Controller
 {
     use ApprovesApplications;
+
+    /**
+     * The named upload fields on page 2, in display order, each attached
+     * under its own label so approvers can tell them apart later. Passport
+     * is still listed even when not required -- the loop only attaches a
+     * field whose file was actually posted.
+     *
+     * @var array<string, string>
+     */
+    protected const DOCUMENT_FIELDS = [
+        'receipt' => 'Receipt',
+        'proof_of_payment' => 'Proof of Payment',
+        'invoice' => 'Invoice',
+        'passport' => 'Passport',
+    ];
+
+    /** PDF/JPG/PNG, 5 MB max -- tighter than the portal-wide DocumentStore default. */
+    protected const FILE_RULES = ['file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'];
 
     protected function moduleKey(): string
     {
@@ -29,80 +46,50 @@ class ClaimsController extends Controller
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
         $data = $request->validate([
-            'purpose_of_claim' => ['required', 'string', 'max:255'],
+            'bank_name' => ['required', 'string', 'max:100'],
             'bank_account_no' => ['required', 'string', 'max:30'],
-            'less_cash_advance' => ['nullable', 'numeric', 'min:0'],
-            'items' => ['required', 'array', 'min:1', 'max:100'],
-            'items.*.item_date' => ['required', 'date'],
-            'items.*.travel_from' => ['nullable', 'string', 'max:150'],
-            'items.*.travel_to' => ['nullable', 'string', 'max:150'],
-            'items.*.flight_train_amount' => ['nullable', 'numeric', 'min:0'],
-            'items.*.meal_allowance' => ['nullable', 'numeric', 'min:0'],
-            'items.*.lodging_amount' => ['nullable', 'numeric', 'min:0'],
-            'items.*.misc_amount' => ['nullable', 'numeric', 'min:0'],
-            'receipt' => DocumentStore::rules(),
-        ], [
-            'items.required' => 'Add at least one expense item.',
-            'items.max' => 'A single claim cannot carry more than 100 expense items.',
+
+            // Claims are journal-publication claims only: there is no expense
+            // breakdown to sum, so total_claims is taken directly from the
+            // student. See the comment on ClaimsDetail::create() below for
+            // why that is safe.
+            'total_claims' => ['required', 'numeric', 'gt:0', 'max:50000', 'decimal:0,2'],
+
+            'receipt' => [...self::FILE_RULES, 'required'],
+            'proof_of_payment' => [...self::FILE_RULES, 'required'],
+            'invoice' => [...self::FILE_RULES, 'required'],
+
+            // Optional, not conditionally required -- the form tells
+            // international students it applies to them; nothing here reads
+            // an international flag back to enforce it.
+            'passport' => [...self::FILE_RULES, 'nullable'],
         ]);
 
-        // total_claim_amount and claim_balance are NEVER read from the
-        // request — summed from the items array server-side, the same way
-        // TravelController derives duration_days instead of trusting a posted
-        // number. A student editing the DOM to inflate the total client-side
-        // has no effect on what actually gets saved.
-        $totalClaimAmount = collect($data['items'])->sum(function ($item) {
-            return ($item['flight_train_amount'] ?? 0)
-                + ($item['meal_allowance'] ?? 0)
-                + ($item['lodging_amount'] ?? 0)
-                + ($item['misc_amount'] ?? 0);
-        });
-        $lessCashAdvance = $data['less_cash_advance'] ?? 0;
-
-        // The advance can only be checked once the total is known, which is
-        // after validation — so it is a ValidationException here rather than
-        // a rule above. Without it an advance larger than the claim stored a
-        // negative claim_balance and walked it through all four approvers.
-        if ($lessCashAdvance > $totalClaimAmount) {
-            throw ValidationException::withMessages([
-                'less_cash_advance' => sprintf(
-                    'The cash advance (RM %s) cannot exceed the total claimed (RM %s).',
-                    number_format((float) $lessCashAdvance, 2),
-                    number_format((float) $totalClaimAmount, 2),
-                ),
-            ]);
-        }
-
-        $application = DB::transaction(function () use ($request, $data, $engine, $documents, $totalClaimAmount, $lessCashAdvance) {
+        $application = DB::transaction(function () use ($request, $data, $engine, $documents) {
             $application = Application::create([
                 'student_id' => $request->user()->id,
                 'module_type' => $this->moduleKey(),
                 'status' => Application::STATUS_DRAFT,
             ]);
 
-            $claimsDetail = ClaimsDetail::create([
+            // total_claims is a direct student input, not derived from a
+            // breakdown — there is nothing here for a tampered DOM value to
+            // inflate, because the figure saved IS what the student typed.
+            // The trust boundary moves downstream instead: each approver
+            // checks this amount against the receipt, proof of payment and
+            // invoice attached below before endorsing, the same way a paper
+            // claim form is checked against its receipt.
+            ClaimsDetail::create([
                 'application_id' => $application->id,
-                'purpose_of_claim' => $data['purpose_of_claim'],
+                'bank_name' => $data['bank_name'],
                 'bank_account_no' => $data['bank_account_no'],
-                'total_claim_amount' => $totalClaimAmount,
-                'less_cash_advance' => $lessCashAdvance,
-                'claim_balance' => $totalClaimAmount - $lessCashAdvance,
+                'total_claims' => $data['total_claims'],
             ]);
 
-            foreach ($data['items'] as $item) {
-                $claimsDetail->items()->create([
-                    'item_date' => $item['item_date'],
-                    'travel_from' => $item['travel_from'] ?? null,
-                    'travel_to' => $item['travel_to'] ?? null,
-                    'flight_train_amount' => $item['flight_train_amount'] ?? 0,
-                    'meal_allowance' => $item['meal_allowance'] ?? 0,
-                    'lodging_amount' => $item['lodging_amount'] ?? 0,
-                    'misc_amount' => $item['misc_amount'] ?? 0,
-                ]);
-            }
-
-            if ($request->hasFile('receipt')) {
-                $documents->attach($application, $request->file('receipt'), 'Receipt');
+            foreach (self::DOCUMENT_FIELDS as $field => $label) {
+                if ($request->hasFile($field)) {
+                    $documents->attach($application, $request->file($field), $label);
+                }
             }
 
             // Hands the application to the first approver in the chain.
@@ -118,10 +105,7 @@ class ClaimsController extends Controller
     {
         $queue = $this->queueFor($request, $engine, ['documents']);
 
-        // One query for all claim rows, eager-loading items so the queue
-        // view can list each claim's expense lines without an N+1 query.
         $details = ClaimsDetail::whereIn('application_id', $queue['applications']->pluck('id'))
-            ->with('items')
             ->get()
             ->keyBy('application_id');
 

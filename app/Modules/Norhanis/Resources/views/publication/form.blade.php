@@ -12,9 +12,14 @@
             @csrf
 
             <fieldset class="fstep" data-label="Paper">
-            <p class="fstep-hint">The paper itself and where it is being presented or published.</p>
+            <p class="fstep-hint">Students are required to download the 3 files, fill them in, get endorsement from internal reviewers, and upload them at the Documents step.</p>
 
-            
+            <p style="display: flex; flex-wrap: wrap; gap: 8px;">
+                @foreach ($templates as $slug => [$file, $downloadName, $linkText])
+                    <a href="{{ route('publication.template', $slug) }}" class="btn-secondary">Download {{ $linkText }}</a>
+                @endforeach
+            </p>
+
             <label for="type_of_request">Type of Request</label>
             <select name="type_of_request" id="type_of_request" required
                     class="@error('type_of_request') is-invalid @enderror">
@@ -24,6 +29,19 @@
                 @endforeach
             </select>
             @error('type_of_request') <p class="field-error">{{ $message }}</p> @enderror
+
+            {{-- Conference only. It sets how many internal reviewers must sign
+                 a Paper Evaluation Sheet, and so how many upload slots the
+                 Documents step shows. --}}
+            <label for="conference_scope" data-conference-only>Local or International Conference</label>
+            <select name="conference_scope" id="conference_scope" data-conference-only
+                    class="@error('conference_scope') is-invalid @enderror">
+                <option value="">-- Select --</option>
+                @foreach ($conferenceScopes as $value => $label)
+                    <option value="{{ $value }}" @selected(old('conference_scope') === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+            @error('conference_scope') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="title_of_paper">Title of Paper</label>
             <input type="text" name="title_of_paper" id="title_of_paper" required
@@ -58,9 +76,7 @@
             </fieldset>
 
             <fieldset class="fstep" data-label="Cost">
-            <p class="fstep-hint">What it costs, in which currency, and which cost centre it is charged against.</p>
-
-            <label for="conference_journal_fee">Conference / Journal Fee</label>
+            <label for="conference_journal_fee" style="margin-top: 0;">Conference / Journal Fee</label>
             <input type="number" step="0.01" name="conference_journal_fee" id="conference_journal_fee" required
                    value="{{ old('conference_journal_fee', 0) }}"
                    class="@error('conference_journal_fee') is-invalid @enderror">
@@ -75,9 +91,9 @@
             </select>
             @error('currency_type') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="cost_centre">Cost Centre</label>
+            <label for="cost_centre">Cost Centre (for CGS cost centre only)</label>
             <input type="text" name="cost_centre" id="cost_centre" required
-                   value="{{ old('cost_centre') }}"
+                   value="{{ old('cost_centre') }}" placeholder="e.g. CGS(015BD1-001)"
                    class="@error('cost_centre') is-invalid @enderror">
             @error('cost_centre') <p class="field-error">{{ $message }}</p> @enderror
 
@@ -121,53 +137,64 @@
             </fieldset>
 
             <fieldset class="fstep" data-label="Documents">
-            <p class="fstep-hint">All optional unless marked otherwise. Each is attached under its own label so CGS can tell them apart later.</p>
-
-            
-            <label for="invoice">Invoice <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="invoice" id="invoice" class="@error('invoice') is-invalid @enderror">
+            <label for="invoice" style="margin-top: 0;">Invoice</label>
+            <input type="file" name="invoice" id="invoice" required class="@error('invoice') is-invalid @enderror">
             @error('invoice') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="index_proof">Index Proof <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="index_proof" id="index_proof" class="@error('index_proof') is-invalid @enderror">
+            <label for="index_proof">Index Proof</label>
+            <input type="file" name="index_proof" id="index_proof" required class="@error('index_proof') is-invalid @enderror">
             @error('index_proof') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="turnitin_report">Turnitin Report <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="turnitin_report" id="turnitin_report" class="@error('turnitin_report') is-invalid @enderror">
+            <label for="turnitin_report">Turnitin Report</label>
+            <input type="file" name="turnitin_report" id="turnitin_report" required class="@error('turnitin_report') is-invalid @enderror">
             @error('turnitin_report') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="letter_of_acceptance">Letter of Acceptance <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="letter_of_acceptance" id="letter_of_acceptance" class="@error('letter_of_acceptance') is-invalid @enderror">
+            <label for="letter_of_acceptance">Letter of Acceptance</label>
+            <input type="file" name="letter_of_acceptance" id="letter_of_acceptance" required class="@error('letter_of_acceptance') is-invalid @enderror">
             @error('letter_of_acceptance') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="conference_journal_details">Conference/Journal Details <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="conference_journal_details" id="conference_journal_details" class="@error('conference_journal_details') is-invalid @enderror">
+            <label for="conference_journal_details">Conference/Journal Details</label>
+            <input type="file" name="conference_journal_details" id="conference_journal_details" required class="@error('conference_journal_details') is-invalid @enderror">
             @error('conference_journal_details') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="authorship_certification_form">Authorship Certification Form <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="authorship_certification_form" id="authorship_certification_form" class="@error('authorship_certification_form') is-invalid @enderror">
+            <label for="authorship_certification_form">Authorship Certification Form</label>
+            <input type="file" name="authorship_certification_form" id="authorship_certification_form" required class="@error('authorship_certification_form') is-invalid @enderror">
             @error('authorship_certification_form') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="response_to_reviewer_comment">Response to Reviewer Comment <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="response_to_reviewer_comment" id="response_to_reviewer_comment" class="@error('response_to_reviewer_comment') is-invalid @enderror">
+            <label for="response_to_reviewer_comment">Response to Reviewer Comment</label>
+            <input type="file" name="response_to_reviewer_comment" id="response_to_reviewer_comment" required class="@error('response_to_reviewer_comment') is-invalid @enderror">
             @error('response_to_reviewer_comment') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="corrected_conference_journal_paper">Corrected Conference/Journal Paper</label>
+            <input type="file" name="corrected_conference_journal_paper" id="corrected_conference_journal_paper" required class="@error('corrected_conference_journal_paper') is-invalid @enderror">
+            @error('corrected_conference_journal_paper') <p class="field-error">{{ $message }}</p> @enderror
+
+            {{-- One sheet per internal reviewer: two for a local conference or a
+                 journal, three for an international conference. The third slot
+                 is switched on by the script below; the controller enforces
+                 the same count. --}}
+            @foreach ([1, 2, 3] as $reviewer)
+                <label for="paper_evaluation_sheet_{{ $reviewer }}" @if ($reviewer === 3) data-third-reviewer @endif>Paper Evaluation Sheet, Reviewer {{ $reviewer }}
+                    @if ($reviewer === 1)
+                        <span style="color: var(--text-grey)">(2 reviewers for local conference, 3 reviewers for international conference, 2 reviewers for journal)</span>
+                    @elseif ($reviewer === 3)
+                        <span style="color: var(--text-grey)">(international conference only)</span>
+                    @endif
+                </label>
+                <input type="file" name="paper_evaluation_sheet_{{ $reviewer }}" id="paper_evaluation_sheet_{{ $reviewer }}"
+                       @if ($reviewer === 3) data-third-reviewer @else required @endif
+                       class="@error('paper_evaluation_sheet_'.$reviewer) is-invalid @enderror">
+                @error('paper_evaluation_sheet_'.$reviewer) <p class="field-error">{{ $message }}</p> @enderror
+            @endforeach
+
+            <label for="authorship_contribution_form">Authorship Contribution Form
+                <span style="color: var(--text-grey)">(required only if more than {{ $authorshipContributionThreshold }} authors are listed)</span></label>
+            <input type="file" name="authorship_contribution_form" id="authorship_contribution_form" class="@error('authorship_contribution_form') is-invalid @enderror">
+            @error('authorship_contribution_form') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="approved_memo_for_utilizing_grant">Approved Memo for Utilizing Grant <span style="color: var(--text-grey)">(optional)</span></label>
             <input type="file" name="approved_memo_for_utilizing_grant" id="approved_memo_for_utilizing_grant" class="@error('approved_memo_for_utilizing_grant') is-invalid @enderror">
             @error('approved_memo_for_utilizing_grant') <p class="field-error">{{ $message }}</p> @enderror
-
-            <label for="corrected_conference_journal_paper">Corrected Conference/Journal Paper <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="corrected_conference_journal_paper" id="corrected_conference_journal_paper" class="@error('corrected_conference_journal_paper') is-invalid @enderror">
-            @error('corrected_conference_journal_paper') <p class="field-error">{{ $message }}</p> @enderror
-
-            <label for="authorship_contribution_form">Authorship Contribution Form
-                <span style="color: var(--text-grey)">(required only if more than 5 authors are listed above)</span></label>
-            <input type="file" name="authorship_contribution_form" id="authorship_contribution_form" class="@error('authorship_contribution_form') is-invalid @enderror">
-            @error('authorship_contribution_form') <p class="field-error">{{ $message }}</p> @enderror
-
-            <label for="paper_evaluation_sheet">Paper Evaluation Sheet <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="paper_evaluation_sheet" id="paper_evaluation_sheet" class="@error('paper_evaluation_sheet') is-invalid @enderror">
-            @error('paper_evaluation_sheet') <p class="field-error">{{ $message }}</p> @enderror
             </fieldset>
 
             <button type="submit">Submit Application</button>
@@ -201,12 +228,48 @@
             .replace('__LABEL__', authorIndex + 1);
         document.getElementById('authors-container').insertAdjacentHTML('beforeend', html);
         authorIndex++;
+        syncDocuments();
     });
 
     document.getElementById('authors-container').addEventListener('click', function (e) {
         if (e.target.classList.contains('remove-author-btn')) {
             e.target.closest('.claim-item-row').remove();
+            syncDocuments();
         }
     });
+
+    // Mirrors what PublicationController::store() enforces, so the student
+    // is told on the step itself rather than after a round trip: the scope
+    // question only for a conference, a third Paper Evaluation Sheet only for
+    // an international one, and the Authorship Contribution Form only above
+    // the author threshold. A switched-off control is disabled as well as
+    // hidden, so it is neither validated by the browser nor submitted.
+    const typeOfRequest = document.getElementById('type_of_request');
+    const conferenceScope = document.getElementById('conference_scope');
+    const authorshipContribution = document.getElementById('authorship_contribution_form');
+
+    function toggle(selector, on) {
+        document.querySelectorAll(selector).forEach(function (el) {
+            el.hidden = ! on;
+            if (el.matches('input, select')) {
+                el.disabled = ! on;
+                el.required = on;
+            }
+        });
+    }
+
+    function syncDocuments() {
+        const isConference = typeOfRequest.value === 'publication_conference';
+
+        toggle('[data-conference-only]', isConference);
+        toggle('[data-third-reviewer]', isConference && conferenceScope.value === 'international');
+
+        authorshipContribution.required =
+            document.querySelectorAll('#authors-container .claim-item-row').length > {{ $authorshipContributionThreshold }};
+    }
+
+    typeOfRequest.addEventListener('change', syncDocuments);
+    conferenceScope.addEventListener('change', syncDocuments);
+    syncDocuments();
 </script>
 @endsection

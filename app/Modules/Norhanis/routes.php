@@ -20,6 +20,8 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/travel/new', [TravelController::class, 'create'])->name('travel.create');
         Route::post('/travel', [TravelController::class, 'store'])->name('travel.store');
+        Route::get('/travel/{application}/supporting-document', [TravelController::class, 'editDocument'])->name('travel.document.edit');
+        Route::post('/travel/{application}/supporting-document', [TravelController::class, 'updateDocument'])->name('travel.document.update');
     });
 
     // Every role that owns a stage in the travel chain shares one queue
@@ -31,6 +33,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/travel/queue', [TravelController::class, 'queue'])->name('travel.queue');
         Route::post('/travel/{application}/decide', [TravelController::class, 'decide'])->name('travel.decide');
     });
+
+    // The applicant's own details page, or anyone holding a stage this
+    // application has reached -- see TravelController::visibleTo(). Not
+    // role-gated here because both students and approvers use it.
+    Route::get('/travel/{application}', [TravelController::class, 'show'])->name('travel.show');
 
     // ---- Claims (student) ----------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
@@ -47,6 +54,10 @@ Route::middleware('auth')->group(function () {
 
     // ---- Publication -----------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
+        // The blank CGS forms the student downloads, completes and uploads back.
+        Route::get('/publication/templates/{template}', [PublicationController::class, 'template'])
+            ->name('publication.template');
+
         Route::get('/publication/new', [PublicationController::class, 'create'])->name('publication.create');
         Route::post('/publication', [PublicationController::class, 'store'])->name('publication.store');
     });

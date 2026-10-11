@@ -12,8 +12,25 @@
        @if ($detail->other_request_specify) ({{ $detail->other_request_specify }}) @endif
     </p>
     @if ($detail->contact_person_name)
-        <p>Contact: {{ $detail->contact_person_name }} {{ $detail->contact_person_no }}</p>
+        <p>Contact: {{ $detail->contact_person_name }} {{ $detail->contact_person_no }}
+           @if ($detail->contact_person_email) ({{ $detail->contact_person_email }}) @endif</p>
     @endif
+
+    @if ($detail->is_ga_gra)
+        @php($taPlan = ($taPlans ?? collect())[$application->id] ?? null)
+        <p>TA Plan:
+            @if ($taPlan)
+                {{ $taPlan->hours_completed }}h completed, {{ $taPlan->hours_during_travel }}h during travel
+                &middot; {{ \App\Modules\Norhanis\Models\TravelTaPlan::managementMethods()[$taPlan->management_method] ?? $taPlan->management_method }}
+            @else
+                <span style="color: var(--text-grey);">not recorded</span>
+            @endif
+        </p>
+    @else
+        <p>TA Plan: <span style="color: var(--text-grey);">Not a GA/GRA recipient</span></p>
+    @endif
+
+    <p><a href="{{ route('travel.show', $application) }}">View full application</a></p>
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif

@@ -37,6 +37,8 @@ class PagesTest extends TestCase
                 'travel_end_date' => now()->addDays(9)->toDateString(),
                 'reason_for_travel' => 'Workshop',
                 'destination_address' => 'Kuala Lumpur',
+                'contact_person_email' => 'contact@utp.edu.my',
+                'is_ga_gra' => 'no',
                 'supporting_document' => UploadedFile::fake()->create($file, 40, 'application/pdf'),
             ])->assertRedirect();
         }
