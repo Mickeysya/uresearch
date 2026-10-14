@@ -385,7 +385,7 @@ class HardboundRulesTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        $student = $this->signedUpStudent();
         $this->supervisor();
 
         $this->actingAs($student)
@@ -412,7 +412,7 @@ class HardboundRulesTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        $student = $this->signedUpStudent();
         $this->supervisor();
 
         Application::create([
@@ -441,7 +441,7 @@ class HardboundRulesTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        $student = $this->signedUpStudent();
         $this->supervisor();
 
         $this->actingAs($student)
@@ -466,7 +466,7 @@ class HardboundRulesTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        $student = $this->signedUpStudent();
         $supervisor = $this->supervisor();
         $cgs = $this->cgs();
 
@@ -486,12 +486,40 @@ class HardboundRulesTest extends TestCase
         $this->actingAs($other)->get(route('hardbound-appeal.memo', $appeal))->assertForbidden();
     }
 
+    /**
+     * The memo is addressed to the Dean and carries the candidate's own
+     * "Yours sincerely" block, so it cannot leave over a blank rule. Gated
+     * the same way an endorser's approval is.
+     */
+    public function test_an_appeal_cannot_be_filed_without_the_candidates_signature(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $this->supervisor();
+
+        $this->actingAs($student)
+            ->post(route('hardbound-appeal.store'), $this->appealPayload())
+            ->assertRedirect(route('hardbound.signature'));
+
+        $this->assertSame(0, HardboundAppealDetail::count());
+
+        // With one on file it goes through, and the memo carries it.
+        $this->signatureFor($student);
+
+        $this->actingAs($student)
+            ->post(route('hardbound-appeal.store'), $this->appealPayload())
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(1, HardboundAppealDetail::count());
+    }
+
     /** An appeal with no reason on it is a blank memo. */
     public function test_an_appeal_needs_a_reason(): void
     {
         Storage::fake('local');
 
-        $this->actingAs($this->student())
+        $this->actingAs($this->signedUpStudent())
             ->post(route('hardbound-appeal.store'), [
                 'requested_until' => now()->addMonths(3)->toDateString(),
             ])
@@ -509,7 +537,7 @@ class HardboundRulesTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        $student = $this->signedUpStudent();
         $supervisor = $this->supervisor();
 
         $this->actingAs($student)->post(route('hardbound-appeal.store'), $this->appealPayload());
@@ -544,7 +572,7 @@ class HardboundRulesTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        $student = $this->signedUpStudent();
         $supervisor = $this->supervisor();
         $this->signatureFor($supervisor);
 
@@ -578,7 +606,7 @@ class HardboundRulesTest extends TestCase
         Storage::fake('local');
         Notification::fake();
 
-        $student = $this->student();
+        $student = $this->signedUpStudent();
         $supervisor = $this->supervisor();
         $chair = $this->chair();
         $cgs = $this->cgs();
@@ -609,6 +637,18 @@ class HardboundRulesTest extends TestCase
                 'signature' => UploadedFile::fake()->image('signature.png', 300, 100),
             ])
             ->assertSessionHasNoErrors();
+    }
+
+    /**
+     * The candidate's signature has to be on file before an appeal can be
+     * filed, so every appeal test puts one there first.
+     */
+    protected function signedUpStudent(string $matric = '22001001', string $email = 'student@test.my'): User
+    {
+        $student = $this->student($matric, $email);
+        $this->signatureFor($student);
+
+        return $student;
     }
 
     /** What the appeal form posts: the reason, and the dates. */

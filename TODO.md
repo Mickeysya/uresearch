@@ -1478,9 +1478,15 @@ while no workflow declares it.
         document again, and `endorsement.blade.php` is gone. The candidate
         signs with the same "My Signature" upload the endorsers use:
         `hardbound_signatures` is keyed on the user account, so the route is
-        simply open to students as well now. Filing without one is allowed
-        and the form says plainly that the memo will go out over a blank
-        signature line.
+        simply open to students as well now. **A signature on file is
+        required to file an appeal** — the memo is addressed to the Dean and
+        carries the candidate's own "Yours sincerely" block, so it cannot
+        leave over a blank rule. Gated the way an endorser's approval is:
+        the attempt redirects to "My Signature". (Allowed-with-a-warning
+        until 2026-10-14, which produced exactly the memo that mistake
+        predicts.) Because the memo is drawn on demand, an appeal filed
+        before the candidate had a signature picks theirs up the moment they
+        upload one.
   - [x] A print-sized copy of the UTP logo lives in
         `Resources/images/utp-logo-print.png` (45 KB, 420px wide) and every
         PDF in this module draws it. The shared `public/images/UTP_logo.png`

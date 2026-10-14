@@ -29,11 +29,12 @@
             </p>
 
             @unless ($signature)
-                <div class="message-warning">
-                    <b>You have no signature on file.</b> The memo is signed with the image you
-                    upload at <a href="{{ route('hardbound.signature') }}">My Signature</a>, the
-                    same way your supervisor signs theirs. You can file the appeal without one,
-                    but the memo will go to the Dean over a blank signature line.
+                <div class="message-error">
+                    <b>You need a signature on file before you can file an appeal.</b> The memo is
+                    signed with the image you upload at
+                    <a href="{{ route('hardbound.signature') }}"><b>My Signature</b></a>, under your
+                    name and student ID, the same way your supervisor signs theirs. It goes to the
+                    Dean, so it cannot leave over a blank signature line.
                 </div>
             @endunless
 

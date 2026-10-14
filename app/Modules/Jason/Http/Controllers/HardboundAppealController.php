@@ -80,6 +80,16 @@ class HardboundAppealController extends Controller
                 "Appeal #{$open->id} is still being processed. Wait for its outcome before filing another.");
         }
 
+        // The memo is addressed to the Dean and carries the candidate's own
+        // "Yours sincerely" block. Letting it go out over a blank rule was
+        // the one thing this design could get wrong, so it is gated the same
+        // way an endorser's approval is: upload the signature, then file.
+        if (! HardboundSignature::forUser($request->user()->id)) {
+            return redirect()->route('hardbound.signature')
+                ->with('error', 'Upload your signature first. It is stamped onto the memo that goes to the '
+                    .'Dean, under your name and student ID.');
+        }
+
         $data = $request->validate([
             'reason' => ['required', 'string', 'max:4000'],
             'original_deadline' => ['nullable', 'date'],
