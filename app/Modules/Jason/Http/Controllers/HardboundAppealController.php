@@ -23,19 +23,20 @@ use Illuminate\Validation\UnauthorizedException;
  * Appeal Hardbound Submission: an appeal for an extension of the hardbound
  * thesis submission deadline.
  *
- * The candidate downloads CGS's memo, pre-filled from the portal's records
- * but blank wherever they have to speak for themselves, writes their appeal
- * on it, signs it and uploads it back -- the same way the Hardbound Thesis
- * Submission form (UTP/CGS/021) works. Nothing they write passes through the
- * portal, so nothing they write can be reworded by it.
+ * The candidate fills in a form and the portal writes CGS's memo from it:
+ * the reason in their own words, the date they are asking for, and the rest
+ * from records the portal already holds. Nothing is downloaded, filled in by
+ * hand and uploaded back (which is how this worked between 2026-09-24 and
+ * 2026-10-14), and nothing is archived either -- the memo is rendered on
+ * demand, every time somebody opens it, from the appeal's own row and the
+ * signatures on file. An appeal therefore costs no document storage at all.
  *
- * The memo is then routed the way the paper one is: through the Supervisor,
- * then the HOD/Chair, then to CGS. Their endorsements cannot be written into
- * the candidate's own file -- stamping inside an uploaded PDF needs a
- * PDF-editing library this project does not carry, and composer.json belongs
- * to the whole team -- so they are stamped onto an endorsement slip that
- * travels with it, carrying the same signatures on file as the Confirmation
- * of Correction.
+ * It is routed the way the paper memo is: through the Supervisor, then the
+ * HOD/Chair, then to CGS, and because the portal writes the document their
+ * signatures are stamped straight into it under the Through lines. The
+ * candidate's own signature comes from the same "My Signature" upload the
+ * endorsers use -- `hardbound_signatures` is keyed on the user account, so
+ * one row per person covers every form they sign.
  *
  * The Dean's "Approved / Not Approved" block stays blank. CGS takes the pack
  * to the Dean off-portal and emails the candidate the outcome, so the portal
@@ -45,11 +46,11 @@ class HardboundAppealController extends Controller
 {
     use ApprovesApplications;
 
-    /** The candidate's own completed memo, as they uploaded it. */
+    /**
+     * Appeals filed before 2026-10-14 carry the candidate's uploaded memo as
+     * a document; nothing new writes one. `memo()` still serves those.
+     */
     public const DOC_MEMO = 'Appeal Memo';
-
-    /** The generated slip carrying the endorsements that memo collected. */
-    public const DOC_ENDORSEMENT = 'Endorsement Slip';
 
     /** The stages whose endorsement is stamped into the memo. */
     public const SIGNING_STAGES = ['supervisor', 'chair'];
@@ -64,6 +65,9 @@ class HardboundAppealController extends Controller
         return view('jason::hardbound_appeal.form', [
             'student' => $request->user(),
             'open' => $this->openRequest($request->user()->id),
+            // The memo is signed with whatever they uploaded at "My
+            // Signature"; without one it would go out over a blank rule.
+            'signature' => HardboundSignature::forUser($request->user()->id),
         ]);
     }
 
@@ -77,13 +81,13 @@ class HardboundAppealController extends Controller
         }
 
         $data = $request->validate([
+            'reason' => ['required', 'string', 'max:4000'],
             'original_deadline' => ['nullable', 'date'],
             'requested_until' => ['required', 'date', 'after:today'],
-            'memo' => DocumentStore::rules(required: true),
         ], [
+            'reason.required' => 'Say why you cannot submit by the deadline. This is the body of the memo.',
             'requested_until.required' => 'Give the date you are asking to submit by.',
             'requested_until.after' => 'The extension date has to be in the future.',
-            'memo.required' => 'Attach your completed memo. Download the blank above, fill it in and sign it first.',
         ]);
 
         $application = DB::transaction(function () use ($request, $data, $engine) {
@@ -95,13 +99,13 @@ class HardboundAppealController extends Controller
 
             HardboundAppealDetail::create([
                 'application_id' => $application->id,
+                'reason' => $data['reason'],
                 'original_deadline' => $data['original_deadline'] ?? null,
                 'requested_until' => $data['requested_until'],
             ]);
 
-            // The candidate's own file, stored exactly as they uploaded it.
-            app(DocumentStore::class)->attach($application, $request->file('memo'), self::DOC_MEMO);
-
+            // Nothing is archived: the memo is these three fields plus the
+            // signatures on file, and is drawn from them whenever it is read.
             return $engine->submit($application);
         });
 
@@ -163,11 +167,6 @@ class HardboundAppealController extends Controller
             return back()->with('error', 'That appeal has already been decided.');
         }
 
-        if (! $refusing && in_array($stage?->key, self::SIGNING_STAGES, true)) {
-            // Re-issue the slip carrying this endorsement.
-            $this->issueEndorsementSlip($application);
-        }
-
         if (! $refusing && $stage?->key === 'cgs_review') {
             $application->student?->notify(new ExtensionMemoReceived($application));
         }
@@ -176,61 +175,66 @@ class HardboundAppealController extends Controller
             $refusing => "Appeal #{$application->id} was not endorsed, and the candidate has been told why.",
             $stage?->key === 'cgs_review' => "Memo received for appeal #{$application->id}. "
                 .'The candidate has been told to wait for further notification.',
-            default => "Appeal #{$application->id} endorsed, and your signature is on the endorsement slip.",
+            default => "Appeal #{$application->id} endorsed, and your signature is on the memo.",
         });
     }
 
     /**
-     * The blank memo, pre-filled with everything the portal already knows
-     * about the candidate and left empty wherever they have to speak for
-     * themselves. They complete it, sign it, and upload it back.
+     * The memo, drawn on demand.
+     *
+     * Nothing is archived: everything the document says lives in the
+     * appeal's own row and in the signatures on file, so it is rendered
+     * fresh each time rather than stored. An appeal filed before
+     * 2026-10-14 carries the candidate's uploaded file instead, and that is
+     * served as it always was.
+     *
+     * Readable by the candidate and by the three roles that hold a stage in
+     * this chain -- with nothing in the documents list, this is the only way
+     * an endorser reads what they are endorsing.
      */
-    public function template(Request $request)
+    public function memo(Request $request, Application $application)
     {
-        $student = $request->user();
+        abort_unless($application->module_type === $this->moduleKey(), 404);
 
-        $pdf = Pdf::loadView('jason::hardbound_appeal.memo', [
-            'application' => null,
-            'student' => $student,
-            'dean' => User::where('role', Role::DEAN_PGR)->orderBy('name')->first(),
-            'supervisorName' => $this->nameOfRole($student, Role::SUPERVISOR),
-            'chairName' => $this->nameOfRole($student, Role::CHAIR),
-            'issuedAt' => now(),
-        ]);
+        $user = $request->user();
+        $stageRoles = array_map(fn ($stage) => $stage->role, app(WorkflowEngine::class)->stagesFor($application));
+
+        abort_unless(
+            $application->student_id === $user->id || in_array($user->role, $stageRoles, true),
+            403
+        );
+
+        // Filed under the upload version: their own file is the memo.
+        if ($uploaded = ApplicationDocument::where('application_id', $application->id)
+            ->where('doc_type', self::DOC_MEMO)
+            ->latest('id')
+            ->first()) {
+            return redirect()->route('documents.show', $uploaded);
+        }
+
+        $pdf = Pdf::loadView('jason::hardbound_appeal.memo', $this->memoData($application));
 
         return response()->streamDownload(
             fn () => print($pdf->output()),
-            'Appeal-for-Extension-of-Hardbound-Thesis-Submission.pdf',
+            "Appeal-for-Extension-{$application->id}.pdf",
             ['Content-Type' => 'application/pdf'],
         );
     }
 
     /**
-     * The candidate's own copy of the memo, at whatever stage it has reached.
-     */
-    public function memo(Request $request, Application $application)
-    {
-        abort_unless($application->module_type === $this->moduleKey(), 404);
-        abort_unless($application->student_id === $request->user()->id, 403);
-
-        $document = ApplicationDocument::where('application_id', $application->id)
-            ->where('doc_type', self::DOC_MEMO)
-            ->latest('id')
-            ->firstOrFail();
-
-        return redirect()->route('documents.show', $document);
-    }
-
-    /**
-     * Generates the endorsement slip with every endorsement collected so far
-     * and archives it, replacing the previous copy so the appeal carries
-     * exactly one current version alongside the candidate's memo.
+     * Everything the memo prints.
      *
-     * Each endorsement's signature and date come from the approval_history
-     * row the engine wrote and that endorser's own uploaded signature, so
-     * the slip and the audit trail cannot disagree.
+     * The endorsements come from the `approval_history` rows the engine
+     * wrote and each endorser's own uploaded signature, so the stamped memo
+     * and the audit trail cannot disagree about who signed or when. The
+     * candidate's signature comes from the same place as theirs.
+     *
+     * The Dean's "Approved / Not Approved" block stays blank: the Dean signs
+     * the memo itself, off-portal, and CGS emails the candidate the outcome.
+     *
+     * @return array<string, mixed>
      */
-    protected function issueEndorsementSlip(Application $application): void
+    protected function memoData(Application $application): array
     {
         $detail = HardboundAppealDetail::where('application_id', $application->id)->firstOrFail();
         $student = $application->student;
@@ -251,27 +255,17 @@ class HardboundAppealController extends Controller
             ];
         }
 
-        $pdf = Pdf::loadView('jason::hardbound_appeal.endorsement', [
+        return [
             'application' => $application,
             'detail' => $detail,
             'student' => $student,
             'dean' => User::where('role', Role::DEAN_PGR)->orderBy('name')->first(),
+            'supervisorName' => $this->nameOfRole($student, Role::SUPERVISOR),
+            'chairName' => $this->nameOfRole($student, Role::CHAIR),
             'signatures' => $signatures,
-        ]);
-
-        // One current version: the previous slip goes when the new one lands.
-        // The candidate's uploaded memo is never touched.
-        ApplicationDocument::where('application_id', $application->id)
-            ->where('doc_type', self::DOC_ENDORSEMENT)
-            ->get()
-            ->each->delete();
-
-        app(DocumentStore::class)->storeGenerated(
-            $application,
-            $pdf->output(),
-            "Endorsement-Slip-{$application->id}.pdf",
-            self::DOC_ENDORSEMENT,
-        );
+            'studentSignature' => $student ? HardboundSignature::forUser($student->id)?->dataUri() : null,
+            'issuedAt' => $application->created_at ?? now(),
+        ];
     }
 
     /**

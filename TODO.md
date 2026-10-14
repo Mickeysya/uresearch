@@ -1448,32 +1448,46 @@ while no workflow declares it.
         by it. §3 of the scope document is the older understanding; the
         workshop one is what is built. **The scope document still needs
         updating to match.**
-  - [x] **Download, fill in, upload back** — the same shape as the Hardbound
-        Thesis Submission form (UTP/CGS/021), and for the same reason: the
-        appeal is the candidate's own words, so the portal must not compose
-        it. `hardbound_appeal/memo.blade.php` reproduces CGS's
-        *Appeal for Extension of Hardbound Thesis Submission* and serves it
-        as a **blank**: addressed to the Dean of Postgraduate and Research,
-        Through the HOD/Chair and the Supervisor, From the candidate with
-        their name, student ID and department already filled in, and ruled
-        writing space where the letter goes. The candidate writes their
-        appeal on it, signs and dates it, and uploads it back. Their file is
-        archived exactly as uploaded and never rewritten.
-  - [x] Routed the way the paper memo is routed. Supervisor and HOD/Chair
-        each endorse, using the same signature on file as the Confirmation of
-        Correction — uploaded once at "My Signature" — and endorsing without
-        one redirects to the upload page.
-  - [x] Endorsements go on an **endorsement slip**, not on the memo. Once the
-        travelling document is the candidate's own upload, the portal cannot
-        write inside it: stamping into an existing PDF needs a PDF-editing
-        library (`setasign/fpdi`) that is not installed, and `composer.json`
-        belongs to all six people. So `endorsement.blade.php` is generated
-        alongside — the candidate, the dates, both endorsers' stamped
-        signatures, and the Dean's *Approved / Not Approved* block — and
-        re-issued at each endorsement, replacing the previous copy so the
-        appeal carries exactly one. **If the team is happy to add FPDI, the
-        signatures could be stamped straight onto the candidate's memo and
-        the slip would not be needed.**
+  - [x] **The portal writes the memo, and stores nothing.** Reverted
+        2026-10-14 from the download-fill-upload version of 2026-09-24, to
+        cut storage and the round trip through a printer. The candidate
+        fills in a two-step form -- the dates, then the reason in their own
+        words -- and `hardbound_appeal/memo.blade.php` draws CGS's
+        *Appeal for Extension of Hardbound Thesis Submission* from it:
+        addressed to the Dean of Postgraduate and Research, Through the
+        HOD/Chair and the Supervisor, From the candidate with their name,
+        student ID and department, and the closing sentence naming the date
+        they are asking for.
+  - [x] **Nothing is archived at all.** The memo is three fields on
+        `hardbound_appeal_details` plus the signatures already on file, so it
+        is rendered on demand every time somebody opens it rather than
+        stored: an appeal costs no document storage. `memo()` is open to the
+        candidate and to the three roles holding a stage in this chain --
+        with nothing in the documents list, it is the only way an endorser
+        reads what they are endorsing, and the queue's detail partial links
+        straight to it. Appeals filed under the upload version still carry
+        their uploaded file, and `memo()` serves that instead when it finds
+        one.
+        **The trade-off, accepted:** if an endorser later replaces their
+        signature image, an older memo redraws with the new one. The names
+        and dates still come from the `approval_history` rows the engine
+        wrote, so who signed and when cannot drift.
+  - [x] **All three signatures are stamped into the memo**, which the
+        separate endorsement slip existed only to work around -- the portal
+        could not write inside a PDF the candidate had uploaded. One
+        document again, and `endorsement.blade.php` is gone. The candidate
+        signs with the same "My Signature" upload the endorsers use:
+        `hardbound_signatures` is keyed on the user account, so the route is
+        simply open to students as well now. Filing without one is allowed
+        and the form says plainly that the memo will go out over a blank
+        signature line.
+  - [x] A print-sized copy of the UTP logo lives in
+        `Resources/images/utp-logo-print.png` (45 KB, 420px wide) and every
+        PDF in this module draws it. The shared `public/images/UTP_logo.png`
+        is 753 KB at 2100x875 and Dompdf embeds it at full resolution, which
+        put 1.5 MB on every document this module produced -- and now that the
+        memo is drawn on every view rather than once, that was bandwidth per
+        read. The shared file is Core's and untouched.
   - [x] **The chain ends at CGS, deliberately.** CGS acknowledges the memo,
         takes it to the Dean off-portal, and emails the candidate the
         outcome, so the portal never claims to know whether the extension was

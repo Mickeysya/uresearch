@@ -3,28 +3,26 @@
      * Appeal for Extension of Hardbound Thesis Submission, reproduced from
      * CGS's memo template.
      *
-     * This is the BLANK the candidate downloads. The template's red starred
-     * placeholders -- *HOD/Chair, *Supervisor, *Student Name, *Department,
-     * *Student ID -- are filled in from the portal's own records, and
-     * everything the candidate has to say in their own words is left empty
-     * for them: the body of the letter and their signature.
+     * Written by the portal and never stored: it is drawn fresh whenever
+     * anyone opens it, from the appeal's own row and the signatures on
+     * file. The template's red starred placeholders -- *HOD/Chair,
+     * *Supervisor, *Student Name, *Department, *Student ID -- come from
+     * records the portal already holds; the body is the candidate's own
+     * words, printed as they wrote them.
      *
-     * They complete it, sign it and upload it back, the same way the
-     * Hardbound Thesis Submission form (UTP/CGS/021) works. Nothing the
-     * candidate writes passes through here, so nothing they write can be
-     * reworded by the portal.
-     *
-     * The endorsements are NOT on this page. Once the candidate's own file
-     * is what travels, the portal cannot write inside it, so the Supervisor
-     * and HOD/Chair endorsements are stamped onto the endorsement slip that
-     * accompanies it -- see endorsement.blade.php.
+     * All three signatures are stamped here. The candidate's and the two
+     * endorsers' come from the same "My Signature" upload, and the dates
+     * from the approval_history rows the engine wrote, so the memo and the
+     * audit trail cannot disagree. The Dean's "Approved / Not Approved"
+     * block is always left blank: the Dean signs off-portal and CGS emails
+     * the candidate the outcome.
      */
 @endphp
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Appeal for Extension of Hardbound Thesis Submission</title>
+    <title>Appeal for Extension of Hardbound Thesis Submission: #{{ $application->id }}</title>
     <style>
         /* One page, like the paper memo. Everything below is sized so that a
            memo with both endorsements and a reason of a few paragraphs still
@@ -55,8 +53,9 @@
         /* The two endorsements sit side by side rather than stacked: the
            page has the width, and stacking them pushed the Dean's block --
            the one that has to be signed -- onto a second sheet. */
-        /* Ruled writing space in the body of a blank memo. */
-        .write { border-bottom: 1px solid #999; height: 17px; margin-bottom: 4px; }
+        table.endorse { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        table.endorse td { width: 50%; vertical-align: top; padding-right: 16px; }
+        .pending { color: #666; font-style: italic; }
 
         .verdict { margin-top: 26px; }
         .foot { position: fixed; bottom: 0; left: 0; right: 0;
@@ -65,7 +64,7 @@
     </style>
 </head>
 <body>
-    <div class="logo"><img src="{{ public_path('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS"></div>
+    <div class="logo"><img src="{{ base_path('app/Modules/Jason/Resources/images/utp-logo-print.png') }}" alt="Universiti Teknologi PETRONAS"></div>
     <h1>MEMORANDUM</h1>
 
     <table class="addr">
@@ -94,7 +93,7 @@
         </tr>
         <tr>
             <td class="k">Date</td><td class="c">:</td>
-            <td></td>
+            <td>{{ $issuedAt->format('j F Y') }}</td>
         </tr>
     </table>
 
@@ -103,17 +102,32 @@
     <div class="body">
         <p>Dear {{ $dean?->name ?? 'Professor' }},</p>
 
-        {{-- Left for the candidate. The ruled lines are what a blank memo
-             gives someone filling it in by hand or on screen. --}}
-        @for ($line = 0; $line < 14; $line++)
-            <div class="write"></div>
-        @endfor
+        {{-- The candidate's own words, paragraph by paragraph. --}}
+        @foreach (preg_split('/\R{2,}/', trim($detail->reason ?? '')) as $paragraph)
+            @if (trim($paragraph) !== '')
+                <p>{{ trim($paragraph) }}</p>
+            @endif
+        @endforeach
+
+        <p>
+            @if ($detail->original_deadline)
+                My hardbound thesis submission is due on
+                {{ $detail->original_deadline->format('j F Y') }}.
+            @endif
+            I therefore appeal for an extension until
+            <b>{{ $detail->requested_until?->format('j F Y') }}</b>,
+            and would be grateful for your kind consideration.
+        </p>
     </div>
 
     <div class="closing">
         <p style="margin: 0 0 4px;">Yours sincerely,</p>
 
-        <div class="sigline"></div>
+        <div class="sigline">
+            @isset ($studentSignature)
+                <img src="{{ $studentSignature }}" alt="Signature of {{ $student?->name }}">
+            @endisset
+        </div>
         <div class="rule"></div>
         <div class="who">
             {{ $student?->name }}<br>
@@ -121,6 +135,33 @@
             {{ $student?->department }}
         </div>
     </div>
+
+    {{-- Not on the paper template, which routes the memo physically. The
+         portal collects these two endorsements, so it prints them: a memo
+         reaching the Dean has to show who it came through. --}}
+    <table class="endorse">
+        <tr>
+            @foreach (['supervisor' => 'Supervisor', 'chair' => 'HOD/Chair'] as $key => $role)
+                <td>
+                    <div class="sigline">
+                        @isset ($signatures[$key]['image'])
+                            <img src="{{ $signatures[$key]['image'] }}" alt="Signature of {{ $signatures[$key]['name'] }}">
+                        @endisset
+                    </div>
+                    <div class="rule"></div>
+                    <div class="who">
+                        @isset ($signatures[$key])
+                            {{ $signatures[$key]['name'] }}<br>
+                            {{ $role }}<br>
+                            {{ $signatures[$key]['date'] }}
+                        @else
+                            <span class="pending">{{ $role }}: not yet endorsed</span>
+                        @endisset
+                    </div>
+                </td>
+            @endforeach
+        </tr>
+    </table>
 
     <div class="verdict">
         <p style="margin: 0 0 22px;">Approved / Not Approved</p>

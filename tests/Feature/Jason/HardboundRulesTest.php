@@ -432,11 +432,12 @@ class HardboundRulesTest extends TestCase
     }
 
     /**
-     * The candidate fills the memo in themselves and uploads it, so their
-     * file is what has to be stored -- and stored as they sent it, because
-     * the portal must not be able to reword an appeal.
+     * The memo is written by the portal and never stored: an appeal is three
+     * fields and the signatures already on file, and the document is drawn
+     * from them whenever it is read. Nothing archived means nothing to keep,
+     * which is the point of writing it this way.
      */
-    public function test_the_candidates_own_memo_is_what_is_filed(): void
+    public function test_an_appeal_stores_no_document_at_all(): void
     {
         Storage::fake('local');
 
@@ -448,50 +449,63 @@ class HardboundRulesTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $appeal = Application::where('module_type', 'hardbound_appeal')->firstOrFail();
-        $memo = $appeal->documents()->where('doc_type', 'Appeal Memo')->firstOrFail();
 
-        $this->assertSame('appeal-memo.pdf', $memo->original_name);
-        Storage::disk('local')->assertExists($memo->path);
+        $this->assertSame(0, $appeal->documents()->count());
+        $this->assertStringContainsString(
+            'experimental rig failed',
+            HardboundAppealDetail::where('application_id', $appeal->id)->value('reason'),
+        );
     }
 
-    /** An appeal cannot be filed without the completed memo. */
-    public function test_an_appeal_needs_the_completed_memo(): void
+    /**
+     * Rendered on demand, by the candidate and by the three roles that hold
+     * a stage: with nothing in the documents list this is the only way an
+     * endorser reads what they are endorsing.
+     */
+    public function test_the_memo_is_built_on_demand_for_the_candidate_and_the_endorsers(): void
     {
         Storage::fake('local');
 
         $student = $this->student();
+        $supervisor = $this->supervisor();
+        $cgs = $this->cgs();
 
-        $this->actingAs($student)
+        $this->actingAs($student)->post(route('hardbound-appeal.store'), $this->appealPayload());
+        $appeal = Application::where('module_type', 'hardbound_appeal')->firstOrFail();
+
+        foreach ([$student, $supervisor, $cgs] as $reader) {
+            $this->actingAs($reader)
+                ->get(route('hardbound-appeal.memo', $appeal))
+                ->assertOk()
+                ->assertHeader('content-type', 'application/pdf');
+        }
+
+        // Not somebody else's appeal, though.
+        $other = $this->student('22009999', 'other@test.my');
+
+        $this->actingAs($other)->get(route('hardbound-appeal.memo', $appeal))->assertForbidden();
+    }
+
+    /** An appeal with no reason on it is a blank memo. */
+    public function test_an_appeal_needs_a_reason(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->student())
             ->post(route('hardbound-appeal.store'), [
                 'requested_until' => now()->addMonths(3)->toDateString(),
             ])
-            ->assertSessionHasErrors('memo');
+            ->assertSessionHasErrors('reason');
 
         $this->assertSame(0, HardboundAppealDetail::count());
     }
 
-    /** The blank the candidate downloads to fill in. */
-    public function test_the_blank_memo_is_pre_filled_and_downloadable(): void
-    {
-        $student = $this->student();
-        $this->supervisor();
-
-        $response = $this->actingAs($student)->get(route('hardbound-appeal.template'));
-
-        $response->assertOk()
-            ->assertHeader('content-type', 'application/pdf');
-
-        $this->assertStringContainsString('.pdf', $response->headers->get('content-disposition'));
-    }
-
     /**
-     * Endorsing stamps the endorser's signature onto the endorsement slip,
-     * so there has to be one -- the same gate the Confirmation has, for the
-     * same reason. The re-issued slip replaces the previous copy, so the
-     * appeal carries exactly one, and the candidate's own memo is never
-     * touched.
+     * Endorsing stamps the endorser's signature into the memo, so there has
+     * to be one to stamp -- the same gate the Confirmation has, for the same
+     * reason.
      */
-    public function test_endorsing_an_appeal_needs_a_signature_and_re_issues_the_slip(): void
+    public function test_endorsing_an_appeal_needs_a_signature(): void
     {
         Storage::fake('local');
 
@@ -515,8 +529,10 @@ class HardboundRulesTest extends TestCase
             ->assertSessionHas('status');
 
         $this->assertSame('chair', $appeal->fresh()->current_stage);
-        $this->assertSame(1, $appeal->documents()->where('doc_type', 'Endorsement Slip')->count());
-        $this->assertSame(1, $appeal->documents()->where('doc_type', 'Appeal Memo')->count());
+
+        // Still nothing stored: the endorsement is a history row and a
+        // signature on file, and the memo draws both when it is opened.
+        $this->assertSame(0, $appeal->documents()->count());
     }
 
     /**
@@ -575,10 +591,8 @@ class HardboundRulesTest extends TestCase
         $this->actingAs($supervisor)->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve']);
         $this->actingAs($chair)->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve']);
 
-        // Both endorsements are on the one current slip, and the candidate's
-        // memo is still the single file they uploaded.
-        $this->assertSame(1, $appeal->documents()->where('doc_type', 'Endorsement Slip')->count());
-        $this->assertSame(1, $appeal->documents()->where('doc_type', 'Appeal Memo')->count());
+        // Both endorsements are recorded, and still nothing is stored.
+        $this->assertSame(0, $appeal->documents()->count());
 
         $this->actingAs($cgs)
             ->post(route('hardbound-appeal.decide', $appeal), ['decision' => 'approve'])
@@ -597,13 +611,14 @@ class HardboundRulesTest extends TestCase
             ->assertSessionHasNoErrors();
     }
 
-    /** What the appeal form posts: the completed memo, and the dates. */
+    /** What the appeal form posts: the reason, and the dates. */
     protected function appealPayload(array $overrides = []): array
     {
         return $overrides + [
+            'reason' => "My experimental rig failed in the final month and the replacement parts "
+                ."took six weeks to arrive.\n\nThe remaining chapters are drafted.",
             'original_deadline' => now()->addWeeks(2)->toDateString(),
             'requested_until' => now()->addMonths(3)->toDateString(),
-            'memo' => UploadedFile::fake()->create('appeal-memo.pdf', 90, 'application/pdf'),
         ];
     }
 }

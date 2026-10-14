@@ -165,7 +165,7 @@
 @php($page++)
 <div class="sheet">
     <div class="code">UTP/PPS/025<br><span class="ver">Ver: Oct 2025</span></div>
-    <div class="logo"><img src="{{ public_path('images/UTP_logo.png') }}" alt="UTP"></div>
+    <div class="logo"><img src="{{ base_path('app/Modules/Jason/Resources/images/utp-logo-print.png') }}" alt="UTP"></div>
     <h1>THESIS EVALUATION REPORT<br>PHD</h1>
 
     <table class="hdr">

@@ -81,7 +81,7 @@
     <div class="frame">
         <table class="hdr">
             <tr>
-                <td class="logo"><img src="{{ public_path('images/UTP_logo.png') }}" alt="UTP"></td>
+                <td class="logo"><img src="{{ base_path('app/Modules/Jason/Resources/images/utp-logo-print.png') }}" alt="UTP"></td>
                 <td>
                     <div class="u">UNIVERSITI TEKNOLOGI PETRONAS</div>
                     <div class="c">CENTRE FOR GRADUATE STUDIES</div>

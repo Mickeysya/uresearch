@@ -11,10 +11,16 @@
         @endif
     </p>
 
+    @if ($detail->reason)
+        <p style="margin-top: 10px;"><b>Reason given:</b></p>
+        <p style="white-space: pre-line;">{{ $detail->reason }}</p>
+    @endif
+
     <p class="queue-meta" style="margin-top: 10px;">
-        The candidate's own memo is in the documents above, and says why in their
-        own words. Your endorsement is stamped onto the endorsement slip that
-        travels with it, which is re-issued each time it is endorsed.
+        <a href="{{ route('hardbound-appeal.memo', $application) }}"><b>Open the memo &rarr;</b></a>
+        &nbsp;It is written by the portal rather than stored, so it is not in the
+        documents list: it carries every signature collected so far, and yours is
+        stamped into it when you endorse.
     </p>
 @else
     <p style="color: var(--text-grey);">Detail record missing for this appeal.</p>

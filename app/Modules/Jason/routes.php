@@ -103,7 +103,17 @@ Route::middleware('auth')->group(function () {
         Route::post('/hardbound/{application}/decide', [HardboundSubmissionController::class, 'decide'])
             ->name('hardbound.decide');
 
-        // The signature each of them stamps onto the Confirmation on approval.
+    });
+
+    // "My Signature": uploaded once, stamped wherever that person signs.
+    // Open to candidates as well as approvers since 2026-10-14 -- the
+    // extension memo is written by the portal and signed by the candidate,
+    // so they need a signature on file the same way an endorser does.
+    // `hardbound_signatures` is keyed on the user account, so one row per
+    // person covers every form they will ever sign.
+    Route::middleware('role:'.implode(',', [
+        Role::STUDENT, Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS,
+    ]))->group(function () {
         Route::get('/hardbound/signature', [HardboundSubmissionController::class, 'signature'])
             ->name('hardbound.signature');
         Route::post('/hardbound/signature', [HardboundSubmissionController::class, 'storeSignature'])
@@ -119,10 +129,15 @@ Route::middleware('auth')->group(function () {
         Route::post('/hardbound-appeal', [HardboundAppealController::class, 'store'])
             ->name('hardbound-appeal.store');
 
-        // The blank memo to fill in and sign, and the candidate's own copy
-        // of the one they uploaded.
-        Route::get('/hardbound-appeal/template', [HardboundAppealController::class, 'template'])
-            ->name('hardbound-appeal.template');
+    });
+
+    // The memo itself, built on demand from what the candidate wrote and
+    // the signatures collected so far. Open to the candidate and to the
+    // three roles that hold a stage in this chain: nothing is archived, so
+    // this is the only way any of them reads it.
+    Route::middleware('role:'.implode(',', [
+        Role::STUDENT, Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS,
+    ]))->group(function () {
         Route::get('/hardbound-appeal/{application}/memo', [HardboundAppealController::class, 'memo'])
             ->name('hardbound-appeal.memo');
     });

@@ -178,7 +178,7 @@
 {{-- ============================================================ letter, page 1 --}}
 <div class="sheet">
     <div class="logo">
-        <img src="{{ public_path('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS">
+        <img src="{{ base_path('app/Modules/Jason/Resources/images/utp-logo-print.png') }}" alt="Universiti Teknologi PETRONAS">
     </div>
 
     <p>
