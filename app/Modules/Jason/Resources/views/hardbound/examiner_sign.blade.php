@@ -46,7 +46,7 @@
                        accept="image/png,image/jpeg"
                        class="@error('signature') is-invalid @enderror">
                 @error('signature') <p class="field-error">{{ $message }}</p> @enderror
-                <p class="queue-meta" style="margin-top: -8px;">
+                <p class="field-hint">
                     A PNG or JPG of your signature, up to 1 MB. It is stamped onto the form with
                     today's date, alongside the signatures already collected, and is used for
                     nothing else.

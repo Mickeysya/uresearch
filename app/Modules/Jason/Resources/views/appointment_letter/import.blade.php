@@ -101,7 +101,7 @@
                    accept=".csv,.txt,.xlsx,.xls"
                    class="@error('sheet') is-invalid @enderror">
             @error('sheet') <p class="field-error">{{ $message }}</p> @enderror
-            <p class="queue-meta" style="margin-top: -8px;">
+            <p class="field-hint">
                 .xlsx or .csv, up to 5 MB. A candidate already imported gets a second
                 appointment, so import each list once. A candidate listed twice on the same
                 sheet is reported rather than imported twice.

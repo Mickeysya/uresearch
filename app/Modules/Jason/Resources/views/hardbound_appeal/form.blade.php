@@ -69,7 +69,7 @@
                           placeholder="Explain why you cannot submit your hardbound thesis by the deadline, and what remains to be done."
                           class="@error('reason') is-invalid @enderror">{{ old('reason') }}</textarea>
                 @error('reason') <p class="field-error">{{ $message }}</p> @enderror
-                <p class="queue-meta" style="margin-top: -8px;">
+                <p class="field-hint">
                     Leave a blank line between paragraphs. The closing sentence naming the date
                     you are asking for is added for you.
                 </p>

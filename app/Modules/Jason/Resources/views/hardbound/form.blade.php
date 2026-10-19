@@ -86,7 +86,7 @@
 
             <label for="matric_no_display">Matric Number</label>
             <input type="text" id="matric_no_display" value="{{ $student->matric_no }}" disabled>
-            <p class="queue-meta" style="margin-top: -8px;">Taken from your student record.</p>
+            <p class="field-hint">Taken from your student record.</p>
 
             <label for="programme">Programme</label>
             <input type="text" name="programme" id="programme" required
@@ -138,7 +138,7 @@
             <input type="file" name="submission_form" id="submission_form" @unless ($returned) required @endunless
                    class="@error('submission_form') is-invalid @enderror">
             @error('submission_form') <p class="field-error">{{ $message }}</p> @enderror
-            <p class="queue-meta" style="margin-top: -8px;">PDF, Word, Excel or an image, up to 10 MB.</p>
+            <p class="field-hint">PDF, Word, Excel or an image, up to 10 MB.</p>
             </fieldset>
 
             <button type="submit">{{ $returned ? 'Resubmit for Confirmation' : 'Submit for Confirmation' }}</button>
