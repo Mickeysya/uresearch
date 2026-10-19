@@ -3,12 +3,35 @@
 @section('title', 'Import Examiner List')
 
 @section('content')
+@push('head')
+    <style>
+        /* A column heading is one thing: "Matric No" broken across two lines
+           reads as two headings that do not exist. */
+        .sheet-note code { white-space: nowrap; }
+
+        .sheet-columns { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+        .sheet-columns li {
+            white-space: nowrap;
+            font-family: var(--font-mono, monospace);
+            font-size: var(--text-sm);
+            background: var(--surface-sunken, #f1f3f6);
+            border-radius: var(--radius-sm, 4px);
+            padding: 2px 7px;
+        }
+    </style>
+@endpush
+
 <div class="card-container-inline">
+    {{-- Everything explanatory lives OUT here, between the page header and
+         the card. `core::partials.form-stepper` re-casts the card it finds
+         the form in -- `.card.is-wizard` is `padding: 0; overflow: hidden`
+         -- so a paragraph left inside it as a sibling of the form loses its
+         padding, runs the full width into the header and is clipped. --}}
     <x-core::page-header
         title="Import Examiner List"
         subtitle="The finalised list, once the Dean has settled it. Each candidate on the sheet becomes an appointment waiting for its pack." />
 
-    <div class="card card-wide">
+    <div class="sheet-note">
         <p class="queue-meta">
             Examiner selection happens before this screen: the supervisor chooses the panel,
             the Academic Executive compiles it, and the list is agreed between CGS, the Senior
@@ -19,7 +42,7 @@
             <b>One row per candidate</b>, with the panel in four named slots: internal main and
             backup, external main and backup. A row is tied to a candidate by its
             <code>Matric No</code>, and every panel needs at least one internal and one external
-            examiner. All four named examiners are appointed and all four receive a pack.
+            examiner. All four named examiners are appointed, and all four receive a pack.
         </p>
 
         <p class="queue-meta">
@@ -27,12 +50,17 @@
             so an export with extra or reordered columns still imports. Each examiner's email and
             institution are read from the examiner records the nomination chain keeps, so the
             sheet only has to name them.
-            @unless ($poolAvailable)
-                <b class="field-error">Those records are not on this database, so an import will
-                only succeed for examiners the sheet fully describes.</b>
-            @endunless
         </p>
+    </div>
 
+    @unless ($poolAvailable)
+        <div class="message-warning">
+            The examiner records are not on this database, so an import will only succeed for
+            examiners the sheet fully describes.
+        </div>
+    @endunless
+
+    <div class="card card-wide">
         <form method="POST" action="{{ route('appointment-letter.import.store') }}"
               enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
@@ -44,13 +72,17 @@
             <a href="{{ route('appointment-letter.template') }}" class="btn-secondary">
                 Download the template (.xlsx)
             </a>
+
             <p class="queue-meta">
                 Or <a href="{{ route('appointment-letter.template', ['format' => 'csv']) }}">download it as .csv</a>.
                 The headings it is written with, which a real export may extend or reorder:
             </p>
-            <p class="queue-meta" style="margin-top: -6px;">
-                <code>{{ implode(' · ', $columns) }}</code>
-            </p>
+
+            <ul class="sheet-columns">
+                @foreach ($columns as $column)
+                    <li>{{ $column }}</li>
+                @endforeach
+            </ul>
             </fieldset>
 
             <fieldset class="fstep" data-label="Upload the list">
