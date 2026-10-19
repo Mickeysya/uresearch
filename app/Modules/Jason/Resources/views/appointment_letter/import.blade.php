@@ -69,9 +69,15 @@
             <p class="fstep-hint">Only needed if you do not already have the list as a
                file. It comes filled in with two worked examples.</p>
 
-            <a href="{{ route('appointment-letter.template') }}" class="btn-secondary">
-                Download the template (.xlsx)
-            </a>
+            {{-- In a block of its own: .btn-secondary is inline-flex, so a
+                 bare anchor sits on a text line and its padding overflows
+                 into whatever follows. Same shape as the hardbound form's
+                 download step. --}}
+            <p>
+                <a href="{{ route('appointment-letter.template') }}" class="btn-secondary">
+                    Download the template (.xlsx)
+                </a>
+            </p>
 
             <p class="queue-meta">
                 Or <a href="{{ route('appointment-letter.template', ['format' => 'csv']) }}">download it as .csv</a>.
