@@ -3,6 +3,7 @@
 namespace App\Modules\Jason\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
+use App\Modules\Jason\Http\Controllers\Concerns\PreviewsDocuments;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApplicationDocument;
@@ -34,6 +35,7 @@ use Illuminate\Validation\UnauthorizedException;
 class AppointmentLetterController extends Controller
 {
     use ApprovesApplications;
+    use PreviewsDocuments;
 
     public const DOC_LETTER = 'Appointment Letter';
 
@@ -594,6 +596,50 @@ class AppointmentLetterController extends Controller
         $verb = $approved ? 'approved' : 'rejected';
 
         return back()->with('status', "Application #{$application->id} {$verb}.");
+    }
+
+    /**
+     * The pack on a page: every document the Dean is being asked to approve,
+     * with one of them framed.
+     *
+     * A panel of four is eight documents, and the Dean's decision rests on
+     * reading them. Downloading eight files to check a nomination, and
+     * another eight for the next one, is the thing this replaces -- they are
+     * listed here and read in place, one at a time.
+     */
+    public function pack(Request $request, Application $application)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $documents = ApplicationDocument::where('application_id', $application->id)
+            ->whereIn('doc_type', [self::DOC_LETTER, self::DOC_REPORT])
+            ->orderBy('doc_type')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn ($document) => $document->visibleTo($request->user()))
+            ->values();
+
+        abort_if($documents->isEmpty(), 404, 'Nothing has been prepared for this nomination yet.');
+
+        // ?doc= picks which one is framed; the first otherwise.
+        $showing = $documents->firstWhere('id', (int) $request->query('doc')) ?? $documents->first();
+
+        return view('jason::appointment_letter.pack', [
+            'application' => $application,
+            'detail' => AppointmentDetail::where('application_id', $application->id)->first(),
+            'student' => $application->student,
+            'documents' => $documents,
+            'showing' => $showing,
+        ]);
+    }
+
+    /** One pack document, inline so the page above can frame it. */
+    public function document(Request $request, Application $application, ApplicationDocument $document)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($document->application_id === $application->id, 404);
+
+        return $this->serveArchived($document, $request);
     }
 
     /**

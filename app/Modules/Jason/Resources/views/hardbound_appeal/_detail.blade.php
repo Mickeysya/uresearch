@@ -17,10 +17,10 @@
     @endif
 
     <p class="queue-meta" style="margin-top: 10px;">
-        <a href="{{ route('hardbound-appeal.memo', $application) }}"><b>Open the memo &rarr;</b></a>
+        <a href="{{ route('hardbound-appeal.read', $application) }}"><b>Read the memo &rarr;</b></a>
         &nbsp;It is written by the portal rather than stored, so it is not in the
         documents list: it carries every signature collected so far, and yours is
-        stamped into it when you endorse.
+        stamped into it when you endorse. It opens on a page rather than downloading.
     </p>
 @else
     <p style="color: var(--text-grey);">Detail record missing for this appeal.</p>

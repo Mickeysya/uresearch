@@ -9,6 +9,25 @@
         subtitle="Appeal for an extension of your hardbound thesis submission deadline." />
 
     <div class="card card-wide">
+        @if (($filed ?? collect())->isNotEmpty())
+            <div class="app-item" style="margin-bottom: 18px;">
+                <p><b>Appeals you have filed</b></p>
+                <ul class="doc-list">
+                    @foreach ($filed as $appeal)
+                        <li>
+                            <b>#{{ $appeal->id }}</b>
+                            <span style="color: var(--text-grey);">{{ ucfirst($appeal->status) }}</span>
+                            &nbsp;<a href="{{ route('hardbound-appeal.read', $appeal) }}">Read the memo &rarr;</a>
+                        </li>
+                    @endforeach
+                </ul>
+                <p class="field-hint">
+                    The memo is written from what you entered and signed with the signature on your
+                    account. It opens on a page, so there is nothing to download to check it.
+                </p>
+            </div>
+        @endif
+
         @if ($open)
             <div class="empty-state">
                 <p>Appeal <b>#{{ $open->id }}</b> is still being processed.</p>

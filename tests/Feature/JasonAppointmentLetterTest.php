@@ -406,6 +406,47 @@ class JasonAppointmentLetterTest extends TestCase
             ->assertSessionHas('error');
     }
 
+    /**
+     * A panel of four is eight documents, and the Dean's decision rests on
+     * reading them. They are listed on one page and read in place, rather
+     * than downloaded a set at a time.
+     */
+    public function test_the_pack_is_read_on_a_page_rather_than_downloaded(): void
+    {
+        Storage::fake('local');
+
+        $application = $this->imported();
+        $cgs = $this->cgs();
+
+        // Stand in for a prepared pack.
+        $document = \App\Modules\Core\Models\ApplicationDocument::create([
+            'application_id' => $application->id,
+            'uploaded_by_id' => $cgs->id,
+            'doc_type' => 'Appointment Letter',
+            'original_name' => 'Appointment-Letter-Internal-someone.pdf',
+            'path' => 'applications/'.$application->id.'/letter.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+        ]);
+
+        Storage::disk('local')->put($document->path, '%PDF-1.4 letter');
+
+        $this->actingAs($cgs)
+            ->get(route('appointment-letter.pack', $application))
+            ->assertOk()
+            ->assertSee($document->original_name)
+            ->assertSee(route('appointment-letter.document', [$application, $document]), false);
+
+        $this->actingAs($cgs)
+            ->get(route('appointment-letter.document', [$application, $document]))
+            ->assertOk()
+            ->assertHeader('content-disposition', 'inline; filename="'.$document->original_name.'"');
+
+        $this->actingAs($cgs)
+            ->get(route('appointment-letter.document', [$application, $document, 'download' => 1]))
+            ->assertHeader('content-disposition', 'attachment; filename="'.$document->original_name.'"');
+    }
+
     /** An imported appointment, sitting on the CGS preparation stage. */
     protected function imported(): Application
     {

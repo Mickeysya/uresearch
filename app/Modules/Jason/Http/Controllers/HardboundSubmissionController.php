@@ -3,6 +3,7 @@
 namespace App\Modules\Jason\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
+use App\Modules\Jason\Http\Controllers\Concerns\PreviewsDocuments;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
@@ -26,6 +27,7 @@ use Illuminate\Validation\UnauthorizedException;
 class HardboundSubmissionController extends Controller
 {
     use ApprovesApplications;
+    use PreviewsDocuments;
 
     /** The last stage: approval here accepts the pack and issues the receipt. */
     protected const FINAL_STAGE = 'cgs_review';
@@ -103,6 +105,15 @@ class HardboundSubmissionController extends Controller
      * download route, which always sends an attachment, so only 021 can be
      * framed; the Confirmation is linked instead.
      */
+    /** An archived document on this application, inline so it can be framed. */
+    public function document(Request $request, Application $application, ApplicationDocument $document)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($document->application_id === $application->id, 404);
+
+        return $this->serveArchived($document, $request);
+    }
+
     public function forms(Request $request, Application $application)
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
@@ -123,22 +134,6 @@ class HardboundSubmissionController extends Controller
                 ->where('doc_type', self::DOC_CORRECTION_FORM)
                 ->latest('id')
                 ->first(),
-        ]);
-    }
-
-    /**
-     * Inline unless the caller asked for a file.
-     *
-     * Content-Disposition is the whole difference: `inline` hands the PDF to
-     * the browser's own viewer, `attachment` puts it on disk.
-     */
-    protected function servePdf($pdf, string $filename, Request $request)
-    {
-        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
-
-        return response($pdf->output(), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => $disposition.'; filename="'.$filename.'"',
         ]);
     }
 

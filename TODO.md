@@ -1374,7 +1374,31 @@ while no workflow declares it.
         extension memo is, so a submission stores no form at all. Submissions
         filed under the upload version still carry the candidate's own file
         and it is served instead when one is found.
-  - [x] **Nothing has to be downloaded to be read.** The generated PDFs —
+  - [x] **Nothing has to be downloaded to be read, in any of the three
+        modules.** `Http\Controllers\Concerns\PreviewsDocuments` serves both
+        a generated PDF and an archived one `Content-Disposition: inline`,
+        with `?download=1` for the file itself, and all three controllers use
+        it. Core's `documents.show` always sends an attachment, which is
+        right for a document somebody is collecting and wrong for one they
+        are checking. The archived path applies Core's own `visibleTo()` —
+        the rule lives on the model so a controller can ask it — and **logs
+        the view the way `DocumentController` does**, so this is not a second
+        way to open the same file that leaves no trace.
+        Framing works because Core's CSP middleware deliberately skips
+        non-HTML responses, so a PDF carries neither `frame-ancestors` nor
+        `X-Frame-Options`; the framing page's `default-src 'self'` allows a
+        same-origin frame.
+        Three pages, one per module:
+        **Hardbound** `hardbound.forms` frames 021 and the Confirmation.
+        **Appeal** `hardbound-appeal.read` frames the memo.
+        **Appointment Letter** `appointment-letter.pack` lists all eight pack
+        documents and frames one at a time, `?doc=` choosing which — eight
+        downloads per nomination to check it was the thing this replaces.
+        Each is linked from the queue's detail partial, and the two student
+        chains list what the candidate has filed on their own page, since
+        neither the memo nor 021 is an archived document any more and so
+        appears in no documents list.
+  - [x] **(superseded by the line above)** The generated PDFs —
         021 and the extension memo — are served `Content-Disposition: inline`,
         so opening one hands it to the browser's own viewer instead of
         leaving another copy in somebody's downloads folder every time a

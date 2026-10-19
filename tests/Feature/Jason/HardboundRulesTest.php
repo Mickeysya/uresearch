@@ -14,6 +14,7 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
 use App\Modules\Jason\Notifications\ExtensionMemoReceived;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
@@ -400,6 +401,39 @@ class HardboundRulesTest extends TestCase
         $this->actingAs($this->student('22009090', 'nosy@test.my'))
             ->get(route('hardbound.forms', $application))
             ->assertForbidden();
+    }
+
+    /**
+     * Opening an archived document from this module must leave the same
+     * trace Core's own download route leaves. Without that it would be a
+     * second way to read the same file that nothing records -- the specific
+     * gap the audit log was added to close.
+     */
+    public function test_reading_an_archived_document_inline_is_still_audited(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->signedUpCandidate();
+        $this->supervisor();
+
+        $this->actingAs($student)->post(route('hardbound.store'), $this->submissionPayload());
+        $application = Application::where('module_type', 'hardbound_submission')->firstOrFail();
+
+        $confirmation = $application->documents()
+            ->where('doc_type', 'Confirmation of Correction to Thesis')
+            ->firstOrFail();
+
+        $before = DB::table('activity_log')->where('description', 'Viewed document')->count();
+
+        $this->actingAs($student)
+            ->get(route('hardbound.document', [$application, $confirmation]))
+            ->assertOk()
+            ->assertHeader('content-disposition', 'inline; filename="'.$confirmation->original_name.'"');
+
+        $this->assertSame(
+            $before + 1,
+            DB::table('activity_log')->where('description', 'Viewed document')->count(),
+        );
     }
 
     /* ---------------- the resubmit guard ---------------- */

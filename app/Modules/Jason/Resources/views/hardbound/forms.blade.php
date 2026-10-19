@@ -26,10 +26,9 @@
         subtitle="{{ $student?->name }}{{ $student?->matric_no ? ' · '.$student->matric_no : '' }}{{ $detail?->thesis_title ? ' · '.$detail->thesis_title : '' }}" />
 
     <p class="queue-meta">
-        Both CGS forms are written by the portal from what the candidate entered, so there is
-        nothing to download in order to read them. UTP/CGS/021 is below; the Confirmation of
-        Correction is an archived document and opens through the usual download route, because
-        it collects signatures as it moves.
+        Both CGS forms are here to read, so there is nothing to download in order to check them.
+        UTP/CGS/021 is written by the portal from what the candidate entered; the Confirmation of
+        Correction is archived, because it collects signatures as it moves.
     </p>
 
     <div class="forms-actions">
@@ -37,9 +36,8 @@
            class="btn-secondary">Download UTP/CGS/021</a>
 
         @isset ($confirmation)
-            <a href="{{ route('documents.show', $confirmation) }}" class="btn-secondary">
-                Open the Confirmation of Correction
-            </a>
+            <a href="{{ route('hardbound.document', [$application, $confirmation, 'download' => 1]) }}"
+               class="btn-secondary">Download the Confirmation</a>
         @endisset
     </div>
 
@@ -54,5 +52,18 @@
         FOR OFFICE USE ONLY block is left for CGS to sign and stamp when the CD and the two
         bound copies are handed over.
     </p>
+
+    @isset ($confirmation)
+        <h3 style="margin: var(--space-6) 0 var(--space-3);">Confirmation of Correction to Thesis (UTP/CGS/017A)</h3>
+
+        <iframe class="pdf-frame"
+                src="{{ route('hardbound.document', [$application, $confirmation]) }}"
+                title="Confirmation of Correction for application {{ $application->id }}"></iframe>
+
+        <p class="field-hint">
+            Re-issued at every approval, so this is the current version: the Supervisor and the
+            Chairman sign electronically, and the examiner signs through the link emailed to them.
+        </p>
+    @endisset
 </div>
 @endsection

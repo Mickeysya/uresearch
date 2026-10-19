@@ -3,6 +3,7 @@
 namespace App\Modules\Jason\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
+use App\Modules\Jason\Http\Controllers\Concerns\PreviewsDocuments;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApplicationDocument;
@@ -45,6 +46,7 @@ use Illuminate\Validation\UnauthorizedException;
 class HardboundAppealController extends Controller
 {
     use ApprovesApplications;
+    use PreviewsDocuments;
 
     /**
      * Appeals filed before 2026-10-14 carry the candidate's uploaded memo as
@@ -65,6 +67,12 @@ class HardboundAppealController extends Controller
         return view('jason::hardbound_appeal.form', [
             'student' => $request->user(),
             'open' => $this->openRequest($request->user()->id),
+            // Nothing else shows these: the memo is not an archived document,
+            // so it appears in no documents list.
+            'filed' => Application::where('module_type', $this->moduleKey())
+                ->where('student_id', $request->user()->id)
+                ->orderByDesc('id')
+                ->get(),
             // The memo is signed with whatever they uploaded at "My
             // Signature"; without one it would go out over a blank rule.
             'signature' => HardboundSignature::forUser($request->user()->id),
@@ -219,18 +227,37 @@ class HardboundAppealController extends Controller
             ->where('doc_type', self::DOC_MEMO)
             ->latest('id')
             ->first()) {
-            return redirect()->route('documents.show', $uploaded);
+            return $this->serveArchived($uploaded, $request);
         }
 
         $pdf = Pdf::loadView('jason::hardbound_appeal.memo', $this->memoData($application));
 
-        // Inline, so reading it opens a tab rather than leaving another copy
-        // in somebody's downloads folder. `?download=1` for the file itself.
-        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+        return $this->servePdf($pdf, "Appeal-for-Extension-{$application->id}.pdf", $request);
+    }
 
-        return response($pdf->output(), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => $disposition.'; filename="Appeal-for-Extension-'.$application->id.'.pdf"',
+    /**
+     * A page to read the memo on, rather than a file to open.
+     *
+     * The same shape as the hardbound forms page: the memo is framed from
+     * the route that serves it, so checking an appeal costs nobody a
+     * download.
+     */
+    public function memoPage(Request $request, Application $application)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $user = $request->user();
+        $stageRoles = array_map(fn ($stage) => $stage->role, app(WorkflowEngine::class)->stagesFor($application));
+
+        abort_unless(
+            $application->student_id === $user->id || in_array($user->role, $stageRoles, true),
+            403
+        );
+
+        return view('jason::hardbound_appeal.memo_page', [
+            'application' => $application,
+            'detail' => HardboundAppealDetail::where('application_id', $application->id)->first(),
+            'student' => $application->student,
         ]);
     }
 

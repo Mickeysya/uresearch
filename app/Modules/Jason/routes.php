@@ -68,6 +68,13 @@ Route::middleware('auth')->group(function () {
     // re-checks the role against the application's actual stage before
     // allowing any decision, same as every other module.
     Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::DEAN_PGR]))->group(function () {
+        // The prepared pack, read in place rather than downloaded.
+        Route::get('/appointment-letter/{application}/pack', [AppointmentLetterController::class, 'pack'])
+            ->name('appointment-letter.pack');
+        Route::get('/appointment-letter/{application}/document/{document}',
+            [AppointmentLetterController::class, 'document'])
+            ->name('appointment-letter.document');
+
         Route::get('/appointment-letter/queue', [AppointmentLetterController::class, 'queue'])
             ->name('appointment-letter.queue');
         Route::post('/appointment-letter/{application}/decide', [AppointmentLetterController::class, 'decide'])
@@ -116,6 +123,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/hardbound/{application}/forms',
             [HardboundSubmissionController::class, 'forms'])
             ->name('hardbound.forms');
+        Route::get('/hardbound/{application}/document/{document}',
+            [HardboundSubmissionController::class, 'document'])
+            ->name('hardbound.document');
     });
 
     // "My Signature": uploaded once, stamped wherever that person signs.
@@ -153,6 +163,8 @@ Route::middleware('auth')->group(function () {
     ]))->group(function () {
         Route::get('/hardbound-appeal/{application}/memo', [HardboundAppealController::class, 'memo'])
             ->name('hardbound-appeal.memo');
+        Route::get('/hardbound-appeal/{application}/read', [HardboundAppealController::class, 'memoPage'])
+            ->name('hardbound-appeal.read');
     });
 
     // The memo is routed "Through" the Supervisor and the HOD/Chair, exactly
