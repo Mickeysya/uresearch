@@ -1371,12 +1371,26 @@ while no workflow declares it.
         the chain, as it always was.
   - [x] **Neither form is archived.** 021 is drawn on demand from the
         submission's own row and the candidate's signature, the same way the
-        extension memo is, so a submission stores no form at all. Readable by
-        the candidate and the three roles holding a stage — with nothing in
-        the documents list, that route is how an approver reads what was
-        submitted, and the queue's detail partial links straight to it.
-        Submissions filed under the upload version still carry the
-        candidate's own file and it is served instead when one is found.
+        extension memo is, so a submission stores no form at all. Submissions
+        filed under the upload version still carry the candidate's own file
+        and it is served instead when one is found.
+  - [x] **Nothing has to be downloaded to be read.** The generated PDFs —
+        021 and the extension memo — are served `Content-Disposition: inline`,
+        so opening one hands it to the browser's own viewer instead of
+        leaving another copy in somebody's downloads folder every time a
+        detail is checked; `?download=1` still gives the file. On top of that
+        **"Read the submission forms"** (`hardbound.forms`) is a page that
+        frames 021 beside a link to the Confirmation. Open to the candidate
+        and the three roles holding a stage; the queue's detail partial links
+        to it, and the student's own Hardbound page lists every submission
+        they have filed with a link, since 021 is no longer an archived
+        document and so appears in no documents list.
+        Framing works because Core's CSP middleware deliberately skips
+        non-HTML responses, so the PDF carries neither `frame-ancestors` nor
+        `X-Frame-Options`; the framing page's own `default-src 'self'` allows
+        a same-origin frame. The **Confirmation** is archived and goes through
+        Core's download route, which always sends an attachment — that one is
+        linked rather than framed.
   - [x] **A submission cannot be filed without the candidate's signature.**
         021 carries their certification that they handed over a CD and two
         bound copies prepared to the University's guidelines, so it cannot go

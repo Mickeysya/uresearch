@@ -49,6 +49,27 @@
             @endif
         @endif
 
+        @if (($filed ?? collect())->isNotEmpty())
+            <div class="app-item" style="margin-bottom: 18px;">
+                <p><b>Submissions you have filed</b></p>
+                <ul class="doc-list">
+                    @foreach ($filed as $app)
+                        <li>
+                            <b>#{{ $app->id }}</b>
+                            {{ $filedDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
+                            <span style="color: var(--text-grey);">&middot; {{ ucfirst($app->status) }}</span>
+                            <br>
+                            <a href="{{ route('hardbound.forms', $app) }}">Read the forms the portal wrote &rarr;</a>
+                        </li>
+                    @endforeach
+                </ul>
+                <p class="field-hint">
+                    UTP/CGS/021 is written from what you entered and signed with the signature on
+                    your account. It opens on a page, so there is nothing to download to check it.
+                </p>
+            </div>
+        @endif
+
         <form method="POST"
               action="{{ $returned ? route('hardbound.resubmit', $returned) : route('hardbound.store') }}"
               class="app-form" data-stepper>

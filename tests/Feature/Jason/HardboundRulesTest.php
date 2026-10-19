@@ -94,6 +94,21 @@ class HardboundRulesTest extends TestCase
         return $student;
     }
 
+    /** What the submission form posts, now that nothing is uploaded. */
+    protected function submissionPayload(array $overrides = []): array
+    {
+        return $overrides + [
+            'thesis_title' => 'A Study of Something',
+            'programme' => 'PhD Full-Time',
+            'supervisor_name' => 'Dr. Aisyah Rahman',
+            'country' => 'MYS',
+            'intake' => 'SEP23',
+            'passport_no' => 'A12345678',
+            'date_of_birth' => '2000-04-17',
+            'viva_date' => now()->subMonth()->toDateString(),
+        ];
+    }
+
     protected function resubmissionPayload(array $overrides = []): array
     {
         return $overrides + [
@@ -325,6 +340,66 @@ class HardboundRulesTest extends TestCase
             'application' => $application->id,
             'examiner' => $examiner->id,
         ]);
+    }
+
+    /**
+     * Both generated forms are read far more often than they are filed
+     * away, so they open in the browser rather than landing in somebody's
+     * downloads folder every time a detail is checked. The file is still
+     * one query parameter away.
+     */
+    public function test_the_generated_forms_open_in_the_browser_not_the_downloads_folder(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->signedUpCandidate();
+        $this->supervisor();
+
+        $this->actingAs($student)
+            ->post(route('hardbound.store'), $this->submissionPayload())
+            ->assertSessionHasNoErrors();
+
+        $application = Application::where('module_type', 'hardbound_submission')->firstOrFail();
+
+        $this->actingAs($student)
+            ->get(route('hardbound.submission-form', $application))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertHeader('content-disposition',
+                'inline; filename="Hardbound-Thesis-Submission-'.$application->id.'.pdf"');
+
+        $this->actingAs($student)
+            ->get(route('hardbound.submission-form', [$application, 'download' => 1]))
+            ->assertOk()
+            ->assertHeader('content-disposition',
+                'attachment; filename="Hardbound-Thesis-Submission-'.$application->id.'.pdf"');
+    }
+
+    /**
+     * A page to read them on, so nothing has to be downloaded to be
+     * checked. Open to the candidate and to the roles holding a stage.
+     */
+    public function test_the_forms_page_frames_the_submission_form(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->signedUpCandidate();
+        $supervisor = $this->supervisor();
+
+        $this->actingAs($student)->post(route('hardbound.store'), $this->submissionPayload());
+        $application = Application::where('module_type', 'hardbound_submission')->firstOrFail();
+
+        foreach ([$student, $supervisor] as $reader) {
+            $this->actingAs($reader)
+                ->get(route('hardbound.forms', $application))
+                ->assertOk()
+                ->assertSee('UTP/CGS/021')
+                ->assertSee(route('hardbound.submission-form', $application), false);
+        }
+
+        $this->actingAs($this->student('22009090', 'nosy@test.my'))
+            ->get(route('hardbound.forms', $application))
+            ->assertForbidden();
     }
 
     /* ---------------- the resubmit guard ---------------- */

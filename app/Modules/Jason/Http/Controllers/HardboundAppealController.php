@@ -224,11 +224,14 @@ class HardboundAppealController extends Controller
 
         $pdf = Pdf::loadView('jason::hardbound_appeal.memo', $this->memoData($application));
 
-        return response()->streamDownload(
-            fn () => print($pdf->output()),
-            "Appeal-for-Extension-{$application->id}.pdf",
-            ['Content-Type' => 'application/pdf'],
-        );
+        // Inline, so reading it opens a tab rather than leaving another copy
+        // in somebody's downloads folder. `?download=1` for the file itself.
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => $disposition.'; filename="Appeal-for-Extension-'.$application->id.'.pdf"',
+        ]);
     }
 
     /**

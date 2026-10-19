@@ -87,11 +87,59 @@ class HardboundSubmissionController extends Controller
             'signedAt' => $application->submitted_at ?? $application->created_at,
         ]);
 
-        return response()->streamDownload(
-            fn () => print($pdf->output()),
-            "Hardbound-Thesis-Submission-{$application->id}.pdf",
-            ['Content-Type' => 'application/pdf'],
+        // Inline, not an attachment: this is read far more often than it is
+        // filed away, and a reviewer checking a detail should not end up with
+        // another copy in their downloads folder each time. `?download=1`
+        // when somebody actually wants the file.
+        return $this->servePdf($pdf, "Hardbound-Thesis-Submission-{$application->id}.pdf", $request);
+    }
+
+    /**
+     * A page to read the forms on, rather than a file to open.
+     *
+     * Both CGS forms are generated, so there is nothing to download to check
+     * them -- they are embedded here from the same routes that serve them.
+     * The Confirmation is an archived document and goes through Core's
+     * download route, which always sends an attachment, so only 021 can be
+     * framed; the Confirmation is linked instead.
+     */
+    public function forms(Request $request, Application $application)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $user = $request->user();
+        $stageRoles = array_map(fn ($stage) => $stage->role, app(WorkflowEngine::class)->stagesFor($application));
+
+        abort_unless(
+            $application->student_id === $user->id || in_array($user->role, $stageRoles, true),
+            403
         );
+
+        return view('jason::hardbound.forms', [
+            'application' => $application,
+            'detail' => HardboundSubmissionDetail::where('application_id', $application->id)->first(),
+            'student' => $application->student,
+            'confirmation' => ApplicationDocument::where('application_id', $application->id)
+                ->where('doc_type', self::DOC_CORRECTION_FORM)
+                ->latest('id')
+                ->first(),
+        ]);
+    }
+
+    /**
+     * Inline unless the caller asked for a file.
+     *
+     * Content-Disposition is the whole difference: `inline` hands the PDF to
+     * the browser's own viewer, `attachment` puts it on disk.
+     */
+    protected function servePdf($pdf, string $filename, Request $request)
+    {
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => $disposition.'; filename="'.$filename.'"',
+        ]);
     }
 
     /**
@@ -150,12 +198,24 @@ class HardboundSubmissionController extends Controller
         // owns: Core's student sidebar does not render module links.
         $awaiting = HardboundSubmissionDetail::resubmittableFor($request->user()->id)->get();
 
+        // Every submission they have filed, so they can read the forms the
+        // portal wrote for them. Nothing else shows these: 021 is not an
+        // archived document any more, so it does not appear in Core's
+        // documents list.
+        $filed = Application::where('module_type', $this->moduleKey())
+            ->where('student_id', $request->user()->id)
+            ->orderByDesc('id')
+            ->get();
+
         return view('jason::hardbound.form', [
             'student' => $request->user(),
             'returned' => null,
             'detail' => null,
             'awaiting' => $awaiting,
             'awaitingDetails' => HardboundSubmissionDetail::whereIn('application_id', $awaiting->pluck('id'))
+                ->get()->keyBy('application_id'),
+            'filed' => $filed,
+            'filedDetails' => HardboundSubmissionDetail::whereIn('application_id', $filed->pluck('id'))
                 ->get()->keyBy('application_id'),
         ]);
     }
@@ -189,6 +249,8 @@ class HardboundSubmissionController extends Controller
             'detail' => $detail,
             'awaiting' => collect(),
             'awaitingDetails' => collect(),
+            'filed' => collect(),
+            'filedDetails' => collect(),
         ]);
     }
 

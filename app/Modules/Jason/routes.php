@@ -110,6 +110,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/hardbound/{application}/submission-form',
             [HardboundSubmissionController::class, 'submissionForm'])
             ->name('hardbound.submission-form');
+
+        // A page to read the forms on. The PDF above is served inline, so it
+        // can be framed here rather than downloaded to be checked.
+        Route::get('/hardbound/{application}/forms',
+            [HardboundSubmissionController::class, 'forms'])
+            ->name('hardbound.forms');
     });
 
     // "My Signature": uploaded once, stamped wherever that person signs.
