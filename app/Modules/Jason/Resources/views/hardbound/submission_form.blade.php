@@ -1,19 +1,27 @@
 @php
     /**
      * Hardbound Thesis Submission, UTP/CGS/021 -- ORIGINAL and STUDENT'S
-     * COPY, as issued. Pre-filled with what the portal knows about the
-     * student; the rest (country, intake, passport, date of birth, title)
-     * and the signature are theirs to complete by hand before uploading.
-     * The office block is CGS's, on paper.
+     * COPY, as issued, and written in full by the portal.
+     *
+     * Downloaded blank and completed by hand until 2026-10-19; the boxes it
+     * left for a pen -- country, intake, passport/IC, date of birth and the
+     * title -- are now entered on screen, and the candidate's signature is
+     * the one on their account. Nothing is stored: this is drawn from the
+     * submission's own row whenever it is opened.
+     *
+     * The "FOR OFFICE USE ONLY" block stays blank. That is CGS's
+     * certification that they received the CD and the two bound copies, and
+     * it is signed and stamped on paper when the candidate hands them over.
      */
     $boxes = function (?string $text, int $n): array {
         $chars = preg_split('//u', strtoupper((string) $text), -1, PREG_SPLIT_NO_EMPTY);
         return array_pad(array_slice($chars, 0, $n), $n, '');
     };
     $name = array_chunk($boxes($student->name, 54), 27);
-    $matric = $boxes($student->matric_no, 7);
-    $country = $boxes(null, 6);
-    $intake = $boxes(null, 6);
+    $matric = $boxes($detail->matric_no ?: $student->matric_no, 7);
+    $country = $boxes($detail->country, 6);
+    $intake = $boxes($detail->intake, 6);
+    $dob = $detail->date_of_birth?->format('j/n/Y');
 @endphp
 <!DOCTYPE html>
 <html>
@@ -48,7 +56,9 @@
         .cert { margin: 14px 0 22px; text-align: justify; }
         table.sig { width: 100%; border-collapse: collapse; }
         table.sig td { vertical-align: top; padding: 0; }
-        .sigline { height: 40px; border-bottom: 1px solid #000; }
+        .sigline { position: relative; height: 40px; border-bottom: 1px solid #000; }
+        .sigline img { position: absolute; left: 2px; bottom: 2px; max-height: 38px; max-width: 94%; }
+        .sigline span { position: absolute; left: 2px; bottom: 4px; }
         .rule { border-top: 3px double #000; margin: 26px 0 14px; }
         .office { text-decoration: underline; margin-bottom: 6px; }
         .blank { display: inline-block; border-bottom: 1px solid #000; width: 290px; }
@@ -99,28 +109,33 @@
                     <td class="l">Passport/IC No:</td>
                     <td>
                         <table class="det" style="width: 100%;"><tr>
-                            <td class="line" style="width: 42%;"></td>
+                            <td class="line" style="width: 42%;">{{ $detail->passport_no }}</td>
                             <td style="width: 16%; text-align: center; white-space: nowrap;">Date of Birth:</td>
-                            <td class="line"></td>
+                            <td class="line">{{ $dob }}</td>
                         </tr></table>
                     </td>
                 </tr>
-                <tr><td class="l">Programme:</td><td class="line">{{ $student->programme }}</td></tr>
+                <tr><td class="l">Programme:</td><td class="line">{{ $detail->programme ?: $student->programme }}</td></tr>
             @else
                 <tr>
                     <td class="l">Programme:</td>
                     <td>
                         <table class="det" style="width: 100%;"><tr>
-                            <td class="line" style="width: 42%;">{{ $student->programme }}</td>
+                            <td class="line" style="width: 42%;">{{ $detail->programme ?: $student->programme }}</td>
                             <td style="width: 16%; text-align: center; white-space: nowrap;">Date of Birth:</td>
-                            <td class="line"></td>
+                            <td class="line">{{ $dob }}</td>
                         </tr></table>
                     </td>
                 </tr>
             @endif
-            <tr><td class="l">Title of Thesis:</td><td class="line"></td></tr>
-            <tr><td class="l hint">(Not more than</td><td class="line"></td></tr>
-            <tr><td class="l hint">15 words)</td><td class="line"></td></tr>
+            @php
+                // Three ruled lines on the form; the title is wrapped across
+                // them rather than overflowing the first.
+                $titleLines = array_pad(explode("\n", wordwrap((string) $detail->thesis_title, 62, "\n", true)), 3, '');
+            @endphp
+            <tr><td class="l">Title of Thesis:</td><td class="line">{{ $titleLines[0] ?? '' }}</td></tr>
+            <tr><td class="l hint">(Not more than</td><td class="line">{{ $titleLines[1] ?? '' }}</td></tr>
+            <tr><td class="l hint">15 words)</td><td class="line">{{ $titleLines[2] ?? '' }}</td></tr>
         </table>
 
         <p class="cert">
@@ -131,8 +146,18 @@
 
         <table class="sig">
             <tr>
-                <td style="width: 55%; padding-right: 60px;">Signature:<div class="sigline"></div></td>
-                <td>Dated:<div class="sigline"></div></td>
+                <td style="width: 55%; padding-right: 60px;">
+                    Signature:
+                    <div class="sigline">
+                        @isset ($signature)
+                            <img src="{{ $signature }}" alt="Signature of {{ $student?->name }}">
+                        @endisset
+                    </div>
+                </td>
+                <td>
+                    Dated:
+                    <div class="sigline"><span>{{ $signedAt?->format('j F Y') }}</span></div>
+                </td>
             </tr>
         </table>
 

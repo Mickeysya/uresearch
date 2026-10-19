@@ -1352,14 +1352,36 @@ while no workflow declares it.
         programme, supervisor. Captured at submission rather than read back
         off `users`, so a candidate who later changes programme or
         supervisor does not retroactively change what CGS reviewed.
-  - [x] Both CGS forms are reproduced from the issued originals. The
-        **Hardbound Thesis Submission (UTP/CGS/021)**, ORIGINAL and STUDENT'S
-        COPY, is generated pre-filled with the student's name, matric and
-        programme for them to complete, sign and upload — the student signs
-        this one themselves. The **Confirmation of Correction to Thesis
-        (UTP/CGS/017A)** is generated from the details the student supplies
-        (programme, viva date, supervisor, co-supervisor, title) and carried
-        through the chain.
+  - [x] Both CGS forms are reproduced from the issued originals, and **both
+        are now written by the portal**. The **Hardbound Thesis Submission
+        (UTP/CGS/021)**, ORIGINAL and STUDENT'S COPY, was downloaded blank,
+        completed by hand and uploaded back until 2026-10-19; it is now
+        filled in on screen like everything else. The four boxes it left for
+        a pen — country, intake, passport/IC and date of birth — are captured
+        on `hardbound_submission_details` (not `users`: no module may add
+        columns there, and they are what this candidate wrote on this
+        submission rather than a standing fact about the person, so a later
+        correction cannot rewrite a form already filed). Country and intake
+        are capped at six characters because the form gives them six boxes
+        each, so what the candidate types and what the form shows are the
+        same thing. `passport_no` is the first identity-document number this
+        portal holds; it is nullable and printed only on that candidate's own
+        form. The **Confirmation of Correction to Thesis (UTP/CGS/017A)** is
+        generated from the details the student supplies and carried through
+        the chain, as it always was.
+  - [x] **Neither form is archived.** 021 is drawn on demand from the
+        submission's own row and the candidate's signature, the same way the
+        extension memo is, so a submission stores no form at all. Readable by
+        the candidate and the three roles holding a stage — with nothing in
+        the documents list, that route is how an approver reads what was
+        submitted, and the queue's detail partial links straight to it.
+        Submissions filed under the upload version still carry the
+        candidate's own file and it is served instead when one is found.
+  - [x] **A submission cannot be filed without the candidate's signature.**
+        021 carries their certification that they handed over a CD and two
+        bound copies prepared to the University's guidelines, so it cannot go
+        out over a blank rule. Gated the way the extension memo and every
+        approver already are, on first submission and on resubmission alike.
   - [x] **Electronic signatures on the Confirmation.** 017A's signatories
         are the Supervisor, the Internal/External Examiner and the Chairman
         of the Viva Voce Examination. The Supervisor and the Chairman

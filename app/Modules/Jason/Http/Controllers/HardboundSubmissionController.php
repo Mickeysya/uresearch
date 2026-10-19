@@ -43,18 +43,55 @@ class HardboundSubmissionController extends Controller
     public const DOC_CORRECTION_FORM = 'Confirmation of Correction to Thesis';
 
     /**
-     * The Hardbound Thesis Submission form (UTP/CGS/021), ORIGINAL and
-     * STUDENT'S COPY, pre-filled with the student's name, matric number and
-     * programme. They complete the rest, sign it, and upload it. The
-     * Confirmation of Correction is not downloaded: the portal generates it
-     * and the approvers sign it electronically.
+     * The Hardbound Thesis Submission form, UTP/CGS/021, drawn on demand.
+     *
+     * Downloaded blank, completed by hand and uploaded back until
+     * 2026-10-19; now filled in on screen and rendered from what the
+     * candidate entered plus the signature on their account. Nothing is
+     * archived -- the form is its own data, so it costs no storage and
+     * cannot drift from the record.
+     *
+     * Readable by the candidate and by the three roles holding a stage in
+     * this chain: with nothing in the documents list, this is how an
+     * approver reads what was submitted. Submissions filed under the upload
+     * version still carry the candidate's own file, and that is served
+     * instead when one is found.
      */
-    public function template(Request $request, string $form)
+    public function submissionForm(Request $request, Application $application)
     {
-        abort_unless($form === 'submission', 404);
+        abort_unless($application->module_type === $this->moduleKey(), 404);
 
-        return Pdf::loadView('jason::hardbound.submission_form', ['student' => $request->user()])
-            ->download('Hardbound-Thesis-Submission-'.($request->user()->matric_no ?: $request->user()->id).'.pdf');
+        $user = $request->user();
+        $stageRoles = array_map(fn ($stage) => $stage->role, app(WorkflowEngine::class)->stagesFor($application));
+
+        abort_unless(
+            $application->student_id === $user->id || in_array($user->role, $stageRoles, true),
+            403
+        );
+
+        if ($uploaded = ApplicationDocument::where('application_id', $application->id)
+            ->where('doc_type', self::DOC_SUBMISSION_FORM)
+            ->latest('id')
+            ->first()) {
+            return redirect()->route('documents.show', $uploaded);
+        }
+
+        $detail = HardboundSubmissionDetail::where('application_id', $application->id)->firstOrFail();
+        $student = $application->student;
+
+        $pdf = Pdf::loadView('jason::hardbound.submission_form', [
+            'application' => $application,
+            'detail' => $detail,
+            'student' => $student,
+            'signature' => $student ? HardboundSignature::forUser($student->id)?->dataUri() : null,
+            'signedAt' => $application->submitted_at ?? $application->created_at,
+        ]);
+
+        return response()->streamDownload(
+            fn () => print($pdf->output()),
+            "Hardbound-Thesis-Submission-{$application->id}.pdf",
+            ['Content-Type' => 'application/pdf'],
+        );
     }
 
     /**
@@ -125,6 +162,10 @@ class HardboundSubmissionController extends Controller
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
+        if ($redirect = $this->mustHaveSignature($request)) {
+            return $redirect;
+        }
+
         $data = $this->validateSubmission($request);
 
         $application = $this->fileSubmission($request, $data, $engine, $documents);
@@ -153,6 +194,10 @@ class HardboundSubmissionController extends Controller
 
     public function resubmit(Request $request, Application $application, WorkflowEngine $engine, DocumentStore $documents)
     {
+        if ($redirect = $this->mustHaveSignature($request)) {
+            return $redirect;
+        }
+
         $this->resubmittableDetail($request, $application);
 
         $data = $this->validateSubmission($request, resubmission: true);
@@ -271,25 +316,50 @@ class HardboundSubmissionController extends Controller
     /**
      * @return array<string, mixed>
      */
+    /**
+     * UTP/CGS/021 carries the candidate's own certification -- that they
+     * have handed over a CD and two bound copies prepared to the
+     * University's guidelines -- so it cannot be filed over a blank
+     * signature rule. Gated the way the extension memo and every approver
+     * already are: upload once, then file.
+     */
+    protected function mustHaveSignature(Request $request): ?RedirectResponse
+    {
+        if (HardboundSignature::forUser($request->user()->id)) {
+            return null;
+        }
+
+        return redirect()->route('hardbound.signature')
+            ->with('error', 'Upload your signature first. It is stamped onto the Hardbound Thesis '
+                .'Submission form you are certifying.');
+    }
+
     protected function validateSubmission(Request $request, bool $resubmission = false): array
     {
         return $request->validate([
             'thesis_title' => ['required', 'string', 'max:500'],
             'programme' => ['required', 'string', 'max:150'],
+            // The four boxes UTP/CGS/021 used to leave blank for the
+            // candidate's pen. Nullable: the form is the candidate's own
+            // certification, and CGS can complete a box on the printed
+            // copy, but it cannot refuse to be filed over one.
+            // Six boxes each on UTP/CGS/021. Capped here rather than
+            // truncated when drawing it, so what the candidate typed and
+            // what the form shows are the same thing.
+            'country' => ['nullable', 'string', 'max:6'],
+            'intake' => ['nullable', 'string', 'max:6'],
+            'passport_no' => ['nullable', 'string', 'max:40'],
+            'date_of_birth' => ['nullable', 'date', 'before:today'],
             'supervisor_name' => ['required', 'string', 'max:150'],
             // The Confirmation of Correction (UTP/CGS/017A) is generated from
             // these; the approvers sign it as it moves.
             'viva_date' => ['required', 'date', 'before_or_equal:today'],
             'co_supervisor_name' => ['nullable', 'string', 'max:150'],
-            // The Hardbound Thesis Submission form is signed by the student
-            // themselves, so it is still downloaded, signed and uploaded. On a
-            // resubmission it is re-uploaded only if it changed.
-            'submission_form' => DocumentStore::rules(required: ! $resubmission),
             'response_to_comments' => [$resubmission ? 'required' : 'nullable', 'string', 'max:2000'],
         ], [
             'viva_date.required' => 'Enter the date of your viva voce examination.',
             'viva_date.before_or_equal' => 'The viva date cannot be in the future.',
-            'submission_form.required' => 'Attach the signed Hardbound Thesis Submission form.',
+            'date_of_birth.before' => 'A date of birth has to be in the past.',
             'response_to_comments.required' => 'Explain what you changed in response to the comments.',
         ]);
     }
@@ -320,16 +390,16 @@ class HardboundSubmissionController extends Controller
                 'thesis_title' => $data['thesis_title'],
                 'matric_no' => $student->matric_no ?? '',
                 'programme' => $data['programme'],
+                'country' => $data['country'] ?? null,
+                'intake' => $data['intake'] ?? null,
+                'passport_no' => $data['passport_no'] ?? null,
+                'date_of_birth' => $data['date_of_birth'] ?? null,
                 'supervisor_name' => $data['supervisor_name'],
                 'viva_date' => $data['viva_date'],
                 'co_supervisor_name' => $data['co_supervisor_name'] ?? null,
                 'resubmission_of_id' => $replaces?->id,
                 'response_to_comments' => $data['response_to_comments'] ?? null,
             ]);
-
-            if ($request->hasFile('submission_form')) {
-                $documents->attach($application, $request->file('submission_form'), self::DOC_SUBMISSION_FORM);
-            }
 
             $application = $engine->submit($application);
 

@@ -80,6 +80,20 @@ class HardboundRulesTest extends TestCase
     }
 
     /** What the resubmission form posts. */
+    /**
+     * A candidate with a signature on file.
+     *
+     * UTP/CGS/021 is written by the portal and signed with it, so filing or
+     * resubmitting without one is refused -- see mustHaveSignature().
+     */
+    protected function signedUpCandidate(string $matric = '22001001', string $email = 'student@test.my'): User
+    {
+        $student = $this->student($matric, $email);
+        $this->signatureFor($student);
+
+        return $student;
+    }
+
     protected function resubmissionPayload(array $overrides = []): array
     {
         return $overrides + [
@@ -319,7 +333,7 @@ class HardboundRulesTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        $student = $this->signedUpCandidate();
         $returned = $this->rejectedSubmission($student);
 
         // Somebody else's returned submission is not yours to replace.
@@ -360,7 +374,7 @@ class HardboundRulesTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        $student = $this->signedUpCandidate();
         $returned = $this->rejectedSubmission($student);
 
         $this->actingAs($student)

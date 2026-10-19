@@ -49,14 +49,14 @@ class FormsTest extends TestCase
 
         $response = $this->actingAs($student)->get(route('hardbound.create'));
 
-        $this->assertIsStepper($response, 4);
+        // Three steps since 2026-10-19: the candidate's own details, the
+        // thesis, and the Confirmation. Nothing is downloaded or uploaded --
+        // the portal writes both CGS forms.
+        $this->assertIsStepper($response, 3);
 
-        // Step 1 is the download, and it has to read as a button. As a link in
-        // a list above the form it was being missed, which is the whole reason
-        // it is a step of its own.
-        $response->assertSee('Get the form')
-            ->assertSee('class="btn-secondary"', false)
-            ->assertSee(route('hardbound.template', 'submission'), false);
+        $response->assertSee('About you')
+            ->assertSee('Passport / IC Number')
+            ->assertDontSee('type="file"', false);
     }
 
     public function test_the_appeal_form_is_a_stepper(): void

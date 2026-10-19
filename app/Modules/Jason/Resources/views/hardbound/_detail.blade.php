@@ -6,6 +6,13 @@
     <p>Supervisor: {{ $detail->supervisor_name }}@if ($detail->co_supervisor_name) &middot; Co-supervisor: {{ $detail->co_supervisor_name }}@endif</p>
     <p>Viva: {{ $detail->viva_date?->format('j M Y') ?? '—' }}</p>
 
+    <p class="queue-meta" style="margin-top: 10px;">
+        <a href="{{ route('hardbound.submission-form', $application) }}"><b>Open UTP/CGS/021 &rarr;</b></a>
+        &nbsp;The candidate's Hardbound Thesis Submission form, written by the portal
+        from what they entered and signed with the signature on their account, so it is
+        not in the documents list.
+    </p>
+
     @if ($detail->isResubmission())
         <p style="margin-top: 10px;">
             <b>Resubmission of #{{ $detail->resubmission_of_id }}</b>

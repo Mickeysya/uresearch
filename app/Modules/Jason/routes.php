@@ -76,11 +76,6 @@ Route::middleware('auth')->group(function () {
 
     // ---- Hardbound Submission ------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
-        // The blank CGS forms the student downloads, completes and uploads back.
-        Route::get('/hardbound/templates/{form}', [HardboundSubmissionController::class, 'template'])
-            ->where('form', 'submission')
-            ->name('hardbound.template');
-
         Route::get('/hardbound/new', [HardboundSubmissionController::class, 'create'])
             ->name('hardbound.create');
         Route::post('/hardbound', [HardboundSubmissionController::class, 'store'])
@@ -103,6 +98,18 @@ Route::middleware('auth')->group(function () {
         Route::post('/hardbound/{application}/decide', [HardboundSubmissionController::class, 'decide'])
             ->name('hardbound.decide');
 
+    });
+
+    // The Hardbound Thesis Submission form (UTP/CGS/021), drawn on demand
+    // from what the candidate entered. Open to the candidate and to the
+    // three roles holding a stage: nothing is archived, so this is how an
+    // approver reads what was submitted.
+    Route::middleware('role:'.implode(',', [
+        Role::STUDENT, Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS,
+    ]))->group(function () {
+        Route::get('/hardbound/{application}/submission-form',
+            [HardboundSubmissionController::class, 'submissionForm'])
+            ->name('hardbound.submission-form');
     });
 
     // "My Signature": uploaded once, stamped wherever that person signs.
