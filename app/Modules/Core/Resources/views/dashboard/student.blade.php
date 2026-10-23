@@ -4,10 +4,16 @@
 
 @section('content')
     {{--
-        Single-screen layout: the page itself never scrolls, individual panels
-        do. .sdash is a three-row grid sized to the viewport (banner, stat
-        cards, then the panels taking whatever height is left), and every
-        panel body is its own scroll container.
+        Natural-height layout: the whole page scrolls, nothing inside a card
+        does. .sdash is a three-row grid (banner, stat cards, panels), each
+        row exactly as tall as its content.
+
+        .sdash-panels is a single 2-column grid holding all four cards
+        directly -- not two independently-stacked columns -- so a row's two
+        cards share one grid row track and size to the taller of the two via
+        the grid's default align-items: stretch. Order here is the pairing:
+        application-status sits beside attendance-overview, notifications
+        beside upcoming-tasks.
 
         Each panel is its own partial, so changing one never touches another.
     --}}
@@ -17,15 +23,10 @@
         @include('core::dashboard.partials.stat-cards')
 
         <div class="sdash-panels">
-            <div class="sdash-col sdash-col-left">
-                @include('core::dashboard.partials.application-status')
-                @include('core::dashboard.partials.notifications')
-            </div>
-
-            <div class="sdash-col sdash-col-right">
-                @include('core::dashboard.partials.attendance-overview')
-                @include('core::dashboard.partials.upcoming-tasks')
-            </div>
+            @include('core::dashboard.partials.application-status')
+            @include('core::dashboard.partials.attendance-overview')
+            @include('core::dashboard.partials.notifications')
+            @include('core::dashboard.partials.upcoming-tasks')
         </div>
     </div>
 @endsection

@@ -131,10 +131,14 @@
 .sdash-stats .sdash-stat:nth-child(3) { animation-delay: calc(var(--rise-start) + 2 * var(--rise-step)); }
 .sdash-stats .sdash-stat:nth-child(4) { animation-delay: calc(var(--rise-start) + 3 * var(--rise-step)); }
 .sdash-stats .sdash-stat:nth-child(5) { animation-delay: calc(var(--rise-start) + 4 * var(--rise-step)); }
-.sdash-panels .sdash-col-left  .sdash-card:nth-child(1) { animation-delay: calc(var(--rise-start) + 3 * var(--rise-step)); }
-.sdash-panels .sdash-col-right .sdash-card:nth-child(1) { animation-delay: calc(var(--rise-start) + 4 * var(--rise-step)); }
-.sdash-panels .sdash-col-left  .sdash-card:nth-child(2) { animation-delay: calc(var(--rise-start) + 5 * var(--rise-step)); }
-.sdash-panels .sdash-col-right .sdash-card:nth-child(2) { animation-delay: calc(var(--rise-start) + 6 * var(--rise-step)); }
+/* .sdash-panels is now a flat 2-column grid (application-status,
+   attendance-overview, notifications, upcoming-tasks, in that order) rather
+   than two independently-stacked columns -- see student.blade.php -- so the
+   stagger is just nth-child order. */
+.sdash-panels > .sdash-card:nth-child(1) { animation-delay: calc(var(--rise-start) + 3 * var(--rise-step)); }
+.sdash-panels > .sdash-card:nth-child(2) { animation-delay: calc(var(--rise-start) + 4 * var(--rise-step)); }
+.sdash-panels > .sdash-card:nth-child(3) { animation-delay: calc(var(--rise-start) + 5 * var(--rise-step)); }
+.sdash-panels > .sdash-card:nth-child(4) { animation-delay: calc(var(--rise-start) + 6 * var(--rise-step)); }
 
 @keyframes sdash-rise {
     from { opacity: 0; transform: translateY(16px); }

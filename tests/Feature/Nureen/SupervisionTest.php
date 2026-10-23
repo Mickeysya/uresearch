@@ -29,7 +29,7 @@ class SupervisionTest extends TestCase
     use MakesUsers;
     use RefreshDatabase;
 
-    public function test_a_supervision_request_requires_a_document(): void
+    public function test_a_supervision_request_requires_at_least_one_document(): void
     {
         $supervisor = $this->supervisor();
 
@@ -38,7 +38,7 @@ class SupervisionTest extends TestCase
         $this->post(route('supervision.store'), [
             'requested_supervisor_id' => $supervisor->id,
             'justification' => 'We share a research interest in reservoir simulation and modelling.',
-        ])->assertSessionHasErrors('supporting_document');
+        ])->assertSessionHasErrors('supporting_documents');
 
         $this->assertSame(0, Application::where('module_type', 'supervision')->count());
     }
@@ -54,7 +54,7 @@ class SupervisionTest extends TestCase
         $this->post(route('supervision.store'), [
             'requested_supervisor_id' => $supervisor->id,
             'justification' => 'We share a research interest in reservoir simulation and modelling.',
-            'supporting_document' => UploadedFile::fake()->create('proposal.pdf', 120, 'application/pdf'),
+            'supporting_documents' => [UploadedFile::fake()->create('proposal.pdf', 120, 'application/pdf')],
         ])->assertRedirect(route('applications.index'));
 
         $application = Application::where('module_type', 'supervision')->sole();
@@ -67,6 +67,48 @@ class SupervisionTest extends TestCase
         // Private disk, random name -- never under public/.
         $this->assertStringStartsWith("applications/{$application->id}/", $document->path);
         $this->assertStringNotContainsString('proposal', $document->path);
+    }
+
+    public function test_a_supervision_request_with_several_documents_attaches_them_all(): void
+    {
+        Storage::fake('local');
+
+        $supervisor = $this->supervisor();
+
+        $this->actingAs($this->student());
+
+        $this->post(route('supervision.store'), [
+            'requested_supervisor_id' => $supervisor->id,
+            'justification' => 'We share a research interest in reservoir simulation and modelling.',
+            'supporting_documents' => [
+                UploadedFile::fake()->create('proposal.pdf', 120, 'application/pdf'),
+                UploadedFile::fake()->create('transcript.png', 300, 'image/png'),
+            ],
+        ])->assertRedirect(route('applications.index'));
+
+        $application = Application::where('module_type', 'supervision')->sole();
+
+        $this->assertSame(2, $application->documents()->count());
+    }
+
+    public function test_more_than_five_documents_is_rejected(): void
+    {
+        $supervisor = $this->supervisor();
+
+        $this->actingAs($this->student());
+
+        $files = array_map(
+            fn ($i) => UploadedFile::fake()->create("doc-{$i}.pdf", 50, 'application/pdf'),
+            range(1, 6),
+        );
+
+        $this->post(route('supervision.store'), [
+            'requested_supervisor_id' => $supervisor->id,
+            'justification' => 'We share a research interest in reservoir simulation and modelling.',
+            'supporting_documents' => $files,
+        ])->assertSessionHasErrors('supporting_documents');
+
+        $this->assertSame(0, Application::where('module_type', 'supervision')->count());
     }
 
     /**

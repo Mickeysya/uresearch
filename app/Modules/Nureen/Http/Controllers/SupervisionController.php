@@ -39,12 +39,15 @@ class SupervisionController extends Controller
             'justification' => ['required', 'string', 'min:20', 'max:2000'],
             // The scope calls for the request to carry its supporting
             // documentation and for completeness to be checked before it
-            // reaches the supervisor, so this is required rather than
-            // optional -- the same bar GA Extension sets.
-            'supporting_document' => DocumentStore::rules(required: true),
+            // reaches the supervisor, so at least one file is required
+            // rather than optional -- the same bar GA Extension sets. See
+            // DocumentStore::manyRules() for the shared count/size/type
+            // limits.
+            ...DocumentStore::manyRules('supporting_documents'),
         ], [
             'justification.min' => 'Please give a sentence or two on why you are requesting this supervisor.',
-            'supporting_document.required' => 'Attach your research proposal or supporting document.',
+            'supporting_documents.required' => 'Attach your research proposal or supporting document.',
+            ...DocumentStore::manyMessages('supporting_documents'),
         ]);
 
         // The dropdown only ever lists supervisors, but the id is still
@@ -67,10 +70,11 @@ class SupervisionController extends Controller
                 'justification' => $data['justification'],
             ]);
 
-            // Through DocumentStore, so it lands on the private disk under a
-            // random name and is served back only by the authorised download
-            // route -- no column on supervision_details, and no new migration.
-            $documents->attach($application, $request->file('supporting_document'), 'Supporting Document');
+            // Through DocumentStore, so each file lands on the private disk
+            // under a random name and is served back only by the authorised
+            // download route -- no column on supervision_details, and no
+            // new migration.
+            $documents->attachMany($application, $request->file('supporting_documents'), 'Supporting Document');
 
             return $engine->submit($application);
         });
