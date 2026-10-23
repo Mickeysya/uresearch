@@ -1667,6 +1667,18 @@ while no workflow declares it.
         wording and the 025 code — the two are separate branches of
         `$conflicts` in `letter.blade.php`, so swap the internal one when CGS
         issues it.
+  - [x] **The Dean signs every letter in the pack.** The letters carry a
+        signature block over their name, and the pack is prepared before the
+        Dean's decision exists, so approving re-issues each letter with their
+        signature stamped onto the rule and replaces the archived copy —
+        before dispatch, because what an examiner is sent is read back off
+        the disk. Approving without a signature on file redirects to "My
+        Signature", the same gate the Supervisor and the Chairman carry on
+        the Confirmation of Correction; rejecting signs nothing. The
+        evaluation report has no Dean block, so it is written once at
+        preparation and left alone rather than re-issued identical.
+        `hardbound_signatures` is keyed on the user account, so the Dean's
+        upload is the same mechanism as everyone else's.
   - [x] **On the Dean's approval, four people are told**, which is where the
         flowchart ends: the candidate, their supervisor, the Academic
         Executive and CGS. One `ExaminersAppointed` class worded from the

@@ -447,6 +447,84 @@ class JasonAppointmentLetterTest extends TestCase
             ->assertHeader('content-disposition', 'attachment; filename="'.$document->original_name.'"');
     }
 
+    /**
+     * The letters go out over the Dean's signature, so approving stamps it
+     * into them. The pack is prepared before that decision exists, so the
+     * letters are re-issued and the archived copies replaced -- and it has
+     * to happen before dispatch, because what an examiner receives is read
+     * back off the disk.
+     */
+    public function test_approving_stamps_the_deans_signature_into_every_letter(): void
+    {
+        Storage::fake('local');
+
+        $application = $this->imported();
+        $dean = User::create([
+            'name' => 'Prof. Dr. Hafiz Osman', 'email' => 'dean@test.my',
+            'password' => 'password', 'role' => Role::DEAN_PGR, 'department' => 'PGR',
+        ]);
+
+        // Prepared, so there are letters to re-issue.
+        $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
+        $detail->update(['letter_prepared_at' => now(), 'thesis_title' => 'A Study of Something']);
+
+        $controller = app(\App\Modules\Jason\Http\Controllers\AppointmentLetterController::class);
+        $generate = new \ReflectionMethod($controller, 'generatePack');
+        $generate->setAccessible(true);
+        $generate->invoke($controller, $application, $detail);
+
+        $before = $application->documents()->where('doc_type', 'Appointment Letter')->pluck('id');
+        $reports = $application->documents()->where('doc_type', 'Thesis Evaluation Report')->pluck('id');
+
+        $this->assertTrue($before->isNotEmpty(), 'The preparation step should write letters.');
+
+        // Re-issued with a signature on file.
+        $this->signatureFor($dean);
+        $generate->invoke($controller, $application->fresh(), $detail->fresh(), $dean);
+
+        $after = $application->fresh()->documents()->where('doc_type', 'Appointment Letter')->pluck('id');
+
+        // Replaced, not added: one current letter per examiner.
+        $this->assertSame($before->count(), $after->count());
+        $this->assertEmpty($after->intersect($before), 'The letters should be the re-issued ones.');
+
+        // The evaluation report has no Dean block, so it is left alone.
+        $this->assertEqualsCanonicalizing(
+            $reports->all(),
+            $application->fresh()->documents()->where('doc_type', 'Thesis Evaluation Report')->pluck('id')->all(),
+        );
+    }
+
+    /** Approving without a signature stamps nothing, so it is refused. */
+    public function test_the_dean_cannot_approve_without_a_signature(): void
+    {
+        Storage::fake('local');
+
+        $application = $this->imported();
+        $dean = User::create([
+            'name' => 'Prof. Dr. Hafiz Osman', 'email' => 'dean@test.my',
+            'password' => 'password', 'role' => Role::DEAN_PGR, 'department' => 'PGR',
+        ]);
+
+        $application->update(['current_stage' => 'dean']);
+
+        $this->actingAs($dean)
+            ->post(route('appointment-letter.decide', $application), ['decision' => 'approve'])
+            ->assertRedirect(route('hardbound.signature'));
+
+        $this->assertSame(Application::STATUS_PENDING, $application->fresh()->status);
+    }
+
+    /** Puts a signature on file for whoever is about to sign. */
+    protected function signatureFor(User $user): void
+    {
+        $this->actingAs($user)
+            ->post(route('hardbound.signature.store'), [
+                'signature' => UploadedFile::fake()->image('signature.png', 300, 100),
+            ])
+            ->assertSessionHasNoErrors();
+    }
+
     /** An imported appointment, sitting on the CGS preparation stage. */
     protected function imported(): Application
     {

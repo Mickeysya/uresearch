@@ -135,7 +135,7 @@ Route::middleware('auth')->group(function () {
     // `hardbound_signatures` is keyed on the user account, so one row per
     // person covers every form they will ever sign.
     Route::middleware('role:'.implode(',', [
-        Role::STUDENT, Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS,
+        Role::STUDENT, Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS, Role::DEAN_PGR,
     ]))->group(function () {
         Route::get('/hardbound/signature', [HardboundSubmissionController::class, 'signature'])
             ->name('hardbound.signature');

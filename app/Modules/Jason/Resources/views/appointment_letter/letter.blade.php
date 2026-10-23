@@ -9,6 +9,11 @@
      * services" vs "terms of reference"), the entitlements, the bank details
      * on the slip and the conflict rows -- so each difference is marked
      * against $internal rather than kept as two near-identical files.
+     *
+     * $deanSignature is set once the Dean has approved: the pack is prepared
+     * before that decision, so the letters are regenerated with it and the
+     * archived copies replaced, which is what an examiner is then sent.
+     * Until then the block prints the rule the paper template has.
      */
     $internal = $examiner->isInternal();
     $role = $internal ? 'Internal' : 'External';
@@ -150,6 +155,11 @@
 
         .clause { margin: 0 0 10px; padding-left: 22px; text-indent: -22px; }
         .sig-line { margin-top: 40px; border-top: 1px solid #000; width: 300px; }
+
+        /* The Dean signs on approval, so the rule has a signature sitting on
+           it rather than empty space above it. */
+        .dean-sig { position: relative; height: 46px; width: 300px; margin-top: 6px; }
+        .dean-sig img { position: absolute; left: 2px; bottom: 0; max-height: 44px; max-width: 290px; }
         .fill { display: inline-block; border-bottom: 1px solid #000; min-width: 170px; }
 
         .utp-footer { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; }
@@ -255,7 +265,12 @@
     <p>Thank you.</p>
     <p>Best regards,</p>
 
-    <div class="sig-line"></div>
+    <div class="dean-sig">
+        @isset ($deanSignature)
+            <img src="{{ $deanSignature }}" alt="Signature of {{ $deanName }}">
+        @endisset
+    </div>
+    <div class="sig-line" style="margin-top: 0;"></div>
     <p>
         <b>{{ $deanName }}</b><br>
         Dean<br>

@@ -17,6 +17,7 @@ use App\Modules\Jason\Imports\AppointmentSheetImport;
 use App\Modules\Jason\Mail\AppointmentLetterMail;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
+use App\Modules\Jason\Models\HardboundSignature;
 use App\Modules\Jason\Notifications\ExaminersAppointed;
 use App\Modules\Jason\Support\AppointmentSheet;
 use App\Modules\Jason\Support\ExaminerDirectory;
@@ -562,6 +563,16 @@ class AppointmentLetterController extends Controller
         // which stage this decision was actually made at.
         $stage = $engine->currentStage($application);
 
+        // The Dean signs every letter in the pack, so there has to be a
+        // signature to stamp. Same gate the Supervisor and the Chairman
+        // carry on the Confirmation of Correction; rejecting signs nothing.
+        if ($data['decision'] === 'approve' && $stage?->key === 'dean'
+            && ! HardboundSignature::forUser($request->user()->id)) {
+            return redirect()->route('hardbound.signature')
+                ->with('error', 'Upload your signature first. Approving stamps it onto every '
+                    .'appointment letter in the pack before they go out.');
+        }
+
         // Approving out of the preparation stage has to go through the prepare
         // form, which is what actually writes the letters. Waving it through
         // from the queue's generic Approve button would hand the Dean nothing
@@ -582,6 +593,16 @@ class AppointmentLetterController extends Controller
         $approved = $data['decision'] === 'approve';
 
         if ($approved && $stage?->key === 'dean') {
+            // The letters go out over the Dean's signature, so it is stamped
+            // into them now and the archived copies replaced -- the pack was
+            // prepared before this decision existed. Done before dispatch,
+            // because what an examiner receives is read back off the disk.
+            $this->generatePack(
+                $application,
+                AppointmentDetail::where('application_id', $application->id)->firstOrFail(),
+                $request->user(),
+            );
+
             // The appointment is real from this moment: it starts each
             // examiner's cooldown, whether or not the mail gets through.
             AppointmentExaminer::where('application_id', $application->id)
@@ -747,10 +768,11 @@ class AppointmentLetterController extends Controller
      * rather than ones that will be produced afterwards. They land as
      * ApplicationDocuments, which is what the Dean's queue lists.
      */
-    protected function generatePack(Application $application, AppointmentDetail $detail): void
+    protected function generatePack(Application $application, AppointmentDetail $detail, ?User $signedBy = null): void
     {
         $store = app(DocumentStore::class);
-        $dean = User::where('role', Role::DEAN_PGR)->orderBy('name')->first();
+        $dean = $signedBy ?: User::where('role', Role::DEAN_PGR)->orderBy('name')->first();
+        $deanSignature = $signedBy ? HardboundSignature::forUser($signedBy->id)?->dataUri() : null;
 
         foreach ($detail->examiners as $examiner) {
             $slug = Str::slug($examiner->examiner_name);
@@ -763,10 +785,29 @@ class AppointmentLetterController extends Controller
                 'student' => $application->student,
                 'issuedAt' => $detail->letter_prepared_at,
                 'dean' => $dean,
+                'deanSignature' => $deanSignature,
             ])->output();
+
+            // Replace rather than add: an application carries exactly one
+            // current letter per examiner, and after the Dean signs it is
+            // the signed one.
+            ApplicationDocument::where('application_id', $application->id)
+                ->where('doc_type', self::DOC_LETTER)
+                ->where('original_name', "Appointment-Letter-{$type}-{$slug}.pdf")
+                ->get()
+                ->each(function ($previous) {
+                    Storage::disk('local')->delete($previous->path);
+                    $previous->delete();
+                });
 
             $store->storeGenerated($application, $letter,
                 "Appointment-Letter-{$type}-{$slug}.pdf", self::DOC_LETTER);
+
+            // The evaluation report carries no Dean block, so there is
+            // nothing to re-stamp; it is written once, at preparation.
+            if ($signedBy) {
+                continue;
+            }
 
             $report = Pdf::loadView('jason::appointment_letter.report', [
                 'application' => $application,
