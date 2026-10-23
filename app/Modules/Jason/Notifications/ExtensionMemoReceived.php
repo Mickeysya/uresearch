@@ -37,7 +37,8 @@ class ExtensionMemoReceived extends Notification implements ShouldQueue
             'stage_label' => 'Non-Executive CGS',
             'title' => "Memo received for appeal #{$this->application->id}. "
                 .'The Centre for Graduate Studies has your appeal for an extension of your hardbound '
-                .'thesis submission and it is now under consideration. Please wait for further notification.',
+                .'thesis submission and it is now under consideration. Please allow around 7 to 14 days '
+                .'for the outcome.',
             'next_stage' => null,
         ];
     }
@@ -50,7 +51,8 @@ class ExtensionMemoReceived extends Notification implements ShouldQueue
             ->line('**Memo received.** The Centre for Graduate Studies has your appeal for an extension '
                 .'of your hardbound thesis submission, endorsed by your supervisor and your HOD/Chair.')
             ->line('It now goes to the Dean of Postgraduate and Research for a decision. '
-                .'**Please wait for further notification** — CGS will contact you directly with the outcome.')
+                .'**Please allow around 7 to 14 days for further announcement**; CGS will contact you '
+                .'directly with the outcome.')
             ->action('Track this appeal', route('applications.index'))
             ->line('You do not need to do anything in the meantime.')
             ->salutation('Centre for Graduate Studies, Universiti Teknologi PETRONAS');

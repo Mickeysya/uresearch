@@ -192,7 +192,7 @@ class HardboundAppealController extends Controller
         return back()->with('status', match (true) {
             $refusing => "Appeal #{$application->id} was not endorsed, and the candidate has been told why.",
             $stage?->key === 'cgs_review' => "Memo received for appeal #{$application->id}. "
-                .'The candidate has been told to wait for further notification.',
+                .'The candidate has been told to allow around 7 to 14 days for the outcome.',
             default => "Appeal #{$application->id} endorsed, and your signature is on the memo.",
         });
     }

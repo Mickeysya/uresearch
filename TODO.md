@@ -1560,8 +1560,9 @@ while no workflow declares it.
         granted. The last stage's decision verb is `received` rather than
         `approved`, the Dean's *Approved / Not Approved* block on the memo is
         left blank for a physical signature, and the module's own
-        `ExtensionMemoReceived` notification says "memo received, please wait
-        for further notification".
+        `ExtensionMemoReceived` notification says "memo received", and asks
+        the candidate to **allow around 7 to 14 days** for the outcome rather
+        than leaving the wait open-ended.
   - [x] One appeal moving at a time, enforced in the controller and not only
         by hiding the form.
   - [x] Refusing to endorse ends the appeal and requires remarks, since the

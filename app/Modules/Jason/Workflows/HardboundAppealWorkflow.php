@@ -27,8 +27,9 @@ use App\Modules\Jason\Models\HardboundAppealDetail;
  * decision offline and emails the candidate personally, so the portal would
  * be guessing if it claimed an outcome. What the last stage records is
  * "memo received and under consideration", which is why its decision verb is
- * `received` rather than `approved`, and why the candidate's notice says to
- * wait for CGS rather than announcing an extension.
+ * `received` rather than `approved`, and why the candidate's notice asks
+ * them to allow around 7 to 14 days for the outcome rather than announcing
+ * an extension.
  *
  * REPLACED, 2026-09-23. This module was first built as an appeal against a
  * rejected submission, which is what docs/scope/jason.md §3 describes: a

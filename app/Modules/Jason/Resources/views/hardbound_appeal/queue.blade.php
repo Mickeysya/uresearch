@@ -6,8 +6,8 @@
     {{-- Into the partial, not above it: see the note in hardbound/queue. --}}
     @php
         $intro = $stage->key === 'cgs_review'
-            ? 'Approving records that CGS has the memo and tells the candidate to wait for '
-                .'further notification. It does not grant the extension: the memo goes to the '
+            ? 'Approving records that CGS has the memo and tells the candidate to allow around '
+                .'7 to 14 days for the outcome. It does not grant the extension: the memo goes to the '
                 .'Dean of Postgraduate and Research, who signs it, and CGS emails the candidate '
                 .'the outcome. Rejecting ends the appeal and needs remarks.'
             : 'Endorsing stamps your signature and today\'s date onto the candidate\'s memo and '
