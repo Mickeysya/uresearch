@@ -33,6 +33,12 @@
 @endpush
 
 <div class="card-container-inline">
+    {{-- Above the header on purpose: below the frame it would be a scroll
+         past a full page of PDF to find. --}}
+    <p style="margin: 0 0 var(--space-3);">
+        <a href="{{ $backTo }}">&larr; {{ $backLabel }}</a>
+    </p>
+
     <x-core::page-header
         title="Appointment pack #{{ $application->id }}"
         subtitle="{{ $student?->name }}{{ $detail?->thesis_title ? ' · '.$detail->thesis_title : '' }}" />

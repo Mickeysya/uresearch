@@ -626,6 +626,10 @@ class AppointmentLetterController extends Controller
 
         return view('jason::appointment_letter.pack', [
             'application' => $application,
+            // Where the reader came from. Only CGS and the Dean can open
+            // this, and both arrive from the queue.
+            'backTo' => route('appointment-letter.queue'),
+            'backLabel' => 'Back to the queue',
             'detail' => AppointmentDetail::where('application_id', $application->id)->first(),
             'student' => $application->student,
             'documents' => $documents,

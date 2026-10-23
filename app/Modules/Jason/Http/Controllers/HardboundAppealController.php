@@ -254,8 +254,12 @@ class HardboundAppealController extends Controller
             403
         );
 
+        $isCandidate = $application->student_id === $user->id;
+
         return view('jason::hardbound_appeal.memo_page', [
             'application' => $application,
+            'backTo' => $isCandidate ? route('hardbound-appeal.create') : route('hardbound-appeal.queue'),
+            'backLabel' => $isCandidate ? 'Back to Appeal Hardbound Submission' : 'Back to the queue',
             'detail' => HardboundAppealDetail::where('application_id', $application->id)->first(),
             'student' => $application->student,
         ]);

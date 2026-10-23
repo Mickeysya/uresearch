@@ -17,6 +17,12 @@
 @endpush
 
 <div class="card-container-inline">
+    {{-- Above the header on purpose: below the frame it would be a scroll
+         past a full page of PDF to find. --}}
+    <p style="margin: 0 0 var(--space-3);">
+        <a href="{{ $backTo }}">&larr; {{ $backLabel }}</a>
+    </p>
+
     <x-core::page-header
         title="Appeal for Extension #{{ $application->id }}"
         subtitle="{{ $student?->name }}{{ $student?->matric_no ? ' · '.$student->matric_no : '' }}{{ $detail?->requested_until ? ' · until '.$detail->requested_until->format('j F Y') : '' }}" />

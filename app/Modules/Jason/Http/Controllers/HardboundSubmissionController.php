@@ -126,8 +126,15 @@ class HardboundSubmissionController extends Controller
             403
         );
 
+        $isCandidate = $application->student_id === $user->id;
+
         return view('jason::hardbound.forms', [
             'application' => $application,
+            // A candidate came from their own Hardbound page; an approver
+            // came from their queue. Worked out here rather than from the
+            // referrer, which a refresh or a bookmark would get wrong.
+            'backTo' => $isCandidate ? route('hardbound.create') : route('hardbound.queue'),
+            'backLabel' => $isCandidate ? 'Back to Hardbound Submission' : 'Back to the queue',
             'detail' => HardboundSubmissionDetail::where('application_id', $application->id)->first(),
             'student' => $application->student,
             'confirmation' => ApplicationDocument::where('application_id', $application->id)
