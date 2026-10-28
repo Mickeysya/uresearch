@@ -15,12 +15,16 @@ use Tests\TestCase;
  *
  * The scope calls document completeness "the point of the module": an
  * extension may not reach CGS without its supporting paperwork and a real
- * justification. That rule lives in one `validate()` call and nothing was
- * guarding it, which is exactly the kind of check that breaks quietly.
+ * justification. Three distinct types are each checked separately now (the
+ * GA extension form, the supervisor's letter, and an acceptance letter or
+ * published paper — either satisfies that third one) rather than one
+ * undifferentiated upload, per config('nureen.ga_extension.required_documents').
  *
  * The chain itself is three fixed stages — Supervisor, CGS Staff, Senior
  * Director — and the middle one is what the legacy app got wrong, so the walk
  * below asserts the position after every decision rather than only the end.
+ * CGS Staff can now also send an incomplete application back to the
+ * supervisor instead of ending it; see the "returning" tests at the bottom.
  */
 class GaExtensionTest extends TestCase
 {
@@ -35,22 +39,31 @@ class GaExtensionTest extends TestCase
             'requested_new_end_date' => now()->addMonths(7)->toDateString(),
             'reason_for_extension' => 'Fieldwork at the Gurun plant slipped two semesters '
                 .'and the remaining analysis needs the assistantship to continue.',
-            'supporting_documents' => [UploadedFile::fake()->create('supervisor-letter.pdf', 90, 'application/pdf')],
+            'ga_extension_form_documents' => [UploadedFile::fake()->create('ga-form.pdf', 50, 'application/pdf')],
+            'supervisor_letter_documents' => [UploadedFile::fake()->create('supervisor-letter.pdf', 90, 'application/pdf')],
+            'acceptance_or_paper_documents' => [UploadedFile::fake()->create('acceptance.pdf', 60, 'application/pdf')],
         ];
     }
 
-    public function test_at_least_one_supporting_document_is_mandatory(): void
+    /* -----------------------------------------------------------------
+     | Document completeness — one required type per config entry
+     |------------------------------------------------------------------*/
+
+    public function test_each_required_document_type_is_mandatory_on_its_own(): void
     {
         Storage::fake('local');
 
-        $this->actingAs($this->student())
-            ->post(route('ga-extension.store'), $this->payload(['supporting_documents' => null]))
-            ->assertSessionHasErrors('supporting_documents');
+        $this->actingAs($this->student());
+
+        foreach (array_keys(config('nureen.ga_extension.required_documents')) as $field) {
+            $this->post(route('ga-extension.store'), $this->payload([$field => null]))
+                ->assertSessionHasErrors($field);
+        }
 
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
 
-    public function test_more_than_five_files_is_rejected(): void
+    public function test_more_than_five_files_for_one_type_is_rejected(): void
     {
         Storage::fake('local');
 
@@ -60,8 +73,8 @@ class GaExtensionTest extends TestCase
         );
 
         $this->actingAs($this->student())
-            ->post(route('ga-extension.store'), $this->payload(['supporting_documents' => $files]))
-            ->assertSessionHasErrors('supporting_documents');
+            ->post(route('ga-extension.store'), $this->payload(['ga_extension_form_documents' => $files]))
+            ->assertSessionHasErrors('ga_extension_form_documents');
 
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
@@ -72,14 +85,14 @@ class GaExtensionTest extends TestCase
 
         $this->actingAs($this->student())
             ->post(route('ga-extension.store'), $this->payload([
-                'supporting_documents' => [UploadedFile::fake()->create('big.pdf', 6000, 'application/pdf')],
+                'supervisor_letter_documents' => [UploadedFile::fake()->create('big.pdf', 6000, 'application/pdf')],
             ]))
-            ->assertSessionHasErrors('supporting_documents.0');
+            ->assertSessionHasErrors('supervisor_letter_documents.0');
 
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
 
-    public function test_files_totalling_over_20mb_are_rejected(): void
+    public function test_files_totalling_over_20mb_for_one_type_are_rejected(): void
     {
         Storage::fake('local');
 
@@ -91,8 +104,8 @@ class GaExtensionTest extends TestCase
         );
 
         $this->actingAs($this->student())
-            ->post(route('ga-extension.store'), $this->payload(['supporting_documents' => $files]))
-            ->assertSessionHasErrors('supporting_documents');
+            ->post(route('ga-extension.store'), $this->payload(['acceptance_or_paper_documents' => $files]))
+            ->assertSessionHasErrors('acceptance_or_paper_documents');
 
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
@@ -103,35 +116,38 @@ class GaExtensionTest extends TestCase
 
         $this->actingAs($this->student())
             ->post(route('ga-extension.store'), $this->payload([
-                'supporting_documents' => [UploadedFile::fake()->create('macro.xlsx', 90, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+                'ga_extension_form_documents' => [UploadedFile::fake()->create('macro.xlsx', 90, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
             ]))
-            ->assertSessionHasErrors('supporting_documents.0');
+            ->assertSessionHasErrors('ga_extension_form_documents.0');
 
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
 
-    public function test_several_valid_files_are_all_attached(): void
+    public function test_a_complete_request_attaches_all_three_document_types_under_their_own_labels(): void
     {
         Storage::fake('local');
 
         $this->actingAs($this->student())
-            ->post(route('ga-extension.store'), $this->payload([
-                'supporting_documents' => [
-                    UploadedFile::fake()->create('letter.pdf', 90, 'application/pdf'),
-                    UploadedFile::fake()->create('photo.jpg', 200, 'image/jpeg'),
-                    UploadedFile::fake()->create('form.docx', 50, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
-                ],
-            ]))
+            ->post(route('ga-extension.store'), $this->payload())
             ->assertRedirect(route('applications.index'));
 
         $application = Application::where('module_type', 'ga_extension')->sole();
 
         $this->assertSame(3, $application->documents()->count());
         $this->assertEqualsCanonicalizing(
-            ['letter.pdf', 'photo.jpg', 'form.docx'],
-            $application->documents()->pluck('original_name')->all(),
+            ['GA Extension Form', "Supervisor's Supporting Letter", 'Acceptance Letter or Published Paper'],
+            $application->documents()->pluck('doc_type')->all(),
         );
+
+        $document = $application->documents()->where('doc_type', 'GA Extension Form')->sole();
+        $this->assertSame('ga-form.pdf', $document->original_name);
+        $this->assertStringStartsWith("applications/{$application->id}/", $document->path);
+        $this->assertStringNotContainsString('ga-form', $document->path);
     }
+
+    /* -----------------------------------------------------------------
+     | The rest of the form
+     |------------------------------------------------------------------*/
 
     public function test_the_new_end_date_must_be_after_the_current_one(): void
     {
@@ -158,7 +174,7 @@ class GaExtensionTest extends TestCase
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
 
-    public function test_a_complete_request_is_submitted_with_its_document_on_the_private_disk(): void
+    public function test_a_complete_request_is_submitted_and_pending_at_the_supervisor(): void
     {
         Storage::fake('local');
 
@@ -173,11 +189,21 @@ class GaExtensionTest extends TestCase
 
         $detail = GaExtensionDetail::where('application_id', $application->id)->sole();
         $this->assertTrue($detail->requested_new_end_date->greaterThan($detail->current_end_date));
+    }
 
-        $document = $application->documents()->sole();
-        $this->assertSame('supervisor-letter.pdf', $document->original_name);
-        $this->assertStringStartsWith("applications/{$application->id}/", $document->path);
-        $this->assertStringNotContainsString('supervisor-letter', $document->path);
+    public function test_the_form_shows_the_logged_in_students_own_profile_details(): void
+    {
+        $student = $this->student(attributes: ['programme' => 'PhD in Chemical Engineering']);
+        $supervisor = $this->supervisor();
+        $student->update(['supervisor_id' => $supervisor->id]);
+
+        $this->actingAs($student)
+            ->get(route('ga-extension.create'))
+            ->assertOk()
+            ->assertSee($student->name)
+            ->assertSee($student->matric_no)
+            ->assertSee('PhD in Chemical Engineering')
+            ->assertSee($supervisor->name);
     }
 
     public function test_the_chain_needs_all_three_approvals(): void
@@ -236,5 +262,100 @@ class GaExtensionTest extends TestCase
         $this->assertSame(Application::STATUS_REJECTED, $application->status);
         // The stage it died on is held, so the trail says who stopped it.
         $this->assertSame('supervisor', $application->current_stage);
+    }
+
+    /* -----------------------------------------------------------------
+     | Sending an incomplete application back, instead of rejecting it
+     |------------------------------------------------------------------*/
+
+    public function test_cgs_staff_can_return_an_application_to_the_supervisor_with_a_reason(): void
+    {
+        Storage::fake('local');
+
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+
+        $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
+        $application = Application::where('module_type', 'ga_extension')->sole();
+
+        $this->actingAs($supervisor)
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        $application->refresh();
+        $this->assertSame('cgs_verify', $application->current_stage);
+
+        $this->actingAs($this->cgs())
+            ->post(route('ga-extension.return', $application), [
+                'remarks' => 'The supervisor letter is unsigned — please have it re-issued.',
+            ])
+            ->assertRedirect();
+
+        $application->refresh();
+        $this->assertSame(Application::STATUS_PENDING, $application->status);
+        // Sent back, not rejected: the application is still open, and back
+        // at the stage that has to redo its part.
+        $this->assertSame('supervisor', $application->current_stage);
+    }
+
+    public function test_returning_an_application_requires_a_reason(): void
+    {
+        Storage::fake('local');
+
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+
+        $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
+        $application = Application::where('module_type', 'ga_extension')->sole();
+
+        $this->actingAs($supervisor)
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        $this->actingAs($this->cgs())
+            ->post(route('ga-extension.return', $application->fresh()), ['remarks' => ''])
+            ->assertSessionHasErrors('remarks');
+    }
+
+    public function test_a_role_not_holding_the_applications_current_stage_cannot_return_it(): void
+    {
+        Storage::fake('local');
+
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+
+        $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
+        $application = Application::where('module_type', 'ga_extension')->sole();
+
+        // Still sitting at the supervisor's own stage -- CGS Staff holds
+        // cgs_verify, not supervisor, so the engine refuses it regardless of
+        // what the route itself allows through.
+        $this->actingAs($this->cgs())
+            ->post(route('ga-extension.return', $application), ['remarks' => 'Needs more detail.'])
+            ->assertRedirect();
+
+        $this->assertSame('supervisor', $application->fresh()->current_stage);
+        $this->assertNotNull(session('error'));
+    }
+
+    /* -----------------------------------------------------------------
+     | The System checks panel approvers see
+     |------------------------------------------------------------------*/
+
+    public function test_the_system_checks_panel_shows_every_required_type_as_present(): void
+    {
+        Storage::fake('local');
+
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+
+        $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
+
+        $this->actingAs($supervisor)
+            ->get(route('ga-extension.queue'))
+            ->assertOk()
+            ->assertSee('System checks')
+            ->assertSee('GA Extension Form')
+            ->assertSee("Supervisor's Supporting Letter")
+            ->assertSee('Acceptance Letter or Published Paper')
+            ->assertDontSee('— missing');
     }
 }

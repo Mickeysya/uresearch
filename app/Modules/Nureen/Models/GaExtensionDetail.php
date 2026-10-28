@@ -10,6 +10,7 @@ class GaExtensionDetail extends Model
 {
     protected $fillable = [
         'application_id', 'current_end_date', 'requested_new_end_date', 'reason_for_extension',
+        'additional_info',
     ];
 
     protected function casts(): array
@@ -17,6 +18,8 @@ class GaExtensionDetail extends Model
         return [
             'current_end_date' => 'date',
             'requested_new_end_date' => 'date',
+            // Provisional -- see config('nureen.ga_extension.additional_fields').
+            'additional_info' => 'array',
         ];
     }
 

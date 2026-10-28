@@ -11,6 +11,10 @@
         .body p { line-height: 1.7; }
         .signature { margin-top: 60px; }
         .signature .line { border-top: 1px solid #1a1a1a; width: 220px; margin-top: 50px; }
+        .verify { margin-top: 40px; display: table; width: 100%; }
+        .verify .qr { display: table-cell; width: 90px; vertical-align: top; }
+        .verify .qr img { width: 80px; height: 80px; }
+        .verify .text { display: table-cell; vertical-align: top; font-size: 10px; color: #555; padding-top: 4px; }
     </style>
 </head>
 <body>
@@ -19,7 +23,7 @@
         <h2>Centre for Graduate Studies (CGS)</h2>
     </div>
 
-    <p>Ref: UResearch/{{ $detail->appointment_type }}/{{ $application->id }}</p>
+    <p>Ref: {{ $detail->reference_number }}</p>
     <p>Date: {{ now()->format('j F Y') }}</p>
 
     <div class="title">
@@ -46,6 +50,23 @@
         <p>Endorsed by:</p>
         <div class="line"></div>
         <p>{{ $endorsedBy->name }}<br>{{ $endorsedBy->roleLabel() }}<br>Centre for Graduate Studies</p>
+    </div>
+
+    {{--
+        Scan to verify, or read the reference above into the verification
+        page by hand. $qrDataUri is null until a QR library is added to
+        composer.json (see SHARED_CHANGES.md) -- Support\QrCode\UnavailableQrCodeGenerator
+        is what returns null today, and this falls back to the plain URL
+        as text until that changes.
+    --}}
+    <div class="verify">
+        @if ($qrDataUri)
+            <div class="qr"><img src="{{ $qrDataUri }}" alt="Verification QR code"></div>
+        @endif
+        <div class="text">
+            Verify this letter at:<br>
+            {{ $verificationUrl }}
+        </div>
     </div>
 </body>
 </html>

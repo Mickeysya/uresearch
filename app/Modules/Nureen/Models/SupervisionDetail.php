@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SupervisionDetail extends Model
 {
     protected $fillable = [
-        'application_id', 'requested_supervisor_id', 'justification', 'reminded_at',
+        'application_id', 'requested_supervisor_id', 'justification',
+        'reminded_at', 'reminder_count', 'reminded_stage_key',
     ];
 
     protected function casts(): array

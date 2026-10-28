@@ -10,6 +10,7 @@ class GaCertificationDetail extends Model
 {
     protected $fillable = [
         'application_id', 'appointment_type', 'period_start', 'period_end', 'purpose',
+        'reference_number', 'revoked_at', 'revoked_reason',
     ];
 
     protected function casts(): array
@@ -17,7 +18,13 @@ class GaCertificationDetail extends Model
         return [
             'period_start' => 'date',
             'period_end' => 'date',
+            'revoked_at' => 'datetime',
         ];
+    }
+
+    public function isRevoked(): bool
+    {
+        return $this->revoked_at !== null;
     }
 
     public function application(): BelongsTo

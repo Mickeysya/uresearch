@@ -9,6 +9,9 @@ use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Notifications\CertificationIssued;
+use App\Modules\Nureen\Support\AppointmentVerifier;
+use App\Modules\Nureen\Support\CertificateReferenceGenerator;
+use App\Modules\Nureen\Support\Contracts\GeneratesQrCode;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -56,15 +59,56 @@ class CertificationController extends Controller
             ->with('status', "Certification request #{$application->id} submitted.");
     }
 
-    public function queue(Request $request, WorkflowEngine $engine)
+    public function queue(Request $request, WorkflowEngine $engine, AppointmentVerifier $verifier)
     {
-        $queue = $this->queueFor($request, $engine);
+        $queue = $this->queueFor($request, $engine, ['student']);
 
         $details = GaCertificationDetail::whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()
             ->keyBy('application_id');
 
-        return view('nureen::ga_certification.queue', $queue + ['details' => $details]);
+        // "Before CGS staff review, the system automatically checks the
+        // student's GA/GRA appointment" -- computed here, for every row in
+        // the queue, not only at the moment the letter is generated.
+        // Informational: nothing here stops CGS approving or rejecting
+        // either way (config('nureen.ga_certification') carries no
+        // enforcement flag on purpose).
+        $appointmentChecks = $details->map(function (GaCertificationDetail $detail) use ($verifier, $queue) {
+            $application = $queue['applications']->firstWhere('id', $detail->application_id);
+
+            if (! $application?->student) {
+                return ['status' => AppointmentVerifier::NOT_FOUND, 'record' => null];
+            }
+
+            return $verifier->verify(
+                $application->student,
+                $detail->appointment_type,
+                $detail->period_start,
+                $detail->period_end,
+            );
+        });
+
+        return view('nureen::ga_certification.queue', $queue + [
+            'details' => $details,
+            'appointmentChecks' => $appointmentChecks,
+        ]);
+    }
+
+    /**
+     * Every certificate ever issued, Valid or Revoked -- reachable from the
+     * queue's tools slot (ga_certification/_tools.blade.php). The pending
+     * queue above only ever lists applications still awaiting a decision,
+     * so once the Senior Director approves one and the certificate exists,
+     * this is the only place left to find it and revoke it.
+     */
+    public function issued(Request $request)
+    {
+        $details = GaCertificationDetail::whereNotNull('reference_number')
+            ->with('application.student')
+            ->orderByDesc('id')
+            ->paginate(20);
+
+        return view('nureen::ga_certification.issued', ['details' => $details]);
     }
 
     /**
@@ -103,11 +147,18 @@ class CertificationController extends Controller
     {
         $detail = GaCertificationDetail::where('application_id', $application->id)->firstOrFail();
 
+        $detail->update(['reference_number' => app(CertificateReferenceGenerator::class)->generate()]);
+
+        $verificationUrl = route('certificate.verify', $detail->reference_number);
+        $qr = app(GeneratesQrCode::class)->dataUri($verificationUrl);
+
         $pdf = Pdf::loadView('nureen::ga_certification.certificate_pdf', [
             'application' => $application,
             'detail' => $detail,
             'student' => $application->student,
             'endorsedBy' => $endorsedBy,
+            'verificationUrl' => $verificationUrl,
+            'qrDataUri' => $qr,
         ]);
 
         $certificate = $documents->storeGenerated(
@@ -123,5 +174,33 @@ class CertificationController extends Controller
         // download. The letter itself stays an ApplicationDocument behind the
         // authorised route; the email is a copy, not the record.
         $application->student?->notify(new CertificationIssued($application, $certificate));
+    }
+
+    /**
+     * Marks the certificate invalid without touching the application the
+     * way an approval chain would -- the application stays approved, this
+     * is only about whether the PDF already issued is still trusted. The
+     * public verification page is what this is actually for.
+     */
+    public function revoke(Request $request, Application $application): RedirectResponse
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $detail = GaCertificationDetail::where('application_id', $application->id)->firstOrFail();
+
+        abort_if($detail->reference_number === null, 404, 'No certificate has been generated for this application.');
+
+        $data = $request->validate([
+            'revoked_reason' => ['required', 'string', 'max:255'],
+        ], [
+            'revoked_reason.required' => 'Say why this certificate is being revoked — it is shown nowhere public, but is kept for the record.',
+        ]);
+
+        $detail->update([
+            'revoked_at' => now(),
+            'revoked_reason' => $data['revoked_reason'],
+        ]);
+
+        return back()->with('status', "Certificate {$detail->reference_number} revoked.");
     }
 }

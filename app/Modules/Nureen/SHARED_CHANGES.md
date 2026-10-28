@@ -63,6 +63,54 @@ developer still sets their own `NUREEN_ATTENDANCE_INGEST_KEY` in their local
 
 ---
 
+## 3. A real QR code library for certificate verification
+
+**File:** `composer.json`
+
+**Change**, add to `require`:
+
+```
+"endroid/qr-code": "^6.0"
+```
+
+**Why:** `GA/GRA Certification Letter` PDFs now carry a unique reference
+number and link to a public verification page
+(`GET /verify/certificate/{reference}`), and the spec asks for a QR code on
+the PDF pointing at it. No QR-generating package exists in `composer.json`
+today (checked). `App\Modules\Nureen\Support\Contracts\GeneratesQrCode` is
+the seam for this: once the package is added, write an implementation
+(e.g. wrapping `Endroid\QrCode\Builder\Builder`) and swap the binding in
+`Nureen\ModuleProvider::register()` — nothing else in the module needs to
+change, since the PDF template and every caller already go through the
+interface.
+
+**Degrades to:** the default binding
+(`App\Modules\Nureen\Support\QrCode\UnavailableQrCodeGenerator`) always
+returns `null`, and `certificate_pdf.blade.php` already falls back to
+printing the plain verification URL as text when that happens. Reference
+numbers, the verification page, and revocation are all fully functional
+without this — only the QR *image* is missing until the package lands.
+
+---
+
+## Note on `Haziq`'s GA/GRA appointment data
+
+`Support\AppointmentVerifier` checks a certification request against a new,
+provisional table, `ga_appointment_records`, seeded with a couple of demo
+rows by `Database\Seeders\GaAppointmentRecordSeeder` — not against anything
+in `app/Modules/Haziq`, which (checked fresh) still has no models or
+migrations at all. Haziq's own `README.md` already flags the overlap
+between his GRA/GA scope and this module as something "to agree with the
+team first," so I have not proposed a `Core\Contracts\SuppliesAppointmentStatus`
+contract here the way `Core\Contracts\SuppliesAttendance` connects Core to
+Nureen's Attendance module — that would be premature until ownership is
+actually settled. Once it is, the shape to copy is exactly that one: a
+Core-owned interface, implemented and bound from whichever module ends up
+owning GA/GRA appointment data, with `AppointmentVerifier` swapped to read
+through it instead of `ga_appointment_records` directly.
+
+---
+
 ## Note on scheduling
 
 No entry needed for `attendance:sync`'s nightly run: it is self-scheduled

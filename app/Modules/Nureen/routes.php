@@ -1,9 +1,11 @@
 <?php
 
 use App\Modules\Core\Support\Role;
+use App\Modules\Nureen\Http\Controllers\AnalyticsController;
 use App\Modules\Nureen\Http\Controllers\AttendanceAppealController;
 use App\Modules\Nureen\Http\Controllers\AttendanceController;
 use App\Modules\Nureen\Http\Controllers\AttendanceIngestController;
+use App\Modules\Nureen\Http\Controllers\CertificateVerificationController;
 use App\Modules\Nureen\Http\Controllers\CertificationController;
 use App\Modules\Nureen\Http\Controllers\GaExtensionController;
 use App\Modules\Nureen\Http\Controllers\SupervisionController;
@@ -27,6 +29,10 @@ Route::middleware('auth')->group(function () {
     ]))->group(function () {
         Route::get('/ga-extension/queue', [GaExtensionController::class, 'queue'])->name('ga-extension.queue');
         Route::post('/ga-extension/{application}/decide', [GaExtensionController::class, 'decide'])->name('ga-extension.decide');
+        // Open to the whole chain; WorkflowEngine::returnTo() refuses it
+        // anywhere but CGS Staff's cgs_verify stage -- see
+        // GaExtensionController::returnToSupervisor().
+        Route::post('/ga-extension/{application}/return', [GaExtensionController::class, 'returnToSupervisor'])->name('ga-extension.return');
     });
 
     // ---- Supervision ----------------------------------------------------
@@ -49,6 +55,13 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS]))->group(function () {
         Route::get('/ga-certification/queue', [CertificationController::class, 'queue'])->name('ga-certification.queue');
         Route::post('/ga-certification/{application}/decide', [CertificationController::class, 'decide'])->name('ga-certification.decide');
+        // Marks an already-issued certificate invalid; does not touch the
+        // application's own status -- see CertificationController::revoke().
+        Route::post('/ga-certification/{application}/revoke', [CertificationController::class, 'revoke'])->name('ga-certification.revoke');
+        // Every certificate ever issued -- an approved application drops
+        // out of the pending queue above, so this is where Revoke is
+        // actually reachable once a certificate exists.
+        Route::get('/ga-certification/issued', [CertificationController::class, 'issued'])->name('ga-certification.issued');
     });
 
     // ---- Attendance -------------------------------------------------------
@@ -71,6 +84,9 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/attendance-appeal/queue', [AttendanceAppealController::class, 'queue'])->name('attendance-appeal.queue');
         Route::post('/attendance-appeal/{application}/decide', [AttendanceAppealController::class, 'decide'])->name('attendance-appeal.decide');
+
+        // ---- Processing time analytics ---------------------------------
+        Route::get('/reports/processing-time', [AnalyticsController::class, 'index'])->name('nureen.analytics');
     });
 
 });
@@ -85,3 +101,12 @@ Route::middleware('auth')->group(function () {
 Route::post('/attendance/ingest', [AttendanceIngestController::class, 'store'])
     ->middleware('throttle:60,1')
     ->name('attendance.ingest');
+
+// ---- Public certificate verification -----------------------------------
+// No login: the whole point is that anyone holding a printed letter (or
+// scanning its QR code) can confirm it is genuine. Throttled for the same
+// reason the ingest endpoint is -- reachable with no session at all.
+Route::get('/verify/certificate/{reference}', [CertificateVerificationController::class, 'show'])
+    ->middleware('throttle:30,1')
+    ->where('reference', '.*')
+    ->name('certificate.verify');
