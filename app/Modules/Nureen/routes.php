@@ -3,6 +3,7 @@
 use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Http\Controllers\AttendanceAppealController;
 use App\Modules\Nureen\Http\Controllers\AttendanceController;
+use App\Modules\Nureen\Http\Controllers\AttendanceIngestController;
 use App\Modules\Nureen\Http\Controllers\CertificationController;
 use App\Modules\Nureen\Http\Controllers\GaExtensionController;
 use App\Modules\Nureen\Http\Controllers\SupervisionController;
@@ -65,9 +66,22 @@ Route::middleware('auth')->group(function () {
         // The blank sheet to fill in. ?format=csv for CSV; .xlsx by default.
         Route::get('/attendance/template', [AttendanceController::class, 'template'])->name('attendance.template');
         Route::get('/attendance/at-risk', [AttendanceController::class, 'atRisk'])->name('attendance.at-risk');
+        // Runs attendance:sync on demand -- see AttendanceController::syncNow().
+        Route::post('/attendance/sync-now', [AttendanceController::class, 'syncNow'])->name('attendance.sync-now');
 
         Route::get('/attendance-appeal/queue', [AttendanceAppealController::class, 'queue'])->name('attendance-appeal.queue');
         Route::post('/attendance-appeal/{application}/decide', [AttendanceAppealController::class, 'decide'])->name('attendance-appeal.decide');
     });
 
 });
+
+// ---- Automated attendance ingestion ------------------------------------
+// Outside `auth`: this is machine-to-machine, authenticated by the
+// X-Api-Key header instead of a session. Still gets the `web` middleware
+// group (and therefore CSRF) because ModuleServiceProvider wraps every
+// module's routes.php in it -- see SHARED_CHANGES.md for the exemption a
+// real external caller needs. Throttled regardless of that, since it is
+// reachable without a session at all.
+Route::post('/attendance/ingest', [AttendanceIngestController::class, 'store'])
+    ->middleware('throttle:60,1')
+    ->name('attendance.ingest');

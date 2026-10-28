@@ -3,23 +3,24 @@
 namespace App\Modules\Nureen\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
-use App\Modules\Core\Models\User;
-use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Exports\AttendanceTemplateExport;
-use App\Modules\Nureen\Imports\AttendanceSheetImport;
 use App\Modules\Nureen\Models\AttendanceRecord;
-use App\Modules\Nureen\Notifications\AttendanceAtRisk;
-use App\Modules\Nureen\Support\AttendanceRiskEvaluator;
+use App\Modules\Nureen\Models\AttendanceSyncRun;
+use App\Modules\Nureen\Support\AttendanceIngestor;
 use App\Modules\Nureen\Support\AttendanceSheet;
+use App\Modules\Nureen\Support\AttendanceSourceFactory;
+use App\Modules\Nureen\Support\AttendanceSyncRunner;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 
 /**
- * The non-workflow half of Attendance: getting UTrace data in (as a CSV
- * export, not a live API -- see the module README) and the two dashboards
- * built from it. The appeal chain itself lives in AttendanceAppealController.
+ * The non-workflow half of Attendance: getting UTrace data in and the two
+ * dashboards built from it. Automated ingestion (attendance:sync and the
+ * sources it reads from) lives in Support\AttendanceSourceFactory and
+ * Support\AttendanceSources; this controller keeps the manual upload as a
+ * fallback and shows CGS the automated side's status. The appeal chain
+ * itself lives in AttendanceAppealController.
  */
 class AttendanceController extends Controller
 {
@@ -27,7 +28,29 @@ class AttendanceController extends Controller
     {
         return view('nureen::attendance.upload', [
             'columns' => AttendanceSheet::COLUMNS,
+            'lastSync' => AttendanceSyncRun::latest('started_at')->first(),
+            'activeSource' => AttendanceSourceFactory::make()->label(),
         ]);
+    }
+
+    /**
+     * Runs a sync on demand, for a CGS member who does not want to wait for
+     * the 02:00 schedule -- recovering from a missed night, or
+     * demonstrating the automated path live. Calls AttendanceSyncRunner
+     * directly rather than `Artisan::call('attendance:sync')`: the command
+     * is only registered for console requests (see ModuleProvider::boot()),
+     * so a web request cannot find it that way.
+     */
+    public function syncNow(AttendanceSyncRunner $runner)
+    {
+        $run = $runner->run();
+
+        return back()->with(
+            'status',
+            "[{$run->source}] Read {$run->rows_read}. Added {$run->rows_added}, "
+                ."updated {$run->rows_updated}, rejected {$run->rows_rejected}. "
+                ."{$run->rows_newly_at_risk} newly flagged at-risk."
+        );
     }
 
     /**
@@ -82,130 +105,31 @@ class AttendanceController extends Controller
             'csv_file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:5120'],
         ]);
 
-        $expected = AttendanceSheet::COLUMNS;
+        $parsed = AttendanceSheet::readFile($request->file('csv_file'));
 
-        try {
-            $sheets = Excel::toArray(new AttendanceSheetImport(), $request->file('csv_file'));
-        } catch (\Throwable $e) {
-            report($e);
-
-            return back()->with('error', 'That file could not be read. Upload a .csv or .xlsx export from UTrace, '
-                .'or start from the template on this page.');
+        if ($parsed['error']) {
+            return back()->with('error', $parsed['error']);
         }
 
-        $rows = $sheets[0] ?? [];
-        $header = array_map(fn ($h) => strtolower(trim((string) $h)), array_shift($rows) ?? []);
+        $summary = (new AttendanceIngestor())->ingest(collect($parsed['rows']));
 
-        if (array_slice($header, 0, 4) !== $expected) {
-            return back()->with('error', 'The first row must be exactly: '.implode(', ', $expected)
-                .'. Download the template on this page to start from a correct file.');
-        }
+        $message = "Processed {$summary->processed()} ".Str::plural('record', $summary->processed()).'. '
+            .$summary->newlyAtRisk.' newly flagged at-risk.';
 
-        $processed = 0;
-        $newlyAtRisk = [];
-        // Why each row was skipped, so staff can repair the file instead of
-        // being told only how many rows failed.
-        $problems = [];
-
-        DB::transaction(function () use ($rows, &$processed, &$problems, &$newlyAtRisk) {
-            foreach ($rows as $i => $row) {
-                // +2: the sheet's own numbering, counting the header as row 1.
-                $line = $i + 2;
-
-                [$matricNo, $periodEnd, $attended, $total] = array_pad(array_values($row), 4, null);
-
-                $matricNo = trim((string) $matricNo);
-
-                // A wholly blank row is trailing whitespace, not a mistake.
-                if ($matricNo === '' && ($periodEnd === null || trim((string) $periodEnd) === '')) {
-                    continue;
-                }
-
-                // An .xlsx date cell, an Excel serial, or a string in any of
-                // the formats Excel writes — all normalised to Y-m-d here.
-                $periodEnd = AttendanceSheet::parseDate($periodEnd);
-
-                $student = User::where('matric_no', $matricNo)
-                    ->where('role', Role::STUDENT)
-                    ->first();
-
-                if (! $student) {
-                    $problems[] = "Row {$line}: no student with matric number \"{$matricNo}\".";
-
-                    continue;
-                }
-
-                if ($periodEnd === null) {
-                    $problems[] = "Row {$line}: period_end is not a date the importer recognises (use YYYY-MM-DD).";
-
-                    continue;
-                }
-
-                if (! is_numeric($attended) || ! is_numeric($total)) {
-                    $problems[] = "Row {$line}: sessions_attended and sessions_total must both be numbers.";
-
-                    continue;
-                }
-
-                if ((int) $total <= 0) {
-                    $problems[] = "Row {$line}: sessions_total must be greater than zero.";
-
-                    continue;
-                }
-
-                if ((int) $attended > (int) $total) {
-                    $problems[] = "Row {$line}: sessions_attended ({$attended}) is greater than sessions_total ({$total}).";
-
-                    continue;
-                }
-
-                $wasAtRisk = AttendanceRecord::where('student_id', $student->id)
-                    ->whereDate('period_end', '<', $periodEnd)
-                    ->orderByDesc('period_end')
-                    ->value('at_risk') ?? false;
-
-                // Replaces the period if it is already on file. See the note
-                // on recordPeriod() for why the lookup cannot be a plain
-                // equality on the date string.
-                $record = AttendanceRecord::recordPeriod(
-                    $student->id,
-                    $periodEnd,
-                    (int) $attended,
-                    (int) $total,
-                );
-
-                $record->update(['at_risk' => AttendanceRiskEvaluator::isAtRisk($record)]);
-
-                if ($record->at_risk && ! $wasAtRisk) {
-                    $newlyAtRisk[] = $record;
-                }
-
-                $processed++;
-            }
-        });
-
-        foreach ($newlyAtRisk as $record) {
-            $record->student->notify(new AttendanceAtRisk($record));
-            $record->student->supervisor?->notify(new AttendanceAtRisk($record));
-        }
-
-        $summary = "Processed {$processed} ".Str::plural('record', $processed).'. '
-            .count($newlyAtRisk).' newly flagged at-risk.';
-
-        if ($problems === []) {
-            return back()->with('status', $summary);
+        if ($summary->rejected === 0) {
+            return back()->with('status', $message);
         }
 
         // The good rows are already saved — a bad row skips itself rather
         // than costing the whole upload — so this is a warning, not an error.
         // Listing the first few beats a bare count: the fix is in the file,
         // and staff need to know which line to open.
-        $shown = array_slice($problems, 0, 5);
-        $extra = count($problems) - count($shown);
+        $shown = array_slice($summary->reasons, 0, 5);
+        $extra = $summary->rejected - count($shown);
 
         return back()
-            ->with('status', $summary)
-            ->with('warning', count($problems).' '.Str::plural('row', $problems).' skipped. '
+            ->with('status', $message)
+            ->with('warning', $summary->rejected.' '.Str::plural('row', $summary->rejected).' skipped. '
                 .implode(' ', $shown)
                 .($extra > 0 ? " (and {$extra} more)" : ''));
     }

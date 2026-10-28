@@ -18,7 +18,82 @@
     <x-core::page-header
         title="Upload Attendance" />
 
+    {{--
+        The automated side: attendance:sync pulls from whichever source is
+        configured (an inbox folder standing in for a nightly Power Automate
+        export, the API endpoint, or simulated data) every night at 02:00,
+        or on demand via Sync Now. Deliberately NOT part of the .fstep
+        wizard below -- it is status plus one action, not a form to step
+        through, and keeping it a plain card means form-stepper's single
+        `document.querySelector('form[data-stepper]')` still finds only the
+        manual-upload form.
+    --}}
+    <div class="card card-wide" style="margin-bottom: var(--space-6);">
+        <h3>Automated Sync</h3>
+        <p class="queue-meta">
+            Students record attendance in the university's Power Apps app. In production
+            a nightly Power Automate flow exports new records here automatically; this FYP
+            simulates that, since there is no live UTP access. The upload below is kept as
+            a manual fallback.
+        </p>
+
+        <div class="table-scroll">
+            <table class="spec-table">
+                <tbody>
+                    <tr>
+                        <td>Active source</td>
+                        <td>{{ $activeSource }}</td>
+                    </tr>
+                    <tr>
+                        <td>Last run</td>
+                        <td>
+                            @if ($lastSync)
+                                {{ $lastSync->started_at->diffForHumans() }}
+                                ({{ $lastSync->started_at->format('j M Y, g:ia') }})
+                            @else
+                                Never run yet.
+                            @endif
+                        </td>
+                    </tr>
+                    @if ($lastSync)
+                        <tr>
+                            <td>Last summary</td>
+                            <td>
+                                Read {{ $lastSync->rows_read }}, added {{ $lastSync->rows_added }},
+                                updated {{ $lastSync->rows_updated }}, rejected {{ $lastSync->rows_rejected }}.
+                                {{ $lastSync->rows_newly_at_risk }} newly flagged at-risk.
+                            </td>
+                        </tr>
+                        @if (! empty($lastSync->rejection_reasons))
+                            <tr>
+                                <td>Rejected rows</td>
+                                <td>
+                                    <ul>
+                                        @foreach (array_slice($lastSync->rejection_reasons, 0, 5) as $reason)
+                                            <li>{{ $reason }}</li>
+                                        @endforeach
+                                    </ul>
+                                    @if (count($lastSync->rejection_reasons) > 5)
+                                        <p class="field-hint">
+                                            and {{ count($lastSync->rejection_reasons) - 5 }} more.
+                                        </p>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endif
+                    @endif
+                </tbody>
+            </table>
+        </div>
+
+        <form method="POST" action="{{ route('attendance.sync-now') }}" style="margin-top: var(--space-4);">
+            @csrf
+            <button type="submit" class="btn-secondary">Sync Now</button>
+        </form>
+    </div>
+
     <div class="card card-wide">
+        <h3 style="margin-top: 0;">Manual Fallback</h3>
         <form method="POST" action="{{ route('attendance.upload') }}" enctype="multipart/form-data" data-stepper>
             @csrf
 
