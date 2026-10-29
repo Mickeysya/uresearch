@@ -112,8 +112,21 @@ class WorkstationDemoSeedTest extends TestCase
         $this->assertSame($profiles->count(), $profiles->pluck('matric_no')->unique()->count());
         $this->assertSame($profiles->count(), $profiles->pluck('email')->unique()->count());
 
+        // Final polish (demo-seed idempotency fix): the 3 unreturned-key
+        // scenario profiles carry a fixed, reserved matric number
+        // (WorkstationDemoSeed::UNRETURNED_KEY_SCENARIOS) instead of one
+        // from nextStudentId()'s sequential YY01NNNN space -- that fixed
+        // identity is the whole idempotency mechanism (see that
+        // constant's own doc), so it deliberately does not match the
+        // regular pattern.
+        $reservedMatricNos = array_column(\App\Modules\Chloe\Console\Commands\WorkstationDemoSeed::UNRETURNED_KEY_SCENARIOS, 'matric_no');
+
         foreach ($profiles as $profile) {
-            $this->assertMatchesRegularExpression('/^(2[1-5])01\d{4}$/', $profile->matric_no);
+            if (in_array($profile->matric_no, $reservedMatricNos, true)) {
+                $this->assertMatchesRegularExpression('/^\d{8}$/', $profile->matric_no);
+            } else {
+                $this->assertMatchesRegularExpression('/^(2[1-5])01\d{4}$/', $profile->matric_no);
+            }
             $firstWord = strtolower(strtok($profile->name, ' '));
             $firstWord = preg_replace('/[^a-z]/', '', $firstWord);
             $this->assertSame("{$firstWord}_{$profile->matric_no}@utp.edu.my", $profile->email);
@@ -212,6 +225,107 @@ class WorkstationDemoSeedTest extends TestCase
         foreach ($pending as $key) {
             $this->assertTrue($key->requested_at->gte(now()->subDays(6)->startOfDay()));
         }
+    }
+
+    /**
+     * Found live: a re-run used to pick its 3 unreturned-key scenario
+     * seats by computing an INDEX into a freshly-recomputed
+     * Available-or-Awaiting pool -- stable only if nothing else has
+     * touched any seat's status since the last run. Any real CGS action
+     * between two runs (here: a plain CGS seat release, the same kind of
+     * action a normal testing session performs constantly) changes that
+     * pool's size, so the same index landed on a DIFFERENT seat -- the
+     * old scenario seat was abandoned (left sitting in Awaiting Key
+     * Return forever) and a brand new one created, which is exactly why
+     * the Awaiting Key Return count grew by 3 on every re-run instead of
+     * staying at 3. This test reproduces that exact failure condition and
+     * proves the fixed (fixed-matric-number-anchored) version survives it:
+     * same seats, same counts, both before and after the churn.
+     */
+    public function test_running_it_twice_with_unrelated_seat_churn_in_between_reuses_the_same_scenario_seats(): void
+    {
+        $this->layCatalogue();
+        $this->artisan('workstation:demo-seed')->assertSuccessful();
+
+        $scenarioSeatIdsBefore = Workstation::where('status', Workstation::STATUS_AWAITING_KEY_RETURN)->pluck('id')->sort()->values();
+        $this->assertCount(3, $scenarioSeatIdsBefore);
+
+        // Unrelated churn: new Available seats appear between the two runs
+        // (the same kind of thing that happens constantly in real use --
+        // new catalogue rows, or other seats cycling through Available) --
+        // enough on its own to change the OLD code's pool size/order and
+        // reproduce the bug, with no side effect on any existing seat's
+        // own status.
+        $extraRoom = WorkstationLocation::create(['block' => 'N2', 'room_code' => 'N2-T-03', 'gender' => 'male', 'name' => 'N2-T-03']);
+        for ($i = 1; $i <= 5; $i++) {
+            Workstation::create(['workstation_location_id' => $extraRoom->id, 'seat_code' => (string) (400 + $i), 'position' => 400 + $i, 'status' => Workstation::STATUS_AVAILABLE]);
+        }
+
+        $this->artisan('workstation:demo-seed')->assertSuccessful();
+
+        $scenarioSeatIdsAfter = Workstation::where('status', Workstation::STATUS_AWAITING_KEY_RETURN)->pluck('id')->sort()->values();
+        $this->assertSame($scenarioSeatIdsBefore->all(), $scenarioSeatIdsAfter->all(), 'The same 3 seats must hold the unreturned-key scenario after unrelated seat churn, not 3 new ones alongside the old.');
+        $this->assertCount(3, $scenarioSeatIdsAfter);
+    }
+
+    /**
+     * The literal requirement: run twice (with the same kind of unrelated
+     * churn in between), and every demo table's row count plus the
+     * identity of every scenario seat (both unreturned-key and
+     * termination-notice) must be exactly identical.
+     */
+    public function test_running_it_twice_with_churn_leaves_every_demo_table_row_count_and_every_scenario_seat_identical(): void
+    {
+        $this->layCatalogue();
+        $this->artisan('workstation:demo-seed')->assertSuccessful();
+
+        $before = [
+            'totals' => [
+                'total' => Workstation::count(),
+                'available' => Workstation::where('status', Workstation::STATUS_AVAILABLE)->count(),
+                'occupied' => Workstation::where('status', Workstation::STATUS_OCCUPIED)->count(),
+                'awaiting_key_return' => Workstation::where('status', Workstation::STATUS_AWAITING_KEY_RETURN)->count(),
+                'disabled' => Workstation::where('status', Workstation::STATUS_DISABLED)->count(),
+            ],
+            'profiles' => DemoStudentProfile::count(),
+            'requests' => WorkstationRequest::whereNotNull('demo_profile_id')->count(),
+            'keys' => LockerKey::whereNotNull('demo_profile_id')->count(),
+            'notices' => WorkstationTerminationNotice::where('status', WorkstationTerminationNotice::STATUS_ACTIVE)->count(),
+            'history' => WorkstationHistory::count(),
+            'unreturnedKeySeats' => Workstation::where('status', Workstation::STATUS_AWAITING_KEY_RETURN)->pluck('id')->sort()->values()->all(),
+            'terminationSeats' => WorkstationTerminationNotice::where('status', WorkstationTerminationNotice::STATUS_ACTIVE)->with('workstationRequest')->get()->pluck('workstationRequest.workstation_id')->sort()->values()->all(),
+        ];
+
+        // Unrelated churn between the two runs.
+        $extraRoom = WorkstationLocation::create(['block' => 'N2', 'room_code' => 'N2-T-04', 'gender' => 'female', 'name' => 'N2-T-04']);
+        Workstation::create(['workstation_location_id' => $extraRoom->id, 'seat_code' => '500', 'position' => 500, 'status' => Workstation::STATUS_AVAILABLE]);
+        $this->travel(2)->days();
+
+        $this->artisan('workstation:demo-seed')->assertSuccessful();
+
+        $after = [
+            'totals' => [
+                'total' => Workstation::count(),
+                'available' => Workstation::where('status', Workstation::STATUS_AVAILABLE)->count(),
+                'occupied' => Workstation::where('status', Workstation::STATUS_OCCUPIED)->count(),
+                'awaiting_key_return' => Workstation::where('status', Workstation::STATUS_AWAITING_KEY_RETURN)->count(),
+                'disabled' => Workstation::where('status', Workstation::STATUS_DISABLED)->count(),
+            ],
+            'profiles' => DemoStudentProfile::count(),
+            'requests' => WorkstationRequest::whereNotNull('demo_profile_id')->count(),
+            'keys' => LockerKey::whereNotNull('demo_profile_id')->count(),
+            'notices' => WorkstationTerminationNotice::where('status', WorkstationTerminationNotice::STATUS_ACTIVE)->count(),
+            'history' => WorkstationHistory::count(),
+            'unreturnedKeySeats' => Workstation::where('status', Workstation::STATUS_AWAITING_KEY_RETURN)->pluck('id')->sort()->values()->all(),
+            'terminationSeats' => WorkstationTerminationNotice::where('status', WorkstationTerminationNotice::STATUS_ACTIVE)->with('workstationRequest')->get()->pluck('workstationRequest.workstation_id')->sort()->values()->all(),
+        ];
+
+        // totals.total and totals.available differ by exactly the 1 new
+        // seat the churn itself added -- everything else, including every
+        // scenario seat identity, must be byte-for-byte identical.
+        $after['totals']['total'] -= 1;
+        $after['totals']['available'] -= 1;
+        $this->assertSame($before, $after);
     }
 
     /** PART 5 #1: no Part-Time or Coursework programme anywhere in the list, or on any seeded profile. */

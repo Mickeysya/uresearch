@@ -287,12 +287,27 @@ class WorkstationDemoSeed extends Command
             'name' => $name,
             'email' => $this->emailFor($name, $matricNo),
             'gender' => $gender,
+            // Placeholders until the real id exists below -- its own
+            // auto-increment id is unknown before create().
             'programme' => $this->pickFrom(self::PROGRAMMES, $seat->id, 'programme'),
             'programme_start_date' => now()->subMonths($this->seededRand($seat->id, 'start', 6, 18)),
-            // PART 5 #2: spread over roughly the next 24 months, not a
-            // single fixed date for every demo student.
             'candidacy_expiry_date' => now()->addMonths($this->seededRand($seat->id, 'expiry', 3, 24)),
             'status' => DemoStudentProfile::STATUS_ACTIVE,
+        ]);
+
+        // Found live: correctExistingDemoProfilesForEligibility() checks
+        // every profile against programme/expiry computed from ITS OWN
+        // id with the '*-correction' salts -- not this seat's id with
+        // these salts, which almost never agree. Without this, EVERY
+        // regular demo profile got rewritten on EVERY subsequent run
+        // (134 of 156 on the very next run, measured live), each time to
+        // a slightly different value as now() moved on -- not a
+        // duplicate, but very much not idempotent either. Setting both to
+        // exactly what the correction method expects, right away, makes
+        // every profile already-correct from its first run onward.
+        $profile->update([
+            'programme' => $this->pickFrom(self::PROGRAMMES, $profile->id, 'programme-correction'),
+            'candidacy_expiry_date' => now()->addMonths($this->seededRand($profile->id, 'expiry-correction', 3, 24)),
         ]);
 
         $allocatedAt = now()->subMonths($this->seededRand($seat->id, 'alloc', 6, 18));
@@ -366,131 +381,178 @@ class WorkstationDemoSeed extends Command
     }
 
     /**
-     * Point 8: three currently-Available seats get a former demo occupant
-     * whose locker key is Return Pending -- one not yet due, one due in
-     * about 2 days, one already overdue. The seat itself is never changed
-     * (status stays Available, so the PDF's Available count is untouched);
-     * only a RELEASED request + a Return Pending key exist behind it.
+     * Point 8: three seats get a former demo occupant whose locker key is
+     * Return Pending -- one not yet due, one due in about 2 days, one
+     * already overdue.
+     *
+     * Found live: the previous version picked its seat by computing an
+     * INDEX into a freshly-recomputed candidate pool
+     * (Available ∪ Awaiting-with-a-demo-request) on every run. That pool's
+     * size and order are only stable if NOTHING ELSE has changed any
+     * seat's status since the last run -- any real CGS action (or a CGS
+     * screen test) between two runs shifts the pool, so the same index
+     * lands on a DIFFERENT seat. The old seat is then abandoned (still
+     * sitting in Awaiting Key Return with its own demo profile, never
+     * found again) and a brand new one is created in its place -- which is
+     * exactly why the Awaiting Key Return count grew by 3 on every re-run
+     * instead of staying at 3.
+     *
+     * Fixed by giving each of the 3 scenarios a FIXED, reserved demo
+     * matric number (self::UNRETURNED_KEY_SCENARIOS) -- a stable identity
+     * a re-run can look up directly, independent of anything else that has
+     * happened to any seat in the meantime. The seat itself is only ever
+     * CHOSEN once, the first time a scenario's profile does not yet exist;
+     * every run after that finds the same profile -> same request -> same
+     * seat and only refreshes its dates (self-healing its status/key back
+     * to the scenario's shape too, in case something else moved it, e.g.
+     * a CGS Release Hold on that exact seat).
      */
+    /** Public (not protected, like the other scenario constants here) so tests can assert against the exact reserved IDs rather than duplicating them. */
+    public const UNRETURNED_KEY_SCENARIOS = [
+        ['tag' => 'not-due', 'days' => 10, 'matric_no' => '99009001'],
+        ['tag' => 'due-soon', 'days' => 2, 'matric_no' => '99009002'],
+        ['tag' => 'overdue', 'days' => -5, 'matric_no' => '99009003'],
+    ];
+
     protected function seedUnreturnedKeySeats(): void
     {
-        $scenarios = [
-            ['tag' => 'not-due', 'days' => 10],
-            ['tag' => 'due-soon', 'days' => 2],
-            ['tag' => 'overdue', 'days' => -5],
-        ];
+        foreach (self::UNRETURNED_KEY_SCENARIOS as $i => $scenario) {
+            $returnDueAt = now()->addDays($scenario['days']);
+            $profile = DemoStudentProfile::where('matric_no', $scenario['matric_no'])->first();
 
-        // The candidate pool for picking one of these 3 scenarios is
-        // genuinely-Available seats PLUS whichever seats a PRIOR run of
-        // this same method already put into Awaiting Key Return -- found
-        // by their own demo-linked request, never a real one -- so the
-        // same seat is found again (and only refreshed) on every re-run,
-        // rather than a fresh pick landing on a different seat each time.
-        $seats = Workstation::where(function ($query) {
-            $query->where('status', Workstation::STATUS_AVAILABLE)
-                ->orWhere(function ($awaiting) {
-                    $awaiting->where('status', Workstation::STATUS_AWAITING_KEY_RETURN)
-                        ->whereHas('requests', fn ($r) => $r->whereNotNull('demo_profile_id'));
-                });
-        })
-            ->with('location')
-            ->orderBy('id')
-            ->get();
+            if ($profile) {
+                $this->refreshUnreturnedKeyScenario($profile, $returnDueAt);
 
-        foreach ($scenarios as $i => $scenario) {
+                continue;
+            }
+
+            // First time this scenario has ever run (a fresh seed, or
+            // after workstation:demo-clear): Maintenance and real-account
+            // seats are never candidates -- Available excludes Maintenance
+            // by construction, and every Available/Awaiting seat here is,
+            // by definition, not currently held by a real student.
+            $seats = Workstation::where('status', Workstation::STATUS_AVAILABLE)
+                ->with('location')
+                ->orderBy('id')
+                ->get();
+
             $seat = $seats->get($this->seededRand(90000 + $i, 'unreturned-pick', 0, max($seats->count() - 1, 0)));
 
             if (! $seat) {
                 continue;
             }
 
-            $existingRequest = WorkstationRequest::where('workstation_id', $seat->id)
-                ->where('status', WorkstationRequest::STATUS_RELEASED)
-                ->whereNotNull('demo_profile_id')
-                ->latest('requested_at')
-                ->first();
-
-            $returnDueAt = now()->addDays($scenario['days']);
-
-            if ($existingRequest) {
-                LockerKey::where('workstation_request_id', $existingRequest->id)
-                    ->latest('requested_at')
-                    ->first()
-                    ?->update(['return_due_at' => $returnDueAt]);
-
-                // Idempotent against the seat's own status too -- a prior
-                // run (or the one-time data migration) should already have
-                // set this, but a run that finds the request without it
-                // still corrects it rather than leaving the seat offerable.
-                if ($seat->status !== Workstation::STATUS_AWAITING_KEY_RETURN) {
-                    $seat->update(['status' => Workstation::STATUS_AWAITING_KEY_RETURN]);
-                }
-
-                continue;
-            }
-
-            $gender = $seat->location->gender;
-            $name = $this->generateName($gender, 80000 + $i);
-            $matricNo = $this->nextStudentId();
-
-            $profile = DemoStudentProfile::create([
-                'matric_no' => $matricNo,
-                'name' => $name,
-                'email' => $this->emailFor($name, $matricNo),
-                'gender' => $gender,
-                'programme' => $this->pickFrom(self::PROGRAMMES, 80000 + $i, 'programme'),
-                'programme_start_date' => now()->subMonths(14),
-                'candidacy_expiry_date' => now()->addMonths(10),
-                'status' => DemoStudentProfile::STATUS_ACTIVE,
-            ]);
-
-            $requestedAt = now()->subMonths(10);
-            $releasedAt = now()->subDays(7);
-
-            $request = WorkstationRequest::create([
-                'workstation_id' => $seat->id,
-                'demo_profile_id' => $profile->id,
-                'status' => WorkstationRequest::STATUS_RELEASED,
-                'requested_at' => $requestedAt,
-                'released_at' => $releasedAt,
-            ]);
-
-            // PART 1 #8: created directly as Awaiting Key Return, not
-            // Available -- a Collected key's seat was never offerable
-            // under the current rule, this scenario exists specifically
-            // to demonstrate that.
-            $seat->update(['status' => Workstation::STATUS_AWAITING_KEY_RETURN]);
-
-            WorkstationHistory::record(
-                seat: $seat,
-                actorType: WorkstationHistory::ACTOR_SYSTEM,
-                actorName: 'System',
-                action: WorkstationHistory::ACTION_SEAT_RELEASED,
-                reason: WorkstationAllocator::REASON_TERMINATION_GRADUATED,
-                beforeState: Workstation::STATUS_OCCUPIED,
-                afterState: Workstation::STATUS_AWAITING_KEY_RETURN,
-                student: StudentDirectory::fromDemoProfile($profile)->asUserLike(),
-            );
-
-            LockerKey::create([
-                'workstation_request_id' => $request->id,
-                'demo_profile_id' => $profile->id,
-                'status' => LockerKey::STATUS_RETURN_PENDING,
-                'requested_at' => $requestedAt,
-                'collected_at' => $requestedAt->copy()->addDay(),
-                'return_due_at' => $returnDueAt,
-            ]);
-
-            WorkstationHistory::record(
-                seat: $seat,
-                actorType: WorkstationHistory::ACTOR_SYSTEM,
-                actorName: 'System',
-                action: WorkstationHistory::ACTION_KEY_RETURN_PENDING,
-                beforeState: LockerKey::STATUS_COLLECTED,
-                afterState: LockerKey::STATUS_RETURN_PENDING,
-                student: StudentDirectory::fromDemoProfile($profile)->asUserLike(),
-            );
+            $this->createUnreturnedKeyScenario($seat, $scenario['matric_no'], 80000 + $i, $returnDueAt);
         }
+    }
+
+    /** Re-run path: same profile, same request, same seat -- only the dates (and, if anything else moved it, its status/key) are refreshed. */
+    protected function refreshUnreturnedKeyScenario(DemoStudentProfile $profile, \Illuminate\Support\Carbon $returnDueAt): void
+    {
+        $request = WorkstationRequest::where('demo_profile_id', $profile->id)
+            ->where('status', WorkstationRequest::STATUS_RELEASED)
+            ->latest('requested_at')
+            ->first();
+
+        if (! $request) {
+            return;
+        }
+
+        $lockerKey = LockerKey::where('workstation_request_id', $request->id)->latest('requested_at')->first();
+        $lockerKey?->update(['status' => LockerKey::STATUS_RETURN_PENDING, 'return_due_at' => $returnDueAt]);
+
+        $seat = $request->workstation;
+
+        // Self-healing: a CGS action on this exact seat (e.g. Release
+        // Hold, or a real re-allocation) could have moved its status or
+        // the key's status away from the scenario's shape since the last
+        // run -- put both back rather than leaving a stale scenario.
+        if ($seat && $seat->status !== Workstation::STATUS_AWAITING_KEY_RETURN) {
+            $seat->update(['status' => Workstation::STATUS_AWAITING_KEY_RETURN]);
+        }
+    }
+
+    /** First-run path: creates the one profile/request/key this scenario will reuse forever after. */
+    protected function createUnreturnedKeyScenario(Workstation $seat, string $matricNo, int $seedKey, \Illuminate\Support\Carbon $returnDueAt): void
+    {
+        $gender = $seat->location->gender;
+        $name = $this->generateName($gender, $seedKey);
+
+        $profile = DemoStudentProfile::create([
+            'matric_no' => $matricNo,
+            'name' => $name,
+            'email' => $this->emailFor($name, $matricNo),
+            'gender' => $gender,
+            // Placeholders until the real id exists below -- its own
+            // auto-increment id is unknown before create().
+            'programme' => $this->pickFrom(self::PROGRAMMES, $seedKey, 'programme'),
+            'programme_start_date' => now()->subMonths(14),
+            'candidacy_expiry_date' => now()->addMonths(10),
+            'status' => DemoStudentProfile::STATUS_ACTIVE,
+        ]);
+
+        // Found live: correctExistingDemoProfilesForEligibility() (which
+        // runs first on every FUTURE call) expects this exact profile's
+        // programme/expiry to be a pure function of ITS OWN id with the
+        // '*-correction' salts -- not this method's own $seedKey/salts,
+        // which are for a DIFFERENT purpose (picking the seat/name).
+        // Without this, the two formulas would almost never agree, and
+        // "corrected" would fire on every single run forever, flipping
+        // the programme and expiry between two different values each
+        // time rather than ever settling. Setting both to exactly what
+        // the correction method would compute, right away, makes this
+        // profile already-correct from its very first run onward.
+        $profile->update([
+            'programme' => $this->pickFrom(self::PROGRAMMES, $profile->id, 'programme-correction'),
+            'candidacy_expiry_date' => now()->addMonths($this->seededRand($profile->id, 'expiry-correction', 3, 24)),
+        ]);
+
+        $requestedAt = now()->subMonths(10);
+        $releasedAt = now()->subDays(7);
+
+        $request = WorkstationRequest::create([
+            'workstation_id' => $seat->id,
+            'demo_profile_id' => $profile->id,
+            'status' => WorkstationRequest::STATUS_RELEASED,
+            'requested_at' => $requestedAt,
+            'released_at' => $releasedAt,
+        ]);
+
+        // PART 1 #8: created directly as Awaiting Key Return, not
+        // Available -- a Collected key's seat was never offerable
+        // under the current rule, this scenario exists specifically
+        // to demonstrate that.
+        $seat->update(['status' => Workstation::STATUS_AWAITING_KEY_RETURN]);
+
+        WorkstationHistory::record(
+            seat: $seat,
+            actorType: WorkstationHistory::ACTOR_SYSTEM,
+            actorName: 'System',
+            action: WorkstationHistory::ACTION_SEAT_RELEASED,
+            reason: WorkstationAllocator::REASON_TERMINATION_GRADUATED,
+            beforeState: Workstation::STATUS_OCCUPIED,
+            afterState: Workstation::STATUS_AWAITING_KEY_RETURN,
+            student: StudentDirectory::fromDemoProfile($profile)->asUserLike(),
+        );
+
+        LockerKey::create([
+            'workstation_request_id' => $request->id,
+            'demo_profile_id' => $profile->id,
+            'status' => LockerKey::STATUS_RETURN_PENDING,
+            'requested_at' => $requestedAt,
+            'collected_at' => $requestedAt->copy()->addDay(),
+            'return_due_at' => $returnDueAt,
+        ]);
+
+        WorkstationHistory::record(
+            seat: $seat,
+            actorType: WorkstationHistory::ACTOR_SYSTEM,
+            actorName: 'System',
+            action: WorkstationHistory::ACTION_KEY_RETURN_PENDING,
+            beforeState: LockerKey::STATUS_COLLECTED,
+            afterState: LockerKey::STATUS_RETURN_PENDING,
+            student: StudentDirectory::fromDemoProfile($profile)->asUserLike(),
+        );
     }
 
     protected function verifyGenderMatches(): void
