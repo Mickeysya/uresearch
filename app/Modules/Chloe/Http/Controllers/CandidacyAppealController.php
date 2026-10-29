@@ -13,6 +13,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\UnauthorizedException;
@@ -44,10 +45,21 @@ class CandidacyAppealController extends Controller
 
         $supervisors = User::where('role', Role::SUPERVISOR)->orderBy('name')->get();
 
-        return view('chloe::candidacy.appeal.form', compact('candidacy', 'supervisors'));
+        // The official appeal memo names Department against the signature
+        // block; pre-fill from the student's own profile as a convenience
+        // default, same reasoning as the pre-filled name/matric number
+        // everywhere else -- it's still editable, and stored on this
+        // appeal's own row, not written back to users.department.
+        $departmentDefault = $request->user()->department;
+
+        // Student ID, read-only -- it's the account's own matric number, not
+        // something an appeal can plausibly disagree with the system about.
+        $studentId = $request->user()->matric_no;
+
+        return view('chloe::candidacy.appeal.form', compact('candidacy', 'supervisors', 'departmentDefault', 'studentId'));
     }
 
-    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
+    public function store(Request $request, WorkflowEngine $engine)
     {
         $candidacy = StudyCandidacy::where('student_id', $request->user()->id)->first();
         abort_unless($candidacy, 404);
@@ -55,16 +67,16 @@ class CandidacyAppealController extends Controller
 
         $data = $request->validate($this->appealFormRules($candidacy) + [
             'supervisor_id' => ['required', 'exists:users,id'],
-            'appeal_form' => DocumentStore::rules(required: false),
+            'department' => ['required', 'string', 'max:150'],
             'disclaimer' => ['accepted'],
         ], $this->appealFormMessages($candidacy));
 
         $supervisor = User::where('id', $data['supervisor_id'])->where('role', Role::SUPERVISOR)->first();
         abort_unless($supervisor, 422, 'Select a valid supervisor.');
 
-        $application = DB::transaction(function () use ($request, $data, $candidacy, $engine, $documents) {
+        $application = DB::transaction(function () use ($data, $candidacy, $engine) {
             $application = Application::create([
-                'student_id' => $request->user()->id,
+                'student_id' => $candidacy->student_id,
                 'module_type' => $this->moduleKey(),
                 'status' => Application::STATUS_DRAFT,
             ]);
@@ -73,39 +85,17 @@ class CandidacyAppealController extends Controller
                 'application_id' => $application->id,
                 'study_candidacy_id' => $candidacy->id,
                 'supervisor_id' => $data['supervisor_id'],
+                'department' => $data['department'],
                 'disclaimer_acknowledged_at' => now(),
             ]);
 
             $this->syncPublications($detail, $data['publications'] ?? []);
-
-            if ($request->hasFile('appeal_form')) {
-                $documents->attach($application, $request->file('appeal_form'), 'Official Appeal Form');
-            }
 
             return $engine->submit($application);
         });
 
         return redirect()->route('applications.index')
             ->with('status', "Appeal #{$application->id} submitted. Your supervisor has been notified.");
-    }
-
-    /**
-     * The student's own appeal, always readable regardless of status —
-     * pending, returned, rejected or approved. Editing is a separate,
-     * narrower action (edit()/resubmit(), only while RETURNED).
-     */
-    public function show(Request $request, Application $application)
-    {
-        abort_unless($application->module_type === $this->moduleKey(), 404);
-        abort_unless($application->student_id === $request->user()->id, 403);
-
-        $detail = CandidacyAppealDetail::where('application_id', $application->id)
-            ->with('candidacy', 'supervisor', 'publications')
-            ->firstOrFail();
-
-        $application->load('history.approver', 'documents');
-
-        return view('chloe::candidacy.appeal.show', compact('application', 'detail'));
     }
 
     public function edit(Request $request, Application $application)
@@ -119,23 +109,20 @@ class CandidacyAppealController extends Controller
         ]);
     }
 
-    public function resubmit(Request $request, Application $application, WorkflowEngine $engine, DocumentStore $documents)
+    public function resubmit(Request $request, Application $application, WorkflowEngine $engine)
     {
         $detail = $this->ownedReturnedAppeal($request, $application);
         $candidacy = $detail->candidacy;
 
-        $data = $request->validate($this->appealFormRules($candidacy) + [
-            'appeal_form' => DocumentStore::rules(required: false),
-        ], $this->appealFormMessages($candidacy));
+        $data = $request->validate(
+            $this->appealFormRules($candidacy),
+            $this->appealFormMessages($candidacy)
+        );
 
-        DB::transaction(function () use ($request, $data, $detail, $application, $engine, $documents) {
+        DB::transaction(function () use ($data, $detail, $application, $engine) {
             $detail->update($this->appealFormAttributes($data));
 
             $this->syncPublications($detail, $data['publications'] ?? []);
-
-            if ($request->hasFile('appeal_form')) {
-                $documents->attach($application, $request->file('appeal_form'), 'Official Appeal Form (Revised)');
-            }
 
             $engine->resubmit($application);
         });
@@ -154,7 +141,7 @@ class CandidacyAppealController extends Controller
         return view('chloe::candidacy.appeal.queue', $queue + ['details' => $details]);
     }
 
-    public function decide(Request $request, Application $application, WorkflowEngine $engine)
+    public function decide(Request $request, Application $application, WorkflowEngine $engine, DocumentStore $documents)
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
 
@@ -182,7 +169,7 @@ class CandidacyAppealController extends Controller
         if ($data['decision'] === 'reject') {
             $this->applyRejection($application->fresh());
         } elseif ($data['decision'] === 'approve' && $request->user()->role === Role::DEAN_PGR) {
-            $this->applyDeanApproval($application->fresh());
+            $this->applyDeanApproval($application->fresh(), $documents);
         }
 
         $verb = match ($data['decision']) {
@@ -194,9 +181,9 @@ class CandidacyAppealController extends Controller
         return back()->with('status', "Appeal #{$application->id} {$verb}.");
     }
 
-    protected function applyDeanApproval(Application $application): void
+    protected function applyDeanApproval(Application $application, DocumentStore $documents): void
     {
-        $detail = CandidacyAppealDetail::where('application_id', $application->id)->with('candidacy')->first();
+        $detail = CandidacyAppealDetail::where('application_id', $application->id)->with('candidacy', 'supervisor')->first();
 
         if (! $detail || ! $detail->candidacy) {
             return;
@@ -212,7 +199,78 @@ class CandidacyAppealController extends Controller
             'cumulative_extension_months' => $candidacy->cumulative_extension_months + $detail->requested_extension_months,
         ]);
 
-        $candidacy->student?->notify(new CandidacyAppealApproved($detail->fresh()));
+        $memo = $this->generateApprovalMemo($application, $detail->fresh(['candidacy', 'supervisor']), $documents);
+
+        $candidacy->student?->notify(new CandidacyAppealApproved($detail->fresh(), $memo));
+    }
+
+    /**
+     * UTP's official "Appeal for Extension of Candidacy" memo -- the letter
+     * body is the student's own Reason for Appeal, the routing lines are the
+     * Supervisor they selected and whoever actually endorsed at the Chair
+     * stage, and the decision line only ever reads "Approved" because this
+     * only ever runs from applyDeanApproval(). Generated and archived here
+     * (as an ApplicationDocument, same as an upload would be) rather than
+     * re-rendered on every view, so what the student is emailed is exactly
+     * what the system kept a copy of.
+     */
+    protected function generateApprovalMemo(Application $application, CandidacyAppealDetail $detail, DocumentStore $documents)
+    {
+        $chair = $application->history()->where('stage_key', 'chair')->latest('created_at')->first()?->approver;
+        $dean = $application->history()->where('stage_key', 'dean')->latest('created_at')->first()?->approver;
+        $student = $application->student;
+
+        $pdf = Pdf::loadView('chloe::candidacy.appeal.memo_pdf', [
+            'application' => $application,
+            'detail' => $detail,
+            'student' => $student,
+            'chair' => $chair,
+            'dean' => $dean,
+            'decidedAt' => now(),
+        ]);
+
+        $this->registerMemoFont($pdf->getDomPDF());
+
+        // The exact filename the student and CGS expect the download to
+        // carry -- not just a doc_type label, the actual file name.
+        $filename = "{$student->name}_{$student->matric_no}_Memo - Appeal for Extension Candidacy.pdf";
+        $filename = str_replace(['/', '\\'], '-', $filename);
+
+        return $documents->storeGenerated(
+            $application,
+            $pdf->output(),
+            $filename,
+            'Appeal for Extension of Candidacy Memo',
+        );
+    }
+
+    /**
+     * Registers the exact font the official memo template uses -- Tahoma,
+     * confirmed by reading the w:rFonts runs straight out of the source
+     * .docx's document.xml, not guessed from how the rendered PDF looks.
+     * Dompdf does not ship it (it's a Microsoft font, not Dompdf's bundled
+     * DejaVu/Helvetica set), so the two TTFs live in this module's own
+     * Resources/fonts and get registered into Dompdf's font cache here.
+     * registerFont() is idempotent -- it no-ops once a style is already in
+     * the cache -- so calling this on every memo costs one cache-file read,
+     * not a re-copy.
+     */
+    protected function registerMemoFont(\Dompdf\Dompdf $dompdf): void
+    {
+        // registerFont() writes its cache file straight into config('dompdf.
+        // options.font_dir') (storage/fonts by default) with no mkdir of its
+        // own -- a fresh checkout has no reason to have that directory yet,
+        // and php-font-lib's fopen() fails silently into a TypeError rather
+        // than a clear "directory missing" message when it doesn't exist.
+        \Illuminate\Support\Facades\File::ensureDirectoryExists(
+            config('dompdf.options.font_dir', storage_path('fonts'))
+        );
+
+        $fonts = app_path('Modules/Chloe/Resources/fonts');
+        $metrics = $dompdf->getFontMetrics();
+
+        $metrics->registerFont(['family' => 'Tahoma', 'weight' => 'normal', 'style' => 'normal'], "{$fonts}/Tahoma.ttf");
+        $metrics->registerFont(['family' => 'Tahoma', 'weight' => 'bold', 'style' => 'normal'], "{$fonts}/Tahoma-Bold.ttf");
     }
 
     /** A rejection at any stage — Supervisor, Chair, CGS Verification or Dean — is final. */
@@ -234,13 +292,16 @@ class CandidacyAppealController extends Controller
     protected function appealFormRules(StudyCandidacy $candidacy): array
     {
         return [
-            'reason' => ['nullable', 'string', 'max:2000'],
+            // The letter body of UTP's official appeal memo -- mandatory
+            // there (it's the actual appeal being made to the Dean), so
+            // mandatory here too, not an optional extra comment.
+            'reason' => ['required', 'string', 'max:2000'],
 
             // Section A -- the form's percentage-of-completion field applies
             // to whichever phase is ticked, not just Writing (it's one
             // merged cell spanning all four phase rows on the paper form).
             'phase' => ['required', 'in:'.implode(',', array_keys(CandidacyAppealDetail::phases()))],
-            'writing_completion_percent' => ['required', 'integer', 'min:0', 'max:100'],
+            'writing_completion_percent' => ['required', 'integer', 'in:'.implode(',', CandidacyAppealDetail::COMPLETION_STEPS)],
             'rcs_status' => ['required', 'in:completed,pending'],
             'rcs_date' => ['required_if:rcs_status,completed', 'nullable', 'date'],
             'rcs_category' => ['required_if:rcs_status,completed', 'nullable', 'string', 'max:255'],
@@ -263,7 +324,9 @@ class CandidacyAppealController extends Controller
     {
         return [
             'requested_extension_months.max' => 'You can request at most '.$candidacy->remainingAppealMonths().' more month(s) — the 12-month cap.',
-            'writing_completion_percent.required' => 'Enter your percentage of completion.',
+            'reason.required' => 'Enter the reason for your appeal.',
+            'writing_completion_percent.required' => 'Select your percentage of completion.',
+            'writing_completion_percent.in' => 'Select your percentage of completion.',
             'rcs_date.required_if' => 'Enter the RCS date, or mark RCS as not yet done.',
             'rcs_category.required_if' => 'Enter the RCS category, or mark RCS as not yet done.',
             'rcs_expected_date.required_if' => 'Enter an expected RCS date, or mark RCS as completed.',
@@ -278,7 +341,7 @@ class CandidacyAppealController extends Controller
     protected function appealFormAttributes(array $data): array
     {
         return [
-            'reason' => $data['reason'] ?? '',
+            'reason' => $data['reason'],
             'phase' => $data['phase'],
             'writing_completion_percent' => $data['writing_completion_percent'],
             'rcs_status' => $data['rcs_status'],

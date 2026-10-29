@@ -9,6 +9,10 @@
     Optional: $intro -- a line of guidance about what deciding here means.
               Pass it in rather than writing it above the include, or it
               renders ABOVE the page title and the screen reads headless.
+              $allowReturn -- default false. A module whose controller's
+              decide() also accepts WorkflowEngine's 'return' outcome (see
+              Chloe's CandidacyAppealController) passes true for the third
+              button; every other caller is unaffected.
 
     WHAT CHANGED, AND WHY (2026-09-17)
 
@@ -193,7 +197,7 @@
                         </ul>
                     @endif
 
-                    <x-core::decision-form :application="$application" :route="route($decideRoute, $application)" />
+                    <x-core::decision-form :application="$application" :route="route($decideRoute, $application)" :allow-return="$allowReturn ?? false" />
                 </div>
             </details>
         @endforeach

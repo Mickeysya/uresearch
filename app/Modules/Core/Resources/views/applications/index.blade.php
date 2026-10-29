@@ -10,10 +10,18 @@
         <div class="app-item">
             <div class="app-item-header">
                 <p><b>{{ $application->module()->label() }} Application #{{ $application->id }}</b></p>
-                <x-core::status-badge :status="$application->status" />
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <x-core::status-badge :status="$application->status" />
+                    <a href="{{ route('applications.show', $application) }}">View</a>
+                </div>
             </div>
 
-            <p>{{ $application->module()->summary($application) }}</p>
+            @php($module = $application->module())
+            @if ($module instanceof \App\Modules\Core\Contracts\SuppliesApplicationDetail)
+                @include($module->detailView(), ['application' => $application])
+            @else
+                <p>{{ $module->summary($application) }}</p>
+            @endif
             <p style="color: var(--text-grey); font-size: 12.5px;">
                 Submitted {{ $application->submitted_at?->format('j M Y, g:ia') }}
             </p>

@@ -3,11 +3,13 @@
 @section('title', 'Workstation Catalogue')
 
 @section('content')
-<h2 style="color: var(--navy);"><a href="{{ route('workstation.cgs.operations') }}" style="color:inherit;">Workstation Management</a> / Catalogue</h2>
-
 <div class="card-container-inline">
+    <x-core::page-header title="Workstation Catalogue" subtitle="Manage the locations and seats behind Workstation Management.">
+        <a href="{{ route('workstation.cgs.operations') }}"><button type="button">Back to Workstation Management</button></a>
+    </x-core::page-header>
+
     <div class="card card-wide">
-        <h2>Add Location</h2>
+        <h3>Add Location</h3>
         <div class="card-divider"></div>
         <form method="POST" action="{{ route('workstation.cgs.catalog.locations.store') }}">
             @csrf
@@ -21,7 +23,7 @@
 
             <label for="gender">Gender</label>
             <select name="gender" id="gender" required>
-                <option value="">— Select —</option>
+                <option value="">Select&hellip;</option>
                 <option value="male" @selected(old('gender') === 'male')>Male</option>
                 <option value="female" @selected(old('gender') === 'female')>Female</option>
             </select>
@@ -41,13 +43,13 @@
 
 <div class="card-container-inline">
     <div class="card card-wide">
-        <h2>Add Seat</h2>
+        <h3>Add Seat</h3>
         <div class="card-divider"></div>
         <form method="POST" action="{{ route('workstation.cgs.catalog.seats.store') }}">
             @csrf
             <label for="workstation_location_id">Location</label>
             <select name="workstation_location_id" id="workstation_location_id" required>
-                <option value="">— Select —</option>
+                <option value="">Select&hellip;</option>
                 @foreach ($locations as $location)
                     <option value="{{ $location->id }}">{{ $location->name }}</option>
                 @endforeach
@@ -57,7 +59,7 @@
             <input type="text" name="seat_code" id="seat_code" required maxlength="20" placeholder="e.g. 17">
             @error('seat_code') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="cluster">Cluster <span style="color: var(--text-grey)">(optional — which desk group this seat belongs to)</span></label>
+            <label for="cluster">Cluster <span style="color: var(--text-grey)">(optional: which desk group this seat belongs to)</span></label>
             <input type="text" name="cluster" id="cluster" maxlength="60" placeholder="e.g. Cluster 1">
 
             <label for="notes">Notes <span style="color: var(--text-grey)">(optional)</span></label>
@@ -71,7 +73,7 @@
 @foreach ($locations as $location)
     <div class="card-container-inline">
         <div class="card card-wide">
-            <h2>{{ $location->name }} ({{ $location->workstations_count }} seats)</h2>
+            <h3>{{ $location->name }} ({{ $location->workstations_count }} seats)</h3>
             <p style="color: var(--text-grey); font-size: 13px;">
                 {{ $location->room_code }} · Block {{ $location->block }} ·
                 <span class="status-badge {{ $location->gender === 'female' ? 'rejected' : 'pending' }}">{{ $location->genderLabel() }}</span>
@@ -113,7 +115,7 @@
                                             <button type="submit">Delete</button>
                                         </form>
                                     @else
-                                        <span style="color: var(--text-grey);">Occupied — no changes until released</span>
+                                        <span style="color: var(--text-grey);">Occupied, no changes until released</span>
                                     @endif
                                 </td>
                             </tr>

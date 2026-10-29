@@ -18,6 +18,10 @@
 /storage/framework/sessions/*
 /storage/framework/views/*
 /storage/logs/*
+# Dompdf's own font cache -- CandidacyAppealController registers the Tahoma
+# TTFs from app/Modules/Chloe/Resources/fonts into here at render time; the
+# source files are committed, this generated cache is not.
+/storage/fonts/*
 !.gitkeep
 .env
 .env.backup

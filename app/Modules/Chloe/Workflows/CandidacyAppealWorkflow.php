@@ -3,6 +3,7 @@
 namespace App\Modules\Chloe\Workflows;
 
 use App\Modules\Chloe\Models\CandidacyAppealDetail;
+use App\Modules\Core\Contracts\SuppliesApplicationDetail;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
@@ -18,7 +19,7 @@ use App\Modules\Core\Support\Stage;
  * and `dean`/`dean_pgr` pairing already listed in docs/module-keys.md's
  * stage-key table, put there for exactly this chain.
  */
-class CandidacyAppealWorkflow implements WorkflowModule
+class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDetail
 {
     public function key(): string
     {
@@ -45,7 +46,7 @@ class CandidacyAppealWorkflow implements WorkflowModule
         $detail = CandidacyAppealDetail::where('application_id', $application->id)->first();
 
         return $detail
-            ? "Extension request — {$detail->requested_extension_months} month(s)"
+            ? "Extension request: {$detail->requested_extension_months} month(s)"
             : 'Study candidacy appeal';
     }
 
@@ -57,5 +58,16 @@ class CandidacyAppealWorkflow implements WorkflowModule
     public function queueRoute(): string
     {
         return 'candidacy-appeal.queue';
+    }
+
+    /**
+     * Reused on both screens: the approver's queue (via
+     * core::partials.queue's $detailView) and the student's own "Track My
+     * Application" page (via this interface) both include the same
+     * partial. See Resources/views/candidacy/appeal/_detail.blade.php.
+     */
+    public function detailView(): string
+    {
+        return 'chloe::candidacy.appeal._detail';
     }
 }

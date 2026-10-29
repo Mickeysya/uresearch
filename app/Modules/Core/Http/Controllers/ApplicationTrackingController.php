@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Http\Controllers;
 
+use App\Modules\Core\Contracts\SuppliesApplicationDetail;
 use App\Modules\Core\Models\Application;
 use Illuminate\Http\Request;
 
@@ -33,6 +34,9 @@ class ApplicationTrackingController extends Controller
 
         $application->load('history.approver', 'documents');
 
-        return view('core::applications.show', compact('application'));
+        $module = $application->module();
+        $detailView = $module instanceof SuppliesApplicationDetail ? $module->detailView() : null;
+
+        return view('core::applications.show', compact('application', 'detailView'));
     }
 }

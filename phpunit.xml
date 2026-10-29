@@ -36,5 +36,13 @@
 
         <!-- Hashing is the slowest thing in an auth test; 4 rounds is plenty. -->
         <env name="BCRYPT_ROUNDS" value="4"/>
+
+        <!--
+            The Workstation assistant (app/Modules/Chloe/Assistant): every
+            automated test runs against FakeModel, never the real Gemini
+            provider. No network call, no free-tier quota spent, no key
+            ever read. See Assistant\FakeModel and ModuleProvider::register().
+        -->
+        <env name="ASSISTANT_PROVIDER" value="fake"/>
     </php>
 </phpunit>

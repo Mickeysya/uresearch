@@ -3,20 +3,19 @@
 @section('title', 'Dismissal List')
 
 @section('content')
-<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-    <h2 style="color: var(--navy); margin:0;">Dismiss Exceeded Study Candidacy</h2>
-    <form method="POST" action="{{ route('candidacy.cgs.dismissals.refresh') }}">
-        @csrf
-        <button type="submit">Refresh List</button>
-    </form>
-</div>
-
 <div class="card-container-inline">
+    <x-core::page-header title="Dismiss Exceeded Study Candidacy">
+        <form method="POST" action="{{ route('candidacy.cgs.dismissals.refresh') }}">
+            @csrf
+            <button type="submit">Refresh List</button>
+        </form>
+    </x-core::page-header>
+
     <div class="card card-wide">
-        <h2>Pending Review</h2>
+        <h3>Pending Review</h3>
         <p style="color: var(--text-grey); font-size: 13px;">
             Review each candidate, then submit to Registry outside this system. Once Registry has processed a
-            dismissal, confirm it here — that updates the student's record and sends their notification.
+            dismissal, confirm it here: that updates the student's record and sends their notification.
         </p>
         <div class="card-divider"></div>
 
@@ -48,7 +47,7 @@
 
 <div class="card-container-inline">
     <div class="card card-wide">
-        <h2>Recently Confirmed</h2>
+        <h3>Recently Confirmed</h3>
         <div class="card-divider"></div>
 
         @if ($confirmed->isEmpty())

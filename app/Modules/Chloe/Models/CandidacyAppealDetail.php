@@ -22,8 +22,11 @@ class CandidacyAppealDetail extends Model
 
     public const RCS_PENDING = 'pending';
 
+    /** A dropdown, not a free-typed number -- CGS reads this field at a glance, not to the percent. */
+    public const COMPLETION_STEPS = [0, 25, 50, 75, 100];
+
     protected $fillable = [
-        'application_id', 'study_candidacy_id', 'supervisor_id',
+        'application_id', 'study_candidacy_id', 'supervisor_id', 'department',
         'reason', 'requested_extension_months', 'new_expiry_date',
         'phase', 'writing_completion_percent',
         'rcs_status', 'rcs_date', 'rcs_category', 'rcs_expected_date',

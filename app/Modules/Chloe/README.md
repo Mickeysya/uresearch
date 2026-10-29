@@ -64,6 +64,37 @@ edits this module makes outside this folder, besides one line in
 `database/seeders/DatabaseSeeder.php`, both following the pattern Nureen and
 Hani already set for those two files).
 
+**Gender is a record, not a student preference.** It used to be student
+self-service (pick it on first visit, change it any time); there is now no
+student-facing route for it at all — `WorkstationController` has no
+`setGender()` method and `routes.php` has no `workstation.gender.set`. CGS
+sets it, one student at a time, from the "Student Genders" table on
+`Cgs\WorkstationOperationsController::index()`; a student with none set yet
+gets a "contact CGS" message instead of a picker. See `tests/Feature/
+WorkstationTest.php`.
+
+**Room photos.** `workstation_locations.photo_path` is nullable and almost
+always null — nobody photographed each of the ten rooms on the reference
+seat map — so `WorkstationLocation::photoUrl()` falls back to one shared
+illustration (`public/images/workstation/room-placeholder.svg`) whenever
+`photo_path` is unset. CGS can attach a real photo per room later by setting
+that column; nothing else changes.
+
+**Block photos.** Home (`workstation.select`) shows a photo card per block,
+one level up from the room photos above and following the same fallback
+shape. `workstation_blocks` is its own small table (`code` unique, `name`,
+nullable `photo_path`) seeded with the two real blocks on the reference seat
+map, `J2` and `N2`; `WorkstationBlock::photoUrl()` falls back to
+`public/images/workstation/block-placeholder.svg` whenever `photo_path` is
+unset, same pattern as the room illustration but visually distinct (a
+building, not a desk). `WorkstationController::index()` drives the block
+list from `WorkstationLocation`'s distinct `block` values, not from which
+`WorkstationBlock` rows happen to exist, so a block with rooms but no
+`WorkstationBlock` row yet still gets a card (generic name, placeholder
+photo) instead of silently vanishing from Home; a `WorkstationBlock` row
+with no rooms yet is correspondingly left off Home. See
+`tests/Feature/WorkstationTest.php`.
+
 ## Study Candidacy Reminder / Appeal / Dismiss
 
 Three processes, one connected story around `study_candidacies` (this
@@ -89,8 +120,46 @@ it isn't a shared Core table with Norhanis' unbuilt RPD trio).
   original simpler reason/months shape via an additive migration
   (`..._add_appeal_form_sections_to_candidacy_appeal_details_table`); every
   new column is nullable/defaulted so the one appeal submitted through the
-  earlier form still loads. The official appeal form upload is optional, not
-  required, per the digitised spec. See `tests/Feature/CandidacyAppealTest.php`.
+  earlier form still loads. There is no document upload on this form — the
+  Section A-D fields are the complete submission. The form also carries
+  Department (pre-filled from the student's own profile, editable, stored on
+  this appeal's own row rather than written back to `users.department` —
+  same reasoning as `supervisor_id`) and a now-mandatory Reason for Appeal,
+  matching what UTP's actual appeal memo requires against its signature
+  block and letter body. Student Name needs no field since it's already the
+  application's own student relation; Student ID is shown too, read-only
+  (`users.matric_no`, not submitted — nothing about an appeal form should
+  let someone overwrite their own matric number). See
+  `tests/Feature/CandidacyAppealTest.php`.
+- **On Dean approval**, `CandidacyAppealController::generateApprovalMemo()`
+  renders UTP's official "Appeal for Extension of Candidacy" memo as a PDF
+  (`Resources/views/candidacy/appeal/memo_pdf.blade.php`, Dompdf, same
+  `Pdf::loadView()->output()` + `DocumentStore::storeGenerated()` pattern
+  Nureen's GA/GRA certification letter already uses) and attaches it to
+  `CandidacyAppealApproved`. Every field on the memo already exists by then:
+  the letter body is the student's own Reason for Appeal, the routing lines
+  are the selected Supervisor and whoever actually endorsed at the Chair
+  stage (read off `approval_history`, not assumed), and the decision line
+  only ever prints "Approved" because the method only ever runs from here.
+  The saved filename is `{Student Name}_{Student ID}_Memo - Appeal for
+  Extension Candidacy.pdf`, exactly, not a doc-type-derived slug.
+  The font is Tahoma, not Dompdf's default DejaVu Sans — confirmed by
+  reading `w:rFonts` straight out of the source `.docx`'s `document.xml`
+  (96 of 97 text runs), not guessed from how the rendered PDF looks. Dompdf
+  doesn't ship it, so the two TTFs are committed under this module's own
+  `Resources/fonts/` and `registerMemoFont()` registers them into Dompdf's
+  font cache (`storage/fonts/`, gitignored, created on demand if missing)
+  before every render.
+  Caught two real bugs building this. `MailMessage::attachFromStorageDisk()`
+  does not exist — that method is on `Mailable`, not the `MailMessage` a
+  Notification's `toMail()` returns — so the attachment silently landed in
+  `failed_jobs` every time; the fix is `MailMessage::attach(Attachment::
+  fromStorageDisk(...))`. Nureen's `CertificationIssued` has the identical
+  call and likely the identical bug, not touched here since it's her
+  module — flagging it rather than fixing it. Separately,
+  `Dompdf\FontMetrics::registerFont()` assumes `font_dir` already exists and
+  fails with an unhelpful `TypeError` (not a clear "directory missing") when
+  it doesn't — `registerMemoFont()` now creates it first.
 
 **Two Core changes, both additive, both covered by `tests/Feature/WorkflowReturnTest.php`:**
 `WorkflowEngine::decide()` gained a third `'return'` outcome alongside the

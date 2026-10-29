@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 260" role="img" aria-label="Illustration of a university block">
+  <defs>
+    <linearGradient id="wsSky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#DCE7F7"/>
+      <stop offset="100%" stop-color="#EEF2F8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="400" height="260" fill="url(#wsSky)"/>
+  <rect x="0" y="222" width="400" height="38" fill="#C9D3E3"/>
+
+  <!-- Building -->
+  <rect x="90" y="56" width="220" height="166" fill="#FFFFFF" stroke="#B9C6DD" stroke-width="3"/>
+  <rect x="90" y="56" width="220" height="14" fill="#284B80"/>
+
+  <!-- Windows, 4 columns x 4 rows -->
+  <g fill="#D9E2F0" stroke="#B9C6DD" stroke-width="1.5">
+    <g>
+      <rect x="108" y="86" width="34" height="26"/>
+      <rect x="160" y="86" width="34" height="26"/>
+      <rect x="212" y="86" width="34" height="26"/>
+      <rect x="264" y="86" width="34" height="26"/>
+    </g>
+    <g>
+      <rect x="108" y="126" width="34" height="26"/>
+      <rect x="160" y="126" width="34" height="26"/>
+      <rect x="212" y="126" width="34" height="26"/>
+      <rect x="264" y="126" width="34" height="26"/>
+    </g>
+    <g>
+      <rect x="108" y="166" width="34" height="26"/>
+      <rect x="212" y="166" width="34" height="26"/>
+      <rect x="264" y="166" width="34" height="26"/>
+    </g>
+  </g>
+  <!-- A lit window, for a touch of life -->
+  <rect x="160" y="166" width="34" height="26" fill="#D9A85A" opacity="0.55"/>
+
+  <!-- Entrance -->
+  <rect x="178" y="192" width="44" height="30" rx="2" fill="#1E3A63"/>
+  <rect x="196" y="192" width="8" height="30" fill="#284B80"/>
+
+  <!-- Signage -->
+  <rect x="150" y="34" width="100" height="20" rx="3" fill="#D9A85A"/>
+  <text x="200" y="48" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="11" font-weight="bold" fill="#1E3A63">UTP</text>
+
+  <!-- Tree -->
+  <g transform="translate(55,195)">
+    <rect x="-5" y="18" width="10" height="27" fill="#8A6B4C"/>
+    <circle cx="0" cy="4" r="26" fill="#4FA876"/>
+  </g>
+  <g transform="translate(350,200)">
+    <rect x="-5" y="14" width="10" height="22" fill="#8A6B4C"/>
+    <circle cx="0" cy="2" r="20" fill="#3E8E63"/>
+  </g>
+</svg>

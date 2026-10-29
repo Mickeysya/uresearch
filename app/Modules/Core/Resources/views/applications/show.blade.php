@@ -10,7 +10,11 @@
     </p>
 
     <div class="app-item">
-        <p>{{ $application->module()->summary($application) }}</p>
+        @if ($detailView)
+            @include($detailView, ['application' => $application])
+        @else
+            <p>{{ $application->module()->summary($application) }}</p>
+        @endif
 
         <x-core::stepper :application="$application" />
 

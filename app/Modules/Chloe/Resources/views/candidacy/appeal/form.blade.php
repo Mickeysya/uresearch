@@ -4,31 +4,41 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header title="Study Candidacy Appeal"
+                         subtitle="Your candidacy expires {{ $candidacy->candidacy_expiry_date->format('j M Y') }}. You may request up to {{ $candidacy->remainingAppealMonths() }} more month(s) of extension (12-month cumulative maximum)." />
+
     <div class="card card-wide">
-        <h2>Study Candidacy Appeal</h2>
-        <div class="card-divider"></div>
-
-        <p style="color: var(--text-grey); font-size: 13px;">
-            Your candidacy expires <b>{{ $candidacy->candidacy_expiry_date->format('j M Y') }}</b>.
-            You may request up to <b>{{ $candidacy->remainingAppealMonths() }}</b> more month(s) of extension
-            (12-month cumulative maximum).
-        </p>
-
-        <form method="POST" action="{{ route('candidacy-appeal.store') }}" enctype="multipart/form-data" id="appeal-form">
+        <form method="POST" action="{{ route('candidacy-appeal.store') }}" id="appeal-form">
             @csrf
 
-            <label for="supervisor_id">Supervisor</label>
+            <label for="supervisor_id">Supervisor<x-chloe::required-mark /></label>
             <select name="supervisor_id" id="supervisor_id" required class="@error('supervisor_id') is-invalid @enderror">
-                <option value="">— Select your supervisor —</option>
+                <option value="">Select your supervisor&hellip;</option>
                 @foreach ($supervisors as $supervisor)
                     <option value="{{ $supervisor->id }}" @selected(old('supervisor_id') == $supervisor->id)>{{ $supervisor->name }}</option>
                 @endforeach
             </select>
             @error('supervisor_id') <p class="field-error">{{ $message }}</p> @enderror
 
-            <h3 style="margin-top: 20px;">Section A — Academic Progress / Current Status</h3>
+            {{-- Named against the signature block on UTP's official appeal
+                 memo, alongside Student Name (already known from the
+                 logged-in account, no field needed for it). Student ID is
+                 the account's own matric number -- shown so the student can
+                 see what the memo will carry, but read-only: it is not
+                 submitted, there is nothing about it an appeal form should
+                 let someone overwrite. --}}
+            <label for="student_id_display">Student ID</label>
+            <input type="text" id="student_id_display" value="{{ $studentId ?? '—' }}" readonly disabled>
 
-            <label>Phase</label>
+            <label for="department">Department<x-chloe::required-mark /></label>
+            <input type="text" name="department" id="department" required maxlength="150"
+                   value="{{ old('department', $departmentDefault) }}"
+                   class="@error('department') is-invalid @enderror">
+            @error('department') <p class="field-error">{{ $message }}</p> @enderror
+
+            <h3 style="margin-top: 20px;">Section A: Academic Progress / Current Status</h3>
+
+            <label>Phase<x-chloe::required-mark /></label>
             <fieldset style="border:none; padding:0; margin:0;">
                 @foreach (\App\Modules\Chloe\Models\CandidacyAppealDetail::phases() as $value => $label)
                     <label style="display:block; font-weight:normal;">
@@ -40,12 +50,17 @@
             </fieldset>
             @error('phase') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="writing_completion_percent">Percentage of completion (%)</label>
-            <input type="number" name="writing_completion_percent" id="writing_completion_percent"
-                   min="0" max="100" required value="{{ old('writing_completion_percent') }}">
+            <label for="writing_completion_percent">Percentage of completion (%)<x-chloe::required-mark /></label>
+            <select name="writing_completion_percent" id="writing_completion_percent" required
+                    class="@error('writing_completion_percent') is-invalid @enderror">
+                <option value="">Select&hellip;</option>
+                @foreach (\App\Modules\Chloe\Models\CandidacyAppealDetail::COMPLETION_STEPS as $step)
+                    <option value="{{ $step }}" @selected((string) old('writing_completion_percent') === (string) $step)>{{ $step }}%</option>
+                @endforeach
+            </select>
             @error('writing_completion_percent') <p class="field-error">{{ $message }}</p> @enderror
 
-            <h4 style="margin-top:16px;">Research Completion Seminar (RCS)</h4>
+            <h4 style="margin-top:16px;">Research Completion Seminar (RCS)<x-chloe::required-mark /></h4>
             <label style="display:block; font-weight:normal;">
                 <input type="radio" name="rcs_status" value="completed" class="appeal-rcs-input" @checked(old('rcs_status') === 'completed') required>
                 RCS completed
@@ -57,11 +72,11 @@
             @error('rcs_status') <p class="field-error">{{ $message }}</p> @enderror
 
             <div id="rcs-completed-fields" hidden>
-                <label for="rcs_date">RCS Date</label>
+                <label for="rcs_date">RCS Date<x-chloe::required-mark /></label>
                 <input type="date" name="rcs_date" id="rcs_date" value="{{ old('rcs_date') }}">
                 @error('rcs_date') <p class="field-error">{{ $message }}</p> @enderror
 
-                <label for="rcs_category">RCS Category</label>
+                <label for="rcs_category">RCS Category<x-chloe::required-mark /></label>
                 <input type="text" name="rcs_category" id="rcs_category" value="{{ old('rcs_category') }}">
                 @error('rcs_category') <p class="field-error">{{ $message }}</p> @enderror
             </div>
@@ -72,10 +87,10 @@
                 @error('rcs_expected_date') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
-            <h3 style="margin-top: 20px;">Section B — Candidacy Extension Record</h3>
+            <h3 style="margin-top: 20px;">Section B: Candidacy Extension Record</h3>
             <p style="color: var(--text-grey); font-size: 13px;">Have you previously had a candidacy extension through either route?</p>
 
-            <label>Through GSC</label>
+            <label>Through GSC<x-chloe::required-mark /></label>
             <label style="display:inline-block; font-weight:normal; margin-right:16px;">
                 <input type="radio" name="extension_via_gsc" value="yes" @checked(old('extension_via_gsc') === 'yes') required> Yes
             </label>
@@ -84,7 +99,7 @@
             </label>
             @error('extension_via_gsc') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label style="margin-top:10px;">Through Vice Chancellor</label>
+            <label style="margin-top:10px;">Through Vice Chancellor<x-chloe::required-mark /></label>
             <label style="display:inline-block; font-weight:normal; margin-right:16px;">
                 <input type="radio" name="extension_via_vc" value="yes" @checked(old('extension_via_vc') === 'yes') required> Yes
             </label>
@@ -93,7 +108,7 @@
             </label>
             @error('extension_via_vc') <p class="field-error">{{ $message }}</p> @enderror
 
-            <h3 style="margin-top: 20px;">Section C — List of Publications/Journal</h3>
+            <h3 style="margin-top: 20px;">Section C: List of Publications/Journal</h3>
             <div id="publications-rows">
                 @foreach (old('publications', ['']) as $i => $publication)
                     <div class="publication-row" style="display:flex; gap:8px; margin-bottom:8px;">
@@ -105,26 +120,22 @@
             <button type="button" id="add-publication-row">+ Add publication</button>
             @error('publications.*') <p class="field-error">{{ $message }}</p> @enderror
 
-            <h3 style="margin-top: 20px;">Section D — Duration of Extension Requested</h3>
-            <label for="requested_extension_months">Extension Requested (months)</label>
+            <h3 style="margin-top: 20px;">Section D: Duration of Extension Requested</h3>
+            <label for="requested_extension_months">Extension Requested (months)<x-chloe::required-mark /></label>
             <input type="number" name="requested_extension_months" id="requested_extension_months"
                    min="1" max="{{ $candidacy->remainingAppealMonths() }}" required
                    value="{{ old('requested_extension_months') }}"
                    class="@error('requested_extension_months') is-invalid @enderror">
             @error('requested_extension_months') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="reason" style="margin-top:16px;">Additional Comments <span style="color: var(--text-grey);">(optional)</span></label>
-            <textarea name="reason" id="reason" rows="3">{{ old('reason') }}</textarea>
+            <label for="reason" style="margin-top:16px;">Reason for Appeal<x-chloe::required-mark /></label>
+            <textarea name="reason" id="reason" rows="4" required>{{ old('reason') }}</textarea>
             @error('reason') <p class="field-error">{{ $message }}</p> @enderror
-
-            <label for="appeal_form" style="margin-top:16px;">Official Appeal Form <span style="color: var(--text-grey)">(optional — the university's own form, if you have it completed and signed)</span></label>
-            <input type="file" name="appeal_form" id="appeal_form" class="@error('appeal_form') is-invalid @enderror">
-            @error('appeal_form') <p class="field-error">{{ $message }}</p> @enderror
 
             <div class="card-divider" style="margin-top:20px;"></div>
             <label style="display:block; font-weight:normal;">
                 <input type="checkbox" name="disclaimer" value="1" @checked(old('disclaimer')) required>
-                All of the information provided by the applicant on this document is considered valid and accurate at
+                <x-chloe::required-mark /> All of the information provided by the applicant on this document is considered valid and accurate at
                 the time it has been received. Any deceit or untruth may lead to discard of the application.
             </label>
             @error('disclaimer') <p class="field-error">{{ $message }}</p> @enderror

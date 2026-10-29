@@ -58,7 +58,7 @@
                             <td>Appeal #{{ $appeal->id }}</td>
                             <td><x-core::status-badge :status="$appeal->status" /></td>
                             <td>{{ $appeal->submitted_at?->format('j M Y') }}</td>
-                            <td><a href="{{ route('candidacy-appeal.show', $appeal) }}">View</a></td>
+                            <td><a href="{{ route('applications.show', $appeal) }}">View</a></td>
                         </tr>
                     @endforeach
                 </tbody>

@@ -3,9 +3,8 @@
 namespace App\Modules\Chloe\Http\Controllers\Cgs;
 
 use App\Modules\Chloe\Models\LockerKey;
-use App\Modules\Chloe\Models\StudentGender;
 use App\Modules\Chloe\Models\Workstation;
-use App\Modules\Chloe\Models\WorkstationLocation;
+use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\User;
@@ -15,72 +14,38 @@ use Illuminate\Validation\Rule;
 use RuntimeException;
 
 /**
- * The operational screen this module's three dashboard widgets live on
- * (Available / Occupied / Pending Locker Key Collection), plus CGS's manual
- * override path. Kept self-contained inside this module rather than injected
- * into Core's CgsDashboard, which has no per-module widget hook today — see
- * the module README for why.
+ * What is left of the pre-rewrite CGS screen now that
+ * WorkstationManagementController owns the landing page, the room/seat
+ * drill-down and every per-seat action. setStudentGender() was removed
+ * entirely, along with its route and the "Student Genders" section on the
+ * landing page -- gender is a student record, not something any
+ * Workstation screen edits. student_genders is the only gender column
+ * anywhere in this database (see the module README); it is now read-only
+ * from every Workstation page, set only by DatabaseSeeder's demo data. The
+ * four action methods below (forceAssign/forceRelease/
+ * markLockerCollected/markLockerReturned) are no longer linked from any
+ * view — the new seat-details page's Assign/Release/Mark-as-Collected/
+ * Mark-as-Returned actions call the real STEP 2 service methods directly —
+ * but their routes are kept working and now delegate to those same
+ * methods, so a request to one of these old routes still writes a History
+ * row, still requires a reason from the fixed list, and still follows the
+ * same rules as the new screen. See the module README / PR description for
+ * the full old-action-by-old-action account.
  */
 class WorkstationOperationsController extends Controller
 {
-    public function index()
-    {
-        // Rooms, each carrying its own seat list (for the override section)
-        // and available/occupied counts (for the per-room breakdown) — one
-        // query rather than the 315-row flat seat table this used to be
-        // before the real seat map reference replaced the placeholder demo
-        // catalogue. See the module README.
-        $rooms = WorkstationLocation::withCount([
-            'workstations',
-            'workstations as available_count' => fn ($q) => $q->where('status', Workstation::STATUS_AVAILABLE),
-        ])
-            ->with(['workstations' => fn ($q) => $q->orderBy('position'), 'workstations.activeRequest.student', 'workstations.activeRequest.lockerKey'])
-            ->orderBy('block')
-            ->orderBy('room_code')
-            ->get();
-
-        $availableCount = $rooms->sum('available_count');
-
-        // Not $occupiedRequests->count(): the catalogue was seeded straight
-        // from CGS's existing seat map, and most seats it already showed
-        // taken have no app-tracked request behind them. Workstation.status
-        // is the source of truth for occupancy; see activeRequest() on that
-        // model for how the per-room detail below shows "who" when known.
-        $occupiedCount = Workstation::where('status', Workstation::STATUS_OCCUPIED)->count();
-
-        $pendingLockerKeys = LockerKey::with('student', 'workstationRequest.workstation.location')
-            ->where('status', LockerKey::STATUS_REQUESTED)
-            ->oldest('requested_at')
-            ->get();
-
-        $students = User::where('role', Role::STUDENT)
-            ->orderBy('name')
-            ->get()
-            ->each(fn ($student) => $student->gender = StudentGender::where('student_id', $student->id)->value('gender'));
-
-        return view('chloe::workstation.cgs.operations', compact(
-            'rooms', 'availableCount', 'occupiedCount', 'pendingLockerKeys', 'students'
-        ));
-    }
-
-    public function setStudentGender(Request $request, User $user)
-    {
-        $data = $request->validate([
-            'gender' => ['required', Rule::in([WorkstationLocation::GENDER_MALE, WorkstationLocation::GENDER_FEMALE])],
-        ]);
-
-        abort_if($user->role !== Role::STUDENT, 404);
-
-        StudentGender::updateOrCreate(['student_id' => $user->id], $data);
-
-        return redirect()->route('workstation.cgs.operations')->with('status', "Gender set for {$user->name}.");
-    }
-
+    /**
+     * Delegates to assignStudent() -- the student still must have no seat
+     * and must match the room's gender, the reason is now validated against
+     * the fixed REASONS_ASSIGN list instead of accepted as free text, and a
+     * History row (and the Assigned email) is now written, none of which
+     * the old forceAssign() on the allocator did on its own.
+     */
     public function forceAssign(Request $request, Workstation $workstation, WorkstationAllocator $allocator)
     {
         $data = $request->validate([
             'student_id' => ['required', 'exists:users,id'],
-            'reason' => ['required', 'string', 'max:255'],
+            'reason' => ['required', Rule::in(WorkstationAllocator::REASONS_ASSIGN)],
         ]);
 
         $student = User::where('id', $data['student_id'])->where('role', Role::STUDENT)->first();
@@ -90,46 +55,89 @@ class WorkstationOperationsController extends Controller
         }
 
         try {
-            $allocator->forceAssign($student, $workstation, $request->user(), $data['reason']);
+            $allocator->assignStudent($student, $workstation, $request->user(), $data['reason']);
         } catch (RuntimeException $e) {
             return redirect()->route('workstation.cgs.operations')->with('error', $e->getMessage());
         }
 
         return redirect()->route('workstation.cgs.operations')
-            ->with('status', "Seat {$workstation->seat_code} force-assigned to {$student->name}.");
+            ->with('status', "Seat {$workstation->seat_code} assigned to {$student->name}.");
     }
 
+    /**
+     * Delegates to releaseSeat() when the seat has a tracked
+     * WorkstationRequest (the normal case) -- reason now validated against
+     * REASONS_RELEASE_IMMEDIATE (PART 3 retired REASONS_RELEASE_CGS; this
+     * old route has no UI for choosing the 5-working-day notice path, so it
+     * stays on the immediate-release group, same as it always released
+     * right away). A History row is written, the student emailed per STEP
+     * 6. Falls back to forceReleaseSeat() only for a seat seeded as
+     * occupied with no request behind it at all, exactly as
+     * WorkstationManagementController::release() does.
+     */
     public function forceRelease(Request $request, Workstation $workstation, WorkstationAllocator $allocator)
     {
-        $data = $request->validate(['reason' => ['required', 'string', 'max:255']]);
+        $data = $request->validate(['reason' => ['required', Rule::in(WorkstationAllocator::REASONS_RELEASE_IMMEDIATE)]]);
 
         if ($workstation->status !== Workstation::STATUS_OCCUPIED) {
             return redirect()->route('workstation.cgs.operations')->with('error', 'That workstation is not currently occupied.');
         }
 
-        $allocator->forceReleaseSeat($workstation, $request->user(), $data['reason']);
+        $activeRequest = $workstation->activeRequest;
 
-        return redirect()->route('workstation.cgs.operations')->with('status', "Seat {$workstation->seat_code} force-released.");
+        try {
+            if ($activeRequest) {
+                $allocator->releaseSeat($activeRequest, WorkstationHistory::ACTOR_CGS, $request->user(), $data['reason']);
+            } else {
+                $allocator->forceReleaseSeat($workstation, $request->user(), $data['reason']);
+            }
+        } catch (RuntimeException $e) {
+            return redirect()->route('workstation.cgs.operations')->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('workstation.cgs.operations')->with('status', "Seat {$workstation->seat_code} released.");
     }
 
-    public function markLockerCollected(LockerKey $lockerKey)
+    /**
+     * Delegates to LockerKey::markAsCollected(), which this predates — same
+     * end state, now also writing a History row and the Collected email
+     * that a raw ->update() here never did.
+     */
+    public function markLockerCollected(Request $request, LockerKey $lockerKey)
     {
-        if ($lockerKey->status !== LockerKey::STATUS_REQUESTED) {
+        if ($lockerKey->status !== LockerKey::STATUS_REQUESTED || ! $lockerKey->student) {
             return redirect()->route('workstation.cgs.operations')->with('error', 'That locker key is not awaiting collection.');
         }
 
-        $lockerKey->update(['status' => LockerKey::STATUS_COLLECTED, 'collected_at' => now()]);
+        try {
+            LockerKey::markAsCollected($lockerKey->student, WorkstationHistory::ACTOR_CGS, $request->user()->name);
+        } catch (RuntimeException $e) {
+            return redirect()->route('workstation.cgs.operations')->with('error', $e->getMessage());
+        }
 
         return redirect()->route('workstation.cgs.operations')->with('status', 'Locker key marked as collected.');
     }
 
-    public function markLockerReturned(LockerKey $lockerKey)
+    /**
+     * This route predates Return Pending entirely -- it used to flip
+     * Collected straight to Returned while the seat was still occupied,
+     * which the current model has no place for (a key only becomes
+     * returnable once its seat is released). Now it only acts when the key
+     * is genuinely awaiting return; otherwise it says so rather than
+     * silently doing the no-longer-valid old thing.
+     */
+    public function markLockerReturned(Request $request, LockerKey $lockerKey)
     {
-        if ($lockerKey->status === LockerKey::STATUS_RETURNED) {
-            return redirect()->route('workstation.cgs.operations')->with('error', 'That locker key is already marked returned.');
+        if ($lockerKey->status !== LockerKey::STATUS_RETURN_PENDING) {
+            return redirect()->route('workstation.cgs.operations')
+                ->with('error', 'That locker key is not awaiting return. A key only becomes returnable once its seat has been released.');
         }
 
-        $lockerKey->update(['status' => LockerKey::STATUS_RETURNED, 'returned_at' => now()]);
+        try {
+            $lockerKey->markReturned(WorkstationHistory::ACTOR_CGS, $request->user()->name);
+        } catch (RuntimeException $e) {
+            return redirect()->route('workstation.cgs.operations')->with('error', $e->getMessage());
+        }
 
         return redirect()->route('workstation.cgs.operations')->with('status', 'Locker key marked as returned.');
     }
