@@ -5,6 +5,7 @@ namespace App\Modules\Hani;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Hani\Workflows\ExaminerNominationWorkflow;
 use App\Modules\Hani\Workflows\ReVivaWorkflow;
+use App\Modules\Hani\Workflows\VivaSoftboundWorkflow;
 use App\Modules\Hani\Workflows\VivaVoceWorkflow;
 use Illuminate\Support\ServiceProvider;
 
@@ -19,5 +20,6 @@ class ModuleProvider extends ServiceProvider
         $registry->register(new ExaminerNominationWorkflow());
         $registry->register(new ReVivaWorkflow());
         $registry->register(new VivaVoceWorkflow());
+        $registry->register(new VivaSoftboundWorkflow());
     }
 }

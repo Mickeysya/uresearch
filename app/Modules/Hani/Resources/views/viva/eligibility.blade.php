@@ -22,11 +22,10 @@
             </p>
 
             @if ($openNotice)
-                <p class="message-success">
-                    Your Notice of Thesis Submission has been submitted.
-                    <a href="{{ route('applications.show', $openNotice) }}">Track it here</a>.
-                    The checklist is locked.
-                </p>
+                @include('hani::viva._progress', ['progress' => $progress])
+
+                <h3>Eligibility Checklist</h3>
+                <p class="fstep-hint">Locked, because your notice was filed on it.</p>
             @endif
 
             <form method="POST" action="{{ route('viva.eligibility.save') }}" id="viva-checklist">

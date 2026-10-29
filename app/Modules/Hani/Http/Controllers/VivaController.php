@@ -12,6 +12,7 @@ use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaEligibility;
 use App\Modules\Hani\Notifications\VivaNoticeSubmitted;
 use App\Modules\Hani\Support\VivaChecklist;
+use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +42,7 @@ class VivaController extends Controller
             'record' => $record,
             'eligible' => VivaChecklist::isEligible($student, $record),
             'openNotice' => VivaChecklist::openNotice($student),
+            'progress' => VivaProgress::for($student),
         ]);
     }
 

@@ -6,6 +6,7 @@ use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\VivaController;
+use App\Modules\Hani\Http\Controllers\VivaSoftboundController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -23,11 +24,20 @@ Route::middleware('auth')->group(function () {
         Route::post('/viva/eligibility', [VivaController::class, 'saveEligibility'])->name('viva.eligibility.save');
         Route::get('/viva/notice', [VivaController::class, 'notice'])->name('viva.notice');
         Route::post('/viva/notice', [VivaController::class, 'storeNotice'])->name('viva.notice.store');
+
+        // Softbound thesis (Form #019). Only once the notice is acknowledged;
+        // VivaProgress::softboundBlockReason() says why not otherwise.
+        Route::get('/viva/softbound', [VivaSoftboundController::class, 'create'])->name('viva.softbound.create');
+        Route::post('/viva/softbound', [VivaSoftboundController::class, 'store'])->name('viva.softbound.store');
     });
 
     Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
         Route::get('/viva/queue', [VivaController::class, 'queue'])->name('viva.queue');
         Route::post('/viva/{application}/decide', [VivaController::class, 'decide'])->name('viva.decide');
+
+        Route::get('/viva/softbound/queue', [VivaSoftboundController::class, 'queue'])->name('viva.softbound.queue');
+        Route::post('/viva/softbound/{application}/decide', [VivaSoftboundController::class, 'decide'])
+            ->name('viva.softbound.decide');
     });
 
     // ---- Examiner Nomination ------------------------------------------
