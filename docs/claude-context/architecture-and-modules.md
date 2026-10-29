@@ -70,7 +70,7 @@ users ──────────< applications >────── approval_
 - **`application_documents`** is already **one-to-many per application** —
   `Application::documents(): HasMany`. Every upload, from every module,
   lands here. This matters: a module never needs a schema change to attach
-  more than one file to an application (see Recent Updates).
+  more than one file to an application.
 - A module never adds columns to `users`, `applications`,
   `approval_history` or `application_documents`. It gets its own
   `<module>_details` table instead (e.g. `ga_extension_details`,
@@ -106,16 +106,17 @@ or `applications.current_stage`. Three entry points matter:
   approved when the chain runs out.
 - **`returnTo()`** — sends an application back to an earlier stage with a
   **mandatory** reason, instead of ending it. Used where a stage wants
-  "someone earlier has to redo this" rather than "rejected, full stop" (the
-  Senior Director and the Dean use it on examiner lists).
+  "someone earlier has to redo this" rather than "rejected, full stop"
+  (GA Extension's CGS Staff use it to send an incomplete application back
+  to the supervisor; the Senior Director and the Dean use it on examiner
+  lists).
 
 If a module's own `decide()` does more than delegate straight to the engine
 (checks which supervisor a row names, moves a deadline, generates a
 letter), it implements the marker interface `Core\Contracts\DecidesOneAtATime`
 so Core's generic bulk-decide refuses that module rather than silently
-skipping its extra logic. Supervision is one of the modules that implements
-this — bulk-approving the queue cannot bypass the "only the named
-supervisor may endorse" check.
+skipping its extra logic. Supervision and Certification both implement
+this.
 
 ## Document storage
 
@@ -127,10 +128,183 @@ back through `DocumentController`, which checks the viewer is the student
 who owns the application, an approver on its chain, or an admin.
 
 Because `application_documents` is already one-to-many, attaching several
-files to one application has never needed a schema change — only a field
-that submits an array and a loop over `DocumentStore::attach()` (see Recent
-Updates, below, for the specific change that made this true for GA
-Extension and Supervision).
+files to one application never needs a schema change. Two sets of helpers
+on `DocumentStore` cover the two shapes a module needs:
+
+- **`rules()` / `attach()`** — the original single-file path. Still used
+  by every module that only ever takes one document (Jason's memo, Hani's
+  thesis, Norhanis's various Publication fields, Chloe's appeal form).
+- **`manyRules()` / `manyMessages()` / `attachMany()`** — added for
+  multi-file fields (1–5 files, configurable type/size/count limits, one
+  `doc_type` label per field). Purely additive — nothing about the
+  single-file path changed, so adding these never touched any other
+  module's upload. GA Extension and Supervision both use this; GA
+  Extension calls it three times (once per required document type) to
+  keep each type separately validated and separately labelled.
+
+## Nureen's four modules
+
+### Attendance
+
+Predictive at-risk flagging, now with automated nightly ingestion instead
+of a CGS staffer uploading a spreadsheet by hand.
+
+- **Three automated sources**, picked by one config key
+  (`config('nureen.attendance.source')`, `.env`-overridable): an inbox
+  folder a Power Automate export (or anything standing in for one) drops
+  files into; an API-key-authenticated POST endpoint that stages JSON
+  records for the next sync to consume; and a simulated source that
+  generates one plausible week per seeded student for a demo with nothing
+  real to point at.
+- **`attendance:sync`**, self-scheduled nightly at 02:00 from
+  `Nureen\ModuleProvider::boot()` via `Schedule::command(...)` — this
+  registers onto the same scheduler `artisan schedule:run` reads
+  regardless of which file calls it, so no shared `routes/console.php`
+  line was needed. Also reachable on demand via a "Sync Now" button on the
+  upload page.
+- **The manual upload stays**, relabelled "Manual Fallback" beneath a new
+  "Automated Sync" status panel (active source, last run, read/added/
+  updated/rejected counts) — both paths now share one row-ingestion
+  routine (`Support\AttendanceIngestor`) so they can never drift apart.
+- Idempotent for free: every source feeds `AttendanceRecord::recordPeriod()`,
+  which already upserts on `(student_id, period_end)`.
+- The existing risk rule (`AttendanceRiskEvaluator`: below 80%, or
+  declining and within 5 points of it) and the existing at-risk
+  notification run unchanged after every sync, same as after a manual
+  upload.
+
+Chain: Appeal → Non-Executive CGS.
+
+### GA Extension
+
+Extends a Graduate Assistantship. Now does the completeness checking and
+profile cross-referencing CGS staff used to do by hand.
+
+- **Read-only applicant block** at the top of the form (name, matric no.,
+  programme, supervisor) straight from the logged-in student's own
+  profile — not submitted as fields, so there is no second, divergent copy
+  of that data to keep in sync.
+- **Three separately-required document types** instead of one
+  undifferentiated upload: the GA extension form, the supervisor's
+  supporting letter, and an acceptance letter *or* published paper
+  (either satisfies that third one). Each is its own
+  `<x-nureen::multi-file-upload>` field, validated and labelled
+  separately, so a missing type blocks submission with a specific message
+  rather than a generic "attach something."
+- **"System checks" panel** shown to approvers: a live ✓/✗ per required
+  document type, computed from `$application->documents` against the same
+  config list that enforced it at submission — so it can never say
+  something was checked that wasn't, or vice versa.
+- **CGS Staff can send an incomplete application back to the supervisor**
+  (`WorkflowEngine::returnTo()`, mandatory reason) instead of rejecting it
+  outright — the same pattern Hani's Examiner Nomination module already
+  established for sending a compiled list back to a department.
+- **Extensible by config, not by code**: `config('nureen.ga_extension')`
+  holds both the required-document list and an `additional_fields` array
+  (key → label/type/required) for whatever the real CGS online form turns
+  out to need. Today that array is empty; adding a field later — and
+  having it appear in the form, the validation, and the approver's detail
+  panel — is one config entry, no migration, no Blade edit. The storage
+  for it (`ga_extension_details.additional_info`, nullable JSON) already
+  exists, waiting.
+- **Stalled-application reminder**: if a pending application sits at one
+  stage past the configured threshold (3 days by default), the current
+  stage's approver is emailed — see "Reminders & analytics" below.
+
+Chain: Supervisor → CGS Staff (`cgs_verify`) → Senior Director CGS.
+
+### Supervision
+
+Supervisor appointment requests. The one module where the stage's role
+holder is *not* automatically the right recipient — the `supervisor` stage
+is addressed to one **named** person, not "anyone holding the Supervisor
+role," which is why its reminder command stays its own, rather than
+reusing the generic one GA Extension and Certification share.
+
+- Request → the specifically named supervisor → CGS eligibility review,
+  with a mandatory supporting document (1–5 files, the same
+  `DocumentStore::manyRules()`/`manyMessages()` as GA Extension).
+- **Stalled reminders with escalation**: `supervision:remind-stalled`
+  (pre-existing) now escalates — after a configurable number of reminders
+  (2 by default) to the named supervisor with still no decision, CGS Staff
+  is also notified, purely informationally ("this request is stuck,
+  nothing needed from you yet"). The reminder count is tracked
+  per-*current-stage*, so it resets cleanly if the request moves on
+  before escalating, rather than carrying a stale count forward.
+- `DecidesOneAtATime`: its `decide()` double-checks the acting supervisor
+  is the one actually named on the request (a gap the engine's normal
+  role-based authorization can't catch on its own, since every
+  Supervisor-role account would otherwise pass it), and on CGS approval it
+  sets `users.supervisor_id` as a side effect.
+
+Chain: Request → named Supervisor → Non-Executive CGS (`cgs_review`).
+
+### GA/GRA Certification Letter
+
+Generates a certification letter PDF on final approval. Now verifiable,
+and backed by an automatic check before CGS ever has to look at it by eye.
+
+- **Automatic appointment verification**, shown to CGS Staff and the
+  Senior Director before they act: Verified / Not Found / Mismatch,
+  computed live against a provisional table (`ga_appointment_records`) —
+  informational only, never blocks a decision either way. Haziq's module
+  owns GA/GRA appointment data *in principle* but has no models or
+  migrations yet (his own module README already flags the overlap as a
+  team decision pending); once that's settled, the seam to swap onto his
+  real data is a single `AppointmentVerifier` change, documented in
+  `SHARED_CHANGES.md`.
+- **A unique, sequential reference number** (`CGS/GACERT/<year>/<seq>`,
+  locked against races) assigned the moment the Senior Director's approval
+  generates the certificate.
+- **A public verification page**, no login: `/verify/certificate/{reference}`
+  shows exactly four facts (student name, letter type, issue date,
+  endorsing approver — read from `approval_history`, not re-stored) plus
+  Valid/Revoked. An unknown reference gets a clear "not found" message.
+  Throttled, since it's reachable with no session at all.
+- **A QR code on the PDF** linking to that page — or, until a QR-generating
+  Composer package is added (none exists yet; documented in
+  `SHARED_CHANGES.md`), the plain verification URL printed as text. The
+  seam (`Contracts\GeneratesQrCode`) is already in place either way, so
+  nothing else changes the day the package lands.
+- **Revocation**: Non-Exec CGS or the Senior Director can revoke an issued
+  certificate with a reason, from a new "Issued Certificates" list
+  (`/ga-certification/issued`, linked from the queue's tools slot) — the
+  only place to reach it once an application is no longer pending and has
+  therefore dropped out of the approval queue. Revoking never touches
+  `applications.status`; the application stays approved, only the
+  certificate's own validity changes.
+- The PDF template (`certificate_pdf.blade.php`) keeps its original,
+  self-contained `<style>` block untouched in shape — still easy to
+  restyle wholesale once a real CGS sample letter arrives.
+
+Chain: CGS Staff (`cgs_verify`) → Senior Director (`senior_director`).
+`DecidesOneAtATime` (the Senior Director's approval is what triggers PDF
+generation).
+
+## Shared infrastructure Nureen built (reusable beyond her own modules)
+
+- **`Support\StalledApplicationReminder`** — the generic half of "remind
+  whoever needs to act": find stalled pending applications for a module,
+  resolve recipients as everyone holding the current stage's role
+  (department-scoped the same way the engine itself scopes `decide()`/
+  `returnTo()`), record a reminder. GA Extension's and Certification's
+  reminder commands are both thin wrappers over this. Any future module
+  whose stages are generically role-addressed (i.e., not Supervision's
+  named-person case) can reuse it directly.
+- **`Support\ProcessingTimeAnalytics`** — average days per `(module,
+  stage)`, computed in PHP from consecutive `approval_history` rows per
+  application rather than a database window function, so the same
+  calculation is portable across the MySQL dev database and the SQLite
+  in-memory test suite. Backs the CGS-only `/reports/processing-time`
+  page (a Chart.js bar chart + an overdue-applications table, the overdue
+  threshold reusing the exact same per-module config the reminders fire
+  on, so the two can't drift apart).
+- **The config-driven extensibility pattern** (`GA Extension's
+  `additional_fields`, `required_documents`; Attendance's `source`,
+  `reminders.*`) — every place a requirement might still change before
+  the real CGS forms are confirmed is a config array read by the
+  controller, the validation, and the relevant view, rather than
+  hardcoded in three places that could drift.
 
 ## Dashboards (brief)
 
@@ -143,22 +317,7 @@ change needed.
 The student dashboard is natural-height (the page scrolls); CGS and Admin
 are locked to one viewport on desktop "by requirement," with each panel
 declaring whether it scrolls internally or is sized to never overflow. See
-`docs/architecture.md` → "The dashboards" for the full detail (why they
-draw different charts, how attendance's three states work, the
-`approver-scroll`/`approver-fit` contract).
-
-## Nureen's four modules
-
-| Module | What it does | Approval chain |
-|---|---|---|
-| **Attendance** | Predictive at-risk flagging from a CSV/.xlsx upload (UTrace has no API access for this FYP — documented as future work). Proactive alerts to student + supervisor, a CGS "at-risk" list, and a student-filed appeal. | Appeal → Non-Executive CGS |
-| **GA Extension** | Extends a Graduate Assistantship. Mandatory document-completeness validation runs *before* CGS ever sees the application. | Supervisor → CGS Staff → Senior Director CGS |
-| **Supervision** | Supervisor appointment requests. Must be decided by the *specific* named supervisor, not just anyone holding the supervisor role — enforced in the module's own `decide()`, which is why it implements `DecidesOneAtATime`. | Request → named Supervisor → CGS eligibility review |
-| **Certification** | GA/GRA completion letters. On final approval, Dompdf auto-generates, formats and dispatches the official PDF, downloadable by the student instantly. | CGS verifies appointment status → approver endorses → PDF generated |
-
-All four are built and complete per `TODO.md` (not merely scoped — check
-`TODO.md` before assuming anything described in `docs/scope/nureen.md` is
-unbuilt).
+`docs/architecture.md` → "The dashboards" for the full detail.
 
 ## Hard rules that govern any change here
 
@@ -177,7 +336,11 @@ unbuilt).
 8. Scope every query — students see only their own rows, approvers only
    their stage.
 9. A change inside `Core/` affects all six people — flag it and explain the
-   impact rather than making it silently.
+   impact rather than making it silently. In practice, every Nureen
+   feature above shipped without touching a single Core or shared file;
+   the handful of genuinely shared changes needed (a CSRF exemption for
+   the attendance ingest endpoint, a QR-code Composer package) are
+   documented, not applied, in `app/Modules/Nureen/SHARED_CHANGES.md`.
 
 ## Where the canonical docs live
 
@@ -191,3 +354,4 @@ unbuilt).
 | `docs/migration-from-legacy.md` | every bug the Laravel rewrite fixed |
 | `TODO.md` | what is actually built vs. only scoped, and the agreed order of work |
 | `docs/test-accounts.md` | every seeded login, by role |
+| `app/Modules/Nureen/SHARED_CHANGES.md` | every shared-file change Nureen's work needs but hasn't applied, with the exact line and why |
