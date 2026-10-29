@@ -5,14 +5,30 @@ use App\Modules\Hani\Http\Controllers\ConflictDetectionController;
 use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
+use App\Modules\Hani\Http\Controllers\VivaController;
 use Illuminate\Support\Facades\Route;
 
 /*
 | Nur Hani Sofia (22001418)
-| Examiner Nomination · Conflict Detection · Re-viva Monitoring
+| Viva Voce · Examiner Nomination · Conflict Detection · Re-viva Monitoring
 */
 
 Route::middleware('auth')->group(function () {
+
+    // ---- Viva Voce Assessment -------------------------------------------
+    // The checklist gates the notice. VivaController::noticeGuard() enforces
+    // it on both notice routes, whatever the buttons on the page say.
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::get('/viva/eligibility', [VivaController::class, 'eligibility'])->name('viva.eligibility');
+        Route::post('/viva/eligibility', [VivaController::class, 'saveEligibility'])->name('viva.eligibility.save');
+        Route::get('/viva/notice', [VivaController::class, 'notice'])->name('viva.notice');
+        Route::post('/viva/notice', [VivaController::class, 'storeNotice'])->name('viva.notice.store');
+    });
+
+    Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
+        Route::get('/viva/queue', [VivaController::class, 'queue'])->name('viva.queue');
+        Route::post('/viva/{application}/decide', [VivaController::class, 'decide'])->name('viva.decide');
+    });
 
     // ---- Examiner Nomination ------------------------------------------
     Route::middleware('role:'.Role::SUPERVISOR)->group(function () {
