@@ -258,10 +258,12 @@ button.sdash-note-row:focus-visible {
 }
 
 /* =====================================================================
-   Attendance gauge (Chart.js half-doughnut).
+   Attendance gauge (Chart.js doughnut).
 
-   2:1 box, because the chart is a semicircle — a square would leave half
-   the container empty and halve the dial's drawn size.
+   2:1 box by default, for a semicircle -- a square would leave half the
+   container empty and halve the dial's drawn size. .chart-gauge-circle
+   opts a full-circle ring (the student dashboard's Attendance Overview,
+   redesigned 2026-10-29) into a square box instead.
    ===================================================================== */
 
 .chart-gauge-wrap {
@@ -270,9 +272,44 @@ button.sdash-note-row:focus-visible {
     width: clamp(150px, 24vh, 230px);
     aspect-ratio: 2 / 1;
     align-self: center;
+    /* A grid item with an explicit width falls back to start alignment
+       under the default justify-self: stretch, so without this the ring
+       sits at the left edge of its column instead of centred in it. */
+    justify-self: center;
 }
 
-.chart-gauge-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+/* Narrower than the semicircle's own max-width -- a full ring reads at
+   full size without needing as much width, and the stat grid beside it
+   needs the room more. */
+.chart-gauge-wrap.chart-gauge-circle { aspect-ratio: 1 / 1; width: clamp(130px, 18vh, 190px); }
+
+/* A soft, tone-matched halo behind the arc so it reads as sitting in its
+   own space rather than floating flat on the card background -- purely
+   decorative, sits behind the canvas and ignores pointer events. Shaped
+   for the semicircle by default (a glow rising from the flat edge);
+   .chart-gauge-circle centres it instead, for the full-circle ring. */
+.chart-gauge-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 8% 2% -6%;
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    background: radial-gradient(ellipse at 50% 100%, var(--gauge-glow, rgba(40, 75, 128, 0.14)) 0%, transparent 72%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.chart-gauge-wrap.chart-gauge-circle::before {
+    inset: -6%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, var(--gauge-glow, rgba(40, 75, 128, 0.14)) 0%, transparent 72%);
+}
+
+.chart-gauge-wrap.tone-good     { --gauge-glow: color-mix(in srgb, var(--success-fg) 22%, transparent); }
+.chart-gauge-wrap.tone-warn     { --gauge-glow: color-mix(in srgb, var(--warning-fg) 22%, transparent); }
+.chart-gauge-wrap.tone-critical { --gauge-glow: color-mix(in srgb, var(--danger-fg) 18%, transparent); }
+.chart-gauge-wrap.tone-none     { --gauge-glow: color-mix(in srgb, var(--text-grey) 16%, transparent); }
+
+.chart-gauge-wrap canvas { position: relative; z-index: 1; display: block; width: 100% !important; height: 100% !important; }
 
 /* Sits in the mouth of the arc. pointer-events:none so it never steals a
    hover from the segment underneath. */
@@ -281,6 +318,7 @@ button.sdash-note-row:focus-visible {
     left: 0;
     right: 0;
     bottom: 0;
+    z-index: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -288,9 +326,18 @@ button.sdash-note-row:focus-visible {
     pointer-events: none;
 }
 
+/* The full-circle ring has no "mouth" to sit in -- the value centres in
+   the middle of the ring instead of anchoring to a flat bottom edge. */
+.chart-gauge-value.chart-gauge-value-circle {
+    top: 0;
+    bottom: 0;
+    justify-content: center;
+}
+
 .chart-gauge-value .sdash-gauge-number {
-    font-size: clamp(20px, 2.3vw, 30px);
-    font-weight: 700;
+    font-size: clamp(22px, 2.5vw, 32px);
+    font-weight: 800;
+    letter-spacing: -0.3px;
     line-height: 1.05;
     font-variant-numeric: tabular-nums;
 }

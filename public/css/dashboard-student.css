@@ -230,6 +230,21 @@
     border-color: var(--navy);
 }
 
+/* A text link with a trailing chevron instead of the boxed-button look --
+   scoped to the attendance card's own header, not a change to every
+   dashboard card's "View All" action. */
+.sdash-action-plain {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0;
+    border: 0;
+}
+
+.sdash-action-plain:hover { background: none; border-color: transparent; text-decoration: underline; }
+.sdash-action-plain span { display: grid; place-items: center; }
+.sdash-action-plain svg { width: 13px; height: 13px; }
+
 /* The page scrolls; this does not -- it is exactly as tall as its rows. */
 .sdash-card-body {
     flex: 1 1 auto;
@@ -378,12 +393,34 @@
 
 /* Two real columns rather than a small dial floating beside a short
    legend -- that left the right half of the card empty. */
+/* A thin tone-coloured strip along the top edge of the card -- a calmer,
+   glanceable status cue than letting the gauge's colour be the only signal. */
+.sdash-attendance {
+    position: relative;
+    border-top: 3px solid var(--border-grey);
+}
+
+.sdash-attendance.tone-good     { border-top-color: var(--success-fg); }
+.sdash-attendance.tone-warn     { border-top-color: var(--warning-fg); }
+.sdash-attendance.tone-critical { border-top-color: var(--danger-fg); }
+
 .sdash-attendance-body {
     display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
     align-items: center;
     gap: clamp(12px, 1.6vw, 26px);
     padding-top: 4px;
+}
+
+.sdash-gauge-side {
+    /* A faint vertical rule separates the dial from its own readout
+       rather than leaving the two columns to float independently. */
+    padding-left: clamp(12px, 1.6vw, 26px);
+    border-left: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 560px) {
+    .sdash-gauge-side { padding-left: 0; border-left: 0; }
 }
 
 .sdash-gauge-wrap {
@@ -429,25 +466,6 @@
     color: var(--text-grey);
 }
 
-.sdash-legend {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.sdash-legend li {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--text-dark);
-}
-
 .sdash-dot {
     width: 9px;
     height: 9px;
@@ -463,6 +481,7 @@
     display: flex;
     align-items: center;
     gap: 9px;
+    flex-wrap: wrap;
     flex-shrink: 0;
     margin: 0 14px 14px;
     padding: 10px 12px;
@@ -479,6 +498,69 @@
 .sdash-note-icon svg { width: 16px; height: 16px; }
 .sdash-note a { color: inherit; font-weight: 600; }
 
+/* A real call-to-action button, for notes that ask the student to go do
+   something (file an appeal) rather than just informing them.
+
+   Every state below sets its own background/border/color explicitly,
+   scoped per tone (.sdash-note.tone-critical/.tone-warn), rather than
+   `currentColor` -- `background: currentColor` previously resolved
+   against this same rule's own `color: var(--surface)` instead of the
+   inherited tone colour, painting white text on a white fill on hover.
+   Same bug, same fix, as the legend "You" badge elsewhere in this file. */
+.sdash-note-cta {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 6px 16px;
+    border: 1px solid;
+    border-radius: 10px;
+    background: var(--surface);
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.sdash-note-cta:visited { text-decoration: none; }
+
+.sdash-note.tone-critical .sdash-note-cta { border-color: var(--danger-border); color: var(--danger-fg); }
+.sdash-note.tone-warn     .sdash-note-cta { border-color: var(--warning-border); color: var(--warning-fg); }
+
+.sdash-note.tone-critical .sdash-note-cta:visited { color: var(--danger-fg); }
+.sdash-note.tone-warn     .sdash-note-cta:visited { color: var(--warning-fg); }
+
+.sdash-note.tone-critical .sdash-note-cta:hover,
+.sdash-note.tone-critical .sdash-note-cta:focus-visible {
+    background: var(--danger-fg);
+    border-color: var(--danger-fg);
+    color: var(--surface);
+}
+
+.sdash-note.tone-warn .sdash-note-cta:hover,
+.sdash-note.tone-warn .sdash-note-cta:focus-visible {
+    background: var(--warning-fg);
+    border-color: var(--warning-fg);
+    color: var(--surface);
+}
+
+.sdash-note.tone-critical .sdash-note-cta:active {
+    background: color-mix(in srgb, var(--danger-fg) 82%, black);
+    border-color: color-mix(in srgb, var(--danger-fg) 82%, black);
+    color: var(--surface);
+}
+
+.sdash-note.tone-warn .sdash-note-cta:active {
+    background: color-mix(in srgb, var(--warning-fg) 82%, black);
+    border-color: color-mix(in srgb, var(--warning-fg) 82%, black);
+    color: var(--surface);
+}
+
+.sdash-note.tone-critical .sdash-note-cta:focus-visible { outline: 2px solid var(--danger-fg); outline-offset: 2px; }
+.sdash-note.tone-warn     .sdash-note-cta:focus-visible { outline: 2px solid var(--warning-fg); outline-offset: 2px; }
+
 /* ---- responsive ----------------------------------------------------
    Everything above is already natural-height, so there is nothing to
    release at a breakpoint -- what is left is purely about width: two
@@ -491,12 +573,17 @@
 }
 
 @media (max-width: 560px) {
+    /* Pre-existing bug, surfaced while verifying the 2026-10-29 redesign:
+       this targeted .sdash-gauge-wrap (dead since the gauge moved to
+       Chart.js) with flex-direction (no effect on a grid container), so
+       the two columns never actually stacked and the ring overlapped the
+       stat grid below 560px. .chart-gauge-wrap is the real element. */
     .sdash-attendance-body {
-        flex-direction: column;
-        align-items: stretch;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
     }
 
-    .sdash-gauge-wrap { width: 100%; max-width: 240px; margin: 0 auto; }
+    .chart-gauge-wrap { margin: 0 auto 4px; }
 
     .sdash-row-side { display: none; }
 }
