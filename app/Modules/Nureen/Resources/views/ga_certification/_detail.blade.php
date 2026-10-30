@@ -5,15 +5,25 @@
 
 @if ($detail)
     <p>Appointment Type: <b>{{ $detail->appointment_type }}</b></p>
+    <p>Supervisor: {{ $detail->supervisor?->name ?? 'Not recorded' }}</p>
     <p>Period: {{ $detail->period_start->format('j M Y') }} – {{ $detail->period_end->format('j M Y') }}</p>
-    <p>Purpose: {{ $detail->purpose }}</p>
+
+    @foreach ($detail->typeFields() as $key => $field)
+        @continue(empty($detail->{$key}))
+        <p>{{ $field['label'] }}: {{ $detail->{$key} }}</p>
+    @endforeach
+
+    @if ($detail->purpose)
+        <p>Purpose: {{ $detail->purpose }}</p>
+    @endif
 
     {{--
         "Before CGS staff review, the system automatically checks the
-        student's GA/GRA appointment" -- computed live in
-        CertificationController::queue() against the provisional
-        ga_appointment_records table (Haziq's module has none of this data
-        yet). Informational only: it does not block Approve/Reject below.
+        student's GA/GRA appointment" -- NOT part of CGS's confirmed
+        process; see config('nureen.ga_certification.appointment_check_enabled').
+        $check is only ever present (non-null) when that is turned on --
+        CertificationController::queue() does not even compute it otherwise.
+        Informational only: it does not block Approve/Reject below.
     --}}
     @if ($check)
         @php

@@ -184,13 +184,13 @@ profile cross-referencing CGS staff used to do by hand.
   programme, supervisor) straight from the logged-in student's own
   profile — not submitted as fields, so there is no second, divergent copy
   of that data to keep in sync.
-- **Three separately-required document types** instead of one
-  undifferentiated upload: the GA extension form, the supervisor's
-  supporting letter, and an acceptance letter *or* published paper
-  (either satisfies that third one). Each is its own
-  `<x-nureen::multi-file-upload>` field, validated and labelled
-  separately, so a missing type blocks submission with a specific message
-  rather than a generic "attach something."
+- **Four separately-required document types** instead of one
+  undifferentiated upload: the GA extension form, an identity document
+  (IC or passport/visa copy), the supervisor's supporting letter, and an
+  acceptance letter *or* published paper (either satisfies that last one).
+  Each is its own `<x-nureen::multi-file-upload>` field, validated and
+  labelled separately, so a missing type blocks submission with a specific
+  message rather than a generic "attach something."
 - **"System checks" panel** shown to approvers: a live ✓/✗ per required
   document type, computed from `$application->documents` against the same
   config list that enforced it at submission — so it can never say
@@ -211,48 +211,105 @@ profile cross-referencing CGS staff used to do by hand.
   stage past the configured threshold (3 days by default), the current
   stage's approver is emailed — see "Reminders & analytics" below.
 
-Chain: Supervisor → CGS Staff (`cgs_verify`) → Senior Director CGS.
+Two chains (2026-10-31, realigned with CGS's confirmed UResearch process —
+see `docs/scope/nureen.md` §5), chosen per application at submission and
+snapshotted onto `GaExtensionDetail::final_approver_snapshot` so a later
+config change never alters a chain already in flight:
+- `'cgs'` (default, `config('nureen.ga_extension.final_approver')`):
+  Supervisor → Non-Executive CGS, **final**. The Senior Director has no
+  stage here; `GaExtensionController::decide()` emails them every outcome
+  informationally instead, and separately copies the endorsing supervisor
+  on the final decision (both as dedicated Nureen notifications, not a
+  literal mail header CC, since the generic per-decision email is Core's
+  `ApplicationDecided`).
+- `'senior_director'`: the original three-stage chain, Supervisor → CGS
+  Staff (`cgs_verify`, intermediate) → Senior Director CGS
+  (`senior_director`, final).
+`GaExtensionWorkflow` implements `DecidesOneAtATime` for this reason — its
+`decide()` now does more than call the engine.
 
 ### Supervision
 
-Supervisor appointment requests. The one module where the stage's role
-holder is *not* automatically the right recipient — the `supervisor` stage
-is addressed to one **named** person, not "anyone holding the Supervisor
-role," which is why its reminder command stays its own, rather than
-reusing the generic one GA Extension and Certification share.
+Main and Co-Supervisor appointment requests. The one module where the
+stage's role holder is *not* automatically the right recipient — the
+`supervisor` stage is addressed to one **named** person, not "anyone
+holding the Supervisor role," which is why its reminder command stays its
+own, rather than reusing the generic one GA Extension and Certification
+share.
 
-- Request → the specifically named supervisor → CGS eligibility review,
-  with a mandatory supporting document (1–5 files, the same
-  `DocumentStore::manyRules()`/`manyMessages()` as GA Extension).
+- Request → the specifically named supervisor endorses → **Chair of
+  Department** (of the student's own department; `Role::isDepartmentScoped()`)
+  approves, with a mandatory supporting document (1–5 files, the same
+  `DocumentStore::manyRules()`/`manyMessages()` as GA Extension). The
+  request also states an appointment role (Main / Co-Supervisor) and type
+  (New / Existing).
+- Two chains (2026-10-31, realigned with CGS — see `docs/scope/nureen.md`
+  §5), snapshotted onto `SupervisionDetail::cgs_stage_snapshot`:
+  `'automatic'` (default, `config('nureen.supervision.cgs_stage')`) makes
+  the Chair's approval **final** — the appointment letter (Dompdf, a
+  `CGS/SVAPPT/<year>/<seq>` reference via `Support\AppointmentReferenceGenerator`,
+  the same race-safe pattern as `CertificateReferenceGenerator`) is issued
+  immediately, emailed to the student with the supervisor CC'd, and listed
+  on a CGS-only "Issued Appointment Letters" page where it can be revoked
+  with a mandatory reason; `'manual'` keeps an explicit `cgs_review` stage
+  after the Chair, with the letter generated only on CGS's own approval.
+- A **Main Supervisor** approval writes `users.supervisor_id` (capturing
+  the previous value first, so a revocation can restore it); a
+  **Co-Supervisor** approval never touches it. Revoking a Main Supervisor
+  letter restores the previous supervisor only if `users.supervisor_id`
+  still equals the one this letter appointed — if a later appointment has
+  since superseded it, the restore is skipped and CGS is told why.
+- A Co-Supervisor request naming someone who is already the student's Main
+  Supervisor, or already an active (approved, unrevoked) Co-Supervisor for
+  them, is blocked at submission with a clear message.
 - **Stalled reminders with escalation**: `supervision:remind-stalled`
-  (pre-existing) now escalates — after a configurable number of reminders
-  (2 by default) to the named supervisor with still no decision, CGS Staff
-  is also notified, purely informationally ("this request is stuck,
-  nothing needed from you yet"). The reminder count is tracked
-  per-*current-stage*, so it resets cleanly if the request moves on
-  before escalating, rather than carrying a stale count forward.
+  escalates at both the Supervisor stage and the Chair stage (department-
+  scoped recipients) — after a configurable number of reminders (2 by
+  default) with still no decision, CGS Staff is also notified, purely
+  informationally ("this request is stuck, nothing needed from you yet").
+  The reminder count is tracked per-*current-stage*, so it resets cleanly
+  if the request moves on before escalating, rather than carrying a stale
+  count forward.
 - `DecidesOneAtATime`: its `decide()` double-checks the acting supervisor
   is the one actually named on the request (a gap the engine's normal
   role-based authorization can't catch on its own, since every
-  Supervisor-role account would otherwise pass it), and on CGS approval it
-  sets `users.supervisor_id` as a side effect.
+  Supervisor-role account would otherwise pass it).
 
-Chain: Request → named Supervisor → Non-Executive CGS (`cgs_review`).
+Chain (`'automatic'`, default): Request → named Supervisor → Chair of
+Department (`chair`, final). Chain (`'manual'`): → Chair (`chair`,
+intermediate) → Non-Executive CGS (`cgs_review`, final).
 
 ### GA/GRA Certification Letter
 
 Generates a certification letter PDF on final approval. Now verifiable,
-and backed by an automatic check before CGS ever has to look at it by eye.
+and backed by an optional automatic check before CGS ever has to look at
+it by eye.
 
-- **Automatic appointment verification**, shown to CGS Staff and the
-  Senior Director before they act: Verified / Not Found / Mismatch,
-  computed live against a provisional table (`ga_appointment_records`) —
-  informational only, never blocks a decision either way. Haziq's module
-  owns GA/GRA appointment data *in principle* but has no models or
-  migrations yet (his own module README already flags the overlap as a
-  team decision pending); once that's settled, the seam to swap onto his
-  real data is a single `AppointmentVerifier` change, documented in
-  `SHARED_CHANGES.md`.
+- **A named-supervisor stage first** (2026-10-31, realigned with CGS — see
+  `docs/scope/nureen.md` §5): the student's own supervisor at submission
+  time (`GaCertificationDetail::supervisor_id`, snapshotted the same way
+  Supervision's `requested_supervisor_id` is) reviews before CGS Staff ever
+  sees it. Submission is blocked up front with a clear message if the
+  student has no supervisor on record. `CertificationController::decide()`
+  checks this the same way `SupervisionController` does — holding the role
+  is not enough, it has to be the named person.
+- **Type-specific fields**: GA certifies against a course (code, name,
+  course owner, semester); GRA against a research project (title, leader,
+  semester, optional grant/project code) — `config('nureen.ga_certification.fields')`,
+  the form shows and validates only the chosen type's list (a small vanilla-JS
+  toggle, degrades to both blocks hidden without JS — same pattern as
+  Chloe's candidacy-appeal form). The original `purpose` field is kept, now
+  optional, alongside the type-specific ones rather than replaced by them.
+- **Automatic appointment verification**, off by default
+  (`nureen.ga_certification.appointment_check_enabled` — not part of CGS's
+  confirmed process) and shown to CGS Staff and the Senior Director only
+  when turned on: Verified / Not Found / Mismatch, computed live against a
+  provisional table (`ga_appointment_records`) — informational only, never
+  blocks a decision either way. Haziq's module owns GA/GRA appointment data
+  *in principle* but has no models or migrations yet (his own module README
+  already flags the overlap as a team decision pending); once that's
+  settled, the seam to swap onto his real data is a single
+  `AppointmentVerifier` change, documented in `SHARED_CHANGES.md`.
 - **A unique, sequential reference number** (`CGS/GACERT/<year>/<seq>`,
   locked against races) assigned the moment the Senior Director's approval
   generates the certificate.
@@ -277,9 +334,9 @@ and backed by an automatic check before CGS ever has to look at it by eye.
   self-contained `<style>` block untouched in shape — still easy to
   restyle wholesale once a real CGS sample letter arrives.
 
-Chain: CGS Staff (`cgs_verify`) → Senior Director (`senior_director`).
-`DecidesOneAtATime` (the Senior Director's approval is what triggers PDF
-generation).
+Chain: named Supervisor (`supervisor`) → CGS Staff (`cgs_verify`) → Senior
+Director (`senior_director`). `DecidesOneAtATime` (the Senior Director's
+approval is what triggers PDF generation).
 
 ## Shared infrastructure Nureen built (reusable beyond her own modules)
 
@@ -287,10 +344,13 @@ generation).
   whoever needs to act": find stalled pending applications for a module,
   resolve recipients as everyone holding the current stage's role
   (department-scoped the same way the engine itself scopes `decide()`/
-  `returnTo()`), record a reminder. GA Extension's and Certification's
-  reminder commands are both thin wrappers over this. Any future module
-  whose stages are generically role-addressed (i.e., not Supervision's
-  named-person case) can reuse it directly.
+  `returnTo()`), record a reminder. GA Extension's reminder command is a
+  thin wrapper over this; Certification's uses it for `cgs_verify`/
+  `senior_director` but special-cases its own new `supervisor` stage
+  (2026-10-31) to the one named person on the row, the same reasoning
+  `RemindStalledSupervisionRequests` has always needed — the generic class
+  has no way to know a module's own named-recipient rule, so that one
+  `match` stays in each command, not pushed down here.
 - **`Support\ProcessingTimeAnalytics`** — average days per `(module,
   stage)`, computed in PHP from consecutive `approval_history` rows per
   application rather than a database window function, so the same

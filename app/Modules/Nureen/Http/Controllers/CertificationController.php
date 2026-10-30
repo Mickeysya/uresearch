@@ -7,6 +7,7 @@ use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Notifications\CertificationIssued;
 use App\Modules\Nureen\Support\AppointmentVerifier;
@@ -27,29 +28,75 @@ class CertificationController extends Controller
         return 'ga_certification';
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return view('nureen::ga_certification.form');
+        return view('nureen::ga_certification.form', [
+            'fields' => config('nureen.ga_certification.fields'),
+            'supportingDocumentLabel' => config('nureen.ga_certification.supporting_document_label'),
+            'hasSupervisor' => $request->user()->supervisor_id !== null,
+        ]);
     }
 
-    public function store(Request $request, WorkflowEngine $engine)
+    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
+        $student = $request->user();
+
+        // "Block submission with a clear message instead of creating an
+        // application nobody can review" -- the new first stage is
+        // addressed to the student's own named supervisor, so there has to
+        // be one to address it to.
+        if (! $student->supervisor_id) {
+            return back()->with('error', 'No supervisor is assigned to your account. Please contact CGS.');
+        }
+
         $data = $request->validate([
             'appointment_type' => ['required', 'in:GA,GRA'],
             'period_start' => ['required', 'date'],
             'period_end' => ['required', 'date', 'after:period_start'],
-            'purpose' => ['required', 'string', 'max:255'],
+            'purpose' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $application = DB::transaction(function () use ($request, $data, $engine) {
+        // "The form shows only the fields for the chosen type" -- validated
+        // the same way, from config('nureen.ga_certification.fields'), so
+        // the form, the validation, the approver's detail view and the
+        // letter can never drift on what a GA or GRA row actually carries.
+        $typeFields = config("nureen.ga_certification.fields.{$data['appointment_type']}", []);
+        $typeRules = [];
+
+        foreach ($typeFields as $key => $field) {
+            $typeRules[$key] = [($field['required'] ?? false) ? 'required' : 'nullable', 'string', 'max:255'];
+        }
+
+        $typeData = $request->validate($typeRules);
+
+        $documentField = 'supporting_documents';
+        $documentLabel = config("nureen.ga_certification.supporting_document_label.{$data['appointment_type']}");
+
+        $documentRules = DocumentStore::manyRules($documentField);
+        $documentMessages = DocumentStore::manyMessages($documentField)
+            + ["{$documentField}.required" => "Attach {$documentLabel}."];
+
+        $request->validate($documentRules, $documentMessages);
+
+        $application = DB::transaction(function () use ($request, $student, $data, $typeData, $documentField, $documentLabel, $engine, $documents) {
             $application = Application::create([
-                'student_id' => $request->user()->id,
-                'submitted_by_id' => $request->user()->id,
+                'student_id' => $student->id,
+                'submitted_by_id' => $student->id,
                 'module_type' => $this->moduleKey(),
                 'status' => Application::STATUS_DRAFT,
             ]);
 
-            GaCertificationDetail::create(['application_id' => $application->id] + $data);
+            GaCertificationDetail::create([
+                'application_id' => $application->id,
+                // Snapshotted now, not re-read later -- if the student's
+                // supervisor changes afterwards, this application still
+                // goes to whoever it was addressed to at submission. See
+                // SupervisionDetail::requested_supervisor_id for the same
+                // reasoning.
+                'supervisor_id' => $student->supervisor_id,
+            ] + $data + $typeData);
+
+            $documents->attachMany($application, $request->file($documentField), $documentLabel);
 
             return $engine->submit($application);
         });
@@ -61,32 +108,46 @@ class CertificationController extends Controller
 
     public function queue(Request $request, WorkflowEngine $engine, AppointmentVerifier $verifier)
     {
-        $queue = $this->queueFor($request, $engine, ['student']);
+        // Same reasoning as SupervisionController::queue(): the engine's
+        // queue is role-scoped, not person-scoped, so the 'supervisor'
+        // stage is narrowed to the one person this application actually
+        // names. CGS Staff and Senior Director need no such narrowing.
+        $queue = $this->queueFor($request, $engine, ['student'],
+            function ($query, Stage $stage) use ($request) {
+                if ($stage->key !== 'supervisor') {
+                    return;
+                }
+
+                $query->whereIn('id', GaCertificationDetail::query()
+                    ->where('supervisor_id', $request->user()->id)
+                    ->select('application_id'));
+            });
 
         $details = GaCertificationDetail::whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()
             ->keyBy('application_id');
 
         // "Before CGS staff review, the system automatically checks the
-        // student's GA/GRA appointment" -- computed here, for every row in
-        // the queue, not only at the moment the letter is generated.
-        // Informational: nothing here stops CGS approving or rejecting
-        // either way (config('nureen.ga_certification') carries no
-        // enforcement flag on purpose).
-        $appointmentChecks = $details->map(function (GaCertificationDetail $detail) use ($verifier, $queue) {
-            $application = $queue['applications']->firstWhere('id', $detail->application_id);
+        // student's GA/GRA appointment" -- NOT part of CGS's confirmed
+        // process, so gated behind config('nureen.ga_certification.
+        // appointment_check_enabled'), default false. When disabled this is
+        // not computed at all, so nothing about it can leak into the view.
+        $appointmentChecks = config('nureen.ga_certification.appointment_check_enabled')
+            ? $details->map(function (GaCertificationDetail $detail) use ($verifier, $queue) {
+                $application = $queue['applications']->firstWhere('id', $detail->application_id);
 
-            if (! $application?->student) {
-                return ['status' => AppointmentVerifier::NOT_FOUND, 'record' => null];
-            }
+                if (! $application?->student) {
+                    return ['status' => AppointmentVerifier::NOT_FOUND, 'record' => null];
+                }
 
-            return $verifier->verify(
-                $application->student,
-                $detail->appointment_type,
-                $detail->period_start,
-                $detail->period_end,
-            );
-        });
+                return $verifier->verify(
+                    $application->student,
+                    $detail->appointment_type,
+                    $detail->period_start,
+                    $detail->period_end,
+                );
+            })
+            : collect();
 
         return view('nureen::ga_certification.queue', $queue + [
             'details' => $details,
@@ -112,14 +173,25 @@ class CertificationController extends Controller
     }
 
     /**
-     * Overrides the trait's decide(): the Senior Director's approval is the
-     * final stage, and that is the moment the certificate has to exist --
-     * generate it and attach it as an ApplicationDocument right here, using
-     * the same download route and permission check every other upload gets.
+     * Overrides the trait's decide(): a 'supervisor'-stage decision must
+     * come from the specific supervisor this application names, not merely
+     * from someone holding the Supervisor role -- same reasoning as
+     * SupervisionController::decide(). The Senior Director's approval is
+     * still the final stage, and that is the moment the certificate has to
+     * exist -- generate it and attach it as an ApplicationDocument right
+     * here, using the same download route and permission check every other
+     * upload gets.
      */
     public function decide(Request $request, Application $application, WorkflowEngine $engine, DocumentStore $documents): RedirectResponse
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $stage = $engine->currentStage($application);
+        $detail = GaCertificationDetail::where('application_id', $application->id)->first();
+
+        if ($stage?->key === 'supervisor' && $detail?->supervisor_id !== $request->user()->id) {
+            abort(403, 'This request was not addressed to you.');
+        }
 
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],

@@ -3,9 +3,13 @@
 namespace Tests\Feature\Nureen;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Nureen\Models\GaExtensionDetail;
+use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
+use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionInformational;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
@@ -15,16 +19,22 @@ use Tests\TestCase;
  *
  * The scope calls document completeness "the point of the module": an
  * extension may not reach CGS without its supporting paperwork and a real
- * justification. Three distinct types are each checked separately now (the
- * GA extension form, the supervisor's letter, and an acceptance letter or
- * published paper — either satisfies that third one) rather than one
- * undifferentiated upload, per config('nureen.ga_extension.required_documents').
+ * justification. Four distinct types are each checked separately (the GA
+ * extension form, an identity document, the supervisor's letter, and an
+ * acceptance letter or published paper — either satisfies that last one)
+ * rather than one undifferentiated upload, per
+ * config('nureen.ga_extension.required_documents').
  *
- * The chain itself is three fixed stages — Supervisor, CGS Staff, Senior
- * Director — and the middle one is what the legacy app got wrong, so the walk
- * below asserts the position after every decision rather than only the end.
- * CGS Staff can now also send an incomplete application back to the
- * supervisor instead of ending it; see the "returning" tests at the bottom.
+ * The chain itself now has two shapes, chosen per application at submission
+ * time and never revisited -- see GaExtensionDetail::final_approver_snapshot
+ * and GaExtensionWorkflow::stages():
+ *   'cgs'             DEFAULT. Supervisor endorses, Non-Executive CGS
+ *                      decides and the application ends there.
+ *   'senior_director' The original three-stage chain: Supervisor, then CGS
+ *                      Staff as an intermediate review, then the Senior
+ *                      Director's final approval.
+ * CGS Staff can also send an incomplete application back to the supervisor
+ * instead of ending it; see the "returning" tests at the bottom.
  */
 class GaExtensionTest extends TestCase
 {
@@ -40,6 +50,7 @@ class GaExtensionTest extends TestCase
             'reason_for_extension' => 'Fieldwork at the Gurun plant slipped two semesters '
                 .'and the remaining analysis needs the assistantship to continue.',
             'ga_extension_form_documents' => [UploadedFile::fake()->create('ga-form.pdf', 50, 'application/pdf')],
+            'identity_document_documents' => [UploadedFile::fake()->create('ic.pdf', 40, 'application/pdf')],
             'supervisor_letter_documents' => [UploadedFile::fake()->create('supervisor-letter.pdf', 90, 'application/pdf')],
             'acceptance_or_paper_documents' => [UploadedFile::fake()->create('acceptance.pdf', 60, 'application/pdf')],
         ];
@@ -123,7 +134,7 @@ class GaExtensionTest extends TestCase
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
 
-    public function test_a_complete_request_attaches_all_three_document_types_under_their_own_labels(): void
+    public function test_a_complete_request_attaches_all_four_document_types_under_their_own_labels(): void
     {
         Storage::fake('local');
 
@@ -133,9 +144,9 @@ class GaExtensionTest extends TestCase
 
         $application = Application::where('module_type', 'ga_extension')->sole();
 
-        $this->assertSame(3, $application->documents()->count());
+        $this->assertSame(4, $application->documents()->count());
         $this->assertEqualsCanonicalizing(
-            ['GA Extension Form', "Supervisor's Supporting Letter", 'Acceptance Letter or Published Paper'],
+            ['GA Extension Form', 'IC or Passport/Visa Copy', "Supervisor's Supporting Letter", 'Acceptance Letter or Published Paper'],
             $application->documents()->pluck('doc_type')->all(),
         );
 
@@ -206,9 +217,10 @@ class GaExtensionTest extends TestCase
             ->assertSee($supervisor->name);
     }
 
-    public function test_the_chain_needs_all_three_approvals(): void
+    public function test_the_default_cgs_chain_needs_only_two_approvals(): void
     {
         Storage::fake('local');
+        Notification::fake();
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
@@ -216,9 +228,9 @@ class GaExtensionTest extends TestCase
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
 
         $application = Application::where('module_type', 'ga_extension')->sole();
+        $this->assertSame('cgs', GaExtensionDetail::where('application_id', $application->id)->sole()->final_approver_snapshot);
 
-        // 1. Supervisor endorses -- this is the step the legacy app treated as
-        //    the end of the chain.
+        // 1. Supervisor endorses.
         $this->actingAs($supervisor)
             ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
@@ -226,7 +238,41 @@ class GaExtensionTest extends TestCase
         $this->assertSame(Application::STATUS_PENDING, $application->status);
         $this->assertSame('cgs_verify', $application->current_stage);
 
-        // 2. CGS verifies.
+        // 2. Non-Executive CGS gives the final decision -- no Senior
+        //    Director stage exists on this chain at all.
+        $this->actingAs($this->cgs())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        $this->assertSame(Application::STATUS_APPROVED, $application->fresh()->status);
+
+        // The supervisor is copied on the final decision, and the Senior
+        // Director -- who has no stage in this mode -- is kept informed.
+        Notification::assertSentTo($supervisor, GaExtensionFinalDecisionCc::class);
+    }
+
+    public function test_the_senior_director_mode_still_needs_all_three_approvals(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        config(['nureen.ga_extension.final_approver' => 'senior_director']);
+
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $director = $this->seniorDirector();
+
+        $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
+
+        $application = Application::where('module_type', 'ga_extension')->sole();
+        $this->assertSame('senior_director', GaExtensionDetail::where('application_id', $application->id)->sole()->final_approver_snapshot);
+
+        $this->actingAs($supervisor)
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        $application->refresh();
+        $this->assertSame(Application::STATUS_PENDING, $application->status);
+        $this->assertSame('cgs_verify', $application->current_stage);
+
         $this->actingAs($this->cgs())
             ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
@@ -234,11 +280,90 @@ class GaExtensionTest extends TestCase
         $this->assertSame(Application::STATUS_PENDING, $application->status);
         $this->assertSame('senior_director', $application->current_stage);
 
-        // 3. Only the Senior Director can finish it.
+        // Only the Senior Director can finish it -- and they are the
+        // decider here, not an informational bystander, so they get no
+        // separate informational copy.
+        $this->actingAs($director)
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        $this->assertSame(Application::STATUS_APPROVED, $application->fresh()->status);
+        Notification::assertSentTo($supervisor, GaExtensionFinalDecisionCc::class);
+        Notification::assertNotSentTo($director, GaExtensionFinalDecisionInformational::class);
+    }
+
+    public function test_an_in_flight_application_submitted_before_this_change_keeps_its_senior_director_chain(): void
+    {
+        Storage::fake('local');
+
+        // Simulate a pre-existing row: live config says 'cgs', but the
+        // snapshot on the detail row (as a pre-migration application would
+        // have been backfilled) says otherwise. stages() must honour the
+        // snapshot, not the live config.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+
+        $application = Application::create([
+            'student_id' => $student->id,
+            'submitted_by_id' => $student->id,
+            'module_type' => 'ga_extension',
+            'status' => Application::STATUS_PENDING,
+            'current_stage' => 'cgs_verify',
+            'submitted_at' => now(),
+        ]);
+
+        GaExtensionDetail::create([
+            'application_id' => $application->id,
+            'current_end_date' => now()->addMonth(),
+            'requested_new_end_date' => now()->addMonths(7),
+            'reason_for_extension' => 'Pre-existing application from before the chain split.',
+            'final_approver_snapshot' => 'senior_director',
+        ]);
+
+        $this->actingAs($this->cgs())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        // Still pending, now at the Senior Director -- a third stage the
+        // live 'cgs' config does not even declare, proving the snapshot
+        // (not the config) governs this specific application's chain.
+        $application->refresh();
+        $this->assertSame(Application::STATUS_PENDING, $application->status);
+        $this->assertSame('senior_director', $application->current_stage);
+
         $this->actingAs($this->seniorDirector())
             ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
         $this->assertSame(Application::STATUS_APPROVED, $application->fresh()->status);
+    }
+
+    public function test_the_senior_director_is_informed_but_cannot_act_in_cgs_mode(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $director = $this->seniorDirector();
+
+        $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
+        $application = Application::where('module_type', 'ga_extension')->sole();
+
+        $this->actingAs($supervisor)
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        // The Director holds no stage on this chain, so acting on it fails.
+        $this->actingAs($director)
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve'])
+            ->assertRedirect();
+
+        $this->assertSame('cgs_verify', $application->fresh()->current_stage);
+
+        $this->actingAs($this->cgs())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        $this->assertSame(Application::STATUS_APPROVED, $application->fresh()->status);
+        Notification::assertSentTo($director, GaExtensionFinalDecisionInformational::class);
     }
 
     public function test_a_rejection_anywhere_in_the_chain_closes_it(): void
@@ -354,6 +479,7 @@ class GaExtensionTest extends TestCase
             ->assertOk()
             ->assertSee('System checks')
             ->assertSee('GA Extension Form')
+            ->assertSee('IC or Passport/Visa Copy')
             ->assertSee("Supervisor's Supporting Letter")
             ->assertSee('Acceptance Letter or Published Paper')
             ->assertDontSee('— missing');

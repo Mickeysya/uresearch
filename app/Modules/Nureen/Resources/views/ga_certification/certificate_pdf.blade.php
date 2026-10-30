@@ -40,7 +40,16 @@
             from <b>{{ $detail->period_start->format('j F Y') }}</b>
             to <b>{{ $detail->period_end->format('j F Y') }}</b>.</p>
 
-        <p>This letter is issued for the purpose of: {{ $detail->purpose }}.</p>
+        @if ($detail->appointment_type === 'GA')
+            <p>Course: <b>{{ $detail->course_name }}</b> ({{ $detail->course_code }}), Course Owner: {{ $detail->course_owner_name }}, Semester: {{ $detail->semester }}.</p>
+        @else
+            <p>Research Project: <b>{{ $detail->project_title }}</b>, Project Leader: {{ $detail->project_leader_name }}, Semester: {{ $detail->semester }}
+                @if ($detail->grant_code), Grant/Project Code: {{ $detail->grant_code }}@endif.</p>
+        @endif
+
+        @if ($detail->purpose)
+            <p>This letter is issued for the purpose of: {{ $detail->purpose }}.</p>
+        @endif
 
         <p>This letter is generated and digitally endorsed through UResearch 2.0
             and does not require a physical signature.</p>

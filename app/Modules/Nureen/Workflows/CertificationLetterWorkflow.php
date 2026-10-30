@@ -12,11 +12,16 @@ use App\Modules\Nureen\Models\GaCertificationDetail;
 /**
  * GA/GRA Certification Letter.
  *
- * CGS staff verify the appointment type, Senior Director CGS gives the final
- * digital endorsement -- the same two-stage shape as GA Extension, reusing
- * its 'cgs_verify' / 'senior_director' stage keys. The Senior Director's
- * approval is also what triggers PDF generation; see
- * CertificationController::decide().
+ * Three stages: the student's own named supervisor reviews first, then CGS
+ * Staff verify the appointment type, then Senior Director CGS gives the
+ * final digital endorsement. The 'cgs_verify' / 'senior_director' keys are
+ * unchanged from before this module had a supervisor stage at all -- an
+ * application already sitting at either one (submitted before this change)
+ * is found and decided exactly the same way, since current_stage is looked
+ * up by key, not by position in the chain. See CertificationController::
+ * decide(), which addresses the new stage to one named person the same way
+ * SupervisionController does, not to everyone holding the Supervisor role.
+ * The Senior Director's approval is still what triggers PDF generation.
  */
 class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime
 {
@@ -33,6 +38,13 @@ class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime
     public function stages(?Application $application = null): array
     {
         return [
+            new Stage(
+                key: 'supervisor',
+                label: 'Lecturer/Supervisor',
+                role: Role::SUPERVISOR,
+                decision: 'endorsed',
+                queueTitle: 'Pending My Endorsement',
+            ),
             new Stage(
                 key: 'cgs_verify',
                 label: 'CGS Staff',

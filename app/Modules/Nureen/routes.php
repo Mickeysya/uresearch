@@ -41,9 +41,19 @@ Route::middleware('auth')->group(function () {
         Route::post('/supervision', [SupervisionController::class, 'store'])->name('supervision.store');
     });
 
-    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::NON_EXEC_CGS]))->group(function () {
+    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS]))->group(function () {
         Route::get('/supervision/queue', [SupervisionController::class, 'queue'])->name('supervision.queue');
         Route::post('/supervision/{application}/decide', [SupervisionController::class, 'decide'])->name('supervision.decide');
+    });
+
+    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+        // Every appointment letter ever issued -- an approved application
+        // drops out of the pending queue above, so this is where Revoke is
+        // actually reachable once a letter exists. See
+        // SupervisionController::issued()/revokeLetter()/downloadLetter().
+        Route::get('/supervision/issued', [SupervisionController::class, 'issued'])->name('supervision.issued');
+        Route::get('/supervision/{application}/letter', [SupervisionController::class, 'downloadLetter'])->name('supervision.letter.download');
+        Route::post('/supervision/{application}/revoke', [SupervisionController::class, 'revokeLetter'])->name('supervision.revoke');
     });
 
     // ---- GA/GRA Certification Letter ------------------------------------
@@ -52,7 +62,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/ga-certification', [CertificationController::class, 'store'])->name('ga-certification.store');
     });
 
-    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS]))->group(function () {
+    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS]))->group(function () {
         Route::get('/ga-certification/queue', [CertificationController::class, 'queue'])->name('ga-certification.queue');
         Route::post('/ga-certification/{application}/decide', [CertificationController::class, 'decide'])->name('ga-certification.decide');
         // Marks an already-issued certificate invalid; does not touch the

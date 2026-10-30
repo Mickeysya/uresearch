@@ -12,7 +12,30 @@
             @csrf
 
             <fieldset class="fstep" data-label="Supervisor">
-            <p class="fstep-hint">Who you are asking for, and why them.</p>
+            <p class="fstep-hint">Who you are asking for, in what capacity, and why them.</p>
+
+            <label for="appointment_role">Appointment Role</label>
+            <select name="appointment_role" id="appointment_role" required
+                    class="@error('appointment_role') is-invalid @enderror">
+                <option value="">Select&hellip;</option>
+                <option value="main_supervisor" @selected(old('appointment_role') == 'main_supervisor')>Main Supervisor</option>
+                <option value="co_supervisor" @selected(old('appointment_role') == 'co_supervisor')>Co-Supervisor</option>
+            </select>
+            @if ($currentSupervisorId)
+                <p class="queue-meta" style="margin-top: -8px;">
+                    A Main Supervisor appointment replaces your current supervisor once approved.
+                </p>
+            @endif
+            @error('appointment_role') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="appointment_type">Appointment Type</label>
+            <select name="appointment_type" id="appointment_type" required
+                    class="@error('appointment_type') is-invalid @enderror">
+                <option value="">Select&hellip;</option>
+                <option value="new" @selected(old('appointment_type') == 'new')>New</option>
+                <option value="existing" @selected(old('appointment_type') == 'existing')>Existing</option>
+            </select>
+            @error('appointment_type') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="requested_supervisor_id">Requested Supervisor</label>
             <select name="requested_supervisor_id" id="requested_supervisor_id" required

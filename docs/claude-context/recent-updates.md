@@ -8,6 +8,174 @@ diff alone.
 
 ---
 
+## 2026-10-31 — GA Extension, Supervision and Certification realigned to CGS's confirmed UResearch process
+
+**Branch:** `develop`, uncommitted.
+
+### The ask
+
+Nureen validated her three approval modules' workflows with CGS through
+written answers from CGS staff (the current process) and CGS's official
+UResearch process workflow diagrams with Client Charter days (the new,
+confirmed process). Where they agreed, the chain changed outright; where
+they differed, the new process became the default behind a config switch so
+it can be reverted without a code change. Attendance was explicitly out of
+scope for this task.
+
+### The design
+
+Three config-driven decisions, each resolved **per application at
+submission** and snapshotted onto that application's own detail row, so a
+later change to the config can never alter the chain an in-flight
+application is already running:
+
+- **GA Extension** (`GaExtensionDetail::final_approver_snapshot`,
+  `nureen.ga_extension.final_approver`): `'cgs'` (default) ends the chain at
+  Non-Executive CGS, with the Senior Director emailed every outcome
+  informationally; `'senior_director'` keeps the original three-stage chain.
+- **Supervision** (`SupervisionDetail::cgs_stage_snapshot`,
+  `nureen.supervision.cgs_stage`): `'automatic'` (default) makes the
+  Chair of Department's approval final — the appointment letter issues
+  immediately; `'manual'` keeps an explicit CGS eligibility-review stage
+  after the Chair, with the letter generated only on CGS's approval.
+- **Certification**: no mode switch (CGS's process did not differ here),
+  but GA and GRA now show and validate only their own type-specific fields,
+  defined in `nureen.ga_certification.fields`.
+
+All three chains keep every Stage key that existed before this change
+(`supervisor`, `cgs_verify`, `senior_director`, `cgs_review`) — a new stage
+is *inserted*, never renamed, which is what lets an application already
+sitting at any of these keys stay decidable exactly where it is regardless
+of which config mode is live when it is next acted on
+(`WorkflowEngine::currentStage()` looks a stage up by key, not position).
+
+Existing in-flight applications, confirmed against the actual dev database
+before writing any code:
+- GA Extension: all backfilled to `final_approver_snapshot = 'senior_director'`
+  (the only chain that has ever existed), so nothing already submitted
+  changes behaviour.
+- Supervision: backfilled to `cgs_stage_snapshot = 'manual'` so a row that
+  reaches the end of its chain still gets a real CGS decision rather than
+  silently skipping to an automatic letter it was never promised. Rows
+  already sitting at `supervisor` do pick up the new Chair stage next —
+  that is the point of the change. `appointment_role` backfilled to
+  `'main_supervisor'` (accurate: the old code always wrote
+  `users.supervisor_id` on approval); `appointment_type` left `null`,
+  genuinely unknown, shown as "Not recorded".
+- Certification: no snapshot needed — inserting the new `supervisor` stage
+  before `cgs_verify` does not retroactively require an application that
+  has already passed that point to go through it.
+
+### What changed
+
+- **Migrations** (3): `final_approver_snapshot` on `ga_extension_details`;
+  `appointment_role`/`appointment_type`/`cgs_stage_snapshot`/
+  `previous_supervisor_id`/`letter_reference`/`letter_issued_at`/
+  `letter_revoked_at`/`letter_revoked_reason`/`letter_revoke_note` on
+  `supervision_details`; `supervisor_id`/type-specific fields/`purpose`
+  made nullable on `ga_certification_details`. All on Nureen's own tables.
+- **`config/nureen.php`** — `ga_extension.final_approver`,
+  `supervision.cgs_stage`/`reference_prefix`, `ga_certification.fields`/
+  `supporting_document_label`/`appointment_check_enabled` (now off by
+  default — not part of CGS's confirmed process), and `charter_days` (the
+  official Client Charter working days per module/stage, recorded for a
+  later task, not yet consumed by reminders or analytics).
+- **Workflows** — `GaExtensionWorkflow` now implements `DecidesOneAtATime`
+  (its `decide()` now does more than call the engine); `SupervisionWorkflow`
+  gained the Chair stage; `CertificationLetterWorkflow` gained the
+  supervisor stage.
+- **Controllers** — `GaExtensionController::decide()` now copies the
+  endorsing supervisor and, in `'cgs'` mode, informs the Senior Director.
+  `SupervisionController` gained the Main/Co-Supervisor split (only Main
+  writes `users.supervisor_id`, capturing the previous value first),
+  appointment-letter generation (`Support\AppointmentReferenceGenerator`,
+  same race-safe pattern as `CertificateReferenceGenerator`), the "Issued
+  Appointment Letters" list, and revocation — which restores the previous
+  supervisor **only if** `users.supervisor_id` still equals the supervisor
+  this specific letter appointed; if a later appointment has since
+  superseded it, the restore is skipped and CGS is told why, both in the
+  redirect message and on the issued-list page. `CertificationController`
+  gained the no-supervisor submission guard, type-specific field validation,
+  and named-supervisor addressing at its new first stage.
+- **New Nureen-owned classes**: `Support\AppointmentReferenceGenerator`,
+  `Notifications\GaExtensionFinalDecisionCc`/`GaExtensionFinalDecisionInformational`,
+  `Notifications\SupervisionFinalDecisionCc`/`AppointmentLetterIssued`/`AppointmentLetterRevoked`.
+- **Views** — Supervision gained `appointment_role`/`appointment_type`
+  fields on the form, a letter-status partial (mirrors Certification's
+  certificate-status partial), an issued-letters list, and a CGS-only tools
+  link. Certification's form now shows only the fields for the chosen type
+  (vanilla JS toggle, degrades to both-hidden without JS, same pattern as
+  Chloe's candidacy-appeal form); the detail view and the PDF letter follow
+  the same type split.
+- **Reminders** — `RemindStalledSupervisionRequests` extended for the Chair
+  stage (department-scoped recipients, same escalation-to-CGS rule as the
+  Supervisor stage). `RemindStalledCertification` now addresses its new
+  `supervisor` stage to the one named person on the row, not every
+  Supervisor-role user, the same reasoning as Supervision's own command.
+- **`database/seeders/DemoDataSeeder.php`** — left untouched (shared,
+  outside Core but affects all six people's demo scenarios); its
+  `CHAINS`/`$outcomes` for these three modules are now stale for a **fresh**
+  `demo:seed` run (existing seeded rows are unaffected — see
+  `SHARED_CHANGES.md`). Added `NureenRealignedWorkflowDemoSeeder`
+  (Nureen-owned, follows the `GaAppointmentRecordSeeder` convention) to seed
+  fresh demo data under the new chains specifically.
+
+### Bugs caught
+
+- Certification's "Non-Executive CGS can always see an issued document"
+  assumption (via `ApplicationDocument::visibleTo()`'s `approval_history`
+  check) silently breaks in Supervision's `'automatic'` mode, where CGS
+  never decides on the application at all. Worked around with a dedicated,
+  role-gated download route rather than widening Core's shared rule — see
+  `SHARED_CHANGES.md`.
+- The Certification detail/PDF templates and `DemoDataSeeder`'s `CHAINS`
+  array both needed updating for the new stage counts; caught by the full
+  test suite failing on both before being fixed.
+- An em dash crept into two new Supervision views
+  (`Tests\Feature\Core\ProseTest`, this repo's own house-style check) —
+  caught immediately by the full suite, not a real bug but worth noting
+  since it would have blocked anyone relying on that test.
+
+### Follow-up fix (same session, before commit)
+
+A pre-commit check against the original ask caught one gap: Non-Executive
+CGS could find an issued appointment letter on the "Issued Appointment
+Letters" list, but was never actually *notified* the moment one issued —
+only the student was. Added `Notifications\AppointmentLetterIssuedToCgs`,
+sent to every Non-Executive CGS user from `SupervisionController::issueLetter()`
+regardless of `cgs_stage` mode (the rule is "every issued letter", not
+"every letter CGS did not already know about" — in `'manual'` mode CGS is
+also the one who just approved it, and still gets the notification). Wired
+into the demo seeder too, for parity. Covered by new assertions in all
+three of `SupervisionTest`'s letter-issuing tests (automatic Main,
+automatic Co-Supervisor, manual mode) plus a negative assertion that
+nothing is sent before the Chair has actually approved. Full suite re-run
+green afterwards: 338 passed, 1776 assertions (+4 from this fix).
+
+### Verification
+
+Full test suite: 338 passed (was 314 before this task; +24 net from new and
+updated coverage across `GaExtensionTest`, `SupervisionTest`,
+`CertificationTest`, `StalledReminderTest`, `CertificateVerificationTest`).
+Live-verified in a headless browser against the running dev stack: the
+Certification form's GA/GRA field toggle (JS-only behaviour feature tests
+cannot exercise) in both light and dark mode; the Supervision "Issued
+Appointment Letters" list showing both a Main and a Co-Supervisor letter as
+Valid with working Revoke forms; an authenticated PDF download of a
+generated appointment letter (caught and fixed a real-disk file-permission
+issue along the way — `storage/app/private/applications/<id>` was
+root-owned because it was created via `docker exec` as root rather than the
+container's `sail` user that actually serves requests; chown'd the
+affected directories rather than deleting any data); and the GA Extension
+queue correctly labelling its CGS stage "Final Approval" in `'cgs'` mode.
+`core-guard` reviewed the full diff against all eight project hard rules
+(Core untouched, no other folder touched, status/current_stage only via
+`WorkflowEngine`, no new columns on shared tables, no raw `$_POST`, uploads
+through `DocumentStore`, no unescaped `{!! !!}`, no hardcoded secrets) —
+pass on all eight.
+
+---
+
 ## 2026-10-11 — Student dashboard: fixed nested scrolling and clipped cards
 
 **Branch/commit:** `develop`, commit `a5da01b`

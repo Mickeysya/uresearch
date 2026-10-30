@@ -119,3 +119,75 @@ which registers onto the same scheduler `artisan schedule:run` reads
 regardless of which file calls it. `routes/console.php` is untouched.
 (The existing `supervision:remind-stalled` line already there predates this
 approach and I have left it as it is — not part of this change.)
+
+---
+
+## 4. `database/seeders/DemoDataSeeder.php` is now stale for three modules
+
+**File:** `database/seeders/DemoDataSeeder.php` (repo root, shared by all
+six people's demo scenarios — not under `app/Modules/Core/`, but I have not
+edited it solo for the same reason I would not edit Core).
+
+**What changed under it:** GA Extension, Supervision and Certification were
+realigned to the workflows CGS confirmed (see the task write-up in this
+session). `DemoDataSeeder::CHAINS` and each module's `$outcomes` arrays
+still assume the OLD chains: GA Extension 3 fixed stages, Supervision 2
+stages with no Chair of Department, Certification 2 stages with no
+Supervisor. The **data these already created is fine** — `current_stage` is
+looked up by key, not position, so every existing seeded row stays
+decidable exactly where it is (see the "existing applications" research in
+this session). The problem is only `php artisan demo:seed` run **again**:
+`runChain()` will try to decide a 3rd/4th step that the application's own
+chain (in whichever config mode is live) does not have, and
+`WorkflowEngine::decide()` throws `LogicException: not awaiting a decision`.
+
+**Suggested change**, inside `DemoDataSeeder`:
+- `CHAINS['ga_extension']` → `[Role::SUPERVISOR, Role::NON_EXEC_CGS]` for the
+  `'cgs'`-mode default (2 steps), or keep the 3-step list if the seeder is
+  changed to set `final_approver_snapshot` explicitly per scenario.
+- `CHAINS['supervision']` → `[Role::SUPERVISOR, Role::CHAIR]` for
+  `'automatic'` mode, needing a seeded Chair-of-Department decider and new
+  required fields (`appointment_role`, `appointment_type`) on each
+  `SupervisionDetail::create()` call.
+- `CHAINS['ga_certification']` → `[Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS]`,
+  plus a `supervisor_id` on each `GaCertificationDetail::create()` call and
+  the new type-specific fields.
+
+**Degrades to:** `demo:seed` throws on these three modules' sections until
+updated; everything else in that seeder (Travel, Publication, Examiner
+Nomination, Attendance, etc.) is untouched and unaffected. In the meantime,
+`php artisan db:seed --class="App\Modules\Nureen\Database\Seeders\NureenRealignedWorkflowDemoSeeder"`
+(new, Nureen-owned, follows the `GaAppointmentRecordSeeder` convention) seeds
+a small set of demo applications under the new chains specifically — GA
+Extension in `'cgs'` mode, Supervision through the Chair with an automatic
+letter for both a Main and a Co-Supervisor, and Certification for both a GA
+and a GRA.
+
+---
+
+## Note on `ApplicationDocument::visibleTo()` and CGS-wide document access
+
+**File:** `app/Modules/Core/Models/ApplicationDocument.php` — not edited.
+
+Its `visibleTo()` rule grants access to the student, an admin, whoever
+currently holds the application's *current stage* role, or anyone already
+in that application's `approval_history`. That has always been enough,
+because every module's chain has always had CGS *decide* at some point,
+which puts a CGS user in `approval_history`.
+
+Supervision's new `'automatic'` mode breaks that assumption on purpose: CGS
+never decides on the application at all (the Chair's approval is final), so
+a Non-Executive CGS user would have no way to open the generated appointment
+letter through the normal `documents.show` route. Rather than widen Core's
+rule to "any CGS-team role, always" — which I am not confident is the right
+general rule, and is not mine to decide for every other module's documents —
+`SupervisionController::downloadLetter()` gives the "Issued Appointment
+Letters" list its own download action, gated on `Role::NON_EXEC_CGS`
+directly. Students and the appointed supervisor still use the ordinary
+`documents.show` route: the student is always the applicant, and the
+supervisor shows up in `approval_history` the moment they endorse, so
+Core's existing rule already covers both of them with no change.
+
+If a future module hits the same "CGS needs to see something it never
+decided on" shape again, that is probably the signal `visibleTo()` is worth
+revisiting as a team decision, not a one-off workaround repeated per module.

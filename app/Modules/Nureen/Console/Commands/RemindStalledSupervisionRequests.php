@@ -18,13 +18,22 @@ use Illuminate\Console\Command;
  * it was reminded (`reminded_at`), so a request only gets nagged again once
  * it has stalled for another full period, not on every run of the command.
  *
- * Repeated reminders to the named supervisor with still no decision also
- * loop CGS Staff in, once `reminder_count` reaches
+ * Three stages, two different kinds of recipient: 'supervisor' is addressed
+ * to the one named person the student picked (see SupervisionController::
+ * queue()); 'chair' is addressed to whoever holds the Chair of Department
+ * role for the student's own department, same department-scoping
+ * ApprovesApplications::queueFor() and WorkflowEngine::decide() already use
+ * (see Role::isDepartmentScoped()); 'cgs_review' -- only reachable in
+ * 'manual' mode -- goes to every Non-Executive CGS user, the same as before
+ * the Chair stage existed.
+ *
+ * Repeated reminders at either of the first two stages with still no
+ * decision also loop CGS Staff in, once `reminder_count` reaches
  * config('nureen.reminders.supervision.escalate_after_reminders') --
  * informational, not a decision request; see SupervisionEscalatedToCgs.
  * `reminded_stage_key` is what keeps that count honest across a move: a
  * count run up at the supervisor's stage must not read as "escalated"
- * again the moment the request has since reached cgs_verify.
+ * again the moment the request has since moved to chair or cgs_review.
  */
 class RemindStalledSupervisionRequests extends Command
 {
@@ -62,9 +71,13 @@ class RemindStalledSupervisionRequests extends Command
                 continue;
             }
 
-            $recipients = $stage->key === 'supervisor'
-                ? User::where('id', $detail->requested_supervisor_id)->get()
-                : User::where('role', Role::NON_EXEC_CGS)->get();
+            $recipients = match ($stage->key) {
+                'supervisor' => User::where('id', $detail->requested_supervisor_id)->get(),
+                'chair' => User::where('role', Role::CHAIR)
+                    ->where('department', $application->student?->department)
+                    ->get(),
+                default => User::where('role', Role::NON_EXEC_CGS)->get(),
+            };
 
             $daysStalled = (int) $application->updated_at->diffInDays(now());
 
@@ -84,11 +97,13 @@ class RemindStalledSupervisionRequests extends Command
                 'reminded_stage_key' => $stage->key,
             ]);
 
-            if ($stage->key === 'supervisor' && $reminderCount >= $escalateAfter) {
-                $supervisor = User::find($detail->requested_supervisor_id);
+            if (in_array($stage->key, ['supervisor', 'chair'], true) && $reminderCount >= $escalateAfter) {
+                $stalledParty = $stage->key === 'supervisor'
+                    ? (User::find($detail->requested_supervisor_id)?->name ?? 'the supervisor')
+                    : 'the Chair of Department';
 
                 foreach (User::where('role', Role::NON_EXEC_CGS)->get() as $cgsStaff) {
-                    $cgsStaff->notify(new SupervisionEscalatedToCgs($application, $supervisor?->name ?? 'the supervisor', $reminderCount));
+                    $cgsStaff->notify(new SupervisionEscalatedToCgs($application, $stalledParty, $reminderCount));
                     $sent++;
                 }
             }

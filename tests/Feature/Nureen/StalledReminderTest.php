@@ -185,6 +185,10 @@ class StalledReminderTest extends TestCase
             'application_id' => $application->id,
             'requested_supervisor_id' => $supervisor->id,
             'justification' => 'Test fixture.',
+            'appointment_role' => SupervisionDetail::ROLE_MAIN,
+            // 'manual' so a later move to 'chair' then 'cgs_review' in these
+            // tests reflects a real stage on this application's own chain.
+            'cgs_stage_snapshot' => 'manual',
         ]);
         $this->backdate($application, 9);
 
@@ -245,8 +249,9 @@ class StalledReminderTest extends TestCase
         $this->assertSame(1, $detail->reminder_count);
         $this->assertSame('supervisor', $detail->reminded_stage_key);
 
-        // The supervisor decides; the request moves to Supervision's
-        // second stage ('cgs_review' -- not GA Extension's 'cgs_verify').
+        // The supervisor decides; the request moves to this 'manual'-mode
+        // application's third stage ('cgs_review' -- not GA Extension's
+        // 'cgs_verify').
         $application->update(['current_stage' => 'cgs_review']);
         $this->backdate($application, 4);
         SupervisionDetail::where('application_id', $application->id)->update(['reminded_at' => now()->subDays(4)]);
@@ -257,5 +262,51 @@ class StalledReminderTest extends TestCase
         // A fresh count at the new stage, not 2 carried over from the old one.
         $this->assertSame(1, $detail->reminder_count);
         $this->assertSame('cgs_review', $detail->reminded_stage_key);
+    }
+
+    /* -----------------------------------------------------------------
+     | Supervision — the Chair of Department stage
+     |------------------------------------------------------------------*/
+
+    public function test_the_chair_stage_reminds_only_the_chair_of_the_students_own_department(): void
+    {
+        Notification::fake();
+
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id, 'department' => 'Chemical Engineering']);
+        $ownChair = $this->user(\App\Modules\Core\Support\Role::CHAIR, ['name' => 'Own Chair', 'email' => 'own-chair@test.my', 'department' => 'Chemical Engineering']);
+        $otherChair = $this->user(\App\Modules\Core\Support\Role::CHAIR, ['name' => 'Other Chair', 'email' => 'other-chair@test.my', 'department' => 'Civil Engineering']);
+
+        $application = $this->stalledSupervisionRequest($supervisor, $student);
+        $application->update(['current_stage' => 'chair']);
+        $this->backdate($application, 4);
+
+        $this->artisan('supervision:remind-stalled')->assertSuccessful();
+
+        Notification::assertSentTo($ownChair, SupervisionRequestStalled::class);
+        Notification::assertNotSentTo($otherChair, SupervisionRequestStalled::class);
+    }
+
+    public function test_the_chair_stage_also_escalates_to_cgs_after_the_configured_number_of_reminders(): void
+    {
+        Notification::fake();
+
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $chair = $this->chair();
+        $cgs = $this->cgs();
+
+        $application = $this->stalledSupervisionRequest($supervisor, $student);
+        $application->update(['current_stage' => 'chair']);
+        $this->backdate($application, 9);
+
+        $this->artisan('supervision:remind-stalled');
+        Notification::assertSentTo($chair, SupervisionRequestStalled::class);
+        Notification::assertNotSentTo($cgs, SupervisionEscalatedToCgs::class);
+
+        SupervisionDetail::where('application_id', $application->id)->update(['reminded_at' => now()->subDays(4)]);
+        $this->artisan('supervision:remind-stalled');
+
+        Notification::assertSentTo($cgs, SupervisionEscalatedToCgs::class);
     }
 }

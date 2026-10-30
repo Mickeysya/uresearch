@@ -5,9 +5,16 @@ namespace App\Modules\Nureen\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\ApprovalHistory;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Role;
+use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaExtensionDetail;
+use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
+use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionInformational;
+use App\Modules\Nureen\Workflows\GaExtensionWorkflow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +88,11 @@ class GaExtensionController extends Controller
                 'requested_new_end_date' => $data['requested_new_end_date'],
                 'reason_for_extension' => $data['reason_for_extension'],
                 'additional_info' => $additionalFields === [] ? null : ($data['additional_info'] ?? []),
+                // Snapshotted now, not re-read later -- see
+                // GaExtensionWorkflow::stages(). A later change to this
+                // config must never alter which chain an already-submitted
+                // application is running.
+                'final_approver_snapshot' => config('nureen.ga_extension.final_approver'),
             ]);
 
             foreach ($requiredDocuments as $field => $label) {
@@ -146,6 +158,62 @@ class GaExtensionController extends Controller
             'status',
             "Application #{$application->id} sent back to the supervisor. They have been notified."
         );
+    }
+
+    /**
+     * Overrides the trait's decide(): the final decision of this chain --
+     * wherever it lands, see GaExtensionWorkflow::stages() -- also copies
+     * the endorsing supervisor and, in 'cgs' mode, informs the Senior
+     * Director who no longer has a stage of their own. See
+     * DecidesOneAtATime on GaExtensionWorkflow.
+     */
+    public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $data = $request->validate([
+            'decision' => ['required', 'in:approve,reject'],
+            'remarks' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $stage = $engine->currentStage($application);
+        $mode = app(GaExtensionWorkflow::class)->modeFor($application);
+
+        try {
+            $decided = $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
+        } catch (UnauthorizedException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\LogicException $e) {
+            return back()->with('error', 'That application has already been decided.');
+        }
+
+        if ($stage && $decided->status !== Application::STATUS_PENDING) {
+            $this->notifyFinalDecision($decided, $stage, $data['decision'] === 'approve', $mode);
+        }
+
+        $verb = $data['decision'] === 'approve' ? 'approved' : 'rejected';
+
+        return back()->with('status', "Application #{$application->id} {$verb}.");
+    }
+
+    protected function notifyFinalDecision(Application $application, Stage $stage, bool $approved, string $mode): void
+    {
+        // The person who actually endorsed at the 'supervisor' stage, not
+        // whoever currently holds the Supervisor role for this student --
+        // the two can differ if the supervisor has since changed.
+        $endorsement = ApprovalHistory::where('application_id', $application->id)
+            ->where('stage_key', 'supervisor')
+            ->first();
+
+        if ($endorsement) {
+            User::find($endorsement->approver_id)?->notify(new GaExtensionFinalDecisionCc($application, $stage, $approved));
+        }
+
+        if ($mode === 'cgs') {
+            foreach (User::where('role', Role::SENIOR_DIRECTOR_CGS)->get() as $director) {
+                $director->notify(new GaExtensionFinalDecisionInformational($application, $stage, $approved));
+            }
+        }
     }
 
     /** @return array<int, string> */

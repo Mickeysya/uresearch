@@ -7,5 +7,6 @@
         'moduleLabel' => 'Supervision',
         'decideRoute' => 'supervision.decide',
         'detailView' => 'nureen::supervision._detail',
+        'tools' => 'nureen::supervision._tools',
     ])
 @endsection

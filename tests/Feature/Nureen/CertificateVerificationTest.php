@@ -24,7 +24,10 @@ class CertificateVerificationTest extends TestCase
 
     protected function approvedCertification(int $seq = 1): Application
     {
-        $student = $this->student("9900100{$seq}", "student{$seq}@test.my");
+        $supervisor = $this->user(Role::SUPERVISOR, [
+            'name' => "Supervisor {$seq}", 'email' => "supervisor{$seq}@test.my",
+        ]);
+        $student = $this->student("9900100{$seq}", "student{$seq}@test.my", ['supervisor_id' => $supervisor->id]);
         $director = $this->user(Role::SENIOR_DIRECTOR_CGS, [
             'name' => "Director {$seq}", 'email' => "director{$seq}@test.my",
         ]);
@@ -41,6 +44,7 @@ class CertificateVerificationTest extends TestCase
 
         GaCertificationDetail::create([
             'application_id' => $application->id,
+            'supervisor_id' => $supervisor->id,
             'appointment_type' => 'GA',
             'period_start' => now()->subYear(),
             'period_end' => now(),
@@ -48,6 +52,7 @@ class CertificateVerificationTest extends TestCase
         ]);
 
         app(WorkflowEngine::class)->submit($application);
+        app(WorkflowEngine::class)->decide($application, $supervisor, 'approve');
         app(WorkflowEngine::class)->decide($application, $cgs, 'approve');
 
         $this->actingAs($director)->post(route('ga-certification.decide', $application), ['decision' => 'approve']);
@@ -197,6 +202,8 @@ class CertificateVerificationTest extends TestCase
 
     public function test_the_appointment_check_reads_verified_against_a_matching_record(): void
     {
+        config(['nureen.ga_certification.appointment_check_enabled' => true]);
+
         $student = $this->student(attributes: ['supervisor_id' => $this->supervisor()->id]);
         $this->certificationQueueApplication($student, 'GA');
 
@@ -215,6 +222,8 @@ class CertificateVerificationTest extends TestCase
 
     public function test_the_appointment_check_reads_not_found_with_no_record_on_file(): void
     {
+        config(['nureen.ga_certification.appointment_check_enabled' => true]);
+
         $student = $this->student();
         $this->certificationQueueApplication($student, 'GA');
 
@@ -226,6 +235,8 @@ class CertificateVerificationTest extends TestCase
 
     public function test_the_appointment_check_reads_mismatch_against_a_different_type(): void
     {
+        config(['nureen.ga_certification.appointment_check_enabled' => true]);
+
         $student = $this->student();
         $this->certificationQueueApplication($student, 'GA');
 
