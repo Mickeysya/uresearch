@@ -2,371 +2,359 @@
 
 namespace App\Modules\Chloe\Console\Commands;
 
+use App\Modules\Chloe\Assistant\Catalogue;
 use App\Modules\Chloe\Assistant\GeminiModel;
 use App\Modules\Chloe\Assistant\Pipeline;
 use App\Modules\Chloe\Models\AssistantLog;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 
 /**
- * PART 8. Runs app/Modules/Chloe/Assistant/evaluation_questions.php against
- * the REAL Gemini provider -- always a fresh GeminiModel, independent of
- * ASSISTANT_PROVIDER, since the whole point of this command is to measure
- * that provider specifically. "It runs only when I start it": nothing
- * else in this codebase calls it, and the agent building this module
- * never runs it either -- it spends real free-tier quota.
+ * PART 8 / Part 4. Measures the semantic ROUTER against the REAL Gemini
+ * provider -- always a fresh GeminiModel, independent of
+ * ASSISTANT_PROVIDER. It runs only when someone starts it; it spends real
+ * free-tier quota.
  *
- * Paces its own calls to the PRIMARY model's own config('assistant.
- * rate_limits.<model>.requests_per_minute') -- Round 4 PART A.5 says 12/min
- * -- and stops cleanly (not a crash) the moment the app's own daily/minute
- * budget trips, which Assistant\Pipeline already enforces -- this command
- * just recognises that outcome and saves progress instead of continuing.
+ * What a run measures, honestly: the router alone. The primary model
+ * only (unless --allow-fallback), no compose calls (Pipeline::
+ * disableCompose()), and --model-only semantics (a router failure is
+ * NOT RUN, never quietly rescued by the keyword fallback). A question the
+ * pipeline answers BEFORE the router (an exact suggested-question text)
+ * costs no call and is reported separately, never counted as a router
+ * success.
+ *
+ * Pacing: one router call per question, spaced to the primary model's
+ * own configured per-minute limit. Stops cleanly at the first
+ * unavailable answer or 429 -- never loops or retries -- saves progress,
+ * and prints the exact --resume command.
+ *
+ * Questions: app/Modules/Chloe/Assistant/evaluation_questions.php, or
+ * --heldout for docs/assistant-ml/heldout-labelled.jsonl. Results live in
+ * storage/app/assistant-evaluate-progress[-heldout].json; --report only
+ * prints them again, with no calls.
  */
 class AssistantEvaluate extends Command
 {
-    protected $signature = 'assistant:evaluate {--resume} {--model-only} {--only=} {--allow-fallback}';
+    /** The date the relative periods ("next month") in the question set were labelled for. */
+    public const LABELLED_FOR = '2026-10-30';
 
-    protected $description = 'Run the evaluation question set against the real provider and report accuracy';
+    protected $signature = 'assistant:evaluate
+        {--resume : Continue the saved run, skipping questions already answered}
+        {--only= : "failed" reruns only the previous failures; any other text reruns questions containing it}
+        {--group= : Comma list of groups to run: original,contrast,messy,standard,followup}
+        {--limit= : Stop after this many router calls in this run}
+        {--heldout : Use docs/assistant-ml/heldout-labelled.jsonl instead of the built-in set}
+        {--report : Print the saved results only -- no calls}
+        {--allow-fallback : Also allow the fallback model}
+        {--model-only : Kept for compatibility; a run is always router-only}';
+
+    protected $description = 'Measure the assistant router against the real provider and report accuracy';
 
     protected function progressPath(): string
     {
-        return storage_path('app/assistant-evaluate-progress.json');
+        return storage_path('app/assistant-evaluate-progress'.($this->option('heldout') ? '-heldout' : '').'.json');
     }
 
     public function handle(): int
     {
-        $questions = require base_path('app/Modules/Chloe/Assistant/evaluation_questions.php');
+        $questions = $this->loadQuestions();
+
+        if ($questions === null) {
+            return self::FAILURE;
+        }
+
+        $saved = $this->loadProgress();
+
+        if ($this->option('report')) {
+            $this->report($saved, $questions, 'Saved results');
+
+            return self::SUCCESS;
+        }
+
+        $indices = $this->selectIndices($questions, $saved);
+
+        if ($indices === []) {
+            $this->warn('Nothing to run for these options.');
+            $this->report($saved, $questions, 'Saved results');
+
+            return self::SUCCESS;
+        }
+
+        if (Carbon::now('Asia/Kuala_Lumpur')->format('Y-m') !== substr(self::LABELLED_FOR, 0, 7)) {
+            $this->warn('The question set\'s relative periods were labelled for '.self::LABELLED_FOR.' -- period checks for "next month"-style questions may not hold today.');
+        }
+
+        $studentUser = User::where('role', Role::STUDENT)->first();
+        $cgsUser = User::whereIn('role', Role::cgsTeam())->first();
+
+        if (! $studentUser || ! $cgsUser) {
+            $this->error('Need at least one student-role user and one CGS-role user in the database to evaluate against.');
+
+            return self::FAILURE;
+        }
+
+        $pipeline = new Pipeline(new GeminiModel);
+        $pipeline->disableCompose();
+        $allowFallback = (bool) $this->option('allow-fallback');
+        $primaryModel = (string) config('assistant.gemini.model');
+        $perMinute = max(1, (int) (config('assistant.rate_limits', [])[$primaryModel]['requests_per_minute'] ?? 12));
+        $delaySeconds = (int) ceil(60 / $perMinute);
+        $limit = $this->option('limit') !== null ? max(0, (int) $this->option('limit')) : null;
+        $isRerun = $this->option('only') !== null;
+
+        $callsBefore = $this->callsToday($primaryModel);
+        $thisRun = [];
+        $routerCalls = 0;
+        $stopped = null;
+        $runStart = microtime(true);
+
+        $this->info(sprintf('Running %d question(s), one router call each, paced every %ds (%s).', count($indices), $delaySeconds, $primaryModel));
+
+        foreach ($indices as $n => $i) {
+            if ($limit !== null && $routerCalls >= $limit) {
+                $stopped = "reached --limit={$limit}";
+
+                break;
+            }
+
+            $q = $questions[$i];
+            $user = $q['role'] === 'student' ? $studentUser : $cgsUser;
+            $this->line(sprintf('[%d/%d] (%s, %s) %s', $n + 1, count($indices), $q['role'], $q['group'], $q['q']));
+
+            $start = microtime(true);
+            $result = $pipeline->ask($user, $q['q'], $q['recent'] ?? [], true, $allowFallback);
+            $elapsedMs = (int) round((microtime(true) - $start) * 1000);
+            $meta = $result['meta'] ?? [];
+            $errorCode = AssistantLog::where('user_id', $user->id)->latest('id')->value('error_code');
+
+            if ($result['outcome'] === AssistantLog::OUTCOME_UNAVAILABLE) {
+                $stopped = 'provider unavailable (error '.($errorCode ?? 'unknown').')';
+                $this->warn("{$stopped} -- stopping cleanly; this question was NOT RUN.");
+
+                break;
+            }
+
+            $usedRouter = ($meta['answered_by'] ?? null) === AssistantLog::ANSWERED_BY_MODEL_ROUTER;
+            $routerCalls += $usedRouter ? 1 : 0;
+
+            $thisRun[$i] = $saved[$i] = $this->score($q, $meta, $result, $usedRouter, $elapsedMs);
+            $this->line('    -> '.($saved[$i]['actual'] ?? '(none)').' conf '.($saved[$i]['confidence'] ?? '-').($saved[$i]['pass_accept'] ? '  ok' : '  FAIL').($usedRouter ? '' : '  [no router call]'));
+            $this->saveProgress($saved);
+
+            if ($errorCode === '429') {
+                $stopped = 'HTTP 429';
+
+                break;
+            }
+
+            if ($usedRouter && $n < count($indices) - 1) {
+                sleep($delaySeconds);
+            }
+        }
+
+        $wall = (int) round(microtime(true) - $runStart);
+        $callsUsed = $this->callsToday($primaryModel) - $callsBefore;
+
+        if ($isRerun) {
+            $this->report($thisRun, $questions, 'This rerun (only the questions just re-asked)');
+        }
+        $this->report($saved, $questions, 'All saved results');
+
+        $this->info("Router calls counted this run: {$callsUsed} (app day counter for {$primaryModel}); questions asked: ".count($thisRun)."; wall time: {$wall}s.");
+
+        if ($stopped !== null) {
+            $remaining = count(array_diff(array_keys($questions), array_keys($saved)));
+            $this->warn("Stopped: {$stopped}. {$remaining} question(s) not yet run.");
+            $this->warn('Continue with: docker exec uresearch-app php artisan assistant:evaluate --resume'.($this->option('heldout') ? ' --heldout' : '').($this->option('group') ? ' --group='.$this->option('group') : ''));
+        }
+
+        return self::SUCCESS;
+    }
+
+    /** @return array<int, array<string, mixed>>|null */
+    protected function loadQuestions(): ?array
+    {
+        if (! $this->option('heldout')) {
+            return require base_path('app/Modules/Chloe/Assistant/evaluation_questions.php');
+        }
+
+        $path = base_path('docs/assistant-ml/heldout-labelled.jsonl');
+
+        if (! File::exists($path)) {
+            $this->error('docs/assistant-ml/heldout-labelled.jsonl does not exist.');
+
+            return null;
+        }
+
+        return collect(preg_split('/\R/', trim(File::get($path))))
+            ->filter()
+            ->map(fn ($line) => json_decode($line, true) + ['group' => 'heldout'])
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int, int> */
+    protected function selectIndices(array $questions, array $saved): array
+    {
+        $indices = array_keys($questions);
+
+        if ($groups = $this->option('group')) {
+            $wanted = array_map('trim', explode(',', $groups));
+            $indices = array_values(array_filter($indices, fn ($i) => in_array($questions[$i]['group'], $wanted, true)));
+        }
 
         $only = $this->option('only');
 
+        if ($only !== null && mb_strtolower(trim($only)) === 'failed') {
+            // A failure: the wrong id, or the right id with the wrong parameters.
+            return array_values(array_filter($indices, fn ($i) => isset($saved[$i]) && (! $saved[$i]['pass_accept'] || ($saved[$i]['params_ok'] ?? null) === false)));
+        }
         if ($only !== null) {
-            return $this->runOnly($questions, $only);
+            return array_values(array_filter($indices, fn ($i) => str_contains(mb_strtolower($questions[$i]['q']), mb_strtolower($only))));
         }
 
-        $total = count($questions);
-
-        $results = $this->option('resume') ? $this->loadProgress() : [];
-
-        $studentUser = User::where('role', Role::STUDENT)->first();
-        $cgsUser = User::whereIn('role', Role::cgsTeam())->first();
-
-        if (! $studentUser || ! $cgsUser) {
-            $this->error('Need at least one student-role user and one CGS-role user in the database to evaluate against.');
-
-            return self::FAILURE;
+        if ($this->option('resume')) {
+            return array_values(array_filter($indices, fn ($i) => ! isset($saved[$i])));
         }
 
-        $pipeline = new Pipeline(new GeminiModel);
-        $modelOnly = (bool) $this->option('model-only');
-        $allowFallback = (bool) $this->option('allow-fallback');
-        // Round 4 PART A.5: paces at the PRIMARY model's own real per-minute limit (12), never the old flat placeholder.
-        $primaryModel = (string) config('assistant.gemini.model');
-        $perMinute = max(1, (int) (config('assistant.rate_limits', [])[$primaryModel]['requests_per_minute'] ?? 12));
-        $delaySeconds = (int) ceil(60 / $perMinute);
-
-        $callsThisRun = 0;
-        $responseTimesMs = [];
-        $stoppedEarly = false;
-
-        foreach ($questions as $i => $q) {
-            if (isset($results[$i])) {
-                continue;
-            }
-
-            $user = $q['role'] === 'student' ? $studentUser : $cgsUser;
-
-            $this->line(sprintf('[%d/%d] (%s) %s', $i + 1, $total, $q['role'], $q['question']));
-
-            $start = microtime(true);
-            $result = $pipeline->ask($user, $q['question'], [], $modelOnly, $allowFallback);
-            $elapsedMs = (int) round((microtime(true) - $start) * 1000);
-
-            $logRow = AssistantLog::where('user_id', $user->id)->latest('occurred_at')->first();
-            $chosen = $logRow?->lookup;
-            $answeredBy = $logRow?->answered_by;
-            $modelUsed = $logRow?->model_used;
-            $errorCode = $logRow?->error_code;
-
-            // Any "unavailable" outcome -- our own budget cap, a 429, or
-            // another error from the provider itself -- is NOT RUN, not a
-            // failure: stop at the first one, never loop or retry, same
-            // as the rule requires for --only below.
-            if ($result['outcome'] === AssistantLog::OUTCOME_UNAVAILABLE) {
-                $this->warn("Provider unavailable (budget reached or an error, code: {$errorCode}) -- stopping cleanly, this question was NOT RUN. Re-run with --resume to continue from here.");
-                $this->saveProgress($results);
-                $stoppedEarly = true;
-
-                break;
-            }
-
-            if ($this->isModelAnswered($answeredBy)) {
-                $callsThisRun++;
-                $responseTimesMs[] = $elapsedMs;
-            }
-
-            $m = $this->matches($q, $chosen, $result['outcome'], $answeredBy);
-
-            $results[$i] = [
-                'pass' => $m['strict'],
-                'pass_acceptable' => $m['acceptable'],
-                'chosen' => $chosen,
-                'answered_by' => $answeredBy,
-                'outcome' => $result['outcome'],
-                'model_used' => $modelUsed,
-                'error_code' => $errorCode,
-            ];
-
-            $this->saveProgress($results);
-
-            if ($this->isModelAnswered($answeredBy) && $i < $total - 1) {
-                sleep($delaySeconds);
-            }
-        }
-
-        $this->report($results, $questions, $callsThisRun, $responseTimesMs);
-
-        if (! $stoppedEarly && count($results) === $total) {
-            $this->clearProgress();
-        }
-
-        return self::SUCCESS;
+        return $indices;
     }
 
-    /**
-     * PART 1 #6: a scoped, non-resuming run over just the questions whose
-     * text contains --only's text, PLUS any question that failed on the
-     * last full/resumed run (read from the same progress file, never
-     * written back here) -- the fast loop for checking a fix without
-     * spending the whole day's budget on the other ~40 questions.
-     * Deliberately its own progress-free path, not a filtered version of
-     * handle()'s loop, so an --only run can never corrupt the full run's
-     * own resumable progress file.
-     */
-    protected function runOnly(array $questions, string $only): int
+    protected function score(array $q, array $meta, array $result, bool $usedRouter, int $elapsedMs): array
     {
-        $previousFailures = $this->previouslyFailedIndices();
+        $actual = $meta['catalogue_id'] ?? null;
 
-        // Round 4 PART B.3: --only=failed reruns ONLY the previous
-        // (strict) failures -- no text matching at all, unlike a normal
-        // --only=<text> run, which merges a text match with the
-        // previous failures as before.
-        if (mb_strtolower(trim($only)) === 'failed') {
-            $indices = $previousFailures;
+        // A student asking a CGS-only question is labelled out_of_scope: a polite refusal is the correct outcome there.
+        $passStrict = $actual === $q['id'];
+        $passAccept = $passStrict || in_array($actual, $q['accept'] ?? [], true);
 
-            if ($indices === []) {
-                $this->warn('No previously-failed questions to re-run.');
+        $expectedParams = $q['params'] ?? [];
+        $actualParams = $meta['router_params'] ?? [];
+        $paramsOk = null;
 
-                return self::SUCCESS;
-            }
-        } else {
-            $needle = mb_strtolower($only);
-
-            $indices = array_values(array_filter(
-                array_keys($questions),
-                fn (int $i) => str_contains(mb_strtolower($questions[$i]['question']), $needle) || in_array($i, $previousFailures, true)
-            ));
-
-            if ($indices === []) {
-                $this->warn('Nothing matches --only, and there are no previously-failed questions to re-run.');
-
-                return self::SUCCESS;
-            }
-        }
-
-        $studentUser = User::where('role', Role::STUDENT)->first();
-        $cgsUser = User::whereIn('role', Role::cgsTeam())->first();
-
-        if (! $studentUser || ! $cgsUser) {
-            $this->error('Need at least one student-role user and one CGS-role user in the database to evaluate against.');
-
-            return self::FAILURE;
-        }
-
-        $pipeline = new Pipeline(new GeminiModel);
-        $modelOnly = (bool) $this->option('model-only');
-        $allowFallback = (bool) $this->option('allow-fallback');
-        // Round 4 PART A.5: paces at the PRIMARY model's own real per-minute limit (12), never the old flat placeholder.
-        $primaryModel = (string) config('assistant.gemini.model');
-        $perMinute = max(1, (int) (config('assistant.rate_limits', [])[$primaryModel]['requests_per_minute'] ?? 12));
-        $delaySeconds = (int) ceil(60 / $perMinute);
-
-        $results = [];
-        $callsThisRun = 0;
-        $responseTimesMs = [];
-        $total = count($indices);
-
-        foreach ($indices as $n => $i) {
-            $q = $questions[$i];
-            $user = $q['role'] === 'student' ? $studentUser : $cgsUser;
-
-            $this->line(sprintf('[%d/%d] (%s) %s', $n + 1, $total, $q['role'], $q['question']));
-
-            $start = microtime(true);
-            $result = $pipeline->ask($user, $q['question'], [], $modelOnly, $allowFallback);
-            $elapsedMs = (int) round((microtime(true) - $start) * 1000);
-
-            $logRow = AssistantLog::where('user_id', $user->id)->latest('occurred_at')->first();
-            $chosen = $logRow?->lookup;
-            $answeredBy = $logRow?->answered_by;
-            $modelUsed = $logRow?->model_used;
-            $errorCode = $logRow?->error_code;
-
-            if ($result['outcome'] === AssistantLog::OUTCOME_UNAVAILABLE) {
-                $this->warn("Provider unavailable (budget reached or an error, code: {$errorCode}) -- stopping cleanly, this question was NOT RUN. --only never resumes; just run it again.");
-
-                break;
-            }
-
-            if ($this->isModelAnswered($answeredBy)) {
-                $callsThisRun++;
-                $responseTimesMs[] = $elapsedMs;
-            }
-
-            $m = $this->matches($q, $chosen, $result['outcome'], $answeredBy);
-
-            $results[$i] = [
-                'pass' => $m['strict'],
-                'pass_acceptable' => $m['acceptable'],
-                'chosen' => $chosen,
-                'answered_by' => $answeredBy,
-                'outcome' => $result['outcome'],
-                'model_used' => $modelUsed,
-                'error_code' => $errorCode,
-            ];
-
-            if ($this->isModelAnswered($answeredBy) && $n < $total - 1) {
-                sleep($delaySeconds);
-            }
-        }
-
-        $this->report($results, $questions, $callsThisRun, $responseTimesMs);
-
-        return self::SUCCESS;
-    }
-
-    /** @return array<int, int> indices (into evaluation_questions.php) that failed last time, from whatever the shared progress file holds -- empty if there is none. */
-    protected function previouslyFailedIndices(): array
-    {
-        if (! File::exists($this->progressPath())) {
-            return [];
-        }
-
-        $decoded = json_decode(File::get($this->progressPath()), true);
-
-        if (! is_array($decoded)) {
-            return [];
-        }
-
-        return array_values(array_map(
-            'intval',
-            array_keys(array_filter($decoded, fn ($row) => is_array($row) && ($row['pass'] ?? true) === false))
-        ));
-    }
-
-    /** PART B: a real provider call was used -- not just the old ANSWERED_BY_MODEL (a lookup CHOICE), but either of the two new guidance/aggregate-compose values too. Undercounts a call that failed validation and fell back to ANSWERED_BY_DIRECT, which cannot be told apart from "budget unavailable, no call attempted at all" from the log alone -- an acceptable, documented approximation for this report-only number. */
-    protected function isModelAnswered(?string $answeredBy): bool
-    {
-        return in_array($answeredBy, [
-            AssistantLog::ANSWERED_BY_MODEL,
-            AssistantLog::ANSWERED_BY_MODEL_GUIDANCE,
-            AssistantLog::ANSWERED_BY_MODEL_COMPOSE,
-        ], true);
-    }
-
-    /**
-     * $expectedAnsweredBy (STEP 2): present only for questions the
-     * deterministic extraction layer is specifically meant to catch --
-     * e.g. "J2 free seats?" must now be 'rule', never 'model'. Omitted
-     * (null) everywhere that distinction either already held before STEP
-     * 2, or genuinely still needs the model, so it isn't asserted there.
-     *
-     * Round 4 PART B.3: returns BOTH a strict pass (expected only) and
-     * an acceptable pass (expected OR any of the question's own
-     * 'acceptable' list) -- never merged into one number, so a CGS
-     * topic-counterpart question can legitimately count as correct
-     * either way without hiding which of the two it actually was.
-     *
-     * @return array{strict: bool, acceptable: bool}
-     */
-    protected function matches(array $question, ?string $chosen, string $outcome, ?string $answeredBy): array
-    {
-        $expectedAnsweredBy = $question['expected_answered_by'] ?? null;
-        $answeredByOk = $expectedAnsweredBy === null || $answeredBy === $expectedAnsweredBy;
-
-        $strict = $answeredByOk && $this->oneExpectationMatches($question['expected'], $chosen, $outcome);
-        $acceptable = $strict;
-
-        if (! $acceptable && $answeredByOk) {
-            foreach ($question['acceptable'] ?? [] as $alternative) {
-                if ($this->oneExpectationMatches($alternative, $chosen, $outcome)) {
-                    $acceptable = true;
-
-                    break;
+        if ($expectedParams !== [] && $passAccept) {
+            $paramsOk = true;
+            foreach ($expectedParams as $k => $v) {
+                if (! array_key_exists($k, $actualParams) || mb_strtolower((string) $actualParams[$k]) !== mb_strtolower((string) $v)) {
+                    $paramsOk = false;
                 }
             }
         }
 
-        return ['strict' => $strict, 'acceptable' => $acceptable];
-    }
-
-    protected function oneExpectationMatches(string $expected, ?string $chosen, string $outcome): bool
-    {
-        return match ($expected) {
-            'refused' => $outcome === AssistantLog::OUTCOME_REFUSED,
-            'asked_back' => $outcome === AssistantLog::OUTCOME_ASKED_BACK,
-            default => $chosen === $expected,
-        };
+        return [
+            'actual' => $actual,
+            'actual_kind' => $actual !== null ? (Catalogue::find($actual)['kind'] ?? null) : null,
+            'confidence' => isset($meta['confidence']) ? round((float) $meta['confidence'], 2) : null,
+            'alternatives' => $meta['alternatives'] ?? [],
+            'router_params' => $actualParams,
+            'pass_strict' => $passStrict,
+            'pass_accept' => $passAccept,
+            'params_ok' => $paramsOk,
+            'router' => $usedRouter,
+            'outcome' => $result['outcome'],
+            'model_used' => $meta['model_used'] ?? null,
+            'ms' => $elapsedMs,
+        ];
     }
 
     /**
-     * Round 4 PART B.3: reports STRICT accuracy (expected only) and
-     * ACCEPTABLE accuracy (expected OR the question's own 'acceptable'
-     * list) as two separate numbers -- a question answered only via its
-     * 'acceptable' alternative shows as ACCEPTABLE in the table, never
-     * silently counted as a plain PASS.
+     * Per role: id accuracy (strict / with accepted alternatives), kind
+     * accuracy, accuracy by expected kind, the kind confusion matrix,
+     * confidence calibration, the threshold table, params accuracy,
+     * every failure, average response time. Router-answered rows only;
+     * pre-router rows are counted separately.
      */
-    protected function report(array $results, array $questions, int $callsThisRun, array $responseTimesMs): void
+    protected function report(array $results, array $questions, string $title): void
     {
-        $rows = [];
-        $passCount = 0;
-        $acceptableCount = 0;
+        $rows = collect($results)->map(fn ($r, $i) => $r + ['q' => $questions[$i]['q'], 'role' => $questions[$i]['role'], 'group' => $questions[$i]['group'], 'expected' => $questions[$i]['id'], 'expected_kind' => Catalogue::find($questions[$i]['id'])['kind'] ?? '?', 'accept' => $questions[$i]['accept'] ?? []]);
+        $router = $rows->where('router', true);
+        $preRouter = $rows->where('router', false)->count();
 
-        foreach ($results as $i => $r) {
-            $q = $questions[$i];
-            // Backward-compatible with a progress file saved before this round, which has no 'pass_acceptable' key at all.
-            $passAcceptable = $r['pass_acceptable'] ?? $r['pass'];
+        $this->newLine();
+        $this->info("=== {$title}: {$router->count()} router-answered question(s)".($preRouter ? ", {$preRouter} answered before the router (no call, not counted)" : '').' ===');
 
-            $rows[] = [
-                $q['question'], $q['role'], $q['expected'],
-                $r['chosen'] ?? '(none)', $r['answered_by'] ?? '-',
-                $r['model_used'] ?? '-', $r['error_code'] ?? '-',
-                $r['pass'] ? 'PASS' : ($passAcceptable ? 'ACCEPTABLE' : 'FAIL'),
-            ];
-
-            if ($r['pass']) {
-                $passCount++;
-            }
-            if ($passAcceptable) {
-                $acceptableCount++;
-            }
+        if ($router->isEmpty()) {
+            return;
         }
 
-        $this->table(['Question', 'Role', 'Expected', 'Chosen', 'Answered By', 'Model Used', 'Error', 'Result'], $rows);
+        $pct = fn ($n, $d) => $d > 0 ? round($n / $d * 100, 1).'%' : '-';
+        $kindOk = fn ($r) => $r['actual_kind'] === $r['expected_kind'] || ($r['pass_accept'] && $r['actual_kind'] !== null);
 
-        $answered = count($results);
-        $strictAccuracy = $answered > 0 ? round($passCount / $answered * 100, 1) : 0.0;
-        $acceptableAccuracy = $answered > 0 ? round($acceptableCount / $answered * 100, 1) : 0.0;
-        $avgMs = $responseTimesMs === [] ? 0 : (int) round(array_sum($responseTimesMs) / count($responseTimesMs));
+        $summary = [];
+        foreach ([...['student', 'cgs'], 'all'] as $role) {
+            $set = $role === 'all' ? $router : $router->where('role', $role);
+            if ($set->isEmpty()) {
+                continue;
+            }
+            $withParams = $set->filter(fn ($r) => $r['params_ok'] !== null);
+            $withParams = $withParams->values();
+            $summary[] = [
+                $role, $set->count(),
+                $pct($set->where('pass_strict', true)->count(), $set->count()),
+                $pct($set->where('pass_accept', true)->count(), $set->count()),
+                $pct($set->filter($kindOk)->count(), $set->count()),
+                $withParams->isEmpty() ? '-' : $pct($withParams->filter(fn ($r) => $r['params_ok'] === true)->count(), $withParams->count()).' of '.$withParams->count(),
+                (int) round($set->avg('ms')).'ms',
+            ];
+        }
+        $this->table(['Role', 'N', 'Id strict', 'Id + accepted', 'Kind', 'Params', 'Avg time'], $summary);
 
-        $this->info("Strict accuracy: {$strictAccuracy}% ({$passCount}/{$answered})");
-        $this->info("Acceptable accuracy: {$acceptableAccuracy}% ({$acceptableCount}/{$answered})");
-        $this->info("Provider calls used this run: {$callsThisRun}");
-        $this->info("Average response time: {$avgMs}ms");
+        $byGroup = $router->groupBy('group')->map(fn ($set, $g) => [$g, $set->count(), $pct($set->where('pass_strict', true)->count(), $set->count()), $pct($set->where('pass_accept', true)->count(), $set->count()), $pct($set->filter($kindOk)->count(), $set->count())])->values()->all();
+        $this->table(['Group', 'N', 'Id strict', 'Id + accepted', 'Kind'], $byGroup);
+
+        $kinds = ['lookup', 'guidance', 'action', 'out_of_scope'];
+        $byKind = collect($kinds)->map(function ($k) use ($router, $pct, $kindOk) {
+            $set = $router->where('expected_kind', $k);
+
+            return [$k, $set->count(), $pct($set->where('pass_accept', true)->count(), $set->count()), $pct($set->filter($kindOk)->count(), $set->count())];
+        })->all();
+        $this->table(['Expected kind', 'N', 'Id + accepted', 'Kind correct'], $byKind);
+
+        $matrix = collect($kinds)->map(fn ($e) => [$e, ...collect([...$kinds, null])->map(fn ($a) => $router->where('expected_kind', $e)->where('actual_kind', $a)->count())->all()])->all();
+        $this->line('Kind confusion matrix (rows = expected, columns = actual):');
+        $this->table(['', ...$kinds, '(none)'], $matrix);
+
+        $bands = [[0.0, 0.5], [0.5, 0.6], [0.6, 0.7], [0.7, 0.8], [0.8, 0.9], [0.9, 1.01]];
+        $calibration = collect($bands)->map(function ($b) use ($router, $pct) {
+            $set = $router->filter(fn ($r) => $r['confidence'] !== null && $r['confidence'] >= $b[0] && $r['confidence'] < $b[1]);
+
+            return [sprintf('%.1f-%.1f', $b[0], min(1.0, $b[1])), $set->count(), $pct($set->where('pass_accept', true)->count(), $set->count())];
+        })->all();
+        $this->line('Confidence calibration:');
+        $this->table(['Band', 'N', 'Accuracy'], $calibration);
+
+        $thresholds = collect([0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95])->map(function ($t) use ($router, $pct) {
+            $wrongAbove = $router->filter(fn ($r) => ! $r['pass_accept'] && ($r['confidence'] ?? 0) >= $t)->count();
+            $chips = $router->filter(fn ($r) => ($r['confidence'] ?? 0) < $t || ($r['alternatives'] ?? []) !== [])->count();
+
+            return [$t, $pct($wrongAbove, $router->count()), $pct($chips, $router->count())];
+        })->all();
+        $this->line('Threshold choice (wrong answers shown with no "Did you mean" / share of answers that show chips):');
+        $this->table(['router_min_confidence', 'Wrong & confident', 'Shows chips'], $thresholds);
+
+        $failures = $router->where('pass_accept', false)->map(fn ($r) => [$r['role'], $r['group'], mb_strimwidth($r['q'], 0, 60, '...'), $r['expected'], $r['actual'] ?? '(none)', $r['confidence']])->values()->all();
+        $this->line('Failures ('.count($failures).'):');
+        if ($failures !== []) {
+            $this->table(['Role', 'Group', 'Question', 'Expected', 'Actual', 'Conf'], $failures);
+        }
+
+        // Strict: where('params_ok', false) would also match null (no parameters expected).
+        $paramFails = $router->filter(fn ($r) => $r['params_ok'] === false)->map(fn ($r) => [mb_strimwidth($r['q'], 0, 60, '...'), json_encode($questions[array_search($r['q'], array_column($questions, 'q'))]['params'] ?? []), json_encode($r['router_params'])])->values()->all();
+        if ($paramFails !== []) {
+            $this->line('Parameter mismatches ('.count($paramFails).'):');
+            $this->table(['Question', 'Expected params', 'Router params (masked)'], $paramFails);
+        }
     }
 
-    /** @return array<int, array{pass: bool, chosen: ?string, answered_by: ?string, outcome: string}> */
+    protected function callsToday(string $model): int
+    {
+        return (int) Cache::get("assistant:calls:day:{$model}:".now(config('assistant.day_timezone', 'America/Los_Angeles'))->format('Ymd'), 0);
+    }
+
     protected function loadProgress(): array
     {
         if (! File::exists($this->progressPath())) {
@@ -375,19 +363,13 @@ class AssistantEvaluate extends Command
 
         $decoded = json_decode(File::get($this->progressPath()), true);
 
-        return is_array($decoded) ? array_map(fn ($row) => $row, $decoded) : [];
+        return is_array($decoded) ? $decoded : [];
     }
 
     protected function saveProgress(array $results): void
     {
         File::ensureDirectoryExists(dirname($this->progressPath()));
+        ksort($results);
         File::put($this->progressPath(), json_encode($results, JSON_PRETTY_PRINT));
-    }
-
-    protected function clearProgress(): void
-    {
-        if (File::exists($this->progressPath())) {
-            File::delete($this->progressPath());
-        }
     }
 }

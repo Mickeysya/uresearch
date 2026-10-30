@@ -66,6 +66,12 @@ final class Lookups
             'programme_breakdown', 'gender_comparison', 'key_status_overview',
             'candidacy_expiry_distribution', 'length_of_stay_distribution',
             'seat_status_by_block', 'return_outlook',
+            // Router catalogue: period-parameterised forecast, distinct
+            // from seat_release_outlook's own fixed "next 3 months"
+            // summary -- reuses WorkstationStatistics::seatReleaseForecast(),
+            // the same function the Insights page's own forecast chart
+            // already reads, so the two can never disagree.
+            'release_forecast',
         ];
     }
 
@@ -99,6 +105,7 @@ final class Lookups
             'releases_this_week' => ['description' => 'How many seats were released in the last 7 days.', 'parameters' => []],
 
             'seat_release_outlook' => ['description' => 'Which seats are likely to become free in the next few months: termination notices, Awaiting Key Return, and candidacy expiring.', 'parameters' => []],
+            'release_forecast' => ['description' => 'How many seats may be released in ONE specific month, quarter or year (a forecast maximum, same source as the Insights page forecast chart) -- not a fixed "next 3 months" summary like seat_release_outlook.', 'parameters' => ['period' => 'required: a month as "YYYY-MM" (e.g. "2026-11"), or a quarter/year/other span as "YYYY-MM..YYYY-MM" (e.g. "2027-01..2027-03")']],
             'almost_full_rooms' => ['description' => 'Which rooms are almost full (occupancy at or above the almost-full threshold).', 'parameters' => []],
             'insights_summary' => ['description' => 'The Insights page key highlights, as a few short sentences.', 'parameters' => []],
 
@@ -148,6 +155,7 @@ final class Lookups
             'length_of_stay_distribution' => self::lengthOfStayDistribution($parameters),
             'seat_status_by_block' => self::seatStatusByBlock(),
             'return_outlook' => self::returnOutlook($parameters),
+            'release_forecast' => self::releaseForecast($parameters),
             default => ['outcome' => 'asked_back', 'text' => "I don't recognise that question. Could you rephrase it?"],
         };
     }
@@ -536,6 +544,46 @@ final class Lookups
             ['label' => 'Termination notices', 'url' => route('workstation.cgs.operations', ['seat_status' => 'termination_notice'])],
             ['label' => 'Awaiting Key Return', 'url' => route('workstation.cgs.operations', ['seat_status' => 'awaiting_key_return'])],
         ], 'resultCount' => $o['termination']['count'] + $o['awaiting_key_return']['count'] + $o['candidacy_expiring']['count']];
+    }
+
+    /**
+     * Router catalogue: a period-parameterised forecast. The period
+     * arrives pre-validated by Pipeline (PeriodExtractor::validate() --
+     * "a model-supplied period is checked, never trusted"); this method
+     * never re-parses free text, only the normalised ['kind','year',
+     * 'month'|'quarter'] shape. Sums WorkstationStatistics::
+     * seatReleaseForecast()'s own per-month rows over the period's
+     * months-ahead range -- the exact same function and numbers the
+     * Insights forecast chart reads, so the two can never disagree.
+     */
+    protected static function releaseForecast(array $parameters): array
+    {
+        // fromString() accepts the router's "2026-11" / "2027-01..2027-03" form or an already-validated array, and re-validates either way.
+        $period = PeriodExtractor::fromString($parameters['period'] ?? null);
+
+        if ($period === null) {
+            return ['outcome' => 'asked_back', 'text' => 'Which month, quarter or year would you like the forecast for?'];
+        }
+
+        [$firstMonthsAhead, $lastMonthsAhead] = PeriodExtractor::monthsAheadRange($period);
+
+        if ($firstMonthsAhead < 0) {
+            return ['outcome' => 'asked_back', 'text' => 'That period has already passed -- which upcoming month, quarter or year would you like instead?'];
+        }
+
+        $monthly = WorkstationStatistics::seatReleaseForecast($lastMonthsAhead + 1);
+        $slice = array_slice($monthly, $firstMonthsAhead, $lastMonthsAhead - $firstMonthsAhead + 1);
+
+        $releases = array_sum(array_column($slice, 'releases'));
+        $fromCandidacy = array_sum(array_column($slice, 'from_candidacy'));
+        $fromTermination = array_sum(array_column($slice, 'from_termination'));
+        $label = PeriodExtractor::label($period);
+
+        $text = "{$releases} seat(s) may be released in {$label}: {$fromCandidacy} from candidacy expiry, {$fromTermination} from termination notices. This is a maximum, not a prediction -- an appeal can extend a candidacy by up to 12 months.";
+
+        return ['outcome' => 'answered', 'text' => $text, 'links' => [
+            ['label' => 'Insights forecast', 'url' => route('workstation.cgs.insights')],
+        ], 'resultCount' => $releases];
     }
 
     /** C2: config('assistant.almost_full_percent') is the threshold, same number the Insights page would use for emphasis. */

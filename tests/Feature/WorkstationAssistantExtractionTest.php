@@ -18,15 +18,15 @@ use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
- * The deterministic keyword-rule layer: a clear LOOKUP with extracted
- * parameters, an action request, or a manipulation phrase still never
- * reaches the model at all (assertRuleAnswered()). A GUIDANCE-topic match
- * (PART B) is no longer primary -- it is held in reserve as the fallback
- * the model's own unavailability falls back to (assertFallbackGuidance()),
- * since PART B's whole point is that the model, with every topic's text
- * already in front of it, finds the right guidance more reliably than a
- * flat phrase list, including a rephrasing the phrase list was never
- * written to catch.
+ * The deterministic layer -- since the semantic router, this is Part 5's
+ * FALLBACK, used only when the router is unavailable or returns invalid
+ * output. Every test here therefore makes the router unavailable first
+ * (FakeModel::forceUnavailable()) and proves that the normaliser, the
+ * interrogative guard, the keyword rules and the parameter extraction
+ * alone still find the right catalogue entry, with its parameters, and
+ * that the row is logged as rule_fallback. Manipulation phrases are the
+ * one exception: they are refused BEFORE the router, so they are logged
+ * as rule and never reach any model call at all.
  */
 class WorkstationAssistantExtractionTest extends TestCase
 {
@@ -61,18 +61,20 @@ class WorkstationAssistantExtractionTest extends TestCase
     }
 
     /**
-     * Runs the question and asserts the deterministic layer chose the
-     * right LOOKUP/action/out_of_scope WITHOUT ever consulting the model
-     * (FakeModel::answerCalls() is empty).
+     * Router unavailable -> the deterministic fallback must still choose
+     * the right lookup/action/out_of_scope, with no compose call either.
      */
-    protected function assertRuleAnswered(User $user, string $question, string $expectedLookup): array
+    protected function assertRuleAnswered(User $user, string $question, string $expectedLookup, string $expectedAnsweredBy = AssistantLog::ANSWERED_BY_RULE_FALLBACK): array
     {
+        FakeModel::forceUnavailable();
+
         $result = $this->pipeline()->ask($user, $question, []);
 
-        $this->assertEmpty(FakeModel::answerCalls(), "Question \"{$question}\" should never have reached the model.");
+        $this->assertEmpty(FakeModel::answerCalls(), "Question \"{$question}\" should never have reached a compose call.");
 
-        $log = AssistantLog::latest('occurred_at')->first();
+        $log = AssistantLog::latest('id')->first();
         $this->assertSame($expectedLookup, $log->lookup, "Question \"{$question}\" logged the wrong lookup.");
+        $this->assertSame($expectedAnsweredBy, $log->answered_by);
 
         return $result;
     }
@@ -90,9 +92,9 @@ class WorkstationAssistantExtractionTest extends TestCase
 
         $result = $this->pipeline()->ask($user, $question, []);
 
-        $log = AssistantLog::latest('occurred_at')->first();
+        $log = AssistantLog::latest('id')->first();
         $this->assertSame("guidance:{$expectedTopic}", $log->lookup, "Question \"{$question}\" did not fall back to the expected topic.");
-        $this->assertSame(AssistantLog::ANSWERED_BY_DIRECT, $log->answered_by);
+        $this->assertSame(AssistantLog::ANSWERED_BY_RULE_FALLBACK, $log->answered_by);
 
         return $result;
     }
@@ -199,7 +201,7 @@ class WorkstationAssistantExtractionTest extends TestCase
         $cgs = $this->cgs();
         $seat = $this->seat($this->room(), '1', Workstation::STATUS_OCCUPIED);
 
-        $result = $this->assertRuleAnswered($cgs, "release seat {$seat->id}", 'action_request');
+        $result = $this->assertRuleAnswered($cgs, "release seat {$seat->id}", 'action_release');
         $this->assertSame('refused', $result['outcome']);
         $this->assertSame(Pipeline::ACTION_REFUSED_MESSAGE, $result['answer']);
         $this->assertStringContainsString((string) $seat->id, $result['links'][0]['url']);
@@ -223,7 +225,7 @@ class WorkstationAssistantExtractionTest extends TestCase
     {
         $cgs = $this->cgs();
 
-        $result = $this->assertRuleAnswered($cgs, 'please reassign this student', 'action_request');
+        $result = $this->assertRuleAnswered($cgs, 'please reassign this student', 'action_reassign');
         $this->assertSame('refused', $result['outcome']);
     }
 
@@ -231,35 +233,35 @@ class WorkstationAssistantExtractionTest extends TestCase
     {
         $cgs = $this->cgs();
 
-        $this->assertRuleAnswered($cgs, 'assign a student to this seat', 'action_request');
+        $this->assertRuleAnswered($cgs, 'assign a student to this seat', 'action_assign');
     }
 
     public function test_action_request_mark_as_collected(): void
     {
         $cgs = $this->cgs();
 
-        $this->assertRuleAnswered($cgs, 'mark the key as collected', 'action_request');
+        $this->assertRuleAnswered($cgs, 'mark the key as collected', 'action_mark_key_collected');
     }
 
     public function test_action_request_set_maintenance(): void
     {
         $cgs = $this->cgs();
 
-        $this->assertRuleAnswered($cgs, 'set maintenance on this seat', 'action_request');
+        $this->assertRuleAnswered($cgs, 'set maintenance on this seat', 'action_set_maintenance');
     }
 
     public function test_action_request_terminate(): void
     {
         $cgs = $this->cgs();
 
-        $this->assertRuleAnswered($cgs, 'terminate this loan', 'action_request');
+        $this->assertRuleAnswered($cgs, 'terminate this loan', 'action_terminate_or_withdraw');
     }
 
     public function test_action_request_withdraw(): void
     {
         $cgs = $this->cgs();
 
-        $this->assertRuleAnswered($cgs, 'withdraw the termination notice', 'action_request');
+        $this->assertRuleAnswered($cgs, 'withdraw the termination notice', 'action_terminate_or_withdraw');
     }
 
     /** The same verb, phrased as a how-to question, must NOT be treated as a command -- it falls back to the cgs_release topic when the model is unavailable. */
@@ -282,7 +284,7 @@ class WorkstationAssistantExtractionTest extends TestCase
         $cgs = $this->cgs();
         $seat = $this->seat($this->room(), '1', Workstation::STATUS_OCCUPIED);
 
-        $result = $this->assertRuleAnswered($cgs, "How do I release seat {$seat->id}?", 'action_request');
+        $result = $this->assertRuleAnswered($cgs, "How do I release seat {$seat->id}?", 'action_release');
         $this->assertSame('refused', $result['outcome']);
         $this->assertSame(Pipeline::ACTION_REFUSED_MESSAGE, $result['answer']);
     }
@@ -366,7 +368,8 @@ class WorkstationAssistantExtractionTest extends TestCase
     {
         $cgs = $this->cgs();
 
-        $result = $this->assertRuleAnswered($cgs, $question, 'out_of_scope');
+        $result = $this->assertRuleAnswered($cgs, $question, 'out_of_scope', AssistantLog::ANSWERED_BY_RULE);
+        $this->assertEmpty(FakeModel::routeCalls(), 'A manipulation phrase is refused before the router.');
         $this->assertSame('refused', $result['outcome']);
         $this->assertSame(Pipeline::OUT_OF_SCOPE_MESSAGE, $result['answer']);
     }
@@ -375,15 +378,15 @@ class WorkstationAssistantExtractionTest extends TestCase
     // Ambiguous / incomplete extraction -- existing behaviour preserved
     // -------------------------------------------------------------
 
-    /** "free seats" alone, with no block, must not be force-answered by the deterministic layer -- it falls through to the model exactly as it did before PART B. */
+    /** "free seats" alone, with no block, must not be force-answered by the fallback as a block-scoped seat_availability. */
     public function test_free_seats_alone_with_no_block_does_not_trigger_deterministic_seat_availability(): void
     {
         $cgs = $this->cgs();
 
-        FakeModel::queueAnswer(['kind' => 'out_of_scope']);
+        FakeModel::forceUnavailable();
         $this->pipeline()->ask($cgs, 'free seats', []);
 
-        $log = AssistantLog::latest('occurred_at')->first();
+        $log = AssistantLog::latest('id')->first();
         $this->assertNotSame('seat_availability', $log->lookup);
     }
 
@@ -404,16 +407,29 @@ class WorkstationAssistantExtractionTest extends TestCase
     }
 
     // -------------------------------------------------------------
-    // assistant:evaluate --model-only still bypasses this layer entirely
+    // The router always goes first now; --model-only never reaches this layer
     // -------------------------------------------------------------
 
-    public function test_model_only_bypasses_deterministic_extraction_too(): void
+    public function test_the_router_decides_first_even_when_a_rule_would_match(): void
     {
         $cgs = $this->cgs();
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'overall_stats']);
+        FakeModel::queueRoute(['id' => 'overall_stats']);
 
-        $this->pipeline()->ask($cgs, 'J2 free seats?', [], true);
+        $this->pipeline()->ask($cgs, 'J2 free seats?', []);
 
-        $this->assertNotEmpty(FakeModel::answerCalls());
+        $this->assertSame(1, FakeModel::routeCallCount());
+        $this->assertSame('overall_stats', AssistantLog::latest('id')->first()->lookup);
+        $this->assertSame(AssistantLog::ANSWERED_BY_MODEL_ROUTER, AssistantLog::latest('id')->first()->answered_by);
+    }
+
+    public function test_model_only_returns_the_busy_message_instead_of_the_fallback(): void
+    {
+        $cgs = $this->cgs();
+        FakeModel::forceUnavailable();
+
+        $result = $this->pipeline()->ask($cgs, 'J2 free seats?', [], true);
+
+        $this->assertSame('unavailable', $result['outcome']);
+        $this->assertNotSame(AssistantLog::ANSWERED_BY_RULE_FALLBACK, AssistantLog::latest('id')->first()->answered_by);
     }
 }

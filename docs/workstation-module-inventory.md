@@ -91,13 +91,14 @@ chain — no `WorkflowEngine`/`Stage` gating, unlike every other module.
 | Termination notice vacate period | 5 working days | `WorkstationAllocator::TERMINATION_NOTICE_WORKING_DAYS` | `Services/WorkstationAllocator.php` |
 | Candidacy appeal extension cap | not re-verified this pass — see `StudyCandidacy::remainingAppealMonths()`/`canAppeal()` | `Models/StudyCandidacy.php` | — |
 | Almost-full room threshold | 90% (default) | `ASSISTANT_ALMOST_FULL_PERCENT` env, `config('assistant.almost_full_percent')` | `config/assistant.php` |
-| Assistant: primary model requests/minute | 12 | `config('assistant.rate_limits.primary.requests_per_minute')` | `config/assistant.php` |
-| Assistant: primary model requests/day | 400 | `config('assistant.rate_limits.primary.requests_per_day')` | `config/assistant.php` |
-| Assistant: fallback model requests/minute | 4 | `config('assistant.rate_limits.fallback.requests_per_minute')` | `config/assistant.php` |
+| Assistant: primary model requests/minute | 12 | `config('assistant.rate_limits')['gemini-3.5-flash-lite']['requests_per_minute']` (keyed by model name; read the whole map -- model names contain dots) | `config/assistant.php` |
+| Assistant: primary model requests/day | 400 | same map, `requests_per_day` | `config/assistant.php` |
+| Assistant: fallback model requests/minute | 4 | same map, `gemini-3.8-flash` entry | `config/assistant.php` |
+| Assistant: router "Did you mean" threshold | 0.9 (chosen from the 2026-10-30 evaluation, see the config comment) | `ASSISTANT_ROUTER_MIN_CONFIDENCE` env, `config('assistant.router_min_confidence')` | `config/assistant.php` |
 | Assistant: per-user requests/minute | 10 | `config('assistant.rate_limits.user_requests_per_minute')` | `config/assistant.php` |
 | Assistant: total request deadline | 22 seconds | `ASSISTANT_TOTAL_DEADLINE_SECONDS` env | `config/assistant.php` |
-| Assistant: single HTTP call timeout | `min(10, total_deadline_seconds)` = 10 seconds in practice | `Pipeline.php` line ~496 | `Assistant/Pipeline.php` |
-| Assistant: Gemini client timeout | 15 seconds, 1 retry | `config('assistant.gemini.timeout'/'retries')` | `config/assistant.php` |
+| Assistant: single HTTP call timeout | at most 10 seconds per attempt, never past the total deadline | `Pipeline::attemptTimeout()` | `Assistant/Pipeline.php` |
+| Assistant: retries | 2 retries on the same model (waits 2 s, 5 s; never after a 429), then 1 fallback-model attempt | `config('assistant.retry_waits_seconds')` | `config/assistant.php` |
 | Assistant: circuit breaker open duration | 60 seconds (default) | `config('assistant.circuit_breaker.open_seconds')` | `config/assistant.php` |
 
 Note: the measured real round-trip for one Gemini call during this audit
@@ -152,8 +153,9 @@ these same notifications, it was not traced in this pass.
 | `candidacy:remind` | Send the next due monthly candidacy-expiry reminder | — |
 | `candidacy:generate-dismissals` | Generate the dismissal candidate list for CGS review | — |
 | `assistant:check` | One trivial request to the configured provider; reports OK/FAILED | `--allow-fallback` |
-| `assistant:evaluate` | Run the evaluation question set against the real provider | `--resume`, `--model-only`, `--only=`, `--allow-fallback` |
-| `assistant:ask` | Run the pipeline as a given user, print the result | `{email} {question}` |
+| `assistant:evaluate` | Measure the router on the labelled question set against the real provider (router only, paced, stops at the first 429) | `--resume`, `--only=failed`, `--group=`, `--limit=`, `--heldout`, `--report`, `--allow-fallback` |
+| `assistant:ask` | Run the pipeline as a given user, print the answer, "Interpreted as", chips, catalogue id, confidence, model and time | `{email} {question}`, `--recent=*`, `--trace` |
+| `assistant:catalogue` | Print the canonical question catalogue for a role | `{role}` (student or cgs) |
 | `assistant:log` | Print the latest `assistant_logs` rows | `--limit=20` |
 
 ### Scheduled (`routes/console.php`)
@@ -185,7 +187,7 @@ these same notifications, it was not traced in this pass.
 | `workstation_histories` | `2026_05_05_000100_create_workstation_histories_table.php` (+ student snapshot columns) — append-only |
 | `demo_student_profiles` | `2026_10_26_000100_create_demo_student_profiles_table.php` |
 | `workstation_termination_notices` | `2026_10_27_000300_create_workstation_termination_notices_table.php` |
-| `assistant_logs` | `2026_10_28_000100_create_assistant_logs_table.php` (+ widened `answered_by`, added `model_used`/`error_code`) |
+| `assistant_logs` | `2026_10_28_000100_create_assistant_logs_table.php` (+ widened `answered_by`, added `model_used`/`error_code`, added `catalogue_kind`) |
 
 Plus one data-migration: `2026_10_27_000200_convert_available_seats_with_a_return_pending_key_to_awaiting_key_return.php`.
 
@@ -200,37 +202,111 @@ the only ones not role-gated, for the reasons noted inline in `routes.php`
 
 ## (h) Assistant
 
+### The flow for a typed question (`Assistant/Pipeline.php`)
+
+1. **Role check** -- student and CGS only; anyone else gets an in-app message.
+2. **Privacy** -- `PrivacyMasker::mask()` replaces every email and 8-digit
+   student ID with `<EMAIL1>` / `<ID1>`; a known student name is refused
+   outright; an email used as a lookup key is asked back ("Please use a
+   Student ID or seat number."). None of these reach the model.
+3. **An exact suggested-question text** is answered like its chip, no model call.
+4. **A manipulation phrase** ("ignore your rules ...") is refused, no model call.
+5. **The router** -- ONE Gemini call (structured JSON output, the Interactions
+   API `response_format` schema) returns `{id, params, confidence,
+   alternatives, clarify}`. The `id` enum is the asking role's own catalogue,
+   so the model can only pick an existing entry; it never writes a data answer.
+6. **Our validation** -- the id must be in the role's catalogue (otherwise
+   invalid output -> step 8); only declared parameter names survive; a period
+   must pass `PeriodExtractor` (else the lookup asks which month/quarter/year);
+   an ID must be one of this question's own placeholders, mapped back to the
+   real value only here; every other value goes through the existing
+   validators in `Lookups::run()`. A short follow-up that names its own period
+   ("and january?") uses that period.
+7. **Execution by kind** -- *lookup*: the existing `Lookups` template, numbers
+   from the database (an aggregate lookup may get the existing second compose
+   call, validated); *guidance*: the chosen topic's text, optionally rewritten
+   by ONE compose call given only that topic (rejected if it invents a number
+   or says the text does not cover the question); *action*: never executed --
+   a refusal that links the seat, the student's seat, or Workstation
+   Management; *out_of_scope*: the existing refusal (a student asking for
+   CGS-only data gets a polite staff-only refusal instead).
+8. **Fallback (Part 5)** -- when the router is unavailable (budget, 5xx, 429,
+   timeout, after retries and the fallback model) or returns invalid output:
+   `QuestionNormaliser` (lowercase, "u"/"pls"/"lah" etc.), the interrogative
+   guard (how many / which / when / what is never an action), the action
+   patterns, `PeriodExtractor`, the keyword rules, and finally "Did you mean"
+   chips by catalogue keyword score plus the suggested questions. No further
+   model call. Logged as `rule_fallback`.
+9. **Transparency** -- every typed answer carries "Interpreted as: <canonical
+   question with the parameters filled in>"; below
+   `router_min_confidence` or when the router names an alternative, up to 3
+   "Did you mean" chips. A chip click goes to `POST /suggestion` with the
+   catalogue id and params -- validated the same way, no model call, no quota.
+
+Budget per typed question: at most 1 router call + at most 1 compose call, both
+through the per-model budgets, retries, fallback model and circuit breaker.
+
+### The catalogue (`Assistant/Catalogue.php`, `php artisan assistant:catalogue {role}`)
+
+The single source of truth: every lookup, every guidance topic, one action
+entry per kind of operation, and out_of_scope -- 22 entries for students, 65
+for CGS. Each entry has an id, kind, roles, ONE canonical question (a
+suggested-question chip's exact text where one points at it), a description
+with contrast hints, 4-6 invented example paraphrases, a parameter schema, a
+link, and the lookup's template method / the guidance topic's summary (its
+first sentences). `CatalogueTest` fails if a lookup, topic or action exists
+in code without an entry, or the reverse.
+
 **Student lookups (4):** `my_workstation`, `my_locker_key`, `available_seats`, `block_comparison`.
 
-**CGS lookups (23):** `seat_availability`, `overall_stats`, `seat_lookup`,
+**CGS lookups (24):** `seat_availability`, `overall_stats`, `seat_lookup`,
 `student_lookup`, `keys_pending_collection`, `keys_pending_return`,
 `awaiting_key_return_seats`, `termination_notices`, `maintenance_seats`,
 `room_occupancy`, `candidacy_expiring`, `releases_this_week`,
-`seat_release_outlook`, `almost_full_rooms`, `insights_summary`,
-`block_comparison`, `programme_breakdown`, `gender_comparison`,
-`key_status_overview`, `candidacy_expiry_distribution`,
+`seat_release_outlook`, `release_forecast`, `almost_full_rooms`,
+`insights_summary`, `block_comparison`, `programme_breakdown`,
+`gender_comparison`, `key_status_overview`, `candidacy_expiry_distribution`,
 `length_of_stay_distribution`, `seat_status_by_block`, `return_outlook`.
 
-The last seven reuse the exact `WorkstationStatistics` methods the Insights
-page's own charts read, so chat and page numbers cannot disagree.
+`release_forecast` (one named month, quarter, year or span) sums the same
+`WorkstationStatistics::seatReleaseForecast()` rows the Insights forecast
+chart reads; the last seven reuse the exact `WorkstationStatistics` methods
+the Insights charts read, so chat and page numbers cannot disagree.
 
 **Guidance topics:** 15 student (`docs/knowledge/assistant/student/*.md`) +
-15 CGS (`docs/knowledge/assistant/cgs/*.md`), loaded fresh on every call,
-never cached.
+15 CGS (`docs/knowledge/assistant/cgs/*.md`), loaded fresh on every call.
 
-**What reaches the model:** `PrivacyMasker::mask()` runs before any text is
-sent — emails and 8-digit student IDs are reversibly masked, and a
-detected name is a hard stop (refused), not masked. Lookups in
-`config('assistant.aggregate_lookups')` (no personal data — counts and
-programme names only) are eligible for an optional second model call that
-phrases the structured numbers into prose; `seat_lookup`/`student_lookup`
-always use the template, never a model call, since they may carry PII.
+**Actions (11, never executed):** release, reassign, assign, mark key
+collected, mark key returned, set maintenance, restore, terminate or
+withdraw, release hold, cancel a key request (student), anything else.
 
-**What is logged:** `assistant_logs` — `user_id`, `role`, `occurred_at`,
-`source`, `lookup` (a lookup name, `guidance:<topic>`, or a refusal-type
-string — never user-typed text), `outcome`, `refusal_reason`,
-`result_count`, `answered_by`, `model_used`, `error_code`. No `question` or
-`answer` column exists on this table at all.
+### What is sent to Gemini
+
+*Router call:* the fixed instructions; today's date and weekday
+(Asia/Kuala_Lumpur); the asking role's catalogue (ids, canonical questions,
+descriptions, parameter hints, invented example paraphrases, one-line topic
+summaries from the static knowledge files); ~26 invented few-shot examples;
+the masked question; up to 5 masked earlier questions from the browser. No
+database value of any kind, no name, no email, no real ID.
+
+*Guidance compose call:* the masked question and earlier questions, and the
+ONE chosen topic's static knowledge text.
+
+*Aggregate compose call (unchanged):* the masked question and the aggregate
+lookup's structured result -- counts, room codes and programme names, never a
+person. `seat_lookup`/`student_lookup`/`my_*` never get it.
+
+### What is logged
+
+`assistant_logs` -- `user_id`, `role`, `occurred_at`, `source`, `lookup` (the
+catalogue id: a lookup name, `guidance:<topic>`, an action id, `out_of_scope`,
+or a refusal type), `catalogue_kind`, `outcome`, `refusal_reason`,
+`result_count`, `answered_by` (`model_router` = the router decided,
+`rule_fallback` = the deterministic fallback decided, `direct`/`rule` for the
+no-model paths), `model_used`, `error_code`. No question, answer, name, email
+or ID column exists. The conversation is never stored server-side: the last 5
+questions live in the browser only. `assistant:ask --trace` prints only masked
+text and the router's ids/parameters, and never writes to the log.
 
 ## (i) Insights page cards
 
@@ -302,8 +378,15 @@ attempted in this pass; if certainty matters, run
 - No separate bell/in-app notification channel was found for this module
   distinct from email — every notification class checked returns
   `['mail']` from `via()`. If a bell UI exists, it was not located here.
-- The assistant's single-HTTP-call timeout (10s, from `min(10,
-  total_deadline_seconds)`) is close to the real measured Gemini response
-  time (~11s) in this environment, which can cause natural-language
-  (model-routed) questions to time out even though the provider itself is
-  reachable — see the audit report's Part 2 findings.
+- Measured 2026-10-30 against `gemini-3.5-flash-lite`: a router call takes
+  about 4.5-5 s; a question that also gets a compose call (guidance, an
+  aggregate lookup) about 9-11 s -- inside the 22 s total deadline and the
+  10 s per-attempt cap. The older note about ~11 s single calls timing out
+  predates the router.
+- `config('assistant.gemini.timeout')` and `config('assistant.gemini.retries')`
+  still exist in `config/assistant.php` but no code reads them any more --
+  per-attempt timeouts come from `Pipeline::attemptTimeout()` and retries from
+  `retry_waits_seconds`.
+- `WorkstationDemoSeedTest::test_termination_notice_dates_are_refreshed_on_rerun_not_duplicated`
+  is date-dependent: run on a Friday, `travel(2)->days()` lands on Sunday and
+  the working-day vacate-by date does not move, so it fails on Fridays.

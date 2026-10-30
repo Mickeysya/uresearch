@@ -388,6 +388,7 @@
         }
 
         #wsa-root .wsa-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+        #wsa-root .wsa-chips-label { flex-basis: 100%; font-size: 12px; color: var(--text-grey, #888); }
         #wsa-root .wsa-chip {
             background: var(--accent-subtle, #E2EAFA);
             color: var(--accent-solid, #284B80);
@@ -647,10 +648,18 @@
                 }
             }
 
-            function addChips(questions, onPick) {
+            /** label (optional): a small grey caption above the chips, e.g. "Did you mean:". */
+            function addChips(questions, onPick, label) {
                 var row = createMessageRow('assistant');
                 var wrap = document.createElement('div');
                 wrap.className = 'wsa-chips';
+
+                if (label) {
+                    var caption = document.createElement('div');
+                    caption.className = 'wsa-chips-label';
+                    caption.textContent = label;
+                    wrap.appendChild(caption);
+                }
 
                 questions.forEach(function (q) {
                     var chip = document.createElement('button');
@@ -731,6 +740,7 @@
                 });
             }
 
+            /** Shared by the 12 curated suggestion chips and a "Did you mean" chip -- the latter also carries the router's own params (e.g. a period), the former never does. No model call either way. */
             function pickSuggestion(suggestion) {
                 addUserMessage(suggestion.text);
                 runRequest(function (signal) {
@@ -743,7 +753,7 @@
                             'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': csrfToken,
                         },
-                        body: JSON.stringify({ id: suggestion.id }),
+                        body: JSON.stringify({ id: suggestion.id, params: suggestion.params || {} }),
                     });
                 });
             }
@@ -798,6 +808,16 @@
 
                         if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
                             addChips(data.suggestions, pickSuggestion);
+                        }
+
+                        // Part 2.5: "Did you mean" chips -- below the
+                        // confidence threshold, or the router also named
+                        // an alternative. Same chip primitive, same
+                        // click path (pickSuggestion -> the suggestion
+                        // endpoint, no model call) as the 12 curated
+                        // suggestions above.
+                        if (Array.isArray(data.chips) && data.chips.length > 0) {
+                            addChips(data.chips.slice(0, 3), pickSuggestion, 'Did you mean:');
                         }
                     })
                     .catch(function () {

@@ -4,6 +4,8 @@ What this assistant can and cannot do.
 
 **No names in questions.** A question containing a real student's name is refused, for privacy -- search by Student ID (8 digits) or seat number instead.
 
+**Understands informal questions.** You can type the way you would message a colleague ("how many seat will be release in nov", "J2 got seat or not", "pls release seat 252"). Every answer ends with an "Interpreted as" line showing the exact question it answered; when it is not sure, it also offers up to three "Did you mean" questions you can tap instead -- tapping one never uses the AI quota.
+
 **Links, not actions.** Every answer that has a relevant page links to it (a seat's own page, the filtered list a number came from, or the Insights page) -- the link is where you actually make a change.
 
 **Knowledge, not judgement.** It answers from the system's own written rules and live data only; it never guesses at a policy the text does not state, and says so plainly when a question falls outside what it has been given.

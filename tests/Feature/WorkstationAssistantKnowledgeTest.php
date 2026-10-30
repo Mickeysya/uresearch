@@ -102,19 +102,22 @@ class WorkstationAssistantKnowledgeTest extends TestCase
     {
         $student = $this->eligibleStudent();
 
+        FakeModel::queueRoute(['id' => 'confirmation', 'confidence' => 0.95]);
         FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'Confirm within the window or the seat is released.', 'sources' => ['confirmation']]);
 
         $this->pipeline()->ask($student, 'What happens if I do not confirm in time?', []);
 
         $this->assertSame('guidance:confirmation', AssistantLog::latest('occurred_at')->first()->lookup);
-        // The keyword rule's own match ("confirm"+"in time") is passed as a hint, not skipped.
-        $this->assertContains('confirmation', FakeModel::answerCalls()[0]['topicHints']);
+        // The router picked the topic; the compose call is given that topic (and only its text).
+        $this->assertSame(['confirmation'], FakeModel::answerCalls()[0]['topicHints']);
+        $this->assertStringStartsWith('### confirmation', FakeModel::answerCalls()[0]['knowledgeText']);
     }
 
     public function test_collect_my_locker_key_gives_the_collect_return_topic(): void
     {
         $student = $this->eligibleStudent();
 
+        FakeModel::queueRoute(['id' => 'locker_key_collect_return', 'confidence' => 0.95]);
         FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'Collect it at CGS.', 'sources' => ['locker_key_collect_return']]);
 
         $this->pipeline()->ask($student, 'How do I collect my locker key?', []);
@@ -126,6 +129,7 @@ class WorkstationAssistantKnowledgeTest extends TestCase
     {
         $student = $this->eligibleStudent();
 
+        FakeModel::queueRoute(['id' => 'eligibility_loan_period', 'confidence' => 0.95]);
         FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'You must be Active, full-time research, not expired.', 'sources' => ['eligibility_loan_period']]);
 
         $this->pipeline()->ask($student, 'Am I eligible for a workstation?', []);
@@ -133,11 +137,12 @@ class WorkstationAssistantKnowledgeTest extends TestCase
         $this->assertSame('guidance:eligibility_loan_period', AssistantLog::latest('occurred_at')->first()->lookup);
     }
 
-    /** "one student holds only one seat; Reassign moves a student in one step; Assign Student is only for a student with no seat" -- answered from BOTH cgs_reassign and cgs_assign. */
+    /** "one student holds only one seat; Reassign moves a student in one step; Assign Student is only for a student with no seat" -- routed to cgs_reassign, whose text covers both. */
     public function test_choosing_another_seat_for_an_unreleased_student_cites_reassign_and_assign(): void
     {
         $cgs = $this->cgs();
 
+        FakeModel::queueRoute(['id' => 'cgs_reassign', 'confidence' => 0.9]);
         FakeModel::queueAnswer([
             'kind' => 'guidance',
             'answer' => 'One student holds only one seat. Use Reassign to move the student to the new seat in one step -- Assign Student only works for a student with no seat at all.',

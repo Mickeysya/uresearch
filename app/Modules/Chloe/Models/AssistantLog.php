@@ -48,12 +48,18 @@ class AssistantLog extends Model
     /** PART B.4: the SECOND, aggregate-composing model call's prose passed validation and was used for a lookup answer (vs. ANSWERED_BY_MODEL, meaning only the lookup CHOICE came from the model and the answer text is the template). */
     public const ANSWERED_BY_MODEL_COMPOSE = 'model_compose';
 
+    /** The new router call (Part 2) picked the catalogue id this answer came from. */
+    public const ANSWERED_BY_MODEL_ROUTER = 'model_router';
+
+    /** Part 5: the router was unavailable or returned invalid output, and the existing deterministic layer (keyword rules, period extractor) answered instead. */
+    public const ANSWERED_BY_RULE_FALLBACK = 'rule_fallback';
+
     public $timestamps = false;
 
     protected $fillable = [
         'user_id', 'role', 'occurred_at', 'source', 'lookup',
         'outcome', 'refusal_reason', 'result_count', 'answered_by',
-        'model_used', 'error_code',
+        'model_used', 'error_code', 'catalogue_kind',
     ];
 
     protected function casts(): array
@@ -85,6 +91,7 @@ class AssistantLog extends Model
         string $answeredBy = self::ANSWERED_BY_DIRECT,
         ?string $modelUsed = null,
         ?string $errorCode = null,
+        ?string $catalogueKind = null,
     ): self {
         return self::create([
             'user_id' => $userId,
@@ -97,6 +104,7 @@ class AssistantLog extends Model
             'answered_by' => $answeredBy,
             'model_used' => $modelUsed,
             'error_code' => $errorCode,
+            'catalogue_kind' => $catalogueKind,
         ]);
     }
 }

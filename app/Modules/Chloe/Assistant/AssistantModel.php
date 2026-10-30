@@ -77,4 +77,23 @@ interface AssistantModel
      * @return array{text: ?string, outcome: 'ok'|'unavailable', error_code: ?string}
      */
     public function composeAggregate(string $maskedQuestion, string $lookupName, array $result, string $model, int $timeoutSeconds): array;
+
+    /**
+     * The semantic router call: picks ONE catalogue id (never invents
+     * one) for the masked question, with normalised parameters, a
+     * confidence, up to 2 alternative ids, and an optional short
+     * clarifying question -- structured JSON output via Gemini's
+     * generationConfig.responseSchema (the same current, documented
+     * mechanism GeminiModel already uses for answer()/composeAggregate(),
+     * just a different schema), so "id" is always one of the ids the
+     * schema's own enum was built from. One attempt against one named
+     * model; Pipeline's own reliability wrapper is what retries/falls
+     * back, exactly as it already does for answer().
+     *
+     * @param  array<int, array<string, mixed>>  $catalogue  Catalogue::forRole()'s own entries for this role
+     * @param  array<int, string>  $recentMaskedQuestions  up to config('assistant.recent_turns') earlier masked USER questions, oldest first
+     * @param  array<int, array{question: string, id: string}>  $fewShots  invented few-shot examples, catalogue ids only
+     * @return array{outcome: 'ok'|'unavailable', id: ?string, params: array<string, mixed>, confidence: ?float, alternatives: array<int, string>, clarify: ?string, error_code: ?string}
+     */
+    public function route(string $maskedQuestion, array $recentMaskedQuestions, array $catalogue, array $fewShots, string $todayLabel, string $model, int $timeoutSeconds): array;
 }

@@ -3,6 +3,9 @@
 namespace App\Modules\Chloe\Assistant;
 
 use App\Modules\Chloe\Models\AssistantLog;
+use App\Modules\Chloe\Models\Workstation;
+use App\Modules\Chloe\Models\WorkstationRequest;
+use App\Modules\Chloe\Support\StudentDirectory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Carbon;
@@ -10,22 +13,25 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Sleep;
 
 /**
- * The whole ask() pipeline, start to finish: role check -> length check ->
- * privacy masking -> deterministic rules (a clear lookup, an action
- * request, a manipulation phrase) -> otherwise ONE model call that can see
- * every guidance topic the role may read plus the lookup catalogue (PART
- * B) -> role-gated dispatch and answer validation -> PART 7 log row.
+ * The whole ask() pipeline for a typed question:
  *
- * Guidance-TOPIC phrase matches from KeywordRules (config('assistant.
- * keyword_rules')'s "guidance:*" entries, and the lost/damaged-key role
- * routing in KeywordRules::extractDeterministic()) are deliberately no
- * longer used to short-circuit the model call the way a LOOKUP match
- * still is -- PART B's whole point is that the model, with every topic's
- * text already in front of it, finds the right guidance far more
- * reliably than a flat phrase list ever did, including a rephrased
- * question the phrase list was never written to catch. They still exist
- * and still work, just demoted to the one place PART B.6 asks for: the
- * fallback answer when the model itself is unavailable.
+ *   role check -> length check -> privacy (IDs/emails masked, a known
+ *   name refused, an email used as a lookup key asked back) -> an exact
+ *   suggested-question text (answered with no model call) -> a
+ *   manipulation phrase (refused) -> the MODEL ROUTER (one call: picks
+ *   a catalogue id + parameters, never writes an answer) -> our own
+ *   validation (id in the role's catalogue, parameters through the
+ *   existing validators and PeriodExtractor) -> execution by kind
+ *   (lookup template / guidance topic text, optionally composed /
+ *   helpful action refusal / out_of_scope refusal) -> "Interpreted as"
+ *   and "Did you mean" -> one metadata log row.
+ *
+ * When the router is unavailable or returns invalid output (after its
+ * retries and the fallback model), fallbackAsk() answers instead from
+ * the deterministic layer alone -- QuestionNormaliser, the interrogative
+ * guard, KeywordRules, PeriodExtractor, Catalogue keyword scores -- with
+ * no further model call. Every answer it gives is logged as
+ * rule_fallback.
  *
  * The conversation itself is never stored server-side: $message and
  * $recentUserQuestions live only for the duration of one call to ask(),
@@ -39,31 +45,76 @@ final class Pipeline
 
     public const ACTION_REFUSED_MESSAGE = "I can't perform actions. Please open the seat to continue.";
 
+    public const ACTION_NO_TARGET_MESSAGE = "I can't perform actions. Open Workstation Management, find the seat or student, and use the Actions menu on the seat.";
+
+    public const ACTION_STUDENT_MESSAGE = "I can't perform actions. You can do this yourself on your Workstation page.";
+
     public const PRIVACY_NAME_MESSAGE = 'For privacy, please search using a Student ID or seat number.';
+
+    public const EMAIL_NOT_A_KEY_MESSAGE = 'Please use a Student ID or seat number.';
 
     public const ANYONE_ELSE_MESSAGE = 'I can only share information about your own workstation.';
 
+    /** A student asked something only CGS staff can see (a forecast, a staff-wide count...). */
+    public const STAFF_ONLY_MESSAGE = 'That information is only available to CGS staff. I can help with your own workstation, your locker key, the seats available to you, and the Term of Use.';
+
     public const ROLE_NOT_SUPPORTED_MESSAGE = 'The assistant is not available for your role yet.';
 
-    /** PART B.6: the model said out_of_scope but the question still sounds like it's about this system -- never shown for the DETERMINISTIC out_of_scope result (an explicit manipulation phrase), which stays the flat refusal. */
+    /** Out of scope, but the question still sounds like it is about this system. */
     public const ASKED_BACK_DOMAIN_MESSAGE = "I'm not sure I understood. You can ask about seats, locker keys, the Term of Use, or use one of the suggested questions.";
 
     public const MISSING_TOPIC_MESSAGE = 'Sorry, I could not find information on that topic. Please contact the Centre for Graduate Studies (CGS).';
 
+    /** assistant:ask --trace only: masked text, router ids/params and the decisions, never the key, a real ID or a name. Never logged. */
+    protected ?array $trace = null;
+
+    /** Set while fallbackAsk() runs, so every row it writes says rule_fallback -- with the router's own model/error code. */
+    protected ?string $answeredByOverride = null;
+
+    protected ?string $fallbackModelUsed = null;
+
+    protected ?string $fallbackErrorCode = null;
+
+    /** assistant:evaluate turns the compose calls off so a run measures (and spends quota on) the router alone. */
+    protected bool $composeEnabled = true;
+
     public function __construct(protected AssistantModel $model) {}
 
-    /** @return array{answer: string, interpreted_as: ?string, links: array, outcome: string, suggestions: ?array} */
+    public function enableTrace(): void
+    {
+        $this->trace = [];
+    }
+
+    /** @return array<int, string> */
+    public function trace(): array
+    {
+        return $this->trace ?? [];
+    }
+
+    public function disableCompose(): void
+    {
+        $this->composeEnabled = false;
+    }
+
+    protected function traceLine(string $line): void
+    {
+        if ($this->trace !== null) {
+            $this->trace[] = $line;
+        }
+    }
+
     /**
-     * $bypassKeywordRules: assistant:evaluate's --model-only -- skips the
-     * deterministic layer entirely so every question reaches the model,
-     * to measure it alone.
-     * $allowFallback (Round 3 PART A.4): assistant:evaluate/assistant:
-     * check default this to false (primary model only, so results
-     * measure that model) unless their own --allow-fallback flag is
-     * passed; the real chat endpoints always pass the default, true.
+     * $bypassKeywordRules: assistant:evaluate's --model-only -- a router
+     * failure returns the busy message directly instead of reaching
+     * fallbackAsk(), so a run measures the router alone.
+     * $allowFallback: false = primary model only (assistant:evaluate and
+     * assistant:check default); the chat endpoints always pass true.
+     *
+     * @return array{answer: string, interpreted_as: ?string, links: array, outcome: string, suggestions: ?array, chips?: array, meta: array}
      */
     public function ask(User $user, string $message, array $recentUserQuestions, bool $bypassKeywordRules = false, bool $allowFallback = true): array
     {
+        $this->answeredByOverride = null;
         $role = self::normalizeRole($user->role);
 
         if ($role === null) {
@@ -80,148 +131,707 @@ final class Pipeline
             return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'question_too_long', AssistantLog::OUTCOME_REFUSED, "Please ask a shorter question ({$maxLength} characters or fewer).", [], null, AssistantLog::ANSWERED_BY_DIRECT, 'question_too_long');
         }
 
-        // Masking and name-detection BEFORE anything else touches the model.
+        // Privacy first, before anything can reach the model.
         $masked = PrivacyMasker::mask($message);
         $maskedQuestion = $masked['masked'];
         $idMap = $masked['idMap'];
+        $this->traceLine("masked question: {$maskedQuestion}");
 
         if (PrivacyMasker::containsKnownStudentName($message)) {
+            $this->traceLine('decision: refused, a known student name (no model call)');
+
             return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'privacy_name', AssistantLog::OUTCOME_REFUSED, self::PRIVACY_NAME_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'name_detected');
         }
 
-        // Deterministic, parameter-carrying matches (an explicit seat
-        // number, a block, an ID placeholder, an action verb, a
-        // manipulation phrase...) are tried before the plain phrase
-        // lists -- see KeywordRules::extractDeterministic() for why a
-        // phrase list alone can't express "J2 free seats?".
-        $rawMatches = $bypassKeywordRules ? [] : KeywordRules::matchAll($maskedQuestion);
-        $deterministic = $bypassKeywordRules ? null : KeywordRules::extractDeterministic($maskedQuestion, $role);
-        $deterministicName = $deterministic['name'] ?? null;
+        // An email is never a lookup key -- asked back before the router, so it never even travels as a placeholder.
+        if (preg_match('/<EMAIL\d+>/', $maskedQuestion)) {
+            $this->traceLine('decision: asked back, an email is not a lookup key (no model call)');
 
-        // A student's question naming a CGS-only identity lookup is refused
-        // outright, before any model call -- cheaper and it is always
-        // refused anyway once role-gated below.
-        if (! $bypassKeywordRules && $role === Role::STUDENT
-            && (array_intersect($rawMatches, ['seat_lookup', 'student_lookup']) !== [] || in_array($deterministicName, ['seat_lookup', 'student_lookup'], true))) {
-            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'anyone_else', AssistantLog::OUTCOME_REFUSED, self::ANYONE_ELSE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_RULE, 'anyone_else');
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'email_not_a_key', AssistantLog::OUTCOME_ASKED_BACK, self::EMAIL_NOT_A_KEY_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'email_not_a_key');
         }
 
-        if ($deterministicName === 'out_of_scope') {
-            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_RULE, 'out_of_scope');
+        // The exact suggested-question texts, answered without any model call.
+        $exactSuggestionId = SuggestedQuestions::findIdByExactText($message, $role);
+
+        if ($exactSuggestionId !== null) {
+            $this->traceLine("decision: exact suggested question {$exactSuggestionId} (no model call)");
+
+            return $this->askSuggestion($user, $exactSuggestionId);
         }
 
-        if ($deterministicName === 'action_request') {
-            return $this->actionRequestResponse($user, $role, $deterministic['parameters'], AssistantLog::ANSWERED_BY_RULE);
+        if (ParameterExtractor::hasManipulationPhrase($maskedQuestion)) {
+            $this->traceLine('decision: refused, manipulation phrase (no model call)');
+
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_RULE, 'manipulation_phrase');
         }
 
-        // Round 4 PART B.1: for the CGS role, a raw match (deterministic
-        // OR phrase-list) naming a STUDENT guidance topic with a
-        // configured CGS counterpart also counts as a match on that
-        // counterpart -- added to $rawMatches itself, BEFORE the
-        // role-allow-list filtering just below, so neither the
-        // deterministic path nor the phrase-list path ever silently
-        // drops it the way plain role-filtering otherwise would (a
-        // student-only topic id is never isAllowedForRole() for 'cgs').
-        // $preferCgsTopics is true whenever this expansion actually
-        // added something, and is passed to the model as an explicit
-        // "this user is CGS staff" instruction alongside the hints.
-        $preferCgsTopics = false;
+        $recentTurns = (int) config('assistant.recent_turns', 5);
+        $recentMasked = array_values(array_map(
+            fn ($q) => PrivacyMasker::mask((string) $q)['masked'],
+            array_slice($recentUserQuestions, -$recentTurns)
+        ));
 
-        if ($role === 'cgs') {
-            $counterpartMap = config('assistant.cgs_topic_counterparts', []);
-            $namesToCheck = $deterministicName !== null ? [...$rawMatches, $deterministicName] : $rawMatches;
+        if ($recentMasked !== []) {
+            $this->traceLine('recent (masked): '.implode(' | ', $recentMasked));
+        }
 
-            foreach ($namesToCheck as $name) {
-                if (! str_starts_with($name, 'guidance:')) {
+        if (! $this->anyModelBudgetAvailable($allowFallback)) {
+            $this->traceLine('router: skipped, no model budget left');
+
+            return $bypassKeywordRules
+                ? $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'unavailable', AssistantLog::OUTCOME_UNAVAILABLE, self::UNAVAILABLE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'provider_unavailable', suggestions: $this->suggestionsList($role), errorCode: 'budget')
+                : $this->fallbackAsk($user, $role, $maskedQuestion, $idMap, $recentMasked, true, null, 'budget');
+        }
+
+        $catalogue = Catalogue::forRole($role);
+        $todayLabel = Carbon::now('Asia/Kuala_Lumpur')->format('l, j F Y');
+
+        $routed = $this->callRouterWithReliability($maskedQuestion, $recentMasked, $catalogue, RouterFewShots::all(), $todayLabel, $allowFallback);
+
+        $this->traceLine('router: '.($routed['outcome'] === 'ok'
+            ? json_encode(['id' => $routed['id'], 'params' => (object) $routed['params'], 'confidence' => $routed['confidence'], 'alternatives' => $routed['alternatives'], 'clarify' => $routed['clarify'] ?? ''], JSON_UNESCAPED_SLASHES).' via '.$routed['model_used']
+            : 'failed, error '.($routed['error_code'] ?? 'unknown')));
+
+        if ($routed['outcome'] !== 'ok' || $routed['id'] === null) {
+            return $bypassKeywordRules
+                ? $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'unavailable', AssistantLog::OUTCOME_UNAVAILABLE, self::UNAVAILABLE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'provider_unavailable', suggestions: $this->suggestionsList($role), modelUsed: $routed['model_used'] ?? null, errorCode: $routed['error_code'] ?? null)
+                : $this->fallbackAsk($user, $role, $maskedQuestion, $idMap, $recentMasked, $routed['error_code'] !== 'invalid_response', $routed['model_used'] ?? null, $routed['error_code'] ?? null);
+        }
+
+        return $this->dispatchRouterResult($user, $role, $routed, $maskedQuestion, $idMap, $recentMasked, $allowFallback, $bypassKeywordRules);
+    }
+
+    /**
+     * Part 2.3-2.5: re-validate what the router chose, execute it by
+     * kind, then add "Interpreted as" and the "Did you mean" chips.
+     *
+     * @param  array{outcome: string, id: string, params: array, confidence: ?float, alternatives: array, clarify: ?string, model_used: ?string}  $routed
+     */
+    protected function dispatchRouterResult(User $user, string $role, array $routed, string $maskedQuestion, array $idMap, array $recentMasked, bool $allowFallback, bool $bypassKeywordRules): array
+    {
+        $id = $routed['id'];
+        $entry = Catalogue::find($id);
+        $modelUsed = $routed['model_used'] ?? null;
+
+        // The id must exist in the ROLE's own catalogue -- a student never
+        // gets a CGS entry, whatever the model said. Invalid output.
+        if ($entry === null || ! in_array($role, $entry['roles'], true)) {
+            $this->traceLine("validation: id {$id} is not in the {$role} catalogue -> invalid output");
+
+            return $bypassKeywordRules
+                ? $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'unavailable', AssistantLog::OUTCOME_UNAVAILABLE, self::UNAVAILABLE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'provider_unavailable', suggestions: $this->suggestionsList($role), modelUsed: $modelUsed, errorCode: 'invalid_id')
+                : $this->fallbackAsk($user, $role, $maskedQuestion, $idMap, $recentMasked, false, $modelUsed, 'invalid_id');
+        }
+
+        $params = $this->validatedParams($entry, $routed['params'] ?? [], $idMap);
+
+        // A short follow-up that itself names a period ("and january?")
+        // takes THAT period, whatever the model carried over from the
+        // earlier question -- checked, never trusted.
+        if (isset($entry['parameters']['period']) && $recentMasked !== [] && str_word_count($maskedQuestion) <= 5) {
+            $own = PeriodExtractor::parseDeterministic(QuestionNormaliser::normalise($maskedQuestion));
+
+            if ($own !== null && PeriodExtractor::toString($own) !== ($params['period'] ?? null)) {
+                $params['period'] = PeriodExtractor::toString($own);
+                $this->traceLine("validation: follow-up names its own period -> {$params['period']}");
+            }
+        }
+
+        // A student's question that is plainly a CGS-only forecast is
+        // never answered with the nearest student lookup instead.
+        if ($role === Role::STUDENT && $entry['kind'] === 'lookup' && self::hasReleaseCue(QuestionNormaliser::normalise($maskedQuestion)) && PeriodExtractor::parseDeterministic(QuestionNormaliser::normalise($maskedQuestion)) !== null) {
+            $this->traceLine("validation: a student asked for a release forecast -> not {$id}, staff-only refusal");
+            $result = $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'staff_only', AssistantLog::OUTCOME_REFUSED, self::STAFF_ONLY_MESSAGE, [], null, AssistantLog::ANSWERED_BY_MODEL_ROUTER, 'staff_only', suggestions: $this->suggestionsList($role), modelUsed: $modelUsed);
+
+            return [...$result, 'meta' => ['catalogue_id' => 'out_of_scope', 'kind' => 'out_of_scope', 'confidence' => (float) ($routed['confidence'] ?? 0.0), 'alternatives' => [], 'router_params' => $routed['params'] ?? [], 'model_used' => $modelUsed, 'answered_by' => AssistantLog::ANSWERED_BY_MODEL_ROUTER]];
+        }
+
+        $confidence = (float) ($routed['confidence'] ?? 0.0);
+        $alternatives = array_values(array_filter($routed['alternatives'] ?? [], fn ($alt) => Catalogue::isAllowed($alt, $role) && $alt !== $id));
+        // router_params: the router's own params, still MASKED (placeholders, never a real ID) -- for assistant:evaluate's parameter check.
+        $meta = ['catalogue_id' => $id, 'kind' => $entry['kind'], 'confidence' => $confidence, 'alternatives' => $alternatives, 'router_params' => $routed['params'] ?? [], 'model_used' => $modelUsed, 'answered_by' => AssistantLog::ANSWERED_BY_MODEL_ROUTER];
+
+        $clarify = $routed['clarify'] ?? null;
+
+        // "If clarify is non-empty and no id is usable": the clarifying
+        // question plus the role's suggested-question chips.
+        if ($entry['kind'] === 'out_of_scope' && $clarify !== null && trim($clarify) !== '' && ParameterExtractor::hasDomainWord($maskedQuestion)) {
+            $this->traceLine('decision: clarify (out_of_scope with a clarifying question)');
+            $result = $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'clarify', AssistantLog::OUTCOME_ASKED_BACK, self::stripInventedPersonalData(trim($clarify)), [], null, AssistantLog::ANSWERED_BY_MODEL_ROUTER, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed);
+
+            return [...$result, 'meta' => $meta];
+        }
+
+        $this->traceLine("decision: {$entry['kind']} {$id}");
+
+        $result = match ($entry['kind']) {
+            'lookup' => $this->answerLookup($user, $role, $id, $params, AssistantLog::ANSWERED_BY_MODEL_ROUTER, AssistantLog::SOURCE_TYPED, maskedQuestion: $maskedQuestion, allowCompose: $this->composeEnabled, modelUsed: $modelUsed),
+            'guidance' => $this->answerGuidance($user, $role, $id, AssistantLog::SOURCE_TYPED, AssistantLog::ANSWERED_BY_MODEL_ROUTER, $modelUsed, $this->composeEnabled ? $maskedQuestion : null, $recentMasked, $allowFallback),
+            'action' => $this->actionRequestResponse($user, $role, $id, $params, AssistantLog::ANSWERED_BY_MODEL_ROUTER, $modelUsed),
+            default => $this->outOfScope($user, $role, $maskedQuestion, AssistantLog::ANSWERED_BY_MODEL_ROUTER, $modelUsed),
+        };
+
+        if ($entry['kind'] !== 'out_of_scope') {
+            $result['interpreted_as'] = Catalogue::interpretedAs($entry, $params);
+        }
+
+        // "Did you mean": below the threshold, or the router named an
+        // alternative -- best first, at most 3, never for out_of_scope.
+        $threshold = (float) config('assistant.router_min_confidence', 0.6);
+
+        if ($entry['kind'] !== 'out_of_scope' && ($confidence < $threshold || $alternatives !== [])) {
+            $result['chips'] = $this->chipsFor([$id, ...$alternatives], $params);
+        } elseif ($entry['kind'] === 'out_of_scope' && $alternatives !== []) {
+            $result['chips'] = $this->chipsFor($alternatives, $params);
+        }
+
+        return [...$result, 'meta' => $meta];
+    }
+
+    /**
+     * Part 2.3: the router's parameters are a hint, never trusted. Only
+     * names the entry declares survive. A period must pass
+     * PeriodExtractor (a bad one is dropped, so the lookup asks back
+     * which month, quarter or year). An ID must be one of THIS
+     * question's own placeholders -- mapped back to the real value here,
+     * and only here -- or it is dropped; an email placeholder is kept as
+     * is so the lookup's own validator asks for a Student ID instead.
+     * Everything else (block, room, seat, months, gender) is passed to
+     * the existing validators in Lookups::run(), which ask back for a
+     * value they do not accept -- never silently widened to "all".
+     */
+    protected function validatedParams(array $entry, array $params, array $idMap): array
+    {
+        $out = [];
+
+        foreach (array_intersect_key($params, $entry['parameters']) as $key => $value) {
+            if (! is_scalar($value) || $value === '') {
+                continue;
+            }
+
+            if ($key === 'period') {
+                $period = PeriodExtractor::fromString($value);
+
+                if ($period === null) {
+                    $this->traceLine('validation: period did not validate -> dropped, the lookup asks back');
+
                     continue;
                 }
 
-                $studentTopic = substr($name, strlen('guidance:'));
+                $out['period'] = PeriodExtractor::toString($period);
+                $this->traceLine("validation: period ok ({$out['period']})");
 
-                if (isset($counterpartMap[$studentTopic])) {
-                    $preferCgsTopics = true;
-                    $counterpartMatch = "guidance:{$counterpartMap[$studentTopic]}";
+                continue;
+            }
 
-                    if (! in_array($counterpartMatch, $rawMatches, true)) {
-                        // Round 4 PART D: PREPENDED, not appended -- found
-                        // live via assistant:evaluate that appending left
-                        // the student topic as $topicHints[0] (and so
-                        // $fallbackGuidanceTopic), which is the OPPOSITE
-                        // of "prefer" when both are hinted.
-                        array_unshift($rawMatches, $counterpartMatch);
-                    }
+            if ($key === 'student_id') {
+                if (is_string($value) && isset($idMap[$value])) {
+                    $out['student_id'] = PrivacyMasker::unmask($value, $idMap);
+                    $this->traceLine('validation: student_id placeholder mapped back');
+                } elseif (is_string($value) && PrivacyMasker::isEmailPlaceholder($value)) {
+                    $out['student_id'] = $value;
+                } else {
+                    $this->traceLine('validation: student_id is not a placeholder from this question -> dropped');
+                }
+
+                continue;
+            }
+
+            $out[$key] = match ($key) {
+                'seat_number', 'months' => is_numeric($value) ? (int) $value : $value,
+                'block', 'room_code' => strtoupper(trim((string) $value)),
+                'gender' => mb_strtolower(trim((string) $value)),
+                default => $value,
+            };
+        }
+
+        if (isset($entry['parameters']['period']) && ! isset($out['period'])) {
+            $this->traceLine('validation: no valid period -> the lookup asks back');
+        }
+
+        return $out;
+    }
+
+    /** @return array<int, array{id: string, text: string, params: array}> */
+    protected function chipsFor(array $ids, array $params): array
+    {
+        return collect(array_unique($ids))
+            ->map(fn ($cid) => Catalogue::find($cid))
+            ->filter(fn ($e) => $e !== null && $e['kind'] !== 'out_of_scope')
+            ->take(3)
+            ->map(function (array $e) use ($params) {
+                $own = array_intersect_key($params, $e['parameters']);
+
+                return ['id' => $e['id'], 'text' => Catalogue::interpretedAs($e, $own), 'params' => (object) $own];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * out_of_scope: a student asking for something only CGS can see gets
+     * the polite staff-only refusal; a question that still sounds like
+     * this system gets the ask-back with the suggested questions; the
+     * rest gets the flat refusal.
+     */
+    protected function outOfScope(User $user, string $role, string $maskedQuestion, string $answeredBy, ?string $modelUsed): array
+    {
+        if ($role === Role::STUDENT && (ParameterExtractor::seatNumber($maskedQuestion) !== null || ParameterExtractor::studentIdPlaceholder($maskedQuestion) !== null)) {
+            $this->traceLine('decision: student named a seat number or ID -> only their own workstation');
+
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'anyone_else', AssistantLog::OUTCOME_REFUSED, self::ANYONE_ELSE_MESSAGE, [], null, $answeredBy, 'anyone_else', modelUsed: $modelUsed);
+        }
+
+        if ($role === Role::STUDENT && $this->looksLikeStaffOnlyQuestion($maskedQuestion)) {
+            $this->traceLine('decision: student asked for CGS-only information -> staff-only refusal');
+
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'staff_only', AssistantLog::OUTCOME_REFUSED, self::STAFF_ONLY_MESSAGE, [], null, $answeredBy, 'staff_only', suggestions: $this->suggestionsList($role), modelUsed: $modelUsed);
+        }
+
+        if (ParameterExtractor::hasDomainWord($maskedQuestion)) {
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_ASKED_BACK, self::ASKED_BACK_DOMAIN_MESSAGE, [], null, $answeredBy, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed);
+        }
+
+        return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_MESSAGE, [], null, $answeredBy, 'out_of_scope', modelUsed: $modelUsed);
+    }
+
+    /**
+     * True when a student's question matches a CGS-only catalogue entry
+     * clearly better than anything in the student's own catalogue (by
+     * Catalogue keyword score, or the release-forecast cue plus a
+     * period). No model call.
+     */
+    protected function looksLikeStaffOnlyQuestion(string $maskedQuestion): bool
+    {
+        $normalised = QuestionNormaliser::normalise($maskedQuestion);
+
+        if (self::hasReleaseCue($normalised) && PeriodExtractor::parseDeterministic($normalised) !== null) {
+            return true;
+        }
+
+        $cgsOnly = collect(Catalogue::keywordCandidates($normalised, 'cgs', 1, 2))
+            ->filter(fn ($c) => ! Catalogue::isAllowed($c['id'], Role::STUDENT))
+            ->first();
+
+        if ($cgsOnly === null) {
+            return false;
+        }
+
+        $bestStudent = Catalogue::keywordCandidates($normalised, Role::STUDENT, 1, 1)[0]['score'] ?? 0;
+
+        return $cgsOnly['score'] > $bestStudent;
+    }
+
+    protected static function hasReleaseCue(string $normalised): bool
+    {
+        return (bool) preg_match('/\b(releas\w*|free(d)?\s+up|freed|become\s+free|be\s+free|vacat\w*|empty\s+up|forecast)\b/', $normalised)
+            && ! preg_match('/\b(this|last|past)\s+(week|7 days)\b/', $normalised);
+    }
+
+    // =====================================================================
+    // Part 5: the deterministic fallback
+    // =====================================================================
+
+    /**
+     * The router was unavailable ($providerDown) or returned invalid
+     * output. Answers from the deterministic layer alone, in this order:
+     * a student naming someone else's seat/ID -> refused; an imperative
+     * (and NOT a question -- the interrogative guard) -> the helpful
+     * action refusal; a release question with a period (or a period-only
+     * follow-up to one) -> release_forecast; the keyword rules (lookups
+     * with their extracted parameters, guidance topics) -> the matching
+     * answer; a student asking for CGS-only data -> staff-only refusal;
+     * otherwise "Did you mean" chips by catalogue keyword score plus the
+     * role's suggested questions. Never another model call.
+     */
+    protected function fallbackAsk(User $user, string $role, string $maskedQuestion, array $idMap, array $recentMasked, bool $providerDown, ?string $modelUsed, ?string $errorCode): array
+    {
+        $this->answeredByOverride = AssistantLog::ANSWERED_BY_RULE_FALLBACK;
+        $this->fallbackModelUsed = $modelUsed;
+        $this->fallbackErrorCode = $errorCode;
+        $normalised = QuestionNormaliser::normalise($maskedQuestion);
+        $this->traceLine("fallback: normalised question: {$normalised}");
+
+        $result = $this->fallbackDecide($user, $role, $normalised, $maskedQuestion, $idMap, $recentMasked, $providerDown, $modelUsed, $errorCode);
+        $this->answeredByOverride = $this->fallbackModelUsed = $this->fallbackErrorCode = null;
+
+        return [...$result, 'meta' => ($result['meta'] ?? []) + ['answered_by' => AssistantLog::ANSWERED_BY_RULE_FALLBACK, 'model_used' => $modelUsed, 'error_code' => $errorCode]];
+    }
+
+    protected function fallbackDecide(User $user, string $role, string $normalised, string $maskedQuestion, array $idMap, array $recentMasked, bool $providerDown, ?string $modelUsed, ?string $errorCode): array
+    {
+        $answeredBy = AssistantLog::ANSWERED_BY_RULE_FALLBACK;
+        $rawMatches = KeywordRules::matchAll($normalised);
+        $deterministic = KeywordRules::extractDeterministic($normalised, $role);
+        $deterministicName = $deterministic['name'] ?? null;
+
+        if ($role === Role::STUDENT
+            && (array_intersect($rawMatches, ['seat_lookup', 'student_lookup']) !== [] || in_array($deterministicName, ['seat_lookup', 'student_lookup'], true))) {
+            $this->traceLine('fallback: student asked about someone else\'s seat');
+
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'anyone_else', AssistantLog::OUTCOME_REFUSED, self::ANYONE_ELSE_MESSAGE, [], null, $answeredBy, 'anyone_else');
+        }
+
+        // An imperative -- never a question (the interrogative guard), never a how-to.
+        $actionId = $this->fallbackActionId($normalised, $role);
+
+        if ($actionId === null && $deterministicName === 'action_request') {
+            $actionId = Catalogue::actionIdForText($normalised, $role) ?? 'action_other';
+        }
+
+        if ($actionId !== null) {
+            $params = array_filter([
+                'seat_number' => ParameterExtractor::seatNumber($normalised),
+                'student_id' => ($p = ParameterExtractor::studentIdPlaceholder($normalised)) !== null ? PrivacyMasker::unmask($p, $idMap) : null,
+            ], fn ($v) => $v !== null);
+            $this->traceLine("fallback: action {$actionId}");
+
+            return $this->withInterpretation($this->actionRequestResponse($user, $role, $actionId, $params, $answeredBy), $actionId, $params);
+        }
+
+        // release_forecast: a release cue with a period, or a bare-period follow-up to one.
+        $period = PeriodExtractor::parseDeterministic($normalised);
+        $isFollowUp = $period !== null && str_word_count(preg_replace('/\d+/', '', $normalised)) <= 4
+            && $recentMasked !== [] && self::hasReleaseCue(QuestionNormaliser::normalise(end($recentMasked)));
+
+        if ($period !== null && (self::hasReleaseCue($normalised) || $isFollowUp)) {
+            if ($role === Role::STUDENT) {
+                return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'staff_only', AssistantLog::OUTCOME_REFUSED, self::STAFF_ONLY_MESSAGE, [], null, $answeredBy, 'staff_only', suggestions: $this->suggestionsList($role));
+            }
+
+            $params = ['period' => PeriodExtractor::toString($period)];
+            $this->traceLine('fallback: release_forecast '.$params['period']);
+
+            return $this->withInterpretation($this->answerLookup($user, $role, 'release_forecast', $params, $answeredBy), 'release_forecast', $params);
+        }
+
+        if ($deterministicName === 'out_of_scope') {
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_MESSAGE, [], null, $answeredBy, 'out_of_scope');
+        }
+
+        // CGS asking a student-phrased guidance question gets the CGS
+        // counterpart topic first (config('assistant.cgs_topic_counterparts')).
+        if ($role === 'cgs') {
+            $counterpartMap = config('assistant.cgs_topic_counterparts', []);
+
+            foreach ($deterministicName !== null ? [$deterministicName, ...$rawMatches] : $rawMatches as $name) {
+                $studentTopic = str_starts_with($name, 'guidance:') ? substr($name, strlen('guidance:')) : null;
+
+                if ($studentTopic !== null && isset($counterpartMap[$studentTopic]) && ! in_array("guidance:{$counterpartMap[$studentTopic]}", $rawMatches, true)) {
+                    array_unshift($rawMatches, "guidance:{$counterpartMap[$studentTopic]}");
                 }
             }
         }
 
-        // Only a LOOKUP match short-circuits the model call -- a
-        // "guidance:*" match (deterministic or phrase-list) is set aside
-        // instead: $fallbackGuidanceTopic (the first one) for PART B.6's
-        // fallback when both models fail, and $topicHints (PART C.1,
-        // ALL of them, topic ids only) passed to the model itself as
-        // "likely relevant" -- the model still decides, but no longer has
-        // to find a matched topic unaided.
-        $multipleMatched = false;
         $primaryLookup = null;
         $parameters = [];
-        $fallbackGuidanceTopic = null;
-        $topicHints = [];
+        $guidanceTopic = null;
 
         if ($deterministicName !== null && str_starts_with($deterministicName, 'guidance:') && $this->isAllowedForRole($deterministicName, $role)) {
-            $fallbackGuidanceTopic = substr($deterministicName, strlen('guidance:'));
-            $topicHints = [$fallbackGuidanceTopic];
-        } elseif ($deterministicName !== null && $this->isAllowedForRole($deterministicName, $role)) {
+            $guidanceTopic = substr($deterministicName, strlen('guidance:'));
+            $guidanceTopic = $role === 'cgs' ? (config('assistant.cgs_topic_counterparts', [])[$guidanceTopic] ?? $guidanceTopic) : $guidanceTopic;
+        } elseif ($deterministicName !== null && $deterministicName !== 'action_request' && $this->isAllowedForRole($deterministicName, $role)) {
             $primaryLookup = $deterministicName;
             $parameters = $deterministic['parameters'];
         } else {
-            $allowedMatches = array_values(array_unique(array_filter(
-                $rawMatches,
-                fn (string $name) => $this->isAllowedForRole($name, $role)
-            )));
-
-            $lookupMatches = array_values(array_filter($allowedMatches, fn ($n) => ! str_starts_with($n, 'guidance:')));
-            $guidanceMatches = array_values(array_filter($allowedMatches, fn ($n) => str_starts_with($n, 'guidance:')));
-
-            $multipleMatched = count($lookupMatches) > 1;
-            $primaryLookup = $lookupMatches[0] ?? null;
-            $topicHints = array_map(fn ($n) => substr($n, strlen('guidance:')), $guidanceMatches);
-            $fallbackGuidanceTopic = $topicHints[0] ?? null;
+            $allowed = array_values(array_unique(array_filter($rawMatches, fn (string $n) => $this->isAllowedForRole($n, $role))));
+            $primaryLookup = collect($allowed)->first(fn ($n) => ! str_starts_with($n, 'guidance:'));
+            $firstGuidance = collect($allowed)->first(fn ($n) => str_starts_with($n, 'guidance:'));
+            $guidanceTopic = $primaryLookup === null && $firstGuidance !== null ? substr($firstGuidance, strlen('guidance:')) : null;
         }
 
         if ($primaryLookup !== null) {
-            // The same unmask every model-chosen parameter also gets below --
-            // a rule-matched lookup can carry a placeholder too (e.g. the
-            // deterministic ID-placeholder extraction for student_lookup).
             $parameters = array_map(fn ($v) => is_string($v) ? PrivacyMasker::unmask($v, $idMap) : $v, $parameters);
+            $this->traceLine("fallback: lookup {$primaryLookup}");
 
-            return $this->answerLookup($user, $role, $primaryLookup, $parameters, AssistantLog::ANSWERED_BY_RULE, $multipleMatched);
+            return $this->withInterpretation($this->answerLookup($user, $role, $primaryLookup, $parameters, $answeredBy), $primaryLookup, $parameters);
         }
 
-        // Otherwise: the one model call, with every guidance topic the
-        // role may see and the lookup catalogue, so a rephrased question
-        // still finds the right answer. Round 3 PART A: this one call is
-        // now a whole reliability sequence (retries, then the fallback
-        // model), never a single bare attempt.
-        if (! $this->anyModelBudgetAvailable($allowFallback)) {
-            return $this->unavailableOrFallback($user, $role, $fallbackGuidanceTopic, null, null);
+        if ($guidanceTopic !== null) {
+            $this->traceLine("fallback: guidance {$guidanceTopic}");
+
+            return $this->withInterpretation($this->answerGuidance($user, $role, $guidanceTopic, AssistantLog::SOURCE_TYPED, $answeredBy, $modelUsed), $guidanceTopic, []);
         }
 
-        $recentTurns = (int) config('assistant.recent_turns', 5);
-        $recentMasked = array_map(
-            fn ($q) => PrivacyMasker::mask((string) $q)['masked'],
-            array_slice($recentUserQuestions, -$recentTurns)
-        );
-
-        $knowledge = GuidanceLibrary::knowledgeTextForRole($role, $maskedQuestion);
-        $lookupCatalogue = Lookups::definitionsForRole($role);
-
-        $result = $this->callModelWithReliability($maskedQuestion, $recentMasked, $knowledge['text'], $lookupCatalogue, $topicHints, $allowFallback, $preferCgsTopics, $role === 'cgs');
-
-        if ($result['outcome'] !== 'ok' || ! is_string($result['kind'] ?? null)) {
-            return $this->unavailableOrFallback($user, $role, $fallbackGuidanceTopic, $result['model_used'] ?? null, $result['error_code'] ?? null);
+        if ($role === Role::STUDENT && $this->looksLikeStaffOnlyQuestion($maskedQuestion)) {
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'staff_only', AssistantLog::OUTCOME_REFUSED, self::STAFF_ONLY_MESSAGE, [], null, $answeredBy, 'staff_only', suggestions: $this->suggestionsList($role));
         }
 
-        return $this->dispatchModelResult($user, $role, $result, $maskedQuestion, $knowledge['text'], $idMap);
+        // Nothing matched: "Did you mean" chips by keyword score, plus the suggested questions.
+        // Action entries are left out: clicking one could only ever give a refusal.
+        $candidates = array_filter(Catalogue::keywordCandidates($normalised, $role, 6), fn ($c) => Catalogue::find($c['id'])['kind'] !== 'action');
+        $chips = $this->chipsFor(array_column($candidates, 'id'), []);
+        $this->traceLine('fallback: no match, '.count($chips).' keyword chip(s)');
+
+        $result = $providerDown
+            ? $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'unavailable', AssistantLog::OUTCOME_UNAVAILABLE, self::UNAVAILABLE_MESSAGE, [], null, $answeredBy, 'provider_unavailable', suggestions: $this->suggestionsList($role), modelUsed: $modelUsed, errorCode: $errorCode)
+            : $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_ASKED_BACK, self::ASKED_BACK_DOMAIN_MESSAGE, [], null, $answeredBy, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed, errorCode: $errorCode);
+
+        return $chips === [] ? $result : [...$result, 'chips' => $chips];
+    }
+
+    /** The imperative test: not interrogative, not a how-to lead-in, an action pattern, and either a named target or the verb first. */
+    protected function fallbackActionId(string $normalised, string $role): ?string
+    {
+        if (QuestionNormaliser::isInterrogative($normalised) || ParameterExtractor::hasGuidanceLeadIn($normalised)) {
+            return null;
+        }
+
+        $actionId = Catalogue::actionIdForText($normalised, $role);
+
+        if ($actionId === null) {
+            return null;
+        }
+
+        $hasTarget = ParameterExtractor::seatNumber($normalised) !== null || ParameterExtractor::studentIdPlaceholder($normalised) !== null;
+        $verbFirst = (bool) preg_match('/^(release|reassign|assign|mark|set|put|disable|restore|terminate|withdraw|cancel|approve|delete|remove|update|change|undo|edit|free|kick|move|give|add|tick|clear|lift|issue|swap|start|bring|un-?disable)\b/', $normalised);
+
+        return $hasTarget || $verbFirst ? $actionId : null;
+    }
+
+    /** Adds the "Interpreted as" line for a catalogue id to a fallback answer. */
+    protected function withInterpretation(array $result, string $catalogueId, array $params): array
+    {
+        $entry = Catalogue::find($catalogueId);
+
+        if ($entry !== null && $entry['kind'] !== 'out_of_scope' && in_array($result['outcome'], [AssistantLog::OUTCOME_ANSWERED, AssistantLog::OUTCOME_REFUSED, AssistantLog::OUTCOME_ASKED_BACK], true)) {
+            $result['interpreted_as'] = Catalogue::interpretedAs($entry, $params);
+            $result['meta'] = ['catalogue_id' => $catalogueId, 'kind' => $entry['kind']];
+        }
+
+        return $result;
+    }
+
+    // =====================================================================
+    // Execution by kind
+    // =====================================================================
+
+    /**
+     * Guidance: the chosen topic is the primary source. When a masked
+     * question is given (the router path, compose enabled) and the
+     * budget allows, ONE compose call writes the answer from that
+     * topic's text alone; the text is accepted only if it is non-empty
+     * and every number in it appears in the topic text or the question
+     * (otherwise the model invented it). In every other case -- no
+     * budget, provider down, invalid text, a chip click, the fallback --
+     * the topic text itself is the answer.
+     */
+    protected function answerGuidance(User $user, string $role, string $topicId, string $source, string $answeredBy, ?string $modelUsed, ?string $maskedQuestion = null, array $recentMasked = [], bool $allowFallback = true): array
+    {
+        $sourceText = GuidanceLibrary::isAllowed($topicId, $role) ? GuidanceLibrary::sourceText($topicId) : null;
+
+        if ($sourceText === null) {
+            return $this->finish($user, $role, $source, 'guidance:unknown', AssistantLog::OUTCOME_ERROR, self::MISSING_TOPIC_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'missing_topic', modelUsed: $modelUsed);
+        }
+
+        $text = $sourceText;
+
+        if ($maskedQuestion !== null && $this->anyModelBudgetAvailable($allowFallback)) {
+            $knowledge = "### {$topicId}\n{$sourceText}";
+            $composed = $this->callModelWithReliability($maskedQuestion, $recentMasked, $knowledge, [], [$topicId], $allowFallback, false, $role === 'cgs');
+            $candidate = self::stripInventedPersonalData(trim((string) ($composed['answer'] ?? '')));
+
+            if ($composed['outcome'] === 'ok' && ($composed['kind'] ?? null) === 'guidance' && $candidate !== '' && ! self::saysNotCovered($candidate) && GuidanceLibrary::everyNumberAppearsIn($candidate, $knowledge.' '.$maskedQuestion)) {
+                $text = $candidate;
+                $this->traceLine('compose: guidance text accepted from '.$composed['model_used']);
+            } else {
+                $this->traceLine('compose: not used ('.($composed['outcome'] === 'ok' ? 'failed validation' : 'error '.($composed['error_code'] ?? 'unknown')).') -> topic text');
+            }
+        }
+
+        return $this->finish($user, $role, $source, "guidance:{$topicId}", AssistantLog::OUTCOME_ANSWERED, $text, GuidanceLibrary::linksForTopics([$topicId]), null, $answeredBy, null, modelUsed: $modelUsed);
+    }
+
+    /**
+     * Lookups run through their existing functions and templates --
+     * every number comes from the database. An AGGREGATE lookup chosen by
+     * the router may get the existing second, composing call (single
+     * attempt, primary model only, validated: any number not in the
+     * structured result rejects it); a personal lookup never does.
+     */
+    protected function answerLookup(User $user, string $role, string $lookup, array $parameters, string $answeredBy, string $source = AssistantLog::SOURCE_TYPED, ?string $maskedQuestion = null, bool $allowCompose = false, ?string $modelUsed = null): array
+    {
+        if (! Lookups::isAllowed($lookup, $role)) {
+            return $role === Role::STUDENT && in_array($lookup, ['seat_lookup', 'student_lookup'], true)
+                ? $this->finish($user, $role, $source, 'anyone_else', AssistantLog::OUTCOME_REFUSED, self::ANYONE_ELSE_MESSAGE, [], null, $answeredBy, 'anyone_else', modelUsed: $modelUsed)
+                : $this->finish($user, $role, $source, 'staff_only', AssistantLog::OUTCOME_REFUSED, self::STAFF_ONLY_MESSAGE, [], null, $answeredBy, 'role_not_permitted', modelUsed: $modelUsed);
+        }
+
+        $result = Lookups::run($lookup, $parameters, $user, $role);
+
+        if ($result['outcome'] === 'asked_back') {
+            return $this->finish($user, $role, $source, $lookup, AssistantLog::OUTCOME_ASKED_BACK, $result['text'], [], null, $answeredBy, null, modelUsed: $modelUsed);
+        }
+
+        $text = $result['text'];
+        $primaryModel = (string) config('assistant.gemini.model');
+        $composeEstimatedTokens = (int) ceil((strlen($maskedQuestion ?? '') + strlen($lookup) + strlen(json_encode($result) ?: '')) / 4);
+
+        if ($allowCompose && $maskedQuestion !== null && in_array($lookup, config('assistant.aggregate_lookups', []), true) && $this->modelBudgetAvailable($primaryModel, $composeEstimatedTokens)) {
+            $this->recordModelCall($primaryModel, $composeEstimatedTokens);
+            $timeout = (int) min(10, (int) config('assistant.total_deadline_seconds', 22));
+            $aggregate = $this->model->composeAggregate($maskedQuestion, $lookup, $result, $primaryModel, $timeout);
+
+            if ($aggregate['outcome'] === 'ok' && is_string($aggregate['text']) && trim($aggregate['text']) !== '') {
+                $candidate = self::stripInventedPersonalData(trim($aggregate['text']));
+
+                if (! self::saysNotCovered($candidate) && GuidanceLibrary::everyNumberAppearsIn($candidate, json_encode($result))) {
+                    $text = $candidate;
+                    $answeredBy = $answeredBy === AssistantLog::ANSWERED_BY_MODEL_ROUTER ? $answeredBy : AssistantLog::ANSWERED_BY_MODEL_COMPOSE;
+                    $this->traceLine('compose: aggregate text accepted');
+                } else {
+                    $this->traceLine('compose: aggregate text invented a number -> template');
+                }
+            }
+        }
+
+        if (empty($result['skipFooter'])) {
+            $text .= "\n\nBased on live data at ".Carbon::now('Asia/Kuala_Lumpur')->format('j M Y, g:ia').'.';
+        }
+
+        return $this->finish($user, $role, $source, $lookup, AssistantLog::OUTCOME_ANSWERED, $text, $result['links'] ?? [], $result['resultCount'] ?? null, $answeredBy, null, modelUsed: $modelUsed);
+    }
+
+    /**
+     * Actions are never executed. The refusal says where to do it
+     * yourself: a valid seat number -> that seat's page; a known
+     * student ID -> the seat that student holds (or that they hold
+     * none); an unknown ID -> says so; no target -> Workstation
+     * Management. A student is pointed at their own Workstation page.
+     */
+    protected function actionRequestResponse(User $user, string $role, string $actionId, array $parameters, string $answeredBy, ?string $modelUsed = null): array
+    {
+        $log = fn (string $text, array $links, string $reason) => $this->finish($user, $role, AssistantLog::SOURCE_TYPED, $actionId, AssistantLog::OUTCOME_REFUSED, $text, $links, null, $answeredBy, $reason, modelUsed: $modelUsed);
+
+        if ($role === Role::STUDENT) {
+            return $log(self::ACTION_STUDENT_MESSAGE, [['label' => 'Workstation page', 'url' => route('workstation.select')]], 'action_request');
+        }
+
+        $seatNumber = isset($parameters['seat_number']) ? (int) $parameters['seat_number'] : null;
+
+        if ($seatNumber !== null && $seatNumber >= 1 && $seatNumber <= 315 && Workstation::whereKey($seatNumber)->exists()) {
+            return $log(self::ACTION_REFUSED_MESSAGE, [['label' => 'Seat Details', 'url' => route('workstation.cgs.seat', $seatNumber)]], 'action_request');
+        }
+
+        $studentId = $parameters['student_id'] ?? null;
+
+        if (is_string($studentId) && preg_match('/^\d{8}$/', $studentId)) {
+            $identity = StudentDirectory::findByStudentId($studentId);
+
+            if ($identity === null) {
+                return $log("I can't perform actions, and no student was found with ID {$studentId}. Please check the ID, or search in Workstation Management.", [['label' => 'Workstation Management', 'url' => route('workstation.cgs.operations')]], 'action_unknown_id');
+            }
+
+            $request = WorkstationRequest::query()
+                ->when($identity->user, fn ($q) => $q->where('student_id', $identity->user->id))
+                ->when($identity->demoProfile, fn ($q) => $q->where('demo_profile_id', $identity->demoProfile->id))
+                ->where('status', WorkstationRequest::STATUS_CONFIRMED)
+                ->latest('requested_at')
+                ->first();
+
+            if ($request !== null) {
+                return $log("I can't perform actions. Student {$studentId}'s seat is open below -- you can continue from there.", [['label' => 'Seat Details', 'url' => route('workstation.cgs.seat', $request->workstation_id)]], 'action_request');
+            }
+
+            return $log("I can't perform actions. Student {$studentId} does not currently hold a workstation -- you can assign one from Workstation Management.", [['label' => 'Workstation Management', 'url' => route('workstation.cgs.operations')]], 'action_request');
+        }
+
+        return $log(self::ACTION_NO_TARGET_MESSAGE, [['label' => 'Workstation Management', 'url' => route('workstation.cgs.operations')]], 'action_request');
+    }
+
+    /** A compose text that says its source does not answer the question is worse than the source itself -- rejected, and the topic text or template is used instead. */
+    protected static function saysNotCovered(string $text): bool
+    {
+        return (bool) preg_match('/\b(does not|doesn\'t|do not|don\'t)\s+(cover|contain|mention|include|say|provide|specify|have)\b|\bnot (covered|mentioned|specified)\b|\bno information\b/i', $text);
+    }
+
+    /** Never allowed in anything the model writes -- a URL, an 8-digit ID, or an email, even a real one it happened to see in the question, is removed rather than trusted. */
+    public static function stripInventedPersonalData(string $text): string
+    {
+        $text = preg_replace('#https?://\S+#i', '[link removed]', $text) ?? $text;
+        $text = preg_replace('/\b\d{8}\b/', '[ID removed]', $text) ?? $text;
+        $text = preg_replace('/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/i', '[email removed]', $text) ?? $text;
+
+        return $text;
+    }
+
+    // =====================================================================
+    // Suggestion chips and "Did you mean" chips -- never the model
+    // =====================================================================
+
+    /**
+     * POST .../suggestion: a curated suggestion id (s1_rules...), or a
+     * "Did you mean" chip's catalogue id with its params. No model call,
+     * no quota, either way.
+     */
+    public function askSuggestion(User $user, string $suggestionId, array $params = []): array
+    {
+        $this->answeredByOverride = null;
+        $role = self::normalizeRole($user->role);
+
+        if ($role === null) {
+            return $this->finish($user, $user->role, AssistantLog::SOURCE_SUGGESTION, 'role_not_supported', AssistantLog::OUTCOME_REFUSED, self::ROLE_NOT_SUPPORTED_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'role_not_supported');
+        }
+
+        $suggestion = SuggestedQuestions::find($suggestionId, $role);
+
+        if ($suggestion === null) {
+            return $this->askCatalogueChip($user, $role, $suggestionId, $params);
+        }
+
+        $meta = ['catalogue_id' => $suggestion['catalogue_id'], 'kind' => Catalogue::find($suggestion['catalogue_id'])['kind'] ?? null, 'answered_by' => AssistantLog::ANSWERED_BY_DIRECT];
+
+        if ($suggestion['type'] === 'static') {
+            $text = SuggestedAnswers::staticText($suggestion['target']);
+
+            if ($text === null) {
+                return $this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, "suggestion:{$suggestionId}", AssistantLog::OUTCOME_ERROR, self::MISSING_TOPIC_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'missing_topic');
+            }
+
+            return [...$this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, "suggestion:{$suggestionId}", AssistantLog::OUTCOME_ANSWERED, $text, [], null, AssistantLog::ANSWERED_BY_DIRECT, null), 'meta' => $meta];
+        }
+
+        $dynamic = SuggestedAnswers::dynamic($suggestion['target'], $user, $role);
+
+        return [...$this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, "suggestion:{$suggestionId}", AssistantLog::OUTCOME_ANSWERED, $dynamic['text'], $dynamic['links'], null, AssistantLog::ANSWERED_BY_DIRECT, null), 'meta' => $meta];
+    }
+
+    /**
+     * A "Did you mean" chip click, by catalogue id. The params come from
+     * the browser, so they are validated exactly like the router's own:
+     * declared names only, a period through PeriodExtractor, a seat
+     * number in range, a student ID as 8 digits -- never trusted.
+     */
+    protected function askCatalogueChip(User $user, string $role, string $catalogueId, array $params): array
+    {
+        $entry = Catalogue::find($catalogueId);
+
+        if ($entry === null || ! in_array($role, $entry['roles'], true)) {
+            return $this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, 'unknown_suggestion', AssistantLog::OUTCOME_ERROR, 'That suggested question is not available.', [], null, AssistantLog::ANSWERED_BY_DIRECT, 'unknown_suggestion');
+        }
+
+        // A chip's student_id is the real ID the user typed (already
+        // unmasked server-side when the chip was built) -- accepted only
+        // in the plain 8-digit shape, so map it through an identity
+        // "placeholder" table for validatedParams().
+        $idMap = [];
+        if (is_string($params['student_id'] ?? null) && preg_match('/^\d{8}$/', $params['student_id'])) {
+            $idMap[$params['student_id']] = $params['student_id'];
+        }
+        $params = $this->validatedParams($entry, $params, $idMap);
+
+        $result = match ($entry['kind']) {
+            'lookup' => $this->answerLookup($user, $role, $entry['id'], $params, AssistantLog::ANSWERED_BY_DIRECT, AssistantLog::SOURCE_SUGGESTION),
+            'guidance' => $this->answerGuidance($user, $role, $entry['id'], AssistantLog::SOURCE_SUGGESTION, AssistantLog::ANSWERED_BY_DIRECT, null),
+            'action' => $this->actionRequestResponse($user, $role, $entry['id'], $params, AssistantLog::ANSWERED_BY_DIRECT),
+            default => $this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'out_of_scope'),
+        };
+
+        if ($entry['kind'] !== 'out_of_scope') {
+            $result['interpreted_as'] = Catalogue::interpretedAs($entry, $params);
+        }
+
+        return [...$result, 'meta' => ['catalogue_id' => $entry['id'], 'kind' => $entry['kind'], 'answered_by' => AssistantLog::ANSWERED_BY_DIRECT]];
     }
 
     /**
@@ -317,225 +927,82 @@ final class Pipeline
         return $remaining > 0.5 ? (int) max(1, min(10, floor($remaining))) : null;
     }
 
-    /** @param array{kind: string, answer: ?string, sources: array, lookup: ?string, params: array} $result */
-    protected function dispatchModelResult(User $user, string $role, array $result, string $maskedQuestion, string $knowledgeText, array $idMap): array
-    {
-        $modelUsed = $result['model_used'] ?? null;
-        $kind = $result['kind'];
-
-        if ($kind === 'out_of_scope') {
-            if (ParameterExtractor::hasDomainWord($maskedQuestion)) {
-                return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_ASKED_BACK, self::ASKED_BACK_DOMAIN_MESSAGE, [], null, AssistantLog::ANSWERED_BY_MODEL, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed);
-            }
-
-            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_MODEL, 'out_of_scope', modelUsed: $modelUsed);
-        }
-
-        if ($kind === 'action') {
-            $params = array_map(fn ($v) => is_string($v) ? PrivacyMasker::unmask($v, $idMap) : $v, $result['params'] ?? []);
-
-            return $this->actionRequestResponse($user, $role, $params, AssistantLog::ANSWERED_BY_MODEL, $modelUsed);
-        }
-
-        if ($kind === 'clarify') {
-            $text = self::stripInventedPersonalData(trim((string) ($result['answer'] ?? '')));
-
-            if ($text === '') {
-                $text = 'Could you tell me a bit more about what you need?';
-            }
-
-            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'clarify', AssistantLog::OUTCOME_ASKED_BACK, $text, [], null, AssistantLog::ANSWERED_BY_MODEL, null, modelUsed: $modelUsed);
-        }
-
-        if ($kind === 'lookup') {
-            $lookupName = (string) ($result['lookup'] ?? '');
-
-            if ($lookupName === '' || ! $this->isAllowedForRole($lookupName, $role)) {
-                if ($role === Role::STUDENT && in_array($lookupName, ['seat_lookup', 'student_lookup'], true)) {
-                    return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'anyone_else', AssistantLog::OUTCOME_REFUSED, self::ANYONE_ELSE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_MODEL, 'anyone_else', modelUsed: $modelUsed);
-                }
-
-                return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_MODEL, 'role_not_permitted', modelUsed: $modelUsed);
-            }
-
-            $params = array_map(fn ($v) => is_string($v) ? PrivacyMasker::unmask($v, $idMap) : $v, $result['params'] ?? []);
-
-            return $this->answerLookup($user, $role, $lookupName, $params, AssistantLog::ANSWERED_BY_MODEL, false, AssistantLog::SOURCE_TYPED, maskedQuestion: $maskedQuestion, allowCompose: true, modelUsed: $modelUsed);
-        }
-
-        if ($kind === 'guidance') {
-            return $this->answerModelGuidance($user, $role, $result, $maskedQuestion, $knowledgeText, $modelUsed);
-        }
-
-        // Any other/unknown kind the model returned -- never guessed at, always the fallback.
-        return $this->unavailableOrFallback($user, $role, null, $modelUsed, 'invalid_kind');
-    }
-
     /**
-     * PART B.3's own validation: only topic ids the role may actually see
-     * are accepted as sources (anything else is silently dropped, never
-     * trusted); the model's text is stripped of any URL/8-digit-number/
-     * email first (it is never allowed to invent or echo one back); then
-     * every remaining number must appear in the knowledge text it was
-     * actually given or in the question itself, or the model is
-     * presumed to have invented it and the cited sections' own raw text
-     * is used instead.
+     * Part 2.7: the router's own reliability sequence -- the exact same
+     * retry/backoff/circuit-breaker/fallback-model/per-model-budget
+     * shape as callModelWithReliability(), just calling
+     * AssistantModel::route() instead of answer(). At most 1 router
+     * call per typed question (plus, separately, at most 1 compose call
+     * -- see answerLookup()'s own composeAggregate() path, unchanged).
+     *
+     * @param  array<int, array<string, mixed>>  $catalogue
+     * @param  array<int, array{question: string, id: string}>  $fewShots
+     * @return array{outcome: string, id: ?string, params: array, confidence: ?float, alternatives: array, clarify: ?string, error_code: ?string, model_used: ?string}
      */
-    protected function answerModelGuidance(User $user, string $role, array $result, string $maskedQuestion, string $knowledgeText, ?string $modelUsed): array
+    protected function callRouterWithReliability(string $maskedQuestion, array $recentMasked, array $catalogue, array $fewShots, string $todayLabel, bool $allowFallback): array
     {
-        $allowedTopics = GuidanceLibrary::topicsForRole($role);
-        // Round 4 PART B.1: the model's own raw "sources" can echo a student topic id straight from the hints it was given -- not CGS-allowed on its own, but its CGS counterpart is, so it is added here BEFORE the role-allow-list filter below, same rule as the pre-call hints.
-        $rawSources = $this->addCgsTopicCounterparts($result['sources'] ?? [], $role);
-        $sources = array_values(array_intersect($rawSources, $allowedTopics));
-
-        $text = self::stripInventedPersonalData(trim((string) ($result['answer'] ?? '')));
-        $valid = $text !== '' && $sources !== [] && GuidanceLibrary::everyNumberAppearsIn($text, $knowledgeText.' '.$maskedQuestion);
-
-        $answeredBy = AssistantLog::ANSWERED_BY_MODEL_GUIDANCE;
-
-        if (! $valid) {
-            if ($sources === []) {
-                return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'guidance:unknown', AssistantLog::OUTCOME_ERROR, self::MISSING_TOPIC_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'missing_topic', modelUsed: $modelUsed);
-            }
-
-            $text = collect($sources)->map(fn ($t) => GuidanceLibrary::sourceText($t))->filter()->implode("\n\n");
-            $answeredBy = AssistantLog::ANSWERED_BY_DIRECT;
-        }
-
-        $links = GuidanceLibrary::linksForTopics($sources);
-        $primaryTopic = $sources[0] ?? 'unknown';
-
-        return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, "guidance:{$primaryTopic}", AssistantLog::OUTCOME_ANSWERED, $text, $links, null, $answeredBy, null, modelUsed: $modelUsed);
-    }
-
-    /** Never allowed in anything the model writes -- a URL, an 8-digit ID, or an email, even a real one it happened to see in the question, is removed rather than trusted. */
-    public static function stripInventedPersonalData(string $text): string
-    {
-        $text = preg_replace('#https?://\S+#i', '[link removed]', $text) ?? $text;
-        $text = preg_replace('/\b\d{8}\b/', '[ID removed]', $text) ?? $text;
-        $text = preg_replace('/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/i', '[email removed]', $text) ?? $text;
-
-        return $text;
-    }
-
-    /** PART B.6: model unavailable/invalid -- a guidance topic the keyword rules already found gets its raw source text; otherwise the busy message with the suggested questions. $modelUsed/$errorCode (Round 3 PART A.5) are whatever callModelWithReliability() last saw, metadata only, logged either way. */
-    protected function unavailableOrFallback(User $user, string $role, ?string $fallbackGuidanceTopic, ?string $modelUsed, ?string $errorCode): array
-    {
-        if ($fallbackGuidanceTopic !== null) {
-            $source = GuidanceLibrary::sourceText($fallbackGuidanceTopic);
-
-            if ($source !== null) {
-                $links = GuidanceLibrary::linksForTopics([$fallbackGuidanceTopic]);
-
-                return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, "guidance:{$fallbackGuidanceTopic}", AssistantLog::OUTCOME_ANSWERED, $source, $links, null, AssistantLog::ANSWERED_BY_DIRECT, null, modelUsed: $modelUsed, errorCode: $errorCode);
-            }
-        }
-
-        return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'unavailable', AssistantLog::OUTCOME_UNAVAILABLE, self::UNAVAILABLE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'provider_unavailable', suggestions: $this->suggestionsList($role), modelUsed: $modelUsed, errorCode: $errorCode);
-    }
-
-    /** POST .../suggestion -- never touches the model or the keyword matcher. */
-    public function askSuggestion(User $user, string $suggestionId): array
-    {
-        $role = self::normalizeRole($user->role);
-
-        if ($role === null) {
-            return $this->finish($user, $user->role, AssistantLog::SOURCE_SUGGESTION, 'role_not_supported', AssistantLog::OUTCOME_REFUSED, self::ROLE_NOT_SUPPORTED_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'role_not_supported');
-        }
-
-        $suggestion = SuggestedQuestions::find($suggestionId, $role);
-
-        if ($suggestion === null) {
-            return $this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, 'unknown_suggestion', AssistantLog::OUTCOME_ERROR, 'That suggested question is not available.', [], null, AssistantLog::ANSWERED_BY_DIRECT, 'unknown_suggestion');
-        }
-
-        if ($suggestion['type'] === 'static') {
-            $text = SuggestedAnswers::staticText($suggestion['target']);
-
-            if ($text === null) {
-                return $this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, "suggestion:{$suggestionId}", AssistantLog::OUTCOME_ERROR, self::MISSING_TOPIC_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'missing_topic');
-            }
-
-            return $this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, "suggestion:{$suggestionId}", AssistantLog::OUTCOME_ANSWERED, $text, [], null, AssistantLog::ANSWERED_BY_DIRECT, null);
-        }
-
-        $dynamic = SuggestedAnswers::dynamic($suggestion['target'], $user, $role);
-
-        return $this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, "suggestion:{$suggestionId}", AssistantLog::OUTCOME_ANSWERED, $dynamic['text'], $dynamic['links'], null, AssistantLog::ANSWERED_BY_DIRECT, null);
-    }
-
-    protected function answerLookup(User $user, string $role, string $lookup, array $parameters, string $answeredBy, bool $multipleMatched, string $source = AssistantLog::SOURCE_TYPED, ?string $maskedQuestion = null, bool $allowCompose = false, ?string $modelUsed = null): array
-    {
-        $result = Lookups::run($lookup, $parameters, $user, $role);
-
-        if ($result['outcome'] === 'asked_back') {
-            return $this->finish($user, $role, $source, $lookup, AssistantLog::OUTCOME_ASKED_BACK, $result['text'], [], null, $answeredBy, null, modelUsed: $modelUsed);
-        }
-
-        $text = $result['text'];
-        $links = $result['links'] ?? [];
-        $resultCount = $result['resultCount'] ?? null;
-        $interpretedAs = null;
-
-        // PART B.4: a non-personal AGGREGATE lookup, chosen by the model,
-        // may get a SECOND model call that turns the structured result
-        // into two to five sentences of prose -- never for a lookup
-        // that returns personal data (never offered here at all, since
-        // $allowCompose is only true from the model's own 'lookup' kind,
-        // and never for a rule-matched lookup, which stays a template).
-        // Single attempt, primary model only -- never retried or failed
-        // over to the fallback, since the template is always a complete
-        // answer on its own; $modelUsed (the lookup's own CHOICE) is
-        // unaffected either way.
-        $composed = null;
+        $deadline = microtime(true) + (int) config('assistant.total_deadline_seconds', 22);
         $primaryModel = (string) config('assistant.gemini.model');
-        $composeEstimatedTokens = (int) ceil((strlen($maskedQuestion ?? '') + strlen($lookup) + strlen(json_encode($result) ?: '')) / 4);
+        $fallbackModel = (string) config('assistant.fallback_model');
+        $waits = config('assistant.retry_waits_seconds', [2, 5]);
+        $lastErrorCode = null;
+        $estimatedTokens = (int) ceil((strlen($maskedQuestion) + strlen(implode(' ', $recentMasked)) + strlen(json_encode($catalogue) ?: '') + strlen(json_encode($fewShots) ?: '')) / 4);
 
-        if ($allowCompose && $maskedQuestion !== null && in_array($lookup, config('assistant.aggregate_lookups', []), true) && $this->modelBudgetAvailable($primaryModel, $composeEstimatedTokens)) {
-            $this->recordModelCall($primaryModel, $composeEstimatedTokens);
-            $timeout = (int) min(10, (int) config('assistant.total_deadline_seconds', 22));
-            $aggregate = $this->model->composeAggregate($maskedQuestion, $lookup, $result, $primaryModel, $timeout);
+        if (! $this->circuitIsOpen($primaryModel)) {
+            $maxAttempts = 1 + count($waits);
 
-            if ($aggregate['outcome'] === 'ok' && is_string($aggregate['text']) && trim($aggregate['text']) !== '') {
-                $candidate = self::stripInventedPersonalData(trim($aggregate['text']));
+            for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+                $timeout = $this->attemptTimeout($deadline);
 
-                if (GuidanceLibrary::everyNumberAppearsIn($candidate, json_encode($result))) {
-                    $composed = $candidate;
+                if ($timeout === null || ! $this->modelBudgetAvailable($primaryModel, $estimatedTokens)) {
+                    break;
+                }
+
+                $this->recordModelCall($primaryModel, $estimatedTokens);
+                $result = $this->model->route($maskedQuestion, $recentMasked, $catalogue, $fewShots, $todayLabel, $primaryModel, $timeout);
+
+                if ($result['outcome'] === 'ok') {
+                    $this->recordModelOutcome($primaryModel, true);
+
+                    return [...$result, 'model_used' => $primaryModel];
+                }
+
+                $this->recordModelOutcome($primaryModel, false);
+                $lastErrorCode = $result['error_code'] ?? null;
+
+                if ($lastErrorCode === '429') {
+                    break;
+                }
+
+                if ($attempt < count($waits) && $this->attemptTimeout($deadline, $waits[$attempt]) !== null) {
+                    Sleep::sleep($waits[$attempt]);
+                } else {
+                    break;
                 }
             }
         }
 
-        if (empty($result['skipFooter'])) {
-            $paramsText = $parameters === [] ? 'none' : collect($parameters)->map(fn ($v, $k) => "{$k}={$v}")->implode(', ');
-            $label = ucfirst(str_replace('_', ' ', $lookup));
-            $interpretedAs = "{$label} · {$paramsText}";
-            $time = Carbon::now('Asia/Kuala_Lumpur')->format('j M Y, g:ia');
+        if (! $allowFallback) {
+            return ['outcome' => 'unavailable', 'id' => null, 'params' => [], 'confidence' => null, 'alternatives' => [], 'clarify' => null, 'error_code' => $lastErrorCode, 'model_used' => null];
+        }
 
-            if ($composed !== null) {
-                $answeredBy = AssistantLog::ANSWERED_BY_MODEL_COMPOSE;
-                $text = $composed."\n\nBased on live data at {$time}.\nInterpreted as: {$interpretedAs}";
-            } else {
-                $text .= "\n\nBased on live data at {$time}.\nInterpreted as: {$interpretedAs}";
+        $timeout = $this->attemptTimeout($deadline);
+
+        if ($timeout !== null && $this->modelBudgetAvailable($fallbackModel, $estimatedTokens)) {
+            $this->recordModelCall($fallbackModel, $estimatedTokens);
+            $result = $this->model->route($maskedQuestion, $recentMasked, $catalogue, $fewShots, $todayLabel, $fallbackModel, $timeout);
+
+            if ($result['outcome'] === 'ok') {
+                $this->recordModelOutcome($fallbackModel, true);
+
+                return [...$result, 'model_used' => $fallbackModel];
             }
+
+            $this->recordModelOutcome($fallbackModel, false);
+            $lastErrorCode = $result['error_code'] ?? $lastErrorCode;
         }
 
-        if ($multipleMatched) {
-            $text .= "\n\nPlease ask one question at a time.";
-        }
-
-        return $this->finish($user, $role, $source, $lookup, AssistantLog::OUTCOME_ANSWERED, $text, $links, $resultCount, $answeredBy, null, $interpretedAs, modelUsed: $modelUsed);
-    }
-
-    protected function actionRequestResponse(User $user, string $role, array $parameters, string $answeredBy, ?string $modelUsed = null): array
-    {
-        $links = [];
-        $seatNumber = isset($parameters['seat_number']) ? (int) $parameters['seat_number'] : null;
-
-        if ($seatNumber && $seatNumber >= 1 && $seatNumber <= 315) {
-            $links[] = ['label' => 'Seat Details', 'url' => route('workstation.cgs.seat', $seatNumber)];
-        }
-
-        return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'action_request', AssistantLog::OUTCOME_REFUSED, self::ACTION_REFUSED_MESSAGE, $links, null, $answeredBy, 'action_request', modelUsed: $modelUsed);
+        return ['outcome' => 'unavailable', 'id' => null, 'params' => [], 'confidence' => null, 'alternatives' => [], 'clarify' => null, 'error_code' => $lastErrorCode, 'model_used' => null];
     }
 
     /** The assistant's own two-role model -- 'student' | 'cgs' | null (everyone else). Shared with the controller's suggestions() so both agree on who gets an empty list vs. the refusal message. */
@@ -546,40 +1013,6 @@ final class Pipeline
         }
 
         return Role::isCgs($dbRole) ? 'cgs' : null;
-    }
-
-    /**
-     * Round 4 PART B.1: for the CGS role only, every student topic id in
-     * $topicIds that has a configured CGS counterpart
-     * (config('assistant.cgs_topic_counterparts')) gets that counterpart
-     * appended -- the student topic id itself is never removed, only
-     * added to. A no-op for the student role or when nothing in
-     * $topicIds has a counterpart.
-     *
-     * @param  array<int, string>  $topicIds
-     * @return array<int, string>
-     */
-    protected function addCgsTopicCounterparts(array $topicIds, string $role): array
-    {
-        if ($role !== 'cgs') {
-            return $topicIds;
-        }
-
-        $map = config('assistant.cgs_topic_counterparts', []);
-
-        foreach ($topicIds as $topicId) {
-            if (isset($map[$topicId]) && ! in_array($map[$topicId], $topicIds, true)) {
-                // Round 4 PART D: PREPENDED, not appended -- found live
-                // via assistant:evaluate that appending left the model's
-                // own (student-side) choice as $sources[0], so the
-                // logged/primary topic stayed the student one even
-                // though its CGS counterpart was correctly present in
-                // the list -- the opposite of "prefer".
-                array_unshift($topicIds, $map[$topicId]);
-            }
-        }
-
-        return $topicIds;
     }
 
     protected function isAllowedForRole(string $name, string $role): bool
@@ -742,7 +1175,10 @@ final class Pipeline
         ?string $modelUsed = null,
         ?string $errorCode = null,
     ): array {
-        AssistantLog::record($user->id, $role, $source, $lookup, $outcome, $refusalReason, $resultCount, $answeredBy, $modelUsed, $errorCode);
+        // Metadata only: the catalogue id (in lookup) and its kind, the
+        // outcome, who decided, the model and the error code -- never
+        // any question or answer text.
+        AssistantLog::record($user->id, $role, $source, $lookup, $outcome, $refusalReason, $resultCount, $this->answeredByOverride ?? $answeredBy, $modelUsed ?? $this->fallbackModelUsed, $errorCode ?? $this->fallbackErrorCode, Catalogue::kindForLogLookup($lookup));
 
         return [
             'answer' => $text,

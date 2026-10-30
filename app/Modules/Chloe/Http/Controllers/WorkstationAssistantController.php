@@ -6,6 +6,7 @@ use App\Modules\Chloe\Assistant\Pipeline;
 use App\Modules\Chloe\Assistant\SuggestedQuestions;
 use App\Modules\Core\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
 /**
  * PART 6. Three read-only JSON endpoints -- the chat UI itself is the next
@@ -32,9 +33,16 @@ class WorkstationAssistantController extends Controller
 
     public function suggestion(Request $request, Pipeline $pipeline)
     {
-        $data = $request->validate(['id' => ['required', 'string', 'max:60']]);
+        $data = $request->validate([
+            'id' => ['required', 'string', 'max:60'],
+            // Part 2.5: a "Did you mean" chip click carries the router's
+            // own (already-validated) params along, e.g. a period for
+            // release_forecast -- the 12 curated suggestion ids never
+            // send any.
+            'params' => ['nullable', 'array'],
+        ]);
 
-        return response()->json($pipeline->askSuggestion($request->user(), $data['id']));
+        return response()->json(Arr::except($pipeline->askSuggestion($request->user(), $data['id'], $data['params'] ?? []), ['meta']));
     }
 
     public function ask(Request $request, Pipeline $pipeline)
@@ -45,6 +53,7 @@ class WorkstationAssistantController extends Controller
             'recent.*' => ['string', 'max:'.config('assistant.max_question_length', 300)],
         ]);
 
-        return response()->json($pipeline->ask($request->user(), $data['message'], $data['recent'] ?? []));
+        // 'meta' (catalogue id, confidence, model) is for the console commands and tests only, never sent to the browser.
+        return response()->json(Arr::except($pipeline->ask($request->user(), $data['message'], $data['recent'] ?? []), ['meta']));
     }
 }

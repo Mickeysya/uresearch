@@ -7,6 +7,7 @@ use App\Modules\Chloe\Assistant\Pipeline;
 use App\Modules\Chloe\Models\AssistantLog;
 use App\Modules\Chloe\Models\StudentGender;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Tests\Support\MakesEligibleWorkstationStudents;
 use Tests\Support\MakesFakeAssistant;
 use Tests\Support\MakesUsers;
@@ -56,9 +57,45 @@ class WorkstationAssistantConsoleTest extends TestCase
         $student = $this->eligibleStudent();
         StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
 
+        FakeModel::queueRoute(['id' => 'available_seats', 'confidence' => 0.93]);
+
         $this->artisan('assistant:ask', ['email' => $student->email, 'question' => 'how many seats are available'])
             ->expectsOutputToContain('Outcome: answered')
+            ->expectsOutputToContain('Interpreted as: How many seats are available in my gender\'s rooms?')
+            ->expectsOutputToContain('Catalogue id: available_seats (lookup)')
+            ->expectsOutputToContain('Confidence: 0.93')
             ->assertSuccessful();
+    }
+
+    /** --trace prints the masked question and the router's ids/params -- never the real ID -- and writes nothing extra to the log. */
+    public function test_assistant_ask_trace_prints_the_masked_router_decision_only(): void
+    {
+        $cgs = $this->cgs();
+        FakeModel::queueRoute(['id' => 'action_mark_key_collected', 'params' => ['student_id' => '<ID1>'], 'confidence' => 0.9]);
+
+        // Artisan::output() is the rendered text; the console mock would see the raw, tag-escaped write.
+        $this->assertSame(0, Artisan::call('assistant:ask', ['email' => $cgs->email, 'question' => 'can u help me to mark 21010121 as key collected?', '--trace' => true]));
+        $out = Artisan::output();
+        $trace = substr($out, 0, strpos($out, 'Answer:'));
+
+        $this->assertStringContainsString('masked question: can u help me to mark <ID1> as key collected?', $trace);
+        $this->assertStringContainsString('"id":"action_mark_key_collected"', $trace);
+        $this->assertStringContainsString('"student_id":"<ID1>"', $trace);
+        $this->assertStringContainsString('decision: action action_mark_key_collected', $trace);
+        $this->assertStringNotContainsString('21010121', $trace, 'The trace only ever shows the masked form.');
+
+        $this->assertSame(1, AssistantLog::count(), 'The trace is never written to the log -- one row for the one question.');
+    }
+
+    public function test_assistant_ask_passes_recent_questions_for_a_follow_up(): void
+    {
+        $cgs = $this->cgs();
+        FakeModel::queueRoute(['id' => 'release_forecast', 'params' => ['period' => '2027-01']]);
+
+        $this->artisan('assistant:ask', ['email' => $cgs->email, 'question' => 'and january?', '--recent' => ['how many seats may be released in december 2026']])
+            ->assertSuccessful();
+
+        $this->assertSame(['how many seats may be released in december 2026'], FakeModel::routeCalls()[0]['recentMaskedQuestions']);
     }
 
     public function test_assistant_ask_fails_cleanly_for_an_unknown_email(): void

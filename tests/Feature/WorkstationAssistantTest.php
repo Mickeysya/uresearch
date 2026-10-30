@@ -61,17 +61,21 @@ class WorkstationAssistantTest extends TestCase
     // Permission matrix
     // -------------------------------------------------------------
 
+    /** A CGS-only id returned for a STUDENT is invalid output: never executed, the fallback answers instead. */
     public function test_a_student_never_gets_a_cgs_lookup_even_if_the_model_returns_one(): void
     {
         $student = $this->eligibleStudent();
         StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
+        $this->seat($this->room(), '1', Workstation::STATUS_OCCUPIED);
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'overall_stats']);
+        FakeModel::queueRoute(['id' => 'overall_stats', 'confidence' => 0.99]);
 
         $result = $this->pipeline()->ask($student, 'tell me everything about the system', []);
 
-        $this->assertSame('refused', $result['outcome']);
-        $this->assertSame(Pipeline::OUT_OF_SCOPE_MESSAGE, $result['answer']);
+        $log = AssistantLog::latest('id')->first();
+        $this->assertNotSame('overall_stats', $log->lookup);
+        $this->assertSame(AssistantLog::ANSWERED_BY_RULE_FALLBACK, $log->answered_by);
+        $this->assertStringNotContainsString('Total', $result['answer']);
     }
 
     public function test_a_female_student_sees_only_female_room_counts_for_available_seats(): void
@@ -85,6 +89,7 @@ class WorkstationAssistantTest extends TestCase
         $this->seat($femaleRoom, '1');
         $this->seat($femaleRoom, '2');
 
+        FakeModel::queueRoute(['id' => 'available_seats']);
         $result = $this->pipeline()->ask($student, 'how many seats are available', []);
 
         $this->assertSame('answered', $result['outcome']);
@@ -97,6 +102,7 @@ class WorkstationAssistantTest extends TestCase
         $student = $this->student();
         StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
 
+        FakeModel::queueRoute(['id' => 'available_seats']);
         $result = $this->pipeline()->ask($student, 'how many seats are available', []);
 
         $this->assertSame('answered', $result['outcome']);
@@ -117,53 +123,59 @@ class WorkstationAssistantTest extends TestCase
     // Privacy (PART B.5)
     // -------------------------------------------------------------
 
-    public function test_the_masked_question_sent_to_the_model_never_contains_a_student_id_or_email(): void
+    public function test_the_masked_question_sent_to_the_model_never_contains_a_student_id(): void
     {
         $cgs = $this->cgs();
 
-        // bypassKeywordRules=true: this question would otherwise resolve
-        // the ID deterministically (without ever reaching the model) --
-        // forcing the model path here is what actually tests this
-        // boundary, which is the point of this test.
-        $this->pipeline()->ask($cgs, 'can you check 22001001 and bob@test.my please', [], true);
+        $this->pipeline()->ask($cgs, 'can you check 22001001 please', ['and 22001002 earlier']);
 
-        $calls = FakeModel::answerCalls();
-        $this->assertNotEmpty($calls);
-        $sent = $calls[0]['maskedQuestion'];
-        $this->assertStringNotContainsString('22001001', $sent);
-        $this->assertStringNotContainsString('bob@test.my', $sent);
-        $this->assertStringContainsString('<ID1>', $sent);
-        $this->assertStringContainsString('<EMAIL1>', $sent);
+        $call = FakeModel::routeCalls()[0];
+        $this->assertStringNotContainsString('22001001', $call['maskedQuestion']);
+        $this->assertStringContainsString('<ID1>', $call['maskedQuestion']);
+        $this->assertSame(['and <ID1> earlier'], $call['recentMaskedQuestions']);
+    }
+
+    /** "Email not a key": a question using an email as the lookup key is asked back before the router -- the email never travels at all. */
+    public function test_an_email_used_as_a_key_never_reaches_the_router(): void
+    {
+        $cgs = $this->cgs();
+
+        $result = $this->pipeline()->ask($cgs, 'can you check bob@test.my please', []);
+
+        $this->assertSame(0, FakeModel::routeCallCount());
+        $this->assertSame('asked_back', $result['outcome']);
+        $this->assertSame(Pipeline::EMAIL_NOT_A_KEY_MESSAGE, $result['answer']);
     }
 
     /**
-     * PART B.5: the exact payload FakeModel received -- knowledgeText
-     * (every CGS + student guidance topic's text) and lookupCatalogue
-     * (the CGS lookup catalogue) must never contain a name, an email, or
-     * an 8-digit student ID, since neither one is built from anything
-     * personal in the first place (both are static/role-scoped, read
-     * before the question is even looked at).
+     * Part 3: the exact payload FakeModel's route() received -- the
+     * role's own catalogue (id/kind/question/description/examples/
+     * parameters) and the few-shots must never contain a name, an
+     * email, or an 8-digit student ID, since neither is built from
+     * anything personal in the first place (both are static/role-scoped,
+     * read before the question is even looked at).
      */
-    public function test_the_knowledge_text_and_lookup_catalogue_sent_to_the_model_contain_no_personal_data(): void
+    public function test_the_catalogue_and_few_shots_sent_to_the_model_contain_no_personal_data(): void
     {
         $cgs = $this->cgs();
         $this->occupiedSeatForStudentId('22010099', 'Nur Aina binti Ismail');
 
         $this->pipeline()->ask($cgs, 'something with no keyword match at all xyz', []);
 
-        $calls = FakeModel::answerCalls();
+        $calls = FakeModel::routeCalls();
         $this->assertNotEmpty($calls);
         $call = $calls[0];
 
         foreach (['22010099', 'bob@test.my', 'Nur Aina', 'Ahmad Danial'] as $needle) {
-            $this->assertStringNotContainsString($needle, $call['knowledgeText']);
-            $this->assertStringNotContainsString($needle, json_encode($call['lookupCatalogue']));
+            $this->assertStringNotContainsString($needle, json_encode($call['catalogue']));
+            $this->assertStringNotContainsString($needle, json_encode($call['fewShots']));
         }
 
-        // Only CGS + student topics (CGS may read both) -- nothing beyond
-        // GuidanceLibrary's own role-scoped list.
-        $this->assertStringContainsString('cgs_reasons', $call['knowledgeText']);
-        $this->assertStringContainsString('select_seat', $call['knowledgeText']);
+        // Only CGS + student topic/lookup ids (CGS may read both) --
+        // nothing beyond Catalogue::forRole()'s own role-scoped list.
+        $catalogueIds = array_column($call['catalogue'], 'id');
+        $this->assertContains('cgs_reasons', $catalogueIds);
+        $this->assertContains('select_seat', $catalogueIds);
     }
 
     public function test_a_placeholder_student_id_the_model_returns_is_mapped_back_to_the_real_value(): void
@@ -171,10 +183,7 @@ class WorkstationAssistantTest extends TestCase
         $cgs = $this->cgs();
         $this->occupiedSeatForStudentId('22010001');
 
-        // The deterministic layer already resolves an 8-digit ID to
-        // student_lookup on its own (ParameterExtractor::
-        // studentIdPlaceholder()) -- this just confirms the final answer
-        // is correct regardless of which layer (rule or model) handled it.
+        FakeModel::queueRoute(['id' => 'student_lookup', 'params' => ['student_id' => '<ID1>']]);
         $result = $this->pipeline()->ask($cgs, 'please check on 22010001', []);
 
         $this->assertSame('answered', $result['outcome']);
@@ -190,7 +199,8 @@ class WorkstationAssistantTest extends TestCase
 
         $this->assertSame('refused', $result['outcome']);
         $this->assertSame(Pipeline::PRIVACY_NAME_MESSAGE, $result['answer']);
-        $this->assertEmpty(FakeModel::answerCalls(), 'A question containing a known name must never reach the model.');
+        $this->assertSame(0, FakeModel::routeCallCount(), 'A question containing a known name must never reach the model.');
+        $this->assertEmpty(FakeModel::answerCalls());
     }
 
     protected function occupiedSeatForStudentId(string $matric, string $name = 'Test Student'): array
@@ -219,7 +229,7 @@ class WorkstationAssistantTest extends TestCase
     {
         $cgs = $this->cgs();
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'seat_lookup']);
+        FakeModel::queueRoute(['id' => 'seat_lookup']);
 
         $result = $this->pipeline()->ask($cgs, 'tell me about a seat', []);
 
@@ -230,7 +240,7 @@ class WorkstationAssistantTest extends TestCase
     {
         $cgs = $this->cgs();
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'seat_availability', 'params' => ['block' => 'X9']]);
+        FakeModel::queueRoute(['id' => 'seat_availability', 'params' => ['block' => 'X9']]);
 
         $result = $this->pipeline()->ask($cgs, 'seats in X9', []);
 
@@ -238,58 +248,108 @@ class WorkstationAssistantTest extends TestCase
         $this->assertSame('Which block do you mean, N2 or J2?', $result['answer']);
     }
 
-    /** "release seat N" is rule-resolved (deterministic action-verb extraction) -- the model is never consulted. "Seat N" means the Workstation id, the same convention seat_lookup already uses. */
+    /** "Seat N" means the Workstation id, the same convention seat_lookup uses. Nothing is ever executed. */
     public function test_an_action_request_is_refused_with_a_seat_details_link(): void
     {
         $cgs = $this->cgs();
         $seat = $this->seat($this->room(), '252', Workstation::STATUS_OCCUPIED);
 
-        $result = $this->pipeline()->ask($cgs, "release seat {$seat->id}", []);
+        FakeModel::queueRoute(['id' => 'action_release', 'params' => ['seat_number' => $seat->id]]);
+        $result = $this->pipeline()->ask($cgs, "pls release seat {$seat->id}", []);
 
         $this->assertSame('refused', $result['outcome']);
         $this->assertSame(Pipeline::ACTION_REFUSED_MESSAGE, $result['answer']);
-        $this->assertNotEmpty($result['links']);
         $this->assertStringContainsString((string) $seat->id, $result['links'][0]['url']);
-        $this->assertSame(AssistantLog::ANSWERED_BY_RULE, AssistantLog::latest('occurred_at')->first()->answered_by);
-        $this->assertEmpty(FakeModel::answerCalls());
+        $this->assertSame("Release Seat {$seat->id}.", $result['interpreted_as']);
+        $this->assertSame(Workstation::STATUS_OCCUPIED, $seat->fresh()->status, 'The assistant never performs the action.');
+        $log = AssistantLog::latest('id')->first();
+        $this->assertSame('action_release', $log->lookup);
+        $this->assertSame('action', $log->catalogue_kind);
+        $this->assertSame(AssistantLog::ANSWERED_BY_MODEL_ROUTER, $log->answered_by);
     }
 
-    /** The model-answered action path still works when the deterministic layer is bypassed (--model-only). */
-    public function test_an_action_request_can_still_be_answered_by_the_model(): void
+    /** A known student ID: the refusal links that student's own seat. */
+    public function test_an_action_for_a_known_student_id_links_their_seat(): void
     {
         $cgs = $this->cgs();
-        $seat = $this->seat($this->room(), '252', Workstation::STATUS_OCCUPIED);
+        [, , $seat] = $this->occupiedSeatForStudentId('22010077');
 
-        FakeModel::queueAnswer(['kind' => 'action', 'params' => ['seat_number' => $seat->id]]);
-
-        $result = $this->pipeline()->ask($cgs, 'please take care of this for me', [], true);
+        FakeModel::queueRoute(['id' => 'action_mark_key_collected', 'params' => ['student_id' => '<ID1>']]);
+        $result = $this->pipeline()->ask($cgs, 'can u help me to mark 22010077 as key collected?', []);
 
         $this->assertSame('refused', $result['outcome']);
-        $this->assertSame(Pipeline::ACTION_REFUSED_MESSAGE, $result['answer']);
-        $this->assertNotEmpty($result['links']);
+        $this->assertStringStartsWith("I can't perform actions.", $result['answer']);
         $this->assertStringContainsString((string) $seat->id, $result['links'][0]['url']);
     }
 
+    public function test_an_action_for_an_unknown_student_id_says_so(): void
+    {
+        $cgs = $this->cgs();
+
+        FakeModel::queueRoute(['id' => 'action_mark_key_returned', 'params' => ['student_id' => '<ID1>']]);
+        $result = $this->pipeline()->ask($cgs, 'mark 29999999 key returned', []);
+
+        $this->assertStringContainsString('no student was found with ID 29999999', $result['answer']);
+        $this->assertSame(route('workstation.cgs.operations'), $result['links'][0]['url']);
+    }
+
+    public function test_an_action_with_no_target_points_to_workstation_management(): void
+    {
+        $cgs = $this->cgs();
+
+        FakeModel::queueRoute(['id' => 'action_set_maintenance']);
+        $result = $this->pipeline()->ask($cgs, 'put a seat under maintenance for me', []);
+
+        $this->assertSame(Pipeline::ACTION_NO_TARGET_MESSAGE, $result['answer']);
+        $this->assertSame(route('workstation.cgs.operations'), $result['links'][0]['url']);
+    }
+
+    /** An ID the model invents (not one of this question's own placeholders) is dropped, never used. */
+    public function test_an_invented_id_placeholder_is_dropped(): void
+    {
+        $cgs = $this->cgs();
+
+        FakeModel::queueRoute(['id' => 'action_release', 'params' => ['student_id' => '<ID7>']]);
+        $result = $this->pipeline()->ask($cgs, 'release the student please', []);
+
+        $this->assertSame(Pipeline::ACTION_NO_TARGET_MESSAGE, $result['answer']);
+    }
+
+    /** clarify is used only when no id is usable (out_of_scope) -- with the role's suggested-question chips. */
     public function test_a_clarify_kind_asks_back_with_the_models_own_question(): void
     {
         $cgs = $this->cgs();
 
-        FakeModel::queueAnswer(['kind' => 'clarify', 'answer' => 'Do you mean block N2 or block J2?']);
+        FakeModel::queueRoute(['id' => 'out_of_scope', 'clarify' => 'Do you mean block N2 or block J2?', 'confidence' => 0.3]);
 
         $result = $this->pipeline()->ask($cgs, 'tell me about the block', []);
 
         $this->assertSame('asked_back', $result['outcome']);
         $this->assertSame('Do you mean block N2 or block J2?', $result['answer']);
+        $this->assertNotEmpty($result['suggestions']);
+    }
+
+    /** A usable id wins over a clarify text: the answer, not the question back. */
+    public function test_a_usable_id_is_answered_even_when_clarify_is_set(): void
+    {
+        $cgs = $this->cgs();
+
+        FakeModel::queueRoute(['id' => 'overall_stats', 'clarify' => 'Which block?']);
+
+        $result = $this->pipeline()->ask($cgs, 'seat numbers overall', []);
+
+        $this->assertSame('answered', $result['outcome']);
     }
 
     public function test_a_clarify_kinds_answer_is_stripped_of_any_invented_id_or_email(): void
     {
         $cgs = $this->cgs();
 
-        FakeModel::queueAnswer(['kind' => 'clarify', 'answer' => 'Do you mean student 22010099 or bob@test.my?']);
+        FakeModel::queueRoute(['id' => 'out_of_scope', 'clarify' => 'Do you mean student 22010099 or bob@test.my?']);
 
-        $result = $this->pipeline()->ask($cgs, 'which student', []);
+        $result = $this->pipeline()->ask($cgs, 'which student seat', []);
 
+        $this->assertSame('asked_back', $result['outcome']);
         $this->assertStringNotContainsString('22010099', $result['answer']);
         $this->assertStringNotContainsString('bob@test.my', $result['answer']);
     }
@@ -298,26 +358,21 @@ class WorkstationAssistantTest extends TestCase
     {
         $student = $this->eligibleStudent();
 
-        FakeModel::queueAnswer(['kind' => 'out_of_scope']);
+        FakeModel::queueRoute(['id' => 'out_of_scope']);
 
         $result = $this->pipeline()->ask($student, 'what is the weather today', []);
 
         $this->assertSame('refused', $result['outcome']);
         $this->assertSame(Pipeline::OUT_OF_SCOPE_MESSAGE, $result['answer']);
+        $this->assertNull($result['interpreted_as']);
     }
 
-    /**
-     * The model's own out_of_scope guess, softened with an ask-back
-     * instead of the flat refusal, ONLY because a domain word is present
-     * -- "what is the weather today" above has none, so it keeps the
-     * flat refusal; this one mentions "loan" so it gets the suggestions
-     * list instead.
-     */
+    /** out_of_scope, but a domain word ("loan") is present: the ask-back with the suggestions, not the flat refusal. */
     public function test_model_out_of_scope_with_a_domain_word_asks_back_with_suggestions_instead_of_refusing(): void
     {
         $student = $this->eligibleStudent();
 
-        FakeModel::queueAnswer(['kind' => 'out_of_scope']);
+        FakeModel::queueRoute(['id' => 'out_of_scope']);
 
         $result = $this->pipeline()->ask($student, 'I have a question about the loan thing', []);
 
@@ -348,37 +403,41 @@ class WorkstationAssistantTest extends TestCase
     {
         $cgs = $this->cgs();
 
+        FakeModel::queueRoute(['id' => 'overall_stats']);
         $result = $this->pipeline()->ask($cgs, 'overall stats please', []);
 
         $this->assertSame('answered', $result['outcome']);
         $this->assertStringContainsString('Based on live data at', $result['answer']);
-        $this->assertStringContainsString('Interpreted as:', $result['answer']);
-        $this->assertNotNull($result['interpreted_as']);
+        $this->assertSame('What are the overall seat totals?', $result['interpreted_as']);
+        $this->assertStringNotContainsString('Interpreted as:', $result['answer'], 'Shown once, as the grey line -- never repeated inside the answer text.');
     }
 
-    public function test_keyword_rule_match_skips_the_model_entirely(): void
+    /** The keyword rules are the fallback only: with the router down they still answer a clear lookup. */
+    public function test_keyword_rule_match_answers_when_the_router_is_down(): void
     {
         $cgs = $this->cgs();
+        FakeModel::forceUnavailable();
 
-        // No answer queued at all -- if the pipeline reached the model it
-        // would fall through to FakeModel's no-queue default, which would
-        // still answer, so instead assert on the log's own answered_by.
-        $this->pipeline()->ask($cgs, 'how many keys are pending collection', []);
+        $result = $this->pipeline()->ask($cgs, 'how many keys are pending collection', []);
 
-        $log = AssistantLog::latest('occurred_at')->first();
-        $this->assertSame(AssistantLog::ANSWERED_BY_RULE, $log->answered_by);
+        $log = AssistantLog::latest('id')->first();
+        $this->assertSame(AssistantLog::ANSWERED_BY_RULE_FALLBACK, $log->answered_by);
         $this->assertSame('keys_pending_collection', $log->lookup);
+        $this->assertSame('How many locker keys are pending collection?', $result['interpreted_as']);
     }
 
-    /**
-     * PART B: a guidance-TOPIC phrase match (as opposed to a lookup
-     * match) no longer short-circuits the model -- it is held in reserve
-     * as the fallback only (see unavailableOrFallback()). "I lost my
-     * locker key" matches guidance:key_lost's own phrase list, so with
-     * the model unavailable, the answer still comes from that topic's
-     * raw source text, proving the keyword rule is still "in sync" even
-     * though it is no longer the primary path.
-     */
+    /** An exact suggested-question text is answered like the chip -- no router call at all. */
+    public function test_an_exact_suggested_question_text_never_calls_the_router(): void
+    {
+        $student = $this->eligibleStudent();
+
+        $result = $this->pipeline()->ask($student, 'What are the workstation rules I must follow?', []);
+
+        $this->assertSame(0, FakeModel::routeCallCount());
+        $this->assertSame('answered', $result['outcome']);
+    }
+
+    /** Router down: the guidance phrase list still finds the topic, answered from its raw text. */
     public function test_a_guidance_phrase_match_falls_back_to_its_topic_when_the_model_is_unavailable(): void
     {
         $student = $this->eligibleStudent();
@@ -387,64 +446,67 @@ class WorkstationAssistantTest extends TestCase
         $result = $this->pipeline()->ask($student, 'I lost my locker key, what do I do?', []);
 
         $this->assertSame('answered', $result['outcome']);
-        $log = AssistantLog::latest('occurred_at')->first();
+        $log = AssistantLog::latest('id')->first();
         $this->assertSame('guidance:key_lost', $log->lookup);
-        $this->assertSame(AssistantLog::ANSWERED_BY_DIRECT, $log->answered_by);
+        $this->assertSame('guidance', $log->catalogue_kind);
+        $this->assertSame(AssistantLog::ANSWERED_BY_RULE_FALLBACK, $log->answered_by);
     }
 
-    /** The same phrase, model available: it reaches the model (PART B's whole point), which here correctly cites key_lost as its source. */
-    public function test_a_guidance_phrase_match_still_reaches_the_model_when_available(): void
+    /** Router up: it picks the topic, and the compose call writes the answer from that topic's text. */
+    public function test_a_guidance_question_is_routed_then_composed_from_the_topic(): void
     {
         $student = $this->eligibleStudent();
 
-        FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'Report it to CGS immediately.', 'sources' => ['key_lost']]);
+        FakeModel::queueRoute(['id' => 'key_lost', 'confidence' => 0.92]);
+        FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'Report it to CGS immediately.']);
 
         $result = $this->pipeline()->ask($student, 'I lost my locker key, what do I do?', []);
 
-        $this->assertNotEmpty(FakeModel::answerCalls());
-        $this->assertSame('answered', $result['outcome']);
-        $log = AssistantLog::latest('occurred_at')->first();
+        $this->assertSame('Report it to CGS immediately.', $result['answer']);
+        $this->assertSame('What should I do if I lose my locker key?', $result['interpreted_as']);
+        $log = AssistantLog::latest('id')->first();
         $this->assertSame('guidance:key_lost', $log->lookup);
-        $this->assertSame(AssistantLog::ANSWERED_BY_MODEL_GUIDANCE, $log->answered_by);
+        $this->assertSame(AssistantLog::ANSWERED_BY_MODEL_ROUTER, $log->answered_by);
     }
 
     public function test_guidance_answer_falls_back_to_source_text_when_the_model_invents_a_number(): void
     {
         $student = $this->eligibleStudent();
 
-        FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'You have 999 minutes to confirm.', 'sources' => ['select_seat']]);
+        FakeModel::queueRoute(['id' => 'select_seat']);
+        FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'You have 999 minutes to confirm.']);
 
         $result = $this->pipeline()->ask($student, 'how do i select a workstation', []);
 
         $this->assertSame('answered', $result['outcome']);
         $this->assertStringNotContainsString('999', $result['answer']);
         $this->assertStringContainsString('5 minutes', $result['answer']);
-        $this->assertSame(AssistantLog::ANSWERED_BY_DIRECT, AssistantLog::latest('occurred_at')->first()->answered_by);
     }
 
-    public function test_guidance_answer_falls_back_to_source_text_when_sources_is_empty(): void
+    public function test_an_empty_compose_answer_falls_back_to_the_topic_text(): void
     {
         $student = $this->eligibleStudent();
 
-        FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'Here is how.', 'sources' => []]);
+        FakeModel::queueRoute(['id' => 'select_seat']);
+        FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => '   ']);
 
         $result = $this->pipeline()->ask($student, 'how do i select a workstation', []);
 
-        $this->assertSame('error', $result['outcome']);
+        $this->assertSame('answered', $result['outcome']);
+        $this->assertStringContainsString('5 minutes', $result['answer']);
     }
 
-    public function test_guidance_answer_drops_a_source_the_role_is_not_allowed_to_see(): void
+    /** A student routed to a CGS-only topic is invalid output -- the CGS text is never shown. */
+    public function test_a_student_is_never_given_a_cgs_topic(): void
     {
         $student = $this->eligibleStudent();
 
-        // A student is never allowed a CGS topic -- cgs_reasons is
-        // dropped, leaving select_seat as the only valid source.
-        FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'Go to the Workstation page.', 'sources' => ['select_seat', 'cgs_reasons']]);
+        FakeModel::queueRoute(['id' => 'cgs_reasons']);
 
         $result = $this->pipeline()->ask($student, 'how do i select a workstation', []);
 
-        $log = AssistantLog::latest('occurred_at')->first();
-        $this->assertSame('guidance:select_seat', $log->lookup);
+        $this->assertNotSame('guidance:cgs_reasons', AssistantLog::latest('id')->first()->lookup);
+        $this->assertStringNotContainsString('Withdraw Termination', $result['answer']);
     }
 
     public function test_guidance_falls_back_to_topic_text_when_the_model_is_unavailable(): void
@@ -510,44 +572,29 @@ class WorkstationAssistantTest extends TestCase
         $this->assertSame(AssistantLog::ANSWERED_BY_DIRECT, AssistantLog::latest('occurred_at')->first()->answered_by);
     }
 
-    /**
-     * Regression test found live, Round 3: the my_locker_key LOOKUP's
-     * bare "key status" phrase matched as a substring inside "what do
-     * the key STATUSES mean" too, swallowing a glossary question as a
-     * rule-matched personal lookup ("you have no key on record") before
-     * it ever reached the model -- the bare phrase is dropped; the
-     * remaining ones all need "my" or "locker".
-     */
+    /** Regression (Round 3): "key statuses" used to be swallowed by the my_locker_key phrase rule. The router goes first now. */
     public function test_a_key_statuses_glossary_question_is_not_swallowed_by_the_my_locker_key_lookup(): void
     {
         $student = $this->eligibleStudent();
 
-        FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'Not Requested, Pending Collection, Collected...', 'sources' => ['student_status_glossary']]);
+        FakeModel::queueRoute(['id' => 'student_status_glossary']);
 
         $this->pipeline()->ask($student, 'what do the key statuses mean', []);
 
-        $this->assertNotEmpty(FakeModel::answerCalls());
-        $this->assertSame('guidance:student_status_glossary', AssistantLog::latest('occurred_at')->first()->lookup);
+        $this->assertSame(1, FakeModel::routeCallCount());
+        $this->assertSame('guidance:student_status_glossary', AssistantLog::latest('id')->first()->lookup);
     }
 
-    /**
-     * Regression test found live via assistant:evaluate under PART B:
-     * the my_workstation LOOKUP's bare "my workstation" phrase matched
-     * as a substring inside this HOW-TO question too, swallowing it as a
-     * rule-matched lookup before it ever reached the model -- narrowed
-     * to question-form phrasings only ("what is my workstation", etc.).
-     */
+    /** Regression (PART B): "my workstation" inside a how-to used to be swallowed by the my_workstation rule. */
     public function test_a_how_to_return_question_is_not_swallowed_by_the_my_workstation_lookup(): void
     {
         $student = $this->eligibleStudent();
 
-        FakeModel::queueAnswer(['kind' => 'guidance', 'answer' => 'Use Return Workstation on your Workstation page.', 'sources' => ['change_or_return']]);
+        FakeModel::queueRoute(['id' => 'change_or_return']);
 
         $this->pipeline()->ask($student, 'How do I return my workstation?', []);
 
-        $this->assertNotEmpty(FakeModel::answerCalls());
-        $log = AssistantLog::latest('occurred_at')->first();
-        $this->assertSame('guidance:change_or_return', $log->lookup);
+        $this->assertSame('guidance:change_or_return', AssistantLog::latest('id')->first()->lookup);
     }
 
     public function test_a_typed_guidance_question_respects_the_app_wide_provider_budget(): void
@@ -564,13 +611,14 @@ class WorkstationAssistantTest extends TestCase
         $this->assertStringContainsString('5 minutes', $result['answer']);
     }
 
-    public function test_an_email_in_a_student_id_question_is_rejected(): void
+    /** An email placeholder handed to student_lookup (only possible from a recent question) is asked back by the lookup's own validator. */
+    public function test_an_email_in_a_student_id_parameter_is_rejected(): void
     {
         $cgs = $this->cgs();
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'student_lookup', 'params' => ['student_id' => 'bob@test.my']]);
+        FakeModel::queueRoute(['id' => 'student_lookup', 'params' => ['student_id' => '<EMAIL1>']]);
 
-        $result = $this->pipeline()->ask($cgs, 'find bob@test.my', []);
+        $result = $this->pipeline()->ask($cgs, 'find that student', []);
 
         $this->assertSame('asked_back', $result['outcome']);
         $this->assertSame('Please use a Student ID or seat number.', $result['answer']);
@@ -580,6 +628,7 @@ class WorkstationAssistantTest extends TestCase
     {
         $student = $this->eligibleStudent();
 
+        FakeModel::queueRoute(['id' => 'out_of_scope']);
         $result = $this->pipeline()->ask($student, 'who is in seat 5', []);
 
         $this->assertSame('refused', $result['outcome']);
@@ -596,7 +645,7 @@ class WorkstationAssistantTest extends TestCase
         $this->seat($this->room(), '1', Workstation::STATUS_OCCUPIED);
         $this->seat($this->room(), '2', Workstation::STATUS_AVAILABLE);
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'overall_stats']);
+        FakeModel::queueRoute(['id' => 'overall_stats']);
         FakeModel::queueAggregate('There are 2 seats in total, 1 available and 1 occupied.');
 
         $result = $this->pipeline()->ask($cgs, 'summarise the whole catalogue for me please', []);
@@ -604,44 +653,45 @@ class WorkstationAssistantTest extends TestCase
         $this->assertSame('answered', $result['outcome']);
         $this->assertStringContainsString('2 seats in total', $result['answer']);
         $this->assertSame(1, FakeModel::aggregateCallCount());
-        $this->assertSame(AssistantLog::ANSWERED_BY_MODEL_COMPOSE, AssistantLog::latest('occurred_at')->first()->answered_by);
+        $this->assertSame(AssistantLog::ANSWERED_BY_MODEL_ROUTER, AssistantLog::latest('id')->first()->answered_by);
     }
 
     public function test_an_aggregate_compose_that_invents_a_number_falls_back_to_the_template(): void
     {
         $cgs = $this->cgs();
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'overall_stats']);
+        FakeModel::queueRoute(['id' => 'overall_stats']);
         FakeModel::queueAggregate('There are 999 seats in total.');
 
         $result = $this->pipeline()->ask($cgs, 'summarise the whole catalogue for me please', []);
 
         $this->assertStringNotContainsString('999', $result['answer']);
-        $this->assertSame(AssistantLog::ANSWERED_BY_MODEL, AssistantLog::latest('occurred_at')->first()->answered_by);
     }
 
-    /** A PERSONAL lookup (seat_lookup, student_lookup, my_workstation, my_locker_key) never gets the second, composing call, even if chosen by the model. */
+    /** A PERSONAL lookup (seat_lookup, student_lookup, my_workstation, my_locker_key) never gets the composing call. */
     public function test_a_personal_lookup_never_gets_the_aggregate_compose_call(): void
     {
         $cgs = $this->cgs();
         $seat = $this->seat($this->room(), '1', Workstation::STATUS_AVAILABLE);
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'seat_lookup', 'params' => ['seat_number' => $seat->id]]);
+        FakeModel::queueRoute(['id' => 'seat_lookup', 'params' => ['seat_number' => $seat->id]]);
 
-        $this->pipeline()->ask($cgs, 'tell me about this seat', []);
+        $result = $this->pipeline()->ask($cgs, 'tell me about this seat', []);
 
+        $this->assertSame('answered', $result['outcome']);
         $this->assertSame(0, FakeModel::aggregateCallCount());
     }
 
     public function test_an_aggregate_compose_respects_the_app_wide_provider_budget(): void
     {
         $cgs = $this->cgs();
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'overall_stats']);
+        FakeModel::queueRoute(['id' => 'overall_stats']);
 
         config(['assistant.rate_limits.default.requests_per_day' => 1]);
 
         $this->pipeline()->ask($cgs, 'summarise the whole catalogue for me please', []);
 
+        $this->assertSame(1, FakeModel::routeCallCount());
         $this->assertSame(0, FakeModel::aggregateCallCount());
     }
 
@@ -656,8 +706,9 @@ class WorkstationAssistantTest extends TestCase
 
         $before = AssistantLog::count();
 
+        FakeModel::queueRoute(['id' => 'available_seats']);
         $this->pipeline()->ask($student, 'how many seats are available', []); // answered
-        FakeModel::queueAnswer(['kind' => 'out_of_scope']);
+        FakeModel::queueRoute(['id' => 'out_of_scope']);
         $this->pipeline()->ask($student, 'what is the weather', []); // refused
         $this->pipeline()->ask($student, 'who is in seat 5', []); // refused (anyone_else)
         FakeModel::forceUnavailable();
@@ -721,7 +772,7 @@ class WorkstationAssistantTest extends TestCase
         $this->seat($this->room(), '2', Workstation::STATUS_AVAILABLE);
         $this->seat($this->j2Room(), '1', Workstation::STATUS_OCCUPIED);
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'block_comparison']);
+        FakeModel::queueRoute(['id' => 'block_comparison']);
         $result = $this->pipeline()->ask($cgs, 'which block is fuller', []);
 
         $this->assertSame('answered', $result['outcome']);
@@ -736,7 +787,7 @@ class WorkstationAssistantTest extends TestCase
         $this->seat($this->room('male'), '1', Workstation::STATUS_OCCUPIED);
         $this->seat($this->j2Room('female'), '1', Workstation::STATUS_AVAILABLE);
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'block_comparison']);
+        FakeModel::queueRoute(['id' => 'block_comparison']);
         $result = $this->pipeline()->ask($cgs, 'which block is fuller', []);
 
         $this->assertStringContainsString('Male:', $result['answer']);
@@ -751,7 +802,7 @@ class WorkstationAssistantTest extends TestCase
         $this->seat($this->room('male'), '1', Workstation::STATUS_OCCUPIED);
         $this->seat($this->j2Room('female'), '1', Workstation::STATUS_OCCUPIED);
 
-        FakeModel::queueAnswer(['kind' => 'lookup', 'lookup' => 'block_comparison']);
+        FakeModel::queueRoute(['id' => 'block_comparison']);
         $result = $this->pipeline()->ask($student, 'compare n2 and j2', []);
 
         $this->assertSame('answered', $result['outcome']);
@@ -761,14 +812,16 @@ class WorkstationAssistantTest extends TestCase
         $this->assertStringContainsString('N2: 1 seats, 1 occupied', $result['answer']);
     }
 
-    public function test_block_comparison_keyword_rule_matches_without_a_model_call(): void
+    public function test_block_comparison_keyword_rule_matches_when_the_router_is_down(): void
     {
         $cgs = $this->cgs();
+        FakeModel::forceUnavailable();
 
-        $result = $this->pipeline()->ask($cgs, 'how crowded is block N2 compared with J2', []);
+        $this->pipeline()->ask($cgs, 'how crowded is block N2 compared with J2', []);
 
         $this->assertEmpty(FakeModel::answerCalls());
-        $log = AssistantLog::latest('occurred_at')->first();
+        $log = AssistantLog::latest('id')->first();
         $this->assertSame('block_comparison', $log->lookup);
+        $this->assertSame(AssistantLog::ANSWERED_BY_RULE_FALLBACK, $log->answered_by);
     }
 }

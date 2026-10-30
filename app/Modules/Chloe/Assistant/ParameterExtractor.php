@@ -77,6 +77,12 @@ final class ParameterExtractor
     {
         $needle = mb_strtolower($text);
 
+        // The interrogative guard: "how many seat will be release in
+        // november" asks for data, it does not ask us to release anything.
+        if (QuestionNormaliser::isInterrogative($needle)) {
+            return false;
+        }
+
         if (self::hasGuidanceLeadIn($needle) && self::seatNumber($text) === null) {
             return false;
         }

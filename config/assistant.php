@@ -117,6 +117,23 @@ return [
 
     'max_question_length' => 300,
 
+    /**
+     * Part 2.5/4.5: below this confidence, or whenever the router also
+     * named an alternative, the answer comes with up to 3 "Did you
+     * mean" chips instead of (or alongside) a bare answer. Chosen from
+     * the evaluation run so that a WRONG answer at or above this
+     * threshold is rare (Part 4.5's own target: at most 3%).
+     *
+     * Measured 2026-10-30, gemini-3.5-flash-lite, 259 router-answered
+     * questions: the model reports 0.8 or more for every answer (250 of
+     * 259 at 0.9-1.0, 98.8% correct there), so every threshold from 0.5
+     * to 0.9 gives the same 1.2% wrong-and-confident and 12.7% showing
+     * chips (most chips come from a named alternative, not from low
+     * confidence). 0.9 is the most cautious value at no measured cost;
+     * 0.95 would add chips to 14.3% of answers for no fewer errors.
+     */
+    'router_min_confidence' => (float) env('ASSISTANT_ROUTER_MIN_CONFIDENCE', 0.9),
+
     /*
     |--------------------------------------------------------------------------
     | Keyword rules
@@ -235,9 +252,13 @@ return [
     | seat 252") -- an action/manipulation phrase only counts when none of
     | these lead-ins are also present.
     */
+    // Every phrase here must be recognised by one Catalogue action entry's
+    // own 'pattern', and every action entry by at least one phrase here --
+    // CatalogueTest checks both directions.
     'action_phrases' => [
         'release', 'reassign', 'assign', 'mark as collected', 'mark as returned',
         'mark the key', 'set maintenance', 'terminate', 'withdraw',
+        'restore', 'release hold', 'cancel my key request', 'approve', 'delete',
     ],
 
     'manipulation_phrases' => [

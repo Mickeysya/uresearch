@@ -6,6 +6,7 @@ use App\Modules\Chloe\Assistant\AssistantModel;
 use App\Modules\Chloe\Assistant\FakeModel;
 use App\Modules\Chloe\Assistant\GeminiModel;
 use App\Modules\Chloe\Console\Commands\AssistantAsk;
+use App\Modules\Chloe\Console\Commands\AssistantCatalogue;
 use App\Modules\Chloe\Console\Commands\AssistantCheck;
 use App\Modules\Chloe\Console\Commands\AssistantEvaluate;
 use App\Modules\Chloe\Console\Commands\AssistantLogList;
@@ -75,6 +76,7 @@ class ModuleProvider extends ServiceProvider
                 WorkstationDemoSeed::class,
                 WorkstationDemoClear::class,
                 AssistantCheck::class,
+                AssistantCatalogue::class,
                 AssistantAsk::class,
                 AssistantLogList::class,
                 AssistantEvaluate::class,

@@ -36,6 +36,9 @@ class FakeModel implements AssistantModel
     /** @var array<int, array{text: ?string, error_code: ?string}> queued composeAggregate() outcomes. */
     protected static array $aggregateQueue = [];
 
+    /** @var array<int, array<string, mixed>> queued route() outcomes, consumed in order -- same success-override/queueFailure() shape as $answerQueue. */
+    protected static array $routeQueue = [];
+
     protected static bool $unavailable = false;
 
     protected static ?string $unavailableErrorCode = null;
@@ -57,14 +60,48 @@ class FakeModel implements AssistantModel
     /** @var array<int, array{maskedQuestion: string, lookupName: string, result: array, model: string, timeoutSeconds: int}> */
     protected static array $aggregateCalls = [];
 
+    /**
+     * Every route() call's full payload -- Part 3's privacy-payload
+     * tests assert on exactly this (the masked question(s), the role's
+     * catalogue, the few-shots, today's date -- nothing else).
+     *
+     * @var array<int, array{maskedQuestion: string, recentMaskedQuestions: array<int, string>, catalogue: array, fewShots: array, todayLabel: string, model: string, timeoutSeconds: int}>
+     */
+    protected static array $routeCalls = [];
+
     public static function reset(): void
     {
         self::$answerQueue = [];
         self::$aggregateQueue = [];
+        self::$routeQueue = [];
         self::$unavailable = false;
         self::$unavailableErrorCode = null;
         self::$answerCalls = [];
         self::$aggregateCalls = [];
+        self::$routeCalls = [];
+    }
+
+    /** @return array<int, array{maskedQuestion: string, recentMaskedQuestions: array<int, string>, catalogue: array, fewShots: array, todayLabel: string, model: string, timeoutSeconds: int}> */
+    public static function routeCalls(): array
+    {
+        return self::$routeCalls;
+    }
+
+    public static function routeCallCount(): int
+    {
+        return count(self::$routeCalls);
+    }
+
+    /** @param array<string, mixed> $overrides any of id/params/confidence/alternatives/clarify -- unset keys get a sane default. */
+    public static function queueRoute(array $overrides): void
+    {
+        self::$routeQueue[] = ['__failure' => false] + $overrides + ['id' => 'out_of_scope', 'params' => [], 'confidence' => 1.0, 'alternatives' => [], 'clarify' => null];
+    }
+
+    /** Queues ONE failed route() attempt with the given error code, consumed in order alongside queueRoute(). */
+    public static function queueRouteFailure(string $errorCode): void
+    {
+        self::$routeQueue[] = ['__failure' => true, 'error_code' => $errorCode];
     }
 
     /** @return array<int, array{maskedQuestion: string, recentMaskedQuestions: array<int, string>, knowledgeText: string, lookupCatalogue: array, model: string, timeoutSeconds: int, topicHints: array<int, string>}> */
@@ -151,6 +188,47 @@ class FakeModel implements AssistantModel
         }
 
         return ['kind' => 'out_of_scope', 'answer' => null, 'sources' => [], 'lookup' => null, 'params' => [], 'outcome' => 'ok', 'error_code' => null];
+    }
+
+    public function route(string $maskedQuestion, array $recentMaskedQuestions, array $catalogue, array $fewShots, string $todayLabel, string $model, int $timeoutSeconds): array
+    {
+        self::$routeCalls[] = [
+            'maskedQuestion' => $maskedQuestion,
+            'recentMaskedQuestions' => $recentMaskedQuestions,
+            'catalogue' => $catalogue,
+            'fewShots' => $fewShots,
+            'todayLabel' => $todayLabel,
+            'model' => $model,
+            'timeoutSeconds' => $timeoutSeconds,
+        ];
+
+        if (self::$unavailable) {
+            return ['outcome' => 'unavailable', 'id' => null, 'params' => [], 'confidence' => null, 'alternatives' => [], 'clarify' => null, 'error_code' => self::$unavailableErrorCode];
+        }
+
+        if (self::$routeQueue !== []) {
+            $next = array_shift(self::$routeQueue);
+
+            if ($next['__failure']) {
+                return ['outcome' => 'unavailable', 'id' => null, 'params' => [], 'confidence' => null, 'alternatives' => [], 'clarify' => null, 'error_code' => $next['error_code']];
+            }
+
+            unset($next['__failure']);
+
+            return [...$next, 'outcome' => 'ok', 'error_code' => null];
+        }
+
+        // No queued response -- a deterministic, no-network default: try
+        // to match a catalogue id mentioned verbatim in the question,
+        // else out_of_scope. Good enough for a test that only cares
+        // about privacy/plumbing, not routing accuracy.
+        foreach (array_column($catalogue, 'id') as $id) {
+            if (str_contains($maskedQuestion, str_replace('_', ' ', $id))) {
+                return ['outcome' => 'ok', 'id' => $id, 'params' => [], 'confidence' => 0.9, 'alternatives' => [], 'clarify' => null, 'error_code' => null];
+            }
+        }
+
+        return ['outcome' => 'ok', 'id' => 'out_of_scope', 'params' => [], 'confidence' => 0.9, 'alternatives' => [], 'clarify' => null, 'error_code' => null];
     }
 
     public function composeAggregate(string $maskedQuestion, string $lookupName, array $result, string $model, int $timeoutSeconds): array
