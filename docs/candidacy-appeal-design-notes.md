@@ -102,3 +102,26 @@ Live data on 2026-11-01: 1 appeal (approved, 6 months, 4 history rows, 1 memo do
 ## 6. Phase plan and commits
 Phase 0 notes (this file) -> Phase 1 data model + backfill -> Phase 2 service, policy, signatures, notifications, commands ->
 Phase 3 memo PDF -> Phase 4 pages, live updates, demo data. One local commit per finished phase.
+
+## 7. Phase 1 delivered (data model)
+
+Tables added (prefix `candidacy_`): `candidacy_departments`, `candidacy_staff_profiles`, `candidacy_staff_assignments`,
+`candidacy_appeals`, `candidacy_appeal_documents`, `candidacy_appeal_events` (append-only), `candidacy_appeal_approvals`.
+The legacy `candidacy_appeal_publications` table was **extended** (nullable `candidacy_appeal_id`, `title`, `venue`, `status`,
+`year`; the legacy columns became nullable) because the brief's name for the new publications table was already taken by it.
+`study_candidacies` gained `department_id`, `original_expiry_date`, `extension_months_used` (CHECK 0..12).
+`candidacy_appeals.legacy_application_id` (unique) is the only column beyond the brief: it makes the backfill idempotent.
+`study_candidacy_id` is nullable on an appeal because a demo profile has no `study_candidacies` row.
+
+Rules enforced by the database (MySQL: CHECK constraints and generated unique keys `open_key` / `draft_key` / `single_holder_key`;
+the SQLite test database: partial unique indexes and RAISE triggers carrying the same constraint names): one open appeal and one
+draft per student, `(student, sequence_no)` unique, sequence 1..12, requested/approved months 1..12, exactly one identity per appeal,
+one chair and at most one dean per department, allowance 0..12.
+
+Helpers: `StudyCandidacy::allowanceUsed()` is `max(extension_months_used, cumulative_extension_months)` until the legacy counter is
+retired; `hasOpenAppeal()` looks at the new table and at not-yet-imported legacy applications; `hasFinalRejection()` honours both
+`final_outcome = rejected_final` and the legacy `last_rejection_at`.
+
+Backfill on the development database (2026-11-01): 1 department, 4 staff profiles, 2 assignments (lecturer, chair), 1 appeal
+(`SCA-22001001-01`, approved, 6 months, memo kept), 5 events, 4 approvals, 1 publication, 3 candidacies updated; nothing unmapped;
+`candidacy:check-allowance` reports OK for all 3 candidacies.

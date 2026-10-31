@@ -6,6 +6,8 @@ use App\Modules\Chloe\Assistant\AssistantModel;
 use App\Modules\Chloe\Assistant\FakeModel;
 use App\Modules\Chloe\Assistant\GeminiModel;
 use App\Modules\Chloe\Console\Commands\AssistantAsk;
+use App\Modules\Chloe\Console\Commands\BackfillCandidacyAppeals;
+use App\Modules\Chloe\Console\Commands\CheckCandidacyAllowance;
 use App\Modules\Chloe\Console\Commands\AssistantCatalogue;
 use App\Modules\Chloe\Console\Commands\AssistantCheck;
 use App\Modules\Chloe\Console\Commands\AssistantEvaluate;
@@ -85,6 +87,8 @@ class ModuleProvider extends ServiceProvider
                 WorkstationDemoClear::class,
                 AssistantCheck::class,
                 AssistantCatalogue::class,
+                BackfillCandidacyAppeals::class,
+                CheckCandidacyAllowance::class,
                 AssistantAsk::class,
                 AssistantLogList::class,
                 AssistantEvaluate::class,
