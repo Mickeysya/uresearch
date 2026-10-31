@@ -2,9 +2,9 @@
 
 namespace App\Modules\Chloe\Http\Controllers\Cgs;
 
+use App\Modules\Chloe\Models\CandidacyAppeal;
 use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Core\Http\Controllers\Controller;
-use App\Modules\Core\Models\Application;
 
 /**
  * This module's three operational widgets (Pending Appeals / Appeal Status
@@ -17,17 +17,17 @@ class CandidacyOperationsController extends Controller
 {
     public function index()
     {
-        $pendingAppeals = Application::where('module_type', 'candidacy_appeal')
-            ->where('status', Application::STATUS_PENDING)
-            ->with('student')
-            ->latest('submitted_at')
+        // The appeal tables of this module are the single source of truth.
+        $pendingAppeals = CandidacyAppeal::whereIn('status', array_values(CandidacyAppeal::STAGE_STATUS))
+            ->with(['student', 'demoProfile'])
+            ->orderByRaw('COALESCE(stage_entered_at, submitted_at) asc')
             ->get();
 
         $appealStatusSummary = [
-            'Pending' => Application::where('module_type', 'candidacy_appeal')->where('status', Application::STATUS_PENDING)->count(),
-            'Returned' => Application::where('module_type', 'candidacy_appeal')->where('status', Application::STATUS_RETURNED)->count(),
-            'Approved' => Application::where('module_type', 'candidacy_appeal')->where('status', Application::STATUS_APPROVED)->count(),
-            'Rejected' => Application::where('module_type', 'candidacy_appeal')->where('status', Application::STATUS_REJECTED)->count(),
+            'Pending' => $pendingAppeals->count(),
+            'Returned' => CandidacyAppeal::where('status', CandidacyAppeal::STATUS_RETURNED)->count(),
+            'Approved' => CandidacyAppeal::where('status', CandidacyAppeal::STATUS_APPROVED)->count(),
+            'Rejected' => CandidacyAppeal::where('status', CandidacyAppeal::STATUS_REJECTED)->count(),
         ];
 
         $nearExpiry = StudyCandidacy::where('status', StudyCandidacy::STATUS_ACTIVE)

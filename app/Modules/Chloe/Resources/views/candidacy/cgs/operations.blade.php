@@ -2,6 +2,8 @@
 
 @section('title', 'Candidacy Management')
 
+@include('chloe::candidacy.wca._assets')
+
 @section('content')
 <div class="card-container-inline">
     <x-core::page-header title="Candidacy Management">
@@ -29,14 +31,14 @@
             <div class="empty-state">No appeals currently pending.</div>
         @else
             <table class="recent-activity-table">
-                <thead><tr><th>#</th><th>Student</th><th>Stage</th><th>Submitted</th></tr></thead>
+                <thead><tr><th>Appeal No.</th><th>Student</th><th>Current step</th><th>Submitted</th></tr></thead>
                 <tbody>
-                    @foreach ($pendingAppeals as $application)
+                    @foreach ($pendingAppeals as $appeal)
                         <tr>
-                            <td>{{ $application->reference() }}</td>
-                            <td>{{ $application->student->name ?? '—' }}</td>
-                            <td>{{ $application->currentStage()?->label ?? '—' }}</td>
-                            <td>{{ $application->submitted_at?->format('j M Y') }}</td>
+                            <td><a href="{{ route('candidacy.appeals.show', $appeal) }}">{{ $appeal->displayNo() }}</a></td>
+                            <td>{{ $appeal->identity()?->name ?? '—' }}</td>
+                            <td>{{ \App\Modules\Chloe\Support\CandidacyAppealPresenter::currentStep($appeal) }}</td>
+                            <td>{{ $appeal->submitted_at?->format('j M Y') }}</td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -69,4 +71,5 @@
         @endif
     </div>
 </div>
+@include('chloe::candidacy.wca._assistant')
 @endsection

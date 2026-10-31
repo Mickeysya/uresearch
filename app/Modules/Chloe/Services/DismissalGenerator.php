@@ -41,7 +41,7 @@ class DismissalGenerator
         }
 
         $reason = match (true) {
-            $candidacy->last_rejection_at !== null => CandidacyDismissal::REASON_APPEAL_REJECTED,
+            $candidacy->hasFinalRejection() => CandidacyDismissal::REASON_APPEAL_REJECTED,
             $candidacy->remainingAppealMonths() <= 0 && $candidacy->candidacy_expiry_date->isPast() => CandidacyDismissal::REASON_EXTENSION_EXHAUSTED,
             $candidacy->candidacy_expiry_date->isPast() => CandidacyDismissal::REASON_EXPIRED_NO_APPEAL,
             default => null,

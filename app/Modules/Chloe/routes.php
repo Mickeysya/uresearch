@@ -1,7 +1,7 @@
 <?php
 
 use App\Modules\Chloe\Http\Controllers\CandidacyAppealController;
-use App\Modules\Chloe\Http\Controllers\CandidacyController;
+use App\Modules\Chloe\Http\Controllers\Candidacy\StudentAppealController;
 use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyDismissalController;
 use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyOperationsController;
 use App\Modules\Chloe\Http\Controllers\Cgs\WorkstationCatalogController;
@@ -110,13 +110,32 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
     | See app/Modules/Chloe/README.md.
     */
     Route::middleware('role:'.Role::STUDENT)->group(function () {
-        Route::get('/candidacy', [CandidacyController::class, 'status'])->name('candidacy.status');
+        Route::get('/candidacy', [StudentAppealController::class, 'status'])->name('candidacy.status');
+        Route::get('/candidacy/region', [StudentAppealController::class, 'statusRegion'])->name('candidacy.status.region');
 
-        Route::get('/candidacy-appeal/new', [CandidacyAppealController::class, 'create'])->name('candidacy-appeal.create');
-        Route::post('/candidacy-appeal', [CandidacyAppealController::class, 'store'])->name('candidacy-appeal.store');
-        Route::get('/candidacy-appeal/{application}/edit', [CandidacyAppealController::class, 'edit'])->name('candidacy-appeal.edit');
-        Route::post('/candidacy-appeal/{application}/resubmit', [CandidacyAppealController::class, 'resubmit'])->name('candidacy-appeal.resubmit');
+        Route::get('/candidacy/appeals/new', [StudentAppealController::class, 'start'])->name('candidacy.appeals.new');
+        Route::get('/candidacy/appeals/draft/{step}', [StudentAppealController::class, 'draft'])->whereNumber('step')->name('candidacy.appeals.draft');
+        Route::post('/candidacy/appeals/draft/{step}', [StudentAppealController::class, 'saveStep'])->whereNumber('step')->name('candidacy.appeals.draft.save');
+        Route::post('/candidacy/appeals/draft/submit/now', [StudentAppealController::class, 'submit'])->name('candidacy.appeals.submit');
+
+        Route::get('/candidacy/appeals/{appeal}/edit', [StudentAppealController::class, 'edit'])->whereNumber('appeal')->name('candidacy.appeals.edit');
+        Route::post('/candidacy/appeals/{appeal}/resubmit', [StudentAppealController::class, 'resubmit'])->whereNumber('appeal')->name('candidacy.appeals.resubmit');
+        Route::post('/candidacy/appeals/{appeal}/documents', [StudentAppealController::class, 'uploadDocument'])->whereNumber('appeal')->name('candidacy.appeals.documents.store');
+        Route::delete('/candidacy/appeals/{appeal}/documents/{document}', [StudentAppealController::class, 'removeDocument'])->whereNumber(['appeal', 'document'])->name('candidacy.appeals.documents.destroy');
+
+        // The old student URLs keep working: they land on the new pages.
+        Route::get('/candidacy-appeal/new', fn () => redirect()->route('candidacy.appeals.new'))->name('candidacy-appeal.create');
+        Route::post('/candidacy-appeal', fn () => redirect()->route('candidacy.status'))->name('candidacy-appeal.store');
+        Route::get('/candidacy-appeal/{application}/edit', fn () => redirect()->route('candidacy.status'))->name('candidacy-appeal.edit');
+        Route::post('/candidacy-appeal/{application}/resubmit', fn () => redirect()->route('candidacy.status'))->name('candidacy-appeal.resubmit');
     });
+
+    // Every role that may see an appeal uses the same detail page; CandidacyAppealPolicy decides (403 otherwise).
+    Route::get('/candidacy/appeals/{appeal}', [StudentAppealController::class, 'show'])->whereNumber('appeal')->name('candidacy.appeals.show');
+    Route::get('/candidacy/appeals/{appeal}/region', [StudentAppealController::class, 'showRegion'])->whereNumber('appeal')->name('candidacy.appeals.region');
+    Route::get('/candidacy/appeals/{appeal}/documents/{document}', [StudentAppealController::class, 'downloadDocument'])->whereNumber(['appeal', 'document'])->name('candidacy.appeals.documents.download');
+    Route::get('/candidacy/appeals/{appeal}/memo', [StudentAppealController::class, 'downloadMemo'])->whereNumber('appeal')->name('candidacy.appeals.memo');
+    Route::get('/candidacy/live/version', [StudentAppealController::class, 'liveVersion'])->middleware('throttle:workstation-live')->name('candidacy.live.version');
 
     // The chain's four approver roles share one queue/decide pair — queueFor()
     // already scopes each to only the stage(s) that role owns.

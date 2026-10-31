@@ -2,6 +2,8 @@
 
 @section('title', 'Dismissal List')
 
+@include('chloe::candidacy.wca._assets')
+
 @section('content')
 <div class="card-container-inline">
     <x-core::page-header title="Dismiss Exceeded Study Candidacy" :back="route('candidacy.cgs.operations')" :back-history="false">
@@ -69,4 +71,5 @@
         @endif
     </div>
 </div>
+@include('chloe::candidacy.wca._assistant')
 @endsection

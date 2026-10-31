@@ -7,10 +7,15 @@ use App\Modules\Chloe\Models\CandidacyAppealApproval;
 use App\Modules\Chloe\Services\CandidacyMemoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\BuildsCandidacyWorld;
+use Tests\Support\MakesUsers;
+use Tests\TestCase;
 
 /** Phase 3: the memo is made on Dean approval, is a real A4 PDF carrying every stamp, and can be verified. */
-class CandidacyMemoTest extends CandidacyAppealServiceTest
+class CandidacyMemoTest extends TestCase
 {
+    use BuildsCandidacyWorld;
+    use MakesUsers;
     use RefreshDatabase;
 
     protected function approved(): CandidacyAppeal

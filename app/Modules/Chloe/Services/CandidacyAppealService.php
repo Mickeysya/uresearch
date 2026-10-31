@@ -105,7 +105,7 @@ class CandidacyAppealService
                 ?? new CandidacyAppeal(['student_id' => $student->id, 'study_candidacy_id' => $candidacy->id, 'status' => CandidacyAppeal::STATUS_DRAFT, 'round' => 1]);
 
             $this->fillSections($appeal, $data);
-            $appeal->department_id = $candidacy->department_id;
+            $appeal->department_id = ($data['department_id'] ?? null) ?: ($appeal->department_id ?? $candidacy->department_id);
             $appeal->save();
             $this->syncPublications($appeal, $data);
 
@@ -127,7 +127,7 @@ class CandidacyAppealService
             $candidacy = StudyCandidacy::whereKey($appeal->study_candidacy_id)->lockForUpdate()->firstOrFail();
             $this->assertComplete($appeal, $candidacy);
 
-            $department = $candidacy->department;
+            $department = $appeal->department_id ? \App\Modules\Chloe\Models\CandidacyDepartment::find($appeal->department_id) : $candidacy->department;
             $supervisor = $department
                 ? CandidacyStaffDirectory::lecturers($department)->firstWhere('id', $appeal->supervisor_profile_id)
                 : null;
@@ -136,6 +136,10 @@ class CandidacyAppealService
 
             if (! $supervisor || ! $chair || ! $dean) {
                 throw ValidationException::withMessages(['supervisor_profile_id' => 'Pick your supervisor from your department. If the list is empty or has no Chair or Dean, contact the Centre for Graduate Studies.']);
+            }
+
+            if ($department && $candidacy->department_id !== $department->id) {
+                $candidacy->forceFill(['department_id' => $department->id])->save(); // the student's record follows the department they chose
             }
 
             $sequence = ((int) CandidacyAppeal::where('student_id', $appeal->student_id)->max('sequence_no')) + 1;
@@ -666,7 +670,7 @@ class CandidacyAppealService
 
     public function stageLabel(string $stage): string
     {
-        return ['supervisor' => 'Lecturer/Supervisor', 'chair' => 'Chair of Department', 'cgs' => 'CGS verification', 'dean' => 'Dean of PGR'][$stage] ?? ucfirst($stage);
+        return ['supervisor' => 'Lecturer/Supervisor', 'chair' => 'Programme Chair', 'cgs' => 'CGS Verification', 'dean' => 'Dean of PGR'][$stage] ?? ucfirst($stage);
     }
 
     /** @param list<string> $reasons */

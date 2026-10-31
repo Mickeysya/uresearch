@@ -33,6 +33,12 @@ class CandidacyAppealTest extends TestCase
         ]);
     }
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->markTestSkipped('Superseded by CandidacyAppealServiceTest / CandidacyStudentPagesTest: the old engine-based student flow now redirects to the new pages. Deleted in Stage 4.');
+    }
+
     protected function candidacyFor(User $student, array $overrides = []): StudyCandidacy
     {
         return StudyCandidacy::create(array_merge([
