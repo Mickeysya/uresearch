@@ -189,6 +189,7 @@ class CandidacyDemoDataTest extends TestCase
 
         $after = $this->counts();
         $this->assertSame(0, CandidacyAppeal::count());
+        $this->assertSame(0, \App\Modules\Chloe\Models\CandidacyAppealEvent::count(), 'the history went with its appeals (cascade)');
         $this->assertSame(0, CandidacyStaffProfile::where('is_demo', true)->count());
         $this->assertSame(0, CandidacyDepartment::where('is_demo', true)->count());
         $this->assertSame($real['users'], $after['users']);

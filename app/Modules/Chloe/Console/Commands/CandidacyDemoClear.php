@@ -36,7 +36,7 @@ class CandidacyDemoClear extends Command
 
         DB::transaction(function () use ($appeals, $profiles) {
             $ids = $appeals->pluck('id')->all();
-            DB::table('candidacy_appeal_events')->whereIn('candidacy_appeal_id', $ids)->orWhereIn('staff_profile_id', $profiles->pluck('id'))->delete();
+            // history rows are never deleted by code: they go with their appeal / profile through the foreign keys' ON DELETE CASCADE
             DB::table('candidacy_appeal_approvals')->whereIn('candidacy_appeal_id', $ids)->delete();
             DB::table('candidacy_appeal_documents')->whereIn('candidacy_appeal_id', $ids)->delete();
             DB::table('candidacy_appeal_publications')->whereIn('candidacy_appeal_id', $ids)->delete();
