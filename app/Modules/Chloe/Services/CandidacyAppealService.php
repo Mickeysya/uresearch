@@ -557,7 +557,7 @@ class CandidacyAppealService
     {
         $vars = ['reasons' => $this->reasonLabels($stage, $decision, $reasons), 'remarks' => $remark ?? '—', 'decision' => $decision === 'verified' ? 'verified' : $decision, 'stage' => $this->stageLabel($stage)];
 
-        $this->afterCommit[] = function () use ($appeal, $decision, $vars) {
+        $this->afterCommit[] = function () use ($appeal, $decision, $vars, $stage) {
             $appeal = $appeal->fresh();
 
             match ($decision) {
@@ -566,7 +566,7 @@ class CandidacyAppealService
                     : [$this->notifyStudent($appeal, 'approved_student', $vars), $this->notifyStage($appeal, 'turn')],
                 'returned' => [
                     $this->notifyStudent($appeal, 'returned_student', $vars, approved: false),
-                    $this->notifyPeople($appeal, 'returned_info', $vars, approved: false),
+                    $this->notifyReturnCircle($appeal, $stage, $vars),
                 ],
                 'rejected' => [
                     $this->notifyStudent($appeal, 'rejected_student', $vars, approved: false),
@@ -574,6 +574,27 @@ class CandidacyAppealService
                 ],
             };
         };
+    }
+
+    /**
+     * Who hears about a return besides the student: the lecturer always; the Chair when CGS or the Dean returned it; CGS when the
+     * Dean returned it. (A lecturer's return informs only the student and the lecturer; a Chair's also only the lecturer; ...)
+     *
+     * @param array<string,string> $vars
+     */
+    protected function notifyReturnCircle(CandidacyAppeal $appeal, string $stage, array $vars): void
+    {
+        $people = collect([$appeal->supervisorProfile?->user]);
+
+        if (in_array($stage, ['cgs', 'dean'], true)) {
+            $people->push($appeal->chairProfile?->user);
+        }
+
+        if ($stage === 'dean') {
+            $people = $people->merge($this->cgsUsers());
+        }
+
+        $this->send($people->filter()->unique('id')->values(), 'returned_info', $this->vars($appeal, $vars, staff: true), approved: false);
     }
 
     protected function notifyFinal(CandidacyAppeal $appeal): void

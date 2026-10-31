@@ -204,3 +204,9 @@ so a dynamic segment at the same depth must always be added after every
 static route at that depth, or it swallows the static one first (a student
 route can't reach an approver-only route anyway, but the queue route needs
 to bind before the dynamic one gets a chance to).
+
+## Study Candidacy Appeal (rebuilt)
+
+The appeal no longer runs on the shared WorkflowEngine: it has its own tables, state machine (`Services/CandidacyAppealService`), policy
+(`Policies/CandidacyAppealPolicy`), memo (`Services/CandidacyMemoService`) and Approval Portal. See `docs/candidacy-appeal-inventory.md`.
+The older sections of this README that mention `CandidacyAppealController` describe the replaced flow.

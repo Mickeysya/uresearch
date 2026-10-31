@@ -44,7 +44,7 @@
         <tr>
             <td class="label">Through</td><td class="sep">:</td>
             <td>
-                {{ $by('chair')?->full_name ?? $appeal->chairProfile?->full_name }} (Chair of Department)
+                {{ $by('chair')?->full_name ?? $appeal->chairProfile?->full_name }} (Programme Chair)
                 @if ($by('chair'))<div class="stamp">@if ($signatures->get('chair'))<div class="sig"><img src="{{ $signatures->get('chair') }}" alt=""></div>@endif<div class="txt">{{ $stamp($by('chair')) }}</div></div>@endif
             </td>
         </tr>

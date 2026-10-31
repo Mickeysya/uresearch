@@ -1,0 +1,158 @@
+# Study Candidacy Appeal: inventory
+
+Module: `App\Modules\Chloe` (owner: Chloe). Written 2026-11-01 after the appeal rebuild. The design reasoning is in
+[candidacy-appeal-design-notes.md](candidacy-appeal-design-notes.md); this file is the reference for what exists.
+
+## 1. Where the data lives
+
+Our module is the single source of truth. New appeals are **never** written to the shared `applications`, `approval_history` or
+`application_documents` tables, so they cannot appear in the old Core approval queue. Nothing here edits a shared table.
+
+| Table | Holds |
+|---|---|
+| `candidacy_departments` | `code`, `name`, `active`, `is_demo` |
+| `candidacy_staff_profiles` | a person who signs: `user_id` (null for staff without a login), `full_name`, `designation`, `department_id`, `signature_path`, `signature_sha256`, `signature_updated_at`, `is_demo` |
+| `candidacy_staff_assignments` | which profile is `lecturer` / `chair` / `dean` of which department (one chair and at most one dean per department) |
+| `study_candidacies` (existing, extended) | `department_id`, `original_expiry_date`, `extension_months_used` (CHECK 0..12) beside the existing expiry, status and legacy `cumulative_extension_months` |
+| `candidacy_appeals` | the appeal: `appeal_no`, `sequence_no`, identity (`student_id` or `demo_profile_id`), `study_candidacy_id`, `department_id`, the named people (`supervisor_/chair_/dean_profile_id`), `status`, `current_stage`, `round`, `returned_by_stage`, `needs_cgs_recheck`, `requested_months`, `approved_months`, `expiry_at_submission`, `new_expiry_date`, sections A, B and D, `declaration_accepted_at`, timestamps (`submitted_at`, `stage_entered_at`, `last_action_at`, `closed_at`), `final_outcome`, memo path/name/time, `legacy_application_id`, `is_demo` |
+| `candidacy_appeal_publications` (existing, extended) | section C rows: `title`, `venue`, `status`, `year` (the legacy `description` column stays for imported rows) |
+| `candidacy_appeal_documents` | official form and supporting files: `kind`, `original_name`, generated `stored_path`, `mime`, `size`, `sha256`, `round_uploaded` |
+| `candidacy_appeal_events` | **append-only** history (see section 3) |
+| `candidacy_appeal_approvals` | one row per decision of a round: approver snapshot (`full_name`, `designation`), `signature_snapshot_path` + hash, `decision`, `documents_complete`, `remark`, `decided_at`, `verification_code` |
+
+Database-level rules (MySQL CHECKs and generated unique keys; SQLite partial unique indexes and triggers in the test database, same
+names): one open appeal and one draft per student, `(student, sequence_no)` unique, sequence 1..12, months 1..12, exactly one identity per
+appeal, allowance 0..12. Files live on the private `local` disk under `candidacy/` (signatures, signature copies, documents, memos); none under `public/`.
+
+## 2. Statuses and transitions
+
+`draft -> with_supervisor -> with_chair -> with_cgs -> with_dean -> approved | rejected`; any stage can send the appeal to `returned`;
+`returned -> (resubmit) -> the returning stage`, except a **Dean return**, which resubmits to `with_cgs` (flag `needs_cgs_recheck`) and then
+goes back to the Dean; a returned appeal whose candidacy expires is set to `closed_expired` by the daily job. `approved`, `rejected`
+(final) and `closed_expired` are end states. There is **no withdraw** anywhere. Only `CandidacyAppealService` writes `status` / `current_stage`.
+
+| Stage | Who | Actions |
+|---|---|---|
+| supervisor | the appeal's named lecturer | Approve, Return |
+| chair | the department's chair, fixed at submission | Approve, Return |
+| cgs | any CGS role (`candidacy.cgs_roles`) | Verify (needs "documents complete = yes"), Return |
+| dean | the department's dean (default dean when it has none) | Approve, Return, Reject (final) |
+
+Dean approval (one transaction): approved months = requested months (the Dean cannot change them), new expiry = current expiry + months
+(calendar months, no overflow), `study_candidacies.candidacy_expiry_date` and `extension_months_used` updated, the memo built, history written.
+Dean rejection is final: `final_outcome = rejected_final`, `study_candidacies.last_rejection_at` set (the dismissal logic then lists the candidate with the reason "appeal rejected").
+
+## 3. Rules, numbers and where to change them
+
+| Rule | Where |
+|---|---|
+| eligibility: active candidacy; expiry today or later (Asia/Kuala_Lumpur); no open appeal; no earlier final rejection; at least 1 month left; 1..remaining months | `CandidacyAppealService::eligibilityProblems()` |
+| allowance 12 months | `config('candidacy.max_extension_months')` |
+| waiting markers: gold dot from 5 days, red from 10 (no reminders, no escalation) | `config('candidacy.waiting_marker')` |
+| CGS roles (view every appeal, act at the CGS stage): `cgs`, `non_exec_cgs`, `senior_exec_cgs`, `manager_cgs`, `senior_director_cgs` | `config('candidacy.cgs_roles')` (the four are `Role::cgsTeam()`, the roles the Workstation CGS routes accept) |
+| signature required to approve (lecturer, chair, dean; optional for CGS) | `config('candidacy.signature_required_stages')` |
+| signature image limits (PNG/JPG, 1 MB, min 200x60, resized into 600x200) | `config('candidacy.signature')` |
+| return / reject reason lists per stage; "Other" needs a remark | `config('candidacy.reasons')` |
+| e-mail wording and placeholders | `config('candidacy.mail')` |
+| default dean when a department has none | `config('candidacy.default_dean_profile')`, else the first `dean_pgr` user's profile |
+| documents: official form `.xlsx` required, up to 4 supporting (`xlsx`/`pdf`/`docx`), 10 MB each, extension **and** content checked | `CandidacyDocumentService` |
+| history is append-only (events cannot be updated or deleted by code; a test scans the code) | `CandidacyAppealEvent` |
+
+## 4. Routes and who may use them
+
+All routes send `Cache-Control: no-store, max-age=0` (`NoStoreResponse`). Access is decided by `CandidacyAppealPolicy` for every route
+(`view`, `edit`, `act`, `downloadMemo`, `downloadDocument`, `viewSignature`); anything else is 403.
+
+| Route | Who |
+|---|---|
+| `/candidacy` (My Study Candidacy), `/candidacy/appeals/new`, `/candidacy/appeals/draft/{1-4}`, documents upload/remove, `/candidacy/appeals/{id}/edit` + `resubmit` | students (own appeals only) |
+| `/candidacy/appeals/{id}` (detail), `.../region`, `.../documents/{doc}`, `.../memo`, `/candidacy/live/version` | the student, the appeal's named people, CGS roles (drafts: the student only; the memo: only once approved) |
+| `/candidacy/portal` (queue), `/candidacy/portal/appeals/{id}` (review), `.../decide` | supervisor, chair, dean, CGS roles; the policy limits each to their own appeals |
+| `/candidacy/signature` (My Signature), `.../image` | the same roles; the image only to its owner |
+| `/cgs/candidacy`, `/cgs/candidacy/dismissals` | CGS team (read the new tables; Pending Appeals link to the detail page) |
+| `/candidacy-appeal/*` (old URLs) | redirect to the new pages; nothing can be decided through them |
+
+Navigation uses the module mechanism, not a shared edit: `CandidacyAppealWorkflow::queueRoute()` = `candidacy.portal.queue` and
+`ProvidesLinks::links()` adds "My Appeal Signature" (and "Candidacy Appeals" for CGS roles that own no engine stage).
+
+## 5. Notifications (e-mail and bell together; the subject always starts with the appeal number)
+
+| Event | Goes to | Template |
+|---|---|---|
+| submitted / resubmitted / approved at a step | the person (or all CGS users) now holding the appeal | `turn` |
+| approved or verified at a step | the student | `approved_student` |
+| returned | the student (reasons, remarks, "resubmit before {{expiry_date}}") | `returned_student` |
+| returned | the lecturer; the Chair too after a CGS or Dean return; CGS too after a Dean return | `returned_info` |
+| Dean rejection (final) | the student; all named people and CGS | `rejected_student`, `rejected` |
+| Dean approval | the student (bold approved months and new expiry, **memo attached**); all named people and CGS | `final_student`, `final_info` |
+| closed because not resubmitted | the student | `closed_expired` |
+
+A demo student has no login: e-mail only. A failed e-mail never undoes a committed decision. The queue worker must be restarted after a
+config change (it keeps the old config in memory).
+
+## 6. Memo, signatures and verification
+
+* **Memo** (Dompdf, A4, black and white, Tahoma): page 1 memorandum (To the Dean; Through the Chair and the Supervisor, each with signature
+  and stamp; From; Date; body; student declaration stamp; APPROVED block with months, new expiry, the Dean's signature and stamp); page 2
+  endorsement and approval record (step, name and designation, decision, date and time GMT+8, verification code; CGS appears here).
+* **Stamp**: `Digitally approved by {name}, {designation} on {dd Mon yyyy, hh:mm} (GMT+8) · Ref {appeal_no} · Code {code}`.
+* **File name**: `<appeal_no>_<Student Name>_<StudentID>_Memo - Appeal for Extension.pdf`; stored as `candidacy/memos/<id>-<random>.pdf`.
+* **Signatures**: each approver uploads one image on "My Signature"; it is decoded with GD, re-encoded as PNG, resized, stored under a generated
+  name. Every decision stores its own **copy** (`signature_snapshot_path`), so replacing a signature never changes an issued memo.
+* **Verification code**: first 10 characters (upper case) of HMAC-SHA256 over appeal number, stage, profile id and decision time, keyed with the app key.
+  `php artisan candidacy:verify-memo <appeal_no>` prints OK or MISMATCH per stage (code and signature copy).
+
+## 7. Commands and schedules
+
+| Command | Purpose |
+|---|---|
+| `candidacy:close-expired-appeals [--dry-run]` | closes returned appeals whose candidacy expired; idempotent; **daily 07:20 Asia/Kuala_Lumpur**, registered from `ModuleProvider` (`routes/console.php` is shared) |
+| `candidacy:verify-memo {appeal_no}` | OK / MISMATCH per stage |
+| `candidacy:check-allowance` | `extension_months_used` and the expiry date against the approved appeals |
+| `candidacy:backfill-appeals` | one-time, idempotent import of the legacy engine appeal(s) |
+| `candidacy:demo-seed` / `candidacy:demo-clear` | 6 departments with demo staff and 41 demo appeals / remove exactly those (see section 9) |
+| `candidacy:remind`, `candidacy:generate-dismissals` | unchanged (reminders and dismissals were not part of this work) |
+
+## 8. Track My Application: decision
+
+The sidebar item "Track My Applications" has two sub-items. **Overview** is Core's (`applications.index`). **My Candidacy** is the route
+`candidacy.status`, which belongs to this module, so priority 1 applied: our page renders the summary list (appeal number, status, current step,
+requested and approved months, last updated, "View full details"). Core's Overview is untouched and still lists the one legacy engine appeal
+(see limitations).
+
+## 9. Demo data and accounts
+
+`candidacy:demo-seed` is deterministic and idempotent. It uses the existing Workstation demo students and **does not change their expiry
+dates** (so "loan valid until" and the seat totals 315 / 152 / 157 / 3 / 3 are unchanged); the history is written backwards from each
+student's current expiry. Result: 41 demo appeals (3 drafts; waiting at supervisor 6, chair 6, CGS 5 (one re-check), Dean 4, with 0 to 14
+waiting days; returned by each of the four stages; 9 approved with memos including one student with two approvals and one at exactly 12 of
+12 months; 3 final rejections; 1 closed-expired), plus the legacy one (42 in total). Every demo row has `is_demo`; `candidacy:demo-clear` removes only those, their
+files and the demo staff, never accounts or real signatures.
+
+Real accounts mapped to Computer & Information Sciences (emails only; passwords are never recorded):
+
+| Role | Email |
+|---|---|
+| lecturer | `supervisor@utp.edu.my` (Dr. Aisyah Rahman) |
+| chair | `chair@utp.edu.my` (Dr. Lim Wei Chun) |
+| dean | `dean@utp.edu.my` (Prof. Dr. Hafiz Osman; default dean and CIS dean) |
+| CGS | `cgs@utp.edu.my`, `manager@utp.edu.my`, `director@utp.edu.my`, `seniorexec@utp.edu.my` |
+
+These accounts have no signature on file: upload one on "My Appeal Signature" before approving. The seeded `cgs@utp.edu.my` password does
+not work and was not reset.
+
+## 10. Shared files touched
+
+None edited. New files only: `config/candidacy.php`, `public/css/chloe-candidacy.css`, `public/js/chloe-candidacy.js`, our module, our tests
+and docs. Two existing Workstation tests got a pinned clock (`WorkstationInsightsTest`, `WorkstationDemoSeedTest`; test code only).
+
+## 11. Known limitations
+
+1. Core's **Overview** page still lists the one legacy engine appeal (a real Core application). Smallest change: filter
+   `module_type = 'candidacy_appeal'` out of `ApplicationTrackingController::index()`.
+2. Core's approver **dashboard badges** count only engine queue rows, so they do not include the new appeals; the portal queue shows the real counts.
+3. `study_candidacy_id` is nullable on an appeal (demo students have no `study_candidacies` row), so their allowance is derived from their appeals.
+4. The legacy `cumulative_extension_months` is kept and merged with `extension_months_used` (the larger wins) until it is retired.
+5. The floating assistant icon can sit on top of the last column of a table at the far right (same behaviour as the Workstation widget).
+6. The required-documents list is generic (official form + up to four supporting files) and is to be reviewed.
+7. The shared stylesheet colours the CGS stat numbers and the shared "Back" link blue; the CGS candidacy pages keep that existing design.

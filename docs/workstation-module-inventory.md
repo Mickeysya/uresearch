@@ -23,8 +23,8 @@ chain — no `WorkflowEngine`/`Stage` gating, unlike every other module.
 | `POST /workstation/locker-key` | `LockerKeyController::store` |
 | `POST /workstation/locker-key/cancel` | `LockerKeyController::cancel` |
 | `GET /workstation/terms`, `/workstation/terms/pdf` | `WorkstationTermsController::show`, `downloadPdf` — outside `auth`, every outbound email links here |
-| `GET /candidacy` | `CandidacyController::status` |
-| `GET /candidacy-appeal/new`, `POST /candidacy-appeal`, `GET .../{application}/edit`, `POST .../{application}/resubmit` | `CandidacyAppealController` |
+| `GET /candidacy` | `Candidacy\StudentAppealController::status` (rebuilt; see candidacy-appeal-inventory.md) |
+| `GET /candidacy-appeal/new`, `POST /candidacy-appeal`, `GET .../{application}/edit`, `POST .../{application}/resubmit` | redirect to the new student pages (`candidacy.appeals.*`) |
 
 ### CGS (middleware `role:` the CGS team roles)
 
@@ -64,7 +64,7 @@ All handled by `Cgs/WorkstationLiveController`; see "Live updates" below.
 
 ### Appeal approval chain (uses `WorkflowEngine`, unlike the rest of the module)
 
-`GET /candidacy-appeal/queue`, `POST /candidacy-appeal/{application}/decide` — roles Supervisor, Chair, Non-Exec CGS, Dean PGR.
+`GET /candidacy-appeal/queue`, `POST /candidacy-appeal/{application}/decide` — now redirect to the Approval Portal (`/candidacy/portal`); roles Supervisor, Chair, the CGS roles, Dean PGR.
 
 ### Header pattern per page (Back and Home)
 
@@ -83,8 +83,8 @@ The standard header is `x-core::page-header` (`layout.css` `.page-header*`): a p
 | CGS Insights | `workstation.cgs.insights` | yes | yes | |
 | CGS Catalogue | `workstation.cgs.catalog` | yes -> landing | yes -> landing | replaced the single "Back to Workstation Management" button |
 | Candidacy: My Study Candidacy | `candidacy.status` | no | no | sidebar entry, first page of its flow |
-| Candidacy: appeal form / revise and resubmit | `candidacy-appeal.create` / `.edit` | yes -> candidacy status / My Applications | no | Back added; the candidacy flow has no Home target of its own, none was invented |
-| Candidacy: approver queue | `candidacy-appeal.queue` | no | no | the shared Core queue partial, left alone |
+| Candidacy: appeal form / revise and resubmit | `candidacy.appeals.new` / `.draft` / `.edit` | yes -> My Study Candidacy |
+| Candidacy: approver queue | `candidacy.portal.queue` (Approval Portal, our own pages) | no | no | the old Core queue is no longer used for candidacy appeals |
 | CGS Candidacy Management | `candidacy.cgs.operations` | no | no | entry page, left alone |
 | CGS Dismissals | `candidacy.cgs.dismissals` | yes -> Candidacy Management | no | Back added |
 
@@ -164,7 +164,7 @@ All mail classes implement `ShouldQueue`, in `app/Modules/Chloe/Notifications/`.
 | `WorkstationStatusNotice::TERMINATION_WITHDRAWN` | "Workstation Termination Notice Withdrawn" | Student | Withdraw Termination |
 | `CandidacyReminder` | "Study Candidacy Expiry Reminder — {date}" | Student | Monthly, from 3 months before expiry |
 | `CandidacyDismissed` | "Study Candidacy — Dismissal Confirmed" | Student | CGS confirms a dismissal |
-| `CandidacyAppealApproved` | "Study Candidacy Appeal Approved — New Expiry Date" | Student | Dean approves the appeal chain |
+| `CandidacyAppealNotice` (templates in `config/candidacy.php`) | subject starts with the appeal number | Student / named approvers / CGS | each step, return, Dean decision (replaces `CandidacyAppealApproved`) |
 
 CGS performs every seat action through an in-page banner only — confirmed
 in `WorkstationManagementController`: no notification is sent to CGS for
@@ -187,6 +187,9 @@ these same notifications, it was not traced in this pass.
 | `workstation:demo-seed` | Give untracked Occupied seats a demo student; seed 3 unreturned-key seats | — |
 | `workstation:demo-clear` | Remove every demo profile and their requests/keys/History rows | — |
 | `workstation:demo-login` | Create/reset the "Chloe Ching" test student (`chloe_<matric>@utp.edu.my`) | `--gender=`, `--expiry-date=` |
+| `candidacy:close-expired-appeals [--dry-run]` | Close returned appeals whose candidacy expired (daily 07:20 Asia/Kuala_Lumpur) | — |
+| `candidacy:verify-memo {appeal_no}` | Check the verification codes of an approved appeal memo | — |
+| `candidacy:demo-seed` / `candidacy:demo-clear` | Demo departments, staff and appeals (see candidacy-appeal-inventory.md) | — |
 | `candidacy:remind` | Send the next due monthly candidacy-expiry reminder | — |
 | `candidacy:generate-dismissals` | Generate the dismissal candidate list for CGS review | — |
 | `assistant:check` | One trivial request to the configured provider; reports OK/FAILED | `--allow-fallback` |

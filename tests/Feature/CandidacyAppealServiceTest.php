@@ -460,4 +460,52 @@ class CandidacyAppealServiceTest extends TestCase
         $this->assertSame('20 7 * * *', $event->expression);
         $this->assertSame('Asia/Kuala_Lumpur', (string) $event->timezone);
     }
+
+    // ---- the return notification matrix ----------------------------------------------------------------------
+
+    /** @return list<string> the e-mails of everyone who got a notice of $template (the student's e-mail is the test student's) */
+    protected function recipients(string $template): array
+    {
+        $out = [];
+        foreach (\App\Modules\Core\Models\User::all() as $user) {
+            if (Notification::sent($user, CandidacyAppealNotice::class)->contains(fn ($n) => $n->template === $template)) {
+                $out[] = $user->role;
+            }
+        }
+        sort($out);
+
+        return $out;
+    }
+
+    public function test_a_return_informs_exactly_the_people_of_the_matrix(): void
+    {
+        $this->user(Role::MANAGER_CGS, ['email' => 'mgr@test.my']); // another CGS user, who must hear only of a Dean return
+
+        $appeal = $this->submitted();
+        $this->service->decide($this->lecturer, $appeal, 'return', ['documents_missing']);
+        $this->assertSame([Role::STUDENT], $this->recipients('returned_student'));
+        $this->assertSame([Role::SUPERVISOR], $this->recipients('returned_info'));
+
+        Notification::fake();
+        $appeal = $this->service->resubmit($this->student, $appeal->fresh());
+        $appeal = $this->service->decide($this->lecturer, $appeal, 'approve');
+        Notification::fake();
+        $this->service->decide($this->chairUser, $appeal, 'return', ['documents_missing']);
+        $this->assertSame([Role::SUPERVISOR], $this->recipients('returned_info')); // the lecturer, not the Chair himself
+        $this->assertSame([Role::STUDENT], $this->recipients('returned_student'));
+
+        Notification::fake();
+        $appeal = $this->service->resubmit($this->student, $appeal->fresh());
+        $appeal = $this->service->decide($this->chairUser, $appeal, 'approve');
+        Notification::fake();
+        $this->service->decide($this->cgsUser, $appeal, 'return', ['documents_unclear']);
+        $this->assertSame([Role::CHAIR, Role::SUPERVISOR], $this->recipients('returned_info'));
+
+        Notification::fake();
+        $appeal = $this->service->resubmit($this->student, $appeal->fresh());
+        $appeal = $this->service->decide($this->cgsUser, $appeal, 'verify', documentsComplete: true);
+        Notification::fake();
+        $this->service->decide($this->deanUser, $appeal, 'return', ['clarification_needed']);
+        $this->assertSame([Role::CHAIR, Role::MANAGER_CGS, Role::NON_EXEC_CGS, Role::SUPERVISOR], $this->recipients('returned_info'));
+    }
 }

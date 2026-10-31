@@ -96,7 +96,7 @@ class StudyCandidacy extends Model
      * has ever been rejected -- at any stage, not only by the Dean. Either
      * one permanently blocks a new appeal. A Return is deliberately not
      * this: it only reopens that same application for editing, it never
-     * touches last_rejection_at. See CandidacyAppealController::decide().
+     * touches last_rejection_at. See CandidacyAppealService::decide().
      */
     public function canAppeal(): bool
     {
