@@ -4,8 +4,8 @@
 
 @section('content')
 <div class="card-container-inline">
-    <x-core::page-header title="Workstation Catalogue" subtitle="Manage the locations and seats behind Workstation Management.">
-        <a href="{{ route('workstation.cgs.operations') }}"><button type="button">Back to Workstation Management</button></a>
+    <x-core::page-header title="Workstation Catalogue" subtitle="Manage the locations and seats behind Workstation Management." :back="route('workstation.cgs.operations')" :back-history="false">
+        <a href="{{ route('workstation.cgs.operations') }}"><button type="button">Home</button></a>
     </x-core::page-header>
 
     <div class="card card-wide">

@@ -10,11 +10,24 @@
 @section('content')
     @include('chloe::workstation._assistant-widget')
 
+{{--
+    The standard Workstation header (x-core::page-header): a plain-text "← Back" above the title (only
+    when there is somewhere to go back to -- never for a guest) and the blue Home button at the top
+    right. Back/Home targets per visitor: Support\WorkstationHeaderLinks. The title replaces the two
+    headings the card used to carry ("Postgraduate Workstation" / "Term of Use").
+--}}
+{{-- Page-scoped: the header sits in a column the same width as the (unchanged) 680px card, so the two line up. --}}
+<style>
+    .wst-column { width: 100%; max-width: 680px; }
+</style>
+
 <div class="card-container">
+    <div class="wst-column">
+    <x-core::page-header title="Postgraduate Workstation Term of Use" :back="$backUrl" :back-history="true">
+        <a href="{{ $homeUrl }}"><button type="button">Home</button></a>
+    </x-core::page-header>
+
     <div class="card card-wide">
-        <h2>Postgraduate Workstation</h2>
-        <h3 style="margin-top: 0;">Term of Use</h3>
-        <div class="card-divider"></div>
 
         <ol style="line-height: 1.6;">
             <li>Any loan requisition of postgraduate workstation located at Block J &amp; Block N shall be made by students through Centre for Graduate Studies (CGS) of Universiti Teknologi PETRONAS (UTP).</li>
@@ -73,5 +86,25 @@
             </p>
         @endunless
     </div>
+    </div>
 </div>
+
+@if ($backUrl)
+    {{-- Back = real browser history when the previous page is another page of THIS application; otherwise the link just follows its href (also what happens with JavaScript off). --}}
+    <script @cspNonce>
+        document.querySelectorAll('[data-browser-back]').forEach(function (link) {
+            link.addEventListener('click', function (event) {
+                if (! document.referrer || window.history.length < 2) return;
+
+                var previous;
+                try { previous = new URL(document.referrer); } catch (e) { return; }
+
+                if (previous.origin === window.location.origin && previous.pathname !== window.location.pathname) {
+                    event.preventDefault();
+                    window.history.back();
+                }
+            });
+        });
+    </script>
+@endif
 @endsection

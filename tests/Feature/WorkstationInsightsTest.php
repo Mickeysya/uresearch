@@ -819,30 +819,102 @@ class WorkstationInsightsTest extends TestCase
         $this->assertStringContainsString("word.toLowerCase() + ' by ' + word.toLowerCase()", $js);
     }
 
-    /**
-     * Final polish PART 1.2: overflow:hidden on the container used to
-     * clip a button's own top/bottom whenever its text needed more than
-     * one line. The container no longer clips (overflow: visible);
-     * each button instead sizes off height:100% of the 36px container
-     * and its own inner border-radius, so nothing can be cut.
-     */
-    public function test_the_segmented_control_buttons_are_equal_width_with_no_clipping(): void
+    /** The page's own <style> block, without Blade comments (they are already gone) -- the CSS this contract is written against. */
+    protected function pageCss(): string
     {
         $html = $this->html();
         $tokenPos = strpos($html, '--wsi-blue:');
         $styleStart = strrpos(substr($html, 0, $tokenPos), '<style>');
-        $styleEnd = strpos($html, '</style>', $tokenPos);
-        $css = substr($html, $styleStart, $styleEnd - $styleStart);
 
-        $this->assertStringContainsString('.wsi-segctl {', $css);
-        $segctlBlock = substr($css, strpos($css, '.wsi-segctl {'), 200);
-        $this->assertStringContainsString('overflow: visible', $segctlBlock);
-        $this->assertStringContainsString('height: 36px', $segctlBlock);
+        return substr($html, $styleStart, strpos($html, '</style>', $tokenPos) - $styleStart);
+    }
 
-        $this->assertStringContainsString('.wsi-segctl button {', $css);
-        $segctlButtonBlock = substr($css, strpos($css, '.wsi-segctl button {'), 300);
-        $this->assertStringContainsString('flex: 1 1 0', $segctlButtonBlock);
-        $this->assertStringContainsString('height: 100%', $segctlButtonBlock);
+    /** The declarations of the rule whose selector is EXACTLY $selector (e.g. ".wsi-segctl button"), as a name => value map. */
+    protected function ruleDeclarations(string $css, string $selector): array
+    {
+        $this->assertSame(1, preg_match('/(?:^|[}\s])'.preg_quote($selector, '/').'\s*\{([^}]*)\}/', $css, $m), "No rule for '{$selector}'.");
+
+        $declarations = [];
+        foreach (array_filter(array_map('trim', explode(';', $m[1]))) as $declaration) {
+            [$name, $value] = array_map('trim', explode(':', $declaration, 2));
+            $declarations[$name] = $value;
+        }
+
+        return $declarations;
+    }
+
+    /**
+     * LAYOUT FIX. The shared stylesheet (css/uresearch.css) gives every button margin-top 16px and
+     * margin-right 8px (and makes it a centred inline-flex), which pushed the segmented control's
+     * buttons 13px out of the bottom of their rounded container. The control is therefore written with
+     * every property explicit; this is the contract that keeps it that way.
+     */
+    public function test_the_segmented_control_css_contract(): void
+    {
+        $css = $this->pageCss();
+
+        $box = $this->ruleDeclarations($css, '.wsi-segctl');
+        foreach ([
+            'display' => 'inline-flex', 'align-items' => 'center', 'box-sizing' => 'border-box', 'height' => '40px',
+            'margin' => '0', 'padding' => '3px', 'border' => '1px solid #C9D6E3', 'border-radius' => '8px',
+            'overflow' => 'visible', 'vertical-align' => 'middle',
+        ] as $name => $value) {
+            $this->assertSame($value, $box[$name] ?? null, ".wsi-segctl {$name}");
+        }
+
+        $button = $this->ruleDeclarations($css, '.wsi-segctl button');
+        foreach ([
+            'display' => 'inline-flex', 'align-items' => 'center', 'justify-content' => 'center', 'flex' => '1 1 0',
+            'min-width' => '72px', 'height' => '100%', 'min-height' => '0', 'margin' => '0', 'padding' => '0 14px',
+            'position' => 'static', 'top' => 'auto', 'transform' => 'none', 'line-height' => '1',
+            'font-size' => '13px', 'font-weight' => '600', 'white-space' => 'nowrap',
+            'border' => '1px solid transparent', 'border-radius' => '6px', 'box-sizing' => 'border-box',
+        ] as $name => $value) {
+            $this->assertSame($value, $button[$name] ?? null, ".wsi-segctl button {$name}");
+        }
+        $this->assertArrayHasKey('color', $button);
+        $this->assertArrayHasKey('background', $button);
+
+        $selected = $this->ruleDeclarations($css, '.wsi-segctl button[aria-pressed="true"]');
+        $this->assertSame('#004B85', $selected['background']);
+        $this->assertSame('#fff', $selected['color']);
+    }
+
+    public function test_the_segmented_control_markup_is_three_plain_buttons_in_one_container(): void
+    {
+        $html = $this->html();
+
+        $this->assertMatchesRegularExpression('/<div class="wsi-segctl" id="wsi-grain-control" role="group" aria-label="Time grain">\s*(<button type="button" data-grain="(year|quarter|month)" aria-pressed="false">\w+<\/button>\s*){3}<\/div>/', $html);
+        $this->assertDoesNotMatchRegularExpression('/id="wsi-grain-control"[^>]*\sstyle=/', $html);
+    }
+
+    /** Box-inside-container, as far as it can be proven without a browser: no control may keep the shared margin or carry a negative one. */
+    public function test_every_control_class_writes_its_own_margin_and_none_is_negative(): void
+    {
+        $css = $this->pageCss();
+
+        foreach (['.wsi-link', '.wsi-reset-link', '.wsi-chip-x', '.wsi-selected-toggle', '.wsi-kpi-card', '.wsi-tile', '.wsi-legend-item', '.wsi-page-btn', '.wsi-drill-btn', '.wsi-segctl button', '.wsi-breadcrumb button'] as $selector) {
+            $rule = $this->ruleDeclarations($css, $selector);
+            $this->assertArrayHasKey('margin', $rule, "'{$selector}' must write its own margin (the shared button rule adds margin-top 16px / margin-right 8px)");
+            $this->assertDoesNotMatchRegularExpression('/-\d/', $rule['margin'], "'{$selector}' has a negative margin, so its box can leave its container");
+        }
+
+        // The cards and tiles are stacked blocks, not the shared centred flex row.
+        foreach (['.wsi-kpi-card', '.wsi-tile'] as $selector) {
+            $this->assertSame('block', $this->ruleDeclarations($css, $selector)['display'], $selector);
+        }
+
+        // The legend's hover pill no longer bleeds out through a negative margin.
+        $this->assertSame('0', $this->ruleDeclarations($css, '.wsi-legend-item')['margin']);
+        $this->assertStringNotContainsString('margin: -2px -4px', $css);
+    }
+
+    public function test_the_forecast_line_labels_only_all_show_when_there_is_room(): void
+    {
+        $js = file_get_contents(public_path('js/chloe-workstation-insights.js'));
+
+        $this->assertStringContainsString('labelsFit: colW >= 30', $js);
+        $this->assertStringContainsString('(pointInfo.defaultVisible || pointInfo.labelsFit)', $js);
     }
 
     // -------------------------------------------------------------

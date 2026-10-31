@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="card-container-inline">
-    <x-core::page-header title="Dismiss Exceeded Study Candidacy">
+    <x-core::page-header title="Dismiss Exceeded Study Candidacy" :back="route('candidacy.cgs.operations')" :back-history="false">
         <form method="POST" action="{{ route('candidacy.cgs.dismissals.refresh') }}">
             @csrf
             <button type="submit">Refresh List</button>

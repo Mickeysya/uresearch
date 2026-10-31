@@ -2,6 +2,7 @@
 
 namespace App\Modules\Chloe\Http\Controllers;
 
+use App\Modules\Chloe\Support\WorkstationHeaderLinks;
 use App\Modules\Core\Http\Controllers\Controller;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -28,8 +29,12 @@ class WorkstationTermsController extends Controller
 
     public function show()
     {
+        $links = WorkstationHeaderLinks::forCurrentVisitor();
+
         return view('chloe::workstation.terms', [
             'hasOriginalPdf' => self::findOriginalPdf() !== null,
+            'homeUrl' => $links['home'],
+            'backUrl' => $links['back'],
         ]);
     }
 

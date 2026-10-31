@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="card-container-inline">
-    <x-core::page-header title="Revise and Resubmit: Appeal #{{ $application->id }}" />
+    <x-core::page-header title="Revise and Resubmit: Appeal #{{ $application->id }}" :back="route('applications.index')" :back-history="false" />
 
     <div class="card card-wide">
         @if ($lastReturn)

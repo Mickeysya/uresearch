@@ -130,6 +130,9 @@
          active) is one step down from that, so it gets one: back to the
          unfiltered landing page, clearing the search and every filter. --}}
     <x-core::page-header title="Workstation Management" :back="$mode === 'results' ? route('workstation.cgs.operations') : null">
+        @if ($mode === 'results')
+            <a href="{{ route('workstation.cgs.operations') }}"><button type="button">Home</button></a>
+        @endif
         <a href="{{ route('workstation.cgs.insights') }}"><button type="button" class="btn-secondary">Insights</button></a>
         <a href="{{ route('workstation.cgs.catalog') }}"><button type="button">Manage the seat catalogue</button></a>
     </x-core::page-header>

@@ -1454,7 +1454,10 @@
             svgLine.appendChild(label);
             var defaultVisible = showEveryLabel || i % 2 === 0;
             if (!defaultVisible) label.style.opacity = '0';
-            forecastCache.points[pt.p.key] = { dot: dot, label: label, value: pt.p.projected_available, defaultVisible: defaultVisible };
+            // A lit point shows its label even when the every-second-point rule would skip it -- but only
+            // if neighbouring labels cannot collide: labels are ~28px wide, so below ~30px between points
+            // only the every-second labels may show (the dot still grows and the tooltip still has the value).
+            forecastCache.points[pt.p.key] = { dot: dot, label: label, value: pt.p.projected_available, defaultVisible: defaultVisible, labelsFit: colW >= 30 };
         });
         forecastCache.path = path;
 
@@ -1543,7 +1546,7 @@
                 // Round 8 PART 3.5: a lit point ALWAYS shows its label,
                 // even if it would normally be skipped by the every-
                 // second-point rule; otherwise fall back to that rule.
-                pointInfo.label.style.opacity = lit ? '1' : (anyHighlightActive() ? '0' : (pointInfo.defaultVisible ? '1' : '0'));
+                pointInfo.label.style.opacity = lit ? ((pointInfo.defaultVisible || pointInfo.labelsFit) ? '1' : '0') : (anyHighlightActive() ? '0' : (pointInfo.defaultVisible ? '1' : '0'));
             }
         });
     }

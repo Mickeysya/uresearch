@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="card-container-inline">
-    <x-core::page-header title="Study Candidacy Appeal"
+    <x-core::page-header title="Study Candidacy Appeal" :back="route('candidacy.status')" :back-history="false"
                          subtitle="Your candidacy expires {{ $candidacy->candidacy_expiry_date->format('j M Y') }}. You may request up to {{ $candidacy->remainingAppealMonths() }} more month(s) of extension (12-month cumulative maximum)." />
 
     <div class="card card-wide">

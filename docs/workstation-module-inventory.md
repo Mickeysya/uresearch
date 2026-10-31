@@ -66,6 +66,28 @@ All handled by `Cgs/WorkstationLiveController`; see "Live updates" below.
 
 `GET /candidacy-appeal/queue`, `POST /candidacy-appeal/{application}/decide` — roles Supervisor, Chair, Non-Exec CGS, Dean PGR.
 
+### Header pattern per page (Back and Home)
+
+The standard header is `x-core::page-header` (`layout.css` `.page-header*`): a plain-text "← Back" above the title (`:back`) and the blue "Home" button in the actions slot. Audited 2026-10-31.
+
+| Page | Route | Back | Home | Notes |
+|---|---|---|---|---|
+| Student Workstation home | `workstation.select` | no | no | first page of the flow, left alone |
+| Student Block (rooms) | `workstation.rooms` | yes -> home | yes -> home | |
+| Student Room (seats) | `workstation.seats` | yes -> block | yes -> home | |
+| Term of Use | `workstation.terms` | student -> home, CGS -> CGS landing, other roles -> dashboard; **hidden for a guest** | student/guest -> `workstation.select` (a guest lands on the sign-in page), CGS -> CGS landing, other roles -> dashboard | public (email links). `Support/WorkstationHeaderLinks`. Back uses browser history when the previous page is a page of this application, otherwise follows its `href` (also with JavaScript off). The Download PDF control is unchanged. |
+| Seat-confirmation result (email link: confirmed / already used / expired / invalid) | `workstation.confirm` | no (nothing of ours to go back to) | yes | plus its existing "Go to Workstation" button |
+| CGS landing | `workstation.cgs.operations` | no | no | first page of the flow, left alone |
+| CGS search / filter results | `workstation.cgs.operations?...` | yes -> landing | yes -> landing | Home added |
+| CGS Block / Room / Seat Details | `workstation.cgs.block` / `.room` / `.seat` | yes | yes | |
+| CGS Insights | `workstation.cgs.insights` | yes | yes | |
+| CGS Catalogue | `workstation.cgs.catalog` | yes -> landing | yes -> landing | replaced the single "Back to Workstation Management" button |
+| Candidacy: My Study Candidacy | `candidacy.status` | no | no | sidebar entry, first page of its flow |
+| Candidacy: appeal form / revise and resubmit | `candidacy-appeal.create` / `.edit` | yes -> candidacy status / My Applications | no | Back added; the candidacy flow has no Home target of its own, none was invented |
+| Candidacy: approver queue | `candidacy-appeal.queue` | no | no | the shared Core queue partial, left alone |
+| CGS Candidacy Management | `candidacy.cgs.operations` | no | no | entry page, left alone |
+| CGS Dismissals | `candidacy.cgs.dismissals` | yes -> Candidacy Management | no | Back added |
+
 ## (b) Seat and locker key statuses
 
 ### `Workstation.status` (`app/Modules/Chloe/Models/Workstation.php`)
@@ -423,5 +445,7 @@ attempted in this pass; if certainty matters, run
 - `WorkstationDemoSeedTest::test_termination_notice_dates_are_refreshed_on_rerun_not_duplicated`
   is date-dependent: run on a Friday, `travel(2)->days()` lands on Sunday and
   the working-day vacate-by date does not move, so it fails on Fridays.
+- At 720px and below every page that uses `x-core::page-header` (not only ours) has a header at least 384 px tall: the shared `.page-header-text { flex: 1 1 24rem }` becomes a minimum height once `.page-header` stacks into a column. It leaves a large gap above the content on phones. It is in the shared stylesheet, so it was not changed here; the one-line fix there would be `@media (max-width: 720px) { .page-header-text { flex-basis: auto; } }`.
+- The shared `button, .btn` rules in `css/uresearch.css` (margin-top 16px, margin-right 8px, display inline-flex, centred, bold, 14px) apply to every button. Insights buttons are therefore styled with every one of those properties written out on their own classes; a test (`WorkstationInsightsTest`) fails if one loses its explicit `margin`.
 - The CGS seat-card pages (a filtered results list, and a Room page) scroll sideways on a 390 px phone: the status badges and the "View" button inside `cgs/_seat-card.blade.php` extend past the viewport (measured identically before and after the live-update work, 475 px and 399 px wide). The landing page and Insights do not.
 - One legacy row in the development data (a `locker_keys` row from 11 Oct whose request was released) is still `requested`. Releasing a seat now cancels a pending key (`WorkstationAllocator::releaseSeat()`), so it cannot recur, and the stats bar no longer counts such a row; the row itself was left untouched.

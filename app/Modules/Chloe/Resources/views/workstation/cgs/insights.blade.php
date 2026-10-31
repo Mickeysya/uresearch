@@ -112,7 +112,7 @@
         .wsi-live-note[hidden] { display: none; }
         .wsi-link {
             font-family: var(--wsi-font); font-size: 13px; line-height: 1.4; font-weight: 400;
-            color: var(--wsi-blue); background: none; border: none; padding: 0;
+            color: var(--wsi-blue); background: none; border: none; margin: 0; padding: 0;
             text-decoration: underline; cursor: pointer;
         }
         .wsi-link:hover, .wsi-link:focus-visible { color: var(--wsi-blue-hover); }
@@ -138,7 +138,7 @@
         }
         .wsi-select:hover { background-color: var(--wsi-hover-bg); border-color: var(--wsi-hover-border); }
         .wsi-select:focus-visible { background-color: var(--wsi-selected-bg); border-color: var(--wsi-hover-border); }
-        .wsi-reset-link { align-self: center; padding-bottom: 12px; }
+        .wsi-reset-link { align-self: center; margin: 0; padding-bottom: 12px; }
         @media (max-width: 1099px) { .wsi-filter-row { flex-wrap: wrap; } }
 
         /* ---- Highlight strip (Power BI's cross-highlight state) ---- */
@@ -201,7 +201,7 @@
         .wsi-chip-x {
             width: 24px; height: 24px; flex-shrink: 0; border: none; background: none; cursor: pointer;
             color: var(--wsi-text-grey); font-family: var(--wsi-font); font-size: 15px; line-height: 1;
-            border-radius: 50%; padding: 0; margin-left: 2px;
+            border-radius: 50%; padding: 0; margin: 0 0 0 2px;
         }
         .wsi-chip-x:hover, .wsi-chip-x:focus-visible { background: var(--wsi-hover-bg); color: var(--wsi-text-dark); }
         .wsi-strip-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; margin-left: auto; }
@@ -212,7 +212,7 @@
         .wsi-selected-toggle {
             width: 100%; text-align: left; display: flex; align-items: center; justify-content: space-between;
             font-family: var(--wsi-font); font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--wsi-text-dark);
-            background: none; border: none; padding: 16px 24px; cursor: pointer;
+            background: none; border: none; margin: 0; padding: 16px 24px; cursor: pointer;
         }
         .wsi-selected-toggle:hover, .wsi-selected-toggle:focus-visible { background: var(--wsi-hover-bg); }
         .wsi-selected-body { padding: 0 24px 24px; }
@@ -237,7 +237,7 @@
         .wsi-selected-pager { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
         .wsi-page-btn {
             font-family: var(--wsi-font); font-size: 13px; font-weight: 600; line-height: 1.2; color: #fff;
-            background: var(--wsi-blue); border: 1px solid transparent; border-radius: 6px; padding: 8px 16px; cursor: pointer;
+            background: var(--wsi-blue); border: 1px solid transparent; border-radius: 6px; margin: 0; padding: 8px 16px; cursor: pointer;
         }
         .wsi-page-btn:disabled { background: var(--wsi-track); color: var(--wsi-text-grey); cursor: not-allowed; }
         .wsi-page-btn:hover:not(:disabled), .wsi-page-btn:focus-visible:not(:disabled) { background: var(--wsi-blue-hover); }
@@ -367,10 +367,12 @@
             below now sets background, border and colour explicitly, so
             nothing can ever fall through again.
         --}}
+        {{-- Shared css/uresearch.css also makes every button `display: inline-flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px`, which laid a card's value, label and link out as one sideways row. Stacked block layout and normal weight are written out explicitly here. --}}
         .wsi-kpi-card {
+            display: block; align-items: normal; justify-content: normal; font-size: 13px; font-weight: 400;
             min-width: 0; text-align: left; font-family: var(--wsi-font); color: var(--wsi-text-body);
             background: var(--wsi-surface); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-            padding: 16px 20px; border: 1px solid transparent; border-left: 4px solid var(--wsi-border-strong);
+            margin: 0; padding: 16px 20px; border: 1px solid transparent; border-left: 4px solid var(--wsi-border-strong);
             cursor: pointer; line-height: 1.3; outline: none;
         }
         .wsi-kpi-card:hover {
@@ -395,8 +397,9 @@
         {{-- Round 7 PART 4.4: the "Key returns" tiles -- same hover/selected treatment as a KPI card, in a real class (not inline styles) this time. --}}
         .wsi-tile-row { display: flex; gap: 14px; }
         .wsi-tile {
+            display: block; align-items: normal; justify-content: normal; font-size: 12px; font-weight: 400;
             flex: 1 1 0; min-width: 0; text-align: center; font-family: var(--wsi-font); color: var(--wsi-text-body);
-            background: var(--wsi-surface-sunken); border-radius: 10px; padding: 16px 6px;
+            background: var(--wsi-surface-sunken); border-radius: 10px; margin: 0; padding: 16px 6px;
             border: 1px solid transparent; border-top: 4px solid var(--wsi-border-strong);
             cursor: pointer; outline: none;
         }
@@ -405,7 +408,13 @@
         .wsi-tile-value { font-size: 26px; font-weight: 700; color: var(--wsi-text-dark); font-variant-numeric: tabular-nums; }
         .wsi-tile-value-urgent { color: var(--wsi-red); }
         .wsi-tile-ghost { display: block; font-size: 12px; font-weight: 400; color: var(--wsi-text-grey); margin-top: 2px; }
-        @media (max-width: 480px) { .wsi-tile-ghost { display: none; } }
+        {{-- 480px and below the three tiles are ~67px wide: tighter gap/padding and an 11px label so the word "Overdue" fits inside its own button. --}}
+        @media (max-width: 480px) {
+            .wsi-tile-ghost { display: none; }
+            .wsi-tile-row { gap: 8px; }
+            .wsi-tile { padding: 16px 3px; }
+            .wsi-tile-label { font-size: 11px; }
+        }
         .wsi-tile-label { font-size: 12px; color: var(--wsi-text-grey); margin-top: 4px; }
 
         /* ---- Shared chart primitives (PART 5) ------------------------ */
@@ -468,36 +477,45 @@
             purely off height:100%/line-height/box-sizing so nothing can
             ever be cut regardless of width.
         --}}
+        {{--
+            LAYOUT FIX (segmented control). The shared stylesheet (css/uresearch.css, "Buttons")
+            gives EVERY button `margin-top: 16px; margin-right: 8px` (plus padding, colour, font
+            and radius). Our old `.wsi-segctl button` rule never set a margin, so each button
+            was pushed 16px down inside its 32px-tall inner box and hung 13px below the rounded
+            container. Every property the shared rule sets is now written explicitly on our own
+            classes, with the selector `.wsi-segctl button` (class + element) outranking it, so
+            nothing here depends on, or edits, the shared file.
+        --}}
         .wsi-segctl {
-            display: inline-flex; height: 36px; padding: 2px; box-sizing: border-box;
-            border: 1px solid #C9D6E3; border-radius: 8px; overflow: visible; flex-shrink: 0;
+            display: inline-flex; align-items: center; box-sizing: border-box; height: 40px; margin: 0; padding: 3px;
+            background: #fff; border: 1px solid #C9D6E3; border-radius: 8px; overflow: visible;
+            vertical-align: middle; flex-shrink: 0;
         }
         .wsi-segctl button {
-            flex: 1 1 0; min-width: 72px; height: 100%; box-sizing: border-box;
-            font-family: var(--wsi-font); font-size: 13px; font-weight: 600; line-height: 32px; color: var(--wsi-text-grey);
-            background: #fff; border: none; border-radius: 6px; padding: 0 12px; cursor: pointer; outline: none;
-            white-space: nowrap;
+            display: inline-flex; align-items: center; justify-content: center; align-self: auto; flex: 1 1 0;
+            box-sizing: border-box; min-width: 72px; height: 100%; min-height: 0; margin: 0; padding: 0 14px;
+            position: static; top: auto; transform: none; vertical-align: middle;
+            font-family: var(--wsi-font); font-size: 13px; font-weight: 600; line-height: 1; white-space: nowrap;
+            color: var(--wsi-text-grey); background: #fff; border: 1px solid transparent; border-radius: 6px;
+            cursor: pointer; outline: none; box-shadow: none;
         }
         .wsi-segctl button:hover, .wsi-segctl button:focus-visible { background: var(--wsi-hover-bg); color: var(--wsi-text-dark); }
         .wsi-segctl button[aria-pressed="true"] { background: #004B85; color: #fff; }
         .wsi-segctl button[aria-pressed="true"]:hover, .wsi-segctl button[aria-pressed="true"]:focus-visible { background: var(--wsi-blue-hover); color: #fff; }
         {{--
-            480px and below: the 72px floor above is wider than this
-            card's own available width (measured ~230px at a 390px
-            viewport), which would force the row past its container --
-            dropping the floor here keeps the three buttons equal width
-            (flex: 1 1 0 alone already guarantees that) and still never
-            clipped, just narrower.
+            480px and below: the 72px floor does not fit this card's width next to its title, so the
+            control takes its own full-width row and the three buttons share it equally.
         --}}
         @media (max-width: 480px) {
-            .wsi-segctl button { min-width: 0; font-size: 11px; padding: 0 4px; }
+            .wsi-segctl { display: flex; width: 100%; }
+            .wsi-segctl button { min-width: 0; padding: 0 6px; font-size: 13px; }
         }
         .wsi-breadcrumb { font-size: 13px; color: var(--wsi-text-grey); margin: 0 0 8px; font-family: var(--wsi-font); }
-        .wsi-breadcrumb button { font-family: var(--wsi-font); font-size: 13px; color: var(--wsi-blue); background: none; border: none; padding: 0; text-decoration: underline; cursor: pointer; outline: none; }
+        .wsi-breadcrumb button { font-family: var(--wsi-font); font-size: 13px; color: var(--wsi-blue); background: none; border: none; margin: 0; padding: 0; text-decoration: underline; cursor: pointer; outline: none; }
         .wsi-breadcrumb button:hover, .wsi-breadcrumb button:focus-visible { color: var(--wsi-blue-hover); }
         .wsi-drill-btn {
             font-family: var(--wsi-font); font-size: 12px; font-weight: 600; line-height: 1.2; color: var(--wsi-blue);
-            background: var(--wsi-chip-bg); border: 1px solid var(--wsi-blue); border-radius: 6px; padding: 6px 12px; cursor: pointer; margin-top: 8px; outline: none;
+            background: var(--wsi-chip-bg); border: 1px solid var(--wsi-blue); border-radius: 6px; padding: 6px 12px; cursor: pointer; margin: 8px 0 0 0; outline: none;
         }
         .wsi-drill-btn:hover, .wsi-drill-btn:focus-visible { background: var(--wsi-hover-border); border-color: var(--wsi-blue-hover); color: var(--wsi-blue-hover); }
 
@@ -521,11 +539,11 @@
         .wsi-tooltip-sub { color: var(--wsi-slate); opacity: 1; font-size: 12px; margin-top: 4px; }
 
         {{-- Round 7 PART 4.1: one shared legend component, used by every chart that needs one. --}}
-        .wsi-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 12px; font-family: var(--wsi-font); }
+        .wsi-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; box-sizing: border-box; margin: 0 0 10px; padding: 0; font-family: var(--wsi-font); }
         .wsi-legend-caption { font-size: 12px; color: var(--wsi-text-grey); margin: 0 0 12px; font-family: var(--wsi-font); }
         .wsi-legend-item {
             display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--wsi-text-body);
-            background: none; border: none; padding: 2px 4px; margin: -2px -4px; border-radius: 6px; cursor: pointer; outline: none; line-height: 1.4;
+            background: none; border: none; padding: 2px 4px; margin: 0; border-radius: 6px; cursor: pointer; outline: none; line-height: 1.4;
         }
         .wsi-legend-item:not(.wsi-legend-static):hover, .wsi-legend-item:not(.wsi-legend-static):focus-visible { background: var(--wsi-hover-bg); color: var(--wsi-text-dark); }
         .wsi-legend-item.wsi-selected { background: var(--wsi-selected-bg); color: var(--wsi-text-dark); }

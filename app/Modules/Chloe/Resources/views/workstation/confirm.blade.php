@@ -12,6 +12,13 @@
 @section('content')
     @include('chloe::workstation._assistant-widget')
 
+{{-- Reached from an email: Home only, no Back (there is no previous page of ours to go back to). --}}
+<div class="card-container-inline">
+    <x-core::page-header title="Workstation Confirmation">
+        <a href="{{ \App\Modules\Chloe\Support\WorkstationHeaderLinks::forCurrentVisitor()['home'] }}"><button type="button">Home</button></a>
+    </x-core::page-header>
+</div>
+
 <div class="card-container">
     <div class="card">
         @if ($outcome === 'confirmed')
