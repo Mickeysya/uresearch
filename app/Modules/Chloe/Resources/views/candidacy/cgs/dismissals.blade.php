@@ -24,7 +24,7 @@
         @if ($pending->isEmpty())
             <div class="empty-state">No dismissal candidates awaiting review.</div>
         @else
-            <table class="recent-activity-table">
+            <div class="wca-table-wrap"><table class="recent-activity-table">
                 <thead><tr><th>Student</th><th>Reason</th><th>Candidacy Expiry</th><th>Generated</th><th>Action</th></tr></thead>
                 <tbody>
                     @foreach ($pending as $dismissal)
@@ -42,7 +42,7 @@
                         </tr>
                     @endforeach
                 </tbody>
-            </table>
+            </table></div>
         @endif
     </div>
 </div>
@@ -55,7 +55,7 @@
         @if ($confirmed->isEmpty())
             <div class="empty-state">Nothing confirmed yet.</div>
         @else
-            <table class="recent-activity-table">
+            <div class="wca-table-wrap"><table class="recent-activity-table">
                 <thead><tr><th>Student</th><th>Reason</th><th>Confirmed By</th><th>Confirmed On</th></tr></thead>
                 <tbody>
                     @foreach ($confirmed as $dismissal)
@@ -67,7 +67,7 @@
                         </tr>
                     @endforeach
                 </tbody>
-            </table>
+            </table></div>
         @endif
     </div>
 </div>

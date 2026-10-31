@@ -27,8 +27,8 @@
             <h3 id="wca-h-allow">Extension allowance</h3>
             <div class="wca-progress" role="img" aria-label="{{ $used }} of {{ $max }} months used"><span class="wca-w-{{ min($max, $used) }}"></span></div>
             <p><strong>{{ $used }} of {{ $max }} months used</strong> &middot; {{ $left }} month(s) left</p>
-            @if ($submittedCount > 0)
-                <p class="wca-muted wca-small">Appeal {{ $submittedCount + ($open || $draft ? 0 : 1) }} &middot; {{ $used }} of {{ $max }} months used</p>
+            @if ($used > 0 || $submittedCount > 1)
+                <p class="wca-muted wca-small">Appeal {{ max(1, $submittedCount + ($draft ? 1 : 0)) }} &middot; {{ $used }} of {{ $max }} months used</p>
             @endif
             <p class="wca-muted wca-small">The total extension across all appeals can never exceed {{ $max }} months.</p>
         </section>
@@ -72,7 +72,7 @@
             <p class="wca-empty">You have not started an appeal.</p>
         @else
             <div class="wca-table-wrap">
-                <table class="wca-table">
+                <table class="wca-table is-stack">
                     <thead><tr>
                         <th>Appeal No.</th><th>Submitted</th><th class="wca-num">Requested (months)</th><th class="wca-num">Approved (months)</th>
                         <th>Status</th><th>Current step (who)</th><th>Last updated</th><th></th>
@@ -80,14 +80,14 @@
                     <tbody>
                     @foreach ($appeals as $appeal)
                         <tr>
-                            <td>{{ $appeal->displayNo() }}</td>
-                            <td>{{ P::date($appeal->submitted_at) }}</td>
-                            <td class="wca-num">{{ $appeal->requested_months ?? '—' }}</td>
-                            <td class="wca-num">{{ $appeal->approved_months ?? '—' }}</td>
-                            <td>@include('chloe::candidacy.wca._status_badge', ['appeal' => $appeal])</td>
-                            <td>{{ P::currentStep($appeal) }}</td>
-                            <td>{{ P::date($appeal->last_action_at ?? $appeal->updated_at, 'j M Y, H:i') }}</td>
-                            <td>
+                            <td class="wca-nowrap" data-label="Appeal No.">{{ $appeal->displayNo() }}</td>
+                            <td class="wca-nowrap" data-label="Submitted">{{ P::date($appeal->submitted_at) }}</td>
+                            <td class="wca-num" data-label="Requested (months)">{{ $appeal->requested_months ?? '—' }}</td>
+                            <td class="wca-num" data-label="Approved (months)">{{ $appeal->approved_months ?? '—' }}</td>
+                            <td data-label="Status">@include('chloe::candidacy.wca._status_badge', ['appeal' => $appeal])</td>
+                            <td data-label="Current step (who)">{{ P::currentStep($appeal) }}</td>
+                            <td class="wca-nowrap" data-label="Last updated">{{ P::date($appeal->last_action_at ?? $appeal->updated_at, 'j M Y, H:i') }}</td>
+                            <td class="wca-nowrap" data-label="Details">
                                 @if ($appeal->isDraft())
                                     <a href="{{ route('candidacy.appeals.draft', ['step' => 1]) }}">Continue</a>
                                 @else

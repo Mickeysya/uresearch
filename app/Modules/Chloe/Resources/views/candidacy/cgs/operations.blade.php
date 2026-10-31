@@ -30,19 +30,19 @@
         @if ($pendingAppeals->isEmpty())
             <div class="empty-state">No appeals currently pending.</div>
         @else
-            <table class="recent-activity-table">
+            <div class="wca-table-wrap"><table class="recent-activity-table">
                 <thead><tr><th>Appeal No.</th><th>Student</th><th>Current step</th><th>Submitted</th></tr></thead>
                 <tbody>
                     @foreach ($pendingAppeals as $appeal)
                         <tr>
-                            <td><a href="{{ route('candidacy.appeals.show', $appeal) }}">{{ $appeal->displayNo() }}</a></td>
+                            <td><a class="wca-link" href="{{ route('candidacy.appeals.show', $appeal) }}">{{ $appeal->displayNo() }}</a></td>
                             <td>{{ $appeal->identity()?->name ?? '—' }}</td>
                             <td>{{ \App\Modules\Chloe\Support\CandidacyAppealPresenter::currentStep($appeal) }}</td>
                             <td>{{ $appeal->submitted_at?->format('j M Y') }}</td>
                         </tr>
                     @endforeach
                 </tbody>
-            </table>
+            </table></div>
         @endif
     </div>
 </div>

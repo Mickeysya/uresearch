@@ -6,7 +6,7 @@
 
 @section('content')
     <div class="wca-page">
-        <x-core::page-header title="Appeal {{ $appeal->displayNo() }}" subtitle="{{ $identity?->name }} ({{ $identity?->studentId }}) &middot; {{ $appeal->department?->name }}" :back="$portal ? route('candidacy.status') : (auth()->user()->isStudent() ? route('candidacy.status') : route('dashboard'))" :back-history="false">
+        <x-core::page-header title="Appeal {{ $appeal->displayNo() }}" subtitle="{{ $identity?->name }} ({{ $identity?->studentId }}) · {{ $appeal->department?->name }}" :back="$portal ? route('candidacy.status') : (auth()->user()->isStudent() ? route('candidacy.status') : route('dashboard'))" :back-history="false">
             <a href="{{ route('dashboard') }}" class="wca-home">Home</a>
         </x-core::page-header>
 
