@@ -146,7 +146,7 @@
 }
 @media (prefers-reduced-motion: reduce) { .wca-page * { animation: none !important; transition: none !important; } }
 .wca-doc-title { margin: 20px 0 8px; }
-.wca-page form { margin: 0; padding: 0; }
+.wca-page form:not(.wca-card) { margin: 0; padding: 0; }
 .wca-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 8px; padding: 0; }
 .wca-head-row h3 { margin: 0; }
 .wca-legend-top { margin: 12px 0 0; }
@@ -206,3 +206,4 @@
 .wca-sig-img { display: block; max-width: 100%; height: auto; max-height: 200px; margin: 0; padding: 0; }
 @media (max-width: 1100px) { .wca-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .wca-filter-grid { grid-template-columns: minmax(0, 1fr); } }
+.wca-page .wca-kv + p { margin-top: 12px; }
