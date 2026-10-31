@@ -51,15 +51,18 @@
             </p>
 
             @foreach ($typeFields as $key => $field)
-                <label for="{{ $key }}">
+                <label for="{{ $type }}-{{ $key }}">
                     {{ $field['label'] }}
                     @unless ($field['required'] ?? false)
                         <span style="color: var(--text-grey)">(optional)</span>
                     @endunless
                 </label>
-                <input type="text" name="{{ $key }}" id="{{ $key }}" maxlength="255"
-                       value="{{ old($key) }}"
+                {{-- 'max' from config keeps the letter on one page; the
+                     same number is validated in CertificationController. --}}
+                <input type="text" name="{{ $key }}" id="{{ $type }}-{{ $key }}" maxlength="{{ $field['max'] ?? 255 }}"
+                       value="{{ old($key) }}" data-char-counter aria-describedby="{{ $type }}-{{ $key }}-count"
                        class="@error($key) is-invalid @enderror">
+                <p class="char-count" id="{{ $type }}-{{ $key }}-count" aria-live="polite">{{ mb_strlen((string) old($key)) }} / {{ $field['max'] ?? 255 }} characters</p>
                 @error($key) <p class="field-error">{{ $message }}</p> @enderror
             @endforeach
             </fieldset>
@@ -69,10 +72,11 @@
             <p class="fstep-hint">Why you need the letter, and the evidence of work done.</p>
 
             <label for="purpose">Purpose <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="text" name="purpose" id="purpose" maxlength="255"
+            <input type="text" name="purpose" id="purpose" maxlength="{{ $purposeMax }}"
                    placeholder="e.g. scholarship application, visa renewal"
-                   value="{{ old('purpose') }}"
+                   value="{{ old('purpose') }}" data-char-counter aria-describedby="purpose-count"
                    class="@error('purpose') is-invalid @enderror">
+            <p class="char-count" id="purpose-count" aria-live="polite">{{ mb_strlen((string) old('purpose')) }} / {{ $purposeMax }} characters</p>
             @error('purpose') <p class="field-error">{{ $message }}</p> @enderror
 
             <div data-type-fields="GA" hidden>
@@ -96,6 +100,13 @@
 </div>
 @include('core::partials.form-stepper')
 
+@push('head')
+<style>
+    .char-count { margin: 2px 0 var(--space-3); font-size: var(--text-xs); color: var(--text-grey); text-align: right; }
+    .char-count.is-full { color: var(--warning-fg); font-weight: var(--weight-semi); }
+</style>
+@endpush
+
 @push('scripts')
 <script @cspNonce>
     (function () {
@@ -116,6 +127,11 @@
                 box.querySelectorAll('input[type="text"]').forEach(function (input) {
                     var label = box.querySelector('label[for="' + input.id + '"]');
                     input.required = show && ! (label && label.textContent.indexOf('(optional)') !== -1);
+                    // Disabled, not just hidden: both blocks have a
+                    // "semester" field, and a hidden-but-enabled one is still
+                    // submitted -- the later (empty) one overwrote what a GA
+                    // student had typed.
+                    input.disabled = ! show;
                 });
                 box.querySelectorAll('input[type="file"]').forEach(function (input) {
                     input.required = show;
@@ -129,6 +145,21 @@
 
         typeSelect.addEventListener('change', syncType);
         syncType();
+
+        // "12 / 120 characters" under every field that is printed on the
+        // letter, so the limit is visible before it is hit.
+        form.querySelectorAll('[data-char-counter]').forEach(function (input) {
+            var counter = document.getElementById(input.getAttribute('aria-describedby'));
+            var max = input.getAttribute('maxlength');
+
+            function update() {
+                counter.textContent = input.value.length + ' / ' + max + ' characters';
+                counter.classList.toggle('is-full', input.value.length >= max);
+            }
+
+            input.addEventListener('input', update);
+            update();
+        });
     })();
 </script>
 @endpush

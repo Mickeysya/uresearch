@@ -3,6 +3,7 @@
 namespace Tests\Feature\Nureen;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
@@ -12,6 +13,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\TestCase;
 
 /**
@@ -38,10 +40,20 @@ use Tests\TestCase;
  */
 class GaExtensionTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 
     /** @return array<string, mixed> */
+    /**
+     * A student with a supervisor assigned -- GA Extension's first stage is
+     * addressed to that person, so submission is refused without one.
+     */
+    protected function supervisedStudent(): User
+    {
+        return $this->student(attributes: ['supervisor_id' => $this->supervisor()->id]);
+    }
+
     protected function payload(array $overrides = []): array
     {
         return $overrides + [
@@ -64,7 +76,7 @@ class GaExtensionTest extends TestCase
     {
         Storage::fake('local');
 
-        $this->actingAs($this->student());
+        $this->actingAs($this->supervisedStudent());
 
         foreach (array_keys(config('nureen.ga_extension.required_documents')) as $field) {
             $this->post(route('ga-extension.store'), $this->payload([$field => null]))
@@ -83,7 +95,7 @@ class GaExtensionTest extends TestCase
             range(1, 6),
         );
 
-        $this->actingAs($this->student())
+        $this->actingAs($this->supervisedStudent())
             ->post(route('ga-extension.store'), $this->payload(['ga_extension_form_documents' => $files]))
             ->assertSessionHasErrors('ga_extension_form_documents');
 
@@ -94,7 +106,7 @@ class GaExtensionTest extends TestCase
     {
         Storage::fake('local');
 
-        $this->actingAs($this->student())
+        $this->actingAs($this->supervisedStudent())
             ->post(route('ga-extension.store'), $this->payload([
                 'supervisor_letter_documents' => [UploadedFile::fake()->create('big.pdf', 6000, 'application/pdf')],
             ]))
@@ -114,7 +126,7 @@ class GaExtensionTest extends TestCase
             range(1, 5),
         );
 
-        $this->actingAs($this->student())
+        $this->actingAs($this->supervisedStudent())
             ->post(route('ga-extension.store'), $this->payload(['acceptance_or_paper_documents' => $files]))
             ->assertSessionHasErrors('acceptance_or_paper_documents');
 
@@ -125,7 +137,7 @@ class GaExtensionTest extends TestCase
     {
         Storage::fake('local');
 
-        $this->actingAs($this->student())
+        $this->actingAs($this->supervisedStudent())
             ->post(route('ga-extension.store'), $this->payload([
                 'ga_extension_form_documents' => [UploadedFile::fake()->create('macro.xlsx', 90, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
             ]))
@@ -138,7 +150,7 @@ class GaExtensionTest extends TestCase
     {
         Storage::fake('local');
 
-        $this->actingAs($this->student())
+        $this->actingAs($this->supervisedStudent())
             ->post(route('ga-extension.store'), $this->payload())
             ->assertRedirect(route('applications.index'));
 
@@ -164,7 +176,7 @@ class GaExtensionTest extends TestCase
     {
         Storage::fake('local');
 
-        $this->actingAs($this->student())
+        $this->actingAs($this->supervisedStudent())
             ->post(route('ga-extension.store'), $this->payload([
                 'current_end_date' => now()->addMonths(7)->toDateString(),
                 'requested_new_end_date' => now()->addMonth()->toDateString(),
@@ -178,7 +190,7 @@ class GaExtensionTest extends TestCase
     {
         Storage::fake('local');
 
-        $this->actingAs($this->student())
+        $this->actingAs($this->supervisedStudent())
             ->post(route('ga-extension.store'), $this->payload(['reason_for_extension' => 'Need more time.']))
             ->assertSessionHasErrors('reason_for_extension');
 
@@ -189,7 +201,7 @@ class GaExtensionTest extends TestCase
     {
         Storage::fake('local');
 
-        $this->actingAs($this->student())
+        $this->actingAs($this->supervisedStudent())
             ->post(route('ga-extension.store'), $this->payload())
             ->assertRedirect(route('applications.index'));
 

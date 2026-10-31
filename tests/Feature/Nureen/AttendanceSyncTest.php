@@ -10,6 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\TestCase;
 
 /**
@@ -26,6 +27,7 @@ use Tests\TestCase;
  */
 class AttendanceSyncTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 

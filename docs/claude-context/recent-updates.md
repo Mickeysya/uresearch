@@ -8,6 +8,259 @@ diff alone.
 
 ---
 
+## 2026-11-01 — Official letters: CGS endorses the appointment letter; one formal layout for both letters
+
+**Branch:** `develop`, uncommitted.
+
+### The ask
+
+An official letter must never name an endorser who did not endorse it. Add a
+Supervision mode where Non-Executive CGS previews and endorses the
+appointment letter before it is issued (the new default); give the Senior
+Director the same preview for GA/GRA certification; and replace both letters'
+plain templates with one formal, shared, smaller Dompdf layout.
+
+### Key findings before writing any code
+
+- In `'automatic'` mode the letter printed **the Chair**, not a CGS user, under
+  "Endorsed by:" followed by "Centre for Graduate Studies": a Chair's
+  approval presented as a CGS endorsement. The controller and the demo seeder
+  both passed the approving Chair as `$endorsedBy`.
+- `users` has no title column (and is Core's), so salutations are
+  "Dear <name>,".
+- Core's decision form has no label option for its Approve button.
+- Each letter was ~879 KB: the whole DejaVu Sans font embedded, unsubset.
+- **A pre-existing bug, found by the new tests:** `AppointmentLetterIssued`
+  and `CertificationIssued` called `MailMessage::attachFromStorageDisk()`,
+  which does not exist. Every letter email had been failing in the queue
+  worker (visible in `failed_jobs`); students never received their letters
+  by email.
+
+### What changed
+
+- **`'endorse'` mode** (`nureen.supervision.cgs_stage`, now the default):
+  Supervisor → Chair (`endorsed`) → Non-Executive CGS at `cgs_review`
+  (`endorsed`, "Pending Letter Endorsement"). The CGS row has **Preview
+  letter** (DRAFT, "To be assigned on issue", the viewer as signatory; writes
+  and sends nothing) and **Endorse & issue letter**, which assigns the
+  reference, issues the PDF in the endorser's name, emails it to the student
+  with the supervisor in CC, and approves. Reject keeps its mandatory reason.
+  `'automatic'`/`'manual'` unchanged; every snapshot is honoured, and
+  `stages(null)` covers all three modes. Client Charter: `cgs_review` keeps
+  its 0 days.
+- **`Support\LetterRenderer`** builds both letters and reads the signatory
+  from `approval_history`: the endorsing CGS user, the approving Senior
+  Director, or (in `'automatic'`) no endorser, only "issued by CGS following
+  approval by <Chair>". The Senior Director has the same **Preview letter**.
+- **One layout** (`letters/layout.blade.php`, extended by `letters/appointment`
+  and `letters/certification`): letterhead with a config logo
+  (`public/images/UTP_logo.png` by default, downscaled in memory, text-only
+  if missing) and config contact details (placeholders), Our Ref and date,
+  addressee, salutation, bold uppercase subject, numbered paragraphs and
+  details table, closing and signature, cc, and a footer on every page
+  (verification URL, computer-generated notice, reference). DejaVu Serif,
+  A4, 2.5 cm margins, one accent colour, one page.
+- **Revocation** re-renders the stored PDF with a diagonal REVOKED watermark
+  (same document row; see `SHARED_CHANGES.md` §7a).
+- **Verification:** new public `/verify/appointment/{ref}`, sharing one view
+  with `/verify/certificate/{ref}`, both built from the renderer's data.
+- **Email attachments fixed** (`Attachment::fromStorageDisk()`).
+- **Client Charter fix:** the clock now starts on the first working day on or
+  after arrival, so a 0-day stage reached on a Sunday is due Monday, not
+  Sunday. Applied to due dates, overdue, reminders and the compliance
+  figures alike.
+- **File size:** ~879 KB → ~96–102 KB per letter (subset fonts ~34 KB, the
+  downscaled logo ~63 KB).
+
+### Verification
+
+- Full suite: 385 passed (17 new in `LettersTest`, 1 new in
+  `ClientCharterTest`; four `SupervisionTest` cases now pin `'automatic'`
+  explicitly).
+- Real app, headless Chromium, records found by matric number: Main
+  (22092101, #174) and Co-Supervisor (22092102, #175) requests submitted
+  through the student form, then supervisor → Chair → CGS preview → endorse;
+  GA (22092103, #176) and GRA (22092104, #177) certifications through to
+  Senior Director preview → approve. Every PDF opened and rendered to an
+  image; all one page. #175 revoked: the student's own download shows
+  REVOKED and the verification page says Revoked.
+- Mailpit: certification letters arrive with the PDF attached. Appointment
+  letter emails kept failing until the long-running queue worker was
+  restarted (`queue:restart`; it had loaded the old class), after which
+  `CGS/SVAPPT/2026/0006` arrived with the PDF attached and the supervisor in
+  CC.
+
+### Follow-up (same session, before commit): valid demo documents, one-page letters
+
+- **"Failed to load PDF document" on the Documents page.** The cause was
+  confirmed: exactly 8 documents, all 45-byte `doc.pdf` stand-ins uploaded by
+  this session's own browser verification runs (applications #170–#177).
+  No seeder or teammate data was affected. The Nureen demo seeders attached
+  no supporting documents at all. Now:
+  - `Database\Seeders\Support\DemoDocuments` attaches a valid one-page
+    Dompdf placeholder ("DEMO DATA: NOT A REAL DOCUMENT", document type,
+    student, application), under the same doc_type the real form uses and
+    named like "Evidence of Work Done - <student>.pdf". Both Nureen seeders
+    use it.
+  - The 8 dev rows (documents 21, 23, 25, 27, 29, 31, 33, 35) were replaced
+    in place with such placeholders and renamed; nothing else was touched.
+  - Real PDFs uploaded through the GA Extension, Supervision and
+    Certification forms in the browser download byte-identical and open.
+  - `SeededDocumentsTest` runs both seeders and parses every stored PDF
+    (structural parser in `tests/Feature/Nureen/Concerns/ParsesPdf.php`).
+- **Tests were writing to the dev database.** The container's
+  `QUEUE_CONNECTION=redis` beats `phpunit.xml`, so queued notifications from
+  tests reached the dev worker, which wrote `failed_jobs` rows (37 per Nureen
+  run). Every Nureen test class now uses `KeepsJobsOffTheDevQueue` (sync
+  queue): 0 rows. The proper fix (`force="true"` in `phpunit.xml`) is in
+  `SHARED_CHANGES.md` §7c.
+- **Certification form bug found:** the GA and GRA blocks both have a
+  `semester` input; the hidden block's was still submitted and overwrote the
+  student's value, so a correctly filled GA request failed with "The
+  semester field is required". Hidden blocks' fields are now disabled.
+  Confirmed both ways in the browser.
+- **Every letter fits one A4 page.** Maximum lengths for every printed field
+  (course code 20, course name 120, course owner 80, project title 150,
+  project leader 80, grant code 40, semester 30, purpose 120), enforced in
+  validation, with `maxlength` and a live counter on the form. Layout: fixed
+  letterhead band at the top, fixed footer band at the bottom, one 10 pt body
+  size, a fixed-width details table that wraps long values, and the ref
+  column sized to its content. Paragraph 1 no longer repeats the supervisor's
+  name (it is in the details table and the cc). `LetterWorstCaseTest` fills
+  every field at its maximum, with long realistic names, programme and
+  department, for the main, Co, 'automatic', DRAFT and REVOKED appointment
+  letters and the GA, GRA, DRAFT and REVOKED certification letters: all one
+  page, with at least 0.8 cm to spare.
+- Full suite: 395 passed.
+
+---
+
+## 2026-11-01 — Client Charter drives due dates, expected decision dates, reminders and compliance
+
+**Branch:** `develop`, uncommitted.
+
+### The ask
+
+CGS's Client Charter (working days per approval stage, already recorded in
+`nureen.charter_days` by the previous task) should drive deadlines, the
+student's expected decision date, reminders and a compliance report for GA
+Extension, Supervision and Certification. Students could not tell when to
+expect an outcome, and nothing measured whether CGS meets its charter.
+
+### Key findings before writing any code
+
+- **Reminders counted calendar days**, from `applications.updated_at`
+  against a flat `stalled_days` (3) per module. The analytics page did the
+  same.
+- **Students never see a module's `_detail` partial.** Those only render
+  inside the approver queue (`core::partials.queue`); the student's
+  `applications.show` and dashboard panel are Core's with no module hook.
+  So the expected date got its own Nureen page, and a Core seam is
+  proposed in `SHARED_CHANGES.md` §5.
+- The collapsed queue row is also Core markup, so the overdue marker there
+  is a scoped CSS `:has()` rule from inside Nureen's own partial.
+
+### The design
+
+One calculator and one rule, used everywhere:
+
+- `Support\WorkingDayCalendar`: Monday–Friday minus
+  `nureen.charter.holidays` (new, empty by default).
+- `Support\ClientCharter`: the stage was reached at the newest
+  `approval_history` row (else `submitted_at`); due date = that date + the
+  stage's charter in working days; overdue once more working days than the
+  charter have passed (= first working day after the due date). Expected
+  decision date = max(due date, today) + the charter days of every stage
+  still ahead on that application's own chain. A `null` charter stage gets
+  no due/expected date, and nothing is invented.
+
+### What changed
+
+- **Student:** new **Expected Decision Dates** page
+  (`nureen.expected-dates`), linked from the student sidebar via
+  `GaExtensionWorkflow::links()`. "Expected decision by …", the note "Based
+  on the CGS Client Charter of N working days … a service target, not a
+  guaranteed date", and only when overdue "This stage is taking longer than
+  the Client Charter. You don't need to do anything; the reviewer has been
+  reminded."
+- **Approver queues (all three):** `charter/_queue_clock.blade.php` at the
+  top of each detail panel shows the stage's due date, and overdue rows are
+  marked on the collapsed line. Rows are ordered by when they reached the
+  stage (`ClientCharter::orderByStageEntry()` via `queueFor()`'s `$scope`),
+  which puts every overdue row first in the default order.
+- **Reminders:** all three `*:remind-stalled` commands fire on each
+  stage's charter (first reminder the day it goes overdue, repeat once per
+  further charter period, never on a weekend alone). `stalled_days` is now
+  only the fallback, in working days, for a `null`-charter stage. A reminder
+  count also resets after a return-to-supervisor. `--days` still overrides,
+  now meaning working days for every stage. Emails say "N working days" and
+  quote the stage's charter.
+- **Compliance report** (`/reports/processing-time`): a table per module and
+  stage (decisions, % within charter, average working days, charter); the
+  chart now shows average working days next to the charter for each stage
+  (same vertical bar structure, second dataset coloured by token); the
+  overdue table is built from `ClientCharter` with stage-reached and due
+  dates. Also fixed: the chart's colour map keyed Supervision as
+  `'Supervision'`, but the module's label is `'Supervision Request'`, so its
+  bars had always fallen back to grey.
+- **Demo data:** `NureenClientCharterDemoSeeder`, on-time and overdue
+  applications at every stage, matric numbers 22091001–22091024.
+
+### Verification
+
+- Full suite: 359 passed (was 338; 21 new across `WorkingDayCalendarTest`,
+  `ClientCharterTest`, `ClientCharterDisplayTest`, plus new cases in
+  `StalledReminderTest` and `AnalyticsTest`). Existing reminder/analytics
+  tests were pinned to a fixed Friday, since "N days ago" is no longer N
+  working days.
+- Headless Chromium against the dev app on Sunday 1 Nov 2026 (rows found
+  by matric number): every student's expected date matched a hand
+  calculation; the overdue message only on overdue rows; each approver's
+  queue marked exactly the overdue rows and listed them first; the CGS
+  page's table, chart and overdue table correct in light and dark, with
+  every bar still drawn after a live theme toggle.
+- Ran the three reminder commands: Mailpit received reminders only for
+  applications `ClientCharter` reports overdue, none for the on-time ones;
+  overdue rows reminded on Thu 29 Oct were correctly held back by the repeat
+  rule.
+
+### Follow-up (same session, before commit): stuck snapshots and GA Extension's supervisor stage
+
+- **Older applications were unreachable.** Core builds queues and the
+  sidebar from `stages(null)`, which Core's contract defines as *every* stage
+  a module can use (`ModuleRegistry::queuesForRole()`, as `TravelWorkflow`
+  does). `GaExtensionWorkflow` and `SupervisionWorkflow` returned only the
+  live config's chain, so in the default modes the Senior Director had no
+  GA Extension queue (3 real applications stuck at `senior_director`, 5 more
+  heading there) and Non-Executive CGS had no Supervision queue (3 real
+  `'manual'` applications stuck at `cgs_review`). Fixed in Nureen alone:
+  `stages(null)` now returns the live chain plus any stage only the other
+  chain has; `stages($application)` still uses the snapshot. GA Extension's
+  shared `cgs_verify` queue is titled "Pending My Review", and each row says
+  whether CGS's decision on it is final. Everything else (stepper, decision
+  emails, `decide()`, `returnTo()`, `ClientCharter`, reminders, analytics)
+  already went through the per-application chain.
+- **Any supervisor could see and decide any student's GA Extension.** The
+  queue had no named-person scope and `decide()` only checked the role.
+  GA Extension now snapshots the student's supervisor at submission
+  (`ga_extension_details.supervisor_id`, new migration, existing rows
+  backfilled from the student's current supervisor: 35 of 35 on the dev
+  database) and, like Certification, scopes the queue, refuses anyone else's
+  decision (403), reminds only that supervisor, and refuses submission
+  without a supervisor.
+- **Left for Core** (`SHARED_CHANGES.md` §6): a return to the supervisor
+  still emails every Supervisor-role user (`WorkflowEngine::notifyReturn()`),
+  and a supervisor's dashboard tile still counts every row at a
+  named-supervisor stage.
+- **Verified:** 8 new tests in `SnapshotChainReachabilityTest`, 7 of which
+  failed before the fix; full suite 367 passed. In the real app the Senior
+  Director found matric 22001012 by search and approved GA Extension #18, and
+  Non-Executive CGS found 22001015 and approved Supervision #26 (letter
+  `CGS/SVAPPT/2026/0003` issued). `supervisor@utp.edu.my` no longer sees
+  22001012's GA Extensions; their own supervisor does.
+
+---
+
 ## 2026-10-31 — GA Extension, Supervision and Certification realigned to CGS's confirmed UResearch process
 
 **Branch:** `develop`, uncommitted.

@@ -3,9 +3,9 @@
 namespace App\Modules\Nureen\Console\Commands;
 
 use App\Modules\Core\Models\User;
-use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Notifications\ApplicationStalled;
+use App\Modules\Nureen\Support\ClientCharter;
 use App\Modules\Nureen\Support\StalledApplicationReminder;
 use Illuminate\Console\Command;
 
@@ -22,34 +22,34 @@ use Illuminate\Console\Command;
  */
 class RemindStalledCertification extends Command
 {
-    protected $signature = 'ga-certification:remind-stalled {--days= : Override config(\'nureen.reminders.ga_certification.stalled_days\')}';
+    protected $signature = 'ga-certification:remind-stalled {--days= : Remind after this many working days at any stage, instead of each stage\'s Client Charter}';
 
     protected $description = 'Email the pending approver for any Certification application stalled at its current stage';
 
-    public function handle(StalledApplicationReminder $reminders, WorkflowEngine $engine): int
+    public function handle(StalledApplicationReminder $reminders, ClientCharter $charter): int
     {
-        $days = (int) ($this->option('days') ?: config('nureen.reminders.ga_certification.stalled_days'));
+        $days = $this->option('days') ? (int) $this->option('days') : null;
         $sent = 0;
 
         foreach ($reminders->findStalled('ga_certification', $days) as $application) {
-            $stage = $engine->currentStage($application);
+            $clock = $charter->stageClock($application, $days);
 
-            if (! $stage) {
+            if (! $clock) {
                 continue;
             }
 
-            $daysStalled = (int) $application->updated_at->diffInDays(now());
+            $stage = $clock['stage'];
 
             $recipients = $stage->key === 'supervisor'
                 ? User::where('id', GaCertificationDetail::where('application_id', $application->id)->value('supervisor_id'))->get()
                 : $reminders->recipientsForCurrentStage($application);
 
             foreach ($recipients as $recipient) {
-                $recipient->notify(new ApplicationStalled($application, $stage, $daysStalled));
+                $recipient->notify(new ApplicationStalled($application, $stage, $clock['working_days_taken'], $clock['charter_days']));
                 $sent++;
             }
 
-            $reminders->recordReminder($application, $stage->key);
+            $reminders->recordReminder($application, $clock);
         }
 
         $this->info("Sent {$sent} stall reminder(s) for Certification.");

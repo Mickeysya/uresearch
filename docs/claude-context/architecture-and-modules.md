@@ -351,14 +351,24 @@ approval is what triggers PDF generation).
   `RemindStalledSupervisionRequests` has always needed — the generic class
   has no way to know a module's own named-recipient rule, so that one
   `match` stays in each command, not pushed down here.
-- **`Support\ProcessingTimeAnalytics`** — average days per `(module,
-  stage)`, computed in PHP from consecutive `approval_history` rows per
-  application rather than a database window function, so the same
-  calculation is portable across the MySQL dev database and the SQLite
-  in-memory test suite. Backs the CGS-only `/reports/processing-time`
-  page (a Chart.js bar chart + an overdue-applications table, the overdue
-  threshold reusing the exact same per-module config the reminders fire
-  on, so the two can't drift apart).
+- **`Support\WorkingDayCalendar` + `Support\ClientCharter`** (2026-11-01) —
+  CGS's Client Charter (`nureen.charter_days`, working days per stage)
+  turned into stage due dates, the student's expected decision date,
+  reminder timing and compliance figures, all counted on the one
+  Monday–Friday calendar minus `nureen.charter.holidays`. A stage is overdue
+  once more working days have passed than its charter, i.e. from the first
+  working day after its due date, which is also when its reviewer is first
+  reminded. A `null` charter stage gets no due/expected date; its
+  reminders fall back to `reminders.<module>.stalled_days`.
+- **`Support\ProcessingTimeAnalytics`** — per `(module, stage)`: decisions,
+  % within the Client Charter, average working days taken vs the charter,
+  computed in PHP from consecutive `approval_history` rows per application
+  rather than a database window function, so the same calculation is
+  portable across the MySQL dev database and the SQLite in-memory test
+  suite. Backs the CGS-only `/reports/processing-time` page (compliance
+  table, a Chart.js bar chart of average vs charter, and an overdue table
+  built from `ClientCharter`, the same rule the reminders fire on, so the
+  two can't drift apart).
 - **The config-driven extensibility pattern** (`GA Extension's
   `additional_fields`, `required_documents`; Attendance's `source`,
   `reminders.*`) — every place a requirement might still change before

@@ -4,19 +4,22 @@ namespace App\Modules\Nureen\Console\Commands;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
-use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Models\SupervisionDetail;
 use App\Modules\Nureen\Notifications\SupervisionEscalatedToCgs;
 use App\Modules\Nureen\Notifications\SupervisionRequestStalled;
+use App\Modules\Nureen\Support\ClientCharter;
 use Illuminate\Console\Command;
 
 /**
  * Escalates a supervision request that has sat on one stage for too long.
  *
- * Scheduled from routes/console.php. Each detail row remembers the last time
- * it was reminded (`reminded_at`), so a request only gets nagged again once
- * it has stalled for another full period, not on every run of the command.
+ * Scheduled from routes/console.php. When a stage is "stalled" is the
+ * Client Charter's call -- see Support\ClientCharter::dueForReminder(): the
+ * first working day the stage is past its charter (3 working days for the
+ * supervisor and the Chair, 0 for cgs_review), then once per further full
+ * period. Each detail row remembers the last time it was reminded
+ * (`reminded_at`), which is what that repeat rule reads.
  *
  * Three stages, two different kinds of recipient: 'supervisor' is addressed
  * to the one named person the student picked (see SupervisionController::
@@ -37,39 +40,36 @@ use Illuminate\Console\Command;
  */
 class RemindStalledSupervisionRequests extends Command
 {
-    protected $signature = 'supervision:remind-stalled {--days= : Override config(\'nureen.reminders.supervision.stalled_days\')}';
+    protected $signature = 'supervision:remind-stalled {--days= : Remind after this many working days at any stage, instead of each stage\'s Client Charter}';
 
     protected $description = 'Email the pending approver for any supervision request stalled at its current stage';
 
-    public function handle(WorkflowEngine $engine): int
+    public function handle(ClientCharter $charter): int
     {
-        $days = (int) ($this->option('days') ?: config('nureen.reminders.supervision.stalled_days'));
+        $days = $this->option('days') ? (int) $this->option('days') : null;
         $escalateAfter = (int) config('nureen.reminders.supervision.escalate_after_reminders');
-        $cutoff = now()->subDays($days);
 
-        $stalled = Application::query()
+        $pending = Application::query()
             ->where('module_type', 'supervision')
             ->where('status', Application::STATUS_PENDING)
-            ->where('updated_at', '<=', $cutoff)
+            ->with('history')
             ->get();
 
         $sent = 0;
 
-        foreach ($stalled as $application) {
+        foreach ($pending as $application) {
             $detail = SupervisionDetail::where('application_id', $application->id)->first();
-            $stage = $engine->currentStage($application);
+            $clock = $charter->stageClock($application, $days);
 
-            if (! $detail || ! $stage) {
+            if (! $detail || ! $clock) {
                 continue;
             }
 
-            // Already reminded since this stall began -- current_stage only
-            // changes when the application moves, so a reminder newer than
-            // updated_at means nobody has acted since, and nagging again is
-            // premature until another full period has passed.
-            if ($detail->reminded_at && $detail->reminded_at->gte($cutoff)) {
+            if (! $charter->dueForReminder($application, $detail->reminded_at, $detail->reminded_stage_key, $days)) {
                 continue;
             }
+
+            $stage = $clock['stage'];
 
             $recipients = match ($stage->key) {
                 'supervisor' => User::where('id', $detail->requested_supervisor_id)->get(),
@@ -79,17 +79,17 @@ class RemindStalledSupervisionRequests extends Command
                 default => User::where('role', Role::NON_EXEC_CGS)->get(),
             };
 
-            $daysStalled = (int) $application->updated_at->diffInDays(now());
-
             foreach ($recipients as $recipient) {
-                $recipient->notify(new SupervisionRequestStalled($application, $stage, $daysStalled));
+                $recipient->notify(new SupervisionRequestStalled($application, $stage, $clock['working_days_taken'], $clock['charter_days']));
                 $sent++;
             }
 
-            // A count from a stage this request has since left is stale,
-            // not "still stalled here" -- reset rather than carry it
-            // forward when the stage does not match what was last stored.
-            $reminderCount = $detail->reminded_stage_key === $stage->key ? $detail->reminder_count + 1 : 1;
+            // A count from a stage this request has since left (or from an
+            // earlier visit to this one) is stale, not "still stalled here"
+            // -- reset rather than carry it forward.
+            $reminderCount = $charter->remindedDuringThisStage($clock, $detail->reminded_at, $detail->reminded_stage_key)
+                ? $detail->reminder_count + 1
+                : 1;
 
             $detail->update([
                 'reminded_at' => now(),

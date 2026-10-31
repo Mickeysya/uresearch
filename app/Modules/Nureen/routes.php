@@ -7,6 +7,7 @@ use App\Modules\Nureen\Http\Controllers\AttendanceController;
 use App\Modules\Nureen\Http\Controllers\AttendanceIngestController;
 use App\Modules\Nureen\Http\Controllers\CertificateVerificationController;
 use App\Modules\Nureen\Http\Controllers\CertificationController;
+use App\Modules\Nureen\Http\Controllers\ExpectedDecisionController;
 use App\Modules\Nureen\Http\Controllers\GaExtensionController;
 use App\Modules\Nureen\Http\Controllers\SupervisionController;
 use Illuminate\Support\Facades\Route;
@@ -54,6 +55,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/supervision/issued', [SupervisionController::class, 'issued'])->name('supervision.issued');
         Route::get('/supervision/{application}/letter', [SupervisionController::class, 'downloadLetter'])->name('supervision.letter.download');
         Route::post('/supervision/{application}/revoke', [SupervisionController::class, 'revokeLetter'])->name('supervision.revoke');
+        // DRAFT of the letter at the cgs_review stage -- writes and sends
+        // nothing; see SupervisionController::previewLetter().
+        Route::get('/supervision/{application}/letter/preview', [SupervisionController::class, 'previewLetter'])->name('supervision.letter.preview');
     });
 
     // ---- GA/GRA Certification Letter ------------------------------------
@@ -72,6 +76,19 @@ Route::middleware('auth')->group(function () {
         // out of the pending queue above, so this is where Revoke is
         // actually reachable once a certificate exists.
         Route::get('/ga-certification/issued', [CertificationController::class, 'issued'])->name('ga-certification.issued');
+    });
+
+    Route::middleware('role:'.Role::SENIOR_DIRECTOR_CGS)->group(function () {
+        // DRAFT of the letter before the Senior Director approves -- writes
+        // and sends nothing; see CertificationController::previewLetter().
+        Route::get('/ga-certification/{application}/letter/preview', [CertificationController::class, 'previewLetter'])->name('ga-certification.letter.preview');
+    });
+
+    // ---- Client Charter: the student's expected decision dates ----------
+    // Across GA Extension, Supervision and Certification -- see
+    // ExpectedDecisionController and Support\ClientCharter.
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::get('/my-applications/expected-dates', [ExpectedDecisionController::class, 'index'])->name('nureen.expected-dates');
     });
 
     // ---- Attendance -------------------------------------------------------
@@ -120,3 +137,9 @@ Route::get('/verify/certificate/{reference}', [CertificateVerificationController
     ->middleware('throttle:30,1')
     ->where('reference', '.*')
     ->name('certificate.verify');
+
+// Same four-facts page for a Supervision appointment letter.
+Route::get('/verify/appointment/{reference}', [CertificateVerificationController::class, 'appointment'])
+    ->middleware('throttle:30,1')
+    ->where('reference', '.*')
+    ->name('appointment.verify');

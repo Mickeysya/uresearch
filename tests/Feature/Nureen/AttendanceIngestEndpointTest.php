@@ -6,6 +6,7 @@ use App\Modules\Nureen\Models\AttendanceIngestQueueEntry;
 use App\Modules\Nureen\Models\AttendanceRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\TestCase;
 
 /**
@@ -21,6 +22,7 @@ use Tests\TestCase;
  */
 class AttendanceIngestEndpointTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 

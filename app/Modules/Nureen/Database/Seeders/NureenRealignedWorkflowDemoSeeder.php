@@ -7,6 +7,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
+use App\Modules\Nureen\Database\Seeders\Support\DemoDocuments;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Models\SupervisionDetail;
@@ -15,8 +16,7 @@ use App\Modules\Nureen\Notifications\AppointmentLetterIssuedToCgs;
 use App\Modules\Nureen\Notifications\CertificationIssued;
 use App\Modules\Nureen\Support\AppointmentReferenceGenerator;
 use App\Modules\Nureen\Support\CertificateReferenceGenerator;
-use App\Modules\Nureen\Support\Contracts\GeneratesQrCode;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Modules\Nureen\Support\LetterRenderer;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -47,6 +47,10 @@ use Illuminate\Support\Facades\Notification;
  * DocumentStore, Dompdf), not re-derived -- a console command has no HTTP
  * request to hand the real controller, so this is the seeder's own call
  * into the same pieces, kept deliberately short.
+ *
+ * Each application gets the supporting documents its form would require,
+ * as valid one-page placeholder PDFs marked as demo data
+ * (Support\DemoDocuments).
  *
  * Matched on a fixed set of demo emails via updateOrCreate, so running it
  * twice adds a fresh batch of applications on top rather than erroring on
@@ -116,12 +120,14 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
 
         GaExtensionDetail::create([
             'application_id' => $application->id,
+            'supervisor_id' => $supervisor->id,
             'current_end_date' => now()->addMonth(),
             'requested_new_end_date' => now()->addMonths(7),
             'reason_for_extension' => 'Fieldwork delayed by two semesters; the remaining analysis needs the assistantship to continue.',
             'final_approver_snapshot' => 'cgs',
         ]);
 
+        app(DemoDocuments::class)->attachRequired($application);
         $engine->submit($application);
         $engine->decide($application, $supervisor, 'approve');
         // Final in 'cgs' mode -- no Senior Director stage on this chain.
@@ -138,7 +144,7 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
         $detail->update(['previous_supervisor_id' => $student->supervisor_id]);
         $student->update(['supervisor_id' => $supervisor->id]);
 
-        $this->issueAppointmentLetter($decided, $detail->fresh(), $chair, $supervisor, $cgs);
+        $this->issueAppointmentLetter($decided, $detail->fresh(), $supervisor, $cgs);
     }
 
     protected function supervisionCo(WorkflowEngine $engine, User $student, User $coSupervisor, User $chair, User $cgs): void
@@ -149,7 +155,7 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
         $decided = $engine->decide($detail->application, $chair, 'approve');
 
         // Co-Supervisor: users.supervisor_id is never touched.
-        $this->issueAppointmentLetter($decided, $detail->fresh(), $chair, $coSupervisor, $cgs);
+        $this->issueAppointmentLetter($decided, $detail->fresh(), $coSupervisor, $cgs);
     }
 
     protected function submitSupervision(WorkflowEngine $engine, User $student, User $supervisor, string $role, string $type): SupervisionDetail
@@ -172,12 +178,13 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
             'cgs_stage_snapshot' => 'automatic',
         ]);
 
+        app(DemoDocuments::class)->attachRequired($application);
         $engine->submit($application);
 
         return $detail->fresh()->load('application');
     }
 
-    protected function issueAppointmentLetter(Application $application, SupervisionDetail $detail, User $endorsedBy, User $supervisor, User $cgs): void
+    protected function issueAppointmentLetter(Application $application, SupervisionDetail $detail, User $supervisor, User $cgs): void
     {
         $documents = app(DocumentStore::class);
 
@@ -186,19 +193,12 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
             'letter_issued_at' => now(),
         ]);
 
-        $pdf = Pdf::loadView('nureen::supervision.appointment_letter_pdf', [
-            'application' => $application,
-            'detail' => $detail,
-            'student' => $application->student,
-            'supervisor' => $supervisor,
-            'endorsedBy' => $endorsedBy,
-        ]);
-
+        // Who the letter names comes from approval_history, never from here.
         $letter = $documents->storeGenerated(
             $application,
-            $pdf->output(),
+            app(LetterRenderer::class)->appointment($application->fresh()),
             "appointment-{$application->id}.pdf",
-            'Supervisor Appointment Letter',
+            LetterRenderer::APPOINTMENT_DOC_TYPE,
         );
 
         $application->student?->notify(new AppointmentLetterIssued($application, $detail, $letter, $supervisor));
@@ -234,6 +234,7 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
             'purpose' => $type === 'GA' ? 'Scholarship application supporting document' : null,
         ] + $fields);
 
+        app(DemoDocuments::class)->attachRequired($application);
         $engine->submit($application);
         $engine->decide($application, $supervisor, 'approve');
         $engine->decide($application, $cgs, 'approve');
@@ -241,23 +242,11 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
 
         $detail->update(['reference_number' => app(CertificateReferenceGenerator::class)->generate()]);
 
-        $verificationUrl = route('certificate.verify', $detail->reference_number);
-        $qr = app(GeneratesQrCode::class)->dataUri($verificationUrl);
-
-        $pdf = Pdf::loadView('nureen::ga_certification.certificate_pdf', [
-            'application' => $decided,
-            'detail' => $detail,
-            'student' => $student,
-            'endorsedBy' => $director,
-            'verificationUrl' => $verificationUrl,
-            'qrDataUri' => $qr,
-        ]);
-
         $certificate = app(DocumentStore::class)->storeGenerated(
             $decided,
-            $pdf->output(),
+            app(LetterRenderer::class)->certification($decided->fresh()),
             "certification-{$decided->id}.pdf",
-            'GA/GRA Certification Letter',
+            LetterRenderer::CERTIFICATION_DOC_TYPE,
         );
 
         $decided->student?->notify(new CertificationIssued($decided, $certificate));

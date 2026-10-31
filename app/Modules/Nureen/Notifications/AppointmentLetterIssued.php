@@ -8,6 +8,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Nureen\Models\SupervisionDetail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Mail\Attachment;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -50,11 +51,13 @@ class AppointmentLetterIssued extends Notification implements ShouldQueue
             ->line('Thank you for using UResearch 2.0.');
 
         if ($this->letter->exists()) {
-            $mail->attachFromStorageDisk(
-                'local',
-                $this->letter->path,
-                $this->letter->original_name,
-                ['mime' => $this->letter->mime_type ?? 'application/pdf'],
+            // MailMessage has no attachFromStorageDisk(); this is the
+            // Attachable form Laravel actually supports. The old call failed
+            // every one of these jobs in the queue worker.
+            $mail->attach(
+                Attachment::fromStorageDisk('local', $this->letter->path)
+                    ->as($this->letter->original_name)
+                    ->withMime($this->letter->mime_type ?? 'application/pdf')
             );
         }
 

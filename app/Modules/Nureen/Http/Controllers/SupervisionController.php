@@ -11,12 +11,13 @@ use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Models\SupervisionDetail;
+use App\Modules\Nureen\Support\ClientCharter;
+use App\Modules\Nureen\Support\LetterRenderer;
 use App\Modules\Nureen\Notifications\AppointmentLetterIssued;
 use App\Modules\Nureen\Notifications\AppointmentLetterIssuedToCgs;
 use App\Modules\Nureen\Notifications\AppointmentLetterRevoked;
 use App\Modules\Nureen\Notifications\SupervisionFinalDecisionCc;
 use App\Modules\Nureen\Support\AppointmentReferenceGenerator;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -122,7 +123,7 @@ class SupervisionController extends Controller
             ->with('status', "Supervision request #{$application->id} submitted.");
     }
 
-    public function queue(Request $request, WorkflowEngine $engine)
+    public function queue(Request $request, WorkflowEngine $engine, ClientCharter $charter)
     {
         // The engine's queue is role-scoped, not person-scoped: every
         // supervisor-role user is handed every pending request at the
@@ -138,8 +139,14 @@ class SupervisionController extends Controller
         // and CGS stages need no such narrowing: both are role-based, and
         // Chair is already department-scoped generically by
         // ApprovesApplications::queueFor() (see Role::isDepartmentScoped()).
-        $queue = $this->queueFor($request, $engine, ['documents'],
-            function ($query, Stage $stage) use ($request) {
+        //
+        // Every stage is also ordered by when each row reached it, so
+        // anything past its Client Charter due date sits at the top -- see
+        // ClientCharter::orderByStageEntry().
+        $queue = $this->queueFor($request, $engine, ['documents', 'history'],
+            function ($query, Stage $stage) use ($request, $charter) {
+                $charter->orderByStageEntry($query);
+
                 if ($stage->key !== 'supervisor') {
                     return;
                 }
@@ -154,7 +161,10 @@ class SupervisionController extends Controller
             ->get()
             ->keyBy('application_id');
 
-        return view('nureen::supervision.queue', $queue + ['details' => $details]);
+        return view('nureen::supervision.queue', $queue + [
+            'details' => $details,
+            'clocks' => $queue['applications']->mapWithKeys(fn (Application $a) => [$a->id => $charter->stageClock($a)]),
+        ]);
     }
 
     /**
@@ -199,7 +209,7 @@ class SupervisionController extends Controller
             $supervisor?->notify(new SupervisionFinalDecisionCc($application, $stage, $approved, $data['remarks'] ?? null));
 
             if ($approved) {
-                $this->finalizeApproval($decided, $detail, $request->user(), $documents);
+                $this->finalizeApproval($decided, $detail, $documents);
             }
         }
 
@@ -215,17 +225,23 @@ class SupervisionController extends Controller
      * all, per the "never overwrite the main supervisor" rule. Either way,
      * the letter is generated and dispatched immediately.
      */
-    protected function finalizeApproval(Application $application, SupervisionDetail $detail, User $decider, DocumentStore $documents): void
+    protected function finalizeApproval(Application $application, SupervisionDetail $detail, DocumentStore $documents): void
     {
         if ($detail->appointment_role === SupervisionDetail::ROLE_MAIN) {
             $detail->update(['previous_supervisor_id' => $application->student->supervisor_id]);
             $application->student->update(['supervisor_id' => $detail->requested_supervisor_id]);
         }
 
-        $this->issueLetter($application, $detail, $decider, $documents);
+        $this->issueLetter($application, $detail, $documents);
     }
 
-    protected function issueLetter(Application $application, SupervisionDetail $detail, User $endorsedBy, DocumentStore $documents): void
+    /**
+     * Assigns the reference and stores the letter. Who it names is NOT
+     * decided here: Support\LetterRenderer reads it from approval_history --
+     * the endorsing CGS user in 'endorse'/'manual' mode, and in 'automatic'
+     * mode no endorser at all, only the Chair whose approval it follows.
+     */
+    protected function issueLetter(Application $application, SupervisionDetail $detail, DocumentStore $documents): void
     {
         $detail->update([
             'letter_reference' => app(AppointmentReferenceGenerator::class)->generate(),
@@ -234,21 +250,15 @@ class SupervisionController extends Controller
 
         $supervisor = User::findOrFail($detail->requested_supervisor_id);
 
-        $pdf = Pdf::loadView('nureen::supervision.appointment_letter_pdf', [
-            'application' => $application,
-            'detail' => $detail,
-            'student' => $application->student,
-            'supervisor' => $supervisor,
-            'endorsedBy' => $endorsedBy,
-        ]);
-
         $letter = $documents->storeGenerated(
             $application,
-            $pdf->output(),
+            app(LetterRenderer::class)->appointment($application->fresh()),
             "appointment-{$application->id}.pdf",
-            'Supervisor Appointment Letter',
+            LetterRenderer::APPOINTMENT_DOC_TYPE,
         );
 
+        // Emailed to the student with the appointed supervisor in CC --
+        // see AppointmentLetterIssued.
         $application->student?->notify(new AppointmentLetterIssued($application, $detail, $letter, $supervisor));
 
         // "Non-Executive CGS is notified of every issued letter" -- being
@@ -257,6 +267,25 @@ class SupervisionController extends Controller
         foreach (User::where('role', Role::NON_EXEC_CGS)->get() as $cgsStaff) {
             $cgsStaff->notify(new AppointmentLetterIssuedToCgs($application, $detail));
         }
+    }
+
+    /**
+     * The "Preview letter" button at the CGS stage: the exact letter, with
+     * the person previewing in the signature block, the reference shown as
+     * "To be assigned on issue" and a DRAFT watermark. Writes nothing and
+     * sends nothing -- no reference number is generated, no file stored, no
+     * one emailed. Endorsing is a separate POST to decide().
+     */
+    public function previewLetter(Request $request, Application $application, WorkflowEngine $engine, LetterRenderer $letters)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($engine->currentStage($application)?->key === 'cgs_review', 404, 'This letter is not awaiting endorsement.');
+
+        return response($letters->appointment($application, draft: true, previewer: $request->user()), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="appointment-'.$application->id.'-draft.pdf"',
+            'Cache-Control' => 'no-store',
+        ]);
     }
 
     /**
@@ -295,7 +324,7 @@ class SupervisionController extends Controller
         abort_if($detail->letter_reference === null, 404, 'No appointment letter has been issued for this application.');
 
         $letter = $application->documents()
-            ->where('doc_type', 'Supervisor Appointment Letter')
+            ->where('doc_type', LetterRenderer::APPOINTMENT_DOC_TYPE)
             ->latest()
             ->firstOrFail();
 
@@ -345,6 +374,11 @@ class SupervisionController extends Controller
                 'letter_revoke_note' => $note,
             ]);
         });
+
+        // The stored letter now carries a REVOKED watermark, wherever it is
+        // downloaded from -- see LetterRenderer::replaceStored().
+        $letters = app(LetterRenderer::class);
+        $letters->replaceStored($application, LetterRenderer::APPOINTMENT_DOC_TYPE, $letters->appointment($application));
 
         $application->student?->notify(new AppointmentLetterRevoked($detail));
         User::find($detail->requested_supervisor_id)?->notify(new AppointmentLetterRevoked($detail));

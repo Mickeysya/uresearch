@@ -63,20 +63,27 @@ return [
 
     'supervision' => [
 
-        // How CGS takes control of a Main or Co-Supervisor appointment,
-        // confirmed against CGS's UResearch process workflow (0 Client
-        // Charter days for this stage). See SupervisionWorkflow::stages()
-        // and SupervisionDetail::cgs_stage_snapshot -- an in-flight
-        // application always runs the chain it was submitted under.
-        //   'automatic' DEFAULT. Chair of Department approves and the
-        //               system immediately issues the appointment letter --
-        //               no separate CGS decision stage. CGS is notified of
-        //               every issued letter and can revoke it afterwards,
-        //               with a mandatory reason.
-        //   'manual'    The cgs_review stage still exists after the Chair:
-        //               Non-Executive CGS makes its own approve/reject
-        //               decision, and the letter is generated only then.
-        'cgs_stage' => env('NUREEN_SUPERVISION_CGS_STAGE', 'automatic'),
+        // How CGS takes control of a Main or Co-Supervisor appointment
+        // (0 Client Charter days for the CGS stage: same working day). See
+        // SupervisionWorkflow::stages() and SupervisionDetail::
+        // cgs_stage_snapshot -- an in-flight application always runs the
+        // chain it was submitted under.
+        //   'endorse'   DEFAULT. After the Chair of Department approves,
+        //               Non-Executive CGS previews the letter (DRAFT) and
+        //               endorses it; endorsing assigns the reference,
+        //               issues the letter under the endorser's own name and
+        //               approves the application. CGS can also reject, with
+        //               a reason. An official letter only ever names an
+        //               endorser who actually endorsed it.
+        //   'automatic' The Chair's approval is final and the letter is
+        //               issued at once. It names no CGS endorser: it states
+        //               that it was issued by the Centre for Graduate
+        //               Studies following approval by the Chair (named from
+        //               approval_history). CGS can revoke it afterwards.
+        //   'manual'    Non-Executive CGS makes an eligibility approve/
+        //               reject decision after the Chair; the letter is
+        //               issued on that approval, naming that CGS user.
+        'cgs_stage' => env('NUREEN_SUPERVISION_CGS_STAGE', 'endorse'),
 
         // CGS/SVAPPT/<year>/<sequence>. See Support\AppointmentReferenceGenerator,
         // the same race-safe pattern as CertificateReferenceGenerator.
@@ -102,23 +109,35 @@ return [
         // Which fields the form, validation, the approver's detail view
         // and the generated letter show for each certification type -- a
         // GA certifies against a course, a GRA against a research
-        // project. key => ['label' => ..., 'type' => 'text', 'required' => bool].
-        // Same convention as ga_extension.additional_fields: one list,
-        // read everywhere a field needs to appear.
+        // project. key => ['label' => ..., 'type' => 'text', 'required' => bool,
+        // 'max' => characters]. Same convention as
+        // ga_extension.additional_fields: one list, read everywhere a field
+        // needs to appear.
+        //
+        // 'max' is what keeps the certification letter on ONE A4 page:
+        // every one of these is printed on it. CertificationController::
+        // store() validates against it, the form sets maxlength and shows a
+        // counter from it, and LettersTest renders the letter with every
+        // field at exactly its max at once and asserts a single page. Raise
+        // one only together with that test.
         'fields' => [
             'GA' => [
-                'course_code' => ['label' => 'Course Code', 'type' => 'text', 'required' => true],
-                'course_name' => ['label' => 'Course Name', 'type' => 'text', 'required' => true],
-                'course_owner_name' => ['label' => "Course Owner's Name", 'type' => 'text', 'required' => true],
-                'semester' => ['label' => 'Semester', 'type' => 'text', 'required' => true],
+                'course_code' => ['label' => 'Course Code', 'type' => 'text', 'required' => true, 'max' => 20],
+                'course_name' => ['label' => 'Course Name', 'type' => 'text', 'required' => true, 'max' => 120],
+                'course_owner_name' => ['label' => "Course Owner's Name", 'type' => 'text', 'required' => true, 'max' => 80],
+                'semester' => ['label' => 'Semester', 'type' => 'text', 'required' => true, 'max' => 30],
             ],
             'GRA' => [
-                'project_title' => ['label' => 'Research Project Title', 'type' => 'text', 'required' => true],
-                'project_leader_name' => ['label' => "Project Leader's Name", 'type' => 'text', 'required' => true],
-                'semester' => ['label' => 'Semester', 'type' => 'text', 'required' => true],
-                'grant_code' => ['label' => 'Grant/Project Code', 'type' => 'text', 'required' => false],
+                'project_title' => ['label' => 'Research Project Title', 'type' => 'text', 'required' => true, 'max' => 150],
+                'project_leader_name' => ['label' => "Project Leader's Name", 'type' => 'text', 'required' => true, 'max' => 80],
+                'semester' => ['label' => 'Semester', 'type' => 'text', 'required' => true, 'max' => 30],
+                'grant_code' => ['label' => 'Grant/Project Code', 'type' => 'text', 'required' => false, 'max' => 40],
             ],
         ],
+
+        // Printed on the letter too ("issued at your request for the
+        // following purpose: ..."), so limited for the same reason.
+        'purpose_max' => 120,
 
         // The required supporting document's label depends on the type --
         // same upload field, different wording for who has to have signed
@@ -130,13 +149,15 @@ return [
 
     ],
 
-    // How many days a pending application may sit at one stage with no
-    // decision before the current approver is reminded, and (Supervision
-    // only) after how many reminders CGS Staff is looped in. Read by
-    // Support\StalledApplicationReminder, the three remind-stalled
-    // commands, and Support\ProcessingTimeAnalytics (an "overdue"
+    // The Client Charter ('charter_days' below) now decides when a stage's
+    // reviewer is reminded. 'stalled_days' is only the FALLBACK, in
+    // working days, for a stage whose charter is null -- today that is
+    // just GA Extension's 'senior_director' stage in 'senior_director'
+    // mode. 'escalate_after_reminders' (Supervision only) is unchanged:
+    // after that many reminders at one stage, CGS Staff is looped in. All
+    // of it goes through Support\ClientCharter, so an "overdue"
     // application on the analytics page is exactly one that would trigger
-    // a reminder -- one number per module, not two to keep in sync).
+    // a reminder.
     'reminders' => [
         'supervision' => [
             'stalled_days' => 3,
@@ -151,14 +172,19 @@ return [
     ],
 
     // Official Client Charter working days per module and stage, as given
-    // in CGS's UResearch process workflow diagrams. Not read by anything
-    // yet -- reminders and analytics keep using 'reminders' above until a
-    // later task wires this in. Keyed by the real Stage::key so there is
-    // no separate vocabulary to keep in sync with the workflow classes.
+    // in CGS's UResearch process workflow diagrams. Read by
+    // Support\ClientCharter, which is the one place that turns these into
+    // stage due dates, the student's expected decision date, the reminder
+    // threshold and the compliance report -- see 'charter' below for the
+    // calendar they are counted on. Keyed by the real Stage::key so there
+    // is no separate vocabulary to keep in sync with the workflow classes.
     // A stage only used in one config mode (ga_extension.senior_director,
     // supervision.cgs_review) is listed anyway, so the figure is on record
-    // even while that mode is not the default; null means "not timed" for
-    // a mode where the stage is entirely skipped.
+    // even while that mode is not the default. null means CGS has given no
+    // charter figure for that stage: it gets no due date and no expected
+    // decision date (nothing is invented), and its reminders fall back to
+    // 'reminders.<module>.stalled_days' above. 0 means "same day" and adds
+    // nothing to an expected decision date.
     'charter_days' => [
         'ga_extension' => [
             'supervisor' => 3,
@@ -175,6 +201,51 @@ return [
             'cgs_verify' => 2,
             'senior_director' => 2,
         ],
+    ],
+
+    // The shared letter layout (Resources/views/letters/layout.blade.php)
+    // both the Supervision appointment letter and the GA/GRA certification
+    // letter extend. Everything CGS may want to change without touching
+    // code lives here. See Support\LetterRenderer.
+    'letters' => [
+
+        'institution' => 'Universiti Teknologi PETRONAS',
+        'centre' => 'Centre for Graduate Studies (CGS)',
+        'address' => '32610 Seri Iskandar, Perak Darul Ridzuan, Malaysia',
+
+        // PLACEHOLDERS until CGS confirms its official contact details.
+        'phone' => env('NUREEN_LETTER_PHONE', '+60 5-xxx xxxx'),
+        'email' => env('NUREEN_LETTER_EMAIL', 'cgs@utp.edu.my'),
+        'website' => env('NUREEN_LETTER_WEBSITE', 'www.utp.edu.my'),
+
+        // A local image file. If it is missing or unreadable the letterhead
+        // falls back to text only; it is never fetched from the internet.
+        // Downscaled in memory before embedding (see LetterRenderer::logo()),
+        // so a large source file does not bloat every letter.
+        'logo_path' => env('NUREEN_LETTER_LOGO', public_path('images/UTP_logo.png')),
+
+        // The one accent colour: the rule under the letterhead.
+        'accent' => '#1F3A68',
+
+        // The title printed under a signatory's name, by role. The line
+        // below it always reads "Centre for Graduate Studies". Provisional
+        // until CGS confirms the wording for each post.
+        'signatory_titles' => [
+            'non_exec_cgs' => 'Non-Executive',
+            'senior_director_cgs' => 'Senior Director',
+        ],
+
+    ],
+
+    'charter' => [
+
+        // Dates (Y-m-d) that are not working days even though they fall on
+        // a weekday. Empty by default. CGS can list Malaysian national and
+        // Perak state public holidays here (e.g. '2026-12-25'); every due
+        // date, expected decision date, reminder and compliance figure is
+        // counted on Support\WorkingDayCalendar, which reads this one list.
+        'holidays' => [],
+
     ],
 
 ];

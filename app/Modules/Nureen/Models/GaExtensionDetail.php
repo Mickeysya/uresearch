@@ -3,13 +3,14 @@
 namespace App\Modules\Nureen\Models;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class GaExtensionDetail extends Model
 {
     protected $fillable = [
-        'application_id', 'current_end_date', 'requested_new_end_date', 'reason_for_extension',
+        'application_id', 'supervisor_id', 'current_end_date', 'requested_new_end_date', 'reason_for_extension',
         'additional_info', 'final_approver_snapshot',
     ];
 
@@ -26,5 +27,11 @@ class GaExtensionDetail extends Model
     public function application(): BelongsTo
     {
         return $this->belongsTo(Application::class);
+    }
+
+    /** The supervisor this application's 'supervisor' stage is addressed to. */
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'supervisor_id');
     }
 }

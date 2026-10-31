@@ -18,31 +18,38 @@ use Illuminate\Support\Collection;
  */
 class StalledApplicationReminder
 {
-    public function __construct(protected WorkflowEngine $engine) {}
+    public function __construct(
+        protected WorkflowEngine $engine,
+        protected ClientCharter $charter,
+    ) {}
 
     /**
-     * Pending applications of this module type that have not moved in at
-     * least $days, and have not already been reminded since the cutoff --
-     * so a 24-hour-interval schedule never double-reminds inside one
-     * stall.
+     * Pending applications of this module type whose current stage's
+     * reviewer is due a reminder -- see ClientCharter::dueForReminder():
+     * first on the working day the stage goes past its Client Charter (or
+     * its stalled_days fallback, for a stage with no charter), then once
+     * per further full period, so a daily schedule never double-reminds
+     * inside one stall. $overrideDays (a command's --days) replaces the
+     * charter for every stage.
      *
      * @return Collection<int, Application>
      */
-    public function findStalled(string $moduleType, int $days): Collection
+    public function findStalled(string $moduleType, ?int $overrideDays = null): Collection
     {
-        $cutoff = now()->subDays($days);
-
         return Application::query()
             ->where('module_type', $moduleType)
             ->where('status', Application::STATUS_PENDING)
-            ->where('updated_at', '<=', $cutoff)
+            ->with('history')
             ->get()
-            ->filter(function (Application $application) use ($cutoff) {
+            ->filter(function (Application $application) use ($overrideDays) {
                 $reminder = ApplicationReminder::where('application_id', $application->id)->first();
 
-                return ! $reminder
-                    || ! $reminder->last_reminded_at
-                    || $reminder->last_reminded_at->lt($cutoff);
+                return $this->charter->dueForReminder(
+                    $application,
+                    $reminder?->last_reminded_at,
+                    $reminder?->reminded_stage_key,
+                    $overrideDays,
+                );
             })
             ->values();
     }
@@ -74,17 +81,20 @@ class StalledApplicationReminder
 
     /**
      * Records that a reminder just went out, resetting the count rather
-     * than incrementing it if the application has moved to a different
-     * stage since the last reminder -- a count from a stage it has since
-     * left is not "still stalled here", it is stale.
+     * than incrementing it if the last one was about a different stage or
+     * an earlier visit to this one (before a return-to-supervisor) -- a
+     * count from a stall that has since ended is stale, not "still stalled
+     * here".
      */
-    public function recordReminder(Application $application, ?string $stageKey): ApplicationReminder
+    public function recordReminder(Application $application, array $clock): ApplicationReminder
     {
         $reminder = ApplicationReminder::firstOrCreate(['application_id' => $application->id]);
 
+        $sameStall = $this->charter->remindedDuringThisStage($clock, $reminder->last_reminded_at, $reminder->reminded_stage_key);
+
         $reminder->update([
-            'reminder_count' => $reminder->reminded_stage_key === $stageKey ? $reminder->reminder_count + 1 : 1,
-            'reminded_stage_key' => $stageKey,
+            'reminder_count' => $sameStall ? $reminder->reminder_count + 1 : 1,
+            'reminded_stage_key' => $clock['stage']->key,
             'last_reminded_at' => now(),
         ]);
 

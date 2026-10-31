@@ -11,6 +11,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\TestCase;
 
 /**
@@ -25,6 +26,7 @@ use Tests\TestCase;
  */
 class CertificationTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 

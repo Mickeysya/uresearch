@@ -11,9 +11,9 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Notifications\CertificationIssued;
 use App\Modules\Nureen\Support\AppointmentVerifier;
+use App\Modules\Nureen\Support\ClientCharter;
+use App\Modules\Nureen\Support\LetterRenderer;
 use App\Modules\Nureen\Support\CertificateReferenceGenerator;
-use App\Modules\Nureen\Support\Contracts\GeneratesQrCode;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +34,7 @@ class CertificationController extends Controller
             'fields' => config('nureen.ga_certification.fields'),
             'supportingDocumentLabel' => config('nureen.ga_certification.supporting_document_label'),
             'hasSupervisor' => $request->user()->supervisor_id !== null,
+            'purposeMax' => config('nureen.ga_certification.purpose_max'),
         ]);
     }
 
@@ -53,7 +54,8 @@ class CertificationController extends Controller
             'appointment_type' => ['required', 'in:GA,GRA'],
             'period_start' => ['required', 'date'],
             'period_end' => ['required', 'date', 'after:period_start'],
-            'purpose' => ['nullable', 'string', 'max:255'],
+            // Printed on the letter -- see config('nureen.ga_certification.purpose_max').
+            'purpose' => ['nullable', 'string', 'max:'.config('nureen.ga_certification.purpose_max')],
         ]);
 
         // "The form shows only the fields for the chosen type" -- validated
@@ -64,7 +66,8 @@ class CertificationController extends Controller
         $typeRules = [];
 
         foreach ($typeFields as $key => $field) {
-            $typeRules[$key] = [($field['required'] ?? false) ? 'required' : 'nullable', 'string', 'max:255'];
+            // 'max' keeps the letter on one page -- see the config comment.
+            $typeRules[$key] = [($field['required'] ?? false) ? 'required' : 'nullable', 'string', 'max:'.($field['max'] ?? 255)];
         }
 
         $typeData = $request->validate($typeRules);
@@ -106,14 +109,18 @@ class CertificationController extends Controller
             ->with('status', "Certification request #{$application->id} submitted.");
     }
 
-    public function queue(Request $request, WorkflowEngine $engine, AppointmentVerifier $verifier)
+    public function queue(Request $request, WorkflowEngine $engine, AppointmentVerifier $verifier, ClientCharter $charter)
     {
         // Same reasoning as SupervisionController::queue(): the engine's
         // queue is role-scoped, not person-scoped, so the 'supervisor'
         // stage is narrowed to the one person this application actually
         // names. CGS Staff and Senior Director need no such narrowing.
-        $queue = $this->queueFor($request, $engine, ['student'],
-            function ($query, Stage $stage) use ($request) {
+        // Every stage is ordered by when each row reached it, so anything
+        // past its Client Charter due date sits at the top.
+        $queue = $this->queueFor($request, $engine, ['student', 'history'],
+            function ($query, Stage $stage) use ($request, $charter) {
+                $charter->orderByStageEntry($query);
+
                 if ($stage->key !== 'supervisor') {
                     return;
                 }
@@ -151,6 +158,7 @@ class CertificationController extends Controller
 
         return view('nureen::ga_certification.queue', $queue + [
             'details' => $details,
+            'clocks' => $queue['applications']->mapWithKeys(fn (Application $a) => [$a->id => $charter->stageClock($a)]),
             'appointmentChecks' => $appointmentChecks,
         ]);
     }
@@ -207,7 +215,7 @@ class CertificationController extends Controller
         }
 
         if ($decided->status === Application::STATUS_APPROVED) {
-            $this->generateCertificate($decided, $request->user(), $documents);
+            $this->generateCertificate($decided, $documents);
         }
 
         $verb = $data['decision'] === 'approve' ? 'approved' : 'rejected';
@@ -215,29 +223,22 @@ class CertificationController extends Controller
         return back()->with('status', "Application #{$application->id} {$verb}.");
     }
 
-    protected function generateCertificate(Application $application, $endorsedBy, DocumentStore $documents): void
+    /**
+     * Assigns the reference and stores the letter. The Senior Director it
+     * names is read from approval_history by Support\LetterRenderer -- the
+     * person who actually approved, not whoever happens to be passed in.
+     */
+    protected function generateCertificate(Application $application, DocumentStore $documents): void
     {
         $detail = GaCertificationDetail::where('application_id', $application->id)->firstOrFail();
 
         $detail->update(['reference_number' => app(CertificateReferenceGenerator::class)->generate()]);
 
-        $verificationUrl = route('certificate.verify', $detail->reference_number);
-        $qr = app(GeneratesQrCode::class)->dataUri($verificationUrl);
-
-        $pdf = Pdf::loadView('nureen::ga_certification.certificate_pdf', [
-            'application' => $application,
-            'detail' => $detail,
-            'student' => $application->student,
-            'endorsedBy' => $endorsedBy,
-            'verificationUrl' => $verificationUrl,
-            'qrDataUri' => $qr,
-        ]);
-
         $certificate = $documents->storeGenerated(
             $application,
-            $pdf->output(),
+            app(LetterRenderer::class)->certification($application->fresh()),
             "certification-{$application->id}.pdf",
-            'GA/GRA Certification Letter',
+            LetterRenderer::CERTIFICATION_DOC_TYPE,
         );
 
         // "Generate, format, and dispatch" -- this is the dispatch. The
@@ -246,6 +247,23 @@ class CertificationController extends Controller
         // download. The letter itself stays an ApplicationDocument behind the
         // authorised route; the email is a copy, not the record.
         $application->student?->notify(new CertificationIssued($application, $certificate));
+    }
+
+    /**
+     * The Senior Director's "Preview letter" button: the exact letter with
+     * their own name in the signature block, the reference shown as "To be
+     * assigned on issue" and a DRAFT watermark. Writes and sends nothing.
+     */
+    public function previewLetter(Request $request, Application $application, WorkflowEngine $engine, LetterRenderer $letters)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($engine->currentStage($application)?->key === 'senior_director', 404, 'This letter is not awaiting final approval.');
+
+        return response($letters->certification($application, draft: true, previewer: $request->user()), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="certification-'.$application->id.'-draft.pdf"',
+            'Cache-Control' => 'no-store',
+        ]);
     }
 
     /**
@@ -272,6 +290,11 @@ class CertificationController extends Controller
             'revoked_at' => now(),
             'revoked_reason' => $data['revoked_reason'],
         ]);
+
+        // The stored letter now carries a REVOKED watermark, wherever it is
+        // downloaded from -- see LetterRenderer::replaceStored().
+        $letters = app(LetterRenderer::class);
+        $letters->replaceStored($application, LetterRenderer::CERTIFICATION_DOC_TYPE, $letters->certification($application));
 
         return back()->with('status', "Certificate {$detail->reference_number} revoked.");
     }

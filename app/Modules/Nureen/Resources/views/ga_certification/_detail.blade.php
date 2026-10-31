@@ -1,3 +1,5 @@
+@include('nureen::charter._queue_clock')
+
 @php
     $detail = $details[$application->id] ?? null;
     $check = $appointmentChecks[$application->id] ?? null;
@@ -15,6 +17,16 @@
 
     @if ($detail->purpose)
         <p>Purpose: {{ $detail->purpose }}</p>
+    @endif
+
+    {{-- The Senior Director sees the exact letter, in their own name,
+         before approving -- approving is what issues it. --}}
+    @if ($application->current_stage === 'senior_director')
+        @include('nureen::letters._preview_styles')
+        <div class="nureen-letter-actions">
+            <a href="{{ route('ga-certification.letter.preview', $application) }}" target="_blank" rel="noopener" class="btn-secondary">Preview letter</a>
+            <p class="hint">A DRAFT of the letter that approving will issue, with your name as signatory. Nothing is issued or sent by previewing.</p>
+        </div>
     @endif
 
     {{--

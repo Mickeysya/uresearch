@@ -14,6 +14,7 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionInformational;
+use App\Modules\Nureen\Support\ClientCharter;
 use App\Modules\Nureen\Workflows\GaExtensionWorkflow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,13 @@ class GaExtensionController extends Controller
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
+        // The first stage is addressed to the student's own named
+        // supervisor, so there has to be one -- same rule as
+        // CertificationController::store().
+        if (! $request->user()->supervisor_id) {
+            return back()->with('error', 'No supervisor is assigned to your account. Please contact CGS.');
+        }
+
         $requiredDocuments = config('nureen.ga_extension.required_documents');
         $additionalFields = config('nureen.ga_extension.additional_fields');
 
@@ -84,6 +92,10 @@ class GaExtensionController extends Controller
 
             GaExtensionDetail::create([
                 'application_id' => $application->id,
+                // Snapshotted like Certification's supervisor_id: if the
+                // student's supervisor changes later, this application
+                // stays with whoever it was addressed to.
+                'supervisor_id' => $request->user()->supervisor_id,
                 'current_end_date' => $data['current_end_date'],
                 'requested_new_end_date' => $data['requested_new_end_date'],
                 'reason_for_extension' => $data['reason_for_extension'],
@@ -107,9 +119,26 @@ class GaExtensionController extends Controller
             ->with('status', "GA Extension application #{$application->id} submitted.");
     }
 
-    public function queue(Request $request, WorkflowEngine $engine)
+    public function queue(Request $request, WorkflowEngine $engine, ClientCharter $charter)
     {
-        $queue = $this->queueFor($request, $engine, ['documents']);
+        // Same reasoning as CertificationController::queue(): the engine's
+        // queue is role-scoped, not person-scoped, so the 'supervisor'
+        // stage is narrowed to the one supervisor this application names
+        // (GaExtensionDetail::supervisor_id). Every stage is also ordered
+        // by when each row reached it, so anything past its Client Charter
+        // due date sits at the top -- see ClientCharter::orderByStageEntry().
+        $queue = $this->queueFor($request, $engine, ['documents', 'history'],
+            function ($query, Stage $stage) use ($request, $charter) {
+                $charter->orderByStageEntry($query);
+
+                if ($stage->key !== 'supervisor') {
+                    return;
+                }
+
+                $query->whereIn('id', GaExtensionDetail::query()
+                    ->where('supervisor_id', $request->user()->id)
+                    ->select('application_id'));
+            });
 
         $details = GaExtensionDetail::whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()
@@ -117,6 +146,7 @@ class GaExtensionController extends Controller
 
         return view('nureen::ga_extension.queue', $queue + [
             'details' => $details,
+            'clocks' => $queue['applications']->mapWithKeys(fn (Application $a) => [$a->id => $charter->stageClock($a)]),
             // Only CGS Staff, at the cgs_verify stage, may send an
             // incomplete application back to the supervisor rather than
             // rejecting it outright -- see returnToSupervisor().
@@ -161,7 +191,9 @@ class GaExtensionController extends Controller
     }
 
     /**
-     * Overrides the trait's decide(): the final decision of this chain --
+     * Overrides the trait's decide(): a 'supervisor'-stage decision must
+     * come from the supervisor this application names, and the final
+     * decision of this chain --
      * wherever it lands, see GaExtensionWorkflow::stages() -- also copies
      * the endorsing supervisor and, in 'cgs' mode, informs the Senior
      * Director who no longer has a stage of their own. See
@@ -178,6 +210,14 @@ class GaExtensionController extends Controller
 
         $stage = $engine->currentStage($application);
         $mode = app(GaExtensionWorkflow::class)->modeFor($application);
+
+        // The engine only checks the role. At the 'supervisor' stage that
+        // is every supervisor in the university; this application is
+        // addressed to one of them -- see queue().
+        if ($stage?->key === 'supervisor'
+            && GaExtensionDetail::where('application_id', $application->id)->value('supervisor_id') !== $request->user()->id) {
+            abort(403, 'This request was not addressed to you.');
+        }
 
         try {
             $decided = $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);

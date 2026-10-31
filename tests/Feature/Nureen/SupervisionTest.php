@@ -14,6 +14,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\TestCase;
 
 /**
@@ -34,6 +35,7 @@ use Tests\TestCase;
  */
 class SupervisionTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 
@@ -82,7 +84,8 @@ class SupervisionTest extends TestCase
         $detail = SupervisionDetail::where('application_id', $application->id)->sole();
         $this->assertSame(SupervisionDetail::ROLE_MAIN, $detail->appointment_role);
         $this->assertSame('new', $detail->appointment_type);
-        $this->assertSame('automatic', $detail->cgs_stage_snapshot);
+        // 'endorse' is the default: CGS endorses the letter after the Chair.
+        $this->assertSame('endorse', $detail->cgs_stage_snapshot);
 
         $document = $application->documents()->sole();
         $this->assertSame('proposal.pdf', $document->original_name);
@@ -266,6 +269,9 @@ class SupervisionTest extends TestCase
 
     public function test_automatic_mode_main_supervisor_chain_sets_supervisor_id_and_issues_the_letter(): void
     {
+        // These exercise 'automatic' mode specifically; the default is now 'endorse'.
+        config(['nureen.supervision.cgs_stage' => 'automatic']);
+
         Storage::fake('local');
         Notification::fake();
 
@@ -310,6 +316,9 @@ class SupervisionTest extends TestCase
 
     public function test_automatic_mode_co_supervisor_approval_never_touches_supervisor_id(): void
     {
+        // These exercise 'automatic' mode specifically; the default is now 'endorse'.
+        config(['nureen.supervision.cgs_stage' => 'automatic']);
+
         Storage::fake('local');
         Notification::fake();
 
@@ -418,6 +427,9 @@ class SupervisionTest extends TestCase
 
     public function test_revoking_a_main_supervisor_letter_restores_the_previous_supervisor(): void
     {
+        // These exercise 'automatic' mode specifically; the default is now 'endorse'.
+        config(['nureen.supervision.cgs_stage' => 'automatic']);
+
         Storage::fake('local');
         Notification::fake();
 
@@ -460,6 +472,9 @@ class SupervisionTest extends TestCase
      */
     public function test_revoking_a_main_supervisor_letter_does_not_overwrite_a_later_appointment(): void
     {
+        // These exercise 'automatic' mode specifically; the default is now 'endorse'.
+        config(['nureen.supervision.cgs_stage' => 'automatic']);
+
         Storage::fake('local');
         Notification::fake();
 

@@ -25,6 +25,10 @@ class ApplicationStalled extends Notification implements ShouldQueue
         protected Application $application,
         protected Stage $stage,
         protected int $daysStalled,
+        // The stage's Client Charter in working days, when it has one --
+        // see Support\ClientCharter. Null for a stage reminded on the
+        // stalled_days fallback, which has no charter figure to quote.
+        protected ?int $charterDays = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -40,7 +44,8 @@ class ApplicationStalled extends Notification implements ShouldQueue
             ->subject("Reminder: {$label} #{$this->application->id} awaiting your decision")
             ->greeting('Hi '.$notifiable->name.',')
             ->line("{$label} application #{$this->application->id} has been waiting on your ".
-                "{$this->stage->label} decision for {$this->daysStalled} days.")
+                "{$this->stage->label} decision for {$this->daysStalled} working ".str('day')->plural($this->daysStalled).'.')
+            ->lineIf($this->charterDays !== null, "The CGS Client Charter for this stage is {$this->charterDays} working ".str('day')->plural($this->charterDays).'.')
             ->action('Review it now', route($this->application->module()->queueRoute(), ['stage' => $this->stage->key]))
             ->line('Thank you for using UResearch 2.0.');
     }

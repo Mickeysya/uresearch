@@ -3,6 +3,7 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
@@ -40,7 +41,7 @@ use Carbon\CarbonInterface;
  * stuck on step 1. Declaring the chain here puts it on the same footing as
  * everything else.
  */
-class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, DecidesOneAtATime
+class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, DecidesOneAtATime, ProvidesLinks
 {
     public function key(): string
     {
@@ -52,10 +53,57 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
         return 'GA Extension';
     }
 
+    /**
+     * With an application: the chain it was submitted under (its snapshot).
+     *
+     * Without one: every stage EITHER chain can use, as Core's contract
+     * asks -- ModuleRegistry::queuesForRole() builds the sidebar and gates
+     * the queue pages from this, so a stage missing here is a stage nobody
+     * can reach. Returning only the live config's chain was a bug: in the
+     * default 'cgs' mode it dropped 'senior_director', and every older
+     * application already sitting there became undecidable. The live chain
+     * comes first, then any stage only the other chain has.
+     */
     public function stages(?Application $application = null): array
     {
-        $mode = $this->modeFor($application);
+        if ($application === null) {
+            return $this->allStages();
+        }
 
+        return $this->chainFor($this->modeFor($application));
+    }
+
+    /** @return array<int, Stage> */
+    protected function allStages(): array
+    {
+        $live = config('nureen.ga_extension.final_approver');
+        $stages = $this->chainFor($live);
+        $keys = array_map(fn (Stage $s) => $s->key, $stages);
+
+        foreach ($this->chainFor($live === 'cgs' ? 'senior_director' : 'cgs') as $stage) {
+            if (! in_array($stage->key, $keys, true)) {
+                $stages[] = $stage;
+            }
+        }
+
+        // 'cgs_verify' is the final decision on a 'cgs' application and an
+        // intermediate review on a 'senior_director' one, and both kinds
+        // share one queue -- so the queue's own title must not claim either.
+        // Per-application labels still come from chainFor().
+        return array_map(fn (Stage $s) => $s->key === 'cgs_verify'
+            ? new Stage(
+                key: 'cgs_verify',
+                label: 'Non-Executive CGS',
+                role: $s->role,
+                decision: $s->decision,
+                queueTitle: 'Pending My Review',
+            )
+            : $s, $stages);
+    }
+
+    /** @return array<int, Stage> */
+    protected function chainFor(string $mode): array
+    {
         $supervisorStage = new Stage(
             key: 'supervisor',
             label: 'Lecturer/Supervisor',
@@ -135,6 +183,19 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
     public function queueRoute(): string
     {
         return 'ga-extension.queue';
+    }
+
+    /**
+     * The student's Expected Decision Dates page, which covers all three of
+     * Nureen's approval modules (GA Extension, Supervision, Certification)
+     * -- declared here only because a link has to belong to one module.
+     * See Http\Controllers\ExpectedDecisionController.
+     */
+    public function links(User $user): array
+    {
+        return $user->role === Role::STUDENT
+            ? [['label' => 'Expected Decision Dates', 'route' => 'nureen.expected-dates']]
+            : [];
     }
 
     /**

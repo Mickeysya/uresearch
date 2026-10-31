@@ -4,130 +4,171 @@ namespace App\Modules\Nureen\Support;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\ModuleRegistry;
-use App\Modules\Core\Services\WorkflowEngine;
-use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 /**
- * "How long does each stage actually take" and "what is stuck right now",
- * for Nureen's three approval-chain modules.
+ * "Is CGS meeting its Client Charter" and "what is past its charter right
+ * now", for Nureen's three approval-chain modules.
  *
  * Computed in PHP from consecutive approval_history rows per application,
  * not a database window function: the test suite runs on SQLite, the app
  * on MySQL, and one portable calculation beats maintaining two queries. At
  * FYP data volumes this is a handful of applications, not a reason to push
  * the work into the database.
+ *
+ * Every duration here is in working days on Support\WorkingDayCalendar,
+ * and every "overdue" is Support\ClientCharter's -- the same calendar and
+ * the same rule the approver queues and the reminder commands use, so this
+ * page can never report a different answer from the one they act on.
  */
 class ProcessingTimeAnalytics
 {
     public const MODULES = ['ga_extension', 'supervision', 'ga_certification'];
 
     public function __construct(
-        protected WorkflowEngine $engine,
         protected ModuleRegistry $registry,
+        protected ClientCharter $charter,
+        protected WorkingDayCalendar $calendar,
     ) {}
 
     /**
-     * One row per (module, stage) that has at least one decision recorded:
-     * the average time between an application arriving at that stage and
-     * the decision that moved it on.
+     * One row per (module, stage) with at least one decision recorded.
      *
-     * @return Collection<int, array{module: string, module_label: string, stage_key: string, stage_label: string, average_days: float, decisions: int}>
+     * A "decision" is any approval_history row at that stage -- endorsed,
+     * approved, reviewed, rejected or returned -- since each one is what
+     * moved the application off that stage. Its duration is the working
+     * days from the application reaching the stage (submission, or the
+     * previous history row) to that row; it was "within charter" when that
+     * is no more than the stage's charter days -- exactly the opposite of
+     * ClientCharter's overdue rule. A stage with no charter figure reports
+     * its average but no compliance percentage.
+     *
+     * Rows come out in each module's own chain order, as listed in
+     * config('nureen.charter_days').
+     *
+     * @return Collection<int, array{
+     *     module: string,
+     *     module_label: string,
+     *     stage_key: string,
+     *     stage_label: string,
+     *     charter_days: ?int,
+     *     decisions: int,
+     *     within_charter: ?int,
+     *     within_charter_percent: ?float,
+     *     average_working_days: float,
+     * }>
      */
-    public function averageDaysByStageAndModule(): Collection
+    public function complianceByStageAndModule(): Collection
     {
         $applications = Application::query()
             ->whereIn('module_type', self::MODULES)
-            ->with(['history' => fn ($query) => $query->orderBy('created_at')])
+            ->with('history')
             ->get();
 
-        /** @var Collection<string, Collection<int, float>> */
-        $byKey = collect();
+        /** @var array<string, array{labels: array<int, string>, days: array<int, int>}> */
+        $byKey = [];
 
         foreach ($applications as $application) {
             $previous = $application->submitted_at;
 
-            foreach ($application->history as $entry) {
+            foreach ($application->history->sortBy([['created_at', 'asc'], ['id', 'asc']]) as $entry) {
                 if ($previous) {
-                    // diffInDays() is signed in Carbon 3: receiver->diffInDays(arg)
-                    // is (arg - receiver), so calling it on the EARLIER
-                    // timestamp with the later one as the argument is what
-                    // gives a positive duration here.
-                    $days = max(0.0, Carbon::parse($previous)->diffInDays(Carbon::parse($entry->created_at)));
-
                     $key = $application->module_type.'|'.$entry->stage_key;
-                    $byKey[$key] = ($byKey[$key] ?? collect())->push($days);
+                    $byKey[$key]['labels'][] = $entry->stage_label;
+                    // From the first working day on or after arrival, the
+                    // same anchor ClientCharter::stageClock() uses.
+                    $byKey[$key]['days'][] = $this->calendar->workingDaysBetween(
+                        $this->calendar->onOrAfter(CarbonImmutable::instance($previous)),
+                        CarbonImmutable::instance($entry->created_at),
+                    );
                 }
 
                 $previous = $entry->created_at;
             }
         }
 
-        return $byKey
-            ->map(function (Collection $days, string $key) {
+        return collect($byKey)
+            ->map(function (array $data, string $key) {
                 [$module, $stageKey] = explode('|', $key, 2);
+                $days = collect($data['days']);
+                $charterDays = $this->charter->charterDays($module, $stageKey);
+                $within = $charterDays === null ? null : $days->filter(fn (int $d) => $d <= $charterDays)->count();
 
                 return [
                     'module' => $module,
                     'module_label' => $this->registry->get($module)->label(),
                     'stage_key' => $stageKey,
-                    'stage_label' => $this->stageLabel($module, $stageKey),
-                    'average_days' => round($days->avg(), 1),
+                    // The label as recorded at decision time -- a stage
+                    // that is not on the live config's chain (GA
+                    // Extension's senior_director, in 'cgs' mode) still
+                    // reads properly.
+                    'stage_label' => end($data['labels']),
+                    'charter_days' => $charterDays,
                     'decisions' => $days->count(),
+                    'within_charter' => $within,
+                    'within_charter_percent' => $within === null ? null : round($within / $days->count() * 100, 1),
+                    'average_working_days' => round($days->avg(), 1),
                 ];
             })
-            ->values()
-            ->sortBy([['module_label', 'asc'], ['stage_label', 'asc']])
+            ->sortBy(fn (array $row) => sprintf(
+                '%d|%03d',
+                array_search($row['module'], self::MODULES, true),
+                $this->chainPosition($row['module'], $row['stage_key']),
+            ))
             ->values();
     }
 
     /**
-     * Pending applications that have outgrown their own module's reminder
-     * threshold -- deliberately the same number remind-stalled commands
-     * use (config('nureen.reminders.<module>.stalled_days')), so this list
-     * matches what reminders are actually firing on rather than keeping a
-     * second number in step with it by hand.
+     * Pending applications whose current stage is past its Client Charter
+     * (or, for a stage with no charter, its stalled_days fallback) -- the
+     * very applications the remind-stalled commands are emailing about.
      *
-     * @return Collection<int, array{application: Application, module_label: string, stage_label: string, days_waiting: int}>
+     * @return Collection<int, array{
+     *     application: Application,
+     *     module_label: string,
+     *     stage_label: string,
+     *     entered_at: CarbonImmutable,
+     *     due_date: CarbonImmutable,
+     *     on_charter: bool,
+     *     working_days_overdue: int,
+     * }>
      */
     public function overdueApplications(): Collection
     {
         $overdue = collect();
 
-        foreach (self::MODULES as $module) {
-            $days = (int) config("nureen.reminders.{$module}.stalled_days");
-            $cutoff = now()->subDays($days);
+        $applications = Application::query()
+            ->whereIn('module_type', self::MODULES)
+            ->where('status', Application::STATUS_PENDING)
+            ->with(['student', 'history'])
+            ->get();
 
-            $applications = Application::query()
-                ->where('module_type', $module)
-                ->where('status', Application::STATUS_PENDING)
-                ->where('updated_at', '<=', $cutoff)
-                ->with('student')
-                ->get();
+        foreach ($applications as $application) {
+            $clock = $this->charter->stageClock($application);
 
-            foreach ($applications as $application) {
-                $stage = $this->engine->currentStage($application);
-
-                $overdue->push([
-                    'application' => $application,
-                    'module_label' => $this->registry->get($module)->label(),
-                    'stage_label' => $stage?->label ?? $application->current_stage,
-                    'days_waiting' => max(0, (int) $application->updated_at->diffInDays(now())),
-                ]);
+            if (! $clock || ! $clock['overdue']) {
+                continue;
             }
+
+            $overdue->push([
+                'application' => $application,
+                'module_label' => $this->registry->get($application->module_type)->label(),
+                'stage_label' => $clock['stage']->label,
+                'entered_at' => $clock['entered_at'],
+                'due_date' => $clock['due_date'],
+                'on_charter' => $clock['on_charter'],
+                'working_days_overdue' => $clock['working_days_overdue'],
+            ]);
         }
 
-        return $overdue->sortByDesc('days_waiting')->values();
+        return $overdue->sortByDesc('working_days_overdue')->values();
     }
 
-    protected function stageLabel(string $module, string $stageKey): string
+    protected function chainPosition(string $module, string $stageKey): int
     {
-        foreach ($this->registry->get($module)->stages() as $stage) {
-            if ($stage->key === $stageKey) {
-                return $stage->label;
-            }
-        }
+        $position = array_search($stageKey, array_keys(config("nureen.charter_days.{$module}", [])), true);
 
-        return $stageKey;
+        return $position === false ? 999 : $position;
     }
 }

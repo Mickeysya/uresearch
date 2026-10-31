@@ -12,14 +12,17 @@ use App\Modules\Nureen\Models\SupervisionDetail;
 /**
  * Supervisor (Main or Co-) appointment requests.
  *
- * Two chains, chosen per application at submission time and never revisited
- * afterwards -- see SupervisionDetail::cgs_stage_snapshot:
- *   'automatic' DEFAULT, confirmed against CGS's UResearch process (0
- *                Client Charter days for the CGS step). The named supervisor
- *                endorses, then the Chair of Department approves -- and
- *                that approval is final: the appointment letter is issued
- *                immediately. CGS keeps control AFTER issuance instead of
- *                before it; see SupervisionController::decide()/revokeLetter().
+ * Three chains, chosen per application at submission time and never
+ * revisited afterwards -- see SupervisionDetail::cgs_stage_snapshot:
+ *   'endorse'    DEFAULT. Supervisor, Chair of Department, then Non-
+ *                Executive CGS previews and endorses the letter at
+ *                cgs_review (0 Client Charter days: same working day).
+ *                Endorsing issues the letter in the endorser's own name,
+ *                so a letter never names an endorser who did not act.
+ *   'automatic'  The Chair of Department's approval is final and the
+ *                letter is issued at once, stating it was issued by CGS
+ *                following the Chair's approval -- no CGS endorser is
+ *                named. CGS keeps control AFTER issuance (revocation).
  *   'manual'     The cgs_review stage still exists after the Chair: Non-
  *                Executive CGS makes its own approve/reject decision, and
  *                the letter is generated only then -- closer to the
@@ -35,6 +38,9 @@ use App\Modules\Nureen\Models\SupervisionDetail;
  */
 class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime
 {
+    /** Every config('nureen.supervision.cgs_stage') value a snapshot can hold. */
+    public const MODES = ['endorse', 'automatic', 'manual'];
+
     public function key(): string
     {
         return 'supervision';
@@ -45,10 +51,41 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime
         return 'Supervision Request';
     }
 
+    /**
+     * With an application: the chain it was submitted under (its snapshot).
+     *
+     * Without one: every stage EITHER chain can use, as Core's contract
+     * asks -- ModuleRegistry::queuesForRole() builds the sidebar and gates
+     * the queue pages from this. Returning only the live config's chain
+     * was a bug: in the default 'automatic' mode it dropped 'cgs_review',
+     * so Non-Executive CGS could no longer reach the older 'manual'
+     * applications already waiting there.
+     */
     public function stages(?Application $application = null): array
     {
-        $mode = $this->modeFor($application);
+        if ($application === null) {
+            $live = config('nureen.supervision.cgs_stage');
+            $stages = $this->chainFor($live);
+            $keys = array_map(fn (Stage $s) => $s->key, $stages);
 
+            foreach (array_diff(self::MODES, [$live]) as $mode) {
+                foreach ($this->chainFor($mode) as $stage) {
+                    if (! in_array($stage->key, $keys, true)) {
+                        $stages[] = $stage;
+                        $keys[] = $stage->key;
+                    }
+                }
+            }
+
+            return $stages;
+        }
+
+        return $this->chainFor($this->modeFor($application));
+    }
+
+    /** @return array<int, Stage> */
+    protected function chainFor(string $mode): array
+    {
         $supervisorStage = new Stage(
             key: 'supervisor',
             label: 'Lecturer/Supervisor',
@@ -56,6 +93,31 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime
             decision: 'endorsed',
             queueTitle: 'Pending My Endorsement',
         );
+
+        if ($mode === 'endorse') {
+            return [
+                $supervisorStage,
+                new Stage(
+                    key: 'chair',
+                    label: 'Chair of Department',
+                    role: Role::CHAIR,
+                    decision: 'endorsed',
+                    queueTitle: 'Pending Department Approval',
+                ),
+                // Same Stage key as 'manual' mode's eligibility review, so
+                // an application sitting at cgs_review is found the same way
+                // whichever of the two it was submitted under. Endorsing
+                // here is what issues the letter -- see
+                // SupervisionController::decide()/previewLetter().
+                new Stage(
+                    key: 'cgs_review',
+                    label: 'Non-Executive CGS',
+                    role: Role::NON_EXEC_CGS,
+                    decision: 'endorsed',
+                    queueTitle: 'Pending Letter Endorsement',
+                ),
+            ];
+        }
 
         if ($mode === 'manual') {
             return [
@@ -90,7 +152,7 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime
     }
 
     /**
-     * 'automatic' or 'manual' -- the application's own snapshot when it has
+     * 'endorse', 'automatic' or 'manual' -- the application's own snapshot when it has
      * one, otherwise the live config (true for a brand new application
      * mid-submit, before SupervisionController::store() has written one).
      */

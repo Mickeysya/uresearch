@@ -1,6 +1,20 @@
+@include('nureen::charter._queue_clock')
+
 @php($detail = $details[$application->id] ?? null)
 
 @if ($detail)
+    {{-- One CGS queue holds both chains' applications (see
+         GaExtensionWorkflow::allStages()), so say which this one is. --}}
+    @if ($application->current_stage === 'cgs_verify')
+        <p class="queue-meta">
+            @if ($detail->final_approver_snapshot === 'senior_director')
+                Submitted under the earlier chain: your approval sends it on to the Senior Director CGS for the final decision.
+            @else
+                Your decision is final for this application.
+            @endif
+        </p>
+    @endif
+
     <p>Current End Date: {{ $detail->current_end_date->format('j M Y') }}</p>
     <p>Requested New End Date: <b>{{ $detail->requested_new_end_date->format('j M Y') }}</b>
        ({{ $detail->current_end_date->diffInDays($detail->requested_new_end_date) }} days extra)</p>
