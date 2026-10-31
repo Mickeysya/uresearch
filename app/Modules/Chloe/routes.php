@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Chloe\Http\Controllers\CandidacyAppealController;
+use App\Modules\Chloe\Http\Controllers\Candidacy\PortalController;
 use App\Modules\Chloe\Http\Controllers\Candidacy\StudentAppealController;
 use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyDismissalController;
 use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyOperationsController;
@@ -137,11 +138,24 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
     Route::get('/candidacy/appeals/{appeal}/memo', [StudentAppealController::class, 'downloadMemo'])->whereNumber('appeal')->name('candidacy.appeals.memo');
     Route::get('/candidacy/live/version', [StudentAppealController::class, 'liveVersion'])->middleware('throttle:workstation-live')->name('candidacy.live.version');
 
-    // The chain's four approver roles share one queue/decide pair — queueFor()
-    // already scopes each to only the stage(s) that role owns.
-    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS, Role::DEAN_PGR]))->group(function () {
-        Route::get('/candidacy-appeal/queue', [CandidacyAppealController::class, 'queue'])->name('candidacy-appeal.queue');
-        Route::post('/candidacy-appeal/{application}/decide', [CandidacyAppealController::class, 'decide'])->name('candidacy-appeal.decide');
+    // The Approval Portal: Supervisor, Programme Chair, CGS verification and Dean of PGR share one set of pages.
+    // Visibility is decided by CandidacyAppealPolicy (named person only), not by the role list alone.
+    Route::middleware('role:'.implode(',', array_unique(array_merge([Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], (array) config('candidacy.cgs_roles')))))->group(function () {
+        Route::get('/candidacy/portal', [PortalController::class, 'queue'])->name('candidacy.portal.queue');
+        Route::get('/candidacy/portal/region', [PortalController::class, 'queueRegion'])->name('candidacy.portal.region');
+        Route::get('/candidacy/portal/live/version', [PortalController::class, 'queueVersion'])->middleware('throttle:workstation-live')->name('candidacy.portal.live.version');
+        Route::get('/candidacy/portal/appeals/{appeal}', [PortalController::class, 'review'])->whereNumber('appeal')->name('candidacy.portal.review');
+        Route::get('/candidacy/portal/appeals/{appeal}/region', [PortalController::class, 'reviewRegion'])->whereNumber('appeal')->name('candidacy.portal.review.region');
+        Route::post('/candidacy/portal/appeals/{appeal}/decide', [PortalController::class, 'decide'])->whereNumber('appeal')->name('candidacy.portal.decide');
+
+        Route::get('/candidacy/signature', [PortalController::class, 'signature'])->name('candidacy.signature.show');
+        Route::post('/candidacy/signature', [PortalController::class, 'signatureStore'])->name('candidacy.signature.store');
+        Route::delete('/candidacy/signature', [PortalController::class, 'signatureDestroy'])->name('candidacy.signature.destroy');
+        Route::get('/candidacy/signature/image', [PortalController::class, 'signatureImage'])->name('candidacy.signature.image');
+
+        // The old shared-engine queue URLs land on the portal; nothing can be decided through them any more.
+        Route::get('/candidacy-appeal/queue', fn () => redirect()->route('candidacy.portal.queue'))->name('candidacy-appeal.queue');
+        Route::post('/candidacy-appeal/{application}/decide', fn () => redirect()->route('candidacy.portal.queue'))->name('candidacy-appeal.decide');
     });
 
     Route::middleware('role:'.implode(',', Role::cgsTeam()))->group(function () {

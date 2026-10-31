@@ -53,27 +53,32 @@
         });
     }
 
-    // ---- modals (a decision always asks in a modal, never with a browser confirm)
-    $all('[data-modal-open]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var m = document.getElementById(btn.getAttribute('data-modal-open'));
-            if (m) { m.hidden = false; document.documentElement.setAttribute('data-wca-modal', '1'); var f = $('textarea, input[type="checkbox"]', m); if (f) { f.focus(); } }
-        });
-    });
+    // ---- modals (a decision always asks in a modal, never with a browser confirm). Delegated, so a live refresh keeps them working.
     function closeModals() { $all('.wca-modal').forEach(function (m) { m.hidden = true; }); document.documentElement.removeAttribute('data-wca-modal'); }
     document.addEventListener('click', function (e) {
+        var opener = e.target.closest('[data-modal-open]');
+        if (opener) {
+            var m = document.getElementById(opener.getAttribute('data-modal-open'));
+            if (m) { m.hidden = false; document.documentElement.setAttribute('data-wca-modal', '1'); }
+            return;
+        }
         if (e.target.closest('[data-modal-close]') || (e.target.classList && e.target.classList.contains('wca-modal'))) { closeModals(); }
     });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModals(); } });
-
-    // ---- other-needs-a-remark hint
-    $all('.wca-modal form').forEach(function (form) {
-        var other = $('input[value="other"]', form), remark = $('textarea[name="remark"]', form), need = $('[data-remark-need]', form);
-        if (other && remark && need) {
-            var sync = function () { need.classList.toggle('wca-hidden', !other.checked); };
-            other.addEventListener('change', sync); sync();
-        }
+    document.addEventListener('change', function (e) {
+        var other = e.target.closest('input[value="other"]');
+        if (other) { var need = $('[data-remark-need]', other.closest('form')); if (need) { need.classList.toggle('wca-hidden', !other.checked); } }
     });
+
+    // ---- signature: preview the chosen file before saving
+    var sigFile = $('#wca-sig-file');
+    if (sigFile) {
+        sigFile.addEventListener('change', function () {
+            var f = sigFile.files && sigFile.files[0], box = $('#wca-sig-new'), img = $('#wca-sig-new-img');
+            if (!f || !/^image\/(png|jpeg)$/.test(f.type)) { box.classList.add('wca-hidden'); return; }
+            var reader = new FileReader(); reader.onload = function () { img.src = reader.result; box.classList.remove('wca-hidden'); }; reader.readAsDataURL(f);
+        });
+    }
 
     // ---- live updates
     var cfg = $('#wca-live');

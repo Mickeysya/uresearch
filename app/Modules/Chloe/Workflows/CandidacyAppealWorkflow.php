@@ -3,6 +3,7 @@
 namespace App\Modules\Chloe\Workflows;
 
 use App\Modules\Chloe\Models\CandidacyAppealDetail;
+use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesApplicationDetail;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
@@ -19,7 +20,7 @@ use App\Modules\Core\Support\Stage;
  * and `dean`/`dean_pgr` pairing already listed in docs/module-keys.md's
  * stage-key table, put there for exactly this chain.
  */
-class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDetail
+class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDetail, ProvidesLinks
 {
     public function key(): string
     {
@@ -50,6 +51,25 @@ class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDeta
             : 'Study candidacy appeal';
     }
 
+    /**
+     * Sidebar and dashboard shortcuts through the module mechanism (no shared layout edit): the portal queue for every CGS role
+     * (the engine only knows non_exec_cgs as a stage owner) and "My Signature" for everyone who signs.
+     */
+    public function links(\App\Modules\Core\Models\User $user): array
+    {
+        $links = [];
+
+        if (in_array($user->role, array_diff((array) config('candidacy.cgs_roles'), [Role::NON_EXEC_CGS]), true)) {
+            $links[] = ['label' => 'Candidacy Appeals', 'route' => 'candidacy.portal.queue'];
+        }
+
+        if (in_array($user->role, array_unique(array_merge([Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], (array) config('candidacy.cgs_roles'))), true)) {
+            $links[] = ['label' => 'My Signature', 'route' => 'candidacy.signature.show'];
+        }
+
+        return $links;
+    }
+
     public function createRoute(): ?string
     {
         return 'candidacy-appeal.create';
@@ -57,7 +77,7 @@ class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDeta
 
     public function queueRoute(): string
     {
-        return 'candidacy-appeal.queue';
+        return 'candidacy.portal.queue';
     }
 
     /**

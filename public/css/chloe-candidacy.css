@@ -189,3 +189,20 @@
 .wca-page .wca-card form + h4 { margin-top: 26px; }
 .wca-page .wca-card p + form, .wca-page .wca-card ul + form { margin-top: 12px; }
 .wca-page input[type="file"] { margin: 0; min-height: 44px; }
+
+/* Approval Portal */
+.wca-page .wca-filters { padding-bottom: 12px; }
+.wca-filter-grid { display: grid; grid-template-columns: 2fr repeat(4, minmax(0, 1fr)); gap: 0 14px; margin: 0; padding: 0; }
+.wca-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 0; border-bottom: 1px solid var(--wca-line); }
+.wca-page .wca-tab { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 -1px; padding: 0 16px; min-height: 42px; line-height: 1.2; color: var(--wca-ink); text-decoration: none; font-weight: 600; border-bottom: 3px solid transparent; }
+.wca-page .wca-tab:hover { background: var(--wca-hover); text-decoration: none; }
+.wca-page .wca-tab.is-active { border-bottom-color: var(--wca-blue); }
+.wca-count { display: inline-block; margin: 0; padding: 1px 8px; min-width: 24px; text-align: center; color: var(--wca-ink); background: #EDF1F4; border-radius: 10px; font-size: 12.5px; font-weight: 600; line-height: 1.5; }
+.wca-tag { display: inline-block; margin: 4px 0 0; padding: 1px 8px; border: 1px solid var(--wca-line); border-left: 4px solid var(--wca-gold); border-radius: 4px; color: var(--wca-ink); font-size: 12px; line-height: 1.5; background: #fff; }
+.wca-modal { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; margin: 0; padding: 16px; background: rgba(20, 30, 40, 0.45); }
+.wca-modal[hidden] { display: none; }
+.wca-modal-box { width: 100%; max-width: 560px; max-height: calc(100vh - 32px); overflow-y: auto; margin: 0; padding: 22px; background: #fff; border-radius: 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3); color: var(--wca-ink); }
+.wca-sig-preview { margin: 8px 0 12px; padding: 12px; background: #fff; border: 1px dashed #B8C3CE; border-radius: 8px; display: inline-block; max-width: 100%; }
+.wca-sig-img { display: block; max-width: 100%; height: auto; max-height: 200px; margin: 0; padding: 0; }
+@media (max-width: 1100px) { .wca-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .wca-filter-grid { grid-template-columns: minmax(0, 1fr); } }
