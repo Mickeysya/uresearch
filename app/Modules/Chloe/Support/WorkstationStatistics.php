@@ -138,20 +138,95 @@ final class WorkstationStatistics
         return $result;
     }
 
+    /**
+     * Seats whose CURRENT key is waiting to be collected.
+     *
+     * One definition, shared with the seat list: the list's "Key Pending
+     * Collection" filter shows a seat when WorkstationManagementController::
+     * presentSeat() resolves its displayed key to `requested`, and that key
+     * is the seat's active (confirmed) request's latest key. This counts
+     * exactly those seats through the same two relations, so the stats bar
+     * number and the filtered list can never disagree.
+     *
+     * It used to count raw locker_keys rows with status `requested`, which
+     * also counted a stale pending key left on a request that had already
+     * been released (the seat Available again): the bar said 22 while the
+     * list, Insights and the seat details all said 21.
+     */
     public static function keysPendingCollection(): int
     {
-        return LockerKey::where('status', LockerKey::STATUS_REQUESTED)->count();
+        return Workstation::whereHas(
+            'activeRequest.lockerKey',
+            fn ($key) => $key->where('locker_keys.status', LockerKey::STATUS_REQUESTED)
+        )->count();
     }
 
-    /** @return array{total: int, overdue: int} */
+    /**
+     * Keys waiting to come back, and how many of those are overdue --
+     * counted per seat on the seat list's own "displayed key" rule
+     * (presentSeat(): the active request's key, or, with no occupant, the
+     * seat's latest Return Pending key), so "Key Return Overdue" always
+     * equals its filtered list.
+     *
+     * @return array{total: int, overdue: int}
+     */
     public static function keysPendingReturn(): array
     {
-        $total = LockerKey::where('status', LockerKey::STATUS_RETURN_PENDING)->count();
-        $overdue = LockerKey::where('status', LockerKey::STATUS_RETURN_PENDING)
-            ->where('return_due_at', '<', now())
-            ->count();
+        $displayed = Workstation::query()
+            ->with(['activeRequest.lockerKey', 'lockerKeysHistory'])
+            ->where(fn ($q) => $q
+                ->whereHas('lockerKeysHistory', fn ($k) => $k->where('locker_keys.status', LockerKey::STATUS_RETURN_PENDING))
+                ->orWhereHas('activeRequest.lockerKey', fn ($k) => $k->where('locker_keys.status', LockerKey::STATUS_RETURN_PENDING)))
+            ->get()
+            ->map(function (Workstation $seat) {
+                $active = $seat->activeRequest;
+                $outstanding = $seat->lockerKeysHistory
+                    ->filter(fn (LockerKey $k) => $k->status === LockerKey::STATUS_RETURN_PENDING)
+                    ->sortByDesc('requested_at')
+                    ->first();
 
-        return ['total' => $total, 'overdue' => $overdue];
+                return $active?->lockerKey ?: (! $active?->occupant() ? $outstanding : null);
+            })
+            ->filter(fn (?LockerKey $k) => $k !== null && $k->status === LockerKey::STATUS_RETURN_PENDING);
+
+        return [
+            'total' => $displayed->count(),
+            'overdue' => $displayed->filter(fn (LockerKey $k) => $k->isOverdueForReturn())->count(),
+        ];
+    }
+
+    /**
+     * The seat counts on a Room card, added to any WorkstationLocation
+     * query -- the Block page's cards and the live stats endpoint both go
+     * through this, so a card can never show a different number from the
+     * one the live update writes into it.
+     */
+    public static function withSeatCounts($locations)
+    {
+        return $locations->withCount([
+            'workstations',
+            'workstations as available_count' => fn ($q) => $q->where('status', Workstation::STATUS_AVAILABLE),
+            'workstations as occupied_count' => fn ($q) => $q->where('status', Workstation::STATUS_OCCUPIED),
+            'workstations as maintenance_count' => fn ($q) => $q->where('status', Workstation::STATUS_DISABLED),
+        ]);
+    }
+
+    /** @return array<int, array{id: int, block: string, room_code: string, available: int, occupied: int, maintenance: int, total: int}> */
+    public static function roomCards(): array
+    {
+        return self::withSeatCounts(WorkstationLocation::query())
+            ->orderBy('block')->orderBy('room_code')
+            ->get()
+            ->map(fn (WorkstationLocation $r) => [
+                'id' => $r->id,
+                'block' => $r->block,
+                'room_code' => $r->room_code,
+                'available' => (int) $r->available_count,
+                'occupied' => (int) $r->occupied_count,
+                'maintenance' => (int) $r->maintenance_count,
+                'total' => (int) $r->workstations_count,
+            ])
+            ->all();
     }
 
     public static function awaitingKeyReturnSeats(?string $gender = null, ?string $block = null): int

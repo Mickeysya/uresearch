@@ -219,29 +219,29 @@
 
         <div class="cgs-stats-row">
             <a href="{{ route('workstation.cgs.operations') }}">
-                <div class="stat-card accent-blue"><div class="stat-number">{{ $stats['total'] }}</div><div class="stat-label">Total</div></div>
+                <div class="stat-card accent-blue"><div class="stat-number" data-live-stat="total">{{ $stats['total'] }}</div><div class="stat-label">Total</div></div>
             </a>
             <a href="{{ $toggle('seat_status', 'available') }}" class="@if($filters['seat_status'] === 'available') is-active @endif">
-                <div class="stat-card accent-green"><div class="stat-number">{{ $stats['available'] }}</div><div class="stat-label">Available</div></div>
+                <div class="stat-card accent-green"><div class="stat-number" data-live-stat="available">{{ $stats['available'] }}</div><div class="stat-label">Available</div></div>
             </a>
             <a href="{{ $toggle('seat_status', 'occupied') }}" class="@if($filters['seat_status'] === 'occupied') is-active @endif">
-                <div class="stat-card accent-blue"><div class="stat-number">{{ $stats['occupied'] }}</div><div class="stat-label">Occupied</div></div>
+                <div class="stat-card accent-blue"><div class="stat-number" data-live-stat="occupied">{{ $stats['occupied'] }}</div><div class="stat-label">Occupied</div></div>
             </a>
             <a href="{{ $toggle('seat_status', 'disabled') }}" class="@if($filters['seat_status'] === 'disabled') is-active @endif">
-                <div class="stat-card accent-red"><div class="stat-number">{{ $stats['maintenance'] }}</div><div class="stat-label">Maintenance</div></div>
+                <div class="stat-card accent-red"><div class="stat-number" data-live-stat="maintenance">{{ $stats['maintenance'] }}</div><div class="stat-label">Maintenance</div></div>
             </a>
             {{-- PART 1 #9: same seat set as the "Key Pending Return" quick
                  filter below -- every Return Pending key's seat is Awaiting
                  Key Return by construction, so filtering either way shows
                  the same seats. --}}
             <a href="{{ $toggle('seat_status', 'awaiting_key_return') }}" class="@if($filters['seat_status'] === 'awaiting_key_return') is-active @endif">
-                <div class="stat-card accent-gold"><div class="stat-number">{{ $stats['awaiting_key_return'] }}</div><div class="stat-label">Awaiting Key Return</div></div>
+                <div class="stat-card accent-gold"><div class="stat-number" data-live-stat="awaiting_key_return">{{ $stats['awaiting_key_return'] }}</div><div class="stat-label">Awaiting Key Return</div></div>
             </a>
             <a href="{{ $toggle('key_status', 'requested') }}" class="@if($filters['key_status'] === 'requested') is-active @endif">
-                <div class="stat-card accent-gold"><div class="stat-number">{{ $stats['key_pending_collection'] }}</div><div class="stat-label">Key Pending Collection</div></div>
+                <div class="stat-card accent-gold"><div class="stat-number" data-live-stat="key_pending_collection">{{ $stats['key_pending_collection'] }}</div><div class="stat-label">Key Pending Collection</div></div>
             </a>
             <a href="{{ $toggle('key_status', 'overdue') }}" class="@if($filters['key_status'] === 'overdue') is-active @endif">
-                <div class="stat-card accent-red"><div class="stat-number">{{ $stats['key_return_overdue'] }}</div><div class="stat-label">Key Return Overdue</div></div>
+                <div class="stat-card accent-red"><div class="stat-number" data-live-stat="key_return_overdue">{{ $stats['key_return_overdue'] }}</div><div class="stat-label">Key Return Overdue</div></div>
             </a>
         </div>
 
@@ -252,8 +252,10 @@
     </div>
 </div>
 
+@include('chloe::workstation._live', ['liveKind' => 'cgs', 'liveStats' => true])
+
 <div class="card-container-inline">
-    <div class="card card-wide">
+    <div class="card card-wide" @if ($mode === 'results') data-live-region @endif>
         @if ($mode === 'browse')
             <h3>Blocks</h3>
             <p style="color: var(--text-grey); font-size: 13px;">Click a block to see its rooms.</p>

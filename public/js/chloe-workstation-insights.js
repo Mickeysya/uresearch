@@ -159,18 +159,6 @@
     }
 
     // =====================================================================
-    // Round 8 PART 4.1: staleness timer -- a plain setTimeout, not
-    // polling and never redrawing anything itself; it only reveals a
-    // warning line after 5 minutes with no refresh. The Refresh link
-    // (and a real page reload) is the only thing that ever re-reads data.
-    // =====================================================================
-    (function wireStalenessTimer() {
-        var warning = document.getElementById('wsi-stale-warning');
-        if (!warning) return;
-        setTimeout(function () { warning.hidden = false; }, 5 * 60 * 1000);
-    })();
-
-    // =====================================================================
     // SMALL HELPERS
     // =====================================================================
     function el(tag, attrs, text) {
@@ -2299,4 +2287,173 @@
     renderDropdowns();
     wireDropdowns();
     renderAll();
+
+    // =====================================================================
+    // LIVE UPDATES
+    //
+    // The page polls a cheap data version every 15 s (only while visible
+    // and focused -- window.ChloeLive in chloe-workstation-live.js). When
+    // it changes, the new fact rows + meta are fetched and swapped in, and
+    // the page is re-rendered through the SAME path a filter change uses,
+    // so the dropdown filters, the highlight selection, the grain and the
+    // drill-down all stay (they are plain state, never reset here). Charts
+    // glide from their old geometry to the new one over TRANSITION_MS.
+    // =====================================================================
+    var GEOMETRY_ATTRS = ['x', 'y', 'width', 'height'];
+    var CHART_IDS = ['wsi-status-by-block', 'wsi-forecast', 'wsi-rooms', 'wsi-gender', 'wsi-programmes', 'wsi-candidacy', 'wsi-stay', 'wsi-keys', 'wsi-returns'];
+
+    /** {containerId: [{x,y,width,height} per <rect>, in DOM order]} */
+    function snapshotGeometry() {
+        var snap = {};
+        CHART_IDS.forEach(function (id) {
+            var c = document.getElementById(id);
+            if (!c) return;
+            snap[id] = Array.prototype.map.call(c.querySelectorAll('rect'), function (r) {
+                var o = {};
+                GEOMETRY_ATTRS.forEach(function (a) { o[a] = r.getAttribute(a); });
+                return o;
+            });
+        });
+        return snap;
+    }
+
+    /** Rebuilt rects start at their old geometry, then move to the new one. */
+    function animateFromSnapshot(snap) {
+        if (!TRANSITION_MS) return;
+        var moved = [];
+        CHART_IDS.forEach(function (id) {
+            var c = document.getElementById(id);
+            if (!c || !snap[id]) return;
+            Array.prototype.forEach.call(c.querySelectorAll('rect'), function (r, i) {
+                var old = snap[id][i];
+                if (!old) return;
+                var target = {};
+                var differs = false;
+                GEOMETRY_ATTRS.forEach(function (a) {
+                    target[a] = r.getAttribute(a);
+                    if (old[a] !== null && old[a] !== target[a]) differs = true;
+                });
+                if (!differs) return;
+                var previousTransition = r.style.transition;
+                r.style.transition = 'none';
+                GEOMETRY_ATTRS.forEach(function (a) { if (old[a] !== null) r.setAttribute(a, old[a]); });
+                moved.push({ rect: r, target: target, transition: previousTransition });
+            });
+        });
+        if (!moved.length) return;
+        void document.body.offsetWidth; // commit the old geometry before moving
+        moved.forEach(function (m) {
+            m.rect.style.transition = GEOMETRY_ATTRS.map(function (a) { return a + ' ' + TRANSITION_MS + 'ms ease'; }).join(', ') + ', opacity ' + TRANSITION_MS + 'ms ease, fill 120ms ease';
+            GEOMETRY_ATTRS.forEach(function (a) { if (m.target[a] !== null) m.rect.setAttribute(a, m.target[a]); });
+        });
+        setTimeout(function () { moved.forEach(function (m) { m.rect.style.transition = m.transition; }); }, TRANSITION_MS + 60);
+    }
+
+    /** A drill-down whose period no longer exists falls back one level at a time. Returns true if it had to. */
+    function repairDrillPath() {
+        var fellBack = false;
+        while (drillPath.length) {
+            var top = drillPath[drillPath.length - 1];
+            var saved = drillPath;
+            drillPath = saved.slice(0, -1);
+            var parentPeriods = drillPath.length ? drilledPeriods().periods : currentForecastData().periods;
+            drillPath = saved;
+            var exists = parentPeriods.some(function (p) { return p.key === top.key; });
+            if (exists) break;
+            drillPath = saved.slice(0, -1);
+            fellBack = true;
+        }
+        return fellBack;
+    }
+
+    function showLiveNote(text) {
+        var note = document.getElementById('wsi-live-note');
+        if (!note) return;
+        note.textContent = text;
+        note.hidden = false;
+        setTimeout(function () { note.hidden = true; }, 6000);
+    }
+
+    function applyLiveData(newRows, newMeta) {
+        var snap = snapshotGeometry();
+
+        ROWS = newRows;
+        META = newMeta;
+        OCCUPIED_ROWS = ROWS.filter(function (r) { return r.occupied; });
+        ROOM_BY_CODE = {};
+        (META.rooms || []).forEach(function (r) { ROOM_BY_CODE[r.code] = r; });
+        BLOCKS = unique((META.rooms || []).map(function (r) { return r.block; })).sort();
+        ALMOST_FULL_PERCENT = META.almost_full_percent || 90;
+
+        recomputePopulation();
+        var fellBack = repairDrillPath();
+        renderDropdowns(); // keeps the selected filters (drops one only if its value vanished)
+        renderAll();
+        animateFromSnapshot(snap);
+        writeStateToUrl();
+
+        if (fellBack) showLiveNote('The period you drilled into no longer exists, so the chart went back one level.');
+    }
+
+    (function wireLive() {
+        var cfg = document.getElementById('wsi-live-config');
+        var L = window.ChloeLive;
+        var text = document.getElementById('wsi-live-text');
+        var dot = document.getElementById('wsi-live-dot');
+        var pauseBtn = document.getElementById('wsi-live-pause');
+        if (!cfg || !L || !text || !dot || !pauseBtn) return;
+
+        var dataUrl = cfg.getAttribute('data-data-url');
+        var fetching = false;
+
+        function stamp(serverTime) {
+            text.textContent = 'Live \u00b7 updated ' + serverTime;
+        }
+
+        function fetchData() {
+            if (fetching) return;
+            fetching = true;
+            fetch(dataUrl, {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            }).then(function (res) { return res.ok ? res.json() : null; })
+                .then(function (json) {
+                    if (json && Array.isArray(json.rows) && json.meta) {
+                        applyLiveData(json.rows, json.meta);
+                        stamp(json.server_time);
+                    }
+                })
+                .catch(function () { /* the next change tries again */ })
+                .then(function () { fetching = false; });
+        }
+
+        var poller = L.createPoller({
+            versionUrl: cfg.getAttribute('data-version-url'),
+            interval: parseInt(cfg.getAttribute('data-interval'), 10) || 15000,
+            version: cfg.getAttribute('data-version'),
+            onTick: function (json) {
+                dot.classList.remove('wsi-live-error');
+                if (!poller.isPaused()) stamp(json.server_time);
+            },
+            onChange: fetchData,
+            onStop: function () { dot.classList.add('wsi-live-error'); text.textContent = 'Live updates stopped \u00b7 sign in again and refresh'; },
+        });
+        window.ChloeInsightsLive = { poller: poller, applyLiveData: applyLiveData };
+
+        pauseBtn.addEventListener('click', function () {
+            if (poller.isPaused()) {
+                poller.resume();
+                pauseBtn.textContent = 'Pause updates';
+                dot.classList.remove('wsi-live-paused');
+            } else {
+                poller.pause();
+                pauseBtn.textContent = 'Resume updates';
+                dot.classList.add('wsi-live-paused');
+                text.textContent = 'Paused';
+            }
+        });
+
+        poller.start();
+    })();
 })();

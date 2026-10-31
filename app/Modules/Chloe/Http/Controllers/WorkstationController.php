@@ -14,6 +14,7 @@ use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Chloe\Support\StudentDirectory;
 use App\Modules\Chloe\Support\WorkstationEligibility;
+use App\Modules\Chloe\Support\WorkstationLiveVersion;
 use App\Modules\Core\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -35,6 +36,7 @@ class WorkstationController extends Controller
 {
     public function index(Request $request)
     {
+        WorkstationLiveVersion::begin($request->user());
         $activeRequest = $this->activeRequestFor($request);
 
         // Rule 11: the reminder/auto-cancel thresholds are checked here too,

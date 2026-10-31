@@ -72,7 +72,9 @@
     }
 </style>
 
-<div class="card-container-inline">
+@include('chloe::workstation._live', ['liveKind' => 'student'])
+
+<div class="card-container-inline" data-live-region>
     <x-core::page-header title="Workstation" />
 
     <div class="card card-wide">

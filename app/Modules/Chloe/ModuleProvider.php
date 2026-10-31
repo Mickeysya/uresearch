@@ -65,6 +65,14 @@ class ModuleProvider extends ServiceProvider
                 ->by($request->user()?->id ?: $request->ip());
         });
 
+        // The live-update pollers (see Http/Controllers/Cgs/WorkstationLiveController):
+        // one open page polls ~4 times a minute, so 60 a minute per user
+        // leaves room for several tabs and still stops a runaway loop.
+        RateLimiter::for('workstation-live', function ($request) {
+            return Limit::perMinute((int) config('assistant.rate_limits.live_requests_per_minute', 60))
+                ->by('live:'.($request->user()?->id ?: $request->ip()));
+        });
+
         if ($this->app->runningInConsole()) {
             $this->commands([
                 RemindOverdueLockerKeys::class,

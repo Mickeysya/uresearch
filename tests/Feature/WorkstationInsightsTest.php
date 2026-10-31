@@ -332,9 +332,9 @@ class WorkstationInsightsTest extends TestCase
         // Starts after <x-core::page-header> -- a shared Core component
         // this page legitimately reuses (same as every other Workstation
         // page); its own class names are not this page's to prefix. The
-        // "Live data" meta line is the first element this page's own
+        // live-indicator line is the first element this page's own
         // Blade source writes after that component.
-        $ownMarkupStart = strpos($html, 'Live data', $pageStart);
+        $ownMarkupStart = strpos($html, 'wsi-live-row', $pageStart);
         $body = substr($html, $ownMarkupStart, $pageEnd - $ownMarkupStart);
 
         // Only a dot that opens an actual selector (preceded by the start
@@ -849,15 +849,31 @@ class WorkstationInsightsTest extends TestCase
     // Round 8 PART 4.1: live-data header
     // -------------------------------------------------------------
 
-    public function test_the_header_shows_data_as_of_and_a_staleness_timer(): void
+    public function test_the_header_shows_the_live_indicator_instead_of_the_stale_warning(): void
     {
         $html = $this->html();
-        $this->assertStringContainsString('Data as of', $html);
-        $this->assertStringContainsString('id="wsi-stale-warning"', $html);
-        $this->assertStringContainsString('This page may be out of date. Refresh to see the latest data.', $html);
+
+        // Live indicator: a green dot, "Live · updated hh:mm:ss" (Malaysia time), a Pause control, and the manual Refresh link.
+        $this->assertStringContainsString('id="wsi-live-dot"', $html);
+        $this->assertMatchesRegularExpression('/Live &middot; updated \d{2}:\d{2}:\d{2}/', $html);
+        $this->assertStringContainsString('id="wsi-live-pause"', $html);
+        $this->assertStringContainsString('Pause updates', $html);
+        $this->assertStringContainsString('id="wsi-refresh-link"', $html);
+
+        // The old "Data as of" line and the 5-minute stale warning are gone.
+        $this->assertStringNotContainsString('Data as of', $html);
+        $this->assertStringNotContainsString('wsi-stale-warning', $html);
+        $this->assertStringNotContainsString('This page may be out of date', $html);
+
+        // The page carries its render-time version, the version endpoint and the data endpoint, 15 s apart.
+        $this->assertMatchesRegularExpression('/id="wsi-live-config"[^>]*data-version="c[0-9a-f]{16}"/s', $html);
+        $this->assertStringContainsString(route('workstation.cgs.live.version'), $html);
+        $this->assertStringContainsString(route('workstation.cgs.live.insights'), $html);
+        $this->assertStringContainsString('data-interval="15000"', $html);
 
         $js = file_get_contents(public_path('js/chloe-workstation-insights.js'));
-        $this->assertStringContainsString('5 * 60 * 1000', $js);
+        $this->assertStringNotContainsString('5 * 60 * 1000', $js);
         $this->assertStringContainsString("getElementById('wsi-refresh-link')", $js);
+        $this->assertStringContainsString('ChloeLive', $js);
     }
 }

@@ -67,6 +67,8 @@
     .student-pick-empty { padding: 10px; font-size: 13px; color: var(--text-grey); }
 </style>
 
+@include('chloe::workstation._live', ['liveKind' => 'cgs'])
+
 <div class="card-container-inline">
     {{-- Back uses real browser history when there is one -- e.g. coming
          from a search/filter results grid -- so it returns there with the
@@ -76,7 +78,7 @@
         <a href="{{ route('workstation.cgs.operations') }}"><button type="button">Home</button></a>
     </x-core::page-header>
 
-    <div class="card card-wide">
+    <div class="card card-wide" data-live-region>
         {{-- 1. Seat --}}
         <h3 style="margin-top:0;">Seat</h3>
         <div class="seat-fact-row">

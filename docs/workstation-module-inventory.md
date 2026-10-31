@@ -51,6 +51,17 @@ chain — no `WorkflowEngine`/`Stage` gating, unlike every other module.
 |---|---|
 | `GET /workstation/assistant/suggestions`, `POST /suggestion`, `POST /ask` | Assistant backend, throttled `assistant-user`. A role the assistant does not support gets an in-app message, not a 403. |
 
+### Live updates (JSON, GET only, throttled `workstation-live`, no-store)
+
+| Route | Role | Returns |
+|---|---|---|
+| `GET /cgs/workstation/live/version` | CGS | `{version, server_time}` |
+| `GET /cgs/workstation/live/stats` | CGS | `{version, server_time, stats (the 7 stats-bar numbers), rooms (id, block, room_code, available, occupied, maintenance, total)}` |
+| `GET /cgs/workstation/live/insights` | CGS | `{version, server_time, rows (the Insights fact rows), meta}` |
+| `GET /workstation/live/version` | Student | `{version, server_time}` for the student's OWN requests, keys, seat and notices only |
+
+All handled by `Cgs/WorkstationLiveController`; see "Live updates" below.
+
 ### Appeal approval chain (uses `WorkflowEngine`, unlike the rest of the module)
 
 `GET /candidacy-appeal/queue`, `POST /candidacy-appeal/{application}/decide` — roles Supervisor, Chair, Non-Exec CGS, Dean PGR.
@@ -95,6 +106,10 @@ chain — no `WorkflowEngine`/`Stage` gating, unlike every other module.
 | Assistant: primary model requests/day | 400 | same map, `requests_per_day` | `config/assistant.php` |
 | Assistant: fallback model requests/minute | 4 | same map, `gemini-3.8-flash` entry | `config/assistant.php` |
 | Assistant: router "Did you mean" threshold | 0.9 (chosen from the 2026-10-30 evaluation, see the config comment) | `ASSISTANT_ROUTER_MIN_CONFIDENCE` env, `config('assistant.router_min_confidence')` | `config/assistant.php` |
+| Live updates: CGS poll interval | 15 seconds (only while the tab is visible and focused) | `data-interval` on `#wsl-config` / `#wsi-live-config` | `Resources/views/workstation/_live.blade.php`, `insights.blade.php` |
+| Live updates: student poll interval | 20 seconds | `data-interval` on `#wsl-config` | `Resources/views/workstation/_live.blade.php` |
+| Live updates: error back-off | interval x 2^failures, at most 2 minutes; stops after 3 consecutive 401/403/419 | `createPoller()` | `public/js/chloe-workstation-live.js` |
+| Live updates: per-user request limit | 60 per minute (a page polls ~4/minute) | `WORKSTATION_LIVE_REQUESTS_PER_MINUTE` env, `config('assistant.rate_limits.live_requests_per_minute')`, limiter `workstation-live` | `config/assistant.php`, `ModuleProvider.php` |
 | Assistant: per-user requests/minute | 10 | `config('assistant.rate_limits.user_requests_per_minute')` | `config/assistant.php` |
 | Assistant: total request deadline | 22 seconds | `ASSISTANT_TOTAL_DEADLINE_SECONDS` env | `config/assistant.php` |
 | Assistant: single HTTP call timeout | at most 10 seconds per attempt, never past the total deadline | `Pipeline::attemptTimeout()` | `Assistant/Pipeline.php` |
@@ -308,6 +323,24 @@ or ID column exists. The conversation is never stored server-side: the last 5
 questions live in the browser only. `assistant:ask --trace` prints only masked
 text and the router's ids/parameters, and never writes to the log.
 
+## (h2) Live updates
+
+**Why:** after a key was marked Collected, the CGS landing page still showed the old "Key Pending Collection" number. Two causes, both fixed:
+1. *The number itself.* `WorkstationStatistics::keysPendingCollection()` counted every raw `locker_keys` row with status `requested`, including a stale key left on a request that had already been released (the seat Available again). The seat list the card links to, Insights and Seat Details all use the seat's current key, so the bar said 22 where each said 21. It now counts seats through `activeRequest.lockerKey` -- the same relations the list uses -- and `keysPendingReturn()` likewise counts the list's own "displayed key". `WorkstationStatistics::withSeatCounts()` is shared by the Block page cards and the live room counts. A test proves every stats-bar number equals its filtered list after every action.
+2. *The page was re-shown from the browser's history copy.* Pages were sent `Cache-Control: no-cache, private` (no `ETag`), which does not stop Back/Forward re-using the stored copy. Every route of this module now goes through `Http/Middleware/NoStoreResponse` (`routes.php`, the `auth` group only): `Cache-Control: no-store, max-age=0` + `Pragma: no-cache`, any `ETag`/`Last-Modified` removed. Chromium then re-requests the page on Back (measured: the corrected number is on screen immediately).
+
+**Version token** (`Support/WorkstationLiveVersion`): CGS = one query of scalar sub-selects -- newest `workstation_histories.id` and row count (every seat/key action writes a History row: CGS actions, student actions, the scheduled jobs, demo seeding) plus the newest `updated_at` of `workstations`, `workstation_requests`, `locker_keys`, `workstation_termination_notices` -- hashed to `c` + 16 hex. Student = a hash of id/status/updated_at of that student's own requests, keys, seat(s) and notices only (statuses are included so a change within the same second still moves it). A page's controller calls `WorkstationLiveVersion::begin()` first thing, so the version embedded in the page is the one its data was read at: a change that lands while the page is built is picked up by the first poll.
+
+**Client** (`public/js/chloe-workstation-live.js`, configured by data attributes, no inline handlers): `ChloeLive.createPoller()` polls the version endpoint every 15 s (20 s for students) only while the tab is visible and focused, checks immediately on becoming visible/focused, on load, and on a persisted `pageshow` (back/forward cache), backs off exponentially (max 2 min) on errors, and stops after 3 consecutive 401/403/419. On a change: the stats bar numbers and Block/Room card counts (`[data-live-stat]`, `[data-live-room] [data-live-count]`) are fetched from `/live/stats` and updated in place (about 300 ms count animation, none under `prefers-reduced-motion`; a 1.5 s light-yellow flash on the changed number); a server-rendered list or details page (`[data-live-region]`: results list, Room page, Seat Details, the student's Workstation home) is re-requested from its own URL and only that container is swapped -- never while a modal is open or the user is typing (applied right after), scroll position and focus kept, with a grey "Updated just now" for 3 s. Seat Details' modal buttons are re-bound by one delegated handler.
+
+**Insights** (`chloe-workstation-insights.js`, "LIVE UPDATES"): the "Data as of" line and 5-minute stale warning are replaced by a green dot + "Live · updated hh:mm:ss", "Pause updates" / "Resume updates" and the manual Refresh link. On a change the fact rows and meta are fetched from `/live/insights`, swapped in and re-rendered through the same path a filter change uses, so the dropdown filters, highlight, grain and URL state stay; the charts' bars glide from their old geometry over 250 ms; a drill-down whose period has left the 36-month window falls back one level with a note.
+
+**Measured** (headless Chromium, 2026-10-31): idle polling is 4 requests/minute per CGS page and 3/minute on the student page; an action in one tab showed in two other CGS tabs within 11.5 s and 13.2 s, and in a student's open page within 5.3 s; a hidden tab sends nothing.
+
+**Never cached:** `WorkstationStatistics` (no `Cache::`, no static memo -- asserted by a test), the three live endpoints, every page of the module (no-store).
+
+**Known, documented difference:** Insights counts a seat mid-selection (Pending/Reserved, at most 5 minutes) as `available`; the stats bar's Available excludes it. The test allows exactly that difference and no other.
+
 ## (i) Insights page cards
 
 | Card (`#wsi-card-*`) | Shows | Computed by |
@@ -390,3 +423,5 @@ attempted in this pass; if certainty matters, run
 - `WorkstationDemoSeedTest::test_termination_notice_dates_are_refreshed_on_rerun_not_duplicated`
   is date-dependent: run on a Friday, `travel(2)->days()` lands on Sunday and
   the working-day vacate-by date does not move, so it fails on Fridays.
+- The CGS seat-card pages (a filtered results list, and a Room page) scroll sideways on a 390 px phone: the status badges and the "View" button inside `cgs/_seat-card.blade.php` extend past the viewport (measured identically before and after the live-update work, 475 px and 399 px wide). The landing page and Insights do not.
+- One legacy row in the development data (a `locker_keys` row from 11 Oct whose request was released) is still `requested`. Releasing a seat now cancels a pending key (`WorkstationAllocator::releaseSeat()`), so it cannot recur, and the stats bar no longer counts such a row; the row itself was left untouched.

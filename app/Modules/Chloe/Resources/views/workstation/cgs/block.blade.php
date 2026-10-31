@@ -28,6 +28,8 @@
     .ws-room-body { height: 130px; padding: 18px; overflow: hidden; }
 </style>
 
+@include('chloe::workstation._live', ['liveKind' => 'cgs', 'liveStats' => true])
+
 <div class="card-container-inline">
     <x-core::page-header title="Block {{ $block }}" :back="route('workstation.cgs.operations')">
         <a href="{{ route('workstation.cgs.operations') }}"><button type="button">Home</button></a>
@@ -36,7 +38,7 @@
     <div class="card card-wide">
         <div class="ws-room-grid">
             @foreach ($rooms as $room)
-                <a href="{{ route('workstation.cgs.room', $room) }}" class="card ws-room-card">
+                <a href="{{ route('workstation.cgs.room', $room) }}" class="card ws-room-card" data-live-room="{{ $room->id }}">
                     <img src="{{ $room->photoUrl() }}" alt="{{ $room->name }}" loading="lazy" class="ws-room-image">
                     <div class="ws-room-body">
                         <b>{{ $room->name }}</b>
@@ -44,7 +46,7 @@
                             <span class="status-badge {{ $room->gender === 'female' ? 'rejected' : 'pending' }}">{{ $room->genderLabel() }}</span>
                         </div>
                         <p style="color: var(--text-grey); font-size: 12.5px; margin-top:6px;">
-                            Available: {{ $room->available_count }} &middot; Occupied: {{ $room->occupied_count }} &middot; Maintenance: {{ $room->maintenance_count }}
+                            Available: <span data-live-count="available">{{ $room->available_count }}</span> &middot; Occupied: <span data-live-count="occupied">{{ $room->occupied_count }}</span> &middot; Maintenance: <span data-live-count="maintenance">{{ $room->maintenance_count }}</span>
                         </p>
                     </div>
                 </a>

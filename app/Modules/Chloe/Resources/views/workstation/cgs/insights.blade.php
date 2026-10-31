@@ -102,8 +102,14 @@
         #wsi-page .wsi-tabular { font-variant-numeric: tabular-nums; }
 
         .wsi-meta { margin: -8px 0 16px; font-size: 14px; line-height: 1.5; color: var(--wsi-text-grey); font-family: var(--wsi-font); }
-        .wsi-stale-warning { color: var(--wsi-gold); margin-top: -12px; }
-        .wsi-stale-warning[hidden] { display: none; }
+        .wsi-live-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        /* The shared button style adds a top/right margin; inside this row the controls sit level with the text. */
+        .wsi-live-row .wsi-link { margin: 0; display: inline-block; }
+        .wsi-live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #2E8B57; }
+        .wsi-live-dot.wsi-live-paused { background: #9CA3AF; }
+        .wsi-live-dot.wsi-live-error { background: #C88A12; }
+        .wsi-live-note { color: #606C73; margin-top: -12px; }
+        .wsi-live-note[hidden] { display: none; }
         .wsi-link {
             font-family: var(--wsi-font); font-size: 13px; line-height: 1.4; font-weight: 400;
             color: var(--wsi-blue); background: none; border: none; padding: 0;
@@ -535,9 +541,22 @@
             <a href="{{ route('workstation.cgs.operations') }}"><button type="button">Home</button></a>
         </x-core::page-header>
 
-        {{-- Round 8 PART 4.1: id="wsi-refresh-link" so the page script can keep its href carrying the CURRENT filters (the URL state it already tracks), not just the bare route. --}}
-        <p class="wsi-meta">Live data &middot; Data as of {{ $meta['generated_at'] }}, Malaysia time &middot; <a class="wsi-link" id="wsi-refresh-link" href="{{ route('workstation.cgs.insights') }}">Refresh</a></p>
-        <p class="wsi-meta wsi-stale-warning" id="wsi-stale-warning" hidden>This page may be out of date. Refresh to see the latest data.</p>
+        {{-- Live indicator (replaces "Data as of ... / 5-minute stale warning"): the page polls
+             the data version every 15 s and re-renders in place with the CURRENT filters and
+             highlight. id="wsi-refresh-link" stays so the manual Refresh link keeps carrying the
+             URL state the page script writes. --}}
+        <p class="wsi-meta wsi-live-row">
+            <span class="wsi-live-dot" id="wsi-live-dot" aria-hidden="true"></span>
+            <span id="wsi-live-text">Live &middot; updated {{ now('Asia/Kuala_Lumpur')->format('H:i:s') }}</span>
+            <button type="button" class="wsi-link" id="wsi-live-pause">Pause updates</button>
+            &middot; <a class="wsi-link" id="wsi-refresh-link" href="{{ route('workstation.cgs.insights') }}">Refresh</a>
+        </p>
+        <p class="wsi-meta wsi-live-note" id="wsi-live-note" hidden></p>
+        <div id="wsi-live-config" hidden
+             data-version="{{ \App\Modules\Chloe\Support\WorkstationLiveVersion::current() }}"
+             data-version-url="{{ route('workstation.cgs.live.version') }}"
+             data-data-url="{{ route('workstation.cgs.live.insights') }}"
+             data-interval="15000"></div>
 
         <div class="wsi-filter-panel">
             <div class="wsi-filter-row">
@@ -686,6 +705,7 @@
 
     <script type="application/json" id="ins-data">@json($rows)</script>
     <script type="application/json" id="ins-meta">@json($meta)</script>
+    <script src="{{ asset('js/chloe-workstation-live.js') }}"></script>
     <script src="{{ asset('js/chloe-insights-aggregate.js') }}"></script>
     <script src="{{ asset('js/chloe-workstation-insights.js') }}"></script>
 

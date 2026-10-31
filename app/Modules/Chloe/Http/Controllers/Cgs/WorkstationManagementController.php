@@ -14,6 +14,7 @@ use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Chloe\Support\StudentDirectory;
 use App\Modules\Chloe\Support\StudentIdentity;
 use App\Modules\Chloe\Support\WorkstationEligibility;
+use App\Modules\Chloe\Support\WorkstationLiveVersion;
 use App\Modules\Chloe\Support\WorkstationStatistics;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\User;
@@ -54,6 +55,7 @@ class WorkstationManagementController extends Controller
 
     public function index(Request $request)
     {
+        WorkstationLiveVersion::begin();
         $filters = $this->filtersFrom($request);
         $stats = $this->stats();
         $locations = WorkstationLocation::orderBy('block')->orderBy('room_code')->get();
@@ -93,13 +95,8 @@ class WorkstationManagementController extends Controller
 
     public function block(string $block)
     {
-        $rooms = WorkstationLocation::where('block', $block)
-            ->withCount([
-                'workstations',
-                'workstations as available_count' => fn ($q) => $q->where('status', Workstation::STATUS_AVAILABLE),
-                'workstations as occupied_count' => fn ($q) => $q->where('status', Workstation::STATUS_OCCUPIED),
-                'workstations as maintenance_count' => fn ($q) => $q->where('status', Workstation::STATUS_DISABLED),
-            ])
+        WorkstationLiveVersion::begin();
+        $rooms = WorkstationStatistics::withSeatCounts(WorkstationLocation::where('block', $block))
             ->orderBy('room_code')
             ->get();
 
@@ -110,6 +107,7 @@ class WorkstationManagementController extends Controller
 
     public function room(WorkstationLocation $workstationLocation)
     {
+        WorkstationLiveVersion::begin();
         $seats = $workstationLocation->workstations()
             ->with(['activeRequest.student', 'activeRequest.demoProfile', 'activeRequest.lockerKey', 'activeRequest.activeTerminationNotice', 'lockerKeysHistory.student', 'lockerKeysHistory.demoProfile'])
             ->orderByRaw('CAST(seat_code AS UNSIGNED) ASC')
@@ -121,6 +119,7 @@ class WorkstationManagementController extends Controller
 
     public function show(Workstation $workstation)
     {
+        WorkstationLiveVersion::begin();
         $workstation->load(['location', 'activeRequest.student', 'activeRequest.demoProfile', 'activeRequest.lockerKey', 'activeRequest.activeTerminationNotice', 'lockerKeysHistory.student', 'lockerKeysHistory.demoProfile']);
 
         $row = $this->presentSeat($workstation);

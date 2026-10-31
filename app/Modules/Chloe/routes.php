@@ -7,11 +7,13 @@ use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyOperationsController;
 use App\Modules\Chloe\Http\Controllers\Cgs\WorkstationCatalogController;
 use App\Modules\Chloe\Http\Controllers\Cgs\WorkstationInsightsController;
 use App\Modules\Chloe\Http\Controllers\Cgs\WorkstationManagementController;
+use App\Modules\Chloe\Http\Controllers\Cgs\WorkstationLiveController;
 use App\Modules\Chloe\Http\Controllers\Cgs\WorkstationOperationsController;
 use App\Modules\Chloe\Http\Controllers\LockerKeyController;
 use App\Modules\Chloe\Http\Controllers\WorkstationAssistantController;
 use App\Modules\Chloe\Http\Controllers\WorkstationController;
 use App\Modules\Chloe\Http\Controllers\WorkstationTermsController;
+use App\Modules\Chloe\Http\Middleware\NoStoreResponse;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\Route;
 
@@ -20,7 +22,7 @@ use Illuminate\Support\Facades\Route;
 | WorkflowEngine — so unlike every other module's routes.php, nothing here
 | is gated by a Stage. See app/Modules/Chloe/README.md.
 */
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', NoStoreResponse::class])->group(function () {
     // The assistant backend. Not gated by role: middleware on purpose --
     // any authenticated role may reach it, and a role the assistant does
     // not support yet gets the in-app message "The assistant is not
@@ -35,6 +37,7 @@ Route::middleware('auth')->group(function () {
         // Home (block picker) -> Room picker -> Seat map, matching CGS's own
         // seat map reference hierarchy. See WorkstationController.
         Route::get('/workstation', [WorkstationController::class, 'index'])->name('workstation.select');
+        Route::get('/workstation/live/version', [WorkstationLiveController::class, 'studentVersion'])->middleware('throttle:workstation-live')->name('workstation.live.student-version');
         Route::get('/workstation/blocks/{block}', [WorkstationController::class, 'rooms'])->name('workstation.rooms');
         Route::get('/workstation/rooms/{workstationLocation}', [WorkstationController::class, 'seats'])->name('workstation.seats');
         // Static single-segment routes MUST be registered before
@@ -60,6 +63,11 @@ Route::middleware('auth')->group(function () {
         // can never be swallowed by it.
         Route::get('/cgs/workstation', [WorkstationManagementController::class, 'index'])->name('workstation.cgs.operations');
         Route::get('/cgs/workstation/insights', [WorkstationInsightsController::class, 'index'])->name('workstation.cgs.insights');
+        Route::middleware('throttle:workstation-live')->prefix('/cgs/workstation/live')->group(function () {
+            Route::get('/version', [WorkstationLiveController::class, 'version'])->name('workstation.cgs.live.version');
+            Route::get('/stats', [WorkstationLiveController::class, 'stats'])->name('workstation.cgs.live.stats');
+            Route::get('/insights', [WorkstationLiveController::class, 'insights'])->name('workstation.cgs.live.insights');
+        });
         Route::get('/cgs/workstation/blocks/{block}', [WorkstationManagementController::class, 'block'])->name('workstation.cgs.block');
         Route::get('/cgs/workstation/rooms/{workstationLocation}', [WorkstationManagementController::class, 'room'])->name('workstation.cgs.room');
         Route::get('/cgs/workstation/export/seats', [WorkstationManagementController::class, 'exportSeats'])->name('workstation.cgs.export.seats');

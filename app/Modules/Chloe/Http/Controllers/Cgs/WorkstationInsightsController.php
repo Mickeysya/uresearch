@@ -21,6 +21,7 @@ class WorkstationInsightsController extends Controller
 {
     public function index()
     {
+        \App\Modules\Chloe\Support\WorkstationLiveVersion::begin();
         $rows = WorkstationStatistics::insightsFactRows();
         $meta = WorkstationStatistics::insightsMeta($rows);
 

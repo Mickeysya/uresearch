@@ -237,9 +237,10 @@ class WorkstationCgsScreensTest extends TestCase
         $response = $this->actingAs($cgs)->get(route('workstation.cgs.block', 'N2'));
 
         $response->assertOk();
-        $response->assertSee('Available: 1', false);
-        $response->assertSee('Occupied: 1', false);
-        $response->assertSee('Maintenance: 1', false);
+        // Each count sits in its own data-live-count span so the live update can change it in place.
+        $response->assertSee('Available: <span data-live-count="available">1</span>', false);
+        $response->assertSee('Occupied: <span data-live-count="occupied">1</span>', false);
+        $response->assertSee('Maintenance: <span data-live-count="maintenance">1</span>', false);
     }
 
     public function test_the_room_page_lists_seats_in_ascending_numeric_order(): void

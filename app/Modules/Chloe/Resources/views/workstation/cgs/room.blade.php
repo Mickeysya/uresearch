@@ -56,12 +56,14 @@
     .cgs-seat-button button { width: 132px; height: 50px; margin: 0; padding: 0; }
 </style>
 
+@include('chloe::workstation._live', ['liveKind' => 'cgs'])
+
 <div class="card-container-inline">
     <x-core::page-header title="{{ $workstationLocation->name }}" :back="route('workstation.cgs.block', $workstationLocation->block)">
         <a href="{{ route('workstation.cgs.operations') }}"><button type="button">Home</button></a>
     </x-core::page-header>
 
-    <div class="card card-wide">
+    <div class="card card-wide" data-live-region>
         <p style="color: var(--text-grey); font-size: 13px;">
             {{ $workstationLocation->room_code }} &middot; Block {{ $workstationLocation->block }} &middot;
             <span class="status-badge {{ $workstationLocation->gender === 'female' ? 'rejected' : 'pending' }}">{{ $workstationLocation->genderLabel() }}</span>

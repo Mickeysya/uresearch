@@ -100,6 +100,8 @@ return [
             'tokens_per_minute' => 200000,
         ],
         'user_requests_per_minute' => (int) env('ASSISTANT_USER_REQUESTS_PER_MINUTE', 10),
+        // Workstation live-update pollers (version/stats/insights), per user -- not an assistant limit, kept here beside the other per-user limiter.
+        'live_requests_per_minute' => (int) env('WORKSTATION_LIVE_REQUESTS_PER_MINUTE', 60),
     ],
 
     /**
