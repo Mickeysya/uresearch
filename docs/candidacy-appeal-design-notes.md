@@ -140,3 +140,16 @@ Backfill on the development database (2026-11-01): 1 department, 4 staff profile
 * `CandidacyMemoService::generate()` is the Phase 3 hook (returns null until then, so approvals work without a memo).
 * Dean rejection also sets `study_candidacies.last_rejection_at`, which keeps the dismissal generator working ("appeal rejected").
 * Tests: `CandidacyAppealServiceTest` (33). Legacy reminder / dismissal / old appeal tests still pass untouched.
+
+## 9. Phase 3 delivered (memo PDF)
+
+* `CandidacyMemoService::generate()` (called inside the Dean-approval transaction, so a failed render rolls the approval back) renders
+  `Resources/views/candidacy/memo/appeal_memo.blade.php` with Dompdf: A4, Tahoma, black and white (logo converted to grey in memory).
+  Page 1: memorandum (To / Through Chair and Supervisor with signature + digital stamp / From / Date), body, student declaration stamp,
+  APPROVED block with the Dean's signature + stamp. Page 2: endorsement and approval record with the verification codes (CGS appears here).
+* Stamp: `Digitally approved by {name}, {designation} on {dd Mon yyyy, hh:mm} (GMT+8) · Ref {appeal_no} · Code {code}`.
+  Signatures come from the per-decision copy, never from the live profile.
+* Stored as `candidacy/memos/<appeal id>-<random>.pdf` on the private disk; download name
+  `<appeal_no>_<Student Name>_<StudentID>_Memo - Appeal for Extension.pdf` (illegal characters removed). Download rights: policy `downloadMemo`.
+* `php artisan candidacy:verify-memo <appeal_no>` prints OK / MISMATCH per stage (code recomputed from the record, signature copy hash).
+* Checked visually (Ghostscript render of both pages) and by text extraction in `CandidacyMemoTest`.

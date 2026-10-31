@@ -20,6 +20,7 @@ use App\Modules\Chloe\Console\Commands\RemindOverdueLockerKeys;
 use App\Modules\Chloe\Console\Commands\SendCandidacyReminders;
 use App\Modules\Chloe\Console\Commands\WorkstationDemoClear;
 use App\Modules\Chloe\Console\Commands\WorkstationDemoLogin;
+use App\Modules\Chloe\Console\Commands\VerifyCandidacyMemo;
 use App\Modules\Chloe\Console\Commands\WorkstationDemoSeed;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Chloe\Models\CandidacyAppeal;
@@ -105,6 +106,7 @@ class ModuleProvider extends ServiceProvider
                 BackfillCandidacyAppeals::class,
                 CheckCandidacyAllowance::class,
                 CloseExpiredCandidacyAppeals::class,
+                VerifyCandidacyMemo::class,
                 AssistantAsk::class,
                 AssistantLogList::class,
                 AssistantEvaluate::class,
