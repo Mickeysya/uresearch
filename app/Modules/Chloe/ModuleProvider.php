@@ -8,6 +8,7 @@ use App\Modules\Chloe\Assistant\GeminiModel;
 use App\Modules\Chloe\Console\Commands\AssistantAsk;
 use App\Modules\Chloe\Console\Commands\BackfillCandidacyAppeals;
 use App\Modules\Chloe\Console\Commands\CheckCandidacyAllowance;
+use App\Modules\Chloe\Console\Commands\CloseExpiredCandidacyAppeals;
 use App\Modules\Chloe\Console\Commands\AssistantCatalogue;
 use App\Modules\Chloe\Console\Commands\AssistantCheck;
 use App\Modules\Chloe\Console\Commands\AssistantEvaluate;
@@ -21,7 +22,12 @@ use App\Modules\Chloe\Console\Commands\WorkstationDemoClear;
 use App\Modules\Chloe\Console\Commands\WorkstationDemoLogin;
 use App\Modules\Chloe\Console\Commands\WorkstationDemoSeed;
 use App\Modules\Core\Services\ModuleRegistry;
+use App\Modules\Chloe\Models\CandidacyAppeal;
+use App\Modules\Chloe\Models\CandidacyStaffProfile;
+use App\Modules\Chloe\Policies\CandidacyAppealPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -59,6 +65,10 @@ class ModuleProvider extends ServiceProvider
     {
         $registry->register(new Workflows\CandidacyAppealWorkflow);
 
+        // One policy for every appeal route (pages, downloads, signature images, actions).
+        Gate::policy(CandidacyAppeal::class, CandidacyAppealPolicy::class);
+        Gate::policy(CandidacyStaffProfile::class, CandidacyAppealPolicy::class);
+
         // PART 6: "rate limited by config" for the assistant's three
         // routes -- per-user, not app-wide (that's providerBudgetAvailable()
         // in Assistant\Pipeline, a separate, smaller free-tier budget).
@@ -75,6 +85,11 @@ class ModuleProvider extends ServiceProvider
                 ->by('live:'.($request->user()?->id ?: $request->ip()));
         });
 
+        // routes/console.php is a shared file, so this module schedules its own job here.
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command('candidacy:close-expired-appeals')->dailyAt('07:20')->timezone('Asia/Kuala_Lumpur')->withoutOverlapping();
+        });
+
         if ($this->app->runningInConsole()) {
             $this->commands([
                 RemindOverdueLockerKeys::class,
@@ -89,6 +104,7 @@ class ModuleProvider extends ServiceProvider
                 AssistantCatalogue::class,
                 BackfillCandidacyAppeals::class,
                 CheckCandidacyAllowance::class,
+                CloseExpiredCandidacyAppeals::class,
                 AssistantAsk::class,
                 AssistantLogList::class,
                 AssistantEvaluate::class,

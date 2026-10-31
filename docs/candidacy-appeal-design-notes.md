@@ -125,3 +125,18 @@ retired; `hasOpenAppeal()` looks at the new table and at not-yet-imported legacy
 Backfill on the development database (2026-11-01): 1 department, 4 staff profiles, 2 assignments (lecturer, chair), 1 appeal
 (`SCA-22001001-01`, approved, 6 months, memo kept), 5 events, 4 approvals, 1 publication, 3 candidacies updated; nothing unmapped;
 `candidacy:check-allowance` reports OK for all 3 candidacies.
+
+## 8. Phase 2 delivered (rules and service)
+
+* `CandidacyAppealService` is the only writer of `candidacy_appeals.status` / `current_stage`: `eligibilityProblems`, `saveDraft`, `submit`,
+  `resubmit`, `decide` (approve / verify / return / reject), `closeExpired`. Every method is one transaction on a locked row; notifications
+  go out after the commit and a mail failure never undoes a decision.
+* `CandidacyAppealPolicy` (registered in `ModuleProvider`) is the single access rule: owner; named person of the stage; CGS roles from
+  `config('candidacy.cgs_stage_roles')`; signature images only for their owner.
+* `CandidacySignatureService`: GD decode, min 200x60, resize into 600x200, re-encode PNG, generated name on the private `local` disk;
+  decisions copy the image (snapshot). Demo placeholder drawn with GD.
+* `CandidacyAppealNotice` + `config('candidacy.mail')` implement the notification matrix (mail + bell; demo students mail only).
+* `candidacy:close-expired-appeals [--dry-run]`, scheduled 07:20 Asia/Kuala_Lumpur from `ModuleProvider` (routes/console.php is shared).
+* `CandidacyMemoService::generate()` is the Phase 3 hook (returns null until then, so approvals work without a memo).
+* Dean rejection also sets `study_candidacies.last_rejection_at`, which keeps the dismissal generator working ("appeal rejected").
+* Tests: `CandidacyAppealServiceTest` (33). Legacy reminder / dismissal / old appeal tests still pass untouched.
