@@ -12,8 +12,9 @@ return [
     // use the profile of the first user with role dean_pgr.
     'default_dean_profile' => env('CANDIDACY_DEFAULT_DEAN_PROFILE_ID') ? (int) env('CANDIDACY_DEFAULT_DEAN_PROFILE_ID') : null,
 
-    // Roles that may see and act on an appeal while it is at the CGS stage ("cgs" is kept for a future role of that name).
-    'cgs_stage_roles' => ['cgs', 'non_exec_cgs'],
+    // The CGS roles: the four CGS-team roles the Workstation module's CGS routes accept (Role::cgsTeam()), plus a role named "cgs".
+    // They may open every appeal read-only and act at the CGS verification stage.
+    'cgs_roles' => ['cgs', 'non_exec_cgs', 'senior_exec_cgs', 'manager_cgs', 'senior_director_cgs'],
 
     // The staff roles that sign an appeal, by login role. A CGS user's signature is optional (text-only stamp).
     'signature_required_stages' => ['supervisor', 'chair', 'dean'],

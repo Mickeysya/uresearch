@@ -626,7 +626,7 @@ class CandidacyAppealService
     /** @return Collection<int, User> */
     protected function cgsUsers(): Collection
     {
-        return User::whereIn('role', (array) config('candidacy.cgs_stage_roles'))->get();
+        return User::whereIn('role', (array) config('candidacy.cgs_roles'))->get();
     }
 
     /** @param Collection<int, User> $users */

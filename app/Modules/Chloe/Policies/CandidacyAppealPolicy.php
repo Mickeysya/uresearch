@@ -9,7 +9,7 @@ use App\Modules\Core\Models\User;
 /**
  * The one place that decides who may see or touch an appeal. Every route (pages, downloads, signature images, actions)
  * asks this class, so no route can forget a check. Rules: a student sees only their own appeals; staff see an appeal only
- * when they are one of its named people; the CGS stage is open to the roles in config('candidacy.cgs_stage_roles').
+ * when they are one of its named people; the CGS stage is open to the roles in config('candidacy.cgs_roles').
  */
 class CandidacyAppealPolicy
 {
@@ -61,7 +61,7 @@ class CandidacyAppealPolicy
 
     public function isCgs(User $user): bool
     {
-        return in_array($user->role, (array) config('candidacy.cgs_stage_roles'), true);
+        return in_array($user->role, (array) config('candidacy.cgs_roles'), true);
     }
 
     protected function isNamedPerson(User $user, CandidacyAppeal $appeal): bool

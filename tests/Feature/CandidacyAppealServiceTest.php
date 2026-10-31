@@ -307,15 +307,25 @@ class CandidacyAppealServiceTest extends TestCase
         $this->assertSame(CandidacyAppeal::STATUS_WITH_SUPERVISOR, $appeal->fresh()->status);
     }
 
-    public function test_cgs_roles_act_at_the_cgs_stage_and_other_cgs_roles_do_not(): void
+    public function test_every_cgs_role_may_view_and_act_at_the_cgs_stage_but_other_roles_may_not(): void
     {
         $appeal = $this->toStage('chair');
         $appeal = $this->service->decide($this->chairUser, $appeal, 'approve');
         $this->assertSame('cgs', $appeal->current_stage);
 
-        $manager = $this->user(Role::MANAGER_CGS, ['email' => 'm@test.my']);
-        $this->expectException(AuthorizationException::class);
-        $this->service->decide($manager, $appeal, 'verify', documentsComplete: true);
+        foreach (config('candidacy.cgs_roles') as $i => $role) {
+            $user = $this->user($role, ['email' => "cgs{$i}@test.my"]);
+            $this->assertTrue($user->can('view', $appeal), "{$role} view");
+            $this->assertTrue($user->can('act', $appeal), "{$role} act");
+        }
+
+        foreach ([Role::ACADEMIC_EXEC, Role::FACULTY, Role::REGISTRY] as $i => $role) {
+            $user = $this->user($role, ['email' => "other{$i}@test.my"]);
+            $this->assertFalse($user->can('view', $appeal), "{$role} view");
+            $this->assertFalse($user->can('act', $appeal), "{$role} act");
+        }
+
+        $this->assertEqualsCanonicalizing(\App\Modules\Core\Support\Role::cgsTeam(), array_diff(config('candidacy.cgs_roles'), ['cgs']));
     }
 
     public function test_the_policy_scopes_viewing_and_downloads(): void
