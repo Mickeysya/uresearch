@@ -402,6 +402,8 @@ class WorkstationDemoSeedTest extends TestCase
     /** PART 5 #3: the daily job skips demo students, so demo-seed itself refreshes the dates on rerun. */
     public function test_termination_notice_dates_are_refreshed_on_rerun_not_duplicated(): void
     {
+        // A Monday: two days later is a Wednesday, so the two working-day dates differ (on a Friday both roll to the same Monday).
+        \Illuminate\Support\Carbon::setTestNow('2026-10-12 10:00:00');
         $this->layCatalogue();
         $this->artisan('workstation:demo-seed')->assertSuccessful();
 

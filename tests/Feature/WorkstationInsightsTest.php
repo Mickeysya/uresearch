@@ -214,6 +214,9 @@ class WorkstationInsightsTest extends TestCase
 
     public function test_group_periods_by_quarter_sums_releases_and_carries_the_last_months_projection(): void
     {
+        // Pinned to a mid-month Monday in the first month of a quarter: the three months must share one quarter on any real date.
+        \Illuminate\Support\Carbon::setTestNow('2026-10-12 10:00:00');
+
         $rows = [];
         $nowMonth = now()->format('Y-m');
         $months = [
