@@ -11,6 +11,7 @@ use App\Modules\Chloe\Models\WorkstationLocation;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Models\WorkstationTerminationNotice;
 use App\Modules\Chloe\Services\WorkstationAllocator;
+use App\Modules\Chloe\Support\CandidacyDepartmentResolver;
 use App\Modules\Chloe\Support\StudentDirectory;
 use App\Modules\Chloe\Support\WorkstationEligibility;
 use App\Modules\Core\Models\User;
@@ -341,6 +342,49 @@ class WorkstationDemoSeedTest extends TestCase
             $this->assertStringNotContainsString('part-time', $programme, "{$profile->name}'s programme is Part-Time: {$profile->programme}");
             $this->assertStringNotContainsString('coursework', $programme, "{$profile->name}'s programme is Coursework: {$profile->programme}");
         });
+    }
+
+    /** Programme realignment: demo text is a catalogue name + "(Full-Time)"; the parsed study category (and so eligibility) of every demo student stays full-time research. */
+    public function test_every_demo_profile_has_a_catalogue_programme_and_stays_full_time_research(): void
+    {
+        $this->layCatalogue();
+        $this->artisan('workstation:demo-seed')->assertSuccessful();
+
+        $levels = ['master_research', 'phd'];
+        $departments = [];
+
+        DemoStudentProfile::all()->each(function (DemoStudentProfile $profile) use ($levels, &$departments) {
+            $this->assertMatchesRegularExpression('/ \(Full-Time\)$/', $profile->programme);
+            $entry = CandidacyDepartmentResolver::catalogueEntry($profile->programme);
+            $this->assertNotNull($entry, "Not in the catalogue: {$profile->programme}");
+            $this->assertContains($entry['level'], $levels, 'No demo student is coursework');
+            $this->assertSame(
+                $entry['level'] === 'phd',
+                str_starts_with($profile->programme, 'PhD') || str_starts_with($profile->programme, 'Doctor'),
+            );
+
+            $text = mb_strtolower($profile->programme);
+            $this->assertFalse(str_contains($text, 'part-time') || str_contains($text, 'coursework'));
+            $this->assertTrue(WorkstationEligibility::isEligible(StudentDirectory::fromDemoProfile($profile)));
+            $departments[$entry['department']] = true;
+        });
+
+        $this->assertGreaterThan(1, count($departments));
+    }
+
+    /** Re-seeding never moves a student to another programme: the text is a pure function of the profile id. */
+    public function test_programme_text_is_stable_across_reruns_and_expiry_is_untouched_by_a_relabel(): void
+    {
+        $this->layCatalogue();
+        $this->artisan('workstation:demo-seed')->assertSuccessful();
+        $before = DemoStudentProfile::orderBy('id')->get(['id', 'programme', 'candidacy_expiry_date'])->map(fn ($p) => [$p->id, $p->programme, (string) $p->candidacy_expiry_date])->all();
+
+        $first = DemoStudentProfile::orderBy('id')->first();
+        $first->update(['programme' => 'MSc Computer Science (Full-Time)']);
+        $this->artisan('workstation:demo-seed')->assertSuccessful();
+
+        $after = DemoStudentProfile::orderBy('id')->get(['id', 'programme', 'candidacy_expiry_date'])->map(fn ($p) => [$p->id, $p->programme, (string) $p->candidacy_expiry_date])->all();
+        $this->assertSame($before, $after);
     }
 
     /** PART 5 #1: an old Part-Time profile from before this change is corrected in place on the next run. */

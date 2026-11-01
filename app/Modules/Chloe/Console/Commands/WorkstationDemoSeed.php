@@ -9,6 +9,7 @@ use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Models\WorkstationTerminationNotice;
 use App\Modules\Chloe\Services\WorkstationAllocator;
+use App\Modules\Chloe\Support\CandidacyDepartmentResolver;
 use App\Modules\Chloe\Support\StudentDirectory;
 use App\Modules\Chloe\Support\WorkingDays;
 use App\Modules\Core\Models\User;
@@ -43,17 +44,12 @@ class WorkstationDemoSeed extends Command
     protected const SEED = 260126;
 
     /**
-     * PART 5 #1: full-time research only -- Part-Time and Coursework were
-     * removed entirely, not just deprioritised, since
-     * WorkstationEligibility::isFullTimeResearch() excludes both and every
-     * demo student must be eligible under PART 1.
+     * Programme text for demo students comes from the catalogue (config('candidacy.programmes')), never from a list in this file. The level
+     * of a demo student is a pure function of the id and was fixed by the earlier fixed-text pool: index n of this list is the level that pool
+     * entry had (MSc = master_research, PhD = phd). Keeping the list keeps every student's level, and every student stays Full-Time research
+     * -- WorkstationEligibility::isFullTimeResearch() excludes Part-Time and Coursework, so a demo student must be neither.
      */
-    protected const PROGRAMMES = [
-        'MSc Computer Science (Full-Time)', 'MSc Information Technology (Full-Time)',
-        'PhD Electrical & Electronic Engineering (Full-Time)', 'PhD Chemical Engineering (Full-Time)',
-        'MSc Petroleum Engineering (Full-Time)', 'PhD Civil Engineering (Full-Time)',
-        'MSc Mechanical Engineering (Full-Time)', 'PhD Computer & Information Sciences (Full-Time)',
-    ];
+    protected const LEVELS = ['master_research', 'master_research', 'phd', 'phd', 'master_research', 'phd', 'master_research', 'phd'];
 
     protected const MALAY_MALE_FIRST = ['Ahmad', 'Muhammad Haziq', 'Mohd Firdaus', 'Amir Hakim', 'Hafiz', 'Zulkifli', 'Faizal', 'Danial', 'Syafiq', 'Fakhrul', 'Azizul', 'Shahrul', 'Nabil', 'Afiq', 'Hakimi'];
 
@@ -99,6 +95,7 @@ class WorkstationDemoSeed extends Command
                 // expiry -- a re-run is how this corrects itself, per the
                 // brief ("update the existing demo profiles in-place").
                 $corrected = $this->correctExistingDemoProfilesForEligibility();
+                $this->relabelLiveAccountsAndHistory();
 
                 // Every Occupied seat, not just the still-untracked ones --
                 // a seat this command already gave a demo profile to on an
@@ -180,23 +177,28 @@ class WorkstationDemoSeed extends Command
         $corrected = 0;
 
         DemoStudentProfile::all()->each(function (DemoStudentProfile $profile) use (&$corrected) {
-            $programme = $this->pickFrom(self::PROGRAMMES, $profile->id, 'programme-correction');
+            $programme = $this->programmeFor($profile->id);
             $expiry = now()->addMonths($this->seededRand($profile->id, 'expiry-correction', 3, 24))->toDateString();
 
-            $needsUpdate = $profile->programme !== $programme
-                || $profile->status !== DemoStudentProfile::STATUS_ACTIVE
-                || ! $profile->candidacy_expiry_date
-                || $profile->candidacy_expiry_date->isPast();
+            // The programme text is re-labelled on its own: a profile whose status and expiry are fine keeps its expiry date.
+            $changes = [];
 
-            if (! $needsUpdate) {
+            if ($profile->programme !== $programme) {
+                $changes['programme'] = $programme;
+            }
+
+            if ($profile->status !== DemoStudentProfile::STATUS_ACTIVE
+                || ! $profile->candidacy_expiry_date
+                || $profile->candidacy_expiry_date->isPast()) {
+                $changes['status'] = DemoStudentProfile::STATUS_ACTIVE;
+                $changes['candidacy_expiry_date'] = $expiry;
+            }
+
+            if ($changes === []) {
                 return;
             }
 
-            $profile->update([
-                'programme' => $programme,
-                'status' => DemoStudentProfile::STATUS_ACTIVE,
-                'candidacy_expiry_date' => $expiry,
-            ]);
+            $profile->update($changes);
 
             $corrected++;
         });
@@ -289,7 +291,7 @@ class WorkstationDemoSeed extends Command
             'gender' => $gender,
             // Placeholders until the real id exists below -- its own
             // auto-increment id is unknown before create().
-            'programme' => $this->pickFrom(self::PROGRAMMES, $seat->id, 'programme'),
+            'programme' => $this->programmeFor($seat->id),
             'programme_start_date' => now()->subMonths($this->seededRand($seat->id, 'start', 6, 18)),
             'candidacy_expiry_date' => now()->addMonths($this->seededRand($seat->id, 'expiry', 3, 24)),
             'status' => DemoStudentProfile::STATUS_ACTIVE,
@@ -306,7 +308,7 @@ class WorkstationDemoSeed extends Command
         // exactly what the correction method expects, right away, makes
         // every profile already-correct from its first run onward.
         $profile->update([
-            'programme' => $this->pickFrom(self::PROGRAMMES, $profile->id, 'programme-correction'),
+            'programme' => $this->programmeFor($profile->id),
             'candidacy_expiry_date' => now()->addMonths($this->seededRand($profile->id, 'expiry-correction', 3, 24)),
         ]);
 
@@ -485,7 +487,7 @@ class WorkstationDemoSeed extends Command
             'gender' => $gender,
             // Placeholders until the real id exists below -- its own
             // auto-increment id is unknown before create().
-            'programme' => $this->pickFrom(self::PROGRAMMES, $seedKey, 'programme'),
+            'programme' => $this->programmeFor($seedKey),
             'programme_start_date' => now()->subMonths(14),
             'candidacy_expiry_date' => now()->addMonths(10),
             'status' => DemoStudentProfile::STATUS_ACTIVE,
@@ -503,7 +505,7 @@ class WorkstationDemoSeed extends Command
         // the correction method would compute, right away, makes this
         // profile already-correct from its very first run onward.
         $profile->update([
-            'programme' => $this->pickFrom(self::PROGRAMMES, $profile->id, 'programme-correction'),
+            'programme' => $this->programmeFor($profile->id),
             'candidacy_expiry_date' => now()->addMonths($this->seededRand($profile->id, 'expiry-correction', 3, 24)),
         ]);
 
@@ -667,6 +669,50 @@ class WorkstationDemoSeed extends Command
         $pool = $gender === 'female' ? self::INTERNATIONAL_FEMALE : self::INTERNATIONAL_MALE;
 
         return $this->pickFrom($pool, $seedKey, 'international', $attempt);
+    }
+
+    /**
+     * The two live demo accounts (config 'candidacy.cis_demo_accounts') get a Computer & Information Sciences catalogue programme of their own
+     * level and mode; no other login account is touched. History keeps a snapshot of the programme text, so the snapshot of every DEMO student's
+     * rows (and of those two accounts) is refreshed to the new label -- text only, never a status, date or seat.
+     */
+    protected function relabelLiveAccountsAndHistory(): void
+    {
+        foreach (User::whereIn('email', (array) config('candidacy.cis_demo_accounts'))->get() as $user) {
+            if (CandidacyDepartmentResolver::catalogueEntry($user->programme)) {
+                continue;
+            }
+
+            $text = (string) $user->programme;
+            $level = stripos($text, 'phd') !== false ? 'phd' : 'master_research';
+            $mode = stripos($text, 'part-time') !== false ? 'Part-Time' : 'Full-Time';
+            $name = $level === 'phd' ? 'PhD in Information Systems' : 'Master of Science in Information Systems';
+
+            $user->forceFill(['programme' => "{$name} ({$mode})"])->save();
+        }
+
+        $labels = DemoStudentProfile::pluck('programme', 'matric_no')->all()
+            + User::whereIn('email', (array) config('candidacy.cis_demo_accounts'))->pluck('programme', 'matric_no')->all();
+
+        foreach ($labels as $matric => $programme) {
+            DB::table('workstation_histories')->where('student_matric_no', $matric)->where('student_programme', '!=', $programme)->update(['student_programme' => $programme]);
+        }
+    }
+
+    /**
+     * The catalogue programme text of a demo student, a pure function of the id: the level comes from LEVELS (unchanged), the department from
+     * a fixed hash, the entry within the department from a second one. Always "(Full-Time)" research.
+     */
+    protected function programmeFor(int $key): string
+    {
+        $level = self::LEVELS[$this->seededRand($key, 'programme-correction0', 0, count(self::LEVELS) - 1)];
+        $codes = array_keys((array) config('candidacy.departments'));
+        $code = $codes[$this->seededRand($key, 'department', 0, count($codes) - 1)];
+
+        $entries = array_values(array_filter((array) config('candidacy.programmes'), fn ($e) => $e[2] === $code && $e[1] === $level));
+        $entry = $entries[$this->seededRand($key, 'programme-pick', 0, count($entries) - 1)];
+
+        return $entry[0].' (Full-Time)';
     }
 
     /** @param array<int, mixed> $pool */
