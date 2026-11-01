@@ -383,3 +383,9 @@ Master and PhD; all nine departments; two already exported), 8 visible exclusion
 Environmental, Computer & Information Sciences; expiring soon, far away and already expired). `candidacy:demo-registry-file` writes `storage/app/demo/registry-confirmed-sample.xlsx` (half of the candidates plus an
 unknown ID, a student who is not a candidate and a repeated row). `candidacy:demo-clear` removes all of it. The old `candidacy:generate-dismissals` (still scheduled at 07:15 in the shared `routes/console.php`) is a
 deprecated no-op; its old table `candidacy_dismissals` is kept, unused.
+
+## 19. Candidacy Insights
+
+CGS Insights page with the expiry forecast, bands, reminder effect and dismissal pipeline, all from `Support\CandidacyStatistics`. Full description, definitions, demo steps and the one shared-file line in `docs/candidacy-insights.md`.
+Demo students for it are candidacy-only (see section 18). The 07:30 / 08:00 rule also covers the "closed as expired" and termination notices (tests in `CandidacyScheduledNoticeTest` and `WorkstationDailyScheduleTest`).
+

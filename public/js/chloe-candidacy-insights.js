@@ -171,7 +171,8 @@
             var hit = svgEl('rect', { x: padL + slot * i, y: padT, width: slot, height: plotH + padB - 6, fill: 'transparent' });
             grp.appendChild(hit);
             var narrow = slot < 30, lab = svgEl('text', { x: x + bw / 2, y: height - padB + 16, 'text-anchor': 'middle', class: 'wsi-category-label' }); lab.textContent = narrow ? (g.narrow || (g.short || g.label).slice(0, 1)) : (g.short || g.label); svg.appendChild(lab);
-            if (g.sub) { var sub = svgEl('text', { x: x + bw / 2, y: height - padB + 30, 'text-anchor': 'middle', class: 'wsi-axis-label' }); sub.textContent = (narrow && /^\d{4}$/.test(g.sub)) ? "'" + g.sub.slice(2) : g.sub; svg.appendChild(sub); }
+            var crowded = narrow && cfg.groups.slice(i + 1, i + 3).some(function (n2) { return !!n2.sub; }); // a year label too close to the next one is dropped
+            if (g.sub && !crowded) { var sub = svgEl('text', { x: x + bw / 2, y: height - padB + 30, 'text-anchor': 'middle', class: 'wsi-axis-label' }); sub.textContent = (narrow && /^\d{4}$/.test(g.sub)) ? "'" + g.sub.slice(2) : g.sub; svg.appendChild(sub); }
             if (totals[i] > 0 && slot >= 20) { var tt = svgEl('text', { x: x + bw / 2, y: y(totals[i]) - 4, 'text-anchor': 'middle', class: 'wsi-value-label' }); tt.textContent = totals[i]; svg.appendChild(tt); }
             svg.appendChild(grp);
             wire(grp, g.dim, g.value, function () { return g.tip; }, g.onClick);
@@ -462,8 +463,11 @@
             if (j.version === liveVersion) { setLive('Live · checked ' + stamp()); return; }
             return fetch(LIVE.dataUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j2) {
                 liveVersion = j2.version; DATA = j2.data; // filters, highlight, search, page and scroll stay as they are
-                renderAll(); setLive('Live · updated ' + stamp());
-                liveNote.hidden = false; liveNote.textContent = 'The numbers changed and were updated in place.'; setTimeout(function () { liveNote.hidden = true; }, 6000);
+                var y = window.scrollY; renderAll(); setLive('Live · updated ' + stamp());
+                // the note above the cards adds a line: move by its height so the cards stay exactly where the person is looking (and again when it goes away)
+                var was = liveNote.offsetHeight; liveNote.hidden = false; liveNote.textContent = 'The numbers changed and were updated in place.';
+                window.scrollTo(0, y + (liveNote.offsetHeight - was));
+                setTimeout(function () { var h = liveNote.offsetHeight, y2 = window.scrollY; liveNote.hidden = true; window.scrollTo(0, y2 - h); }, 6000);
             });
         }).catch(function () { setLive('Live · connection problem, retrying', 'wsi-live-error'); });
     }

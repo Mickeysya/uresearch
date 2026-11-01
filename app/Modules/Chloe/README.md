@@ -251,3 +251,9 @@ Management & Humanities. **Demo programme text comes from the seeders** (`workst
 The Dismissal List (Candidacy Management) is live: students whose candidacy has expired (rule and Handbook references in `docs/candidacy-appeal-inventory.md` section 18). CGS exports it to Excel; the Registry
 processes it elsewhere; the Registry or CGS uploads the result on **Dismissal Upload** (preview, then a confirmation dialog) and those students are marked dismissed. No keep status, no batch lock. Demo:
 `candidacy:demo-seed`, `candidacy:demo-registry-file`, `docs/candidacy-demo-script.md`. Candidacy-only demo students (`demo_student_profiles.candidacy_only`) are invisible to Workstation.
+
+## Candidacy Insights
+
+`/cgs/candidacy/insights` (CGS only): operational monitoring of the known expiry dates (a projection, not a prediction). One statistics class (`Support\CandidacyStatistics`), the Workstation Insights look and mechanisms,
+live update. See `docs/candidacy-insights.md`.
+
