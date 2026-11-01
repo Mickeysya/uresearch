@@ -89,7 +89,7 @@ Filters (search, department, months, waiting at least, round) apply to the activ
 Four cards: **In progress** (with supervisor, chair, CGS or dean; not returned), **Returned**, **Approved**, **Rejected**. Closed expired is not a card; it is
 listed under **All** and the Status filter. A card click filters the list (active card highlighted, click again to clear; the state is in the URL, so a refresh keeps it).
 Cards, tabs (In progress / Returned / Approved / Rejected / All) and the table come from `CandidacyOperationsQuery` with the same filters, so they cannot disagree.
-Filters: search, department, status, current step, months, waiting at least, round. 25 rows per page. Below 1100 px the table stacks into labelled rows.
+Filters: search, department, status, current step, months, waiting at least, round. 25 rows per page (one pagination bar, see section 15). Below 1100 px the table stacks into labelled rows.
 "View details" opens the appeal page; Back returns to this page with its group, filters and page number.
 
 ### Back and the return path
@@ -237,3 +237,22 @@ unchanged (`chair`, `with_chair`, `Role::CHAIR`), and the memo verification code
 | A Dean rejection blocks all future appeals | confirmed with CGS during requirement gathering |
 | An appeal is allowed on the last day of the expiry date | confirmed with CGS during requirement gathering |
 | Dean rejection reasons list | starting list, to be confirmed by CGS |
+
+## 15. UI conventions: one pagination component
+
+Every paginated candidacy list (Operations and every Approval Portal tab, 25 rows per page) uses ONE bar: the view `candidacy/wca/_pagination.blade.php` with the
+window logic in `Support/CandidacyPagination`. Its markup and CSS are the Workstation CGS seat-list bar (`.cgs-pagination`, `.is-current`, `.is-disabled`; the
+declarations are copied into `chloe-candidacy.css` because the Workstation page defines them inline): "« Prev", numbered buttons with the current page in dark blue, "Next »".
+
+| Rule | Detail |
+|---|---|
+| Prev / Next | greyed `span` with `aria-disabled="true"` when they cannot be used (Prev on page 1, Next on the last page): not a link, not focusable, no hover |
+| Current page | not a link, `aria-current="page"` |
+| Window | at most 7 slots (5 at 480 px and below, smaller buttons; both bars are rendered and CSS shows one). Up to 7 pages: every number. More: first and last always shown, exactly 7 slots, "…" for gaps (plain text, never two side by side). 12 pages: page 1-4 `1 2 3 4 5 … 12`, page 6 `1 … 5 6 7 … 12`, page 9-12 `1 … 8 9 10 11 12` |
+| Line below | `Showing 26 to 39 of 39 appeals` (right noun per list). 0 results: `No appeals found` and no bar. One page: only the "Showing" line |
+| State | every link keeps tab, search, filters and card in the URL; changing a filter, card, tab or search drops `page` (back to page 1) |
+| Bad page numbers | below 1, empty or non-numeric -> page 1; beyond the last page -> the last page (never an empty page or an error) |
+| Live update | the bar is part of the refreshed region, and the region URL carries the current page, so a 15 s refresh keeps the page; if the page no longer exists it shows the last one |
+| Back from the appeal page | the return path includes `page`, so Back lands on the same page |
+
+Workstation pagination is not changed. Note for the Workstation owner: its bar prints every page number (no window), so a very long list would wrap onto several lines.

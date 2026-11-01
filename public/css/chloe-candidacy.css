@@ -226,3 +226,21 @@
 .wca-page .wca-table .wca-btn.is-small { white-space: nowrap; }
 .wca-table.is-compact td:nth-child(3) { min-width: 0; }
 .wca-page .page-header-back { width: fit-content; max-width: 100%; }
+
+/* Pagination: the Workstation CGS seat-list bar, same classes and declarations (they are inline on that page, so copied here) */
+.cgs-pagination { display: flex; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
+.cgs-pagination a, .cgs-pagination span { padding: 6px 11px; border-radius: 8px; font-size: 13px; border: 1px solid var(--border-grey); text-decoration: none; color: var(--navy); }
+.cgs-pagination .is-current { background: var(--navy); color: white; border-color: var(--navy); }
+.cgs-pagination .is-disabled { color: var(--text-grey); }
+/* the ellipsis is plain text: no box */
+.cgs-pagination .is-gap { border-color: transparent; color: var(--text-grey); padding-left: 4px; padding-right: 4px; }
+.wca-page .cgs-pagination a:hover { background: none; text-decoration: none; }
+.cgs-pagination .is-disabled { cursor: default; pointer-events: none; }
+.cgs-pagination.is-compact { display: none; }
+.wca-showing { margin: 10px 0 0; }
+@media (max-width: 480px) {
+    .cgs-pagination.is-full { display: none; }
+    .cgs-pagination.is-compact { display: flex; gap: 4px; }
+    .cgs-pagination.is-compact a, .cgs-pagination.is-compact span { padding: 4px 8px; font-size: 12px; }
+    .cgs-pagination.is-compact .is-gap { padding-left: 2px; padding-right: 2px; }
+}

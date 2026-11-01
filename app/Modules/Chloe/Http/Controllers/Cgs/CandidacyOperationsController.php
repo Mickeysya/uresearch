@@ -4,6 +4,7 @@ namespace App\Modules\Chloe\Http\Controllers\Cgs;
 
 use App\Modules\Chloe\Models\CandidacyDepartment;
 use App\Modules\Chloe\Support\CandidacyOperationsQuery as Q;
+use App\Modules\Chloe\Support\CandidacyPagination as Pg;
 use App\Modules\Chloe\Support\CandidacyReturnPath;
 use App\Modules\Core\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -43,8 +44,8 @@ class CandidacyOperationsController extends Controller
         $f = Q::filters($request->query());
         $counts = Q::counts($f);
         $total = $counts[$f['group'] ?? 'all'];
-        $pages = max(1, (int) ceil($total / self::PER_PAGE));
-        $f['page'] = min($f['page'], $pages);
+        $pages = Pg::pages($total, self::PER_PAGE);
+        $f['page'] = Pg::page($request->query('page'), $pages); // 0 / "abc" -> 1; beyond the last page -> the last page
 
         $rows = Q::forGroup($f, $f['group'])
             ->with(['student', 'demoProfile', 'department', 'supervisorProfile', 'chairProfile', 'deanProfile'])
@@ -54,7 +55,7 @@ class CandidacyOperationsController extends Controller
         $query = array_filter(['group' => $f['group'], 'q' => $f['q'], 'department' => $f['department'], 'status' => $f['status'], 'step' => $f['step'], 'months' => $f['months'], 'waiting' => $f['waiting'], 'round' => $f['round'], 'page' => $f['page'] > 1 ? $f['page'] : null]);
 
         return [
-            'f' => $f, 'counts' => $counts, 'rows' => $rows, 'total' => $total, 'pages' => $pages, 'query' => $query,
+            'f' => $f, 'counts' => $counts, 'rows' => $rows, 'total' => $total, 'pages' => $pages, 'perPage' => self::PER_PAGE, 'query' => $query,
             'returnTo' => CandidacyReturnPath::current($request, '/cgs/candidacy', $query),
             'departments' => CandidacyDepartment::orderBy('name')->get(),
             'liveVersion' => Q::version(),

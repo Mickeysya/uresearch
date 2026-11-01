@@ -214,3 +214,5 @@ The older sections of this README that mention `CandidacyAppealController` descr
 All appeal pages (student, Approval Portal, Operations) share one appeal page, `/candidacy/appeals/{id}`; see the inventory for the tabs, Operations cards, return path and live updates.
 
 Handbook alignment (2025): the chair step is displayed as "Department Chair"; the expiry day is still a valid day to appeal; the Dean's rejection needs reasons; Operations has four cards. The planned (not built) items are in `docs/candidacy-appeal-inventory.md` section 13.
+
+Pagination: every candidacy list uses one bar (`candidacy/wca/_pagination.blade.php`, `Support/CandidacyPagination`), the Workstation seat-list look with a 7-slot window; rules in `docs/candidacy-appeal-inventory.md` section 15.

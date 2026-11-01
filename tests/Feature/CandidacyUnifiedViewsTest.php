@@ -259,7 +259,7 @@ class CandidacyUnifiedViewsTest extends TestCase
 
         $this->assertSame(25, substr_count($p1, 'View details'));
         $this->assertSame(2, substr_count($p2, 'View details'));
-        $this->assertStringContainsString('Page 2 of 2', $p2);
+        $this->assertStringContainsString('Showing 26 to 27 of 27 appeals', $p2);
     }
 
     // ---- access, headers and live endpoints ---------------------------------------------------------------------

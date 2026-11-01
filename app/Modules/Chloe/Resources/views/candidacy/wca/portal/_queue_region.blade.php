@@ -5,7 +5,7 @@
 <section class="wca-card" aria-label="Appeals">
     <div class="wca-tabs" role="tablist">
         @foreach ($tabs as $t)
-            <a class="wca-tab {{ $tab === $t ? 'is-active' : '' }}" role="tab" aria-selected="{{ $tab === $t ? 'true' : 'false' }}" href="{{ route('candidacy.portal.queue', array_merge($query, ['tab' => $t === 'pending' ? null : $t])) }}">{{ $tabNames[$t] }} <span class="wca-count">{{ $counts[$t] }}</span></a>
+            <a class="wca-tab {{ $tab === $t ? 'is-active' : '' }}" role="tab" aria-selected="{{ $tab === $t ? 'true' : 'false' }}" href="{{ route('candidacy.portal.queue', array_merge(array_diff_key($query, ['page' => 1]), ['tab' => $t === 'pending' ? null : $t])) }}">{{ $tabNames[$t] }} <span class="wca-count">{{ $counts[$t] }}</span></a>
         @endforeach
         @if ($isCgs)
             <a class="wca-tabs-end" href="{{ route('candidacy.cgs.operations') }}">View all appeals &rarr;</a>
@@ -22,9 +22,7 @@
         @include('chloe::candidacy.wca._legend')
     @endif
 
-    @if ($rows->isEmpty())
-        <p class="wca-empty">{{ ['pending' => 'Nothing is pending your action.', 'ongoing' => 'No ongoing appeals.', 'history' => 'No appeals with a final result yet.', 'decided' => 'You have not decided any appeal yet.'][$tab] }}</p>
-    @else
+    @if ($rows->isNotEmpty())
         <div class="wca-table-wrap">
             <table class="wca-table is-stack is-compact">
                 <thead><tr>
@@ -69,4 +67,5 @@
             </table>
         </div>
     @endif
+    @include('chloe::candidacy.wca._pagination', ['page' => $page, 'pages' => $pages, 'total' => $total, 'perPage' => $perPage, 'noun' => 'appeals', 'pageUrl' => fn ($n) => route('candidacy.portal.queue', array_merge(array_diff_key($query, ['page' => 1]), ['page' => $n > 1 ? $n : null]))])
 </section>

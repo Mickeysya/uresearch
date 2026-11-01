@@ -9,6 +9,7 @@ use App\Modules\Chloe\Services\CandidacyAppealService;
 use App\Modules\Chloe\Services\CandidacySignatureService;
 use App\Modules\Chloe\Support\CandidacyAppealPresenter;
 use App\Modules\Chloe\Support\CandidacyLiveVersion;
+use App\Modules\Chloe\Support\CandidacyPagination as Pg;
 use App\Modules\Chloe\Support\CandidacyPortalQuery;
 use App\Modules\Chloe\Support\CandidacyReturnPath;
 use App\Modules\Chloe\Support\CandidacyStaffDirectory;
@@ -23,6 +24,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /** The Approval Portal: one queue, one review page and one signature page for Supervisor, Chair, CGS and Dean. */
 class PortalController extends Controller
 {
+    public const PER_PAGE = 25;
+
     public function __construct(
         protected CandidacyAppealService $service,
         protected CandidacySignatureService $signatures,
@@ -51,14 +54,20 @@ class PortalController extends Controller
             'months' => $request->integer('months') ?: null, 'waiting' => $request->integer('waiting') ?: null, 'round' => $request->integer('round') ?: null,
         ];
 
-        $rows = CandidacyPortalQuery::filter(CandidacyPortalQuery::forTab($user, $tab), $filters)
-            ->with(['student', 'demoProfile', 'department', 'approvals', 'supervisorProfile', 'chairProfile', 'deanProfile'])
-            ->orderByRaw($tab === 'pending' ? 'stage_entered_at asc' : 'COALESCE(last_action_at, updated_at) desc')
-            ->get();
+        $listQuery = CandidacyPortalQuery::filter(CandidacyPortalQuery::forTab($user, $tab), $filters);
+        $total = (clone $listQuery)->count();
+        $pages = Pg::pages($total, self::PER_PAGE);
+        $page = Pg::page($request->query('page'), $pages); // 0 / "abc" -> 1; beyond the last page -> the last page
 
-        $query = array_filter(['tab' => $tab === 'pending' ? null : $tab, 'q' => $filters['q'], 'department' => $filters['department'], 'months' => $filters['months'], 'waiting' => $filters['waiting'], 'round' => $filters['round']]);
+        $rows = $listQuery->with(['student', 'demoProfile', 'department', 'approvals', 'supervisorProfile', 'chairProfile', 'deanProfile'])
+            ->orderByRaw($tab === 'pending' ? 'stage_entered_at asc' : 'COALESCE(last_action_at, updated_at) desc')
+            ->orderBy('id')
+            ->skip(($page - 1) * self::PER_PAGE)->take(self::PER_PAGE)->get();
+
+        $query = array_filter(['tab' => $tab === 'pending' ? null : $tab, 'q' => $filters['q'], 'department' => $filters['department'], 'months' => $filters['months'], 'waiting' => $filters['waiting'], 'round' => $filters['round'], 'page' => $page > 1 ? $page : null]);
 
         return [
+            'page' => $page, 'pages' => $pages, 'total' => $total, 'perPage' => self::PER_PAGE,
             'tab' => $tab, 'tabs' => $tabs, 'rows' => $rows, 'filters' => $filters, 'user' => $user, 'isCgs' => CandidacyPortalQuery::isCgs($user),
             'counts' => CandidacyPortalQuery::counts($user),
             'departments' => CandidacyDepartment::orderBy('name')->get(),

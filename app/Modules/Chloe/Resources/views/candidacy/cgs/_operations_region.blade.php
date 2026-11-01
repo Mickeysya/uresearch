@@ -24,9 +24,7 @@
     </div>
     @include('chloe::candidacy.wca._legend')
 
-    @if ($rows->isEmpty())
-        <p class="wca-empty">No appeals match.</p>
-    @else
+    @if ($rows->isNotEmpty())
         <div class="wca-table-wrap">
             <table class="wca-table is-stack is-compact">
                 <thead><tr>
@@ -54,12 +52,6 @@
                 </tbody>
             </table>
         </div>
-        @if ($pages > 1)
-            <nav class="wca-pager" aria-label="Pages">
-                <span class="wca-muted">Page {{ $f['page'] }} of {{ $pages }} &middot; {{ $total }} appeals</span>
-                @if ($f['page'] > 1)<a class="wca-btn is-small" href="{{ $link($f['group'], $f['page'] - 1) }}">Previous</a>@endif
-                @if ($f['page'] < $pages)<a class="wca-btn is-small" href="{{ $link($f['group'], $f['page'] + 1) }}">Next</a>@endif
-            </nav>
         @endif
-    @endif
+    @include('chloe::candidacy.wca._pagination', ['page' => $f['page'], 'pages' => $pages, 'total' => $total, 'perPage' => $perPage, 'noun' => 'appeals', 'pageUrl' => fn ($n) => $link($f['group'], $n > 1 ? $n : null)])
 </section>
