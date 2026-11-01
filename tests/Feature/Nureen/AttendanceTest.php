@@ -27,6 +27,18 @@ class AttendanceTest extends TestCase
     use MakesUsers;
     use RefreshDatabase;
 
+    /**
+     * These fixtures use periods in mid-2026, before the configured demo
+     * semester (nureen.attendance.semester_start). The risk check only looks
+     * at the current semester, so they state "every period counts".
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['nureen.attendance.semester_start' => null]);
+    }
+
     protected function sheet(array $rows, string $name = 'attendance.csv'): UploadedFile
     {
         $csv = implode(',', AttendanceSheet::COLUMNS)."\n";

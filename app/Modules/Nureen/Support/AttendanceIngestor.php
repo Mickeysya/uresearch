@@ -5,7 +5,6 @@ namespace App\Modules\Nureen\Support;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Models\AttendanceRecord;
-use App\Modules\Nureen\Notifications\AttendanceAtRisk;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -66,6 +65,15 @@ class AttendanceIngestor
                     continue;
                 }
 
+                // A period is recorded once it has ended, never before: a
+                // future period_end would count sessions that have not
+                // happened yet, from any source or upload.
+                if ($periodEnd > now()->toDateString()) {
+                    $problems[] = "{$label}: period_end {$periodEnd} is in the future; a period can only be recorded once it has ended.";
+
+                    continue;
+                }
+
                 $attended = $row['sessions_attended'] ?? null;
                 $total = $row['sessions_total'] ?? null;
 
@@ -119,12 +127,11 @@ class AttendanceIngestor
             }
         });
 
-        // Outside the transaction, same as before: a mail failure must not
-        // roll back attendance that was already successfully recorded.
-        foreach ($newlyAtRisk as $record) {
-            $record->student->notify(new AttendanceAtRisk($record));
-            $record->student->supervisor?->notify(new AttendanceAtRisk($record));
-        }
+        // No email from here any more: the early warning is sent by
+        // Support\AttendanceEarlyWarning, which the callers (the sync runner
+        // and the manual upload) run after this -- it also applies the
+        // end-of-semester projection and the no-repeat rule.
+        // `newlyAtRisk` still counts the original rule's new flags.
 
         return new IngestSummary(
             read: $read,

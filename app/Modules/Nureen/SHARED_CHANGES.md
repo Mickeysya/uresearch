@@ -401,3 +401,79 @@ migration outside Nureen changes.
 
 **Degrades to:** without it, nothing changes: the System checks panel keeps
 showing only "type attached / missing", exactly as today.
+
+---
+
+## 9. Attendance projection: what Core shows students
+
+Nureen's attendance risk check now includes an end-of-semester projection
+(`Support\AttendanceProjector`), shown to CGS only. By design, students see
+their current attendance and history, never a projection or a trend.
+Everything is inside `app/Modules/Nureen/`, except (a), which the team
+agreed and is done. (b)–(d) still need a team decision.
+
+**a. DONE (1 Nov 2026, agreed by the team): the "Predicted Attendance"
+card is replaced.** It showed students the older mean-change projection.
+It is now an "Attendance Action" card, worded by Nureen, and the Active
+Applications card shows the nearest Client Charter decision date. Core
+files changed, and why:
+
+| File | Change |
+|---|---|
+| `Core/Contracts/SuppliesAttendance.php` | `projectionFor(): ?float` replaced by `actionFor(): ?array` (label, value, note, pill, pillTone, url), so no projected figure can reach the student dashboard |
+| `Core/Contracts/SuppliesDecisionDates.php` (new) | `expectedDecisionDate(Application): ?CarbonInterface`, implemented on a workflow class like `ProvidesLinks` |
+| `Core/Services/StudentDashboard.php` | `predictedAttendance()` → `attendanceAction()`; new `nextDecisionDate()` (earliest date over the student's own pending applications) |
+| `Core/Http/Controllers/DashboardController.php` | student branch passes `attendanceAction` and `nextDecision` instead of `predicted` |
+| `Core/Resources/views/dashboard/partials/stat-cards.blade.php` | the second card renders `attendanceAction`; Active Applications' note adds "· next decision by j M"; a pill may carry a ready-made `url`; a `textValue` card sets its words smaller |
+
+Only the student dashboard includes `stat-cards.blade.php`; the CGS, admin,
+supervisor, chair and approver dashboards are untouched (asserted in
+`AttendanceActionCardTest`). Nureen deleted `AttendanceProvider::projectionFor()`
+and `AttendanceRiskEvaluator::project()`. Tests outside Nureen changed:
+`tests/Feature/Core/ModuleContractsTest.php` (`predictedAttendance()` →
+`attendanceAction()`).
+
+**Still open, small:** the dashboard's gauge (Core's
+`attendance-overview.blade.php`) labels its stat "Target ≥ 85%" (the top of
+the "Good" band), while the requirement, the email and the new card say
+80%. Suggest relabelling it "Requirement ≥ 80%".
+
+**b. "Current attendance" means two different things.** Core's dashboard
+card and gauge show the LATEST PERIOD's percentage
+(`AttendanceReading::$percentage`). The 80% requirement, the early-warning
+email and Nureen's overview page use attendance SO FAR THIS SEMESTER. A
+student can be told 96.3% in the email and see 90% on the dashboard.
+
+**Proposed change:** add `?float $semesterPercentage = null` to
+`Core\Support\AttendanceReading`, which Nureen's provider would fill from
+`AttendanceRiskEvaluator::assess()`. The dashboard card and gauge would
+show it, labelled "This semester so far", with the latest period as the
+secondary figure.
+
+**c. Core's CGS dashboard counts only the original rule.** Its attendance
+bands and alert count read `attendance_records.at_risk` through
+`latestPerStudent()`, which deliberately still means only the original
+per-period rule. A student flagged by the projection alone is on Nureen's
+At-Risk list but not in those counts.
+
+**Proposed change:** an `atRiskCount(): int` method on `SuppliesAttendance`
+(Nureen: `AttendanceRiskState::where('at_risk', true)->count()`), used for
+the CGS dashboard's at-risk figure.
+
+**Degrades to:** the CGS dashboard under-counts by the projection-only
+students; the At-Risk list itself is complete.
+
+**d. `database/seeders/DemoDataSeeder.php` still seeds MONTHLY attendance**
+(`attendance_months`, month-end `period_end`s) and links its attendance
+appeals to those rows. The demo semester is now weekly
+(`Nureen\Database\Seeders\NureenAttendanceDemoSeeder`: four weeks ending
+9–30 Oct 2026, in the semester starting `nureen.attendance.semester_start`).
+Re-running `demo:seed` would put monthly rows back beside the weekly ones.
+The projection then skips those students ("Projection unavailable:
+inconsistent periods") until `NureenAttendanceDemoSeeder` is run again.
+**Proposed change:** in DemoDataSeeder, call `NureenAttendanceDemoSeeder`
+instead of writing attendance itself, and link its demo appeals to a weekly
+row with `sessions_requested` set. Also, its attendance appeals now need the
+two required document types (`config('nureen.attendance_appeal.required_documents')`);
+appeals it seeds without them show "missing" in CGS's checks.
+

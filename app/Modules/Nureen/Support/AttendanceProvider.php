@@ -3,6 +3,7 @@
 namespace App\Modules\Nureen\Support;
 
 use App\Modules\Core\Contracts\SuppliesAttendance;
+use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\AttendanceReading;
 use App\Modules\Nureen\Models\AttendanceRecord;
@@ -32,16 +33,58 @@ class AttendanceProvider implements SuppliesAttendance
         return $record ? $this->toReading($record) : null;
     }
 
-    public function projectionFor(User $student): ?float
+    /**
+     * The student dashboard's "Attendance Action" card, worded here so Core
+     * only renders it. The figures come from Support\AttendanceTarget --
+     * plain arithmetic on the student's own sessions, never the projection
+     * or the trend (those are CGS's, on the at-risk list). Supportive in
+     * tone throughout: the card says what to do, not how bad things are.
+     */
+    public function actionFor(User $student): ?array
     {
-        $record = AttendanceRecord::where('student_id', $student->id)
-            ->orderByDesc('period_end')
-            ->first();
+        $target = app(AttendanceTarget::class)->for($student);
+        $view = route('attendance.overview');
 
-        // The projection rule itself stays in AttendanceRiskEvaluator, next
-        // to isAtRisk() -- the two are the same small explicit rule set and
-        // are meant to be read together.
-        return $record ? AttendanceRiskEvaluator::project($record) : null;
+        return match ($target['state']) {
+            AttendanceTarget::ON_TRACK => [
+                'label' => 'Attendance Target', 'value' => 'On track', 'note' => 'Minimum 80% this semester',
+                'pill' => 'View Attendance', 'pillTone' => 'good', 'url' => $view,
+            ],
+            AttendanceTarget::ATTEND => [
+                'label' => 'Attendance Action',
+                'value' => "Attend {$target['sessions_needed']} of the next {$target['sessions_remaining']} sessions",
+                'note' => 'to stay at or above 80% this semester',
+                'pill' => 'View Attendance', 'pillTone' => 'info', 'url' => $view,
+            ],
+            AttendanceTarget::JUSTIFICATION => $this->justificationCard($target['appeal']),
+            default => [
+                'label' => 'Attendance Target', 'value' => 'Keep checking in', 'note' => 'Your attendance target will appear after a few weeks',
+                'pill' => 'View Attendance', 'pillTone' => 'muted', 'url' => $view,
+            ],
+        };
+    }
+
+    /** 80% is out of reach: ask for a justification, or show the appeal already filed. */
+    protected function justificationCard(?Application $appeal): array
+    {
+        if (! $appeal) {
+            return [
+                'label' => 'Attendance Action', 'value' => 'Justification needed',
+                'note' => 'Submit a justification letter and monthly activity breakdown to CGS',
+                'pill' => 'Submit Justification', 'pillTone' => 'warn', 'url' => route('attendance-appeal.create'),
+            ];
+        }
+
+        [$value, $note, $tone] = match ($appeal->status) {
+            Application::STATUS_APPROVED => ['Appeal approved', 'CGS has accepted your justification', 'good'],
+            Application::STATUS_REJECTED => ['Appeal rejected', 'Talk to your supervisor or CGS about next steps', 'warn'],
+            default => ['Appeal under review', 'CGS is reviewing your justification', 'info'],
+        };
+
+        return [
+            'label' => 'Attendance Action', 'value' => $value, 'note' => $note,
+            'pill' => 'View Appeal', 'pillTone' => $tone, 'url' => route('applications.show', $appeal),
+        ];
     }
 
     /** @return Collection<int, AttendanceReading> */

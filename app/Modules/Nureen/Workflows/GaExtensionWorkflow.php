@@ -3,12 +3,14 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use Illuminate\Support\Str;
 use App\Modules\Core\Models\User;
@@ -41,8 +43,11 @@ use Carbon\CarbonInterface;
  * stuck on step 1. Declaring the chain here puts it on the same footing as
  * everything else.
  */
-class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, DecidesOneAtATime, ProvidesLinks
+class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, DecidesOneAtATime, ProvidesLinks, SuppliesDecisionDates
 {
+    /** expectedDecisionDate(): the Client Charter date, for the student dashboard. */
+    use ExpectsDecisionByCharter;
+
     public function key(): string
     {
         return 'ga_extension';

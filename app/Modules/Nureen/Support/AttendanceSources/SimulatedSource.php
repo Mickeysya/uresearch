@@ -27,7 +27,13 @@ class SimulatedSource implements AttendanceSource
 
     public function pull(): Collection
     {
-        $periodEnd = CarbonImmutable::now()->endOfWeek(CarbonImmutable::FRIDAY)->format('Y-m-d');
+        // The most recent COMPLETED week: the Friday on or before today.
+        // endOfWeek(FRIDAY) used to give this week's Friday even on a
+        // Sunday -- a period ending in the future, before any of its
+        // sessions had happened. AttendanceIngestor now rejects that from
+        // any source too.
+        $today = CarbonImmutable::today();
+        $periodEnd = ($today->isFriday() ? $today : $today->previous(CarbonImmutable::FRIDAY))->format('Y-m-d');
 
         $already = AttendanceRecord::whereDate('period_end', $periodEnd)
             ->pluck('student_id')

@@ -8,6 +8,280 @@ diff alone.
 
 ---
 
+## 2026-11-01 — Attendance: viva demo cases, and the student dashboard's Attendance Action card
+
+**Branch:** `develop`, uncommitted. **Includes a Core change the team agreed.**
+
+### The ask
+
+Add a re-runnable seeder for three viva demo students (projection only,
+current rule, steady) that prints their figures. Replace Core's misleading
+"Predicted Attendance" student card with an "Attendance Action" card that
+tells the student what to do next, never showing the projection. Add the
+nearest Client Charter decision date to the Active Applications card. Keep
+the Core change minimal and leave the other dashboards untouched.
+
+### Key findings before writing any code
+
+- The old card was fed by `SuppliesAttendance::projectionFor()` →
+  `AttendanceRiskEvaluator::project()` (an older mean-change rule). Nothing
+  else used either, so both could go.
+- The Client Charter lives in Nureen, and Core may not name it. The calendar
+  already uses an "implement a Core contract on your workflow" seam
+  (`SuppliesCalendarEvents`), so the decision date follows that pattern.
+- At 70% after 4 of 14 weeks (the old "current rule" case), 80% is still
+  reachable (84 of the next 100 sessions), so that student would never show
+  "Justification needed". The case was lowered to 3, 3, 2, 3 (27.5%): 101
+  of the 100 sessions left would be needed.
+- Only the student dashboard includes `stat-cards.blade.php`.
+
+### The design
+
+- **`Support\AttendanceTarget`** (Nureen): `sessionsNeeded(attended, total,
+  remaining)` = the fewest N with (attended + N) ÷ (total + M) ≥ 80%, or null
+  when N > M; `remainingSessions()` = semester periods left × average
+  sessions per period so far. Both use the semester's figures, with
+  excusals counted per the config. `for($student)` picks a state:
+  `too_early` (fewer than `projection_min_periods` periods), `on_track` (not
+  flagged by `assess()`, or N = 0), `attend`, `justification` (plus the
+  latest appeal this semester, if any).
+- **The wording lives in Nureen** (`AttendanceProvider::actionFor()`); Core
+  only renders label, value, note, pill and link. The tone is supportive:
+  "Justification needed" uses the amber pill, never red.
+- **Core seams:** `SuppliesAttendance::projectionFor()` →
+  `actionFor()`, and a new `SuppliesDecisionDates` contract that the three
+  charter workflows implement via `Workflows\Concerns\ExpectsDecisionByCharter`
+  (`ClientCharter::expectedDecision()['expected_date']`).
+  `StudentDashboard::nextDecisionDate()` takes the earliest across the
+  student's own pending applications. Untimed stages and teammates' modules
+  give no date, so the card says just "In progress".
+- **`AttendanceRiskDemoSeeder`** owns the three cases (and
+  `NureenAttendanceDemoSeeder` now reads them from it). It replaces just
+  those three students' histories and runs the early warning for them only,
+  so a re-run neither duplicates rows nor re-sends email. It prints login,
+  current %, projected %, reason and the card text.
+
+### What changed
+
+- Nureen: `Support/AttendanceTarget.php` (new),
+  `Support/AttendanceProvider.php` (`actionFor()`; `projectionFor()` gone),
+  `Support/AttendanceRiskEvaluator.php` (legacy `project()` gone),
+  `Workflows/Concerns/ExpectsDecisionByCharter.php` (new) on
+  `GaExtensionWorkflow`, `SupervisionWorkflow` and
+  `CertificationLetterWorkflow`, `Database/Seeders/AttendanceRiskDemoSeeder.php`
+  (new), `NureenAttendanceDemoSeeder.php` (cases from the new seeder).
+- **Core** (every file, with the reason, is in `SHARED_CHANGES.md` §9a):
+  `Contracts/SuppliesAttendance.php`, `Contracts/SuppliesDecisionDates.php`
+  (new), `Services/StudentDashboard.php`,
+  `Http/Controllers/DashboardController.php`,
+  `Resources/views/dashboard/partials/stat-cards.blade.php`.
+- Tests: `AttendanceActionCardTest` (new, 16 tests);
+  `AttendanceEarlyWarningTest`'s "no student sees the projection" test now
+  also covers the two cards; `AttendanceDataRulesTest` (the current-rule case
+  is now `both`); `tests/Feature/Core/ModuleContractsTest.php` (method
+  rename).
+
+### Bugs caught
+
+- In the real app, the card's sentence value rendered at the big-number size
+  (four lines) and stretched the whole row. It now has a `textValue` flag
+  that sets the words smaller, in the same partial.
+- A test fixture of my own asked for 23 sessions with 10 left (an unreachable
+  case, not a rounding one); it was corrected to 30 of 31, which needs 3.
+
+### Verification
+
+- Full suite: 443 passed.
+- Seeder on dev, run twice: 22093001 95% / 75% / projected / "Attend 74 of
+  the next 100 sessions"; 22001011 27.5% / 22.5% / both / "Justification
+  needed"; 22001012 90% / 90% / not flagged / "On track". Four rows each;
+  no new email on the second run.
+- Browser, light and dark: Hafiz's card reads "Attend 74 of the next 100
+  sessions" and no projected figure or wording appears on his dashboard,
+  overview or history. Mailpit holds exactly one early-warning email for
+  him. Haziq's card reads "Justification needed" and links to the appeal
+  form (three upload fields). Tan Wei Jian's card reads "On track", and his
+  Active Applications card says "In progress · next decision by 5 Nov" (his
+  pending Supervision; his GA Extensions are on the untimed Senior Director
+  route). The CGS At-Risk list shows Hafiz as Projected and Haziq as Both;
+  Tan is correctly absent. The CGS, admin, supervisor, chair and dean
+  dashboards return 200 without either new card.
+- Dev side effects: Haziq received a second early-warning email, because
+  his projection fell well past the re-alert margin when his case was
+  lowered. 242 failed jobs that teammates' tests leaked onto the dev queue
+  over two suite runs (Core, Chloe and Jason notifications; the §7 phpunit
+  issue) were deleted.
+
+---
+
+## 2026-11-01 — Attendance: end-of-semester projection and automatic early warnings
+
+**Branch:** `develop`, uncommitted.
+
+### The ask
+
+Make at-risk detection genuinely predictive (the FYP title promises
+"Predictive Analytics") without a trained model: CGS has no labelled
+history. Project each student's end-of-semester attendance by least-squares
+regression on their own per-period rates. Flag students early, email them
+automatically with supportive wording, and never show students the
+projection. Approved appeals must count, CGS must see who was emailed and
+when, and there must be no repeated alerts.
+
+### Key findings before writing any code
+
+- **One `attendance_records` row = one student × one period**, with that
+  period's own counts (not cumulative). What a period *is* was never fixed:
+  all dev data is **monthly** (40 sessions ≈ check-in + check-out × 20
+  working days, from the shared DemoDataSeeder) and the upload template's
+  samples are monthly, but the automated sync's **simulated source writes
+  weekly** rows (period ending Friday).
+- **The original rule is per period, not cumulative**: the latest period
+  below 80%, or three declining periods ending within 5 points of 80%.
+- **Appeals recorded at most one period and no session count**, and approval
+  changed no figures at all.
+- **Core's student dashboard already shows a "Predicted Attendance" card**,
+  fed by an older mean-change rule (`AttendanceRiskEvaluator::project()`).
+  Reported, not removed (SHARED_CHANGES.md §9).
+- **Monthly periods make the projection nearly inert**: with a 4-month
+  semester it starts at month 3 of 4, and any decline steep enough to project
+  below 80% trips the original rule first. Hence `semester_periods` defaults
+  to 14 (weekly), with 4 documented for monthly uploads.
+
+### The design
+
+- **`Support\AttendanceProjector`**: pure, no database. Least-squares line
+  through per-period rates against period number; zero-session periods skipped
+  (they still count as elapsed); extended over the remaining periods, each
+  clamped to 0–100%, at the average sessions per period so far. Returns
+  current cumulative %, projected %, slope; null below
+  `projection_min_periods`.
+- **`AttendanceRiskEvaluator::assess()`**: the original rule (`isAtRisk()`,
+  unchanged) plus the projection, reason `current` / `projected` / `both`,
+  over the current semester's periods (`semester_start`), with excused
+  sessions counted.
+- **Who sees what**: the outcome is stored in a new Nureen table,
+  `attendance_risk_states`, shown only on CGS's At-Risk list.
+  `attendance_records.at_risk` keeps its old meaning, so nothing a student
+  sees changes because of the projection.
+- **`Support\AttendanceEarlyWarning`**: runs after every sync and every
+  manual upload, for every student. It emails (student plus supervisor copy)
+  on newly at risk, or when the projection has dropped by more than
+  `realert_margin` since the last alert. Every alert goes in
+  `attendance_alerts`.
+- **Appeals**: name a period and the missed sessions covered. Approval adds
+  them to `attendance_records.sessions_excused` (raw UTrace figures
+  untouched) and re-runs the check.
+
+### What changed
+
+- Config `nureen.attendance.semester_periods` (14), `semester_start` (null),
+  `projection_min_periods` (3), `realert_margin` (5). Threshold reused from
+  `AttendanceRiskEvaluator::THRESHOLD`.
+- Migrations, all on Nureen tables:
+  - `attendance_records.sessions_excused`
+  - `attendance_appeal_details.sessions_covered`
+  - new `attendance_risk_states`
+  - new `attendance_alerts`
+- `AttendanceAtRisk` email rewritten: current semester %, 80%, reason-specific
+  wording, what to do, appeal link. Never the projection or slope. The
+  supervisor copy follows the same rule.
+- The ingestor no longer emails; the sync runner and the upload run the early
+  warning. New command `attendance:check-risk`.
+- CGS At-Risk list rebuilt: current, projected, trend, reason, last emailed;
+  sortable (projected % by default); searchable by matric number or name.
+- Student overview: latest period **and** "This semester so far" (the figure
+  the email quotes). History marks excused sessions.
+- Appeal form: choose the period and the missed sessions covered. The CGS
+  detail shows what approval will excuse. `AttendanceAppealWorkflow` is now
+  `DecidesOneAtATime`.
+
+### Bugs caught
+
+- **The long-running queue worker kept the old notification class**: all 28
+  early-warning jobs from the first sync failed ("typed property $record
+  must not be accessed before initialization"). Fixed with
+  `queue:restart` and a retry of exactly those jobs. Any deploy that changes a
+  queued class needs a worker restart.
+- **Email vs dashboard mismatch**: the email quotes the semester figure
+  (96.3%), the dashboard the latest period (90%). Fixed on Nureen's overview;
+  Core's card proposed in SHARED_CHANGES.md §9b.
+- **History read "18 / 20 sessions, 100%"** after an excusal; now says
+  "+ 2 excused by an approved appeal".
+- **A false positive in my own check**: the verification student's email
+  address contained "projection" and showed in the sidebar; renamed.
+
+### Verification
+
+- Tests: 18 new (projector unit tests incl. the worked 87.5 → 62.5 example;
+  early-warning feature tests). Two appeal tests updated for the new
+  `sessions_covered` field. Full suite 413 passed.
+- Real app, student 22093001 (weekly periods 20, 20, 19, 18 of 20):
+  - `attendance:sync --source=simulated` flagged them "projected" only:
+    96.3% now, projected 78.8%, −3.5 pts/period.
+  - Mailpit: exactly one email, supportive wording, 96.3% and 80% shown, no
+    projected figure or trend, appeal link opens the form. Supervisor copy
+    received.
+  - A second sync sent nothing.
+  - As CGS (light and dark mode): found by matric with every figure, reason
+    "Projected", last emailed 1 Nov 2026 7:10 am.
+  - As the student: dashboard, overview and history show no new projection
+    (the legacy Core card still shows 76.7%, reported).
+  - Appeal #182 (2 sessions, period ending 6 Nov), approved by CGS from the
+    queue found by matric: excused 2, latest period 100%, semester 98.8%,
+    projection 96.3%, no longer at risk, off CGS's list.
+- Dev data side effects: the simulated syncs added one random weekly row
+  (period ending 6 Nov) for every other student, and the first full risk
+  check emailed the 14 students it newly flagged, plus supervisors
+  (Mailpit only).
+
+### Follow-up (same session, before commit): attendance data fixes
+
+- **No future periods.** The simulated source used this week's Friday even on
+  a Sunday, writing periods ending 6 Nov 2026. It now writes the last
+  completed week (the Friday on or before today), and `AttendanceIngestor`
+  rejects any `period_end` after today from every source and the manual
+  upload. The 49 future rows (one per demo student) were deleted from the dev
+  database.
+- **No projection across mixed period lengths.**
+  `AttendanceProjector::periodLength()` classifies the gaps between end
+  dates (weekly 6–8 days, monthly 28–31). Mixed or irregular gaps mean
+  `unavailableReason()` = `inconsistent_periods`: the rule-based flag still
+  applies, the projection does not, and CGS sees "Projection unavailable:
+  inconsistent periods". Stored as `attendance_risk_states.projection_status`.
+- **Weekly demo semester.** `nureen.attendance.semester_start` defaults to
+  2026-10-05, so four weeks (ending 9–30 Oct) are complete by 1 Nov.
+  `NureenAttendanceDemoSeeder` replaces the whole attendance history of the
+  49 listed demo students (DemoDataSeeder's 18 and Nureen's 31) with clean
+  weekly rows. Cases: 22093001 projection only (95% → projected 75%),
+  22001011 current rule (70%, improving), 22001012 steady (90%). Every other
+  demo student is healthy. Risk states and alerts were reset; the 28
+  early-warning emails and the appeal #182 email from the earlier
+  verification were deleted from Mailpit.
+- **Appeals.** They did not require CGS's documents. They now require a
+  Justification Letter and a Monthly Activity Breakdown (multi-file, via
+  `DocumentStore::manyRules()`). The student records `sessions_requested`;
+  CGS approves `sessions_approved` (default = requested, never more, may be
+  fewer), with both kept.
+- **Excusal rule is configurable:** `nureen.attendance.excused_sessions` =
+  `count_as_attended` (default) or `exclude_from_total`, applied in one place
+  (`AttendanceRecord::countedAttended()` / `countedTotal()`). Stored
+  percentages are re-derived at the next check if the setting changes.
+- **Bug caught in the real app, not by the tests:** the appeal form still
+  called a renamed method and returned a 500 for any student with a missed
+  session. The existing test only loaded the form for a student with no
+  attendance. Fixed, with a regression test using real periods.
+- The four uncommitted attendance migrations were rolled back and re-run on
+  the dev database (the appeal migration now adds `sessions_requested` and
+  `sessions_approved`).
+- Verified: full suite 427 passed. Real app: a simulated sync added nothing
+  (no future week) and flagged exactly 22093001 (projected) and 22001011
+  (current). 22093001 received one email (95%, no projection), then nothing
+  on a second sync. CGS's list and the student's pages are correct in both
+  themes, and the appeal form shows both required uploads.
+
+---
+
 ## 2026-11-01 — Official letters: CGS endorses the appointment letter; one formal layout for both letters
 
 **Branch:** `develop`, uncommitted.

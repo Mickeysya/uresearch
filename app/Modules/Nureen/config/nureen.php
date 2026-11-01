@@ -18,6 +18,60 @@ return [
         // there is no "accept anything" fallback for a credential.
         'ingest_key' => env('NUREEN_ATTENDANCE_INGEST_KEY'),
 
+        // ---- End-of-semester projection (Support\AttendanceProjector) ----
+        // A period is whatever one attendance_records row covers -- the
+        // module does not fix it. 14 matches the automated sync (one row per
+        // week, period ending Friday; see AttendanceSources\SimulatedSource)
+        // and UTP's 14-week semester. If CGS uploads MONTHLY periods instead,
+        // set this to 4: with monthly data the projection can only start at
+        // month 3 of 4, so it adds little warning beyond the current rule.
+        // The 80% requirement itself is AttendanceRiskEvaluator::THRESHOLD,
+        // not repeated here.
+        'semester_periods' => (int) env('NUREEN_ATTENDANCE_SEMESTER_PERIODS', 14),
+
+        // First day of the current semester (Y-m-d). Only periods ending on
+        // or after it count towards the semester's figures. CGS sets this
+        // each semester (NUREEN_ATTENDANCE_SEMESTER_START). The default is
+        // the DEMO semester: Monday 5 October 2026, so four weekly periods
+        // (weeks ending 9-30 Oct) are complete by 1 November -- early in a
+        // 14-week semester, which is when a projection is worth having.
+        // See Database\Seeders\NureenAttendanceDemoSeeder. Null = every
+        // period on file.
+        'semester_start' => env('NUREEN_ATTENDANCE_SEMESTER_START', '2026-10-05'),
+
+        // How sessions excused by an APPROVED attendance appeal are counted
+        // -- pending confirmation from CGS. See AttendanceRecord::countedAttended().
+        //   'count_as_attended'  DEFAULT. Excused sessions count as attended:
+        //                        (attended + excused) / total.
+        //   'exclude_from_total' Excused sessions are taken out of the
+        //                        period: attended / (total - excused).
+        'excused_sessions' => env('NUREEN_ATTENDANCE_EXCUSED_SESSIONS', 'count_as_attended'),
+
+        // Fewer usable periods than this (periods with zero sessions do not
+        // count) and there is no projection at all, rather than a line
+        // through two points.
+        'projection_min_periods' => 3,
+
+        // A student already alerted is emailed again only if their projected
+        // end-of-semester % has fallen by MORE than this many percentage
+        // points since that alert. See Support\AttendanceEarlyWarning.
+        'realert_margin' => 5.0,
+
+    ],
+
+    'attendance_appeal' => [
+
+        // CGS's requirement for an attendance appeal: field => the label the
+        // files are attached under. AttendanceAppealController::store()
+        // builds its validation from this list (DocumentStore::manyRules(),
+        // the same multi-file helper GA Extension uses), the form renders
+        // one upload per entry, and the approver's detail view checks each
+        // is present -- one list, so the three cannot drift.
+        'required_documents' => [
+            'justification_letter_documents' => 'Justification Letter',
+            'activity_breakdown_documents' => 'Monthly Activity Breakdown',
+        ],
+
     ],
 
     'ga_extension' => [

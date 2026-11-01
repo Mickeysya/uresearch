@@ -3,10 +3,12 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 
 /**
@@ -23,8 +25,11 @@ use App\Modules\Nureen\Models\GaCertificationDetail;
  * SupervisionController does, not to everyone holding the Supervisor role.
  * The Senior Director's approval is still what triggers PDF generation.
  */
-class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime
+class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates
 {
+    /** expectedDecisionDate(): the Client Charter date, for the student dashboard. */
+    use ExpectsDecisionByCharter;
+
     public function key(): string
     {
         return 'ga_certification';

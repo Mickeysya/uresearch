@@ -5,8 +5,11 @@ namespace App\Modules\Nureen\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Nureen\Exports\AttendanceTemplateExport;
 use App\Modules\Nureen\Models\AttendanceRecord;
+use App\Modules\Nureen\Models\AttendanceRiskState;
 use App\Modules\Nureen\Models\AttendanceSyncRun;
+use App\Modules\Nureen\Support\AttendanceEarlyWarning;
 use App\Modules\Nureen\Support\AttendanceIngestor;
+use App\Modules\Nureen\Support\AttendanceRiskEvaluator;
 use App\Modules\Nureen\Support\AttendanceSheet;
 use App\Modules\Nureen\Support\AttendanceSourceFactory;
 use App\Modules\Nureen\Support\AttendanceSyncRunner;
@@ -113,8 +116,12 @@ class AttendanceController extends Controller
 
         $summary = (new AttendanceIngestor())->ingest(collect($parsed['rows']));
 
+        // Same as after an automated sync: the full risk check and the
+        // automatic early warnings -- see Support\AttendanceEarlyWarning.
+        $warnings = app(AttendanceEarlyWarning::class)->run();
+
         $message = "Processed {$summary->processed()} ".Str::plural('record', $summary->processed()).'. '
-            .$summary->newlyAtRisk.' newly flagged at-risk.';
+            .$warnings['newly_at_risk'].' newly flagged at-risk.';
 
         if ($summary->rejected === 0) {
             return back()->with('status', $message);
@@ -134,14 +141,22 @@ class AttendanceController extends Controller
                 .($extra > 0 ? " (and {$extra} more)" : ''));
     }
 
-    /** The logged-in student's current standing: percentage + at-risk banner. */
+    /**
+     * The logged-in student's current standing: their latest period, their
+     * attendance so far this semester (the figure the 80% requirement and
+     * the early-warning email use), and the at-risk banner. Never the
+     * projection or the trend -- those are CGS's alone.
+     */
     public function overview(Request $request)
     {
         $latest = AttendanceRecord::where('student_id', $request->user()->id)
             ->orderByDesc('period_end')
             ->first();
 
-        return view('nureen::attendance.overview', ['latest' => $latest]);
+        return view('nureen::attendance.overview', [
+            'latest' => $latest,
+            'semesterSoFar' => $latest ? AttendanceRiskEvaluator::assess($request->user()->id)['current'] : null,
+        ]);
     }
 
     /** The logged-in student's full period-by-period attendance record. */
@@ -154,18 +169,44 @@ class AttendanceController extends Controller
         return view('nureen::attendance.history', ['records' => $records]);
     }
 
-    /** CGS's "At-Risk" list: the latest record for every currently at-risk student. */
-    public function atRisk()
+    /**
+     * CGS's at-risk list: every student whose latest risk check flagged
+     * them -- by the original rule, the end-of-semester projection, or both
+     * -- with the projection, the trend and when they were last emailed.
+     * The ONLY screen the projection appears on; see
+     * Support\AttendanceEarlyWarning for where the figures come from.
+     *
+     * ?sort=projected (default, lowest first) | current | name
+     * ?q= matric number or name
+     */
+    public function atRisk(Request $request)
     {
-        // latestPerStudent() lives on the model: the CGS dashboard and the
-        // admin average both need the same "one row per student, their most
-        // recent period" join, and all three had built it separately.
-        $records = AttendanceRecord::latestPerStudent()
-            ->where('attendance_records.at_risk', true)
+        $sort = in_array($request->query('sort'), ['projected', 'current', 'name'], true) ? $request->query('sort') : 'projected';
+        $search = trim((string) $request->query('q', ''));
+
+        $states = AttendanceRiskState::query()
+            ->where('at_risk', true)
             ->with('student')
-            ->orderBy('attendance_records.percentage')
+            ->withMax('alerts as last_emailed_at', 'sent_at')
+            ->when($search !== '', fn ($q) => $q->whereHas('student', fn ($s) => $s
+                ->where('name', 'like', "%{$search}%")
+                ->orWhere('matric_no', 'like', "%{$search}%")))
             ->get();
 
-        return view('nureen::attendance.at_risk', ['records' => $records]);
+        // Sorted in PHP: a handful of rows, and "no projection yet" must sort
+        // after every real figure whichever database this runs on.
+        $states = match ($sort) {
+            'current' => $states->sortBy(fn ($s) => $s->current_percentage ?? INF),
+            'name' => $states->sortBy(fn ($s) => mb_strtolower($s->student?->name ?? '')),
+            default => $states->sortBy(fn ($s) => $s->projected_percentage ?? INF),
+        };
+
+        return view('nureen::attendance.at_risk', [
+            'states' => $states->values(),
+            'sort' => $sort,
+            'search' => $search,
+            'threshold' => AttendanceRiskEvaluator::THRESHOLD,
+            'semesterPeriods' => (int) config('nureen.attendance.semester_periods'),
+        ]);
     }
 }

@@ -168,12 +168,67 @@ of a CGS staffer uploading a spreadsheet by hand.
   routine (`Support\AttendanceIngestor`) so they can never drift apart.
 - Idempotent for free: every source feeds `AttendanceRecord::recordPeriod()`,
   which already upserts on `(student_id, period_end)`.
-- The existing risk rule (`AttendanceRiskEvaluator`: below 80%, or
-  declining and within 5 points of it) and the existing at-risk
-  notification run unchanged after every sync, same as after a manual
-  upload.
+- **The risk check** runs for every student after every sync and every
+  manual upload (`Support\AttendanceEarlyWarning`; also on demand with
+  `attendance:check-risk`). It combines:
+  - the **original rule**, unchanged (`AttendanceRiskEvaluator::isAtRisk()`:
+    the latest period below 80%, or three declining periods ending within
+    5 points of it); `attendance_records.at_risk` still means only this; and
+  - an **end-of-semester projection** (`Support\AttendanceProjector`, pure,
+    no database): a least-squares line through the student's own per-period
+    rates, extended over the rest of the semester (each period clamped
+    0–100%, at the average sessions per period so far). Not a trained model:
+    CGS has no labelled history. Config: `attendance.semester_periods`
+    (default 14, weekly periods), `semester_start`,
+    `projection_min_periods` (3), `realert_margin` (5 points); the 80%
+    threshold is `AttendanceRiskEvaluator::THRESHOLD`.
+  The outcome (reason `current` / `projected` / `both`, current semester %,
+  projected %, slope) goes in Nureen's `attendance_risk_states`.
+- **Who sees what.** The projection is a CGS monitoring tool: it appears
+  only on CGS's At-Risk Students list (`attendance.at-risk`, sortable by
+  projected %, with when each student was last emailed). Students see their
+  latest period, their attendance so far this semester, and their history;
+  never the projection or the trend. Core's student dashboard card is now
+  "Attendance Action" (`Support\AttendanceTarget`, via
+  `SuppliesAttendance::actionFor()`, which replaced `projectionFor()`): how
+  many of the next M sessions the student must attend to finish at or above
+  80% (M = semester periods left × average sessions per period), or
+  "Justification needed" / the appeal's status when 80% is out of reach.
+  The older mean-change projection behind the removed "Predicted
+  Attendance" card is deleted.
+- **Automatic early warnings** (`Notifications\AttendanceAtRisk`, with a copy
+  to the supervisor): sent when a student newly becomes at risk, or when
+  their projected % has fallen by more than `realert_margin` since their
+  last alert; never repeated otherwise. A student who recovers and drops
+  again is newly at risk. Every alert is recorded in `attendance_alerts`.
+  The email quotes current attendance against 80%, never the projection;
+  projection-only students get supportive "declining… may fall below"
+  wording, and everyone gets the appeal link.
+- **Periods must be consistent.** The projector refuses to fit a line
+  across mixed period lengths (weekly 6–8-day gaps vs monthly 28–31, or
+  anything irregular): the student keeps the rule-based flag only, and CGS
+  sees "Projection unavailable: inconsistent periods". No source can record
+  a period ending after today (the ingestor rejects it; the simulated source
+  writes the last completed week).
+- **Demo semester:** weekly periods from `semester_start` = 5 Oct 2026
+  (`NureenAttendanceDemoSeeder`), with three deliberate cases owned by
+  `AttendanceRiskDemoSeeder` (run on its own for the viva; prints each
+  student's figures): 22093001 projection only (95%, projected 75%, "Attend
+  74 of the next 100 sessions"), 22001011 current rule (27.5%, "Justification
+  needed"), 22001012 steady (90%, "On track").
+- **Approved appeals count.** An appeal must carry a Justification Letter
+  and a Monthly Activity Breakdown (`attendance_appeal.required_documents`,
+  multi-file), and names one of the student's periods and how many missed
+  sessions it asks to excuse (`sessions_requested`). CGS may approve fewer,
+  never more (`sessions_approved`); both are kept. Approved sessions go into
+  `attendance_records.sessions_excused` (UTrace's own `sessions_attended` is
+  never rewritten) and are counted per `attendance.excused_sessions`:
+  `count_as_attended` (default, (attended + excused) ÷ total) or
+  `exclude_from_total` (attended ÷ (total − excused)), pending CGS's answer.
+  The student's risk check runs again at once.
 
-Chain: Appeal → Non-Executive CGS.
+Chain: Appeal → Non-Executive CGS (one at a time: approval excuses sessions,
+so the workflow is `DecidesOneAtATime`).
 
 ### GA Extension
 

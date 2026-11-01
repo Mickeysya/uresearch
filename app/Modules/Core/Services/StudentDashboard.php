@@ -2,11 +2,13 @@
 
 namespace App\Modules\Core\Services;
 
+use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\Concerns\BuildsPanels;
 use App\Modules\Core\Services\Concerns\ReadsAttendance;
 use App\Modules\Core\Support\AttendanceReading;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 /**
@@ -57,17 +59,17 @@ class StudentDashboard
         });
     }
 
-    /** Straight-line projection of the attendance trend, or null. */
-    public function predictedAttendance(): ?float
+    /**
+     * The "Attendance Action" card, worded by the module that supplies
+     * attendance (SuppliesAttendance::actionFor()), or null without one.
+     *
+     * @return array{label: string, value: string, note: string, pill: string, pillTone: string, url: string}|null
+     */
+    public function attendanceAction(): ?array
     {
         $source = $this->attendanceSource();
 
-        // No source, or nothing on file yet, means there is no trend to draw.
-        if (! $source || ! $this->attendance()) {
-            return null;
-        }
-
-        return $this->safely('attendance', fn () => $source->projectionFor($this->student), null);
+        return $source ? $this->safely('attendance', fn () => $source->actionFor($this->student), null) : null;
     }
 
     public function activeApplications(): int
@@ -75,6 +77,25 @@ class StudentDashboard
         return $this->safely('applications', fn () => $this->student->applications()
             ->where('status', Application::STATUS_PENDING)
             ->count(), 0);
+    }
+
+    /**
+     * The earliest expected decision date across the student's pending
+     * applications, from modules that keep a charter
+     * (Contracts\SuppliesDecisionDates), or null when none promises one.
+     */
+    public function nextDecisionDate(): ?CarbonInterface
+    {
+        return $this->safely('applications', fn () => $this->student->applications()
+            ->where('status', Application::STATUS_PENDING)
+            ->with('history')
+            ->get()
+            ->map(fn (Application $application) => ($module = $application->module()) instanceof SuppliesDecisionDates
+                ? $module->expectedDecisionDate($application)
+                : null)
+            ->filter()
+            ->sort()
+            ->first(), null);
     }
 
     public function unreadNotifications(): int

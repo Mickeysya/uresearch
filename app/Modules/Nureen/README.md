@@ -18,6 +18,23 @@
   than 0% or a dash — that default is Core's
   (`StudentDashboard::STARTING_PERCENTAGE`), and `latestFor()` still returns
   `null`, so nothing is invented in these tables.
+  **End-of-semester projection (CGS only):** after every sync and upload,
+  `Support\AttendanceEarlyWarning` runs the original rule plus a
+  least-squares projection of each student's semester attendance
+  (`Support\AttendanceProjector`), stores the outcome in
+  `attendance_risk_states`, and emails newly at-risk students (with a
+  supervisor copy) without ever showing them the projection. CGS's At-Risk
+  list shows current %, projected %, trend, reason and last emailed. An
+  approved appeal excuses the missed sessions it covers. See the Attendance
+  section of `docs/claude-context/architecture-and-modules.md`.
+  **Student dashboard "Attendance Action" card** (`Support\AttendanceTarget`,
+  worded by `AttendanceProvider::actionFor()`): "On track"; "Attend N of the
+  next M sessions" (plain arithmetic on the student's own sessions, never
+  the projection); "Justification needed" (or the appeal's status) once 80%
+  is out of reach; "Keep checking in" before three weeks of data.
+  Viva demo: `php artisan db:seed --class="App\Modules\Nureen\Database\Seeders\AttendanceRiskDemoSeeder"`
+  sets the three cases (22093001 projection only, 22001011 current rule,
+  22001012 steady) and prints each one's figures.
 
 - **Supervision** — complete. Supervisor → CGS eligibility review. CGS's
   approval sets `users.supervisor_id`. Because the engine can't yet scope a
@@ -63,7 +80,10 @@ its due date. That is the day its reviewer is first reminded.
 
 The student's own status screens (`applications.show`, the dashboard panel)
 are Core's, so the expected date is on a page of its own for now. See
-`SHARED_CHANGES.md` §5 for the seam that would put it there instead.
+`SHARED_CHANGES.md` §5 for the seam that would put it there instead. The
+student dashboard's Active Applications card does show the nearest one
+("In progress · next decision by 5 Nov"): the three charter workflows
+implement Core's `SuppliesDecisionDates` (`Workflows\Concerns\ExpectsDecisionByCharter`).
 
 Demo data: `NureenClientCharterDemoSeeder` (matric numbers 22091001–22091024,
 on-time and overdue at every stage).
@@ -171,8 +191,11 @@ role-scoped pending that decision.
 
 | File | Guards |
 |---|---|
+| `AttendanceProjectorTest` | the least-squares projection: the worked 87.5 → 62.5 example, steady attendance, too few periods, zero-session periods, clamping at 0 and 100% |
+| `AttendanceEarlyWarningTest` | who is flagged and why; the email wording, which never contains the projection; no repeated alerts (margin, recovery); alerts recorded and shown as "last emailed"; sorting; students never seeing the projection; approved appeals excusing absences |
 | `AttendanceTest` | the template round-trip (download it, feed it straight back), the header check, the date formats Excel writes, a bad row being skipped with a reason while the good rows save, re-uploading a period replacing rather than duplicating, and the at-risk alert firing on the transition |
 | `GaExtensionTest` | document completeness — the module's point per `nureen.md` Module 2 — and the three-stage chain, asserting the position after *every* decision, because the middle stage is what the legacy app got wrong |
+| `AttendanceActionCardTest` | the N-of-M arithmetic (rounding up, exactly 80%, already secured, unreachable, remaining sessions); the card's four states and the appeal statuses; the Active Applications decision date (nearest, none without a charter, own applications only); staff dashboards unchanged; the viva demo seeder's three outcomes, re-run safe, one email each |
 | `AttendanceAppealTest` | the single stage being final, and that a student cannot attach another student's flagged record to their own appeal (403) |
 | `SupervisionTest` | the required document, that it lands on the private disk under a random name, and that a supervisor sees only the requests naming them |
 | `CertificationTest` | the letter being generated, attached as an `ApplicationDocument`, and actually dispatched |

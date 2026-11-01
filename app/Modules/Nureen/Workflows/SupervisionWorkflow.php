@@ -3,10 +3,12 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 use App\Modules\Nureen\Models\SupervisionDetail;
 
 /**
@@ -36,8 +38,11 @@ use App\Modules\Nureen\Models\SupervisionDetail;
  * rather than in this class, since that write is a side effect of a
  * decision, not part of the chain itself.
  */
-class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime
+class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates
 {
+    /** expectedDecisionDate(): the Client Charter date, for the student dashboard. */
+    use ExpectsDecisionByCharter;
+
     /** Every config('nureen.supervision.cgs_stage') value a snapshot can hold. */
     public const MODES = ['endorse', 'automatic', 'manual'];
 

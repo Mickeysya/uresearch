@@ -41,6 +41,10 @@ class AttendanceSyncTest extends TestCase
         // never collide with each other or with a real demo run.
         $this->inbox = sys_get_temp_dir().'/attendance-inbox-test-'.uniqid();
         config(['nureen.attendance.source' => 'inbox', 'nureen.attendance.inbox_path' => $this->inbox]);
+
+        // These fixtures use periods in mid-2026, before the configured demo
+        // semester; the risk check only looks at the current semester.
+        config(['nureen.attendance.semester_start' => null]);
     }
 
     protected function tearDown(): void

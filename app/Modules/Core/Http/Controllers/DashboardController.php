@@ -34,8 +34,9 @@ class DashboardController extends Controller
 
             return view('core::dashboard.student', [
                 'attendance' => $dash->attendance(),
-                'predicted' => $dash->predictedAttendance(),
+                'attendanceAction' => $dash->attendanceAction(),
                 'activeCount' => $dash->activeApplications(),
+                'nextDecision' => $dash->nextDecisionDate(),
                 'unreadCount' => $dash->unreadNotifications(),
                 'taskCount' => $dash->upcomingTaskCount(),
                 // My Application Status and Recent Notifications are
