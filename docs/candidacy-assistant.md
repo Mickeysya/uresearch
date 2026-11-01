@@ -1,8 +1,36 @@
-# Study Candidacy in the assistant
+# Study Candidacy assistant, and the two domains
 
-The Study Candidacy pages use the **same assistant** as Workstation: the same floating button and chat panel, the same endpoints (`/workstation/assistant/...`), the same Gemini setup and free-tier limits, the same router
-(one model call returns `{id, params, confidence, alternatives, clarify}`; the model never writes a number, a name or a date), the same privacy rules, the same fallback and the same "Interpreted as:" line and
-"Did you mean" chips. Nothing was duplicated: `Assistant\CandidacyAssistant` adds entries to the one catalogue.
+One engine, **two separate domains**: `workstation` and `candidacy`. The engine is shared: the same floating button and chat panel, the same endpoints (`/workstation/assistant/...`), the same Gemini setup, key and free-tier limits, the same router
+(one model call returns `{id, params, confidence, alternatives, clarify}`; the model never writes a number, a name or a date), the same privacy rules, the same fallback (keyword rules, then topic text, then the busy message with chips)
+and the same "Interpreted as:" line and "Did you mean" chips. Everything that is **content** belongs to exactly one domain, and one domain never answers the other.
+
+## Domains (`Assistant\AssistantDomains`, `config/assistant.php` -> `domains` and `domain_pages`)
+
+| | workstation | candidacy |
+|---|---|---|
+| Pages | `workstation.*` routes (student pages, CGS Workstation Management, Insights ...) | `candidacy.*` and `candidacy-appeal.*` routes (My Study Candidacy, appeal pages, Approval Portal, Operations, Insights, Dismissal List, Dismissal Upload, My Signature) |
+| Title, placeholder | Workstation Assistant, "Ask about workstations or locker keys" | Study Candidacy Assistant, "Ask about your candidacy or appeals" |
+| Roles | student, CGS | student, approver, CGS |
+| Catalogue | `Catalogue::forRole($role, 'workstation')` | `Catalogue::forRole($role, 'candidacy')` |
+| Suggested questions (6 per role) | `SuggestedQuestions` | `CandidacyAssistant::suggestions()` (answered by catalogue id, no model call) |
+| Guidance topics | `docs/knowledge/workstation/{student,cgs}/` | `docs/knowledge/candidacy/` |
+| Router prompt and examples | `GeminiModel::routerInstruction` (workstation head), `RouterFewShots::workstation()` | the candidacy head and `RouterFewShots::candidacy()` |
+| Evaluation set | `set: workstation` | `set: candidacy` (and `cross`) |
+| Log | `assistant_logs.domain = workstation` | `candidacy` |
+
+**Which page is in which domain** is decided in one place: the first matching pattern of `config('assistant.domain_pages')` by route name. To give a new page a domain, add one line there.
+The widget is rendered with its domain, its page and a **token** (an HMAC of domain, user and page); the server rejects a request whose token does not match what it claims, whose page is not mapped to the claimed domain,
+or whose role the domain does not serve (an approver has no Workstation). The model is only ever given the catalogue of the current domain, and a catalogue id of the other domain is rejected even if the model names it.
+
+**Out-of-domain questions.** `config('assistant.domains.<d>.strong_terms')` lists words that clearly belong to a domain (workstation: seat, workstation, locker, key, block, room, vacate, Term of Use ...; candidacy: appeal, approver, supervisor,
+chair, Dean, memo, Softbound, dismissal, reminder, signature, extension, candidacy ...). A question with strong terms of the OTHER domain and none of the current one is answered with the redirect **without calling the model**: on a Workstation
+page "I can only answer questions about workstations and locker keys here. For Study Candidacy questions, please use the assistant on the Study Candidacy pages." and on a candidacy page "I can only answer questions about Study Candidacy
+(appeals, approvals, reminders, expiry and dismissal) here. For workstation or locker key questions, please use the assistant on the Workstation pages.", each with a link to the user's own page in the other domain (student: My Study Candidacy /
+the Workstation page; approver: the Approval Portal / the Dashboard, because an approver has no Workstation page; CGS: Operations / Workstation Management) and the CURRENT domain's chips below it. Words that exist in both worlds
+(expiry, student, CGS, programme) never redirect by themselves, and a question with strong terms of the current domain is routed normally. "Candidacy" next to an expiry word on a Workstation page ("when does my candidacy expire") goes to the
+Workstation catalogue first (a workstation loan runs to the candidacy expiry date); if that finds no entry (the router returns no match), the redirect follows.
+
+The chat history lives only in the page (nothing is stored), so the two domains can never share one; the one thing kept per domain is the greeting flag (`wsaGreetingShown:<domain>`), and New chat clears both.
 
 ## Roles (`Assistant\AssistantRoles`)
 
@@ -16,7 +44,7 @@ The Study Candidacy pages use the **same assistant** as Workstation: the same fl
 Every entry carries `domain` (`workstation` or `candidacy`) and `roles`. The page the question is asked on gives only a **prior** (that domain's entries first, and its own six suggested questions); no entry is hidden by it.
 A role never receives another role's entries: the router only sees its role's catalogue, and the pipeline re-checks the chosen id against the asking role. `CandidacyAssistantTest` checks every role against every entry.
 
-## What it answers (61 candidacy entries, plus actions)
+## What the candidacy domain answers (candidacy entries, plus actions)
 
 Counts today (candidacy domain, data lookups + guidance topics): **student 23** (7 + 16), **approver 18** (5 + 13), **CGS 38** (14 + 24); Workstation entries are unchanged.
 

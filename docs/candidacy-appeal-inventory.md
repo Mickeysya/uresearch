@@ -391,6 +391,6 @@ Demo students for it are candidacy-only (see section 18). The 07:30 / 08:00 rule
 
 ## 20. Study Candidacy in the assistant
 
-The candidacy pages use the live assistant (the same widget, endpoint, router, privacy rules and fallback as Workstation): roles student, approver and CGS, 61 candidacy catalogue entries, 24 guidance topics with source lines, and refusals for every action
-and outcome prediction. Details, sources, PDPA notes, the demo and how to add a topic: `docs/candidacy-assistant.md`. The old "coming soon" placeholder is gone.
-
+The candidacy pages have their own assistant **domain** on the shared engine (the same widget, endpoint, Gemini setup, router design, privacy rules and fallback as Workstation), with its own catalogue, suggested questions, topic files (`docs/knowledge/candidacy/`),
+router prompt, evaluation set and log value; a question of the other domain is redirected without a model call. Roles: student, approver, CGS. It explains and shows data and never acts or predicts a decision. Details, sources, PDPA notes, the demo and how to add a topic or a
+page to a domain: `docs/candidacy-assistant.md`. The old "coming soon" placeholder is gone.

@@ -479,3 +479,12 @@ Older names still work: `workstation:process-releases` and `workstation:remind-l
 before 08:00 goes out early); `candidacy:remind` is a deprecated no-op. `routes/console.php` is shared and still lists the older entries (07:00 `candidacy:remind`, 07:30
 `workstation:process-releases`, 08:00 `workstation:remind-locker-keys`); they are harmless duplicates and the owner of that file can delete them. Other modules' own jobs (e.g. `rpd:remind`,
 `supervision:remind-stalled`) are not ours.
+
+## The Workstation assistant answers Workstation only
+
+Since the Study Candidacy assistant was added, the assistant is **two separate domains on one engine** (`docs/candidacy-assistant.md`). The Workstation widget runs in the `workstation` domain: its catalogue, six suggested questions per role, router prompt and
+examples, topic files and numbers are exactly the Workstation ones and behave as before; a question about appeals, approvers, reminders, Softbound or dismissal gets a redirect to the Study Candidacy pages (no model call) instead of an answer.
+Changes that touch Workstation: the topic files moved, unchanged, from `docs/knowledge/assistant/` to `docs/knowledge/workstation/`; the input placeholder reads "Ask about workstations or locker keys"; the `out_of_scope` entry's wording names the other domain;
+`assistant_logs` has a `domain` column; the assistant commands take `--domain` (default `workstation`). Nothing in the Workstation catalogue was candidacy content (a scan for appeals, approvers, dismissal, reminders, Softbound and signature found them only as
+context in topic texts, such as "an appeal extends the candidacy"), so nothing was moved out.
+

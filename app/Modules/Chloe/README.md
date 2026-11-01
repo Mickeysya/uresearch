@@ -259,6 +259,6 @@ live update. See `docs/candidacy-insights.md`.
 
 ## Study Candidacy assistant
 
-The candidacy pages use the same assistant as Workstation, extended with roles (student, approver, CGS), candidacy data lookups (`Assistant\CandidacyLookups`, numbers from the page queries) and guidance topics (`docs/knowledge/candidacy/`, each with a
-"Source:" line). It never makes changes or predicts a decision. See `docs/candidacy-assistant.md`.
-
+The assistant has two separate domains on one engine: `workstation` and `candidacy` (which page belongs to which is `config('assistant.domain_pages')`). The candidacy domain has its own catalogue (roles student, approver, CGS), data lookups
+(`Assistant\CandidacyLookups`, numbers from the page queries), guidance topics (`docs/knowledge/candidacy/`, each with a "Source:" line) and router prompt; it never makes changes or predicts a decision, and a question of the other domain is redirected without a model call.
+Commands take `--domain=workstation|candidacy`. See `docs/candidacy-assistant.md`.
