@@ -245,3 +245,9 @@ before 08:00 goes out early); `candidacy:remind` is a deprecated no-op. `routes/
 catalogue name to its department first; text that is not in the catalogue (real students) falls back to the keyword patterns and then a hash. Department names: Chemical Engineering; Civil &
 Environmental Engineering; Electrical & Electronic Engineering; Mechanical Engineering; Petroleum Engineering; Geoscience; Computer & Information Sciences; Fundamental & Applied Sciences;
 Management & Humanities. **Demo programme text comes from the seeders** (`workstation:demo-seed`), never typed by hand, so the demo-clear commands and re-seeding never bring old text back.
+
+## Dismissal process
+
+The Dismissal List (Candidacy Management) is live: students whose candidacy has expired (rule and Handbook references in `docs/candidacy-appeal-inventory.md` section 18). CGS exports it to Excel; the Registry
+processes it elsewhere; the Registry or CGS uploads the result on **Dismissal Upload** (preview, then a confirmation dialog) and those students are marked dismissed. No keep status, no batch lock. Demo:
+`candidacy:demo-seed`, `candidacy:demo-registry-file`, `docs/candidacy-demo-script.md`. Candidacy-only demo students (`demo_student_profiles.candidacy_only`) are invisible to Workstation.

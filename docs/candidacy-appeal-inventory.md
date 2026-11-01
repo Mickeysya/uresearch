@@ -202,13 +202,11 @@ unchanged (`chair`, `with_chair`, `Role::CHAIR`), and the memo verification code
 
 ## 13. Planned (documentation only: nothing here is built)
 
-1. **Applied appeals are flagged**: a student with an open appeal is flagged and is not listed as a dismissal candidate while the appeal is open.
-2. **Dismissal candidate rule**: today is after the current expiry date **and** no Softbound submitted **and** no open appeal **and** the student is not inactive, completed or dismissed.
-   A Dean rejection alone does **not** make a student a candidate (Handbook 4.3). CGS reviews the list; the final decision is outside our scope. The dismissal list will ask
-   `Support\StudentStatusReader` at run time and never copy the status.
-3. **Registry upload page** (Registry and CGS roles) is ONLY for **dismissal confirmation** (the Registry's confirmed dismissals, with preview, row errors, confirm to apply, who/when logged).
-   Expiry-date changes outside appeals (deferment, change of mode or programme, other) are made by **CGS** as a manual adjustment with a reason and a letter reference; an optional CGS Excel upload may come later.
-   Reminders recalculate on their own (the log is keyed by the expiry date) and `extension_months_used` is unchanged.
+1. **Dismissal List, rule and Registry upload: BUILT** (section 18). The old generator, the review list and "Dean rejection = candidate" are gone.
+2. **Excel export of the Operations list**: not built (to be done next). Export exactly the filtered Operations list (same query and columns as the table) to `.xlsx`, CGS roles only. The
+   Dismissal List already has its own export.
+3. **Expiry-date changes outside appeals** (deferment, change of mode or programme, other) are made by **CGS** as a manual adjustment with a reason and a letter reference; an optional CGS Excel upload may
+   come later. Reminders recalculate on their own (the log is keyed by the expiry date) and `extension_months_used` is unchanged.
    **Open item:** confirm with CGS whether a changed expiry date already includes approved appeal months (assumed yes).
 4. **Reminder log page**: not now (the log table exists; a page for CGS to see it is later).
 5. **CGS menu order reserved**: Operations, Insights, Dismissal List. The Insights forecast chart "expiring within 3 months" will filter the student list when clicked, like Workstation Insights
@@ -340,3 +338,48 @@ Older names still work: `workstation:process-releases` and `workstation:remind-l
 before 08:00 goes out early); `candidacy:remind` is a deprecated no-op. `routes/console.php` is shared and still lists the older entries (07:00 `candidacy:remind`, 07:30
 `workstation:process-releases`, 08:00 `workstation:remind-locker-keys`); they are harmless duplicates and the owner of that file can delete them. Other modules' own jobs (e.g. `rpd:remind`,
 `supervision:remind-stalled`) are not ours.
+
+## 18. Dismissal process (simplified)
+
+**The idea.** The Dismissal List is simply: *students whose candidacy has expired*. CGS exports it to Excel, the Registry processes it outside our system, then the Registry or CGS uploads the result
+and the system marks those students as dismissed. A dismissed student leaves the list; students not in the uploaded file stay on it, so the next export is "still pending". There is **no "keep" status,
+no per-row reason and no batch lock or batch number**: the list is always live, nothing is stored about it, and nothing is ever locked. (Decided to keep it this simple: every extra state is one more
+thing for CGS to maintain and for the two lists to disagree about.)
+
+**The rule** (`Support\CandidacyDismissalList::evaluate()`, used by the page, the export and the upload preview, so they cannot disagree). A student is a candidate when ALL are true:
+1. today (Asia/Kuala_Lumpur) is **after** the current expiry date (on the expiry day itself the student is still within the period);
+2. no Softbound submitted; not completed; not inactive or deferred; not already dismissed (all read through `StudentStatusReader`);
+3. no appeal in review (with Supervisor, Chair, CGS or Dean); an appeal submitted on the expiry day that is still in review keeps the student off the list until it is decided;
+4. a research programme (`config('candidacy.dismissal.include_coursework')` = false; Coursework students are not listed and not reminded).
+
+Handbook references: 4.3 (the maximum candidacy period; **a Dean rejection alone does not make a student a candidate**, the expiry date does) and 4.4 (the student may appeal to be reinstated).
+
+**The page.** Candidacy Management > Dismissal List (CGS roles). Same look as Operations: three cards that filter when clicked (Candidates, Not yet exported, Exported (awaiting Registry)), a filter card (search by
+name or ID, Department, Programme level Master/PhD, Last appeal outcome, Exported Yes/No), the table (Student, Programme, Department, Expiry date, Days since expiry, Last appeal outcome, Exported on), the shared
+pagination, live update every 15 s with Pause updates, no-store headers, Back link and the assistant icon. "View student" opens the latest appeal when there is one. There are no action buttons per row.
+Last appeal outcome: None, Approved earlier, Rejected, Closed expired (or Returned (open) until the 07:30 job closes it).
+
+**Export.** "Export all candidates to Excel" (no filter) or "Export filtered list to Excel" (exactly the rows shown). `dismissal-candidates_<YYYY-MM-DD>.xlsx` with Student ID (text), Name, Programme, Department, Expiry
+date, Last appeal outcome and a blank Exported on; bold header, set column widths. Every export writes one `candidacy_dismissal_exports` row per student (`candidacy_id` or `demo_profile_id`, `exported_at`,
+`exported_by`); the page shows the newest `exported_at`; exporting again only updates it. Nothing else changes.
+
+**Upload.** "Dismissal Upload" (Registry and the CGS roles; the Registry sees only this page, through our module's `ProvidesLinks`; the route middleware is inside our module). `.xlsx` or `.csv` with a "Student ID"
+column (case-insensitive; the file exported above works unchanged), up to 5 MB and 2000 rows.
+1. **Preview** (nothing saved): every row gets *Will be dismissed*, *Not a current candidate* (with the reason: Softbound submitted, appeal in review, not expired yet, completed, inactive, coursework, no candidacy
+   record), *Already dismissed*, *Unknown student ID* or *Duplicate row in file*, with the counts. Only "Will be dismissed" rows are applied. Confirm is switched off when there is nothing to apply.
+2. **Confirm** (a dialog like the Dean's: the count, "This cannot be undone here", Discard focused). One transaction: every row is checked again, then each student gets `dismissed_at` / `dismissed_by_id`
+   (a real student on `study_candidacies`, status `dismissed`; a demo student on the demo profile), one `candidacy_dismissal_imports` row (who, file, when, rows, dismissed, skipped, summary) and one
+   `candidacy_dismissal_import_rows` row per student. Re-uploading the same file dismisses nobody twice. A student who stopped being a candidate between preview and confirm is skipped and reported.
+The page also shows the last 10 uploads.
+
+**Effects, all through existing mechanisms.** The student leaves the list; reminders stop (`StudentStatusReader`: dismissed); a seat holder goes into the Workstation termination flow with the reason "Dismissal"
+(`WorkstationTerminationTriggers`, started by the 07:30 refresh); open appeals are not touched; the student gets an e-mail and a bell **immediately** (an immediate, user-triggered action, so the 08:00 rule does not
+apply): "Your candidacy has been ended because the maximum candidacy period was exceeded (Postgraduate Student Handbook section 4.3), as confirmed by the Registry. The Handbook (section 4.4) describes how to
+appeal for reinstatement; please contact the Registry." Nothing is e-mailed to CGS (the result is shown on the page).
+
+**Demo data.** 30 *candidacy-only* demo students (`demo_student_profiles.candidacy_only`; matric 21020001 to 21020030): no seat, no key, hidden from every Workstation list, search, statistic, Insights chart and
+assistant answer (a global scope on the model; candidacy code asks for them explicitly). 14 candidates (no appeal; Dean rejection then expiry; returned appeal closed as expired; approved earlier then expired again;
+Master and PhD; all nine departments; two already exported), 8 visible exclusions (Softbound x2, inactive, completed, appeal in review x2, already dismissed x2) and 8 Coursework students (Chemical, Civil &
+Environmental, Computer & Information Sciences; expiring soon, far away and already expired). `candidacy:demo-registry-file` writes `storage/app/demo/registry-confirmed-sample.xlsx` (half of the candidates plus an
+unknown ID, a student who is not a candidate and a repeated row). `candidacy:demo-clear` removes all of it. The old `candidacy:generate-dismissals` (still scheduled at 07:15 in the shared `routes/console.php`) is a
+deprecated no-op; its old table `candidacy_dismissals` is kept, unused.
