@@ -110,7 +110,7 @@ final class Lookups
             'insights_summary' => ['description' => 'The Insights page key highlights, as a few short sentences.', 'parameters' => []],
 
             // Round 8 PART 5.1 -- same numbers as the Insights page's own charts.
-            'programme_breakdown' => ['description' => 'Top programmes by share of current seat holders, e.g. "MSc Information Technology (Full-Time): 23 seat holders (14.6%)". Optional block or gender to narrow it.', 'parameters' => ['block' => 'optional, "N2" or "J2"', 'gender' => 'optional, "male" or "female"']],
+            'programme_breakdown' => ['description' => 'Top programmes by share of current seat holders, e.g. "Master of Science in Information Technology (Full-Time): 23 seat holders (14.6%)". Optional block or gender to narrow it.', 'parameters' => ['block' => 'optional, "N2" or "J2"', 'gender' => 'optional, "male" or "female"']],
             'gender_comparison' => ['description' => 'Male rooms versus female rooms: seat counts and occupancy percentage for each, e.g. to answer "male versus female occupancy". Optional block.', 'parameters' => ['block' => 'optional, "N2" or "J2"']],
             'key_status_overview' => ['description' => 'Locker key status counts among current seat holders: not requested, pending collection, collected, return pending. Optional block or gender.', 'parameters' => ['block' => 'optional, "N2" or "J2"', 'gender' => 'optional, "male" or "female"']],
             'candidacy_expiry_distribution' => ['description' => 'Current seat holders by how soon their candidacy expires: 0-3, 3-6, 6-12, over 12 months. Optional block or gender.', 'parameters' => ['block' => 'optional, "N2" or "J2"', 'gender' => 'optional, "male" or "female"']],

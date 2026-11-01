@@ -267,8 +267,8 @@ The student's Supervisor list is the lecturers of the student's department, sort
 **One Dean for the whole university**: the profile of the account that has the Dean role (`dean_pgr`); no department has a Dean assignment, and every appeal, memo, e-mail and
 history entry names that person. If a second account ever gets the Dean role the lookup takes the first by id: confirm which one is meant before that happens.
 
-**Department auto-fill.** A student never chooses a department. `CandidacyDepartmentResolver`: the candidacy record's `department_id`; when empty it is derived from the programme text with
-`config('candidacy.programme_department_patterns')` (Chemical, Civil/Environmental, Electrical/Electronic, Mechanical, Petroleum, Geo, Computer/Information/IT/Software,
+**Department auto-fill.** A student never chooses a department. `CandidacyDepartmentResolver`: the candidacy record's `department_id`; when empty it is derived from the programme text: first the exact name in the programme catalogue
+(`config('candidacy.programmes')`, see the catalogue section below), then `config('candidacy.programme_department_patterns')` (Chemical, Civil/Environmental, Electrical/Electronic, Mechanical, Petroleum, Geo, Computer/Information/IT/Software,
 Applied Science/Chemistry/Physics/Mathematics, Management/MBA/Humanities; first match wins); text that matches nothing is placed by a hash of the student ID (stable). The accounts in
 `config('candidacy.cis_demo_accounts')` always belong to Computer & Information Sciences. New Appeal step 1 shows the department read-only ("Taken from your student record"), offers only the
 lecturers of that department and shows the Department Chair read-only. A posted department that is not the student's own, or a supervisor who is not a lecturer of it (including a chair or the Dean), is refused on
@@ -284,9 +284,16 @@ title itself from `data-doc-title` (module script); the layout itself would need
 **"&" is escaped once.** Component attributes written as `subtitle="{{ ... }}"` were escaped by Blade and again by the component; they are now passed as bound values (`:subtitle="..."`). Tests render
 a department name with "&" on the pages, filters, e-mail, bell and memo.
 
-**Known limits of the demo data.** Only the six departments whose programmes appear among the Workstation demo students (Chemical, Civil, Electrical, Mechanical, Petroleum, Computer & Information Sciences)
-have demo appeals; Geoscience has one (a real account placed there by the hash rule) and Applied Science and Management and Humanities have none, because giving them students would mean adding rows that
-Workstation reads. The legacy appeal SCA-22001001-01 (account `student@utp.edu.my`) falls under Computer & Information Sciences and is left alone, so that account has 6 of 12 months used (it can still submit for up to 6 months).
+**Programme catalogue.** `config('candidacy.programmes')` is the single list of programmes: exact name, level (`coursework`, `master_research`, `phd`) and department. Department names:
+Chemical Engineering; Civil & Environmental Engineering; Electrical & Electronic Engineering; Mechanical Engineering; Petroleum Engineering; Geoscience (Faculty of Engineering);
+Computer & Information Sciences; Fundamental & Applied Sciences; Management & Humanities (Faculty of Science, Management & Computing). A student's department is the catalogue department of their
+programme name (a trailing "(Full-Time)" / "(Part-Time)" is ignored); text that is not in the catalogue (real students keep the text they have) falls back to the keyword patterns, then the hash.
+**The programme text of demo students comes from the demo seeders** (`workstation:demo-seed`), never typed by hand, so `workstation:demo-clear`, `candidacy:demo-clear` and re-seeding never bring
+the old text back. Research programmes are shown as "<name> (Full-Time)"; every demo student is Full-Time research, because Workstation eligibility excludes Part-Time and Coursework.
+The Coursework entries of the catalogue are therefore not used by any demo student.
+
+**Demo data now.** All nine departments have demo students (14 to 20 each) and demo appeals (3 to 20 each); Computer & Information Sciences has 19 demo appeals plus the legacy appeal
+SCA-22001001-01 (account `student@utp.edu.my`), which is left alone, so that account has 6 of 12 months used (it can still submit for up to 6 months).
 
 ## 17. Dean rejection confirmation, student status reader, automatic reminders
 

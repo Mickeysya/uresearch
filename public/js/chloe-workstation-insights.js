@@ -1881,7 +1881,10 @@
         }
 
         var width = container.clientWidth || 700;
-        var rowH = 36;
+        // Narrow cards (phones): the programme names are long (up to ~70 characters), so each row is stacked -- the name on its own line
+        // across the full width (truncated, full name in the tooltip), the bar and its value below it. No horizontal scroll.
+        var stacked = width < 560;
+        var rowH = stacked ? 54 : 36;
         // labelW has a 150px FLOOR, not just a 35%-of-width ceiling --
         // found live at 390px: a long programme name (e.g. "PhD Computer
         // & Information Sciences (Full-Time)") collided with its own
@@ -1889,12 +1892,13 @@
         // for the label. The floor can need more room than the
         // container has; the card scrolls horizontally when it does,
         // same technique as the column charts.
-        var labelW = Math.max(150, Math.min(360, width * 0.35));
+        var labelW = stacked ? 0 : Math.max(150, Math.min(360, width * 0.35));
         var valueColW = 110;
         var minTrackW = 60;
         var trackW = Math.max(minTrackW, width - labelW - valueColW - 16);
         var totalH = groups.length * rowH;
         var requiredWidth = labelW + minTrackW + valueColW + 16;
+        if (stacked) requiredWidth = 0;
         var svgWidth = Math.max(width, requiredWidth);
         var scrolls = svgWidth > width;
         if (scrolls) container.classList.add('wsi-hscroll');
@@ -1911,17 +1915,17 @@
 
         groups.forEach(function (g, i) {
             var y = i * rowH;
-            var label = svgEl('text', { x: 0, y: y + rowH / 2 + 4, class: 'wsi-category-label' });
+            var label = svgEl('text', { x: 0, y: stacked ? y + 15 : y + rowH / 2 + 4, class: 'wsi-category-label' });
             label.textContent = g.name;
             svg.appendChild(label);
-            fitSvgTextWidth(label, labelW - 8);
+            fitSvgTextWidth(label, stacked ? width - 4 : labelW - 8);
             if (label.textContent !== g.name) label.setAttribute('data-full-name', g.name); // the tooltip/aria still read the real, untruncated name via g.name in closures below
 
-            var barY = y + (rowH - 18) / 2;
+            var barY = stacked ? y + 26 : y + (rowH - 18) / 2;
             var contextPx = (g.count / maxCount) * trackW;
             var seg = drawHBarSegment(svg, labelW, barY, trackW, 18, COLORS.blue, 0, contextPx, contextPx);
 
-            var valueLabel = svgEl('text', { x: labelW + trackW + 10, y: y + rowH / 2 + 4, class: 'wsi-value-label' });
+            var valueLabel = svgEl('text', { x: labelW + trackW + 10, y: stacked ? barY + 13 : y + rowH / 2 + 4, class: 'wsi-value-label' });
             valueLabel.textContent = g.count + ' · ' + percentOf(g.count, holders) + '%';
             svg.appendChild(valueLabel);
 

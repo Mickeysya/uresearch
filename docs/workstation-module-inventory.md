@@ -374,7 +374,7 @@ text and the router's ids/parameters, and never writes to the log.
 | `forecast` | Seats that may be released by period (candidacy expiry / termination), projected available-seats line | `seatReleaseForecast()` / fact rows' `release_month`/`release_source` |
 | `rooms` | Occupied/capacity per room, highest first | `insightsFactRows()`, grouped by room client-side |
 | `gender` | Occupied/Available/Awaiting/Maintenance by Male vs Female rooms | `occupancyByGender()` / fact rows |
-| `programmes` | Top 8 programmes by current seat holders | `programmeBreakdown()` |
+| `programmes` | Top 8 programmes by current seat holders (names up to about 70 characters: truncated with the full name in the tooltip; on cards narrower than 560px each row is stacked, name above the bar, so the chart never scrolls sideways) | `programmeBreakdown()` |
 | `candidacy` | Candidacy expiry buckets (0-3/3-6/6-12/12+ months) | `candidacyExpiryBuckets()` |
 | `stay` | Length-of-stay buckets (under 6/6-12/12-18/over 18 months) | `lengthOfStayBuckets()` |
 | `keys` | Locker key status grouped by block | `keyStatusOverviewFromFactRows()` / fact rows |
@@ -452,3 +452,12 @@ attempted in this pass; if certainty matters, run
 - The shared `button, .btn` rules in `css/uresearch.css` (margin-top 16px, margin-right 8px, display inline-flex, centred, bold, 14px) apply to every button. Insights buttons are therefore styled with every one of those properties written out on their own classes; a test (`WorkstationInsightsTest`) fails if one loses its explicit `margin`.
 - The CGS seat-card pages (a filtered results list, and a Room page) scroll sideways on a 390 px phone: the status badges and the "View" button inside `cgs/_seat-card.blade.php` extend past the viewport (measured identically before and after the live-update work, 475 px and 399 px wide). The landing page and Insights do not.
 - One legacy row in the development data (a `locker_keys` row from 11 Oct whose request was released) is still `requested`. Releasing a seat now cancels a pending key (`WorkstationAllocator::releaseSeat()`), so it cannot recur, and the stats bar no longer counts such a row; the row itself was left untouched.
+
+
+## Demo programme text
+
+The programme of every Workstation demo student is a catalogue name (`config('candidacy.programmes')`) followed by "(Full-Time)", chosen by `workstation:demo-seed` as a fixed function of the profile
+id (department by hash, level kept from the earlier lists, so each student keeps their level). Nothing else about a demo student changes when the label does: gender, seat, key, expiry date and
+termination scenario are untouched. The two live demo accounts (`student@utp.edu.my`, `chloe_26005007@utp.edu.my`) carry "Master of Science in Information Systems (Full-Time)". The History
+snapshot of the programme (`workstation_histories.student_programme`) is refreshed for demo students and those two accounts only. Note: re-running `workstation:demo-seed` on a database in use also
+re-bases the demo key dates and termination-notice dates to today, as it always did.
