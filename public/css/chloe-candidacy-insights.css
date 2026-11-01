@@ -387,3 +387,4 @@
 #wsi-page .wci-kpis-inline { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 12px; }
 #wsi-page { padding-bottom: 160px; }
 @media (max-width: 640px) { #wsi-page { padding-left: 16px; padding-right: 16px; } }
+#wsi-page input.wsi-select { background-image: none; padding-right: 12px; }

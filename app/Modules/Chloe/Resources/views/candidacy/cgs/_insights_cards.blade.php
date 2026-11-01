@@ -19,3 +19,25 @@
                 <div class="wsi-card-body" id="wci-forecast"></div>
                 <p class="wsi-footer-note">Bars = students expiring in that period, by status category (the number above a bar is its total). Line = running total of the periods shown. Based on the expiry dates on record today; an approved appeal moves a date and the chart follows. Students past their expiry date are on the Dismissal List.</p>
             </div>
+
+            <div class="wsi-layer-head">
+                <h2 class="wsi-layer-title">Who expires in the next three months?</h2>
+                <p class="wsi-layer-desc">The students CGS can still reach before the expiry date, by how close it is.</p>
+            </div>
+
+            <div class="wsi-span-12 wsi-card" id="wsi-card-bands">
+                <h3 class="wsi-card-title">Expiring within 3 months</h3>
+                <p class="wsi-card-subtitle">Students by how many months are left, split by status category. Months are counted like the reminder milestones.</p>
+                <div class="wsi-card-body" id="wci-bands"></div>
+            </div>
+
+            <div class="wsi-span-12 wsi-card" id="wsi-card-students">
+                <div class="wsi-card-head-row">
+                    <div>
+                        <h3 class="wsi-card-title">Students expiring within 3 months</h3>
+                        <p class="wsi-card-subtitle" id="wci-students-subtitle">Closest expiry date first; students with no action yet first on a tie. Follows the filters and whatever you highlight above.</p>
+                    </div>
+                    <div class="wsi-field"><label for="wci-search">Search</label><input class="wsi-select" type="search" id="wci-search" placeholder="Student name or ID" autocomplete="off"></div>
+                </div>
+                <div class="wsi-card-body" id="wci-students"></div>
+            </div>

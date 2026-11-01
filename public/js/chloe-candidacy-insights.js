@@ -330,6 +330,81 @@
     document.querySelectorAll('#wci-grain button').forEach(function (b) { b.addEventListener('click', function () { grain = b.dataset.grain; drill = []; highlight.period = []; onChange(); }); });
     charts.push({ id: 'forecast', paint: paintForecast });
 
+    // ================================================================ Chart 2: Expiring within 3 months + the student list
+    function bandRows(rows, b) { return rows.filter(function (r) { return r.band === b; }); }
+    function paintBands() {
+        var ctx = ctxRows(), hl = hlRows(ctx), active = hlActive();
+        var groups = BAND_ORDER.map(function (b) {
+            var inCtx = bandRows(ctx, b), segs = catSegs(inCtx), solid = active ? catSegs(bandRows(hl, b)) : null;
+            var tip = [DATA.bands[b], plural(inCtx.length, 'student', 'students')].concat(CAT_ORDER.map(function (k) { return DATA.categories[k] + ': ' + segs[k] + (solid ? ' (' + solid[k] + ' highlighted)' : ''); }));
+            return { key: b, label: DATA.bands[b], short: DATA.bands[b].replace(' months', ' mo').replace(' month', ' mo'), narrow: DATA.bands[b].replace('Up to ', '≤').replace(' months', 'mo').replace(' month', 'mo'), segs: segs, solid: solid, tip: tip, dim: 'band', value: b };
+        });
+        var box = document.getElementById('wci-bands');
+        stackedColumns(box, { label: 'Students expiring within 3 months by band and status category', groups: groups, order: CAT_ORDER, colors: CAT_COLOR, height: 240, emptyText: 'Nobody expires within 3 months for these filters.' });
+        catLegend(box, ctx.filter(function (r) { return r.band; }));
+    }
+    charts.push({ id: 'bands', paint: paintBands });
+
+    var PAGE = 10, PRIORITY = { none: 0, returned: 1, in_review: 2, softbound: 3 };
+    function windowSlots(total, current, slots) {
+        if (total < 1) { return []; }
+        var all = function (a, b) { var o = []; for (var i = a; i <= b; i++) { o.push(i); } return o; };
+        current = Math.max(1, Math.min(current, total));
+        if (total <= slots) { return all(1, total); }
+        var edge = slots - 2;
+        if (current <= slots - 3) { return all(1, edge).concat(['…', total]); }
+        if (current >= total - slots + 4) { return [1, '…'].concat(all(total - edge + 1, total)); }
+        var inner = slots - 4, start = current - Math.floor((inner - 1) / 2);
+        return [1, '…'].concat(all(start, start + inner - 1), ['…', total]);
+    }
+    function pagination(container, page, pages, total, noun, go) {
+        if (total === 0) { container.appendChild(el('p', { class: 'wca-muted wca-small wca-showing' }, 'No ' + noun + ' found')); return; }
+        if (pages > 1) {
+            [['is-full', 7], ['is-compact', 5]].forEach(function (m) {
+                var nav = el('nav', { class: 'cgs-pagination ' + m[0], 'aria-label': 'Pages' });
+                var link = function (txt, n, rel) { var a = el('a', { href: '#' }, txt); if (rel) { a.setAttribute('rel', rel); } a.addEventListener('click', function (e) { e.preventDefault(); go(n); }); return a; };
+                nav.appendChild(page <= 1 ? el('span', { class: 'is-disabled', 'aria-disabled': 'true' }, '« Prev') : link('« Prev', page - 1, 'prev'));
+                windowSlots(pages, page, m[1]).forEach(function (s) {
+                    if (s === '…') { var g = el('span', { class: 'is-gap', 'aria-hidden': 'true' }, '…'); nav.appendChild(g); }
+                    else if (s === page) { nav.appendChild(el('span', { class: 'is-current', 'aria-current': 'page' }, String(s))); }
+                    else { nav.appendChild(link(String(s), s)); }
+                });
+                nav.appendChild(page >= pages ? el('span', { class: 'is-disabled', 'aria-disabled': 'true' }, 'Next »') : link('Next »', page + 1, 'next'));
+                container.appendChild(nav);
+            });
+        }
+        var from = (page - 1) * PAGE + 1, to = Math.min(total, page * PAGE);
+        container.appendChild(el('p', { class: 'wca-muted wca-small wca-showing' }, 'Showing ' + from + ' to ' + to + ' of ' + total + ' ' + (total === 1 ? noun.replace(/s$/, '') : noun)));
+    }
+    function listRows() {
+        var q = tableState.q.trim().toLowerCase();
+        return hlRows(ctxRows()).filter(function (r) { return r.band && (!q || (r.name + ' ' + r.studentId).toLowerCase().indexOf(q) !== -1); })
+            .sort(function (a, b) { return a.daysLeft - b.daysLeft || PRIORITY[a.category] - PRIORITY[b.category] || a.name.localeCompare(b.name); });
+    }
+    function paintList() {
+        var box = document.getElementById('wci-students'); clear(box);
+        var rows = listRows(), pages = Math.max(1, Math.ceil(rows.length / PAGE));
+        tableState.page = Math.min(Math.max(1, tableState.page), pages);
+        if (rows.length === 0) { box.appendChild(el('p', { class: 'wsi-empty' }, 'No students expiring within 3 months match this selection.')); return; }
+        var wrap = el('div', { class: 'wca-table-wrap' }), table = el('table', { class: 'wca-table is-stack is-compact' }), head = el('tr');
+        ['Student', 'Department', 'Level', 'Expiry date', 'Days left', 'Status category', 'Appeal no.', 'Reminders sent', 'Last reminder'].forEach(function (h) { head.appendChild(el('th', {}, h)); });
+        var thead = el('thead'); thead.appendChild(head); table.appendChild(thead);
+        var tb = el('tbody');
+        rows.slice((tableState.page - 1) * PAGE, tableState.page * PAGE).forEach(function (r) {
+            var tr = el('tr'), td = function (label, content, cls) { var c = el('td', { 'data-label': label }); if (cls) { c.className = cls; } if (content instanceof Node) { c.appendChild(content); } else { c.textContent = content; } tr.appendChild(c); return c; };
+            var who = el('span'); who.appendChild(document.createTextNode(r.name)); who.appendChild(el('br')); who.appendChild(el('span', { class: 'wca-muted wca-small' }, r.studentId));
+            td('Student', who); td('Department', r.deptName || '—'); td('Level', levelName(r.level) + (r.mode === 'part' ? ' · Part-Time' : '')); td('Expiry date', fmtDate(r.expiry), 'wca-nowrap');
+            td('Days left', String(r.daysLeft), 'wca-num'); td('Status category', el('span', { class: 'wci-badge is-' + r.category }, DATA.categories[r.category]));
+            td('Appeal no.', r.appealNo ? (function () { var a = el('a', { class: 'wsi-link', href: LIVE.appealUrl + '/' + r.appealId + '?return=' + encodeURIComponent('/cgs/candidacy/insights') }, r.appealNo); return a; })() : '—', 'wca-nowrap');
+            td('Reminders sent', r.reminders.length ? r.reminders.map(function (x) { return x.m + ' mo'; }).join(', ') : '—'); td('Last reminder', r.lastReminder ? fmtDate(r.lastReminder) : '—', 'wca-nowrap');
+            tb.appendChild(tr);
+        });
+        table.appendChild(tb); wrap.appendChild(table); box.appendChild(wrap);
+        pagination(box, tableState.page, pages, rows.length, 'students', function (n) { tableState.page = n; paintList(); });
+    }
+    document.getElementById('wci-search').addEventListener('input', function (e) { tableState.q = e.target.value; tableState.page = 1; paintList(); });
+    charts.push({ id: 'list', paint: paintList });
+
 
     // ---------------------------------------------------------------- live update
     var liveVersion = LIVE.version, livePaused = false, liveTimer = null;

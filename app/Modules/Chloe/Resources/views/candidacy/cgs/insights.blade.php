@@ -3,6 +3,7 @@
 @section('title', 'Candidacy Insights')
 
 @push('head')
+    <link rel="stylesheet" href="{{ asset('css/chloe-candidacy.css') }}">
     <link rel="stylesheet" href="{{ asset('css/chloe-candidacy-insights.css') }}?v=1">
 @endpush
 
