@@ -389,3 +389,8 @@ deprecated no-op; its old table `candidacy_dismissals` is kept, unused.
 CGS Insights page with the expiry forecast, bands, reminder effect and dismissal pipeline, all from `Support\CandidacyStatistics`. Full description, definitions, demo steps and the one shared-file line in `docs/candidacy-insights.md`.
 Demo students for it are candidacy-only (see section 18). The 07:30 / 08:00 rule also covers the "closed as expired" and termination notices (tests in `CandidacyScheduledNoticeTest` and `WorkstationDailyScheduleTest`).
 
+## 20. Study Candidacy in the assistant
+
+The candidacy pages use the live assistant (the same widget, endpoint, router, privacy rules and fallback as Workstation): roles student, approver and CGS, 61 candidacy catalogue entries, 24 guidance topics with source lines, and refusals for every action
+and outcome prediction. Details, sources, PDPA notes, the demo and how to add a topic: `docs/candidacy-assistant.md`. The old "coming soon" placeholder is gone.
+
