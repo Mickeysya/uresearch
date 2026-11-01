@@ -57,7 +57,7 @@
         var opener = e.target.closest('[data-modal-open]');
         if (opener) {
             var m = document.getElementById(opener.getAttribute('data-modal-open'));
-            if (m) { m.hidden = false; document.documentElement.setAttribute('data-wca-modal', '1'); }
+            if (m) { m.hidden = false; document.documentElement.setAttribute('data-wca-modal', '1'); var firstDiscard = m.classList.contains('wca-confirm') ? $('#wca-confirm-discard', m) : null; if (firstDiscard) { firstDiscard.focus(); } }
             return;
         }
         var ask = e.target.closest('[data-confirm-open]');

@@ -63,6 +63,10 @@ class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDeta
             $links[] = ['label' => 'Candidacy Appeals', 'route' => 'candidacy.portal.queue'];
         }
 
+        if (in_array($user->role, array_merge(Role::cgsTeam(), [Role::REGISTRY]), true)) {
+            $links[] = ['label' => 'Dismissal Upload', 'route' => 'candidacy.cgs.dismissal-upload'];
+        }
+
         if (in_array($user->role, array_unique(array_merge([Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], (array) config('candidacy.cgs_roles'))), true)) {
             $links[] = ['label' => 'My Signature', 'route' => 'candidacy.signature.show'];
         }

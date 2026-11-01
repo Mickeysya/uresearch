@@ -4,6 +4,7 @@ use App\Modules\Chloe\Http\Controllers\CandidacyAppealController;
 use App\Modules\Chloe\Http\Controllers\Candidacy\PortalController;
 use App\Modules\Chloe\Http\Controllers\Candidacy\StudentAppealController;
 use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyDismissalController;
+use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyDismissalUploadController;
 use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyOperationsController;
 use App\Modules\Chloe\Http\Controllers\Cgs\WorkstationCatalogController;
 use App\Modules\Chloe\Http\Controllers\Cgs\WorkstationInsightsController;
@@ -168,6 +169,13 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
         Route::get('/cgs/candidacy/dismissals/region', [CandidacyDismissalController::class, 'region'])->name('candidacy.cgs.dismissals.region');
         Route::get('/cgs/candidacy/dismissals/live/version', [CandidacyDismissalController::class, 'liveVersion'])->middleware('throttle:workstation-live')->name('candidacy.cgs.dismissals.live.version');
         Route::post('/cgs/candidacy/dismissals/export', [CandidacyDismissalController::class, 'export'])->name('candidacy.cgs.dismissals.export');
+    });
+    // Dismissal Upload: the Registry's result comes back here. Registry and the CGS roles only; nothing else of the module is open to the Registry.
+    Route::middleware('role:'.implode(',', array_merge(Role::cgsTeam(), [Role::REGISTRY])))->group(function () {
+        Route::get('/cgs/candidacy/dismissal-upload', [CandidacyDismissalUploadController::class, 'show'])->name('candidacy.cgs.dismissal-upload');
+        Route::post('/cgs/candidacy/dismissal-upload/preview', [CandidacyDismissalUploadController::class, 'preview'])->name('candidacy.cgs.dismissal-upload.preview');
+        Route::post('/cgs/candidacy/dismissal-upload/confirm', [CandidacyDismissalUploadController::class, 'confirm'])->name('candidacy.cgs.dismissal-upload.confirm');
+        Route::post('/cgs/candidacy/dismissal-upload/discard', [CandidacyDismissalUploadController::class, 'discard'])->name('candidacy.cgs.dismissal-upload.discard');
     });
 });
 
