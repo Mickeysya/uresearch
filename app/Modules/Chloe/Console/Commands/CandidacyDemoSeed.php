@@ -7,6 +7,7 @@ use App\Modules\Chloe\Models\CandidacyAppealApproval;
 use App\Modules\Chloe\Models\CandidacyAppealDocument;
 use App\Modules\Chloe\Models\CandidacyAppealEvent;
 use App\Modules\Chloe\Models\CandidacyDepartment;
+use App\Modules\Chloe\Models\CandidacyDemoStudentStatus;
 use App\Modules\Chloe\Models\CandidacyStaffAssignment;
 use App\Modules\Chloe\Models\CandidacyStaffProfile;
 use App\Modules\Chloe\Models\DemoStudentProfile;
@@ -103,6 +104,7 @@ class CandidacyDemoSeed extends Command
         }
 
         $this->seedOverlay();
+        $this->seedDismissalCases($signatures, $memos);
         $this->info("Demo appeals created this run: {$this->created}. Demo appeals now: ".CandidacyAppeal::where('is_demo', true)->count().'.');
 
         return self::SUCCESS;
@@ -129,6 +131,108 @@ class CandidacyDemoSeed extends Command
                 'softbound_submitted_at' => $kind === 'softbound' ? $this->now->copy()->subDays($daysAgo)->toDateString() : null,
                 'completed' => $kind === 'completed', 'inactive' => $kind === 'inactive', 'label' => 'Demo data',
             ]);
+        }
+    }
+
+    // ------------------------------------------------------------------ the dismissal demo (candidacy-only students)
+
+    /**
+     * Students that exist only for the Study Candidacy demo (demo_student_profiles.candidacy_only): Workstation never sees them (no seat, no key, hidden
+     * from its lists and numbers), and no existing demo student is touched. 14 are dismissal candidates (expired with no appeal; after a Dean rejection;
+     * returned appeal closed as expired; approved earlier and expired again; Master and PhD in all nine departments, two already exported), 8 are
+     * excluded for a visible reason and 8 are Coursework students. Their expiry dates are relative to the day of seeding, so they stay expired.
+     * [id, name, dept, level, case, days relative to today (expiry), extra]
+     */
+    protected function dismissalRoster(): array
+    {
+        return [
+            // candidates
+            ['21020001', 'Nurul Huda binti Samad', 'CHE', 'phd', 'none', -14, ['exported' => true]],
+            ['21020002', 'Wong Jia Hui', 'CEE', 'master_research', 'none', -45, []],
+            ['21020003', 'Mohd Ariff bin Salleh', 'GEO', 'phd', 'none', -100, []],
+            ['21020004', 'Kamal a/l Subramaniam', 'MEC', 'master_research', 'none', -9, []],
+            ['21020005', 'Lim Zhi Xuan', 'EEE', 'phd', 'rejected', -30, ['months' => 6, 'age' => 160, 'closed_days_ago' => 90, 'exported' => true]],
+            ['21020006', 'Siti Aminah binti Daud', 'PET', 'master_research', 'rejected', -22, ['months' => 4, 'age' => 140, 'closed_days_ago' => 70]],
+            ['21020007', 'Ravi a/l Chandran', 'APS', 'phd', 'rejected', -60, ['months' => 5, 'age' => 170, 'closed_days_ago' => 95]],
+            ['21020008', 'Tan Mei Ling', 'CIS', 'master_research', 'closed_expired', -40, ['months' => 3, 'age' => 130, 'wait' => 75, 'closed_days_ago' => 39, 'by' => 'supervisor']],
+            ['21020009', 'Hassan bin Ibrahim', 'MHU', 'phd', 'closed_expired', -25, ['months' => 4, 'age' => 110, 'wait' => 60, 'closed_days_ago' => 24, 'by' => 'chair']],
+            ['21020010', 'Priyanka a/p Nair', 'CEE', 'phd', 'closed_expired', -70, ['months' => 6, 'age' => 150, 'wait' => 100, 'closed_days_ago' => 69, 'by' => 'supervisor']],
+            ['21020011', 'Ong Wei Han', 'CHE', 'master_research', 'approved', -30, ['months' => 3, 'age' => 200, 'closed_days_ago' => 160]],
+            ['21020012', 'Farhana binti Zulkifli', 'CIS', 'phd', 'approved', -55, ['months' => 2, 'age' => 220, 'closed_days_ago' => 190]],
+            ['21020013', 'Daniel Lee Kok Wai', 'CIS', 'master_research', 'none', -5, []],
+            ['21020014', 'Aisha binti Khalid', 'CIS', 'phd', 'none', -130, []],
+            // excluded, with a visible reason
+            ['21020015', 'Azmi bin Latif', 'MEC', 'phd', 'softbound', -20, []],
+            ['21020016', 'Grace Tan Sze Yen', 'PET', 'master_research', 'softbound', -35, []],
+            ['21020017', 'Vignesh a/l Murugan', 'EEE', 'master_research', 'inactive', -50, []],
+            ['21020018', 'Noraini binti Hashim', 'GEO', 'master_research', 'completed', -15, []],
+            ['21020019', 'Chia Boon Keat', 'CEE', 'phd', 'in_review', -3, ['state' => 'with_chair', 'months' => 4, 'age' => 3, 'wait' => 2]],
+            ['21020020', 'Syafiqah binti Anuar', 'CIS', 'master_research', 'in_review', -10, ['state' => 'with_dean', 'months' => 3, 'age' => 14, 'wait' => 5]],
+            ['21020021', 'Rajesh a/l Pillai', 'CHE', 'phd', 'dismissed', -200, ['dismissed_days_ago' => 60]],
+            ['21020022', 'Lau Siew Mei', 'MHU', 'master_research', 'dismissed', -250, ['dismissed_days_ago' => 90]],
+            // Coursework (not reminded, not listed)
+            ['21020023', 'Hafizuddin bin Roslan', 'CHE', 'coursework:MSc in Process Safety', 'coursework', 40, []],
+            ['21020024', 'Cheah Li Ying', 'CEE', 'coursework:MSc in Offshore Engineering', 'coursework', 75, []],
+            ['21020025', 'Nadiah binti Omar', 'CIS', 'coursework:MSc in Data Science', 'coursework', 20, []],
+            ['21020026', 'Kavin a/l Rajendran', 'CHE', 'coursework:MSc in Process Integration', 'coursework', 500, []],
+            ['21020027', 'Amirul bin Jamal', 'CEE', 'coursework:MSc in Industrial Environmental Engineering', 'coursework', 700, []],
+            ['21020028', 'Yap Xin Rui', 'CIS', 'coursework:Master of Science in Predictive Analytics', 'coursework', -30, []],
+            ['21020029', 'Zulaikha binti Mansor', 'CEE', 'coursework:MSc in Asset Management & Maintenance', 'coursework', -90, []],
+            ['21020030', 'Ng Kah Hou', 'CIS', 'coursework:MSc in Applied Computing', 'coursework', -10, []],
+        ];
+    }
+
+    protected function seedDismissalCases(CandidacySignatureService $signatures, CandidacyMemoService $memos): void
+    {
+        $today = $this->now->copy()->startOfDay();
+        $cgs = User::whereIn('role', (array) config('candidacy.cgs_roles'))->orderBy('id')->first();
+        $registry = User::where('role', \App\Modules\Core\Support\Role::REGISTRY)->orderBy('id')->first();
+
+        foreach ($this->dismissalRoster() as [$id, $name, $code, $level, $case, $days, $x]) {
+            if (str_starts_with($level, 'coursework:')) {
+                $programme = substr($level, 11).' (Coursework)';
+            } else {
+                $entry = collect((array) config('candidacy.programmes'))->first(fn ($e) => $e[2] === $code && $e[1] === $level);
+                $programme = $entry[0].' (Full-Time)';
+            }
+
+            $profile = DemoStudentProfile::withoutGlobalScopes()->firstOrNew(['matric_no' => $id]);
+
+            if ($profile->exists && $profile->candidacy_only === false) {
+                continue; // never touch an ordinary demo student
+            }
+
+            $expiry = $today->copy()->addDays($days);
+            $profile->forceFill([
+                'name' => $name, 'email' => strtolower(explode(' ', $name)[0]).'_'.$id.'@utp.edu.my', 'gender' => 'male', 'programme' => $programme,
+                'programme_start_date' => $expiry->copy()->subYears(3)->toDateString(), 'candidacy_expiry_date' => $expiry->toDateString(),
+                'status' => $case === 'dismissed' ? 'dismissed' : 'active', 'candidacy_only' => true,
+                'dismissed_at' => $case === 'dismissed' ? $today->copy()->subDays($x['dismissed_days_ago'])->setTime(10, 0) : null,
+                'dismissed_by_id' => $case === 'dismissed' ? $registry?->id : null,
+            ])->save();
+
+            match ($case) {
+                'softbound' => CandidacyDemoStudentStatus::updateOrCreate(['demo_profile_id' => $profile->id], ['softbound_submitted_at' => $expiry->copy()->subDays(30)->toDateString(), 'completed' => false, 'inactive' => false, 'label' => 'Demo data']),
+                'completed' => CandidacyDemoStudentStatus::updateOrCreate(['demo_profile_id' => $profile->id], ['softbound_submitted_at' => null, 'completed' => true, 'inactive' => false, 'label' => 'Demo data']),
+                'inactive' => CandidacyDemoStudentStatus::updateOrCreate(['demo_profile_id' => $profile->id], ['softbound_submitted_at' => null, 'completed' => false, 'inactive' => true, 'label' => 'Demo data']),
+                default => null,
+            };
+
+            if (in_array($case, ['rejected', 'closed_expired', 'approved', 'in_review'], true)) {
+                $no = sprintf('SCA-%s-01', $id);
+
+                if (! CandidacyAppeal::where('appeal_no', $no)->exists()) {
+                    $state = $x['state'] ?? $case;
+                    $sc = ['dept' => $code, 'profile' => $profile, 'state' => $state, 'months' => $x['months'], 'wait' => $x['wait'] ?? 0, 'age' => $x['age'], 'no' => $no, 'seq' => 1]
+                        + (isset($x['closed_days_ago']) ? ['closed_days_ago' => $x['closed_days_ago']] : []) + (isset($x['by']) ? ['by' => $x['by']] : []);
+                    DB::transaction(fn () => $this->build($sc, $signatures, $memos));
+                    $this->created++;
+                }
+            }
+
+            if (! empty($x['exported']) && $cgs) {
+                \App\Modules\Chloe\Models\CandidacyDismissalExport::firstOrCreate(['demo_profile_id' => $profile->id], ['exported_at' => $this->now->copy()->subDays(2)->setTime(15, 30), 'exported_by' => $cgs->id]);
+            }
         }
     }
 

@@ -13,10 +13,10 @@ use App\Modules\Core\Models\User;
  */
 final class CandidacyDepartmentResolver
 {
-    /** The catalogue entry (name, level, department code) for an exact programme name, ignoring a trailing "(Full-Time)" / "(Part-Time)". */
+    /** The catalogue entry (name, level, department code) for an exact programme name, ignoring a trailing "(Full-Time)", "(Part-Time)" or "(Coursework)". */
     public static function catalogueEntry(?string $programme): ?array
     {
-        $name = trim((string) preg_replace('/\s*\((?:full|part)-time\)\s*$/i', '', (string) $programme));
+        $name = trim((string) preg_replace('/\s*\((?:full-time|part-time|coursework)\)\s*$/i', '', (string) $programme));
 
         foreach ((array) config('candidacy.programmes') as $entry) {
             if ($name !== '' && strcasecmp($entry[0], $name) === 0) {

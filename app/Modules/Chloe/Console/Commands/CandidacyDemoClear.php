@@ -46,6 +46,11 @@ class CandidacyDemoClear extends Command
             CandidacyDepartment::where('is_demo', true)->delete();
             DB::table('candidacy_demo_student_statuses')->delete();                                      // the demo overlay: all of it is demo data
             DB::table('candidacy_reminder_log')->whereNotNull('demo_profile_id')->delete();            // reminder rows made for demo students
+            // the dismissal demo: exports and uploads that involve demo students, then the candidacy-only demo students themselves (re-seeding brings them back as they were)
+            DB::table('candidacy_dismissal_exports')->whereNotNull('demo_profile_id')->delete();
+            DB::table('candidacy_dismissal_import_rows')->whereNotNull('demo_profile_id')->delete();
+            DB::table('candidacy_dismissal_imports')->where('is_demo', true)->delete();
+            DB::table('demo_student_profiles')->where('candidacy_only', true)->delete();
         });
 
         foreach (array_filter($files) as $file) {

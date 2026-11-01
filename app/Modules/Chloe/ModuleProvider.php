@@ -8,6 +8,7 @@ use App\Modules\Chloe\Assistant\GeminiModel;
 use App\Modules\Chloe\Console\Commands\AssistantAsk;
 use App\Modules\Chloe\Console\Commands\BackfillCandidacyAppeals;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoClear;
+use App\Modules\Chloe\Console\Commands\CandidacyDemoRegistryFile;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoSeed;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoSoftbound;
 use App\Modules\Chloe\Console\Commands\CheckCandidacyAllowance;
@@ -122,6 +123,7 @@ class ModuleProvider extends ServiceProvider
                 CheckCandidacyAllowance::class,
                 CloseExpiredCandidacyAppeals::class,
                 CandidacyDemoSeed::class,
+                CandidacyDemoRegistryFile::class,
                 CandidacyDemoClear::class,
                 CandidacyDemoSoftbound::class,
                 CheckCandidacyStatusSource::class,

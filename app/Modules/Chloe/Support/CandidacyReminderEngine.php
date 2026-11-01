@@ -88,7 +88,7 @@ final class CandidacyReminderEngine
         }
 
         if (config('candidacy.reminders.demo_students')) {
-            foreach (DemoStudentProfile::orderBy('id')->get() as $p) {
+            foreach (DemoStudentProfile::withoutGlobalScopes()->orderBy('id')->get() as $p) {
                 $list[] = ['identity' => StudentDirectory::fromDemoProfile($p), 'candidacy' => null, 'demo' => $p, 'expiry' => $p->candidacy_expiry_date ? CarbonImmutable::parse(\Illuminate\Support\Carbon::parse($p->candidacy_expiry_date)->toDateString(), self::TZ) : null, 'programme' => $p->programme];
             }
         }
