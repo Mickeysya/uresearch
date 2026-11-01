@@ -45,7 +45,8 @@ class AssistantEvaluate extends Command
     protected $signature = 'assistant:evaluate
         {--resume : Continue the saved run, skipping questions already answered}
         {--only= : "failed" reruns only the previous failures; any other text reruns questions containing it}
-        {--group= : Comma list of groups to run: original,contrast,messy,standard,followup}
+        {--group= : Comma list of groups to run: original,contrast,messy,standard,followup,candidacy}
+        {--sample= : Run the candidacy group plus this many existing (Workstation) questions, evenly spread}
         {--limit= : Stop after this many router calls in this run}
         {--heldout : Use docs/assistant-ml/heldout-labelled.jsonl instead of the built-in set}
         {--report : Print the saved results only -- no calls}
@@ -89,7 +90,9 @@ class AssistantEvaluate extends Command
         }
 
         $studentUser = User::where('role', Role::STUDENT)->first();
-        $cgsUser = User::whereIn('role', Role::cgsTeam())->first();
+        // a plain CGS user (not also an approver), so a CGS question is judged against the CGS catalogue alone
+        $cgsUser = User::whereIn('role', Role::cgsTeam())->get()->first(fn (User $u) => \App\Modules\Chloe\Assistant\AssistantRoles::roleFor($u) === 'cgs') ?? User::whereIn('role', Role::cgsTeam())->first();
+        $approverUser = User::whereIn('role', [Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR])->first();
 
         if (! $studentUser || ! $cgsUser) {
             $this->error('Need at least one student-role user and one CGS-role user in the database to evaluate against.');
@@ -122,13 +125,18 @@ class AssistantEvaluate extends Command
             }
 
             $q = $questions[$i];
-            $user = $q['role'] === 'student' ? $studentUser : $cgsUser;
+            $user = match ($q['role']) { 'student' => $studentUser, 'approver' => $approverUser ?? $cgsUser, default => $cgsUser };
             $this->line(sprintf('[%d/%d] (%s, %s) %s', $n + 1, count($indices), $q['role'], $q['group'], $q['q']));
 
             $start = microtime(true);
             $result = $pipeline->ask($user, $q['q'], $q['recent'] ?? [], true, $allowFallback);
             $elapsedMs = (int) round((microtime(true) - $start) * 1000);
             $meta = $result['meta'] ?? [];
+
+            // a question the pipeline refuses before the router (a person's name) is labelled refused_before_router
+            if (($q['id'] ?? null) === 'refused_before_router' && ($result['outcome'] ?? null) === AssistantLog::OUTCOME_REFUSED) {
+                $meta['catalogue_id'] = 'refused_before_router';
+            }
             $errorCode = AssistantLog::where('user_id', $user->id)->latest('id')->value('error_code');
 
             if ($result['outcome'] === AssistantLog::OUTCOME_UNAVAILABLE) {
@@ -205,6 +213,13 @@ class AssistantEvaluate extends Command
         if ($groups = $this->option('group')) {
             $wanted = array_map('trim', explode(',', $groups));
             $indices = array_values(array_filter($indices, fn ($i) => in_array($questions[$i]['group'], $wanted, true)));
+        }
+
+        if ($sample = (int) $this->option('sample')) {
+            $existing = array_values(array_filter($indices, fn ($i) => $questions[$i]['group'] !== 'candidacy'));
+            $step = max(1, (int) floor(count($existing) / $sample));
+            $picked = array_slice(array_values(array_filter($existing, fn ($i, $n) => $n % $step === 0, ARRAY_FILTER_USE_BOTH)), 0, $sample);
+            $indices = array_values(array_filter($indices, fn ($i) => $questions[$i]['group'] === 'candidacy' || in_array($i, $picked, true)));
         }
 
         $only = $this->option('only');
@@ -285,7 +300,7 @@ class AssistantEvaluate extends Command
         $kindOk = fn ($r) => $r['actual_kind'] === $r['expected_kind'] || ($r['pass_accept'] && $r['actual_kind'] !== null);
 
         $summary = [];
-        foreach ([...['student', 'cgs'], 'all'] as $role) {
+        foreach ([...['student', 'approver', 'cgs'], 'all'] as $role) {
             $set = $role === 'all' ? $router : $router->where('role', $role);
             if ($set->isEmpty()) {
                 continue;
