@@ -103,7 +103,7 @@ final class GuidanceLibrary
             'cgs_system_guide' => 'The whole CGS side in order: the landing page, every seat action, locker keys, History/exports, and Insights.',
             'cgs_status_glossary' => 'Every seat status and locker key status from the CGS side, and exactly which action moves a seat from one to the next.',
             'cgs_automation' => 'Exactly what the daily job does on its own (which termination triggers are automatic, which are manual-only), and the key reminder/cancellation schedule.',
-            'cgs_insights_definitions' => 'How each number on the Insights page is calculated, and its assumptions (the forecast is a maximum, appeals extend candidacy, Awaiting Key Return is excluded, etc).',
+            'cgs_insights_definitions' => 'How each number on the WORKSTATION Insights page (seats, keys, release forecast) is calculated; the candidacy Insights page is cand_cgs_insights_guide. and its assumptions (the forecast is a maximum, appeals extend candidacy, Awaiting Key Return is excluded, etc).',
             'cgs_assistant_scope' => 'What this assistant itself can and cannot do: read-only, no names in questions, links instead of actions.',
         ];
     }
