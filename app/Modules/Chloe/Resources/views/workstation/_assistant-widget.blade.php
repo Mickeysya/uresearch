@@ -8,24 +8,34 @@
     live only here.
 --}}
 @php
-    // $wsaStatic: pass a string to render the SAME widget as a "coming soon" placeholder (the candidacy pages do). It shows that
-    // one line, has no suggestions, no input and makes no request: the endpoint URLs are not even rendered.
+    // $wsaDomain: 'workstation' (default) or 'candidacy' -- the page only gives the assistant a PRIOR (that domain's entries first and its own suggested questions);
+    // it is the same assistant, endpoint and rules either way. $wsaStatic is the old "coming soon" mode and is no longer used by any page.
     $wsaStatic = $wsaStatic ?? null;
-    $wsaName = $wsaStatic ? 'Study Candidacy Assistant' : 'Workstation Assistant';
-    $wsaRole = auth()->check() ? ($wsaStatic ? 'static' : \App\Modules\Chloe\Assistant\Pipeline::normalizeRole(auth()->user()->role)) : null;
+    $wsaDomain = ($wsaDomain ?? 'workstation') === 'candidacy' ? 'candidacy' : 'workstation';
+    $wsaName = $wsaDomain === 'candidacy' ? 'Study Candidacy Assistant' : 'Workstation Assistant';
+    $wsaRole = auth()->check() ? ($wsaStatic ? 'static' : \App\Modules\Chloe\Assistant\AssistantRoles::roleFor(auth()->user())) : null;
 @endphp
 @if ($wsaRole !== null)
     @php
-        $wsaIsCgs = $wsaRole === 'cgs';
-        $wsaFirstMessage = $wsaIsCgs
-            ? "Hi! I can answer questions about seats, locker keys and workstation rules. I can't make changes, but I can link you to the right page."
-            : 'Hi! I can help with workstations, locker keys and the Term of Use. Choose a question or type your own.';
-        $wsaHint = $wsaIsCgs
-            ? "Search by Student ID or seat number. Names aren't supported."
-            : "Guidance only. I can't make changes.";
-        $wsaGreeting = $wsaIsCgs
-            ? 'Hi! Ask me about seats, keys or the rules.'
-            : 'Hi! Questions about seats or your locker key?';
+        $wsaIsCgs = in_array($wsaRole, ['cgs', 'cgs_approver'], true);
+
+        if ($wsaDomain === 'candidacy') {
+            [$wsaFirstMessage, $wsaHint, $wsaGreeting] = match (true) {
+                $wsaIsCgs => ["Hi! I can answer questions about appeals, expiring candidacies, reminders and the dismissal list. I can't make changes, but I can link you to the right page.", "Ask about counts and steps. Names aren't supported, and I can't approve, export or dismiss.", 'Hi! Ask me about appeals, expiries or dismissals.'],
+                $wsaRole === 'approver' => ["Hi! I can tell you how many appeals wait for you, explain your step and the rules. I can't approve or return an appeal for you.", "Guidance only. I can't make changes.", 'Hi! Questions about your appeals?'],
+                default => ["Hi! I can tell you when your candidacy expires, how many extension months you have left, where your appeal is and how appeals work. Choose a question or type your own.", "Guidance only. I can't make changes or predict a decision.", 'Hi! Questions about your candidacy or appeal?'],
+            };
+        } else {
+            $wsaFirstMessage = $wsaIsCgs
+                ? "Hi! I can answer questions about seats, locker keys and workstation rules. I can't make changes, but I can link you to the right page."
+                : 'Hi! I can help with workstations, locker keys and the Term of Use. Choose a question or type your own.';
+            $wsaHint = $wsaIsCgs
+                ? "Search by Student ID or seat number. Names aren't supported."
+                : "Guidance only. I can't make changes.";
+            $wsaGreeting = $wsaIsCgs
+                ? 'Hi! Ask me about seats, keys or the rules.'
+                : 'Hi! Questions about seats or your locker key?';
+        }
 
         if ($wsaStatic) {
             $wsaFirstMessage = $wsaStatic;
@@ -36,6 +46,7 @@
     <div
         id="wsa-root"
         data-role="{{ $wsaRole }}"
+        data-domain="{{ $wsaDomain }}"
         data-csrf="{{ csrf_token() }}"
         data-char-limit="{{ (int) config('assistant.max_question_length', 300) }}"
         data-recent-turns="{{ (int) config('assistant.recent_turns', 5) }}"
@@ -530,6 +541,7 @@
             var firstMessage = root.getAttribute('data-first-message');
             // Static (coming soon) mode: one fixed line, nothing to ask, and no request is ever made.
             var isStatic = root.getAttribute('data-static') === '1';
+            var wsaDomain = root.getAttribute('data-domain') || 'workstation';
             if (isStatic) { input.disabled = true; input.placeholder = 'Coming soon'; sendBtn.disabled = true; }
 
             // PART 2 #8: conversation lives only in this closure's memory --
@@ -733,7 +745,7 @@
                 if (isStatic) return Promise.resolve([]);
                 if (suggestionsCache) return Promise.resolve(suggestionsCache);
 
-                return fetch(suggestionsUrl, {
+                return fetch(suggestionsUrl + (wsaDomain === 'candidacy' ? (suggestionsUrl.indexOf('?') === -1 ? '?' : '&') + 'domain=candidacy' : ''), {
                     headers: { Accept: 'application/json' },
                     credentials: 'same-origin',
                 }).then(function (res) {
@@ -791,7 +803,7 @@
                             'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': csrfToken,
                         },
-                        body: JSON.stringify({ message: text, recent: recentUserQuestions.slice(0, -1) }),
+                        body: JSON.stringify({ message: text, recent: recentUserQuestions.slice(0, -1), domain: wsaDomain }),
                     });
                 });
             }

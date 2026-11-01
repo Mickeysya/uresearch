@@ -53,5 +53,5 @@
     </div>
     <div class="wsi-tooltip" id="wsi-tooltip" role="tooltip" hidden></div>
     <script src="{{ asset('js/chloe-candidacy-insights.js') }}?v=1" defer></script>
-    @include('chloe::workstation._assistant-widget', ['wsaStatic' => 'The Study Candidacy assistant is coming soon.'])
+    @include('chloe::workstation._assistant-widget', ['wsaDomain' => 'candidacy'])
 @endsection

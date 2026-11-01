@@ -198,10 +198,10 @@ class CandidacyDepartmentRosterTest extends TestCase
         $this->assertStringContainsString('<optgroup label="Faculty of Science, Management &amp; Computing">', $this->actingAs($this->chairUser)->get(route('candidacy.portal.queue'))->getContent()); // once-escaped attribute
     }
 
-    public function test_a_name_with_an_ampersand_is_shown_correctly_in_the_assistant_placeholder_e_mail_and_bell(): void
+    public function test_a_name_with_an_ampersand_is_shown_correctly_in_the_assistant_widget_e_mail_and_bell(): void
     {
         $html = $this->actingAs($this->student)->get(route('candidacy.status'))->getContent();
-        $this->assertStringContainsString('data-first-message="The Study Candidacy assistant is coming soon."', $html); // the placeholder shows no department; it must simply stay clean
+        $this->assertStringContainsString('data-domain="candidacy"', $html); // the live widget shows no department; the page must simply stay clean
         $this->assertStringNotContainsString('&amp;amp;', $html);
 
         $appeal = $this->submitted();

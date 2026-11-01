@@ -296,17 +296,18 @@ class CandidacyStudentPagesTest extends TestCase
         }
     }
 
-    public function test_the_assistant_placeholder_is_static_and_makes_no_request(): void
+    public function test_the_candidacy_pages_use_the_live_assistant_with_the_candidacy_prior(): void
     {
         $html = $this->actingAs($this->student)->get(route('candidacy.status'))->getContent();
 
-        $this->assertStringContainsString('The Study Candidacy assistant is coming soon.', $html);
         $this->assertStringContainsString('id="wsa-root"', $html);
-        $this->assertStringContainsString('data-static="1"', $html);
-        $this->assertStringNotContainsString('assistant/ask', $html);
-        $this->assertStringNotContainsString('assistant/suggestion', $html);
-        $this->assertStringNotContainsString('data-ask-url="', $html);
-        $this->assertStringNotContainsString('data-suggestions-url="', $html);
+        $this->assertStringContainsString('data-domain="candidacy"', $html);
+        $this->assertStringContainsString('data-role="student"', $html);
+        $this->assertStringNotContainsString('data-static="1"', $html);
+        $this->assertStringContainsString('data-ask-url="', $html);
+        $this->assertStringContainsString('data-suggestions-url="', $html);
+        $this->assertStringContainsString('Study Candidacy Assistant', $html);
+        $this->assertStringNotContainsString('data-first-message="The Study Candidacy assistant is coming soon', $html);
         $this->assertStringNotContainsString('localStorage', file_get_contents(public_path('js/chloe-candidacy.js')));
     }
 
@@ -314,7 +315,7 @@ class CandidacyStudentPagesTest extends TestCase
     {
         $this->actingAs($this->student);
         $ws = view('chloe::workstation._assistant-widget')->render();
-        $ca = view('chloe::workstation._assistant-widget', ['wsaStatic' => 'The Study Candidacy assistant is coming soon.'])->render();
+        $ca = view('chloe::workstation._assistant-widget', ['wsaDomain' => 'candidacy'])->render();
         $grab = fn (string $html, string $re) => preg_match($re, $html, $m) ? preg_replace('/\s+/', ' ', $m[0]) : null;
 
         $this->assertNotNull($grab($ws, '~<style>.*?</style>~s'));
@@ -357,7 +358,7 @@ class CandidacyStudentPagesTest extends TestCase
 
         $this->actingAs($this->cgsUser)->get(route('candidacy.cgs.operations'))->assertOk()
             ->assertSee('SCA-22001001-01')->assertSee(route('candidacy.appeals.show', $appeal), false)
-            ->assertSee('The Study Candidacy assistant is coming soon.')->assertDontSee('Students Near Candidacy Expiry');
-        $this->actingAs($this->cgsUser)->get(route('candidacy.cgs.dismissals'))->assertOk()->assertSee('The Study Candidacy assistant is coming soon.');
+            ->assertSee('data-domain="candidacy"', false)->assertDontSee('Students Near Candidacy Expiry');
+        $this->actingAs($this->cgsUser)->get(route('candidacy.cgs.dismissals'))->assertOk()->assertSee('data-domain="candidacy"', false);
     }
 }

@@ -34,5 +34,5 @@
             @include('chloe::candidacy.cgs._dismissals_region')
         </div>
     </div>
-    @include('chloe::workstation._assistant-widget', ['wsaStatic' => 'The Study Candidacy assistant is coming soon.'])
+    @include('chloe::workstation._assistant-widget', ['wsaDomain' => 'candidacy'])
 @endsection
