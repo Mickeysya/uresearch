@@ -136,7 +136,7 @@ Backfill on the development database (2026-11-01): 1 department, 4 staff profile
 * `CandidacySignatureService`: GD decode, min 200x60, resize into 600x200, re-encode PNG, generated name on the private `local` disk;
   decisions copy the image (snapshot). Demo placeholder drawn with GD.
 * `CandidacyAppealNotice` + `config('candidacy.mail')` implement the notification matrix (mail + bell; demo students mail only).
-* `candidacy:close-expired-appeals [--dry-run]`, scheduled 07:20 Asia/Kuala_Lumpur from `ModuleProvider` (routes/console.php is shared).
+* `candidacy:close-expired-appeals [--dry-run]`, scheduled 07:30 Asia/Kuala_Lumpur from `ModuleProvider` (routes/console.php is shared).
 * `CandidacyMemoService::generate()` is the Phase 3 hook (returns null until then, so approvals work without a memo).
 * Dean rejection also sets `study_candidacies.last_rejection_at`, which keeps the dismissal generator working ("appeal rejected").
 * Tests: `CandidacyAppealServiceTest` (33). Legacy reminder / dismissal / old appeal tests still pass untouched.

@@ -8,7 +8,9 @@ use App\Modules\Chloe\Models\WorkstationTerminationNotice;
 use App\Modules\Chloe\Notifications\LockerKeyNotice;
 use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Chloe\Support\WorkstationTerminationTriggers;
+use App\Modules\Chloe\Support\ScheduledDelivery;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * PART 3's daily job -- replaces the old 14/7/3-day Release Notice pipeline
@@ -37,17 +39,42 @@ use Illuminate\Console\Command;
  */
 class ProcessWorkstationReleases extends Command
 {
-    protected $signature = 'workstation:process-releases {--dry-run : Print what would happen; change nothing}';
+    protected $signature = 'workstation:process-releases {--dry-run : Print what would happen; change nothing} {--only= : refresh (07:30: terminations and releases) or reminders (08:00: key return reminders)}';
 
     protected $description = 'Start termination notices for automatic triggers, auto-release seats whose vacate-by day has ended, and send locker key return reminders';
 
     public function handle(WorkstationAllocator $allocator): int
     {
         $dryRun = (bool) $this->option('dry-run');
+        $only = $this->option('only') ?: null;
 
-        $started = $this->startTerminations($allocator, $dryRun);
-        $released = $this->releaseEndedNotices($allocator, $dryRun);
-        $reminded = $dryRun ? 0 : $this->sendReturnReminders();
+        // 07:30 REFRESH changes data only (its termination notice is held until 08:00); 08:00 REMINDERS sends the key return reminders.
+        // The old name with no --only does both in that order, all inside the refresh context, so anything it would send before 08:00 is queued for 08:00.
+        $refresh = $only === null || $only === 'refresh';
+        $reminders = $only === null || $only === 'reminders';
+
+        $started = $released = $reminded = 0;
+
+        if ($refresh) {
+            ScheduledDelivery::refreshing(function () use ($allocator, $dryRun, &$started, &$released) {
+                $started = $this->startTerminations($allocator, $dryRun);
+                $released = $this->releaseEndedNotices($allocator, $dryRun);
+            });
+        }
+
+        if ($reminders && ! $dryRun) {
+            $lock = Cache::lock('workstation-return-reminders', 600);
+
+            if ($lock->block(30)) {
+                try {
+                    $reminded = $only === null
+                        ? ScheduledDelivery::refreshing(fn () => $this->sendReturnReminders())
+                        : $this->sendReturnReminders();
+                } finally {
+                    $lock->release();
+                }
+            }
+        }
 
         $prefix = $dryRun ? '[DRY RUN] ' : '';
         $this->info("{$prefix}Terminations started {$started}, seats released {$released}, return reminders {$reminded}.");
@@ -127,7 +154,7 @@ class ProcessWorkstationReleases extends Command
                 }
 
                 $lockerKey->update(['return_reminder_sent_at' => now()]);
-                $lockerKey->student->notify(new LockerKeyNotice($lockerKey, LockerKeyNotice::RETURN_REMINDER));
+                $lockerKey->student->notify(ScheduledDelivery::apply(new LockerKeyNotice($lockerKey, LockerKeyNotice::RETURN_REMINDER)));
                 $sent++;
             });
 

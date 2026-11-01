@@ -219,4 +219,29 @@ Pagination: every candidacy list uses one bar (`candidacy/wca/_pagination.blade.
 
 Departments, roster, department auto-fill, the single Dean and the one My Signature page are described in `docs/candidacy-appeal-inventory.md` section 16.
 
-Reminders (`candidacy:send-reminders`, 07:25), the student status reader and the Dean's two-step rejection are described in `docs/candidacy-appeal-inventory.md` section 17; `candidacy:remind` is deprecated and does nothing.
+Reminders (`candidacy:send-reminders`, 08:00), the student status reader and the Dean's two-step rejection are described in `docs/candidacy-appeal-inventory.md` section 17; `candidacy:remind` is deprecated and does nothing.
+
+## Daily schedule (Asia/Kuala_Lumpur)
+
+Two moments each morning. **07:30 REFRESH** changes data only; **08:00 REMINDERS** sends e-mail and bell notices. Every notice that a scheduled job owes a student goes out at 08:00:
+the state change is made at 07:30 and its notice is queued with a delay until 08:00 the same day (`Support\ScheduledDelivery`). A run after 08:00 (manual, or a late scheduler) delivers at once;
+page loads and people's own actions are never delayed. Running a job twice sends nothing twice (`reminder_sent_at`, `return_reminder_sent_at`, `candidacy_reminder_log`).
+
+| Time | Command (defined in `ModuleProvider`) | What it does |
+|---|---|---|
+| 07:30 | `candidacy:close-expired-appeals` | closes returned appeals whose candidacy expired (student notice held until 08:00) |
+| 07:30 | `workstation:refresh-daily` | key collection auto-cancel (day 7), vacate-period auto-release, candidacy-expiry / dismissal termination triggers (termination notice held until 08:00) |
+| 08:00 | `workstation:send-reminders` | key collection reminder (day 3) and key return reminder |
+| 08:00 | `candidacy:send-reminders` | the 3 / 2 / 1 month candidacy expiry reminders |
+
+Older names still work: `workstation:process-releases` and `workstation:remind-locker-keys` run the refresh part and then the reminders part (inside the refresh context, so nothing they send
+before 08:00 goes out early); `candidacy:remind` is a deprecated no-op. `routes/console.php` is shared and still lists the older entries (07:00 `candidacy:remind`, 07:30
+`workstation:process-releases`, 08:00 `workstation:remind-locker-keys`); they are harmless duplicates and the owner of that file can delete them. Other modules' own jobs (e.g. `rpd:remind`,
+`supervision:remind-stalled`) are not ours.
+
+## Programme catalogue
+
+`config/candidacy.php` → `programmes` is the single list of programme names, each with a level (`coursework`, `master_research`, `phd`) and a department. `CandidacyDepartmentResolver` maps an exact
+catalogue name to its department first; text that is not in the catalogue (real students) falls back to the keyword patterns and then a hash. Department names: Chemical Engineering; Civil &
+Environmental Engineering; Electrical & Electronic Engineering; Mechanical Engineering; Petroleum Engineering; Geoscience; Computer & Information Sciences; Fundamental & Applied Sciences;
+Management & Humanities. **Demo programme text comes from the seeders** (`workstation:demo-seed`), never typed by hand, so the demo-clear commands and re-seeding never bring old text back.

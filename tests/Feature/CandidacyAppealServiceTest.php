@@ -457,7 +457,7 @@ class CandidacyAppealServiceTest extends TestCase
             ->first(fn ($e) => str_contains($e->command, 'candidacy:close-expired-appeals'));
 
         $this->assertNotNull($event);
-        $this->assertSame('20 7 * * *', $event->expression);
+        $this->assertSame('30 7 * * *', $event->expression);
         $this->assertSame('Asia/Kuala_Lumpur', (string) $event->timezone);
     }
 

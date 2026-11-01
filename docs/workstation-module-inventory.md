@@ -187,7 +187,7 @@ these same notifications, it was not traced in this pass.
 | `workstation:demo-seed` | Give untracked Occupied seats a demo student; seed 3 unreturned-key seats | — |
 | `workstation:demo-clear` | Remove every demo profile and their requests/keys/History rows | — |
 | `workstation:demo-login` | Create/reset the "Chloe Ching" test student (`chloe_<matric>@utp.edu.my`) | `--gender=`, `--expiry-date=` |
-| `candidacy:close-expired-appeals [--dry-run]` | Close returned appeals whose candidacy expired (daily 07:20 Asia/Kuala_Lumpur) | — |
+| `candidacy:close-expired-appeals [--dry-run]` | Close returned appeals whose candidacy expired (daily 07:30 Asia/Kuala_Lumpur) | — |
 | `candidacy:verify-memo {appeal_no}` | Check the verification codes of an approved appeal memo | — |
 | `candidacy:demo-seed` / `candidacy:demo-clear` | Demo departments, staff and appeals (see candidacy-appeal-inventory.md) | — |
 | `candidacy:remind` | Send the next due monthly candidacy-expiry reminder | — |
@@ -461,3 +461,21 @@ id (department by hash, level kept from the earlier lists, so each student keeps
 termination scenario are untouched. The two live demo accounts (`student@utp.edu.my`, `chloe_26005007@utp.edu.my`) carry "Master of Science in Information Systems (Full-Time)". The History
 snapshot of the programme (`workstation_histories.student_programme`) is refreshed for demo students and those two accounts only. Note: re-running `workstation:demo-seed` on a database in use also
 re-bases the demo key dates and termination-notice dates to today, as it always did.
+
+## Daily schedule (Asia/Kuala_Lumpur)
+
+Two moments each morning. **07:30 REFRESH** changes data only; **08:00 REMINDERS** sends e-mail and bell notices. Every notice that a scheduled job owes a student goes out at 08:00:
+the state change is made at 07:30 and its notice is queued with a delay until 08:00 the same day (`Support\ScheduledDelivery`). A run after 08:00 (manual, or a late scheduler) delivers at once;
+page loads and people's own actions are never delayed. Running a job twice sends nothing twice (`reminder_sent_at`, `return_reminder_sent_at`, `candidacy_reminder_log`).
+
+| Time | Command (defined in `ModuleProvider`) | What it does |
+|---|---|---|
+| 07:30 | `candidacy:close-expired-appeals` | closes returned appeals whose candidacy expired (student notice held until 08:00) |
+| 07:30 | `workstation:refresh-daily` | key collection auto-cancel (day 7), vacate-period auto-release, candidacy-expiry / dismissal termination triggers (termination notice held until 08:00) |
+| 08:00 | `workstation:send-reminders` | key collection reminder (day 3) and key return reminder |
+| 08:00 | `candidacy:send-reminders` | the 3 / 2 / 1 month candidacy expiry reminders |
+
+Older names still work: `workstation:process-releases` and `workstation:remind-locker-keys` run the refresh part and then the reminders part (inside the refresh context, so nothing they send
+before 08:00 goes out early); `candidacy:remind` is a deprecated no-op. `routes/console.php` is shared and still lists the older entries (07:00 `candidacy:remind`, 07:30
+`workstation:process-releases`, 08:00 `workstation:remind-locker-keys`); they are harmless duplicates and the owner of that file can delete them. Other modules' own jobs (e.g. `rpd:remind`,
+`supervision:remind-stalled`) are not ours.

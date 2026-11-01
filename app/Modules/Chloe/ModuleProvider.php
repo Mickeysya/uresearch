@@ -13,6 +13,8 @@ use App\Modules\Chloe\Console\Commands\CandidacyDemoSoftbound;
 use App\Modules\Chloe\Console\Commands\CheckCandidacyAllowance;
 use App\Modules\Chloe\Console\Commands\CheckCandidacyStatusSource;
 use App\Modules\Chloe\Console\Commands\CloseExpiredCandidacyAppeals;
+use App\Modules\Chloe\Console\Commands\WorkstationRefreshDaily;
+use App\Modules\Chloe\Console\Commands\WorkstationSendRemindersDaily;
 use App\Modules\Chloe\Console\Commands\AssistantCatalogue;
 use App\Modules\Chloe\Console\Commands\AssistantCheck;
 use App\Modules\Chloe\Console\Commands\AssistantEvaluate;
@@ -91,16 +93,21 @@ class ModuleProvider extends ServiceProvider
                 ->by('live:'.($request->user()?->id ?: $request->ip()));
         });
 
-        // routes/console.php is a shared file, so this module schedules its own job here.
+        // routes/console.php is a shared file, so this module schedules its own jobs here (Asia/Kuala_Lumpur):
+        //   07:30 REFRESH   data only -- appeals closed, keys auto-cancelled, vacate periods released, terminations started
+        //   08:00 REMINDERS every e-mail / bell notice a scheduled job sends to a student (the refresh's notices are queued for 08:00)
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
-            $schedule->command('candidacy:close-expired-appeals')->dailyAt('07:20')->timezone('Asia/Kuala_Lumpur')->withoutOverlapping();
-            // after the close job, so a student whose returned appeal was just closed is not reminded about it
-            $schedule->command('candidacy:send-reminders')->dailyAt('07:25')->timezone('Asia/Kuala_Lumpur')->withoutOverlapping();
+            $schedule->command('candidacy:close-expired-appeals')->dailyAt('07:30')->timezone('Asia/Kuala_Lumpur')->withoutOverlapping();
+            $schedule->command('workstation:refresh-daily')->dailyAt('07:30')->timezone('Asia/Kuala_Lumpur')->withoutOverlapping();
+            $schedule->command('workstation:send-reminders')->dailyAt('08:00')->timezone('Asia/Kuala_Lumpur')->withoutOverlapping();
+            $schedule->command('candidacy:send-reminders')->dailyAt('08:00')->timezone('Asia/Kuala_Lumpur')->withoutOverlapping();
         });
 
         if ($this->app->runningInConsole()) {
             $this->commands([
                 RemindOverdueLockerKeys::class,
+                WorkstationRefreshDaily::class,
+                WorkstationSendRemindersDaily::class,
                 SendCandidacyReminders::class,
                 SendCandidacyExpiryReminders::class,
                 GenerateCandidacyDismissals::class,

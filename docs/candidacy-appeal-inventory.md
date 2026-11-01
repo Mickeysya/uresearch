@@ -147,7 +147,7 @@ config change (it keeps the old config in memory).
 
 | Command | Purpose |
 |---|---|
-| `candidacy:close-expired-appeals [--dry-run]` | closes returned appeals whose candidacy expired; idempotent; **daily 07:20 Asia/Kuala_Lumpur**, registered from `ModuleProvider` (`routes/console.php` is shared) |
+| `candidacy:close-expired-appeals [--dry-run]` | closes returned appeals whose candidacy expired; idempotent; **daily 07:30 Asia/Kuala_Lumpur**, registered from `ModuleProvider` (`routes/console.php` is shared) |
 | `candidacy:verify-memo {appeal_no}` | OK / MISMATCH per stage |
 | `candidacy:check-allowance` | `extension_months_used` and the expiry date against the approved appeals |
 | `candidacy:backfill-appeals` | one-time, idempotent import of the legacy engine appeal(s) |
@@ -310,7 +310,7 @@ one of our demo students; 3 none = not submitted. A real student's own candidacy
 Any screen that shows a value resolved from the overlay says "Demo data" (the "Student candidacy" card of the appeal page for staff; the dry-run output). Commands: `candidacy:demo-softbound <studentID>` (writes only the overlay, demo students only),
 `candidacy:check-status-source` (counts shared / overlay / candidacy record / none). The overlay is filled by `candidacy:demo-seed` and cleared by `candidacy:demo-clear`. No page lets CGS set Softbound.
 
-**Expiry reminders** (`Support\CandidacyReminderEngine`, command `candidacy:send-reminders [--dry-run] [--date=YYYY-MM-DD]`, daily **07:25 Asia/Kuala_Lumpur**, after `candidacy:close-expired-appeals` at 07:20).
+**Expiry reminders** (`Support\CandidacyReminderEngine`, command `candidacy:send-reminders [--dry-run] [--date=YYYY-MM-DD]`, daily **08:00 Asia/Kuala_Lumpur**, after `candidacy:close-expired-appeals` at 07:20).
 - Eligible: research students (Full-Time or Part-Time; Coursework excluded, `candidacy.reminders.programme_types`), with a current expiry date, today on or before it, and no Softbound submitted / completed / dismissed / inactive-or-deferred.
 - An appeal in review (with supervisor, chair, CGS or dean) **pauses** reminders; they resume when the appeal is returned (variant C), rejected or approved. A pause records nothing.
 - Milestones: expiry date minus 3, 2 and 1 calendar months, no month overflow (31 May minus 3 months = the last day of February). A milestone is sent by the first run on or after its date. If several are due and unsent, ONLY the latest is sent and the earlier ones are recorded as skipped.
@@ -322,3 +322,21 @@ Any screen that shows a value resolved from the overlay says "Demo data" (the "S
 - The old `candidacy:remind` (still scheduled at 07:00 by the shared `routes/console.php`, which is not ours to edit) is now a no-op, so nothing is sent twice. No reminder log page and no 3-day/1-day reminders yet (section 13).
 - Walkthrough with exact commands and real output: `docs/candidacy-reminder-demo.md`. Items to confirm with CGS: `docs/candidacy-cgs-confirmation-list.md`.
 - Known gap (shared file): the shared notification feed only follows `application_id`, so clicking the reminder in the bell stays on the notification page; the link is in the notification data (`url`) and in the e-mail.
+
+## Daily schedule (Asia/Kuala_Lumpur)
+
+Two moments each morning. **07:30 REFRESH** changes data only; **08:00 REMINDERS** sends e-mail and bell notices. Every notice that a scheduled job owes a student goes out at 08:00:
+the state change is made at 07:30 and its notice is queued with a delay until 08:00 the same day (`Support\ScheduledDelivery`). A run after 08:00 (manual, or a late scheduler) delivers at once;
+page loads and people's own actions are never delayed. Running a job twice sends nothing twice (`reminder_sent_at`, `return_reminder_sent_at`, `candidacy_reminder_log`).
+
+| Time | Command (defined in `ModuleProvider`) | What it does |
+|---|---|---|
+| 07:30 | `candidacy:close-expired-appeals` | closes returned appeals whose candidacy expired (student notice held until 08:00) |
+| 07:30 | `workstation:refresh-daily` | key collection auto-cancel (day 7), vacate-period auto-release, candidacy-expiry / dismissal termination triggers (termination notice held until 08:00) |
+| 08:00 | `workstation:send-reminders` | key collection reminder (day 3) and key return reminder |
+| 08:00 | `candidacy:send-reminders` | the 3 / 2 / 1 month candidacy expiry reminders |
+
+Older names still work: `workstation:process-releases` and `workstation:remind-locker-keys` run the refresh part and then the reminders part (inside the refresh context, so nothing they send
+before 08:00 goes out early); `candidacy:remind` is a deprecated no-op. `routes/console.php` is shared and still lists the older entries (07:00 `candidacy:remind`, 07:30
+`workstation:process-releases`, 08:00 `workstation:remind-locker-keys`); they are harmless duplicates and the owner of that file can delete them. Other modules' own jobs (e.g. `rpd:remind`,
+`supervision:remind-stalled`) are not ours.

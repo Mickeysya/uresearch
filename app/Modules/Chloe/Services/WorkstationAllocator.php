@@ -12,6 +12,7 @@ use App\Modules\Chloe\Models\WorkstationTerminationNotice;
 use App\Modules\Chloe\Notifications\WorkstationSelectionConfirmed;
 use App\Modules\Chloe\Notifications\WorkstationSelectionPendingConfirmation;
 use App\Modules\Chloe\Notifications\WorkstationStatusNotice;
+use App\Modules\Chloe\Support\ScheduledDelivery;
 use App\Modules\Chloe\Support\WorkingDays;
 use App\Modules\Core\Models\User;
 use Illuminate\Support\Carbon;
@@ -528,12 +529,12 @@ class WorkstationAllocator
 
         $occupant = $request->occupant();
 
-        $occupant?->notify(new WorkstationStatusNotice($request->workstation, WorkstationStatusNotice::TERMINATION_NOTICE, [
+        $occupant?->notify(ScheduledDelivery::apply(new WorkstationStatusNotice($request->workstation, WorkstationStatusNotice::TERMINATION_NOTICE, [
             'reason' => $notice->reason,
             'notice_date' => $notice->notice_date->format('j M Y'),
             'vacate_by_date' => $notice->vacate_by_date->format('j M Y'),
             'terms_link' => route('workstation.terms'),
-        ], $occupant?->name));
+        ], $occupant?->name)));
 
         return $notice;
     }

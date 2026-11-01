@@ -2,6 +2,7 @@
 
 namespace App\Modules\Chloe\Models;
 
+use App\Modules\Chloe\Support\ScheduledDelivery;
 use App\Modules\Chloe\Notifications\LockerKeyNotice;
 use App\Modules\Chloe\Support\StudentDirectory;
 use App\Modules\Chloe\Support\StudentIdentity;
@@ -121,17 +122,19 @@ class LockerKey extends Model
      * looking at). Returns what happened, so a caller tallying totals
      * doesn't need its own copy of the thresholds to know.
      *
+     * `$only` limits the sweep for the scheduled jobs: 'cancel' (07:30 refresh) or 'remind' (08:00 reminders); null does both, as the page load does.
+     *
      * @return 'cancelled'|'reminded'|null
      */
-    public function processIfOverdue(): ?string
+    public function processIfOverdue(?string $only = null): ?string
     {
         if ($this->status !== self::STATUS_REQUESTED || ! $this->student) {
             return null;
         }
 
-        if ($this->isPastCollectionWindow()) {
+        if ($only !== 'remind' && $this->isPastCollectionWindow()) {
             $this->update(['status' => self::STATUS_CANCELLED]);
-            $this->student->notify(new LockerKeyNotice($this, LockerKeyNotice::CANCELLED));
+            $this->student->notify(ScheduledDelivery::apply(new LockerKeyNotice($this, LockerKeyNotice::CANCELLED)));
 
             WorkstationHistory::record(
                 seat: $this->workstationRequest->workstation,
@@ -146,11 +149,15 @@ class LockerKey extends Model
             return 'cancelled';
         }
 
+        if ($only === 'cancel') {
+            return null;
+        }
+
         $reminderDue = $this->requested_at->copy()->addDays(self::GRACE_DAYS)->isPast();
 
         if ($reminderDue && ! $this->reminder_sent_at) {
             $this->update(['reminder_sent_at' => now(), 'reminder_count' => $this->reminder_count + 1]);
-            $this->student->notify(new LockerKeyNotice($this, LockerKeyNotice::REMINDER));
+            $this->student->notify(ScheduledDelivery::apply(new LockerKeyNotice($this, LockerKeyNotice::REMINDER)));
 
             return 'reminded';
         }

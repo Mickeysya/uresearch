@@ -627,7 +627,7 @@ class CandidacyAppealService
         }
 
         $notice = new CandidacyAppealNotice($template, $this->vars($appeal, $extra), $approved, null, $memo ? $appeal->memo_path : null, $memo ? $appeal->memo_filename : null);
-        $identity->notify($notice);
+        $identity->notify(\App\Modules\Chloe\Support\ScheduledDelivery::apply($notice));
     }
 
     /** Everyone named on the appeal and the CGS recipients, except nobody twice. */

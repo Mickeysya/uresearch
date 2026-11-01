@@ -6,7 +6,7 @@ use Illuminate\Console\Command;
 
 /**
  * DEPRECATED, kept only because the shared routes/console.php still schedules `candidacy:remind` at 07:00 and a shared file is not ours to edit.
- * It sends NOTHING: reminders are now sent by candidacy:send-reminders (07:25), which de-duplicates and follows the Handbook rules. Running both
+ * It sends NOTHING: reminders are now sent by candidacy:send-reminders (08:00), which de-duplicates and follows the Handbook rules. Running both
  * would send twice.
  */
 class SendCandidacyReminders extends Command
@@ -17,7 +17,7 @@ class SendCandidacyReminders extends Command
 
     public function handle(): int
     {
-        $this->line('candidacy:remind is deprecated and sends nothing. Reminders are sent by candidacy:send-reminders (daily 07:25).');
+        $this->line('candidacy:remind is deprecated and sends nothing. Reminders are sent by candidacy:send-reminders (daily 08:00).');
 
         return self::SUCCESS;
     }

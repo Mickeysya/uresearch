@@ -352,8 +352,8 @@ class CandidacyReminderEngineTest extends TestCase
         $close = $events->first(fn ($e) => str_contains($e->command, 'candidacy:close-expired-appeals'));
         $remind = $events->first(fn ($e) => str_contains($e->command, 'candidacy:send-reminders'));
 
-        $this->assertSame('20 7 * * *', $close->expression);
-        $this->assertSame('25 7 * * *', $remind->expression);
+        $this->assertSame('30 7 * * *', $close->expression);
+        $this->assertSame('0 8 * * *', $remind->expression);
         $this->assertSame('Asia/Kuala_Lumpur', (string) $remind->timezone);
     }
 

@@ -6,7 +6,7 @@ use App\Modules\Chloe\Support\CandidacyReminderEngine;
 use Illuminate\Console\Command;
 
 /**
- * Daily 07:25 Asia/Kuala_Lumpur (after candidacy:close-expired-appeals at 07:20), scheduled from the module provider.
+ * Daily 08:00 Asia/Kuala_Lumpur (the REMINDERS moment; candidacy:close-expired-appeals runs at 07:30), scheduled from the module provider.
  * --dry-run lists who would get which milestone and variant and writes nothing. --date=YYYY-MM-DD pretends today is that day; it is allowed only
  * with --dry-run or in the local environment, so it can never change what a real run sends.
  */

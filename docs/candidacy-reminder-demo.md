@@ -228,3 +228,21 @@ and then `php artisan candidacy:demo-seed` again; the log rows of demo students 
 `php artisan candidacy:demo-softbound 21010069` marks that demo student "Softbound submitted today" in the demo overlay (add `--date=`, `--completed`, `--inactive`, or `--remove`).
 `php artisan candidacy:check-status-source` counts how many students resolve from the shared source, the demo overlay, the candidacy record, or nowhere.
 The overlay never applies to a real student, and the shared Softbound table is not read until its name and fields are filled in `config/candidacy.php` (`status_source_table`).
+
+## Daily schedule (Asia/Kuala_Lumpur)
+
+Two moments each morning. **07:30 REFRESH** changes data only; **08:00 REMINDERS** sends e-mail and bell notices. Every notice that a scheduled job owes a student goes out at 08:00:
+the state change is made at 07:30 and its notice is queued with a delay until 08:00 the same day (`Support\ScheduledDelivery`). A run after 08:00 (manual, or a late scheduler) delivers at once;
+page loads and people's own actions are never delayed. Running a job twice sends nothing twice (`reminder_sent_at`, `return_reminder_sent_at`, `candidacy_reminder_log`).
+
+| Time | Command (defined in `ModuleProvider`) | What it does |
+|---|---|---|
+| 07:30 | `candidacy:close-expired-appeals` | closes returned appeals whose candidacy expired (student notice held until 08:00) |
+| 07:30 | `workstation:refresh-daily` | key collection auto-cancel (day 7), vacate-period auto-release, candidacy-expiry / dismissal termination triggers (termination notice held until 08:00) |
+| 08:00 | `workstation:send-reminders` | key collection reminder (day 3) and key return reminder |
+| 08:00 | `candidacy:send-reminders` | the 3 / 2 / 1 month candidacy expiry reminders |
+
+Older names still work: `workstation:process-releases` and `workstation:remind-locker-keys` run the refresh part and then the reminders part (inside the refresh context, so nothing they send
+before 08:00 goes out early); `candidacy:remind` is a deprecated no-op. `routes/console.php` is shared and still lists the older entries (07:00 `candidacy:remind`, 07:30
+`workstation:process-releases`, 08:00 `workstation:remind-locker-keys`); they are harmless duplicates and the owner of that file can delete them. Other modules' own jobs (e.g. `rpd:remind`,
+`supervision:remind-stalled`) are not ours.
