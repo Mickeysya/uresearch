@@ -205,10 +205,10 @@ class CandidacyAppealDataModelTest extends TestCase
 
         $this->assertCount(2, CandidacyStaffDirectory::lecturers($department));
         $this->assertSame($chair->id, CandidacyStaffDirectory::chair($department)->id);
-        $this->assertSame($dean->id, CandidacyStaffDirectory::dean($department)->id);
+        // a department has no Dean of its own: the single Dean is the account with the Dean role (see the next test)
     }
 
-    public function test_the_default_dean_applies_when_a_department_has_none(): void
+    public function test_the_single_dean_is_the_account_with_the_dean_role_whatever_the_department(): void
     {
         $department = CandidacyDepartment::create(['code' => 'X', 'name' => 'No Dean Dept']);
         $deanUser = $this->dean();

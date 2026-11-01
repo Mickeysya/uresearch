@@ -11,11 +11,11 @@
 @section('content')
     <div class="wca-page">
         @if ($mode === 'resubmit')
-            <x-core::page-header title="Resubmit Appeal {{ $appeal->appeal_no }}" subtitle="Revise the appeal and send it back." :back="route('candidacy.appeals.show', $appeal)" :back-history="false">
+            <x-core::page-header :title="'Resubmit Appeal '.$appeal->appeal_no" subtitle="Revise the appeal and send it back." :back="route('candidacy.appeals.show', $appeal)" :back-history="false">
                 <a href="{{ route('dashboard') }}" class="wca-home">Home</a>
             </x-core::page-header>
         @else
-            <x-core::page-header title="New Appeal" subtitle="Step {{ $step }} of 4: {{ $steps[$step] }}" :back="$step === 1 ? route('candidacy.status') : route('candidacy.appeals.draft', ['step' => $step - 1])" :back-history="false">
+            <x-core::page-header title="New Appeal" :subtitle="'Step '.$step.' of 4: '.$steps[$step]" :back="$step === 1 ? route('candidacy.status') : route('candidacy.appeals.draft', ['step' => $step - 1])" :back-history="false">
                 <a href="{{ route('dashboard') }}" class="wca-home">Home</a>
             </x-core::page-header>
         @endif

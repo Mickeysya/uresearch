@@ -12,6 +12,36 @@ return [
     // use the profile of the first user with role dean_pgr.
     'default_dean_profile' => env('CANDIDACY_DEFAULT_DEAN_PROFILE_ID') ? (int) env('CANDIDACY_DEFAULT_DEAN_PROFILE_ID') : null,
 
+    // The nine departments, with their faculty (display names are exact; codes are stored). Keyed by code.
+    'departments' => [
+        'CHE' => ['Chemical Engineering', 'Faculty of Engineering'],
+        'CEE' => ['Civil & Environmental Engineering', 'Faculty of Engineering'],
+        'EEE' => ['Electrical & Electronic Engineering', 'Faculty of Engineering'],
+        'MEC' => ['Mechanical Engineering', 'Faculty of Engineering'],
+        'PET' => ['Petroleum Engineering', 'Faculty of Engineering'],
+        'GEO' => ['Geoscience', 'Faculty of Engineering'],
+        'APS' => ['Applied Science', 'Faculty of Science, Management & Computing'],
+        'CIS' => ['Computer & Information Sciences', 'Faculty of Science, Management & Computing'],
+        'MHU' => ['Management and Humanities', 'Faculty of Science, Management & Computing'],
+    ],
+
+    // Department auto-fill: the first department whose pattern matches the programme text (case-insensitive) wins. A text that matches
+    // none is placed deterministically (hash of the student ID), so the result is stable. Order matters.
+    'programme_department_patterns' => [
+        'CHE' => ['/chemical/i'],
+        'CEE' => ['/civil/i', '/environmental/i'],
+        'EEE' => ['/electrical/i', '/electronic/i'],
+        'MEC' => ['/mechanical/i'],
+        'PET' => ['/petroleum/i'],
+        'GEO' => ['/\\bgeo/i'],
+        'CIS' => ['/computer/i', '/information/i', '/\\bIT\\b/', '/software/i'],
+        'APS' => ['/applied science/i', '/chemistry/i', '/physics/i', '/mathematics/i'],
+        'MHU' => ['/management/i', '/\\bMBA\\b/', '/humanities/i'],
+    ],
+
+    // These login accounts always belong to Computer & Information Sciences (the live demo accounts).
+    'cis_demo_accounts' => ['student@utp.edu.my', 'chloe_26005007@utp.edu.my'],
+
     // The CGS roles: the four CGS-team roles the Workstation module's CGS routes accept (Role::cgsTeam()), plus a role named "cgs".
     // They may open every appeal read-only and act at the CGS verification stage.
     'cgs_roles' => ['cgs', 'non_exec_cgs', 'senior_exec_cgs', 'manager_cgs', 'senior_director_cgs'],
@@ -85,10 +115,10 @@ return [
     'mail' => [
         'turn' => [
             'subject' => '{{appeal_no}}: appeal pending your action ({{stage}})',
-            'title' => 'Appeal {{appeal_no}} is pending your action at the {{stage}} step.',
+            'title' => 'Appeal {{appeal_no}} ({{department}}) is pending your action at the {{stage}} step.',
             'lines' => [
                 'Dear colleague,',
-                'The Study Candidacy Appeal {{appeal_no}} of {{student_name}} requests an extension of {{requested_months}} month(s) and is now pending your action ({{stage}}).',
+                'The Study Candidacy Appeal {{appeal_no}} of {{student_name}} ({{department}}) requests an extension of {{requested_months}} month(s) and is now pending your action ({{stage}}).',
                 'Please open the appeal to review it: {{link}}',
             ],
         ],

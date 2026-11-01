@@ -244,3 +244,4 @@
     .cgs-pagination.is-compact a, .cgs-pagination.is-compact span { padding: 4px 8px; font-size: 12px; }
     .cgs-pagination.is-compact .is-gap { padding-left: 2px; padding-right: 2px; }
 }
+.wca-page .wca-readonly { margin: 0 0 4px; padding: 10px 12px; min-height: 40px; line-height: 1.4; background: #EEF1F4; border: 1px solid #D5DBE1; border-radius: 8px; color: var(--wca-ink); font-weight: 600; }

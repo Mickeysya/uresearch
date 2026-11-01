@@ -64,7 +64,7 @@ class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDeta
         }
 
         if (in_array($user->role, array_unique(array_merge([Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], (array) config('candidacy.cgs_roles'))), true)) {
-            $links[] = ['label' => 'My Appeal Signature', 'route' => 'candidacy.signature.show'];
+            $links[] = ['label' => 'My Signature', 'route' => 'candidacy.signature.show'];
         }
 
         return $links;

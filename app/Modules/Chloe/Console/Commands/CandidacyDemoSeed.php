@@ -13,6 +13,9 @@ use App\Modules\Chloe\Models\DemoStudentProfile;
 use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Chloe\Services\CandidacyMemoService;
 use App\Modules\Chloe\Services\CandidacySignatureService;
+
+use App\Modules\Chloe\Support\CandidacyDemoRoster;
+use App\Modules\Chloe\Support\CandidacyDepartmentResolver;
 use App\Modules\Chloe\Support\CandidacyStaffDirectory;
 use App\Modules\Chloe\Support\CandidacyVerification;
 use App\Modules\Core\Models\User;
@@ -38,28 +41,6 @@ class CandidacyDemoSeed extends Command
     protected $description = 'Seed demo departments, demo staff and about 40 demo study-candidacy appeals (idempotent)';
 
     protected const SEED = 260201;
-
-    protected const DEPARTMENTS = [
-        'CIS' => 'Computer & Information Sciences', 'CEE' => 'Civil & Environmental Engineering', 'EEE' => 'Electrical & Electronic Engineering',
-        'CHE' => 'Chemical Engineering', 'MEC' => 'Mechanical Engineering', 'GPE' => 'Geosciences & Petroleum Engineering',
-    ];
-
-    /** Which department a demo student's programme belongs to. */
-    protected const PROGRAMME_DEPT = [
-        'MSc Computer Science (Full-Time)' => 'CIS', 'MSc Information Technology (Full-Time)' => 'CIS', 'PhD Computer & Information Sciences (Full-Time)' => 'CIS',
-        'PhD Civil Engineering (Full-Time)' => 'CEE', 'PhD Electrical & Electronic Engineering (Full-Time)' => 'EEE', 'PhD Chemical Engineering (Full-Time)' => 'CHE',
-        'MSc Mechanical Engineering (Full-Time)' => 'MEC', 'MSc Petroleum Engineering (Full-Time)' => 'GPE',
-    ];
-
-    protected const LECTURERS = [
-        'CIS' => ['Dr. Rohani Idris', 'Dr. Kevin Tan Boon Keat'], 'CEE' => ['Dr. Nurul Huda Zainal', 'Dr. Ahmad Syukri Latif', 'Dr. Priya Subramaniam'],
-        'EEE' => ['Dr. Faridah Osman', 'Dr. Lee Chong Wei', 'Dr. Muthu Rajan'], 'CHE' => ['Dr. Salmah Yusof', 'Dr. Tan Ai Ling', 'Dr. Khairul Anuar'],
-        'MEC' => ['Dr. Zainuddin Hamid', 'Dr. Rajesh Menon', 'Dr. Noraini Baharom'], 'GPE' => ['Dr. Hasnul Hadi', 'Dr. Wong Mei Fong', 'Dr. Ismail Sabri'],
-    ];
-
-    protected const CHAIRS = ['CEE' => 'Assoc. Prof. Dr. Aminah Daud', 'EEE' => 'Assoc. Prof. Dr. Gan Kok Seng', 'CHE' => 'Assoc. Prof. Dr. Maznah Jamil', 'MEC' => 'Assoc. Prof. Dr. Shahrir Abdullah', 'GPE' => 'Assoc. Prof. Dr. Hanis Roslan'];
-
-    protected const DEANS = ['CEE' => 'Prof. Dr. Ramli Hashim', 'EEE' => 'Prof. Dr. Lau Hock Seng', 'CHE' => 'Prof. Dr. Siti Aishah Karim', 'MEC' => 'Prof. Dr. Faizul Rahman', 'GPE' => 'Prof. Dr. Johan Ahmad'];
 
     protected const REASONS = [
         'My field data collection was delayed by about four months because the instrument calibration had to be repeated twice, and the thesis chapters depend on those results.',
@@ -91,7 +72,6 @@ class CandidacyDemoSeed extends Command
 
     public function handle(CandidacySignatureService $signatures, CandidacyMemoService $memos): int
     {
-        mt_srand(self::SEED);
         $this->created = 0;
         $this->now = Carbon::now('Asia/Kuala_Lumpur');
 
@@ -99,6 +79,8 @@ class CandidacyDemoSeed extends Command
             $this->seedStaff($signatures);
             $this->alignRealCandidacies();
         });
+
+        mt_srand(self::SEED); // the appeals' own fixed draw (the roster used its own)
 
         $students = $this->pickStudents();
         $existing = CandidacyAppeal::where('is_demo', true)->pluck('appeal_no')->filter()->all();
@@ -130,38 +112,48 @@ class CandidacyDemoSeed extends Command
     protected function seedStaff(CandidacySignatureService $signatures): void
     {
         $profileOf = fn (?int $userId) => $userId ? CandidacyStaffProfile::where('user_id', $userId)->first() : null;
-        $real = [
-            'lecturer' => $profileOf(User::where('email', 'supervisor@utp.edu.my')->value('id')),
-            'chair' => $profileOf(User::where('email', 'chair@utp.edu.my')->value('id')),
-            'dean' => $profileOf(User::where('role', 'dean_pgr')->orderBy('id')->value('id')),
-        ];
+        $realLecturer = $profileOf(User::where('email', 'supervisor@utp.edu.my')->value('id'));
+        $realChair = $profileOf(User::where('email', 'chair@utp.edu.my')->value('id'));
+        $dean = CandidacyStaffDirectory::defaultDean();
 
-        foreach (self::DEPARTMENTS as $code => $name) {
-            $dept = CandidacyDepartment::where('code', $code)->first() ?? CandidacyDepartment::create(['code' => $code, 'name' => $name, 'active' => true, 'is_demo' => true]);
+        if (! $dean) {
+            throw new \RuntimeException('There is no profile for the account with the Dean role.');
+        }
+
+        // ONE Dean for the whole university, no department: no department holds a Dean assignment (our own table only)
+        CandidacyStaffAssignment::where('role', CandidacyStaffAssignment::ROLE_DEAN)->delete();
+        $dean->forceFill(['department_id' => null])->save();
+
+        $codes = array_keys((array) config('candidacy.departments'));
+        $roster = CandidacyDemoRoster::generate($codes, array_merge(User::pluck('name')->all(), CandidacyStaffProfile::where('is_demo', false)->pluck('full_name')->all()));
+
+        foreach ((array) config('candidacy.departments') as $code => [$name, $faculty]) {
+            $dept = CandidacyDepartment::where('code', $code)->first();
+            $dept = $dept ? tap($dept)->update(['name' => $name, 'faculty' => $faculty, 'active' => true]) : CandidacyDepartment::create(['code' => $code, 'name' => $name, 'faculty' => $faculty, 'active' => true, 'is_demo' => true]);
             $this->departments[$code] = $dept;
+
             $lecturers = [];
-            $chair = null;
-            $dean = null;
 
-            if ($code === 'CIS') {
-                $real['lecturer'] && $lecturers[] = $this->assign($dept, $real['lecturer'], 'lecturer');
-                $chair = $real['chair'] ? $this->assign($dept, $real['chair'], 'chair') : null;
-                $dean = $real['dean'] ? $this->assign($dept, $real['dean'], 'dean') : null;
+            if ($code === 'CIS' && $realLecturer) {
+                $lecturers[] = $this->assign($dept, $realLecturer, 'lecturer');
             }
 
-            foreach (self::LECTURERS[$code] as $lecturerName) {
-                $lecturers[] = $this->assign($dept, $this->demoProfile($lecturerName, "Lecturer, {$name}", $dept, $signatures), 'lecturer');
+            foreach ($roster['lecturers'][$code] as $fullName) {
+                $lecturers[] = $this->assign($dept, $this->demoProfile($fullName, "Lecturer, {$name}", $dept, $signatures), 'lecturer');
             }
 
-            $chair ??= $this->assign($dept, $this->demoProfile(self::CHAIRS[$code], "Department Chair, {$name}", $dept, $signatures), 'chair');
-            $dean ??= $this->assign($dept, $this->demoProfile(self::DEANS[$code], 'Dean of Postgraduate and Research', $dept, $signatures), 'dean');
+            $chair = $code === 'CIS' && $realChair
+                ? $this->assign($dept, $realChair, 'chair')
+                : $this->assign($dept, $this->demoProfile($roster['chairs'][$code], "Department Chair, {$name}", $dept, $signatures), 'chair');
+
             $this->staff[$code] = ['lecturers' => $lecturers, 'chair' => $chair, 'dean' => $dean];
         }
     }
 
+    /** A fake staff member (no login account). Found again by name on a re-run; gets a placeholder signature drawn by GD (marked demo). */
     protected function demoProfile(string $name, string $designation, CandidacyDepartment $dept, CandidacySignatureService $signatures): CandidacyStaffProfile
     {
-        $profile = CandidacyStaffProfile::firstOrCreate(['full_name' => $name, 'is_demo' => true], ['designation' => $designation, 'department_id' => $dept->id]);
+        $profile = CandidacyStaffProfile::firstOrCreate(['full_name' => $name, 'is_demo' => true], ['designation' => $designation, 'department_id' => $dept->id, 'user_id' => null]);
 
         if (! $profile->hasSignature()) {
             $signatures->placeholder($profile);
@@ -170,28 +162,35 @@ class CandidacyDemoSeed extends Command
         return $profile;
     }
 
+    /** A person is a lecturer OR a chair of ONE department, never both and never two departments. */
     protected function assign(CandidacyDepartment $dept, CandidacyStaffProfile $profile, string $role): CandidacyStaffProfile
     {
-        if ($role === 'chair' || $role === 'dean') {
-            $current = CandidacyStaffAssignment::where('department_id', $dept->id)->where('role', $role)->first();
+        $other = CandidacyStaffAssignment::where('staff_profile_id', $profile->id)->where(fn ($q) => $q->where('role', '!=', $role)->orWhere('department_id', '!=', $dept->id))->exists();
+
+        if ($other) {
+            throw new \RuntimeException("{$profile->full_name} already holds another role or department.");
+        }
+
+        if ($role === 'chair') {
+            $current = CandidacyStaffAssignment::where('department_id', $dept->id)->where('role', 'chair')->first();
 
             if ($current && $current->staff_profile_id !== $profile->id) {
-                return CandidacyStaffProfile::find($current->staff_profile_id); // the department already has its own; never replaced
+                return CandidacyStaffProfile::find($current->staff_profile_id);
             }
         }
 
         CandidacyStaffAssignment::firstOrCreate(['department_id' => $dept->id, 'staff_profile_id' => $profile->id, 'role' => $role]);
+        $profile->forceFill(['department_id' => $dept->id])->save();
 
         return $profile;
     }
 
-    /** Every real candidacy record gets a department and an original expiry date (consistent with the extension months used). */
+    /** Every candidacy record gets a department (the live demo accounts: Computer & Information Sciences) and an original expiry date. */
     protected function alignRealCandidacies(): void
     {
-        $cis = $this->departments['CIS'];
-
-        foreach (StudyCandidacy::all() as $candidacy) {
-            $candidacy->department_id ??= $cis->id;
+        foreach (StudyCandidacy::with('student')->get() as $candidacy) {
+            $code = $candidacy->student ? CandidacyDepartmentResolver::codeForUser($candidacy->student) : 'CIS';
+            $candidacy->department_id = $this->departments[$code]->id;
             $candidacy->original_expiry_date ??= $candidacy->candidacy_expiry_date->copy()->subMonthsNoOverflow($candidacy->allowanceUsed());
             $candidacy->save();
         }
@@ -205,8 +204,7 @@ class CandidacyDemoSeed extends Command
         $byDept = [];
 
         foreach (DemoStudentProfile::orderBy('id')->get() as $profile) {
-            $code = self::PROGRAMME_DEPT[$profile->programme] ?? 'CIS';
-            $byDept[$code][] = $profile;
+            $byDept[CandidacyDepartmentResolver::codeFor($profile->programme, $profile->matric_no)][] = $profile;
         }
 
         foreach ($byDept as &$list) {
@@ -226,59 +224,65 @@ class CandidacyDemoSeed extends Command
      */
     protected function scenarios(array $students): array
     {
-        $s = fn (string $dept, int $i) => $students[$dept][$i];
         $list = [];
-        $add = function (string $dept, int $i, string $state, int $months, int $wait, int $age, array $extra = []) use (&$list, $s) {
-            $list[] = ['dept' => $dept, 'profile' => $s($dept, $i), 'state' => $state, 'months' => $months, 'wait' => $wait, 'age' => $age] + $extra;
+        $add = function (string $dept, int $i, string $state, int $months, int $wait, int $age, array $extra = []) use (&$list, $students) {
+            $list[] = ['dept' => $dept, 'profile' => $students[$dept][$i], 'state' => $state, 'months' => $months, 'wait' => $wait, 'age' => $age] + $extra;
         };
 
-        // two approved appeals for one student, and one at exactly 12 of 12 months (6 + 6)
+        // two approved appeals for one student, and one at exactly 12 of 12 months (6 + 6); a second student with 3 + 4
         $add('EEE', 0, 'approved', 6, 0, 190, ['seq' => 1, 'closed_days_ago' => 150]);
         $add('EEE', 0, 'approved', 6, 0, 120, ['seq' => 2, 'closed_days_ago' => 70]);
-        $add('GPE', 0, 'approved', 3, 0, 170, ['seq' => 1, 'closed_days_ago' => 135]);
-        $add('GPE', 0, 'approved', 4, 0, 90, ['seq' => 2, 'closed_days_ago' => 52]);
+        $add('PET', 0, 'approved', 3, 0, 170, ['seq' => 1, 'closed_days_ago' => 135]);
+        $add('PET', 0, 'approved', 4, 0, 90, ['seq' => 2, 'closed_days_ago' => 52]);
         // one approved and then a new appeal in flight at the Chair
         $add('CHE', 0, 'approved', 3, 0, 160, ['seq' => 1, 'closed_days_ago' => 125]);
         $add('CHE', 0, 'with_chair', 4, 6, 12, ['seq' => 2]);
-        // single approved appeals (memo + stamps) in other departments
+        // single approved appeals (memo + stamps)
         $add('CEE', 0, 'approved', 2, 0, 80, ['closed_days_ago' => 50]);
         $add('MEC', 0, 'approved', 12, 0, 60, ['closed_days_ago' => 31]);
         $add('MEC', 1, 'approved', 5, 0, 45, ['closed_days_ago' => 20]);
         $add('CEE', 1, 'approved', 1, 0, 30, ['closed_days_ago' => 9]);
-        // final rejections
+        // final rejections (with reasons)
         $add('EEE', 1, 'rejected', 4, 0, 100, ['closed_days_ago' => 68]);
         $add('CHE', 1, 'rejected', 6, 0, 75, ['closed_days_ago' => 41]);
-        $add('GPE', 1, 'rejected', 3, 0, 50, ['closed_days_ago' => 22]);
-        // returned: by each stage, and a Dean return waiting for the student
+        $add('PET', 1, 'rejected', 3, 0, 50, ['closed_days_ago' => 22]);
+        // returned: by the Supervisor and the Chair (Computer & Information Sciences, so the real accounts see them), by CGS and by the Dean elsewhere
         $add('CIS', 0, 'returned', 5, 8, 20, ['by' => 'supervisor']);
         $add('CIS', 1, 'returned', 3, 5, 24, ['by' => 'chair']);
         $add('CEE', 2, 'returned', 6, 3, 27, ['by' => 'cgs']);
         $add('MEC', 2, 'returned', 4, 2, 33, ['by' => 'dean']);
-        // waiting at the Supervisor (CIS ones go to the real lecturer)
-        foreach ([['CIS', 2, 4, 0], ['CIS', 3, 6, 1], ['CIS', 4, 2, 3], ['EEE', 2, 3, 5], ['GPE', 2, 5, 8], ['CHE', 2, 4, 12]] as [$d, $i, $m, $w]) {
+        // waiting at the Supervisor (the real lecturer for Computer & Information Sciences)
+        foreach ([['CIS', 2, 4, 0], ['CIS', 3, 6, 2], ['CIS', 4, 2, 6], ['CIS', 5, 5, 11], ['EEE', 2, 3, 5], ['PET', 2, 5, 8], ['CHE', 2, 4, 12]] as [$d, $i, $m, $w]) {
             $add($d, $i, 'with_supervisor', $m, $w, $w + 2);
         }
-        // waiting at the Chair
-        foreach ([['CIS', 5, 6, 0], ['CIS', 6, 3, 2], ['CEE', 3, 5, 6], ['MEC', 3, 2, 10], ['EEE', 3, 4, 14]] as [$d, $i, $m, $w]) {
+        // waiting at the Department Chair (the real chair for Computer & Information Sciences)
+        foreach ([['CIS', 6, 6, 0], ['CIS', 7, 3, 3], ['CIS', 8, 4, 7], ['CIS', 9, 5, 14], ['CEE', 3, 5, 6], ['MEC', 3, 2, 10], ['EEE', 3, 4, 14]] as [$d, $i, $m, $w]) {
             $add($d, $i, 'with_chair', $m, $w, $w + 6);
         }
         // waiting at CGS verification (one is a re-check after a Dean return)
-        foreach ([['CIS', 7, 4, 1], ['GPE', 3, 6, 4], ['CHE', 3, 3, 7], ['CEE', 4, 5, 11]] as [$d, $i, $m, $w]) {
+        foreach ([['CIS', 10, 4, 1], ['CIS', 11, 6, 5], ['PET', 3, 6, 4], ['CHE', 3, 3, 7], ['CEE', 4, 5, 11]] as [$d, $i, $m, $w]) {
             $add($d, $i, 'with_cgs', $m, $w, $w + 12);
         }
+        $add('CIS', 12, 'with_cgs', 3, 13, 36, ['recheck' => true]);
         $add('MEC', 4, 'with_cgs', 4, 13, 38, ['recheck' => true]);
-        // waiting at the Dean
-        foreach ([['CIS', 8, 5, 0], ['CIS', 9, 3, 3], ['EEE', 4, 6, 6], ['GPE', 4, 2, 12]] as [$d, $i, $m, $w]) {
+        // waiting at the Dean: from several departments
+        foreach ([['CIS', 13, 5, 0], ['CIS', 14, 3, 3], ['CIS', 15, 4, 9], ['EEE', 4, 6, 6], ['PET', 4, 2, 12], ['CEE', 5, 3, 1], ['MEC', 5, 4, 8]] as [$d, $i, $m, $w]) {
             $add($d, $i, 'with_dean', $m, $w, $w + 18);
         }
+        // Computer & Information Sciences with a final result (the real lecturer, chair and Dean's History tabs)
+        $add('CIS', 16, 'approved', 3, 0, 120, ['closed_days_ago' => 85]);
+        $add('CIS', 17, 'approved', 6, 0, 70, ['closed_days_ago' => 40]);
+        $add('CIS', 18, 'approved', 2, 0, 35, ['closed_days_ago' => 12]);
+        $add('CIS', 19, 'rejected', 5, 0, 95, ['closed_days_ago' => 58]);
+        $add('CIS', 20, 'rejected', 3, 0, 45, ['closed_days_ago' => 19]);
         // drafts
-        foreach ([['CIS', 10, 3], ['CEE', 5, 4], ['GPE', 5, 2]] as [$d, $i, $m]) {
+        foreach ([['CIS', 21, 3], ['CEE', 6, 4], ['PET', 5, 2]] as [$d, $i, $m]) {
             $add($d, $i, 'draft', $m, 0, 2);
         }
         // closed because it was not resubmitted before the (real) candidacy expired
         if ($expired = User::where('email', 'student2@utp.edu.my')->first()) {
             if (StudyCandidacy::where('student_id', $expired->id)->exists()) {
-                $list[] = ['dept' => 'CIS', 'student_id' => $expired->id, 'state' => 'closed_expired', 'months' => 3, 'wait' => 45, 'age' => 70, 'by' => 'supervisor', 'closed_days_ago' => 30];
+                $list[] = ['dept' => CandidacyDepartmentResolver::codeForUser($expired), 'student_id' => $expired->id, 'state' => 'closed_expired', 'months' => 3, 'wait' => 45, 'age' => 70, 'by' => 'supervisor', 'closed_days_ago' => 30];
             }
         }
 
@@ -316,7 +320,8 @@ class CandidacyDemoSeed extends Command
 
         // the supervisor is one of the department's lecturers, chosen by the student; the first (real in CIS) is used for in-flight CIS work
         $lecturers = $staff['lecturers'];
-        $supervisor = ($sc['dept'] === 'CIS' && in_array($state, ['with_supervisor', 'returned'], true)) ? $lecturers[0] : $lecturers[mt_rand(0, count($lecturers) - 1)];
+        // in Computer & Information Sciences the real lecturer is the supervisor of every appeal that waits for the Supervisor or was returned, and of most others
+        $supervisor = ($sc['dept'] === 'CIS' && ($lecturers[0]->user_id !== null) && (in_array($state, ['with_supervisor', 'returned'], true) || mt_rand(0, 3) > 0)) ? $lecturers[0] : $lecturers[mt_rand(0, count($lecturers) - 1)];
         $start = $this->now->copy()->subDays($sc['age']);
         $months = $sc['months'];
         $isDraft = $state === 'draft';
@@ -429,7 +434,7 @@ class CandidacyDemoSeed extends Command
     {
         return match (true) {
             ($sc['dept'] === 'EEE' && ($sc['seq'] ?? 0) === 1 && $sc['state'] === 'approved') => 6,
-            ($sc['dept'] === 'GPE' && ($sc['seq'] ?? 0) === 1 && $sc['state'] === 'approved') => 4,
+            ($sc['dept'] === 'PET' && ($sc['seq'] ?? 0) === 1 && $sc['state'] === 'approved') => 4,
             ($sc['dept'] === 'CHE' && ($sc['seq'] ?? 0) === 1 && $sc['state'] === 'approved') => 0,
             default => 0,
         };

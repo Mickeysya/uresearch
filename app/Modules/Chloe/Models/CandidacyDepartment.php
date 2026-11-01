@@ -10,7 +10,7 @@ class CandidacyDepartment extends Model
 {
     protected $table = 'candidacy_departments';
 
-    protected $fillable = ['code', 'name', 'active', 'is_demo'];
+    protected $fillable = ['code', 'name', 'faculty', 'active', 'is_demo'];
 
     protected function casts(): array
     {

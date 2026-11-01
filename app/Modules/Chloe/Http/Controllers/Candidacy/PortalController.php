@@ -109,7 +109,12 @@ class PortalController extends Controller
     {
         $profile = CandidacyStaffDirectory::profileForUser($request->user());
 
-        return view('chloe::candidacy.wca.portal.signature', ['profile' => $profile, 'user' => $request->user(), 'required' => $this->signatureRequired($request->user())]);
+        $return = CandidacyReturnPath::validate($request->query('return'));
+
+        return view('chloe::candidacy.wca.portal.signature', [
+            'profile' => $profile, 'user' => $request->user(), 'required' => $this->signatureRequired($request->user()),
+            'return' => $return, 'back' => $return ?? route('candidacy.portal.queue', [], false),
+        ]);
     }
 
     public function signatureStore(Request $request)
@@ -120,7 +125,7 @@ class PortalController extends Controller
 
         $this->signatures->store($profile, $request->file('signature'), $request->user());
 
-        return redirect()->route('candidacy.signature.show')->with('wca_status', 'Your signature was saved.');
+        return redirect($this->afterSignature($request))->with('wca_status', 'Your signature was saved.');
     }
 
     public function signatureDestroy(Request $request)
@@ -131,7 +136,7 @@ class PortalController extends Controller
 
         $this->signatures->remove($profile, $request->user());
 
-        return redirect()->route('candidacy.signature.show')->with('wca_status', 'Your signature was removed.');
+        return redirect($this->afterSignature($request))->with('wca_status', 'Your signature was removed.');
     }
 
     public function signatureImage(Request $request): StreamedResponse
@@ -141,6 +146,12 @@ class PortalController extends Controller
         Gate::authorize('viewSignature', $profile);
 
         return Storage::disk('local')->response($profile->signature_path, null, ['Content-Type' => 'image/png']);
+    }
+
+    /** Back to the appeal or portal page the user came from (validated, internal only); from the sidebar it stays on this page. */
+    protected function afterSignature(Request $request): string
+    {
+        return CandidacyReturnPath::validate($request->input('return')) ?? route('candidacy.signature.show', [], false);
     }
 
     protected function signatureRequired(User $user): bool

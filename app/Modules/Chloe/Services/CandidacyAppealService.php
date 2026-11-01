@@ -12,6 +12,7 @@ use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Chloe\Notifications\CandidacyAppealNotice;
 use App\Modules\Chloe\Policies\CandidacyAppealPolicy;
 use App\Modules\Chloe\Support\CandidacyAppealPresenter;
+use App\Modules\Chloe\Support\CandidacyDepartmentResolver;
 use App\Modules\Chloe\Support\CandidacyStaffDirectory;
 use App\Modules\Chloe\Support\CandidacyVerification;
 use App\Modules\Chloe\Support\StudentDirectory;
@@ -106,7 +107,8 @@ class CandidacyAppealService
                 ?? new CandidacyAppeal(['student_id' => $student->id, 'study_candidacy_id' => $candidacy->id, 'status' => CandidacyAppeal::STATUS_DRAFT, 'round' => 1]);
 
             $this->fillSections($appeal, $data);
-            $appeal->department_id = ($data['department_id'] ?? null) ?: ($appeal->department_id ?? $candidacy->department_id);
+            // the department is never chosen by the student: it comes from the student's record (or is derived from the programme)
+            $appeal->department_id = CandidacyDepartmentResolver::forCandidacy($candidacy)?->id;
             $appeal->save();
             $this->syncPublications($appeal, $data);
 
@@ -128,19 +130,19 @@ class CandidacyAppealService
             $candidacy = StudyCandidacy::whereKey($appeal->study_candidacy_id)->lockForUpdate()->firstOrFail();
             $this->assertComplete($appeal, $candidacy);
 
-            $department = $appeal->department_id ? \App\Modules\Chloe\Models\CandidacyDepartment::find($appeal->department_id) : $candidacy->department;
-            $supervisor = $department
-                ? CandidacyStaffDirectory::lecturers($department)->firstWhere('id', $appeal->supervisor_profile_id)
-                : null;
-            $chair = $department ? CandidacyStaffDirectory::chair($department) : null;
-            $dean = CandidacyStaffDirectory::dean($department);
+            $department = CandidacyDepartmentResolver::forCandidacy($candidacy);
 
-            if (! $supervisor || ! $chair || ! $dean) {
-                throw ValidationException::withMessages(['supervisor_profile_id' => 'Pick your supervisor from your department. If the list is empty or has no Chair or Dean, contact the Centre for Graduate Studies.']);
+            if (! $department) {
+                throw ValidationException::withMessages(['department' => 'Your department could not be found in your student record, so the appeal cannot be submitted. Please contact the Centre for Graduate Studies.']);
             }
 
-            if ($department && $candidacy->department_id !== $department->id) {
-                $candidacy->forceFill(['department_id' => $department->id])->save(); // the student's record follows the department they chose
+            $appeal->department_id = $department->id;
+            $supervisor = CandidacyStaffDirectory::lecturers($department)->firstWhere('id', $appeal->supervisor_profile_id);
+            $chair = CandidacyStaffDirectory::chair($department);
+            $dean = CandidacyStaffDirectory::dean();
+
+            if (! $supervisor || ! $chair || ! $dean) {
+                throw ValidationException::withMessages(['supervisor_profile_id' => 'Pick your supervisor from the lecturers of your department. If the list is empty or the department has no Chair, contact the Centre for Graduate Studies.']);
             }
 
             $sequence = ((int) CandidacyAppeal::where('student_id', $appeal->student_id)->max('sequence_no')) + 1;
@@ -670,6 +672,7 @@ class CandidacyAppealService
 
         return $extra + [
             'student_name' => $identity?->name ?? 'Student',
+            'department' => $appeal->department?->name ?? '',
             'appeal_no' => $appeal->displayNo(),
             'stage' => $appeal->current_stage ? $this->stageLabel($appeal->current_stage) : '',
             'decision' => '',

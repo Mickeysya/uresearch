@@ -71,28 +71,98 @@ class CandidacyDemoDataTest extends TestCase
         $this->artisan('candidacy:demo-seed')->expectsOutputToContain('created this run: 0')->assertSuccessful();
 
         $this->assertSame($first, $this->counts());
-        $this->assertGreaterThanOrEqual(38, $first['candidacy_appeals']);
-        $this->assertLessThanOrEqual(42, $first['candidacy_appeals']);
+        $this->assertGreaterThanOrEqual(50, $first['candidacy_appeals']);
+        $this->assertLessThanOrEqual(70, $first['candidacy_appeals']);
     }
 
-    public function test_six_departments_each_with_lecturers_a_chair_and_a_dean(): void
+    public function test_nine_departments_with_the_agreed_roster(): void
     {
         $this->artisan('candidacy:demo-seed')->assertSuccessful();
 
-        $this->assertSame(6, CandidacyDepartment::count());
+        $this->assertSame(9, CandidacyDepartment::count());
+        $this->assertSame(['Faculty of Engineering' => 6, 'Faculty of Science, Management & Computing' => 3], CandidacyDepartment::all()->countBy('faculty')->sortKeys()->all());
+        $this->assertSame(0, CandidacyDepartment::where('name', 'like', '%Geosciences & Petroleum%')->count());
+
         foreach (CandidacyDepartment::all() as $dept) {
             $roles = CandidacyStaffAssignment::where('department_id', $dept->id)->get()->groupBy('role');
-            $this->assertGreaterThanOrEqual(3, $roles->get('lecturer', collect())->count(), $dept->code);
-            $this->assertSame(1, $roles->get('chair', collect())->count(), $dept->code);
-            $this->assertSame(1, $roles->get('dean', collect())->count(), $dept->code);
+            $lecturers = $roles->get('lecturer', collect())->count();
+            $this->assertGreaterThanOrEqual(5, $lecturers, $dept->code);
+            $this->assertLessThanOrEqual(7, $lecturers, $dept->code);
+            $this->assertSame(1, $roles->get('chair', collect())->count(), "{$dept->code}: exactly one Department Chair");
+            $this->assertFalse($roles->has('dean'), "{$dept->code}: a department has no Dean");
         }
 
-        // the real accounts are mapped to CIS and get no signature file from the seed
+        // 9 chairs, none a lecturer; nobody holds two roles or two departments
+        $this->assertSame(9, CandidacyStaffAssignment::where('role', 'chair')->count());
+        $this->assertSame(0, CandidacyStaffAssignment::where('role', 'dean')->count());
+        $this->assertSame(0, CandidacyStaffAssignment::select('staff_profile_id')->groupBy('staff_profile_id')->havingRaw('count(*) > 1')->get()->count());
+        $chairIds = CandidacyStaffAssignment::where('role', 'chair')->pluck('staff_profile_id');
+        $this->assertSame(0, CandidacyStaffAssignment::where('role', 'lecturer')->whereIn('staff_profile_id', $chairIds)->count());
+
+        // the fake staff have no login; exactly the real lecturer and chair have one (plus the Dean and a CGS profile that are not in departments)
+        $fake = CandidacyStaffProfile::where('is_demo', true);
+        $this->assertSame(0, (clone $fake)->whereNotNull('user_id')->count());
+        $this->assertSame(8, (clone $fake)->whereIn('id', $chairIds)->count());
+        $names = CandidacyStaffProfile::pluck('full_name');
+        $this->assertSame($names->count(), $names->unique()->count(), 'all names are unique');
+        $this->assertSame(0, (clone $fake)->get()->filter(fn ($p) => User::where('name', $p->full_name)->exists())->count(), 'no fake name equals an account name');
+        foreach ((clone $fake)->get() as $p) {
+            $this->assertMatchesRegularExpression('/^(Dr\.|Ir\. Dr\.|Assoc\. Prof\. Dr\.|Prof\. Dr\.|Prof\. Ir\. Dr\.) /', $p->full_name);
+        }
+
+        // the real lecturer and chair belong to Computer & Information Sciences; the real lecturer is one of 5 to 7 there
         $cis = CandidacyDepartment::where('code', 'CIS')->first();
-        $real = CandidacyStaffProfile::whereIn('user_id', User::whereIn('email', ['supervisor@utp.edu.my', 'chair@utp.edu.my', 'dean@utp.edu.my'])->pluck('id'))->get();
-        $this->assertCount(3, $real);
+        $real = CandidacyStaffProfile::whereIn('user_id', User::whereIn('email', ['supervisor@utp.edu.my', 'chair@utp.edu.my'])->pluck('id'))->get();
+        $this->assertCount(2, $real);
         $this->assertTrue($real->every(fn ($p) => ! $p->hasSignature() && ! $p->is_demo));
-        $this->assertSame(3, CandidacyStaffAssignment::where('department_id', $cis->id)->whereIn('staff_profile_id', $real->pluck('id'))->count());
+        $this->assertSame(2, CandidacyStaffAssignment::where('department_id', $cis->id)->whereIn('staff_profile_id', $real->pluck('id'))->count());
+    }
+
+    public function test_there_is_exactly_one_dean_and_every_appeal_uses_the_roster(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $dean = CandidacyStaffProfile::where('user_id', User::where('role', Role::DEAN_PGR)->value('id'))->first();
+
+        $this->assertNull($dean->department_id);
+        $this->assertSame(1, CandidacyStaffProfile::where('designation', 'like', '%Dean%')->count(), 'one Dean in our tables');
+        $this->assertSame([$dean->id], CandidacyAppeal::distinct()->pluck('dean_profile_id')->all());
+        $this->assertSame(0, \App\Modules\Chloe\Models\CandidacyAppealApproval::where('designation', 'like', '%Dean%')->where('profile_id', '!=', $dean->id)->count());
+
+        foreach (CandidacyAppeal::with(['supervisorProfile', 'chairProfile'])->get() as $a) {
+            $chairOf = CandidacyStaffAssignment::where('department_id', $a->department_id)->where('role', 'chair')->value('staff_profile_id');
+            $this->assertSame($chairOf, $a->chair_profile_id, "{$a->appeal_no}: the Chair of its department");
+            $this->assertTrue(CandidacyStaffAssignment::where('department_id', $a->department_id)->where('role', 'lecturer')->where('staff_profile_id', $a->supervisor_profile_id)->exists(), "{$a->appeal_no}: a lecturer of its department");
+        }
+    }
+
+    public function test_every_department_that_has_students_has_at_least_two_appeals_and_computer_and_information_sciences_has_the_agreed_mix(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $byDept = CandidacyAppeal::where('is_demo', true)->get()->groupBy('department_id');
+        $withStudents = DemoStudentProfile::pluck('programme')->map(fn ($p) => \App\Modules\Chloe\Support\CandidacyDepartmentResolver::codeFor($p, '1'))->unique();
+
+        foreach (CandidacyDepartment::whereIn('code', $withStudents)->get() as $d) {
+            $this->assertGreaterThanOrEqual(2, ($byDept[$d->id] ?? collect())->count(), $d->code);
+        }
+
+        $cis = CandidacyDepartment::where('code', 'CIS')->first();
+        $a = CandidacyAppeal::where('department_id', $cis->id)->get();
+        $lec = CandidacyStaffProfile::where('user_id', User::where('email', 'supervisor@utp.edu.my')->value('id'))->first();
+        $chair = CandidacyStaffProfile::where('user_id', User::where('email', 'chair@utp.edu.my')->value('id'))->first();
+
+        $this->assertGreaterThanOrEqual(12, $a->count());
+        $this->assertGreaterThanOrEqual(3, $a->where('status', 'with_supervisor')->where('supervisor_profile_id', $lec->id)->count());
+        $this->assertGreaterThanOrEqual(3, $a->where('status', 'with_chair')->where('chair_profile_id', $chair->id)->count());
+        $this->assertGreaterThanOrEqual(2, $a->where('status', 'with_cgs')->count());
+        $this->assertGreaterThanOrEqual(2, $a->where('status', 'with_dean')->count());
+        $this->assertGreaterThanOrEqual(1, $a->where('status', 'returned')->count());
+        $this->assertGreaterThanOrEqual(2, $a->where('status', 'approved')->count());
+        $this->assertGreaterThanOrEqual(1, $a->where('status', 'rejected')->count());
+        $this->assertGreaterThanOrEqual(1, $a->where('supervisor_profile_id', $lec->id)->whereIn('status', ['with_chair', 'with_cgs', 'with_dean', 'returned'])->count(), 'Ongoing for the real lecturer');
+
+        // the real Dean has appeals waiting from several departments
+        $this->assertGreaterThanOrEqual(3, CandidacyAppeal::where('status', 'with_dean')->distinct()->pluck('department_id')->count());
+        $this->assertGreaterThanOrEqual(3, CandidacyAppeal::where('status', 'with_cgs')->count());
     }
 
     public function test_every_state_is_covered_with_waiting_days_from_0_to_14(): void
@@ -158,15 +228,17 @@ class CandidacyDemoDataTest extends TestCase
         $this->assertGreaterThan($closed->events()->where('action', 'returned')->first()->occurred_at, $closed->closed_at);
     }
 
-    public function test_in_flight_appeals_are_routed_to_the_real_cis_staff_and_the_real_candidacies_are_aligned(): void
+    public function test_the_real_candidacies_get_a_department_and_the_live_demo_accounts_none_of_the_demo_appeals(): void
     {
-        $this->artisan('candidacy:demo-seed')->assertSuccessful();
-        $lecturer = CandidacyStaffProfile::where('user_id', User::where('email', 'supervisor@utp.edu.my')->value('id'))->first();
-        $chair = CandidacyStaffProfile::where('user_id', User::where('email', 'chair@utp.edu.my')->value('id'))->first();
+        $live = User::create(['name' => 'Live Student', 'email' => 'student@utp.edu.my', 'password' => 'password', 'role' => Role::STUDENT, 'matric_no' => '22001001', 'programme' => 'MSc Petroleum Engineering']);
+        StudyCandidacy::create(['student_id' => $live->id, 'programme_start_date' => '2025-01-01', 'candidacy_expiry_date' => '2027-06-10', 'status' => 'active']);
 
-        $this->assertGreaterThanOrEqual(3, CandidacyAppeal::where('status', 'with_supervisor')->where('supervisor_profile_id', $lecturer->id)->count());
-        $this->assertGreaterThanOrEqual(2, CandidacyAppeal::where('status', 'with_chair')->where('chair_profile_id', $chair->id)->count());
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+
         $this->assertTrue(StudyCandidacy::all()->every(fn ($c) => $c->department_id && $c->original_expiry_date));
+        $this->assertSame('CIS', CandidacyDepartment::find(StudyCandidacy::where('student_id', $live->id)->value('department_id'))->code);
+        $this->assertSame(0, CandidacyAppeal::where('student_id', $live->id)->count(), 'no demo appeal for a live demo account');
+        $this->assertSame(0, StudyCandidacy::where('student_id', $live->id)->value('extension_months_used'));
     }
 
     public function test_the_demo_students_expiry_dates_are_never_changed(): void
@@ -199,7 +271,7 @@ class CandidacyDemoDataTest extends TestCase
         $this->assertTrue(CandidacyDepartment::where('code', 'CIS')->exists());
 
         $this->artisan('candidacy:demo-seed')->assertSuccessful(); // and it can be seeded again
-        $this->assertGreaterThanOrEqual(38, CandidacyAppeal::count());
+        $this->assertGreaterThanOrEqual(50, CandidacyAppeal::count());
     }
 
     public function test_check_allowance_still_passes_after_seeding(): void

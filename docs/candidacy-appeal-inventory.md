@@ -12,7 +12,7 @@ Our module is the single source of truth. New appeals are **never** written to t
 |---|---|
 | `candidacy_departments` | `code`, `name`, `active`, `is_demo` |
 | `candidacy_staff_profiles` | a person who signs: `user_id` (null for staff without a login), `full_name`, `designation`, `department_id`, `signature_path`, `signature_sha256`, `signature_updated_at`, `is_demo` |
-| `candidacy_staff_assignments` | which profile is `lecturer` / `chair` / `dean` of which department (one chair and at most one dean per department) |
+| `candidacy_staff_assignments` | which profile is `lecturer` or `chair` of which department (exactly one chair per department; nobody is both, nobody is in two departments). The Dean has no assignment: see section 16 |
 | `study_candidacies` (existing, extended) | `department_id`, `original_expiry_date`, `extension_months_used` (CHECK 0..12) beside the existing expiry, status and legacy `cumulative_extension_months` |
 | `candidacy_appeals` | the appeal: `appeal_no`, `sequence_no`, identity (`student_id` or `demo_profile_id`), `study_candidacy_id`, `department_id`, the named people (`supervisor_/chair_/dean_profile_id`), `status`, `current_stage`, `round`, `returned_by_stage`, `needs_cgs_recheck`, `requested_months`, `approved_months`, `expiry_at_submission`, `new_expiry_date`, sections A, B and D, `declaration_accepted_at`, timestamps (`submitted_at`, `stage_entered_at`, `last_action_at`, `closed_at`), `final_outcome`, memo path/name/time, `legacy_application_id`, `is_demo` |
 | `candidacy_appeal_publications` (existing, extended) | section C rows: `title`, `venue`, `status`, `year` (the legacy `description` column stays for imported rows) |
@@ -36,7 +36,7 @@ goes back to the Dean; a returned appeal whose candidacy has expired (today is A
 | supervisor | the appeal's named lecturer | Approve, Return |
 | chair | the department's chair, fixed at submission | Approve, Return |
 | cgs | any CGS role (`candidacy.cgs_roles`) | Verify (needs "documents complete = yes"), Return |
-| dean | the department's dean (default dean when it has none) | Approve, Return, Reject (final) |
+| dean | the ONE Dean of the university (section 16) | Approve, Return, Reject (final) |
 
 Dean approval (one transaction): approved months = requested months (the Dean cannot change them), new expiry = current expiry + months
 (calendar months, no overflow), `study_candidacies.candidacy_expiry_date` and `extension_months_used` updated, the memo built, history written.
@@ -54,7 +54,7 @@ Dean rejection is final and needs at least one reason from the Dean's list ("Oth
 | signature image limits (PNG/JPG, 1 MB, min 200x60, resized into 600x200) | `config('candidacy.signature')` |
 | return / reject reason lists per stage; "Other" needs a remark. The Dean's rejection list is the agreed starting list (CGS will confirm it); keys are stored with the decision, labels are display-only; rows made before the list changed use `candidacy.legacy_reject_reasons`, and a rejection with no reason shows "Not recorded" | `config('candidacy.reasons')` |
 | e-mail wording and placeholders | `config('candidacy.mail')` |
-| default dean when a department has none | `config('candidacy.default_dean_profile')`, else the first `dean_pgr` user's profile |
+| the single Dean | the profile of the account with the Dean role (`CandidacyStaffDirectory::defaultDean()`); `config('candidacy.default_dean_profile')` can name a profile instead |
 | documents: official form `.xlsx` required, up to 4 supporting (`xlsx`/`pdf`/`docx`), 10 MB each, extension **and** content checked | `CandidacyDocumentService` |
 | history is append-only (events cannot be updated or deleted by code; a test scans the code) | `CandidacyAppealEvent` |
 
@@ -67,7 +67,7 @@ All routes send `Cache-Control: no-store, max-age=0` (`NoStoreResponse`). Access
 |---|---|
 | `/candidacy` (My Study Candidacy), `/candidacy/appeals/new`, `/candidacy/appeals/draft/{1-4}`, documents upload/remove, `/candidacy/appeals/{id}/edit` + `resubmit` | students (own appeals only) |
 | **`/candidacy/appeals/{id}`: THE appeal page** (one URL for everyone), `.../region`, `.../documents/{doc}`, `.../memo`, `/candidacy/live/version` | the student, the people named on that appeal (also before it has reached them: read-only), CGS roles; drafts: the student only. The "Your action" card appears only while the appeal is pending that user's action |
-| `/candidacy/portal` (Approval Portal), `.../region`, `.../live/version`, `POST .../appeals/{id}/decide` | supervisor, chair, dean, CGS roles |
+| `/candidacy/portal` (Study Candidacy Approval Portal), `.../region`, `.../live/version`, `POST .../appeals/{id}/decide` | supervisor, chair, dean, CGS roles |
 | `/candidacy/portal/appeals/{id}` (old review URL) | redirects to the appeal page |
 | `/candidacy/signature` (My Signature), `.../image` | the same roles; the image only to its owner |
 | `/cgs/candidacy` (Candidacy Management > Operations), `.../region`, `/cgs/candidacy/live/version`, `/cgs/candidacy/live/stats`, `/cgs/candidacy/dismissals` | CGS team |
@@ -114,7 +114,7 @@ Tabs and text use **Pending my action** everywhere. Statuses come from one map, 
 Not built yet (no Export button). Next phase: export exactly the filtered Operations list (same query and columns as the table) to `.xlsx`, CGS roles only.
 
 Navigation uses the module mechanism, not a shared edit: `CandidacyAppealWorkflow::queueRoute()` = `candidacy.portal.queue` and
-`ProvidesLinks::links()` adds "My Appeal Signature" (and "Candidacy Appeals" for CGS roles that own no engine stage).
+`ProvidesLinks::links()` adds "My Signature" (and "Candidacy Appeals" for CGS roles that own no engine stage).
 
 ## 5. Notifications (e-mail and bell together; the subject always starts with the appeal number)
 
@@ -151,7 +151,7 @@ config change (it keeps the old config in memory).
 | `candidacy:verify-memo {appeal_no}` | OK / MISMATCH per stage |
 | `candidacy:check-allowance` | `extension_months_used` and the expiry date against the approved appeals |
 | `candidacy:backfill-appeals` | one-time, idempotent import of the legacy engine appeal(s) |
-| `candidacy:demo-seed` / `candidacy:demo-clear` | 6 departments with demo staff and 41 demo appeals / remove exactly those (see section 9) |
+| `candidacy:demo-seed` / `candidacy:demo-clear` | the nine departments with their demo roster and the demo appeals / remove exactly those (see sections 9 and 16) |
 | `candidacy:remind`, `candidacy:generate-dismissals` | unchanged (reminders and dismissals were not part of this work) |
 
 ## 8. Track My Application: decision
@@ -165,9 +165,7 @@ requested and approved months, last updated, "View full details"). Core's Overvi
 
 `candidacy:demo-seed` is deterministic and idempotent. It uses the existing Workstation demo students and **does not change their expiry
 dates** (so "loan valid until" and the seat totals 315 / 152 / 157 / 3 / 3 are unchanged); the history is written backwards from each
-student's current expiry. Result: 41 demo appeals (3 drafts; waiting at supervisor 6, chair 6, CGS 5 (one re-check), Dean 4, with 0 to 14
-waiting days; returned by each of the four stages; 9 approved with memos including one student with two approvals and one at exactly 12 of
-12 months; 3 final rejections; 1 closed-expired), plus the legacy one (42 in total). Every demo row has `is_demo`; `candidacy:demo-clear` removes only those, their
+student's current expiry. Result: 54 demo appeals plus the legacy one (55 in total; 130 approvals, 185 events): every stage, every return type, rejections with reasons, one closed expired, a student at exactly 12 of 12 months, two students with two approvals, 0 to 14 waiting days, 12 approved with memos that verify. Computer & Information Sciences has 23 appeals (the real lecturer, chair, Dean and CGS all have rows in every tab). Every demo row has `is_demo`; `candidacy:demo-clear` removes only those, their
 files and the demo staff, never accounts or real signatures.
 
 Real accounts mapped to Computer & Information Sciences (emails only; passwords are never recorded):
@@ -176,10 +174,10 @@ Real accounts mapped to Computer & Information Sciences (emails only; passwords 
 |---|---|
 | lecturer | `supervisor@utp.edu.my` (Dr. Aisyah Rahman) |
 | chair | `chair@utp.edu.my` (Dr. Lim Wei Chun) |
-| dean | `dean@utp.edu.my` (Prof. Dr. Hafiz Osman; default dean and CIS dean) |
+| the Dean | `dean@utp.edu.my` (Prof. Dr. Hafiz Osman; the one Dean for the whole university) |
 | CGS | `cgs@utp.edu.my`, `manager@utp.edu.my`, `director@utp.edu.my`, `seniorexec@utp.edu.my` |
 
-These accounts have no signature on file: upload one on "My Appeal Signature" before approving. The seeded `cgs@utp.edu.my` password does
+These accounts have no signature on file: upload one on "My Signature" before approving. The seeded `cgs@utp.edu.my` password does
 not work and was not reset.
 
 ## 10. Shared files touched
@@ -256,3 +254,39 @@ declarations are copied into `chloe-candidacy.css` because the Workstation page 
 | Back from the appeal page | the return path includes `page`, so Back lands on the same page |
 
 Workstation pagination is not changed. Note for the Workstation owner: its bar prints every page number (no window), so a very long list would wrap onto several lines.
+
+## 16. Departments, roster, department auto-fill, single Dean, My Signature
+
+**Nine departments** (`config('candidacy.departments')`, stored in `candidacy_departments` with a `faculty` column):
+Faculty of Engineering: Chemical Engineering; Civil & Environmental Engineering; Electrical & Electronic Engineering; Mechanical Engineering; Petroleum Engineering; Geoscience.
+Faculty of Science, Management & Computing: Applied Science; Computer & Information Sciences; Management and Humanities. Department filters group them by faculty.
+
+**Roster rules** (enforced by `candidacy:demo-seed` and covered by tests): exactly 1 Department Chair per department (9 chairs); 5 to 7 lecturers per department; nobody is both
+a lecturer and a chair, and nobody belongs to two departments; every name is unique and no fake name equals a real account's name. The real chair account is the Chair of
+Computer & Information Sciences and the real lecturer account is one of its lecturers (the other 4 to 6 are fake); the other 8 chairs and all other lecturers are fake staff
+profiles with no login (`user_id` null). Names (Malay, Chinese and Indian, with titles) come from `CandidacyDemoRoster` with a fixed seed, so every reseed gives the same people.
+The student's Supervisor list is the lecturers of the student's department, sorted by the name without its title, and never contains a chair.
+
+**One Dean for the whole university**: the profile of the account that has the Dean role (`dean_pgr`); no department has a Dean assignment, and every appeal, memo, e-mail and
+history entry names that person. If a second account ever gets the Dean role the lookup takes the first by id: confirm which one is meant before that happens.
+
+**Department auto-fill.** A student never chooses a department. `CandidacyDepartmentResolver`: the candidacy record's `department_id`; when empty it is derived from the programme text with
+`config('candidacy.programme_department_patterns')` (Chemical, Civil/Environmental, Electrical/Electronic, Mechanical, Petroleum, Geo, Computer/Information/IT/Software,
+Applied Science/Chemistry/Physics/Mathematics, Management/MBA/Humanities; first match wins); text that matches nothing is placed by a hash of the student ID (stable). The accounts in
+`config('candidacy.cis_demo_accounts')` always belong to Computer & Information Sciences. New Appeal step 1 shows the department read-only ("Taken from your student record"), offers only the
+lecturers of that department and shows the Department Chair read-only. A posted department that is not the student's own, or a supervisor who is not a lecturer of it (including a chair or the Dean), is refused on
+the server; a student with no department gets a clear message and cannot submit.
+
+**My Signature.** One page and one route (`candidacy.signature.show`), labelled "My Signature" everywhere (sidebar, the portal filter card, the "Upload your signature" link). The portal
+button and the appeal-page link pass a validated internal `return` path (same rules as Back); after saving or removing a signature the user goes back there with the filters kept, and from the sidebar
+stays on the signature page. (The hardbound module has its own, unrelated signature page and sidebar item; it is not ours.)
+
+**Study Candidacy Approval Portal.** The heading and the browser tab read "Study Candidacy Approval Portal". The shared layout writes a fixed `<title>UResearch</title>`, so our page sets the tab
+title itself from `data-doc-title` (module script); the layout itself would need an edit to do it server-side.
+
+**"&" is escaped once.** Component attributes written as `subtitle="{{ ... }}"` were escaped by Blade and again by the component; they are now passed as bound values (`:subtitle="..."`). Tests render
+a department name with "&" on the pages, filters, e-mail, bell and memo.
+
+**Known limits of the demo data.** Only the six departments whose programmes appear among the Workstation demo students (Chemical, Civil, Electrical, Mechanical, Petroleum, Computer & Information Sciences)
+have demo appeals; Geoscience has one (a real account placed there by the hash rule) and Applied Science and Management and Humanities have none, because giving them students would mean adding rows that
+Workstation reads. The legacy appeal SCA-22001001-01 (account `student@utp.edu.my`) falls under Computer & Information Sciences and is left alone, so that account has 6 of 12 months used (it can still submit for up to 6 months).

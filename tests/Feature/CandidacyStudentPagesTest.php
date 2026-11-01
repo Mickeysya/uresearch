@@ -99,16 +99,17 @@ class CandidacyStudentPagesTest extends TestCase
 
     // ---- the form -------------------------------------------------------------------------------------------
 
-    public function test_step_one_needs_a_department_and_a_supervisor_of_that_department(): void
+    public function test_step_one_shows_the_department_read_only_and_needs_a_supervisor_of_it(): void
     {
-        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1))->assertOk()->assertSee('Department and supervisor');
+        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1))->assertOk()->assertSee('Department and supervisor')
+            ->assertSee('Computer & Information Sciences')->assertSee('Taken from your student record.')->assertDontSee('id="wca-department"', false);
 
         $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'next'])
-            ->assertSessionHasErrors(['department_id', 'supervisor_profile_id']);
+            ->assertSessionHasErrors(['supervisor_profile_id']);
 
         $other = CandidacyDepartment::create(['code' => 'EEE', 'name' => 'Electrical']);
         $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'next', 'department_id' => $other->id, 'supervisor_profile_id' => $this->profile($this->lecturer)->id])
-            ->assertSessionHasErrors('supervisor_profile_id');
+            ->assertSessionHasErrors('department_id');
     }
 
     public function test_save_draft_is_lenient_and_next_is_strict_on_step_two(): void
@@ -280,7 +281,7 @@ class CandidacyStudentPagesTest extends TestCase
             }
             $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'), $url);
             $html = $response->getContent();
-            $page = preg_match('~<div class="wca-page">(.*?)<div\s+id="wsa-root"~s', $html, $m) ? $m[1] : $html;
+            $page = preg_match('~<div class="wca-page"[^>]*>(.*?)<div\s+id="wsa-root"~s', $html, $m) ? $m[1] : $html;
             $this->assertDoesNotMatchRegularExpression('~\sstyle\s*=~i', $page, "inline style on {$url}");
             $this->assertDoesNotMatchRegularExpression('~\son[a-z]+\s*=~i', $page, "inline handler on {$url}");
 

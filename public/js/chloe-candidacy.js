@@ -7,6 +7,10 @@
     function $(sel, root) { return (root || document).querySelector(sel); }
     function $all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
 
+    // ---- the tab title (the shared layout writes a fixed <title>, so a page may name itself)
+    var named = $('[data-doc-title]');
+    if (named) { document.title = named.getAttribute('data-doc-title'); }
+
     // ---- publications: add and remove rows
     var pubs = $('#wca-pubs'), tpl = $('#wca-pub-template');
     if (pubs && tpl) {

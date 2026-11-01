@@ -5,7 +5,7 @@
 <section class="wca-card" aria-labelledby="wca-h-act">
     <h3 id="wca-h-act">Your action</h3>
     @if ($needsSignature)
-        <div class="wca-banner is-note" role="alert">You have no signature on file. Your approval is stamped with your signature, so upload it before you decide. <a href="{{ route('candidacy.signature.show') }}">Upload your signature</a></div>
+        <div class="wca-banner is-note" role="alert">You have no signature on file. Your approval is stamped with your signature, so upload it before you decide. <a href="{{ route('candidacy.signature.show', ['return' => \App\Modules\Chloe\Support\CandidacyReturnPath::current(request(), '/candidacy/appeals/'.$appeal->id, ['return' => $return])]) }}">Upload your signature</a></div>
     @else
         @if ($appeal->needs_cgs_recheck && $isCgs)<p><strong>Re-check after Dean return:</strong> the Dean returned this appeal and the student revised it. Verify it again before it goes back to the Dean.</p>@endif
         @if ($isDean && $preview)

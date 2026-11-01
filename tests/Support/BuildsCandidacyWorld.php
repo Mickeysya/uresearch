@@ -47,7 +47,7 @@ trait BuildsCandidacyWorld
         Carbon::setTestNow('2026-11-01 10:00:00');
 
         $this->service = app(CandidacyAppealService::class);
-        $dept = CandidacyDepartment::create(['code' => 'CIS', 'name' => 'Computer and Information Sciences']);
+        $dept = CandidacyDepartment::create(['code' => 'CIS', 'name' => 'Computer & Information Sciences', 'faculty' => 'Faculty of Science, Management & Computing']);
 
         $this->student = $this->student();
         $this->lecturer = $this->supervisor();

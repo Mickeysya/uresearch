@@ -10,6 +10,7 @@ use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Chloe\Services\CandidacyAppealService;
 use App\Modules\Chloe\Services\CandidacyDocumentService;
 use App\Modules\Chloe\Support\CandidacyAppealPresenter;
+use App\Modules\Chloe\Support\CandidacyDepartmentResolver;
 use App\Modules\Chloe\Support\CandidacyLiveVersion;
 use App\Modules\Chloe\Support\CandidacyPortalQuery;
 use App\Modules\Chloe\Support\CandidacyReturnPath;
@@ -95,7 +96,7 @@ class StudentAppealController extends Controller
         // The first visit creates the (empty) draft so documents can be attached at step 3.
         $appeal ??= $this->service->saveDraft($user, []);
 
-        return view('chloe::candidacy.wca.form', $this->formData($appeal, $candidacy, $step, 'draft', $request->integer('department') ?: null));
+        return view('chloe::candidacy.wca.form', $this->formData($appeal, $candidacy, $step, 'draft'));
     }
 
     public function saveStep(Request $request, int $step)
@@ -117,8 +118,14 @@ class StudentAppealController extends Controller
             return back()->withErrors(['official_form' => 'Upload the official appeal form (.xlsx) to continue.']);
         }
 
+        $department = CandidacyDepartmentResolver::forCandidacy($candidacy);
+
+        if ($step === 1 && ! $department) {
+            return back()->withErrors(['department' => 'Your department could not be found in your student record, so the appeal cannot be submitted. Please contact the Centre for Graduate Studies.']);
+        }
+
         if ($step === 1 || $step === 2) {
-            $data = $request->validate($this->rules($step, $strict, $request, $candidacy->remainingAppealMonths()), $this->messages());
+            $data = $request->validate($this->rules($step, $strict, $request, $candidacy->remainingAppealMonths(), $department?->id), $this->messages());
             $this->service->saveDraft($user, $this->cleanData($data, $step));
         }
 
@@ -162,7 +169,7 @@ class StudentAppealController extends Controller
     {
         Gate::authorize('edit', $appeal);
         $candidacy = StudyCandidacy::where('student_id', $request->user()->id)->firstOrFail();
-        $data = $request->validate($this->rules(2, true, $request, $candidacy->remainingAppealMonths()), $this->messages());
+        $data = $request->validate($this->rules(2, true, $request, $candidacy->remainingAppealMonths(), null), $this->messages());
 
         $this->service->resubmit($request->user(), $appeal, $this->cleanData($data, 2));
 
@@ -274,22 +281,20 @@ class StudentAppealController extends Controller
     // ---------------------------------------------------------------- helpers
 
     /** @return array<string, mixed> */
-    protected function formData(CandidacyAppeal $appeal, ?StudyCandidacy $candidacy, int $step, string $mode, ?int $departmentOverride = null): array
+    protected function formData(CandidacyAppeal $appeal, ?StudyCandidacy $candidacy, int $step, string $mode): array
     {
         $appeal->load(['documents', 'publications', 'department']);
-        $departmentId = $departmentOverride ?? $appeal->department_id ?? $candidacy?->department_id;
-        $department = $departmentId ? CandidacyDepartment::find($departmentId) : null;
+        $department = $candidacy ? CandidacyDepartmentResolver::forCandidacy($candidacy) : null;
         $returned = $mode === 'resubmit'
             ? $appeal->events()->whereIn('action', ['returned'])->get()->last()
             : null;
 
         return [
             'appeal' => $appeal, 'candidacy' => $candidacy, 'step' => $step, 'mode' => $mode,
-            'departments' => CandidacyDepartment::where('active', true)->orderBy('name')->get(),
             'department' => $department,
             'lecturers' => $department ? CandidacyStaffDirectory::lecturers($department) : collect(),
             'chair' => $department ? CandidacyStaffDirectory::chair($department) : null,
-            'dean' => CandidacyStaffDirectory::dean($department),
+            'dean' => CandidacyStaffDirectory::dean(),
             'remaining' => $candidacy?->remainingAppealMonths() ?? 0,
             'phases' => CandidacyAppealDetail::phases(),
             'returnedEvent' => $returned,
@@ -300,15 +305,15 @@ class StudentAppealController extends Controller
     }
 
     /** @return array<string, mixed> */
-    protected function rules(int $step, bool $strict, Request $request, int $remaining): array
+    protected function rules(int $step, bool $strict, Request $request, int $remaining, ?int $departmentId): array
     {
         $req = $strict ? 'required' : 'nullable';
 
         if ($step === 1) {
             return [
-                'department_id' => [$req, 'integer', Rule::exists('candidacy_departments', 'id')->where('active', true)],
-                'supervisor_profile_id' => [$req, 'integer', Rule::exists('candidacy_staff_assignments', 'staff_profile_id')
-                    ->where('department_id', $request->input('department_id'))->where('role', 'lecturer')],
+                // the department is not a choice: a posted value that is not the student's own is refused (a tampered form)
+                'department_id' => ['nullable', 'integer', Rule::in([$departmentId])],
+                'supervisor_profile_id' => [$req, 'integer', Rule::exists('candidacy_staff_assignments', 'staff_profile_id')->where('department_id', $departmentId)->where('role', 'lecturer')],
             ];
         }
 
@@ -336,8 +341,8 @@ class StudentAppealController extends Controller
     protected function messages(): array
     {
         return [
-            'supervisor_profile_id.exists' => 'Pick a supervisor from the chosen department.',
-            'department_id.required' => 'Choose your department.',
+            'supervisor_profile_id.exists' => 'Pick a supervisor from the lecturers of your department.',
+            'department_id.in' => 'Your department comes from your student record and cannot be changed.',
             'supervisor_profile_id.required' => 'Choose your supervisor.',
             'requested_months.max' => 'You can request at most your remaining allowance (:max month(s)).',
             'reason.min' => 'Please give a reason of at least 20 characters.',

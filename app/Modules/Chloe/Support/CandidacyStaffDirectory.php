@@ -28,10 +28,13 @@ final class CandidacyStaffDirectory
         return self::holders($department, CandidacyStaffAssignment::ROLE_CHAIR)->first();
     }
 
-    /** The department's own dean, or the default dean when it has none. */
-    public static function dean(CandidacyDepartment|int|null $department): ?CandidacyStaffProfile
+    /**
+     * The ONE Dean of the whole university (Dean of PGR / CGS Dean): the profile of the account that has the Dean role. A department has no
+     * Dean of its own, so the argument is ignored; it stays only so existing callers keep working.
+     */
+    public static function dean(CandidacyDepartment|int|null $department = null): ?CandidacyStaffProfile
     {
-        return ($department ? self::holders($department, CandidacyStaffAssignment::ROLE_DEAN)->first() : null) ?? self::defaultDean();
+        return self::defaultDean();
     }
 
     public static function defaultDean(): ?CandidacyStaffProfile
@@ -52,7 +55,14 @@ final class CandidacyStaffDirectory
 
         return CandidacyStaffProfile::query()
             ->whereIn('id', CandidacyStaffAssignment::where('department_id', $id)->where('role', $role)->select('staff_profile_id'))
-            ->orderBy('full_name')
-            ->get();
+            ->get()
+            ->sortBy(fn (CandidacyStaffProfile $p) => mb_strtolower(self::sortName($p->full_name)))
+            ->values();
+    }
+
+    /** The name without its leading titles ("Assoc. Prof. Ir. Dr. Tan Wei Ming" -> "Tan Wei Ming"), so lists sort by the name itself. */
+    public static function sortName(string $name): string
+    {
+        return trim(preg_replace('/^((assoc\.?\s+prof\.?|prof\.?|ir\.?|dr\.?|puan|encik|en\.?|ts\.?)\s+)+/i', '', $name));
     }
 }

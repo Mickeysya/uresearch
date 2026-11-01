@@ -17,7 +17,7 @@
             <div class="wca-filter-grid is-ops">
                 <div class="wca-field"><label for="wca-q">Search</label><input id="wca-q" class="wca-input" type="search" name="q" value="{{ $f['q'] }}" placeholder="Appeal no., student name or ID"></div>
                 <div class="wca-field"><label for="wca-f-dept">Department</label>
-                    <select id="wca-f-dept" class="wca-select" name="department"><option value="">All</option>@foreach ($departments as $d)<option value="{{ $d->id }}" @selected($f['department'] === $d->id)>{{ $d->name }}</option>@endforeach</select></div>
+                    <select id="wca-f-dept" class="wca-select" name="department"><option value="">All</option>@foreach ($departments->groupBy('faculty') as $faculty => $group)<optgroup label="{{ $faculty }}">@foreach ($group as $d)<option value="{{ $d->id }}" @selected($f['department'] === $d->id)>{{ $d->name }}</option>@endforeach</optgroup>@endforeach</select></div>
                 <div class="wca-field"><label for="wca-f-status">Status</label>
                     <select id="wca-f-status" class="wca-select" name="status"><option value="">All</option>@foreach (['with_supervisor' => 'With Supervisor', 'with_chair' => 'With Department Chair', 'with_cgs' => 'With CGS', 'with_dean' => 'With Dean', 'returned' => 'Returned to student', 'approved' => 'Approved', 'rejected' => 'Rejected (final)', 'closed_expired' => 'Closed expired'] as $k => $label)<option value="{{ $k }}" @selected($f['status'] === $k)>{{ $label }}</option>@endforeach</select></div>
                 <div class="wca-field"><label for="wca-f-step">Current step</label>

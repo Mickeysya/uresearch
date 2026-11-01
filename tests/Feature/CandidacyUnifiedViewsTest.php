@@ -318,7 +318,7 @@ class CandidacyUnifiedViewsTest extends TestCase
 
     public function test_the_old_wordings_are_gone_from_the_module_and_its_docs(): void
     {
-        $banned = ['Needs my action', 'Waiting for my action', 'Pending Appeals', 'waiting for your action', 'is waiting for you', 'Programme Chair', 'Chair of Department'];
+        $banned = ['Needs my action', 'Waiting for my action', 'Pending Appeals', 'waiting for your action', 'is waiting for you', 'Programme Chair', 'Chair of Department', 'My Appeal Signature'];
         $files = collect([
             ...glob(base_path('app/Modules/Chloe/Resources/views/candidacy/**/*.php')) ?: [], base_path('config/candidacy.php'), base_path('docs/candidacy-appeal-inventory.md'), base_path('app/Modules/Chloe/README.md'),
         ]);

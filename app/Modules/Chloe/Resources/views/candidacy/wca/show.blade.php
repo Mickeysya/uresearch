@@ -6,7 +6,7 @@
 
 @section('content')
     <div class="wca-page">
-        <x-core::page-header title="{{ $appeal->displayNo() }}" subtitle="{{ $identity?->name }} ({{ $identity?->studentId }}) · {{ $appeal->department?->name }}" :back="$back" :back-history="false">
+        <x-core::page-header :title="$appeal->displayNo()" :subtitle="($identity?->name).' ('.($identity?->studentId).') · '.($appeal->department?->name)" :back="$back" :back-history="false">
             <a href="{{ route('dashboard') }}" class="wca-home">Home</a>
         </x-core::page-header>
 
