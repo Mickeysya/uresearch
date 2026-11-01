@@ -31,6 +31,7 @@ class CandidacyInsightsPageTest extends TestCase
             }
         }
 
+        auth()->logout();
         $this->get(route('candidacy.cgs.insights'))->assertRedirect();
     }
 
