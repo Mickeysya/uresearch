@@ -32,6 +32,8 @@
      to min-height rather than a hard height because this card also carries
      the occupant's name/ID and key badges, which the student's never did. --}}
 <style>
+    {{-- 390 px: the three header buttons of the results page (Home, Insights, Manage the seat catalogue) wrap instead of pushing the page sideways. --}}
+    @media (max-width: 480px) { .page-header-actions { flex-wrap: wrap; max-width: 100%; } .page-header-actions button { white-space: normal; } }
     .cgs-top-card { display: flex; flex-direction: column; gap: 16px; }
 
     .cgs-search-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
@@ -107,7 +109,7 @@
         gap: 16px;
     }
     .cgs-seat-image { width: 204px; height: 153px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #fff; }
-    .cgs-seat-text { flex: 1; min-width: 0; }
+    .cgs-seat-text { flex: 1 1 160px; min-width: 0; }
     .cgs-seat-title { font-weight: 700; font-size: 17px; }
     .cgs-seat-sub { color: var(--text-grey); font-size: 13px; margin-top: 2px; }
     .cgs-seat-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }

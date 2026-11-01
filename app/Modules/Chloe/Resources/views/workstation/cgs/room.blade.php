@@ -43,8 +43,8 @@
         (scoped to this page only, not the shared class itself) keeps
         every badge inside the card at any width.
     --}}
-    .cgs-seat-text { flex: 1; min-width: 0; max-width: 100%; }
-    .cgs-seat-badges .status-badge { white-space: normal; max-width: 100%; }
+    .cgs-seat-text { flex: 1 1 160px; min-width: 0; max-width: 100%; }
+    .cgs-seat-badges .status-badge { white-space: normal; max-width: 100%; box-sizing: border-box; }
     .cgs-seat-title { font-weight: 700; font-size: 17px; }
     .cgs-seat-sub { color: var(--text-grey); font-size: 13px; margin-top: 2px; }
     .cgs-seat-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }

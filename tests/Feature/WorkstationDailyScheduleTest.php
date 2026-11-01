@@ -174,4 +174,28 @@ class WorkstationDailyScheduleTest extends TestCase
         $this->at('08:00:00');
         $this->assertNull(\App\Modules\Chloe\Support\ScheduledDelivery::refreshing(fn () => \App\Modules\Chloe\Support\ScheduledDelivery::apply($notice())->delay), 'from 08:00 on: immediate');
     }
+
+    public function test_the_termination_notice_is_queued_for_08_00_after_the_07_30_state_change_and_immediate_after_08_00(): void
+    {
+        foreach (['07:30:00' => true, '09:10:00' => false] as $time => $held) {
+            $this->at($time);
+            [$student, $key] = $this->pendingKey(1);
+            \App\Modules\Chloe\Models\StudyCandidacy::create(['student_id' => $student->id, 'programme_start_date' => '2022-01-01', 'candidacy_expiry_date' => '2026-10-01', 'status' => 'active']);
+            Notification::fake();
+
+            $this->artisan('workstation:refresh-daily')->assertSuccessful();
+
+            $notice = \App\Modules\Chloe\Models\WorkstationTerminationNotice::where('workstation_request_id', $key->workstation_request_id)->first();
+            $this->assertNotNull($notice, "the termination is started at {$time}");
+            $eight = Carbon::parse('2026-11-03 08:00:00', 'Asia/Kuala_Lumpur');
+            Notification::assertSentTo($student, \App\Modules\Chloe\Notifications\WorkstationStatusNotice::class, fn ($n) => $held ? ($n->delay !== null && $n->delay->equalTo($eight)) : $n->delay === null);
+
+            \Illuminate\Support\Facades\DB::table('workstation_termination_notices')->delete();
+            \Illuminate\Support\Facades\DB::table('locker_keys')->delete();
+            \Illuminate\Support\Facades\DB::table('workstation_requests')->delete();
+            \Illuminate\Support\Facades\DB::table('study_candidacies')->delete();
+            \Illuminate\Support\Facades\DB::table('workstations')->delete();
+            \Illuminate\Support\Facades\DB::table('users')->where('email', 'keys@test.my')->delete();
+        }
+    }
 }

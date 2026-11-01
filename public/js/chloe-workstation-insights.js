@@ -2005,10 +2005,12 @@
         }
 
         var width = container.clientWidth || 400;
-        var leftGutter = 40, labelHeadroom = 24;
+        // Narrow cards (phones): tighter gutter, gap and column floor, so four columns fit without a sideways scroll (same fix as the Programme chart).
+        var narrowCard = width < 420;
+        var leftGutter = narrowCard ? 30 : 40, labelHeadroom = 24;
         var chartH = 220;
-        var colGap = 24;
-        var colW = Math.max(36, Math.min(56, (width - leftGutter) / order.length - colGap));
+        var colGap = narrowCard ? 10 : 24;
+        var colW = Math.max(narrowCard ? 28 : 36, Math.min(56, (width - leftGutter - 20) / order.length - colGap));
         // colW has its own 36px floor (PART 5's own minimum column
         // width) -- on a narrow container that floor can need MORE
         // space than the container actually has. Found live: the last
@@ -2055,7 +2057,7 @@
             valueLabel.textContent = String(contextCount);
             svg.appendChild(valueLabel);
 
-            var lines = splitLabelTwoLines(labelMap[key]);
+            var lines = splitLabelTwoLines(narrowCard ? String(labelMap[key]).replace(' months', ' mo') : labelMap[key]);
             lines.forEach(function (line, li) {
                 var t = svgEl('text', { x: x + colW / 2, y: chartH + 4 + li * 13, 'text-anchor': 'middle', class: 'wsi-category-label' });
                 t.textContent = line;
