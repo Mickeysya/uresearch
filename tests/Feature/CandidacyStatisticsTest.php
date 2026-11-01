@@ -117,8 +117,8 @@ class CandidacyStatisticsTest extends TestCase
         }
 
         $summary = S::summary(S::population());
-        $sql = fn (string $from, string $to) => DB::table('demo_student_profiles')->where('status', 'active')->whereBetween('candidacy_expiry_date', [$from, $to])->count()
-            + DB::table('study_candidacies')->where(fn ($q) => $q->whereNull('status')->orWhereNotIn('status', ['softbound', 'completed', 'inactive', 'dismissed']))->whereBetween('candidacy_expiry_date', [$from, $to])->count();
+        $sql = fn (string $from, string $to) => DB::table('demo_student_profiles')->where('status', 'active')->whereDate('candidacy_expiry_date', '>=', $from)->whereDate('candidacy_expiry_date', '<=', $to)->count()
+            + DB::table('study_candidacies')->where(fn ($q) => $q->whereNull('status')->orWhereNotIn('status', ['softbound', 'completed', 'inactive', 'dismissed']))->whereDate('candidacy_expiry_date', '>=', $from)->whereDate('candidacy_expiry_date', '<=', $to)->count();
 
         $this->assertSame($sql('2027-03-01', '2027-06-01'), $summary['within3']);
         $this->assertSame($sql('2027-03-01', '2028-12-31'), $summary['total']);
