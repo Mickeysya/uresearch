@@ -116,7 +116,7 @@
         target.addEventListener('mouseenter', function (e) { var t = tip(); showTooltip(e.clientX, e.clientY, t[0], t.slice(1)); });
         target.addEventListener('mousemove', function (e) { if (!tooltipEl.hidden) { tooltipEl.style.left = (e.clientX + 12) + 'px'; tooltipEl.style.top = (e.clientY + 12) + 'px'; } });
         target.addEventListener('mouseleave', hideTooltip);
-        target.addEventListener('focus', function () { var t = tip(); showTooltipNear(target, t[0], t.slice(1)); });
+        target.addEventListener('focus', function () { setTimeout(function () { if (document.activeElement === target) { var t = tip(); showTooltipNear(target, t[0], t.slice(1)); } }, 80); }); // after the scroll-into-view, which would hide it
         target.addEventListener('blur', hideTooltip);
     }
 
@@ -156,7 +156,7 @@
             var tl = svgEl('text', { x: padL - 6, y: gy + 4, 'text-anchor': 'end', class: 'wsi-axis-label' }); tl.textContent = Math.round(v); svg.appendChild(tl);
         }
         var n = cfg.groups.length, slot = plotW / Math.max(1, n), bw = Math.min(46, slot * 0.66);
-        var active = hlActive();
+        var active = cfg.groups.some(function (g) { return !!g.solid; }); // only a chart that has a highlighted part fades its context
         cfg.groups.forEach(function (g, i) {
             var x = padL + slot * i + (slot - bw) / 2, grp = svgEl('g', {});
             [['ghost', g.segs, active ? 0.22 : 1], ['solid', g.solid, 1]].forEach(function (pass) {
