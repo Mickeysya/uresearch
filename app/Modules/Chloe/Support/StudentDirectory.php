@@ -40,7 +40,7 @@ final class StudentDirectory
             return null;
         }
 
-        $profile = DemoStudentProfile::find($demoProfileId);
+        $profile = DemoStudentProfile::withoutGlobalScopes()->find($demoProfileId);
 
         return $profile ? self::fromDemoProfile($profile) : null;
     }
@@ -65,7 +65,7 @@ final class StudentDirectory
             return self::fromUser($user);
         }
 
-        $profile = DemoStudentProfile::where('matric_no', $studentId)->first();
+        $profile = DemoStudentProfile::withoutGlobalScopes()->where('matric_no', $studentId)->first();
 
         return $profile ? self::fromDemoProfile($profile) : null;
     }

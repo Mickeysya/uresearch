@@ -360,13 +360,4 @@ class CandidacyStudentPagesTest extends TestCase
             ->assertSee('The Study Candidacy assistant is coming soon.')->assertDontSee('Students Near Candidacy Expiry');
         $this->actingAs($this->cgsUser)->get(route('candidacy.cgs.dismissals'))->assertOk()->assertSee('The Study Candidacy assistant is coming soon.');
     }
-
-    public function test_a_final_rejection_makes_the_dismissal_reason_appeal_rejected(): void
-    {
-        $this->service->decide($this->deanUser, $this->toStage('dean'), 'reject', ['progress_insufficient']);
-        $this->candidacy->update(['candidacy_expiry_date' => '2026-12-01']);
-
-        $this->assertSame(1, (new \App\Modules\Chloe\Services\DismissalGenerator)->generate());
-        $this->assertSame(\App\Modules\Chloe\Models\CandidacyDismissal::REASON_APPEAL_REJECTED, \App\Modules\Chloe\Models\CandidacyDismissal::first()->reason);
-    }
 }

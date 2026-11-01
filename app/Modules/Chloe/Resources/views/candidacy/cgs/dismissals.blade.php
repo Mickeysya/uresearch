@@ -5,71 +5,34 @@
 @include('chloe::candidacy.wca._assets')
 
 @section('content')
-<div class="card-container-inline">
-    <x-core::page-header title="Dismiss Exceeded Study Candidacy" :back="route('candidacy.cgs.operations')" :back-history="false">
-        <form method="POST" action="{{ route('candidacy.cgs.dismissals.refresh') }}">
-            @csrf
-            <button type="submit">Refresh List</button>
+    <div class="wca-page">
+        <x-core::page-header title="Dismissal List" subtitle="Students whose study candidacy has expired. CGS exports the list; the Registry processes it; the result comes back through Dismissal Upload." :back="route('candidacy.cgs.operations')" :back-history="false">
+            <a href="{{ route('dashboard') }}" class="wca-home">Home</a>
+        </x-core::page-header>
+
+        @include('chloe::candidacy.wca._flash')
+
+        <form method="GET" action="{{ route('candidacy.cgs.dismissals') }}" class="wca-card wca-filters" role="search" id="wca-dismissal-filters">
+            @if ($f['group'])<input type="hidden" name="group" value="{{ $f['group'] }}">@endif
+            <div class="wca-filter-grid is-ops">
+                <div class="wca-field"><label for="wca-q">Search</label><input id="wca-q" class="wca-input" type="search" name="q" value="{{ $f['q'] }}" placeholder="Student name or ID"></div>
+                <div class="wca-field"><label for="wca-f-dept">Department</label>
+                    <select id="wca-f-dept" class="wca-select" name="department"><option value="">All</option>@foreach ($departments->groupBy('faculty') as $faculty => $group)<optgroup label="{{ $faculty }}">@foreach ($group as $d)<option value="{{ $d->id }}" @selected($f['department'] === $d->id)>{{ $d->name }}</option>@endforeach</optgroup>@endforeach</select></div>
+                <div class="wca-field"><label for="wca-f-level">Programme level</label>
+                    <select id="wca-f-level" class="wca-select" name="level"><option value="">All</option><option value="master" @selected($f['level'] === 'master')>Master</option><option value="phd" @selected($f['level'] === 'phd')>PhD</option></select></div>
+                <div class="wca-field"><label for="wca-f-outcome">Last appeal outcome</label>
+                    <select id="wca-f-outcome" class="wca-select" name="outcome"><option value="">All</option>@foreach (\App\Modules\Chloe\Support\CandidacyDismissalList::OUTCOMES as $k => $label)<option value="{{ $k }}" @selected($f['outcome'] === $k)>{{ $label }}</option>@endforeach</select></div>
+                <div class="wca-field"><label for="wca-f-exported">Exported</label>
+                    <select id="wca-f-exported" class="wca-select" name="exported"><option value="">All</option><option value="yes" @selected($f['exported'] === 'yes')>Yes</option><option value="no" @selected($f['exported'] === 'no')>No</option></select></div>
+            </div>
+            <div class="wca-actions"><button type="submit" class="wca-btn is-primary">Apply filters</button><a class="wca-btn" href="{{ route('candidacy.cgs.dismissals') }}">Clear</a></div>
         </form>
-    </x-core::page-header>
 
-    <div class="card card-wide">
-        <h3>Pending Review</h3>
-        <p style="color: var(--text-grey); font-size: 13px;">
-            Review each candidate, then submit to Registry outside this system. Once Registry has processed a
-            dismissal, confirm it here: that updates the student's record and sends their notification.
-        </p>
-        <div class="card-divider"></div>
+        @include('chloe::candidacy.wca._live', ['liveVersion' => $liveVersion, 'liveRegionUrl' => route('candidacy.cgs.dismissals.region', $query), 'liveVersionUrl' => route('candidacy.cgs.dismissals.live.version')])
 
-        @if ($pending->isEmpty())
-            <div class="empty-state">No dismissal candidates awaiting review.</div>
-        @else
-            <div class="wca-table-wrap"><table class="recent-activity-table">
-                <thead><tr><th>Student</th><th>Reason</th><th>Candidacy Expiry</th><th>Generated</th><th>Action</th></tr></thead>
-                <tbody>
-                    @foreach ($pending as $dismissal)
-                        <tr>
-                            <td>{{ $dismissal->student->name ?? '—' }}@if ($dismissal->student?->matric_no) ({{ $dismissal->student->matric_no }})@endif</td>
-                            <td>{{ \App\Modules\Chloe\Models\CandidacyDismissal::reasonLabel($dismissal->reason) }}</td>
-                            <td>{{ $dismissal->candidacy->candidacy_expiry_date->format('j M Y') }}</td>
-                            <td>{{ $dismissal->generated_at->format('j M Y') }}</td>
-                            <td>
-                                <form method="POST" action="{{ route('candidacy.cgs.dismissals.confirm', $dismissal) }}">
-                                    @csrf
-                                    <button type="submit">Confirm Registry Processed</button>
-                                </form>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table></div>
-        @endif
+        <div id="wca-live-region">
+            @include('chloe::candidacy.cgs._dismissals_region')
+        </div>
     </div>
-</div>
-
-<div class="card-container-inline">
-    <div class="card card-wide">
-        <h3>Recently Confirmed</h3>
-        <div class="card-divider"></div>
-
-        @if ($confirmed->isEmpty())
-            <div class="empty-state">Nothing confirmed yet.</div>
-        @else
-            <div class="wca-table-wrap"><table class="recent-activity-table">
-                <thead><tr><th>Student</th><th>Reason</th><th>Confirmed By</th><th>Confirmed On</th></tr></thead>
-                <tbody>
-                    @foreach ($confirmed as $dismissal)
-                        <tr>
-                            <td>{{ $dismissal->student->name ?? '—' }}</td>
-                            <td>{{ \App\Modules\Chloe\Models\CandidacyDismissal::reasonLabel($dismissal->reason) }}</td>
-                            <td>{{ $dismissal->confirmedBy->name ?? '—' }}</td>
-                            <td>{{ $dismissal->confirmed_at?->format('j M Y') }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table></div>
-        @endif
-    </div>
-</div>
-@include('chloe::workstation._assistant-widget', ['wsaStatic' => 'The Study Candidacy assistant is coming soon.'])
+    @include('chloe::workstation._assistant-widget', ['wsaStatic' => 'The Study Candidacy assistant is coming soon.'])
 @endsection

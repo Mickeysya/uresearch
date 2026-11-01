@@ -23,14 +23,25 @@ class DemoStudentProfile extends Model
 
     protected $fillable = [
         'matric_no', 'name', 'email', 'gender', 'programme',
-        'programme_start_date', 'candidacy_expiry_date', 'status',
+        'programme_start_date', 'candidacy_expiry_date', 'status', 'candidacy_only', 'dismissed_at', 'dismissed_by_id',
     ];
+
+    /**
+     * Demo students made only for the Study Candidacy demo (candidacy_only) are invisible to everything that does not ask for them: Workstation
+     * lists, searches, the demo seeder and the statistics never see them. Candidacy code asks with withoutGlobalScopes() (or the relations below).
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope('workstation_visible', fn ($query) => $query->where($query->getModel()->getTable().'.candidacy_only', false));
+    }
 
     protected function casts(): array
     {
         return [
             'programme_start_date' => 'date',
             'candidacy_expiry_date' => 'date',
+            'candidacy_only' => 'boolean',
+            'dismissed_at' => 'datetime',
         ];
     }
 

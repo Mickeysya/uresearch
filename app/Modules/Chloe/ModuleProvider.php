@@ -13,13 +13,13 @@ use App\Modules\Chloe\Console\Commands\CandidacyDemoSoftbound;
 use App\Modules\Chloe\Console\Commands\CheckCandidacyAllowance;
 use App\Modules\Chloe\Console\Commands\CheckCandidacyStatusSource;
 use App\Modules\Chloe\Console\Commands\CloseExpiredCandidacyAppeals;
+use App\Modules\Chloe\Console\Commands\GenerateCandidacyDismissals;
 use App\Modules\Chloe\Console\Commands\WorkstationRefreshDaily;
 use App\Modules\Chloe\Console\Commands\WorkstationSendRemindersDaily;
 use App\Modules\Chloe\Console\Commands\AssistantCatalogue;
 use App\Modules\Chloe\Console\Commands\AssistantCheck;
 use App\Modules\Chloe\Console\Commands\AssistantEvaluate;
 use App\Modules\Chloe\Console\Commands\AssistantLogList;
-use App\Modules\Chloe\Console\Commands\GenerateCandidacyDismissals;
 use App\Modules\Chloe\Console\Commands\ProcessWorkstationReleases;
 use App\Modules\Chloe\Console\Commands\ReleaseExpiredWorkstationSelections;
 use App\Modules\Chloe\Console\Commands\RemindOverdueLockerKeys;
@@ -109,8 +109,8 @@ class ModuleProvider extends ServiceProvider
                 WorkstationRefreshDaily::class,
                 WorkstationSendRemindersDaily::class,
                 SendCandidacyReminders::class,
-                SendCandidacyExpiryReminders::class,
                 GenerateCandidacyDismissals::class,
+                SendCandidacyExpiryReminders::class,
                 ReleaseExpiredWorkstationSelections::class,
                 ProcessWorkstationReleases::class,
                 WorkstationDemoLogin::class,

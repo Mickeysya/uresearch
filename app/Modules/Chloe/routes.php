@@ -165,8 +165,9 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
         Route::get('/cgs/candidacy/live/stats', [CandidacyOperationsController::class, 'liveStats'])->middleware('throttle:workstation-live')->name('candidacy.cgs.live.stats');
 
         Route::get('/cgs/candidacy/dismissals', [CandidacyDismissalController::class, 'index'])->name('candidacy.cgs.dismissals');
-        Route::post('/cgs/candidacy/dismissals/refresh', [CandidacyDismissalController::class, 'refresh'])->name('candidacy.cgs.dismissals.refresh');
-        Route::post('/cgs/candidacy/dismissals/{dismissal}/confirm', [CandidacyDismissalController::class, 'confirm'])->name('candidacy.cgs.dismissals.confirm');
+        Route::get('/cgs/candidacy/dismissals/region', [CandidacyDismissalController::class, 'region'])->name('candidacy.cgs.dismissals.region');
+        Route::get('/cgs/candidacy/dismissals/live/version', [CandidacyDismissalController::class, 'liveVersion'])->middleware('throttle:workstation-live')->name('candidacy.cgs.dismissals.live.version');
+        Route::post('/cgs/candidacy/dismissals/export', [CandidacyDismissalController::class, 'export'])->name('candidacy.cgs.dismissals.export');
     });
 });
 

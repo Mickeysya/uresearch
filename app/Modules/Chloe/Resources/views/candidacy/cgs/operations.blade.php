@@ -29,7 +29,7 @@
                 <div class="wca-field"><label for="wca-f-round">Round</label>
                     <select id="wca-f-round" class="wca-select" name="round"><option value="">All</option>@foreach (range(1, 5) as $r)<option value="{{ $r }}" @selected($f['round'] === $r)>{{ $r }}</option>@endforeach</select></div>
             </div>
-            <div class="wca-actions"><button type="submit" class="wca-btn is-primary">Apply filters</button><a class="wca-btn" href="{{ route('candidacy.cgs.operations') }}">Clear</a><a class="wca-btn" href="{{ route('candidacy.cgs.dismissals') }}">Review the dismissal list</a></div>
+            <div class="wca-actions"><button type="submit" class="wca-btn is-primary">Apply filters</button><a class="wca-btn" href="{{ route('candidacy.cgs.operations') }}">Clear</a><a class="wca-btn" href="{{ route('candidacy.cgs.dismissals') }}">Dismissal List</a></div>
         </form>
 
         @include('chloe::candidacy.wca._live', ['liveVersion' => $liveVersion, 'liveRegionUrl' => route('candidacy.cgs.operations.region', $query), 'liveVersionUrl' => route('candidacy.cgs.live.version'), 'liveStatsUrl' => route('candidacy.cgs.live.stats', $query)])

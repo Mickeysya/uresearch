@@ -75,6 +75,11 @@ return [
         'MHU' => ['/management/i', '/\\bMBA\\b/', '/humanities/i'],
     ],
 
+    // The Dismissal List (Support\CandidacyDismissalList): students whose candidacy has expired. Coursework students are not listed.
+    'dismissal' => [
+        'include_coursework' => false,
+    ],
+
     // These login accounts always belong to Computer & Information Sciences (the live demo accounts).
     'cis_demo_accounts' => ['student@utp.edu.my', 'chloe_26005007@utp.edu.my'],
 

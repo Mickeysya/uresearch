@@ -82,7 +82,7 @@ class CandidacyAppeal extends Model
 
     public function demoProfile(): BelongsTo
     {
-        return $this->belongsTo(DemoStudentProfile::class, 'demo_profile_id');
+        return $this->belongsTo(DemoStudentProfile::class, 'demo_profile_id')->withoutGlobalScopes();
     }
 
     public function candidacy(): BelongsTo
