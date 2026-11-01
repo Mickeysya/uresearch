@@ -23,7 +23,7 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
  */
 class AssistantAsk extends Command
 {
-    protected $signature = 'assistant:ask {email : The user\'s email} {question : The question to ask} {--recent=* : An earlier question, oldest first (repeatable)} {--trace : Print the router decision trace}';
+    protected $signature = 'assistant:ask {email : The user\'s email} {question : The question to ask} {--domain=workstation : workstation or candidacy} {--recent=* : An earlier question, oldest first (repeatable)} {--trace : Print the router decision trace}';
 
     protected $description = 'Run the assistant pipeline as the given user and print the result';
 
@@ -39,6 +39,8 @@ class AssistantAsk extends Command
 
             return self::FAILURE;
         }
+
+        $pipeline->setDomain((string) $this->option('domain'));
 
         if ($this->option('trace')) {
             $pipeline->enableTrace();

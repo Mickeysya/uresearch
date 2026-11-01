@@ -29,6 +29,13 @@ class AssistantCheck extends Command
         $this->line("Provider: {$provider}");
         $this->line('Model: '.($primaryModel ?: '(not set)'));
 
+        // both domains: their catalogue sizes per role and their router prompt (the one provider, key and limits are shared)
+        foreach (\App\Modules\Chloe\Assistant\AssistantDomains::all() as $domain) {
+            $sizes = collect((array) config("assistant.domains.{$domain}.roles"))->map(fn ($r) => $r.' '.count(\App\Modules\Chloe\Assistant\Catalogue::forRole($r, $domain)))->implode(', ');
+            $prompt = mb_strlen(GeminiModel::routerInstruction(\App\Modules\Chloe\Assistant\Catalogue::forRole('cgs', $domain), \App\Modules\Chloe\Assistant\RouterFewShots::all($domain), 'today', []));
+            $this->line("Domain {$domain}: catalogue entries per role: {$sizes}; router prompt (CGS) {$prompt} characters");
+        }
+
         if ($provider === 'gemini' && ! $primaryModel) {
             $this->error('ASSISTANT_GEMINI_MODEL is empty -- set it in .env before this can work.');
 

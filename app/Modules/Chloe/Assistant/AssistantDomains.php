@@ -115,9 +115,9 @@ final class AssistantDomains
     /**
      * The other domain's name when the question clearly belongs to it: it has strong terms of the other domain and none of the current one. One exception: "candidacy" next to an
      * expiry word ("when does my candidacy expire") is not enough on its own, because a workstation loan runs to the candidacy expiry date; the Workstation catalogue then decides
-     * (and the redirect still follows if it has no entry for it).
+     * (and once the router has found no entry for it, `$afterRouter`, the redirect follows).
      */
-    public static function belongsToOther(string $normalisedQuestion, string $current): ?string
+    public static function belongsToOther(string $normalisedQuestion, string $current, bool $afterRouter = false): ?string
     {
         if (self::hasStrongTerm($normalisedQuestion, $current)) {
             return null;
@@ -130,7 +130,7 @@ final class AssistantDomains
             return null;
         }
 
-        if ($current === self::WORKSTATION && array_diff($terms, ['candidacy', 'candidature']) === [] && preg_match('/\b(expir\w*|end|ends|ending|finish\w*|deadline)\b/', $normalisedQuestion)) {
+        if (! $afterRouter && $current === self::WORKSTATION && array_diff($terms, ['candidacy', 'candidature']) === [] && preg_match('/\b(expir\w*|end|ends|ending|finish\w*|deadline)\b/', $normalisedQuestion)) {
             return null;
         }
 

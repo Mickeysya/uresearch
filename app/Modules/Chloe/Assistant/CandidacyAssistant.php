@@ -300,7 +300,7 @@ final class CandidacyAssistant
         $window = ['window' => ['type' => 'string', 'required' => false, 'hint' => 'optional: this_month, last_month or last_30_days']];
 
         return [
-            'cand_my_expiry' => ['roles' => $S, 'question' => 'When does my candidacy expire?', 'description' => "The student's own candidacy expiry date and how many days are left. Not about workstation loan dates (that is my_workstation).", 'link' => 'candidacy.status',
+            'cand_my_expiry' => ['roles' => $S, 'question' => 'When does my candidacy expire?', 'description' => "The student's own candidacy expiry date and how many days are left.", 'link' => 'candidacy.status',
                 'examples' => ['when does my candidacy end', 'my candidacy expiry date pls', 'how many days left on my candidacy', 'when will my candidature finish', 'candidacy deadline for me', 'expiry date of my study candidacy']],
             'cand_my_extension' => ['roles' => $S, 'question' => 'How many months of extension do I have left?', 'description' => "The student's own months of extension used and left, out of the maximum (12) across all appeals.", 'link' => 'candidacy.status',
                 'examples' => ['how many extension months remain', 'extension months used so far', 'how much extension can i still get', 'months left to appeal for', 'my remaining extension', 'have i used up my extension']],
@@ -338,7 +338,7 @@ final class CandidacyAssistant
                 'examples' => ['appeals waiting over 10 days', 'how many appeals are late', 'overdue appeals count', 'appeals stuck for 10 days or more', 'appeals waiting longer than ten days']],
             'cand_cgs_avg_waiting' => ['roles' => $C, 'question' => 'What is the average waiting time at each step?', 'description' => 'The average number of days appeals have waited at each step right now.', 'link' => 'candidacy.cgs.operations',
                 'examples' => ['average days waiting per step', 'how long do appeals wait on average', 'mean waiting time at the dean', 'average wait by stage', 'typical delay at each step']],
-            'cand_cgs_expiring' => ['roles' => $C, 'question' => 'How many students expire within {months} months?', 'defaults' => ['months' => 3], 'description' => 'How many students\' candidacies expire within 1, 2 or 3 months, ALL students and not only workstation seat holders (the candidacy Insights numbers). Contrast: seat holders only is candidacy_expiring.', 'link' => 'candidacy.cgs.insights',
+            'cand_cgs_expiring' => ['roles' => $C, 'question' => 'How many students expire within {months} months?', 'defaults' => ['months' => 3], 'description' => 'How many students\' candidacies expire within 1, 2 or 3 months, ALL students (the candidacy Insights numbers).', 'link' => 'candidacy.cgs.insights',
                 'parameters' => ['months' => ['type' => 'integer', 'required' => false, 'hint' => 'optional 1, 2 or 3']],
                 'examples' => ['how many candidacies expire soon', 'students expiring in the next 3 months', 'candidacy expiries within a month', 'number of expiring candidacies', 'who is about to expire count', 'how many expire in 2 months']],
             'cand_cgs_no_action' => ['roles' => $C, 'question' => 'How many of them have taken no action?', 'description' => 'Of the students expiring within 3 months, how many have taken no action yet (the high-risk count on Insights).', 'link' => 'candidacy.cgs.insights',

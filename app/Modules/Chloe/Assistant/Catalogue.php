@@ -475,7 +475,7 @@ final class Catalogue
             [
                 'id' => 'candidacy_expiring', 'kind' => 'lookup', 'roles' => ['cgs'],
                 'question' => 'How many current seat holders\' candidacy expires within {months} months?',
-                'description' => "How many current WORKSTATION SEAT HOLDERS' candidacy expires within N months (default 3 if not given). Contrast: not candidacy_expiry_distribution (that buckets everyone into 0-3/3-6/6-12/12+ at once, no single N); not cand_cgs_expiring (that counts ALL students, not only seat holders).",
+                'description' => "How many current WORKSTATION SEAT HOLDERS' candidacy expires within N months (default 3 if not given). Contrast: not candidacy_expiry_distribution (that buckets everyone into 0-3/3-6/6-12/12+ at once, no single N).",
                 'examples' => ['how many expiring soon', 'candidacy ending in 6 months how many', 'students expiring this quarter', 'expiry count next 3 months', 'how many about to expire'],
                 'parameters' => ['months' => ['type' => 'integer', 'required' => false, 'hint' => '1-12, default 3']],
                 'link' => 'workstation.cgs.operations',
@@ -784,7 +784,7 @@ final class Catalogue
             [
                 'id' => 'action_other', 'kind' => 'action', 'roles' => [Role::STUDENT, 'cgs'],
                 'question' => 'Approve, delete or change something in the system.',
-                'description' => 'Any other imperative to approve, delete, change, update or undo something not covered by a more specific action entry above (a bare "approve the pending thing" with no appeal named is this one; approving an APPEAL is cand_action_decide).',
+                'description' => 'Any other imperative to approve, delete, change, update or undo something not covered by a more specific action entry above.',
                 'examples' => ['approve this request', 'delete seat 55', 'change the room for seat 11', 'update my details', 'undo the last action'],
                 'parameters' => ['seat_number' => ['type' => 'integer', 'required' => false, 'hint' => '1-315, if named'], 'student_id' => ['type' => 'string', 'required' => false, 'hint' => 'the ID placeholder copied exactly, e.g. "<ID1>" -- nothing added before or after it; a seat number never goes here']],
                 'link' => null,

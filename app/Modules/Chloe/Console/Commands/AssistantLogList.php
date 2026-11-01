@@ -13,7 +13,7 @@ use Illuminate\Console\Command;
  */
 class AssistantLogList extends Command
 {
-    protected $signature = 'assistant:log {--limit=20}';
+    protected $signature = 'assistant:log {--limit=20} {--domain= : only this domain}';
 
     protected $description = 'Print the latest assistant_logs rows as a table';
 
@@ -22,6 +22,7 @@ class AssistantLogList extends Command
         $limit = max(1, (int) $this->option('limit'));
 
         $rows = AssistantLog::with('user')
+            ->when($this->option('domain'), fn ($q, $d) => $q->where('domain', $d))
             ->latest('occurred_at')
             ->limit($limit)
             ->get();
@@ -33,11 +34,12 @@ class AssistantLogList extends Command
         }
 
         $this->table(
-            ['Occurred At', 'User', 'Role', 'Source', 'Lookup', 'Outcome', 'Refusal Reason', 'Result Count', 'Answered By', 'Model Used', 'Error Code'],
+            ['Occurred At', 'User', 'Role', 'Domain', 'Source', 'Lookup', 'Outcome', 'Refusal Reason', 'Result Count', 'Answered By', 'Model Used', 'Error Code'],
             $rows->map(fn (AssistantLog $row) => [
                 $row->occurred_at->format('Y-m-d H:i:s'),
                 $row->user?->email ?? "#{$row->user_id}",
                 $row->role,
+                $row->domain,
                 $row->source,
                 $row->lookup,
                 $row->outcome,

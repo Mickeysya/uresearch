@@ -405,7 +405,7 @@ final class Pipeline
     protected function outOfScope(User $user, string $role, string $maskedQuestion, string $answeredBy, ?string $modelUsed): array
     {
         // the model (which only sees THIS domain) found no match, and the words belong to the other domain: the redirect, not a generic refusal
-        if (AssistantDomains::belongsToOther(QuestionNormaliser::normalise($maskedQuestion), $this->domain) !== null) {
+        if (AssistantDomains::belongsToOther(QuestionNormaliser::normalise($maskedQuestion), $this->domain, true) !== null) {
             return $this->redirect($user, $role, $answeredBy, $modelUsed);
         }
 
