@@ -256,7 +256,7 @@ Workstation pagination is not changed. Note for the Workstation owner: its bar p
 
 **Nine departments** (`config('candidacy.departments')`, stored in `candidacy_departments` with a `faculty` column):
 Faculty of Engineering: Chemical Engineering; Civil & Environmental Engineering; Electrical & Electronic Engineering; Mechanical Engineering; Petroleum Engineering; Geoscience.
-Faculty of Science, Management & Computing: Applied Science; Computer & Information Sciences; Management and Humanities. Department filters group them by faculty.
+Faculty of Science, Management & Computing: Fundamental & Applied Sciences; Computer & Information Sciences; Management & Humanities. Department filters group them by faculty.
 
 **Roster rules** (enforced by `candidacy:demo-seed` and covered by tests): exactly 1 Department Chair per department (9 chairs); 5 to 7 lecturers per department; nobody is both
 a lecturer and a chair, and nobody belongs to two departments; every name is unique and no fake name equals a real account's name. The real chair account is the Chair of

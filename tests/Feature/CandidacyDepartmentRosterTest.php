@@ -33,7 +33,7 @@ class CandidacyDepartmentRosterTest extends TestCase
 
         $this->assertCount(9, $d);
         $this->assertSame(['Chemical Engineering', 'Civil & Environmental Engineering', 'Electrical & Electronic Engineering', 'Mechanical Engineering', 'Petroleum Engineering', 'Geoscience'], array_values(array_map(fn ($x) => $x[0], array_filter($d, fn ($x) => $x[1] === 'Faculty of Engineering'))));
-        $this->assertSame(['Applied Science', 'Computer & Information Sciences', 'Management and Humanities'], array_values(array_map(fn ($x) => $x[0], array_filter($d, fn ($x) => $x[1] === 'Faculty of Science, Management & Computing'))));
+        $this->assertSame(['Fundamental & Applied Sciences', 'Computer & Information Sciences', 'Management & Humanities'], array_values(array_map(fn ($x) => $x[0], array_filter($d, fn ($x) => $x[1] === 'Faculty of Science, Management & Computing'))));
         $this->assertNotContains('Geosciences & Petroleum Engineering', array_column($d, 0));
     }
 

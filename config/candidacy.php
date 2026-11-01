@@ -20,12 +20,48 @@ return [
         'MEC' => ['Mechanical Engineering', 'Faculty of Engineering'],
         'PET' => ['Petroleum Engineering', 'Faculty of Engineering'],
         'GEO' => ['Geoscience', 'Faculty of Engineering'],
-        'APS' => ['Applied Science', 'Faculty of Science, Management & Computing'],
+        'APS' => ['Fundamental & Applied Sciences', 'Faculty of Science, Management & Computing'],
         'CIS' => ['Computer & Information Sciences', 'Faculty of Science, Management & Computing'],
-        'MHU' => ['Management and Humanities', 'Faculty of Science, Management & Computing'],
+        'MHU' => ['Management & Humanities', 'Faculty of Science, Management & Computing'],
     ],
 
-    // Department auto-fill: the first department whose pattern matches the programme text (case-insensitive) wins. A text that matches
+    // The programme catalogue: the single source for programme names, their level and their department. `level` is coursework | master_research | phd.
+    // Demo programme text comes from the demo seeders using this list; real students keep the text they have and use the keyword fallback below.
+    'programmes' => [
+        ['MSc in Process Safety', 'coursework', 'CHE'],
+        ['MSc in Process Integration', 'coursework', 'CHE'],
+        ['Master of Science in Chemical Engineering', 'master_research', 'CHE'],
+        ['PhD in Chemical Engineering', 'phd', 'CHE'],
+        ['MSc in Offshore Engineering', 'coursework', 'CEE'],
+        ['MSc in Industrial Environmental Engineering', 'coursework', 'CEE'],
+        ['MSc in Asset Management & Maintenance', 'coursework', 'CEE'],
+        ['Master of Science in Civil Engineering', 'master_research', 'CEE'],
+        ['PhD in Civil Engineering', 'phd', 'CEE'],
+        ['Master of Science in Electrical and Electronics Engineering', 'master_research', 'EEE'],
+        ['PhD in Electrical and Electronics Engineering', 'phd', 'EEE'],
+        ['Master of Science in Mechanical Engineering', 'master_research', 'MEC'],
+        ['PhD in Mechanical Engineering', 'phd', 'MEC'],
+        ['Master of Science in Petroleum Engineering', 'master_research', 'PET'],
+        ['PhD in Petroleum Engineering', 'phd', 'PET'],
+        ['Master of Science in Petroleum Geoscience', 'master_research', 'GEO'],
+        ['PhD in Petroleum Geoscience', 'phd', 'GEO'],
+        ['MSc in Data Science', 'coursework', 'CIS'],
+        ['Master of Science in Predictive Analytics', 'coursework', 'CIS'],
+        ['MSc in Applied Computing', 'coursework', 'CIS'],
+        ['Master of Science in Information Technology', 'master_research', 'CIS'],
+        ['Master of Science in Information Systems', 'master_research', 'CIS'],
+        ['PhD in Information Technology', 'phd', 'CIS'],
+        ['PhD in Information Systems', 'phd', 'CIS'],
+        ['Master of Science (Applied Science)', 'master_research', 'APS'],
+        ['PhD in Applied Science', 'phd', 'APS'],
+        ['Master of Philosophy in Management', 'master_research', 'MHU'],
+        ['Master of Science in Social Science & Humanities', 'master_research', 'MHU'],
+        ['PhD in Management', 'phd', 'MHU'],
+        ['PhD in Social Science & Humanities', 'phd', 'MHU'],
+        ['Doctor of Philosophy (General/Interdisciplinary)', 'phd', 'MHU'],
+    ],
+
+    // Department auto-fill (fallback for text that is not in the catalogue): the first department whose pattern matches the programme text (case-insensitive) wins. A text that matches
     // none is placed deterministically (hash of the student ID), so the result is stable. Order matters.
     'programme_department_patterns' => [
         'CHE' => ['/chemical/i'],
@@ -60,7 +96,7 @@ return [
         'inactive_values' => [],      // inactive / deferred
     ],
 
-    // Automatic expiry reminders (Support\CandidacyReminderEngine, command candidacy:send-reminders, daily 07:25 Asia/Kuala_Lumpur).
+    // Automatic expiry reminders (Support\CandidacyReminderEngine, command candidacy:send-reminders, daily 08:00 Asia/Kuala_Lumpur).
     'reminders' => [
         // Programme types that get reminders. "research" = Full-Time and Part-Time research; Coursework is excluded.
         'programme_types' => ['research'],
