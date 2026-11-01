@@ -1,5 +1,4 @@
 /* Study Candidacy pages. No inline handlers: everything is wired here from data attributes and ids.
-   - assistant placeholder: opens a static panel, makes NO request and stores nothing
    - live updates: polls a tiny version endpoint every 15 s while the tab is visible, swaps #wca-live-region in place
    - publication rows, RCS fields, modals */
 (function () {
@@ -7,15 +6,6 @@
 
     function $(sel, root) { return (root || document).querySelector(sel); }
     function $all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
-
-    // ---- assistant placeholder
-    var toggle = $('#wca-assistant-toggle'), panel = $('#wca-assistant-panel');
-    if (toggle && panel) {
-        var setOpen = function (open) { panel.hidden = !open; toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); };
-        toggle.addEventListener('click', function () { setOpen(panel.hidden); });
-        var close = $('#wca-assistant-close');
-        if (close) { close.addEventListener('click', function () { setOpen(false); }); }
-    }
 
     // ---- publications: add and remove rows
     var pubs = $('#wca-pubs'), tpl = $('#wca-pub-template');

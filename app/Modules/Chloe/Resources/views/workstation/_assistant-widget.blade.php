@@ -8,7 +8,11 @@
     live only here.
 --}}
 @php
-    $wsaRole = auth()->check() ? \App\Modules\Chloe\Assistant\Pipeline::normalizeRole(auth()->user()->role) : null;
+    // $wsaStatic: pass a string to render the SAME widget as a "coming soon" placeholder (the candidacy pages do). It shows that
+    // one line, has no suggestions, no input and makes no request: the endpoint URLs are not even rendered.
+    $wsaStatic = $wsaStatic ?? null;
+    $wsaName = $wsaStatic ? 'Study Candidacy Assistant' : 'Workstation Assistant';
+    $wsaRole = auth()->check() ? ($wsaStatic ? 'static' : \App\Modules\Chloe\Assistant\Pipeline::normalizeRole(auth()->user()->role)) : null;
 @endphp
 @if ($wsaRole !== null)
     @php
@@ -22,6 +26,12 @@
         $wsaGreeting = $wsaIsCgs
             ? 'Hi! Ask me about seats, keys or the rules.'
             : 'Hi! Questions about seats or your locker key?';
+
+        if ($wsaStatic) {
+            $wsaFirstMessage = $wsaStatic;
+            $wsaHint = 'Coming soon.';
+            $wsaGreeting = "Hi! I'm coming soon.";
+        }
     @endphp
     <div
         id="wsa-root"
@@ -29,9 +39,11 @@
         data-csrf="{{ csrf_token() }}"
         data-char-limit="{{ (int) config('assistant.max_question_length', 300) }}"
         data-recent-turns="{{ (int) config('assistant.recent_turns', 5) }}"
+        @if ($wsaStatic) data-static="1" @else
         data-suggestions-url="{{ route('workstation.assistant.suggestions') }}"
         data-suggestion-url="{{ route('workstation.assistant.suggestion') }}"
         data-ask-url="{{ route('workstation.assistant.ask') }}"
+        @endif
         data-first-message="{{ $wsaFirstMessage }}"
         data-greeting="{{ $wsaGreeting }}"
     >
@@ -60,7 +72,7 @@
             </svg>
         </template>
 
-        <button type="button" id="wsa-toggle" class="wsa-toggle" aria-haspopup="dialog" aria-controls="wsa-panel" aria-expanded="false" aria-label="Open Workstation Assistant" title="Workstation Assistant">
+        <button type="button" id="wsa-toggle" class="wsa-toggle" aria-haspopup="dialog" aria-controls="wsa-panel" aria-expanded="false" aria-label="Open {{ $wsaName }}" title="{{ $wsaName }}">
             <span id="wsa-toggle-icon" class="wsa-toggle-icon" data-mood="idle"></span>
         </button>
 
@@ -80,15 +92,15 @@
             <span id="wsa-greeting-text"></span>
         </div>
 
-        <div id="wsa-panel" class="wsa-panel" role="dialog" aria-modal="false" aria-label="Workstation Assistant" aria-hidden="true" hidden>
+        <div id="wsa-panel" class="wsa-panel" role="dialog" aria-modal="false" aria-label="{{ $wsaName }}" aria-hidden="true" hidden>
             <div class="wsa-header">
                 <span class="wsa-header-title-wrap">
                     <span id="wsa-header-icon" class="wsa-header-icon" aria-hidden="true"></span>
-                    <span class="wsa-title">Workstation Assistant</span>
+                    <span class="wsa-title">{{ $wsaName }}</span>
                 </span>
                 <div class="wsa-header-actions">
                     <button type="button" id="wsa-new-chat" class="wsa-text-btn">New chat</button>
-                    <button type="button" id="wsa-close" class="wsa-icon-btn" aria-label="Close Workstation Assistant">
+                    <button type="button" id="wsa-close" class="wsa-icon-btn" aria-label="Close {{ $wsaName }}">
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M18 6 6 18M6 6l12 12"></path>
                         </svg>
@@ -516,6 +528,9 @@
             var askUrl = root.getAttribute('data-ask-url');
             var greetingLine = root.getAttribute('data-greeting') || '';
             var firstMessage = root.getAttribute('data-first-message');
+            // Static (coming soon) mode: one fixed line, nothing to ask, and no request is ever made.
+            var isStatic = root.getAttribute('data-static') === '1';
+            if (isStatic) { input.disabled = true; input.placeholder = 'Coming soon'; sendBtn.disabled = true; }
 
             // PART 2 #8: conversation lives only in this closure's memory --
             // never localStorage/sessionStorage/a cookie/the server. A
@@ -715,6 +730,7 @@
             updateSendButtonState();
 
             function fetchSuggestions() {
+                if (isStatic) return Promise.resolve([]);
                 if (suggestionsCache) return Promise.resolve(suggestionsCache);
 
                 return fetch(suggestionsUrl, {
@@ -989,7 +1005,7 @@
                 e.preventDefault();
 
                 var text = input.value.trim();
-                if (text === '' || text.length > charLimit || sendBtn.disabled) return;
+                if (isStatic || text === '' || text.length > charLimit || sendBtn.disabled) return;
 
                 input.value = '';
                 updateSendButtonState(); // setting .value programmatically fires no 'input' event

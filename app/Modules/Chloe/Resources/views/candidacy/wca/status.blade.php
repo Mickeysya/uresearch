@@ -17,5 +17,5 @@
             @include('chloe::candidacy.wca._status_region')
         </div>
     </div>
-    @include('chloe::candidacy.wca._assistant')
+    @include('chloe::workstation._assistant-widget', ['wsaStatic' => 'The Study Candidacy assistant is coming soon.'])
 @endsection

@@ -280,7 +280,7 @@ class CandidacyStudentPagesTest extends TestCase
             }
             $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'), $url);
             $html = $response->getContent();
-            $page = preg_match('~<div class="wca-page">(.*)~s', $html, $m) ? $m[1] : $html;
+            $page = preg_match('~<div class="wca-page">(.*?)<div\s+id="wsa-root"~s', $html, $m) ? $m[1] : $html;
             $this->assertDoesNotMatchRegularExpression('~\sstyle\s*=~i', $page, "inline style on {$url}");
             $this->assertDoesNotMatchRegularExpression('~\son[a-z]+\s*=~i', $page, "inline handler on {$url}");
 
@@ -300,15 +300,31 @@ class CandidacyStudentPagesTest extends TestCase
         $html = $this->actingAs($this->student)->get(route('candidacy.status'))->getContent();
 
         $this->assertStringContainsString('The Study Candidacy assistant is coming soon.', $html);
+        $this->assertStringContainsString('id="wsa-root"', $html);
+        $this->assertStringContainsString('data-static="1"', $html);
         $this->assertStringNotContainsString('assistant/ask', $html);
         $this->assertStringNotContainsString('assistant/suggestion', $html);
-        $this->assertStringNotContainsString('wsa-', $html);
+        $this->assertStringNotContainsString('data-ask-url="', $html);
+        $this->assertStringNotContainsString('data-suggestions-url="', $html);
+        $this->assertStringNotContainsString('localStorage', file_get_contents(public_path('js/chloe-candidacy.js')));
+    }
 
-        $js = file_get_contents(public_path('js/chloe-candidacy.js'));
-        $assistantBlock = substr($js, strpos($js, '// ---- assistant placeholder'), strpos($js, '// ---- publications') - strpos($js, '// ---- assistant placeholder'));
-        $this->assertStringNotContainsString('fetch(', $assistantBlock);
-        $this->assertStringNotContainsString('XMLHttpRequest', $assistantBlock);
-        $this->assertStringNotContainsString('localStorage', $js);
+    public function test_the_candidacy_icon_is_the_workstation_icon(): void
+    {
+        $this->actingAs($this->student);
+        $ws = view('chloe::workstation._assistant-widget')->render();
+        $ca = view('chloe::workstation._assistant-widget', ['wsaStatic' => 'The Study Candidacy assistant is coming soon.'])->render();
+        $grab = fn (string $html, string $re) => preg_match($re, $html, $m) ? preg_replace('/\s+/', ' ', $m[0]) : null;
+
+        $this->assertNotNull($grab($ws, '~<style>.*?</style>~s'));
+        $this->assertSame($grab($ws, '~<style>.*?</style>~s'), $grab($ca, '~<style>.*?</style>~s'));
+        $this->assertSame($grab($ws, '~<template id="wsa-robot-template">.*?</template>~s'), $grab($ca, '~<template id="wsa-robot-template">.*?</template>~s'));
+        $this->assertSame($grab($ws, '~<span id="wsa-toggle-icon".*?</span>~s'), $grab($ca, '~<span id="wsa-toggle-icon".*?</span>~s'));
+        $this->assertSame($grab($ws, '~<div id="wsa-greeting".*?</div>~s'), $grab($ca, '~<div id="wsa-greeting".*?</div>~s'));
+        $this->assertSame(
+            preg_replace('/(aria-label|title)="[^"]*"/', '', $grab($ws, '~<button type="button" id="wsa-toggle".*?>~s')),
+            preg_replace('/(aria-label|title)="[^"]*"/', '', $grab($ca, '~<button type="button" id="wsa-toggle".*?>~s'))
+        );
     }
 
     public function test_the_live_version_changes_when_the_appeal_changes_and_is_throttled_by_the_shared_limiter(): void

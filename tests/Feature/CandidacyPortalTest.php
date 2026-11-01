@@ -248,7 +248,7 @@ class CandidacyPortalTest extends TestCase
             $response = $this->actingAs($this->lecturer)->get($url)->assertOk();
             $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'), $url);
             $html = $response->getContent();
-            $page = preg_match('~<div class="wca-page">(.*)~s', $html, $m) ? $m[1] : $html;
+            $page = preg_match('~<div class="wca-page">(.*?)<div\s+id="wsa-root"~s', $html, $m) ? $m[1] : $html;
             $this->assertDoesNotMatchRegularExpression('~\sstyle\s*=~i', $page, "inline style on {$url}");
             $this->assertDoesNotMatchRegularExpression('~\son[a-z]+\s*=~i', $page, "inline handler on {$url}");
             preg_match_all('~class="([^"]*)"~', $page, $classes);
