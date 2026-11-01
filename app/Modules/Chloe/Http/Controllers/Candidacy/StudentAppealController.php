@@ -56,7 +56,7 @@ class StudentAppealController extends Controller
             'candidacy' => $candidacy, 'appeals' => $appeals, 'problems' => $problems, 'open' => $open, 'draft' => $draft,
             'submittedCount' => $appeals->whereNotNull('appeal_no')->count(),
             'max' => (int) config('candidacy.max_extension_months'),
-            'reminders' => $candidacy ? $candidacy->reminders()->latest('sent_at')->get() : collect(),
+            'reminders' => $candidacy ? \App\Modules\Chloe\Models\CandidacyReminderLog::where('candidacy_id', $candidacy->id)->where('status', 'sent')->orderByDesc('sent_at')->get() : collect(),
             'liveVersion' => CandidacyLiveVersion::forStudent($user),
         ];
     }

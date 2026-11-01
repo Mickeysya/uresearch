@@ -21,6 +21,7 @@ use App\Modules\Chloe\Console\Commands\GenerateCandidacyDismissals;
 use App\Modules\Chloe\Console\Commands\ProcessWorkstationReleases;
 use App\Modules\Chloe\Console\Commands\ReleaseExpiredWorkstationSelections;
 use App\Modules\Chloe\Console\Commands\RemindOverdueLockerKeys;
+use App\Modules\Chloe\Console\Commands\SendCandidacyExpiryReminders;
 use App\Modules\Chloe\Console\Commands\SendCandidacyReminders;
 use App\Modules\Chloe\Console\Commands\WorkstationDemoClear;
 use App\Modules\Chloe\Console\Commands\WorkstationDemoLogin;
@@ -93,12 +94,15 @@ class ModuleProvider extends ServiceProvider
         // routes/console.php is a shared file, so this module schedules its own job here.
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
             $schedule->command('candidacy:close-expired-appeals')->dailyAt('07:20')->timezone('Asia/Kuala_Lumpur')->withoutOverlapping();
+            // after the close job, so a student whose returned appeal was just closed is not reminded about it
+            $schedule->command('candidacy:send-reminders')->dailyAt('07:25')->timezone('Asia/Kuala_Lumpur')->withoutOverlapping();
         });
 
         if ($this->app->runningInConsole()) {
             $this->commands([
                 RemindOverdueLockerKeys::class,
                 SendCandidacyReminders::class,
+                SendCandidacyExpiryReminders::class,
                 GenerateCandidacyDismissals::class,
                 ReleaseExpiredWorkstationSelections::class,
                 ProcessWorkstationReleases::class,

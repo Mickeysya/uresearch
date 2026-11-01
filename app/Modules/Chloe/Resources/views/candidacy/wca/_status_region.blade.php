@@ -107,7 +107,7 @@
             <h3 id="wca-h-rem">Expiry reminders sent to you</h3>
             <ul class="wca-list">
                 @foreach ($reminders as $reminder)
-                    <li><span>Reminder {{ $reminder->reminder_number ?? '' }}</span><span class="wca-muted">{{ $reminder->sent_at?->format('j M Y') }}</span></li>
+                    <li><span>{{ $reminder->milestone }} month(s) before {{ $reminder->expiry_date->format('j M Y') }}</span><span class="wca-muted">{{ $reminder->sent_at?->setTimezone('Asia/Kuala_Lumpur')->format('j M Y') }}</span></li>
                 @endforeach
             </ul>
         </section>
