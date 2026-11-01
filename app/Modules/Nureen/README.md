@@ -35,6 +35,13 @@
   Viva demo: `php artisan db:seed --class="App\Modules\Nureen\Database\Seeders\AttendanceRiskDemoSeeder"`
   sets the three cases (22093001 projection only, 22001011 current rule,
   22001012 steady) and prints each one's figures.
+  **Backtest** (`php artisan attendance:backtest --synthetic`, or a
+  full-semester export in the upload format): hides the periods after each
+  cut-off (25/50/75% plus `--cutoff`), replays the live rule and projection
+  in memory, and reports MAE/RMSE against the actual final %, precision /
+  recall / F1 for rule, projection and both, and how much earlier the
+  combined approach flags. Markdown report in `storage/app/backtest/`
+  (git-ignored). `--help` documents the synthetic patterns.
 
 - **Supervision** — complete. Supervisor → CGS eligibility review. CGS's
   approval sets `users.supervisor_id`. Because the engine can't yet scope a
@@ -195,6 +202,7 @@ role-scoped pending that decision.
 | `AttendanceEarlyWarningTest` | who is flagged and why; the email wording, which never contains the projection; no repeated alerts (margin, recovery); alerts recorded and shown as "last emailed"; sorting; students never seeing the projection; approved appeals excusing absences |
 | `AttendanceTest` | the template round-trip (download it, feed it straight back), the header check, the date formats Excel writes, a bad row being skipped with a reason while the good rows save, re-uploading a period replacing rather than duplicating, and the at-risk alert firing on the transition |
 | `GaExtensionTest` | document completeness — the module's point per `nureen.md` Module 2 — and the three-stage chain, asserting the position after *every* decision, because the middle stage is what the legacy app got wrong |
+| `AttendanceBacktestTest` | a hand-worked 5-student dataset giving exactly MAE 6.98 and the expected precision/recall/earliness (directly and through the CSV parser); every metric at every cut-off on synthetic data; same seed = identical report; the documented pattern mix; no database writes or notifications at all; bad input; incomplete students left out |
 | `AttendanceActionCardTest` | the N-of-M arithmetic (rounding up, exactly 80%, already secured, unreachable, remaining sessions); the card's four states and the appeal statuses; the Active Applications decision date (nearest, none without a charter, own applications only); staff dashboards unchanged; the viva demo seeder's three outcomes, re-run safe, one email each |
 | `AttendanceAppealTest` | the single stage being final, and that a student cannot attach another student's flagged record to their own appeal (403) |
 | `SupervisionTest` | the required document, that it lands on the private disk under a random name, and that a supervisor sees only the requests naming them |

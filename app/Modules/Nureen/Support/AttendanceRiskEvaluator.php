@@ -104,26 +104,38 @@ class AttendanceRiskEvaluator
 
     public static function isAtRisk(AttendanceRecord $current): bool
     {
-        if ((float) $current->percentage < self::THRESHOLD) {
-            return true;
-        }
-
         $priorTwo = AttendanceRecord::where('student_id', $current->student_id)
             ->where('period_end', '<', $current->period_end)
             ->orderByDesc('period_end')
             ->limit(2)
-            ->get();
+            ->get()
+            ->values();
 
-        if ($priorTwo->count() < 2) {
+        return self::ruleFlags(
+            (float) $current->percentage,
+            $priorTwo->count() === 2 ? (float) $priorTwo[0]->percentage : null,
+            $priorTwo->count() === 2 ? (float) $priorTwo[1]->percentage : null,
+        );
+    }
+
+    /**
+     * The rule itself, on three per-period percentages (latest first; the
+     * earlier two null when there are fewer than two prior periods). Pure,
+     * so the backtest (Support\Backtest\AttendanceBacktester) judges exactly
+     * the rule the live check runs.
+     */
+    public static function ruleFlags(float $current, ?float $previous, ?float $beforeThat): bool
+    {
+        if ($current < self::THRESHOLD) {
+            return true;
+        }
+
+        if ($previous === null || $beforeThat === null) {
             return false;
         }
 
-        [$previous, $beforeThat] = $priorTwo->values()->all();
-
-        $declining = (float) $current->percentage < (float) $previous->percentage
-            && (float) $previous->percentage < (float) $beforeThat->percentage;
-
-        $nearThreshold = (float) $current->percentage <= self::THRESHOLD + self::EARLY_WARNING_BAND;
+        $declining = $current < $previous && $previous < $beforeThat;
+        $nearThreshold = $current <= self::THRESHOLD + self::EARLY_WARNING_BAND;
 
         return $declining && $nearThreshold;
     }

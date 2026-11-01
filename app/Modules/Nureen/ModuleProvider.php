@@ -4,6 +4,7 @@ namespace App\Modules\Nureen;
 
 use App\Modules\Core\Contracts\SuppliesAttendance;
 use App\Modules\Core\Services\ModuleRegistry;
+use App\Modules\Nureen\Console\Commands\BacktestAttendance;
 use App\Modules\Nureen\Console\Commands\CheckAttendanceRisk;
 use App\Modules\Nureen\Console\Commands\RemindStalledCertification;
 use App\Modules\Nureen\Console\Commands\RemindStalledGaExtension;
@@ -61,6 +62,7 @@ class ModuleProvider extends ServiceProvider
                 RemindStalledCertification::class,
                 SyncAttendance::class,
                 CheckAttendanceRisk::class,
+                BacktestAttendance::class,
             ]);
         }
 

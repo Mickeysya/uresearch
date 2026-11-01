@@ -210,6 +210,15 @@ of a CGS staffer uploading a spreadsheet by hand.
   sees "Projection unavailable: inconsistent periods". No source can record
   a period ending after today (the ingestor rejects it; the simulated source
   writes the last completed week).
+- **Backtest** (`attendance:backtest`, `Support\Backtest\AttendanceBacktester`
+  + `SyntheticAttendance`): replays complete semesters with the later
+  periods hidden, through the live rule (`AttendanceRiskEvaluator::ruleFlags()`,
+  the pure core of `isAtRisk()`), the live projector and the model's own
+  percentage maths on unsaved rows. Reports projection error and
+  rule / projection / combined precision, recall and F1 at 25/50/75% of the
+  semester, plus earliness. In memory only; a Markdown report goes to
+  `storage/app/backtest/`. Runs on a seeded synthetic dataset (labelled as
+  such) until CGS supplies an anonymised real export.
 - **Demo semester:** weekly periods from `semester_start` = 5 Oct 2026
   (`NureenAttendanceDemoSeeder`), with three deliberate cases owned by
   `AttendanceRiskDemoSeeder` (run on its own for the viva; prints each

@@ -8,6 +8,94 @@ diff alone.
 
 ---
 
+## 2026-11-01 — Attendance: a backtest of the projection's predictive accuracy
+
+**Branch:** `develop`, uncommitted. Nureen only.
+
+### The ask
+
+Evidence, not a claim, for the dissertation: how accurately does the
+projection predict a student's final attendance, and does rule OR
+projection catch at-risk students earlier than the rule alone? A console
+command over a full-semester dataset (the upload format, or a reproducible
+synthetic one until CGS provides anonymised data), at several cut-offs,
+entirely in memory, with a Markdown report.
+
+### Key findings before writing any code
+
+- `isAtRisk()` queried the database for the two prior periods, so the rule
+  could not be replayed in memory without copying it. Copying would let the
+  backtest drift from the live rule, so the rule's logic was extracted into
+  a pure `ruleFlags(current, previous, beforeThat)`, which `isAtRisk()` now
+  calls (same behaviour; all existing rule tests pass unchanged).
+- The per-period percentage (including the zero-session case) comes from
+  `AttendanceRecord::countedPercentage()` on an unsaved model, so it is
+  exactly what the live check stores, with nothing written.
+- The alerts table is `attendance_alerts` (the ask said
+  `attendance_risk_alerts`); the test checks it, `attendance_records`,
+  `attendance_risk_states`, `notifications` and `jobs`.
+
+### The design
+
+- **`Support\Backtest\AttendanceBacktester`** (pure): for each student,
+  replays the checks after every period (the rule on that period; the
+  projection, from `projection_min_periods`, on the periods so far) and
+  compares them with the actual final % (all attended ÷ all scheduled).
+  "Truly at risk" = actual final below 80%. A method has flagged a student
+  by cut-off k if it flagged them at any check up to k, because the live
+  system emails on the first flag. MAE/RMSE compare the projection made at
+  k with the actual final %, both at one decimal; a baseline MAE carries the
+  attendance so far forward, so the projection can be judged against doing
+  nothing clever. Earliness covers the whole semester: the first combined
+  flag against the first rule flag, for truly at-risk students.
+- **`Support\Backtest\SyntheticAttendance`**: seven patterns in documented
+  proportions (steady high 30%, steady borderline 15%, gradual decline 15%,
+  sudden drop 10%, recovery after a bad period 10%, one isolated bad period
+  10%, noisy but fine 10%). It adds ±4-point uniform noise (±12 for noisy but
+  fine) at 10 sessions a week, with its own seeded Mt19937 engine (default
+  seed 2026, 200 students, the configured 14 periods). Matric numbers are
+  SYN0001 onwards.
+- **`attendance:backtest`**: `{file?}` or `--synthetic`, `--cutoff` (headline,
+  default 50%), always also 25/50/75%, `--periods`, `--students`, `--seed`,
+  `--output`. Files go through `AttendanceSheet::readFile()` and the same
+  row checks as the upload. Students without exactly the semester's periods
+  are left out and counted. Prints two tables plus earliness, and writes
+  the Markdown report to `storage/app/backtest/`, which gets its own
+  `.gitignore` (`*`) so reports never show in Source Control. The report
+  carries a prominent synthetic-data notice when applicable, and only
+  aggregate figures (no per-student rows, so a real export stays
+  anonymous in the report).
+
+### What changed
+
+- New: `Console/Commands/BacktestAttendance.php` (registered in
+  `ModuleProvider`), `Support/Backtest/AttendanceBacktester.php`,
+  `Support/Backtest/SyntheticAttendance.php`,
+  `tests/Feature/Nureen/AttendanceBacktestTest.php` (8 tests).
+- `Support/AttendanceRiskEvaluator.php`: `ruleFlags()` extracted from
+  `isAtRisk()`.
+
+### Bugs caught
+
+- None in the code. The hand-worked 5-student dataset was checked against a
+  real run before it became a test: MAE 6.98; rule precision 1/2, recall
+  1/3; projection and combined 2/3 and 2/3; mean lead 1/3 period.
+
+### Verification
+
+- Full suite: 451 passed.
+- Synthetic run (seed 2026, 200 students, 14 weeks, 35 truly at risk):
+  - **Projection error** (MAE): 12.10 / 4.00 / 1.09 points at periods 4, 7
+    and 11, against a baseline of 5.92 / 4.08 / 1.53.
+  - **Midpoint precision / recall:** rule alone 41.2% / 60.0%; rule OR
+    projection 29.4% / 85.7%.
+  - **Earliness:** the combined approach flagged truly at-risk students
+    2.06 periods earlier on average, earlier for 18 of the 35.
+- The "25%" cut-off of a 14-period semester is period 4 (3.5 rounded); the
+  table shows the real share (29%).
+
+---
+
 ## 2026-11-01 — Attendance: viva demo cases, and the student dashboard's Attendance Action card
 
 **Branch:** `develop`, uncommitted. **Includes a Core change the team agreed.**
