@@ -46,7 +46,9 @@ class AssistantEvaluate extends Command
         {--resume : Continue the saved run, skipping questions already answered}
         {--only= : "failed" reruns only the previous failures; any other text reruns questions containing it}
         {--group= : Comma list of groups to run: original,contrast,messy,standard,followup,candidacy}
-        {--sample= : Run the candidacy group plus this many existing (Workstation) questions, evenly spread}
+        {--set= : Comma list of sets to run: workstation, candidacy, cross (default: all)}
+        {--domain= : Only questions asked in this domain (workstation or candidacy)}
+        {--sample= : Run only this many questions of the workstation set, evenly spread (the other sets run whole)}
         {--limit= : Stop after this many router calls in this run}
         {--heldout : Use docs/assistant-ml/heldout-labelled.jsonl instead of the built-in set}
         {--report : Print the saved results only -- no calls}
@@ -129,7 +131,7 @@ class AssistantEvaluate extends Command
             $this->line(sprintf('[%d/%d] (%s, %s) %s', $n + 1, count($indices), $q['role'], $q['group'], $q['q']));
 
             $start = microtime(true);
-            $result = $pipeline->ask($user, $q['q'], $q['recent'] ?? [], true, $allowFallback);
+            $result = $pipeline->setDomain($q['domain'] ?? 'workstation')->ask($user, $q['q'], $q['recent'] ?? [], true, $allowFallback);
             $elapsedMs = (int) round((microtime(true) - $start) * 1000);
             $meta = $result['meta'] ?? [];
 
@@ -215,11 +217,20 @@ class AssistantEvaluate extends Command
             $indices = array_values(array_filter($indices, fn ($i) => in_array($questions[$i]['group'], $wanted, true)));
         }
 
+        if ($sets = $this->option('set')) {
+            $wanted = array_map('trim', explode(',', $sets));
+            $indices = array_values(array_filter($indices, fn ($i) => in_array($questions[$i]['set'] ?? 'workstation', $wanted, true)));
+        }
+
+        if ($domain = $this->option('domain')) {
+            $indices = array_values(array_filter($indices, fn ($i) => ($questions[$i]['domain'] ?? 'workstation') === $domain));
+        }
+
         if ($sample = (int) $this->option('sample')) {
-            $existing = array_values(array_filter($indices, fn ($i) => $questions[$i]['group'] !== 'candidacy'));
+            $existing = array_values(array_filter($indices, fn ($i) => ($questions[$i]['set'] ?? 'workstation') === 'workstation'));
             $step = max(1, (int) floor(count($existing) / $sample));
             $picked = array_slice(array_values(array_filter($existing, fn ($i, $n) => $n % $step === 0, ARRAY_FILTER_USE_BOTH)), 0, $sample);
-            $indices = array_values(array_filter($indices, fn ($i) => $questions[$i]['group'] === 'candidacy' || in_array($i, $picked, true)));
+            $indices = array_values(array_filter($indices, fn ($i) => ($questions[$i]['set'] ?? 'workstation') !== 'workstation' || in_array($i, $picked, true)));
         }
 
         $only = $this->option('only');
@@ -244,7 +255,8 @@ class AssistantEvaluate extends Command
         $actual = $meta['catalogue_id'] ?? null;
 
         // A student asking a CGS-only question is labelled out_of_scope: a polite refusal is the correct outcome there.
-        $passStrict = $actual === $q['id'];
+        // cross-domain labels: a redirect is the expected answer to another domain's question; an ambiguous question passes when it is NOT redirected
+        $passStrict = $q['id'] === 'stay_in_domain' ? $actual !== 'wrong_domain' : $actual === $q['id'];
         $passAccept = $passStrict || in_array($actual, $q['accept'] ?? [], true);
 
         $expectedParams = $q['params'] ?? [];
@@ -291,6 +303,28 @@ class AssistantEvaluate extends Command
 
         $this->newLine();
         $this->info("=== {$title}: {$router->count()} router-answered question(s)".($preRouter ? ", {$preRouter} answered before the router (no call, not counted)" : '').' ===');
+
+        // per set: all rows (router-answered or not). Cross-domain rows also say how many were redirected WITHOUT a model call.
+        $setRows = [];
+        foreach ($results as $i => $r) {
+            $setRows[$questions[$i]['set'] ?? 'workstation'][] = $r + ['expected_id' => $questions[$i]['id']];
+        }
+        foreach (['workstation', 'candidacy', 'cross'] as $set) {
+            $rs = collect($setRows[$set] ?? []);
+
+            if ($rs->isEmpty()) {
+                continue;
+            }
+
+            $line = sprintf('Set %-11s %d question(s): strict %s, with accepted alternatives %s', $set, $rs->count(), round($rs->where('pass_strict', true)->count() / $rs->count() * 100, 1).'%', round($rs->where('pass_accept', true)->count() / $rs->count() * 100, 1).'%');
+
+            if ($set === 'cross') {
+                $redirects = $rs->where('expected_id', 'wrong_domain');
+                $line .= sprintf('; redirects: %d of %d passed, %d without a model call', $redirects->where('pass_accept', true)->count(), $redirects->count(), $redirects->where('pass_accept', true)->where('router', false)->count());
+            }
+
+            $this->line($line);
+        }
 
         if ($router->isEmpty()) {
             return;

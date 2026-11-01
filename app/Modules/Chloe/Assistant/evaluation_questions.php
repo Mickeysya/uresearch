@@ -11,7 +11,9 @@
  *   params  expected parameters, normalised the way the router must
  *           return them (period "YYYY-MM" / "YYYY-MM..YYYY-MM", relative
  *           periods resolved against the labelling date below)
- *   group   original | contrast | messy | standard | followup
+ *   group   original | contrast | messy | standard | followup | candidacy | cross
+ *   domain  the assistant domain the question is ASKED in: workstation (default) | candidacy
+ *   set     which evaluation set it belongs to: workstation | candidacy | cross (derived from the group when not written)
  *   recent  earlier questions, for a follow-up
  *
  * The router is not trained on any of this: no question here is copied
@@ -29,7 +31,9 @@ $q = fn (string $q, string $role, string $id, string $group, array $params = [],
     fn ($v) => $v !== []
 );
 
-return [
+$x = fn (string $q, string $role, string $domain, string $id) => ['q' => $q, 'role' => $role, 'id' => $id, 'group' => 'cross', 'domain' => $domain, 'set' => 'cross'];
+
+$rows = [
     // ---------------------------------------------------------------
     // The two original failing questions.
     // ---------------------------------------------------------------
@@ -413,4 +417,50 @@ return [
     $q('when does Ahmad Danial expire', 'cgs', 'refused_before_router', 'candidacy'),
     $q('where is the appeal of Nur Farah Adilah', 'cgs', 'refused_before_router', 'candidacy'),
     $q('is Ahmad Danial on the dismissal list', 'cgs', 'refused_before_router', 'candidacy'),
+
+    // ---------------------------------------------------------------
+    // Cross-domain set: a question of the OTHER domain must be redirected (mostly without a model call); ambiguous words must stay.
+    // ---------------------------------------------------------------
+    // 15 Workstation questions asked in the candidacy domain
+    $x('how do i request a locker key', 'student', 'candidacy', 'wrong_domain'),
+    $x('which seat am i sitting in', 'student', 'candidacy', 'wrong_domain'),
+    $x('what are the workstation rules', 'student', 'candidacy', 'wrong_domain'),
+    $x('is it possible to swap into a different room', 'student', 'candidacy', 'wrong_domain'),
+    $x('i lost my locker key what now', 'student', 'candidacy', 'wrong_domain'),
+    $x('how many seats are free in block n2', 'cgs', 'candidacy', 'wrong_domain'),
+    $x('release seat 120 now', 'cgs', 'candidacy', 'wrong_domain'),
+    $x('how many keys are waiting to be collected', 'cgs', 'candidacy', 'wrong_domain'),
+    $x('which rooms are almost full', 'cgs', 'candidacy', 'wrong_domain'),
+    $x('how do i set a seat to maintenance', 'cgs', 'candidacy', 'wrong_domain'),
+    $x('what does a vacate notice mean', 'student', 'candidacy', 'wrong_domain'),
+    $x('occupancy per room please', 'cgs', 'candidacy', 'wrong_domain'),
+    $x('how do i return my workstation', 'student', 'candidacy', 'wrong_domain'),
+    $x('how long can i keep my desk', 'student', 'candidacy', 'wrong_domain'),
+    $x('my locker key request is pending, when can i collect', 'approver', 'candidacy', 'wrong_domain'),
+    // 15 candidacy questions asked in the workstation domain
+    $x('how do i submit an appeal for more time', 'student', 'workstation', 'wrong_domain'),
+    $x('who approves my extension appeal', 'student', 'workstation', 'wrong_domain'),
+    $x('what documents does an appeal need', 'student', 'workstation', 'wrong_domain'),
+    $x('will the dean accept my appeal', 'student', 'workstation', 'wrong_domain'),
+    $x('is my softbound recorded', 'student', 'workstation', 'wrong_domain'),
+    $x('how many dismissal candidates are there', 'cgs', 'workstation', 'wrong_domain'),
+    $x('how many appeals are waiting at the supervisor', 'cgs', 'workstation', 'wrong_domain'),
+    $x('how do i export the dismissal list', 'cgs', 'workstation', 'wrong_domain'),
+    $x('how many reminders were sent last month', 'cgs', 'workstation', 'wrong_domain'),
+    $x('how do i upload my signature', 'cgs', 'workstation', 'wrong_domain'),
+    $x('what happens when a chair returns an appeal', 'student', 'workstation', 'wrong_domain'),
+    $x('what does the approval memo say', 'student', 'workstation', 'wrong_domain'),
+    $x('dismiss the students on the list', 'cgs', 'workstation', 'wrong_domain'),
+    $x('how many months of extension are left', 'student', 'workstation', 'wrong_domain'),
+    $x('what are the approver rules', 'cgs', 'workstation', 'wrong_domain'),
+    // 6 ambiguous-term questions: they must stay in the current domain (no redirect)
+    $x('when does my expiry date end', 'student', 'candidacy', 'stay_in_domain'),
+    $x('how many students expire soon', 'cgs', 'candidacy', 'stay_in_domain'),
+    $x('which programme has the most students expiring', 'cgs', 'candidacy', 'stay_in_domain'),
+    $x('when does my expiry date end', 'student', 'workstation', 'stay_in_domain'),
+    $x('how many students have a place here', 'cgs', 'workstation', 'stay_in_domain'),
+    $x('is the cgs office open on weekends', 'student', 'workstation', 'stay_in_domain'),
 ];
+
+// every row knows the domain it is asked in and the set it belongs to; the candidacy and cross groups are their own sets
+return array_map(fn (array $r) => $r + ['domain' => $r['group'] === 'candidacy' ? 'candidacy' : 'workstation'] + ['set' => in_array($r['group'], ['candidacy', 'cross'], true) ? $r['group'] : 'workstation'], $rows);

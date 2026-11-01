@@ -663,18 +663,25 @@ class AssistantRouterTest extends TestCase
         $rows = require base_path('app/Modules/Chloe/Assistant/evaluation_questions.php');
 
         $this->assertGreaterThanOrEqual(250, count($rows));
+        $this->assertSame([15, 15, 6], [
+            count(array_filter($rows, fn ($r) => $r['set'] === 'cross' && $r['domain'] === 'candidacy' && $r['id'] === 'wrong_domain')),
+            count(array_filter($rows, fn ($r) => $r['set'] === 'cross' && $r['domain'] === 'workstation' && $r['id'] === 'wrong_domain')),
+            count(array_filter($rows, fn ($r) => $r['id'] === 'stay_in_domain')),
+        ], 'the cross-domain set: 15 workstation questions in the candidacy domain, 15 candidacy questions in the workstation domain, 6 ambiguous ones');
 
         foreach ($rows as $row) {
             $this->assertContains($row['role'], ['student', 'approver', 'cgs']);
-            $this->assertContains($row['group'], ['original', 'contrast', 'messy', 'standard', 'followup', 'candidacy']);
+            $this->assertContains($row['group'], ['original', 'contrast', 'messy', 'standard', 'followup', 'candidacy', 'cross']);
+            $this->assertContains($row['domain'], ['workstation', 'candidacy']);
+            $this->assertContains($row['set'], ['workstation', 'candidacy', 'cross']);
             foreach ([$row['id'], ...($row['accept'] ?? [])] as $id) {
-                if ($id === 'refused_before_router') {
+                if (in_array($id, ['refused_before_router', 'wrong_domain', 'stay_in_domain'], true)) {
                     continue; // a person's name: refused before the router, so there is no catalogue entry to check
                 }
 
                 $this->assertTrue(Catalogue::isAllowed($id, $row['role']), "'{$row['q']}' is labelled with '{$id}', not in the {$row['role']} catalogue.");
             }
-            foreach ($row['id'] === 'refused_before_router' ? [] : array_keys($row['params'] ?? []) as $param) {
+            foreach (in_array($row['id'], ['refused_before_router', 'wrong_domain', 'stay_in_domain'], true) ? [] : array_keys($row['params'] ?? []) as $param) {
                 $this->assertArrayHasKey($param, Catalogue::find($row['id'])['parameters'], "'{$row['q']}' expects an undeclared parameter '{$param}'.");
             }
         }
