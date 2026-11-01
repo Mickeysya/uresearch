@@ -237,7 +237,7 @@
 .wca-page .cgs-pagination a:hover { background: none; text-decoration: none; }
 .cgs-pagination .is-disabled { cursor: default; pointer-events: none; }
 .cgs-pagination.is-compact { display: none; }
-.wca-showing { margin: 10px 0 0; }
+.wca-page .wca-showing { margin: 10px 0 0; }
 @media (max-width: 480px) {
     .cgs-pagination.is-full { display: none; }
     .cgs-pagination.is-compact { display: flex; gap: 4px; }
