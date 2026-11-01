@@ -169,7 +169,8 @@ return [
             'title' => 'Your appeal {{appeal_no}} was rejected by the Dean (final). Reasons: {{reasons}}',
             'lines' => [
                 'Dear {{student_name}},',
-                'Your Study Candidacy Appeal {{appeal_no}} was rejected by the Dean of Postgraduate and Research. This decision is final: no further appeal can be submitted for this candidacy.',
+                'Your Study Candidacy Appeal {{appeal_no}} was rejected by the Dean of Postgraduate and Research. This decision is final: no further appeal can be submitted for this candidacy. Your expiry date stays at {{expiry_date}}.',
+                'You can still submit your Softbound thesis before {{expiry_date}}. If no Softbound is submitted by then, you become a dismissal candidate for the Centre for Graduate Studies to review.',
                 'Reasons: {{reasons}}',
                 'Remarks: {{remarks}}',
                 'Details: {{link}}',

@@ -245,3 +245,11 @@
     .cgs-pagination.is-compact .is-gap { padding-left: 2px; padding-right: 2px; }
 }
 .wca-page .wca-readonly { margin: 0 0 4px; padding: 10px 12px; min-height: 40px; line-height: 1.4; background: #EEF1F4; border: 1px solid #D5DBE1; border-radius: 8px; color: var(--wca-ink); font-weight: 600; }
+
+/* the Dean's second (final) dialog sits above the first modal */
+.wca-confirm { z-index: 3100; }
+.wca-page .wca-btn.is-danger { background: #C62828; border-color: #C62828; color: #fff; }
+.wca-page .wca-btn.is-danger:hover { background: #A81F1F; border-color: #A81F1F; color: #fff; }
+.wca-page .wca-btn.is-danger:disabled { background: #D98A8A; border-color: #D98A8A; color: #fff; cursor: not-allowed; }
+.wca-consequences { margin: 0 0 12px; padding: 0 0 0 20px; }
+.wca-consequences li { margin: 0 0 6px; padding: 0; line-height: 1.45; }

@@ -48,7 +48,11 @@
     }
 
     // ---- modals (a decision always asks in a modal, never with a browser confirm). Delegated, so a live refresh keeps them working.
-    function closeModals() { $all('.wca-modal').forEach(function (m) { m.hidden = true; }); document.documentElement.removeAttribute('data-wca-modal'); }
+    // A "confirm" dialog (the Dean's second, final dialog) sits ABOVE its modal: Esc, clicking outside and Discard close only it.
+    function openConfirms() { return $all('.wca-confirm').filter(function (m) { return !m.hidden; }); }
+    function closeConfirms() { openConfirms().forEach(function (m) { m.hidden = true; }); }
+    function closeModals() { closeConfirms(); $all('.wca-modal').forEach(function (m) { m.hidden = true; }); document.documentElement.removeAttribute('data-wca-modal'); }
+    function problem(form, text) { var p = $('.wca-error[id$="-problem"]', form); if (p) { p.textContent = text || ''; p.classList.toggle('wca-hidden', !text); } }
     document.addEventListener('click', function (e) {
         var opener = e.target.closest('[data-modal-open]');
         if (opener) {
@@ -56,9 +60,32 @@
             if (m) { m.hidden = false; document.documentElement.setAttribute('data-wca-modal', '1'); }
             return;
         }
+        var ask = e.target.closest('[data-confirm-open]');
+        if (ask) {
+            var form = ask.closest('form'), dlg = document.getElementById(ask.getAttribute('data-confirm-open'));
+            var ticked = $all('input[name="reasons[]"]:checked', form), remark = ($('textarea[name="remark"]', form) || {}).value || '';
+            if (!ticked.length) { problem(form, 'Pick at least one reason from the list.'); return; }
+            if (ticked.some(function (c) { return c.value === 'other'; }) && !remark.trim()) { problem(form, 'A remark is required when the reason is "Other".'); return; }
+            problem(form, '');
+            var list = $('#wca-confirm-reasons', dlg); list.textContent = '';
+            ticked.forEach(function (c) { var li = document.createElement('li'); li.textContent = c.parentNode.textContent.trim(); list.appendChild(li); });
+            $('#wca-confirm-remark', dlg).textContent = remark.trim(); $('#wca-confirm-remark-wrap', dlg).classList.toggle('wca-hidden', !remark.trim());
+            var final = $('#wca-confirm-final', dlg); final.disabled = false; final.removeAttribute('data-sent');
+            dlg.hidden = false; var discard = $('#wca-confirm-discard', dlg); if (discard) { discard.focus(); }
+            return;
+        }
+        var submit = e.target.closest('[data-confirm-submit]');
+        if (submit) {
+            if (submit.getAttribute('data-sent')) { return; } // a second click does nothing
+            submit.setAttribute('data-sent', '1'); submit.disabled = true;
+            var f = document.getElementById(submit.getAttribute('data-confirm-submit')); if (f) { f.submit(); }
+            return;
+        }
+        if (e.target.closest('[data-confirm-close]')) { closeConfirms(); return; }
+        if (e.target.classList && e.target.classList.contains('wca-confirm')) { closeConfirms(); return; }
         if (e.target.closest('[data-modal-close]') || (e.target.classList && e.target.classList.contains('wca-modal'))) { closeModals(); }
     });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeModals(); } });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (openConfirms().length) { closeConfirms(); } else { closeModals(); } } });
     document.addEventListener('change', function (e) {
         var other = e.target.closest('input[value="other"]');
         if (other) { var need = $('[data-remark-need]', other.closest('form')); if (need) { need.classList.toggle('wca-hidden', !other.checked); } }

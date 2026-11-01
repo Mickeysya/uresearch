@@ -57,7 +57,7 @@
         <h3 id="wca-h-rej">Reasons for rejection</h3>
         <p>{{ $rejReasons !== '' ? $rejReasons : 'Not recorded' }}</p>
         @if ($rej?->remark)<p class="wca-muted">Remark: {{ $rej->remark }}</p>@endif
-        <p class="wca-muted wca-small">This decision is final. No further appeals are accepted for this candidacy; the expiry date stays unchanged.</p>
+        <p class="wca-muted wca-small">This decision is final. No further appeals are accepted for this candidacy; the expiry date stays at {{ ($candidacy?->candidacy_expiry_date ?? $appeal->expiry_at_submission)?->format('j M Y') ?? 'its current date' }}. The student may still submit the Softbound thesis before the expiry date.</p>
     </section>
 @endif
 
