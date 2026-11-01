@@ -42,7 +42,17 @@ final class GuidanceLibrary
     /** CGS may also ask the student topics; a student must never reach a CGS one. */
     public static function topicsForRole(string $role): array
     {
-        return $role === Role::STUDENT ? self::STUDENT_TOPICS : [...self::STUDENT_TOPICS, ...self::CGS_TOPICS];
+        $topics = [];
+
+        foreach (AssistantRoles::set($role) as $plain) {
+            $topics = array_merge($topics, match ($plain) {
+                Role::STUDENT => [...self::STUDENT_TOPICS, ...CandidacyAssistant::topicsFor('student')],
+                AssistantRoles::APPROVER => CandidacyAssistant::topicsFor('approver'),
+                default => [...self::STUDENT_TOPICS, ...self::CGS_TOPICS, ...CandidacyAssistant::topicsFor('cgs')],
+            });
+        }
+
+        return array_values(array_unique($topics));
     }
 
     public static function isAllowed(string $topic, string $role): bool
@@ -63,6 +73,7 @@ final class GuidanceLibrary
     public static function topicDescriptions(): array
     {
         return [
+            ...array_map(fn ($spec) => $spec['description'], CandidacyAssistant::topicSpecsPublic()),
             'select_seat' => 'How to browse and select a workstation seat.',
             'visibility_rules' => 'Why some rooms or seats are not shown to this student.',
             'confirmation' => 'What happens if a seat selection is not confirmed in time.',
@@ -99,6 +110,10 @@ final class GuidanceLibrary
 
     public static function sourceText(string $topic): ?string
     {
+        if (CandidacyAssistant::isTopic($topic)) {
+            return CandidacyAssistant::sourceText($topic);
+        }
+
         $directory = in_array($topic, self::CGS_TOPICS, true) ? 'cgs' : 'student';
         $path = base_path("docs/knowledge/assistant/{$directory}/{$topic}.md");
 
@@ -138,6 +153,11 @@ final class GuidanceLibrary
             // that a placeholder with no matching entry here renders as
             // the literal string "{{almost_full_percent}}".
             '{{almost_full_percent}}' => (string) config('assistant.almost_full_percent', 90),
+            // Study Candidacy topics
+            '{{cand_max_extension_months}}' => (string) config('candidacy.max_extension_months', 12),
+            '{{cand_max_supporting}}' => (string) \App\Modules\Chloe\Services\CandidacyDocumentService::MAX_SUPPORTING,
+            '{{cand_max_file_mb}}' => (string) (\App\Modules\Chloe\Services\CandidacyDocumentService::MAX_BYTES / 1048576),
+            '{{cand_reminder_months}}' => implode(', ', (array) config('candidacy.reminders.milestones', [3, 2, 1])),
         ];
     }
 
@@ -176,6 +196,11 @@ final class GuidanceLibrary
         $sections = [];
 
         foreach ($topics as $topic) {
+            // a candidacy topic is shown as written (never composed by the model), so it is not part of the model's knowledge text
+            if (CandidacyAssistant::isTopic($topic)) {
+                continue;
+            }
+
             $source = self::sourceText($topic);
 
             if ($source !== null) {
@@ -251,6 +276,10 @@ final class GuidanceLibrary
         $links = [];
 
         foreach ($topics as $topic) {
+            if (CandidacyAssistant::isTopic($topic)) {
+                continue; // a candidacy topic's links are CandidacyAssistant::linksForTopic()
+            }
+
             if (! in_array($topic, [...self::STUDENT_TOPICS, ...self::CGS_TOPICS], true)) {
                 continue;
             }

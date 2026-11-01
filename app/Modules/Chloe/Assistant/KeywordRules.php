@@ -97,13 +97,13 @@ final class KeywordRules
         }
 
         if (ParameterExtractor::hasLostOrDamagedKeyPhrase($maskedQuestion) || ParameterExtractor::hasMarkKeyStatusPhrase($maskedQuestion)) {
-            $topic = $role === 'cgs' ? 'cgs_keys' : 'key_lost';
+            $topic = AssistantRoles::hasCgs($role) ? 'cgs_keys' : 'key_lost';
 
             // "How do I mark a key as collected?" from a student is not
             // key_lost at all -- it's asking how the already-known
             // collect/return flow works, so it gets that topic instead;
             // a genuine lost/damaged key always goes to key_lost.
-            if ($role !== 'cgs' && ParameterExtractor::hasMarkKeyStatusPhrase($maskedQuestion) && ! ParameterExtractor::hasLostOrDamagedKeyPhrase($maskedQuestion)) {
+            if (! AssistantRoles::hasCgs($role) && ParameterExtractor::hasMarkKeyStatusPhrase($maskedQuestion) && ! ParameterExtractor::hasLostOrDamagedKeyPhrase($maskedQuestion)) {
                 $topic = 'locker_key_collect_return';
             }
 

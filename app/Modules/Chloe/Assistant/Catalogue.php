@@ -75,12 +75,13 @@ final class Catalogue
             ...self::lookupEntries(),
             ...self::guidanceEntries(),
             ...self::actionEntries(),
+            ...CandidacyAssistant::entries(),
             [
                 'id' => 'out_of_scope',
                 'kind' => 'out_of_scope',
-                'roles' => [Role::STUDENT, 'cgs'],
+                'roles' => [Role::STUDENT, 'cgs', 'approver'],
                 'question' => '',
-                'description' => 'The question is not about the Workstation/locker-key system at all, or is unrelated small talk -- or it asks for something no entry in THIS catalogue answers (for a student: CGS-only information such as release forecasts, other students, or staff-wide statistics).',
+                'description' => 'The question is not about the Workstation/locker-key system or Study Candidacy at all, or is unrelated small talk -- or it asks for something no entry in THIS catalogue answers (for a student: CGS-only information such as release forecasts, other students, or staff-wide statistics).',
                 'examples' => ['what is the weather today', 'tell me a joke', 'who won the football last night', 'how do i reset my email password', 'whats for lunch'],
                 'parameters' => [],
                 'link' => null,
@@ -101,6 +102,8 @@ final class Catalogue
         $suggestionTexts = SuggestedQuestions::textsByCatalogueId();
 
         foreach ($entries as &$entry) {
+            $entry['domain'] ??= 'workstation';
+
             if (isset($suggestionTexts[$entry['id']])) {
                 $entry['question'] = $suggestionTexts[$entry['id']];
             }
@@ -108,7 +111,7 @@ final class Catalogue
                 $entry['summary'] = self::summaryFromTopicText($entry['id']);
             }
             if ($entry['kind'] === 'lookup') {
-                $entry['template'] = Str::camel($entry['id']);
+                $entry['template'] ??= Str::camel($entry['id']);
             }
         }
 
@@ -134,9 +137,16 @@ final class Catalogue
     }
 
     /** @return array<int, array<string, mixed>> */
-    public static function forRole(string $role): array
+    public static function forRole(string $role, ?string $domain = null): array
     {
-        return array_values(array_filter(self::all(), fn ($e) => in_array($role, $e['roles'], true)));
+        $entries = array_values(array_filter(self::all(), fn ($e) => AssistantRoles::covers($role, $e['roles'])));
+
+        if ($domain !== null) {
+            // the current page only gives a PRIOR: that domain's entries first (stable), nothing is removed
+            usort($entries, fn ($a, $b) => (($a['domain'] === $domain) ? 0 : 1) <=> (($b['domain'] === $domain) ? 0 : 1));
+        }
+
+        return $entries;
     }
 
     public static function find(string $id): ?array
@@ -154,7 +164,7 @@ final class Catalogue
     {
         $entry = self::find($id);
 
-        return $entry !== null && in_array($role, $entry['roles'], true);
+        return $entry !== null && AssistantRoles::covers($role, $entry['roles']);
     }
 
     /**
@@ -169,7 +179,7 @@ final class Catalogue
         foreach (self::ACTION_MATCH_ORDER as $id) {
             $entry = self::find($id);
 
-            if ($entry !== null && in_array($role, $entry['roles'], true) && preg_match($entry['pattern'], $normalisedText)) {
+            if ($entry !== null && AssistantRoles::covers($role, $entry['roles']) && preg_match($entry['pattern'], $normalisedText)) {
                 return $id;
             }
         }
@@ -181,7 +191,9 @@ final class Catalogue
     public const ACTION_MATCH_ORDER = [
         'action_release_hold', 'action_reassign', 'action_assign', 'action_mark_key_collected',
         'action_mark_key_returned', 'action_set_maintenance', 'action_restore',
-        'action_terminate_or_withdraw', 'action_cancel_request', 'action_release', 'action_other',
+        'action_terminate_or_withdraw', 'action_cancel_request',
+        'cand_action_decide', 'cand_action_submit', 'cand_action_reminders', 'cand_action_export_upload', 'cand_action_dismiss',
+        'action_release', 'action_other',
     ];
 
     protected const STOPWORDS = [
@@ -655,6 +667,7 @@ final class Catalogue
         'action_mark_key_returned', 'action_set_maintenance', 'action_restore',
         'action_terminate_or_withdraw', 'action_release_hold', 'action_cancel_request',
         'action_other',
+        'cand_action_decide', 'cand_action_submit', 'cand_action_reminders', 'cand_action_export_upload', 'cand_action_dismiss',
     ];
 
     /** @return array<int, array<string, mixed>> */

@@ -111,9 +111,10 @@ class WorkstationAssistantTest extends TestCase
 
     public function test_an_unsupported_role_is_refused_with_the_exact_message(): void
     {
-        $supervisor = $this->supervisor();
+        // Supervisors, Chairs and the Dean are the 'approver' role since the candidacy assistant; a role still unsupported is the Registry
+        $registry = \App\Modules\Core\Models\User::create(['name' => 'Registry', 'email' => 'registry-x@test.my', 'password' => 'password', 'role' => \App\Modules\Core\Support\Role::REGISTRY]);
 
-        $result = $this->pipeline()->ask($supervisor, 'how many seats are available', []);
+        $result = $this->pipeline()->ask($registry, 'how many seats are available', []);
 
         $this->assertSame('refused', $result['outcome']);
         $this->assertSame(Pipeline::ROLE_NOT_SUPPORTED_MESSAGE, $result['answer']);

@@ -78,7 +78,17 @@ final class Pipeline
     /** assistant:evaluate turns the compose calls off so a run measures (and spends quota on) the router alone. */
     protected bool $composeEnabled = true;
 
+    /** The page the question comes from gives a PRIOR only (that domain's entries first); no entry is hidden by it. */
+    protected ?string $domain = null;
+
     public function __construct(protected AssistantModel $model) {}
+
+    public function setDomain(?string $domain): static
+    {
+        $this->domain = in_array($domain, ['workstation', 'candidacy'], true) ? $domain : null;
+
+        return $this;
+    }
 
     public function enableTrace(): void
     {
@@ -115,7 +125,7 @@ final class Pipeline
     public function ask(User $user, string $message, array $recentUserQuestions, bool $bypassKeywordRules = false, bool $allowFallback = true): array
     {
         $this->answeredByOverride = null;
-        $role = self::normalizeRole($user->role);
+        $role = AssistantRoles::roleFor($user);
 
         if ($role === null) {
             return $this->finish($user, $user->role, AssistantLog::SOURCE_TYPED, 'role_not_supported', AssistantLog::OUTCOME_REFUSED, self::ROLE_NOT_SUPPORTED_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'role_not_supported');
@@ -159,6 +169,13 @@ final class Pipeline
             return $this->askSuggestion($user, $exactSuggestionId);
         }
 
+        // the candidacy chips' exact texts: answered by catalogue id, no model call
+        if (($candidacyChip = CandidacyAssistant::findIdByExactText($message, $role)) !== null) {
+            $this->traceLine("decision: exact candidacy suggested question {$candidacyChip} (no model call)");
+
+            return $this->askCatalogueChip($user, $role, $candidacyChip, []);
+        }
+
         if (ParameterExtractor::hasManipulationPhrase($maskedQuestion)) {
             $this->traceLine('decision: refused, manipulation phrase (no model call)');
 
@@ -183,7 +200,7 @@ final class Pipeline
                 : $this->fallbackAsk($user, $role, $maskedQuestion, $idMap, $recentMasked, true, null, 'budget');
         }
 
-        $catalogue = Catalogue::forRole($role);
+        $catalogue = Catalogue::forRole($role, $this->domain);
         $todayLabel = Carbon::now('Asia/Kuala_Lumpur')->format('l, j F Y');
 
         $routed = $this->callRouterWithReliability($maskedQuestion, $recentMasked, $catalogue, RouterFewShots::all(), $todayLabel, $allowFallback);
@@ -215,7 +232,7 @@ final class Pipeline
 
         // The id must exist in the ROLE's own catalogue -- a student never
         // gets a CGS entry, whatever the model said. Invalid output.
-        if ($entry === null || ! in_array($role, $entry['roles'], true)) {
+        if ($entry === null || ! AssistantRoles::covers($role, $entry['roles'])) {
             $this->traceLine("validation: id {$id} is not in the {$role} catalogue -> invalid output");
 
             return $bypassKeywordRules
@@ -489,6 +506,19 @@ final class Pipeline
             return $this->withInterpretation($this->actionRequestResponse($user, $role, $actionId, $params, $answeredBy), $actionId, $params);
         }
 
+        // a plain Study Candidacy question (keyword layer of the fallback): the lookup or topic it names, for THIS role only
+        if (($candidacyId = CandidacyAssistant::keywordMatch($normalised, $role)) !== null) {
+            $entry = Catalogue::find($candidacyId);
+            $this->traceLine("fallback: candidacy {$candidacyId}");
+            $answer = match ($entry['kind']) {
+                'lookup' => $this->answerLookup($user, $role, $candidacyId, [], $answeredBy),
+                'guidance' => $this->answerGuidance($user, $role, $candidacyId, AssistantLog::SOURCE_TYPED, $answeredBy, $modelUsed),
+                default => $this->actionRequestResponse($user, $role, $candidacyId, [], $answeredBy),
+            };
+
+            return $this->withInterpretation($answer, $candidacyId, []);
+        }
+
         // release_forecast: a release cue with a period, or a bare-period follow-up to one.
         $period = PeriodExtractor::parseDeterministic($normalised);
         $isFollowUp = $period !== null && str_word_count(preg_replace('/\d+/', '', $normalised)) <= 4
@@ -511,7 +541,7 @@ final class Pipeline
 
         // CGS asking a student-phrased guidance question gets the CGS
         // counterpart topic first (config('assistant.cgs_topic_counterparts')).
-        if ($role === 'cgs') {
+        if (AssistantRoles::hasCgs($role)) {
             $counterpartMap = config('assistant.cgs_topic_counterparts', []);
 
             foreach ($deterministicName !== null ? [$deterministicName, ...$rawMatches] : $rawMatches as $name) {
@@ -529,7 +559,7 @@ final class Pipeline
 
         if ($deterministicName !== null && str_starts_with($deterministicName, 'guidance:') && $this->isAllowedForRole($deterministicName, $role)) {
             $guidanceTopic = substr($deterministicName, strlen('guidance:'));
-            $guidanceTopic = $role === 'cgs' ? (config('assistant.cgs_topic_counterparts', [])[$guidanceTopic] ?? $guidanceTopic) : $guidanceTopic;
+            $guidanceTopic = AssistantRoles::hasCgs($role) ? (config('assistant.cgs_topic_counterparts', [])[$guidanceTopic] ?? $guidanceTopic) : $guidanceTopic;
         } elseif ($deterministicName !== null && $deterministicName !== 'action_request' && $this->isAllowedForRole($deterministicName, $role)) {
             $primaryLookup = $deterministicName;
             $parameters = $deterministic['parameters'];
@@ -584,7 +614,7 @@ final class Pipeline
         }
 
         $hasTarget = ParameterExtractor::seatNumber($normalised) !== null || ParameterExtractor::studentIdPlaceholder($normalised) !== null;
-        $verbFirst = (bool) preg_match('/^(release|reassign|assign|mark|set|put|disable|restore|terminate|withdraw|cancel|approve|delete|remove|update|change|undo|edit|free|kick|move|give|add|tick|clear|lift|issue|swap|start|bring|un-?disable)\b/', $normalised);
+        $verbFirst = (bool) preg_match('/^(submit|file|send|resend|trigger|export|upload|download|dismiss|decline|accept|reject|return|release|reassign|assign|mark|set|put|disable|restore|terminate|withdraw|cancel|approve|delete|remove|update|change|undo|edit|free|kick|move|give|add|tick|clear|lift|issue|swap|start|bring|un-?disable)\b/', $normalised);
 
         return $hasTarget || $verbFirst ? $actionId : null;
     }
@@ -625,10 +655,12 @@ final class Pipeline
         }
 
         $text = $sourceText;
+        $isCandidacy = CandidacyAssistant::isTopic($topicId);
 
-        if ($maskedQuestion !== null && $this->anyModelBudgetAvailable($allowFallback)) {
+        // a candidacy topic is shown as written, with its own "Source:" line (no model rewrite that could drop it)
+        if (! $isCandidacy && $maskedQuestion !== null && $this->anyModelBudgetAvailable($allowFallback)) {
             $knowledge = "### {$topicId}\n{$sourceText}";
-            $composed = $this->callModelWithReliability($maskedQuestion, $recentMasked, $knowledge, [], [$topicId], $allowFallback, false, $role === 'cgs');
+            $composed = $this->callModelWithReliability($maskedQuestion, $recentMasked, $knowledge, [], [$topicId], $allowFallback, false, AssistantRoles::hasCgs($role));
             $candidate = self::stripInventedPersonalData(trim((string) ($composed['answer'] ?? '')));
 
             if ($composed['outcome'] === 'ok' && ($composed['kind'] ?? null) === 'guidance' && $candidate !== '' && ! self::saysNotCovered($candidate) && GuidanceLibrary::everyNumberAppearsIn($candidate, $knowledge.' '.$maskedQuestion)) {
@@ -639,7 +671,7 @@ final class Pipeline
             }
         }
 
-        return $this->finish($user, $role, $source, "guidance:{$topicId}", AssistantLog::OUTCOME_ANSWERED, $text, GuidanceLibrary::linksForTopics([$topicId]), null, $answeredBy, null, modelUsed: $modelUsed);
+        return $this->finish($user, $role, $source, "guidance:{$topicId}", AssistantLog::OUTCOME_ANSWERED, $text, $isCandidacy ? CandidacyAssistant::linksForTopic($topicId, $role) : GuidanceLibrary::linksForTopics([$topicId]), null, $answeredBy, null, modelUsed: $modelUsed);
     }
 
     /**
@@ -701,6 +733,12 @@ final class Pipeline
      */
     protected function actionRequestResponse(User $user, string $role, string $actionId, array $parameters, string $answeredBy, ?string $modelUsed = null): array
     {
+        if (str_starts_with($actionId, 'cand_action_')) {
+            $refusal = CandidacyAssistant::refusal($actionId, $role);
+
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, $actionId, AssistantLog::OUTCOME_REFUSED, $refusal['text'], $refusal['links'], null, $answeredBy, 'action_request', modelUsed: $modelUsed);
+        }
+
         $log = fn (string $text, array $links, string $reason) => $this->finish($user, $role, AssistantLog::SOURCE_TYPED, $actionId, AssistantLog::OUTCOME_REFUSED, $text, $links, null, $answeredBy, $reason, modelUsed: $modelUsed);
 
         if ($role === Role::STUDENT) {
@@ -767,7 +805,7 @@ final class Pipeline
     public function askSuggestion(User $user, string $suggestionId, array $params = []): array
     {
         $this->answeredByOverride = null;
-        $role = self::normalizeRole($user->role);
+        $role = AssistantRoles::roleFor($user);
 
         if ($role === null) {
             return $this->finish($user, $user->role, AssistantLog::SOURCE_SUGGESTION, 'role_not_supported', AssistantLog::OUTCOME_REFUSED, self::ROLE_NOT_SUPPORTED_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'role_not_supported');
@@ -806,7 +844,7 @@ final class Pipeline
     {
         $entry = Catalogue::find($catalogueId);
 
-        if ($entry === null || ! in_array($role, $entry['roles'], true)) {
+        if ($entry === null || ! AssistantRoles::covers($role, $entry['roles'])) {
             return $this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, 'unknown_suggestion', AssistantLog::OUTCOME_ERROR, 'That suggested question is not available.', [], null, AssistantLog::ANSWERED_BY_DIRECT, 'unknown_suggestion');
         }
 
@@ -1010,6 +1048,10 @@ final class Pipeline
     {
         if ($dbRole === Role::STUDENT) {
             return Role::STUDENT;
+        }
+
+        if (in_array($dbRole, [Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], true)) {
+            return AssistantRoles::APPROVER;
         }
 
         return Role::isCgs($dbRole) ? 'cgs' : null;

@@ -33,7 +33,17 @@ final class Lookups
     /** @return array<int, string> */
     public static function forRole(string $role): array
     {
-        return $role === Role::STUDENT ? self::studentNames() : self::cgsNames();
+        $names = [];
+
+        foreach (AssistantRoles::set($role) as $plain) {
+            $names = array_merge($names, match ($plain) {
+                Role::STUDENT => [...self::studentNames(), ...CandidacyAssistant::lookupNames('student')],
+                AssistantRoles::APPROVER => CandidacyAssistant::lookupNames('approver'),
+                default => [...self::cgsNames(), ...CandidacyAssistant::lookupNames('cgs')],
+            });
+        }
+
+        return array_values(array_unique($names));
     }
 
     public static function isAllowed(string $name, string $role): bool
@@ -119,6 +129,8 @@ final class Lookups
             'return_outlook' => ['description' => 'Locker keys due back: due within 7 days, due in 8-14 days, overdue. Optional block or gender.', 'parameters' => ['block' => 'optional, "N2" or "J2"', 'gender' => 'optional, "male" or "female"']],
         ];
 
+        $all += CandidacyAssistant::definitions();
+
         return array_intersect_key($all, array_flip(self::forRole($role)));
     }
 
@@ -128,6 +140,10 @@ final class Lookups
      */
     public static function run(string $name, array $parameters, User $user, string $role): array
     {
+        if (str_starts_with($name, 'cand_')) {
+            return CandidacyAssistant::run($name, $parameters, $user);
+        }
+
         return match ($name) {
             'my_workstation' => self::myWorkstation($user),
             'my_locker_key' => self::myLockerKey($user),

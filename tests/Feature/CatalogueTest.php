@@ -32,7 +32,7 @@ class CatalogueTest extends TestCase
         }
         foreach ($catalogueLookupIds as $id) {
             $this->assertTrue(
-                Lookups::isAllowed($id, 'cgs') || Lookups::isAllowed($id, Role::STUDENT),
+                Lookups::isAllowed($id, 'cgs') || Lookups::isAllowed($id, Role::STUDENT) || Lookups::isAllowed($id, 'approver'),
                 "Catalogue lookup entry '{$id}' is not a real lookup allowed for any role."
             );
         }
@@ -53,7 +53,7 @@ class CatalogueTest extends TestCase
 
     public function test_every_guidance_topic_has_a_catalogue_entry_and_every_guidance_entry_is_a_real_topic(): void
     {
-        $allTopics = [...GuidanceLibrary::STUDENT_TOPICS, ...GuidanceLibrary::CGS_TOPICS];
+        $allTopics = [...GuidanceLibrary::STUDENT_TOPICS, ...GuidanceLibrary::CGS_TOPICS, ...array_keys(\App\Modules\Chloe\Assistant\CandidacyAssistant::TOPICS)];
         $catalogueGuidanceIds = collect(Catalogue::all())->where('kind', 'guidance')->pluck('id')->all();
 
         foreach ($allTopics as $topic) {
@@ -116,7 +116,8 @@ class CatalogueTest extends TestCase
         $this->assertEqualsCanonicalizing(Catalogue::ACTION_KINDS, $actionIds);
         $this->assertEqualsCanonicalizing(Catalogue::ACTION_MATCH_ORDER, $actionIds);
 
-        foreach ($actionIds as $id) {
+        // the candidacy actions are recognised by their own patterns (the next test), not by the Workstation config('assistant.action_phrases') verbs
+        foreach (array_filter($actionIds, fn ($id) => ! str_starts_with($id, 'cand_action_')) as $id) {
             $this->assertContains($id, $covered, "Catalogue action entry '{$id}' is matched by no config('assistant.action_phrases') phrase.");
         }
     }
@@ -135,7 +136,7 @@ class CatalogueTest extends TestCase
     {
         foreach (Catalogue::all() as $entry) {
             if ($entry['kind'] === 'lookup') {
-                $this->assertTrue(method_exists(Lookups::class, $entry['template']), "Lookup '{$entry['id']}' names a missing template method.");
+                $this->assertTrue(method_exists(Lookups::class, $entry['template']) || method_exists(\App\Modules\Chloe\Assistant\CandidacyLookups::class, $entry['template']), "Lookup '{$entry['id']}' names a missing template method.");
             }
             if ($entry['kind'] === 'guidance') {
                 $this->assertNotSame('', $entry['summary']);

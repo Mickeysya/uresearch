@@ -20,7 +20,11 @@ final class SuggestedQuestions
     /** @return array<string, array{text: string, type: 'static'|'dynamic', target: string, catalogue_id: string}> */
     public static function forRole(string $role): array
     {
-        return $role === Role::STUDENT ? self::student() : self::cgs();
+        return match (true) {
+            $role === Role::STUDENT => self::student(),
+            $role === AssistantRoles::APPROVER => [],
+            default => self::cgs(),
+        };
     }
 
     public static function find(string $id, string $role): ?array

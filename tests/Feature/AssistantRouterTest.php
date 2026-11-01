@@ -609,9 +609,11 @@ class AssistantRouterTest extends TestCase
     // Role limits
     // -------------------------------------------------------------
 
-    public function test_only_student_and_cgs_can_use_the_assistant(): void
+    public function test_only_student_approver_and_cgs_can_use_the_assistant(): void
     {
-        $result = $this->pipeline()->ask($this->supervisor(), 'how many seats are available', []);
+        // the Registry and every other role are still refused; Supervisor, Chair and Dean are the approver role (Study Candidacy)
+        $registry = \App\Modules\Core\Models\User::create(['name' => 'Registry', 'email' => 'registry-y@test.my', 'password' => 'password', 'role' => \App\Modules\Core\Support\Role::REGISTRY]);
+        $result = $this->pipeline()->ask($registry, 'how many seats are available', []);
 
         $this->assertSame(Pipeline::ROLE_NOT_SUPPORTED_MESSAGE, $result['answer']);
         $this->assertSame(0, FakeModel::routeCallCount());

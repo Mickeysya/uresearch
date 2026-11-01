@@ -207,17 +207,17 @@ final class CandidacyStatistics
         return $out;
     }
 
-    /** @return list<array{month:string,dept:?string,level:string,mode:string}> every dismissed student (real: study_candidacies.dismissed_at; demo: the profile's) */
+    /** @return list<array{date:string,month:string,dept:?string,level:string,mode:string}> every dismissed student (real: study_candidacies.dismissed_at; demo: the profile's) */
     public static function dismissedRows(): array
     {
         $rows = [];
 
         foreach (\App\Modules\Chloe\Models\StudyCandidacy::with('student')->whereNotNull('dismissed_at')->get() as $c) {
-            $rows[] = ['month' => $c->dismissed_at->timezone(self::TZ)->format('Y-m'), 'dept' => CandidacyDepartmentResolver::forCandidacy($c)?->code, 'level' => CandidacyDismissalList::levelOf($c->student?->programme), 'mode' => stripos((string) $c->student?->programme, 'part-time') !== false ? 'part' : 'full'];
+            $rows[] = ['date' => $c->dismissed_at->timezone(self::TZ)->toDateString(), 'month' => $c->dismissed_at->timezone(self::TZ)->format('Y-m'), 'dept' => CandidacyDepartmentResolver::forCandidacy($c)?->code, 'level' => CandidacyDismissalList::levelOf($c->student?->programme), 'mode' => stripos((string) $c->student?->programme, 'part-time') !== false ? 'part' : 'full'];
         }
 
         foreach (\App\Modules\Chloe\Models\DemoStudentProfile::withoutGlobalScopes()->whereNotNull('dismissed_at')->get() as $p) {
-            $rows[] = ['month' => $p->dismissed_at->timezone(self::TZ)->format('Y-m'), 'dept' => CandidacyDepartmentResolver::codeFor($p->programme, $p->matric_no), 'level' => CandidacyDismissalList::levelOf($p->programme), 'mode' => stripos((string) $p->programme, 'part-time') !== false ? 'part' : 'full'];
+            $rows[] = ['date' => $p->dismissed_at->timezone(self::TZ)->toDateString(), 'month' => $p->dismissed_at->timezone(self::TZ)->format('Y-m'), 'dept' => CandidacyDepartmentResolver::codeFor($p->programme, $p->matric_no), 'level' => CandidacyDismissalList::levelOf($p->programme), 'mode' => stripos((string) $p->programme, 'part-time') !== false ? 'part' : 'full'];
         }
 
         return $rows;
