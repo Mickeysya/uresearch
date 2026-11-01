@@ -40,11 +40,12 @@ class CandidacyDemoDataTest extends TestCase
         $real = $mk(Role::STUDENT, 'student2@utp.edu.my', 'Nur Farah Adilah', ['matric_no' => '22001002']);
         StudyCandidacy::create(['student_id' => $real->id, 'programme_start_date' => '2022-10-11', 'candidacy_expiry_date' => '2026-10-01', 'status' => 'dismissed']);
 
-        $programmes = ['MSc Computer Science (Full-Time)', 'MSc Information Technology (Full-Time)', 'MSc Mechanical Engineering (Full-Time)', 'MSc Petroleum Engineering (Full-Time)',
-            'PhD Chemical Engineering (Full-Time)', 'PhD Civil Engineering (Full-Time)', 'PhD Computer & Information Sciences (Full-Time)', 'PhD Electrical & Electronic Engineering (Full-Time)'];
+        // one catalogue programme per department (20 students each), the way the Workstation demo seeder labels them
+        $programmes = ['PhD in Chemical Engineering (Full-Time)', 'PhD in Civil Engineering (Full-Time)', 'PhD in Electrical and Electronics Engineering (Full-Time)', 'Master of Science in Mechanical Engineering (Full-Time)',
+            'Master of Science in Petroleum Engineering (Full-Time)', 'PhD in Petroleum Geoscience (Full-Time)', 'Master of Science in Information Technology (Full-Time)', 'PhD in Applied Science (Full-Time)', 'PhD in Management (Full-Time)'];
         $n = 0;
         foreach ($programmes as $programme) {
-            foreach (range(1, 16) as $i) {
+            foreach (range(1, 20) as $i) {
                 DemoStudentProfile::create(['matric_no' => (string) (21010000 + ++$n), 'name' => "Demo Student {$n}", 'email' => "demo{$n}@utp.edu.my", 'gender' => 'male', 'programme' => $programme,
                     'programme_start_date' => '2025-01-10', 'candidacy_expiry_date' => Carbon::parse('2027-03-01')->addDays($n * 5)->toDateString(), 'status' => 'active']);
             }
@@ -140,6 +141,7 @@ class CandidacyDemoDataTest extends TestCase
         $this->artisan('candidacy:demo-seed')->assertSuccessful();
         $byDept = CandidacyAppeal::where('is_demo', true)->get()->groupBy('department_id');
         $withStudents = DemoStudentProfile::pluck('programme')->map(fn ($p) => \App\Modules\Chloe\Support\CandidacyDepartmentResolver::codeFor($p, '1'))->unique();
+        $this->assertCount(9, $withStudents, "all nine departments have demo students");
 
         foreach (CandidacyDepartment::whereIn('code', $withStudents)->get() as $d) {
             $this->assertGreaterThanOrEqual(2, ($byDept[$d->id] ?? collect())->count(), $d->code);
@@ -230,7 +232,7 @@ class CandidacyDemoDataTest extends TestCase
 
     public function test_the_real_candidacies_get_a_department_and_the_live_demo_accounts_none_of_the_demo_appeals(): void
     {
-        $live = User::create(['name' => 'Live Student', 'email' => 'student@utp.edu.my', 'password' => 'password', 'role' => Role::STUDENT, 'matric_no' => '22001001', 'programme' => 'MSc Petroleum Engineering']);
+        $live = User::create(['name' => 'Live Student', 'email' => 'student@utp.edu.my', 'password' => 'password', 'role' => Role::STUDENT, 'matric_no' => '22001001', 'programme' => 'Master of Science in Information Systems (Full-Time)']);
         StudyCandidacy::create(['student_id' => $live->id, 'programme_start_date' => '2025-01-01', 'candidacy_expiry_date' => '2027-06-10', 'status' => 'active']);
 
         $this->artisan('candidacy:demo-seed')->assertSuccessful();

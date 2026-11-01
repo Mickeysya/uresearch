@@ -288,20 +288,26 @@ class CandidacyDemoSeed extends Command
         foreach ([['CIS', 10, 4, 1], ['CIS', 11, 6, 5], ['PET', 3, 6, 4], ['CHE', 3, 3, 7], ['CEE', 4, 5, 11]] as [$d, $i, $m, $w]) {
             $add($d, $i, 'with_cgs', $m, $w, $w + 12);
         }
-        $add('CIS', 12, 'with_cgs', 3, 13, 36, ['recheck' => true]);
         $add('MEC', 4, 'with_cgs', 4, 13, 38, ['recheck' => true]);
         // waiting at the Dean: from several departments
-        foreach ([['CIS', 13, 5, 0], ['CIS', 14, 3, 3], ['CIS', 15, 4, 9], ['EEE', 4, 6, 6], ['PET', 4, 2, 12], ['CEE', 5, 3, 1], ['MEC', 5, 4, 8]] as [$d, $i, $m, $w]) {
+        foreach ([['CIS', 12, 5, 0], ['CIS', 13, 3, 3], ['CIS', 14, 4, 9], ['EEE', 4, 6, 6], ['PET', 4, 2, 12], ['CEE', 5, 3, 1], ['MEC', 5, 4, 8], ['GEO', 2, 2, 4]] as [$d, $i, $m, $w]) {
             $add($d, $i, 'with_dean', $m, $w, $w + 18);
         }
         // Computer & Information Sciences with a final result (the real lecturer, chair and Dean's History tabs)
-        $add('CIS', 16, 'approved', 3, 0, 120, ['closed_days_ago' => 85]);
-        $add('CIS', 17, 'approved', 6, 0, 70, ['closed_days_ago' => 40]);
-        $add('CIS', 18, 'approved', 2, 0, 35, ['closed_days_ago' => 12]);
-        $add('CIS', 19, 'rejected', 5, 0, 95, ['closed_days_ago' => 58]);
-        $add('CIS', 20, 'rejected', 3, 0, 45, ['closed_days_ago' => 19]);
+        $add('CIS', 15, 'approved', 3, 0, 120, ['closed_days_ago' => 85]);
+        $add('CIS', 16, 'approved', 6, 0, 70, ['closed_days_ago' => 40]);
+        $add('CIS', 17, 'approved', 2, 0, 35, ['closed_days_ago' => 12]);
+        $add('CIS', 18, 'rejected', 5, 0, 95, ['closed_days_ago' => 58]);
+        // the three departments that had no appeals: Geoscience, Fundamental & Applied Sciences, Management & Humanities (two or more each)
+        $add('GEO', 0, 'approved', 3, 0, 100, ['closed_days_ago' => 64]);
+        $add('GEO', 1, 'with_supervisor', 4, 3, 5);
+        $add('APS', 0, 'returned', 3, 4, 18, ['by' => 'chair']);
+        $add('APS', 1, 'with_chair', 5, 9, 15);
+        $add('APS', 2, 'rejected', 4, 0, 60, ['closed_days_ago' => 29]);
+        $add('MHU', 0, 'approved', 6, 0, 55, ['closed_days_ago' => 24]);
+        $add('MHU', 1, 'with_cgs', 4, 3, 15);
         // drafts
-        foreach ([['CIS', 21, 3], ['CEE', 6, 4], ['PET', 5, 2]] as [$d, $i, $m]) {
+        foreach ([['MHU', 2, 2], ['CEE', 6, 4], ['PET', 5, 2]] as [$d, $i, $m]) {
             $add($d, $i, 'draft', $m, 0, 2);
         }
         // closed because it was not resubmitted before the (real) candidacy expired
