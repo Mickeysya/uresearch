@@ -141,10 +141,10 @@ class CandidacyAssistantTest extends TestCase
         $n = CandidacyPortalQuery::pending($this->lecturer)->count();
 
         $this->assertSame(1, $n);
-        $this->assertStringContainsString('1 appeal is waiting', $this->ask($this->lecturer, 'how many appeals are waiting for me', 'cand_ap_pending')['answer']);
+        $this->assertStringContainsString('1 appeal is pending your action', $this->ask($this->lecturer, 'how many appeals are waiting for me', 'cand_ap_pending')['answer']);
         // the Chair has nothing at their step yet: the same question gives THEIR number
         $this->assertSame(0, CandidacyPortalQuery::pending($this->chairUser)->count());
-        $this->assertStringContainsString('No appeal is waiting', $this->ask($this->chairUser, 'how many appeals are waiting for me', 'cand_ap_pending')['answer']);
+        $this->assertStringContainsString('No appeal is pending your action', $this->ask($this->chairUser, 'how many appeals are waiting for me', 'cand_ap_pending')['answer']);
     }
 
     public function test_the_cgs_numbers_equal_operations_insights_and_the_dismissal_list(): void

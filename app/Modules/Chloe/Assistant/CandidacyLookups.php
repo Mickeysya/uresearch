@@ -284,7 +284,7 @@ final class CandidacyLookups
 
         $n = CandidacyPortalQuery::pending($user)->count();
 
-        return self::done($n === 0 ? 'No appeal is waiting for your action.' : self::plural($n, 'appeal is', 'appeals are').' waiting for your action.', [self::link('Approval Portal', 'candidacy.portal.queue')], $n);
+        return self::done($n === 0 ? 'No appeal is pending your action.' : self::plural($n, 'appeal is', 'appeals are').' pending your action.', [self::link('Approval Portal', 'candidacy.portal.queue')], $n);
     }
 
     protected static function approverOldest(User $user, array $p): array
@@ -297,7 +297,7 @@ final class CandidacyLookups
 
         return $a
             ? self::done("The longest wait is appeal {$a->displayNo()}, waiting ".self::plural($a->waitingDays(), 'day', 'days').' at your step.', [['label' => 'Open the appeal', 'url' => route('candidacy.appeals.show', ['appeal' => $a->id])]], 1)
-            : self::done('No appeal is waiting for your action.', [self::link('Approval Portal', 'candidacy.portal.queue')], 0);
+            : self::done('No appeal is pending your action.', [self::link('Approval Portal', 'candidacy.portal.queue')], 0);
     }
 
     protected static function approverWaiting(User $user, array $p): array
