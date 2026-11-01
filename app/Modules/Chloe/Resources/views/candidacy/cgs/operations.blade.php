@@ -5,71 +5,39 @@
 @include('chloe::candidacy.wca._assets')
 
 @section('content')
-<div class="card-container-inline">
-    <x-core::page-header title="Candidacy Management">
-        <a href="{{ route('candidacy.cgs.dismissals') }}"><button type="button">Review the dismissal list</button></a>
-    </x-core::page-header>
+    <div class="wca-page">
+        <x-core::page-header title="Candidacy Management" subtitle="Operations: every study candidacy appeal.">
+            <a class="wca-btn" href="{{ route('candidacy.cgs.dismissals') }}">Review the dismissal list</a>
+            <a href="{{ route('dashboard') }}" class="wca-home">Home</a>
+        </x-core::page-header>
 
-    <div class="stat-cards-row">
-        <div class="stat-card accent-blue">
-            <div class="stat-number">{{ $pendingAppeals->count() }}</div>
-            <div class="stat-label">Pending Appeals</div>
-        </div>
-        @foreach ($appealStatusSummary as $label => $count)
-            <div class="stat-card accent-gold">
-                <div class="stat-number">{{ $count }}</div>
-                <div class="stat-label">{{ $label }}</div>
+        @include('chloe::candidacy.wca._flash')
+
+        <form method="GET" action="{{ route('candidacy.cgs.operations') }}" class="wca-card wca-filters" role="search">
+            @if ($f['group'])<input type="hidden" name="group" value="{{ $f['group'] }}">@endif
+            <div class="wca-filter-grid is-ops">
+                <div class="wca-field"><label for="wca-q">Search</label><input id="wca-q" class="wca-input" type="search" name="q" value="{{ $f['q'] }}" placeholder="Appeal no., student name or ID"></div>
+                <div class="wca-field"><label for="wca-f-dept">Department</label>
+                    <select id="wca-f-dept" class="wca-select" name="department"><option value="">All</option>@foreach ($departments as $d)<option value="{{ $d->id }}" @selected($f['department'] === $d->id)>{{ $d->name }}</option>@endforeach</select></div>
+                <div class="wca-field"><label for="wca-f-status">Status</label>
+                    <select id="wca-f-status" class="wca-select" name="status"><option value="">All</option>@foreach (['with_supervisor' => 'With Supervisor', 'with_chair' => 'With Programme Chair', 'with_cgs' => 'With CGS', 'with_dean' => 'With Dean', 'returned' => 'Returned to student', 'approved' => 'Approved', 'rejected' => 'Rejected (final)', 'closed_expired' => 'Closed expired'] as $k => $label)<option value="{{ $k }}" @selected($f['status'] === $k)>{{ $label }}</option>@endforeach</select></div>
+                <div class="wca-field"><label for="wca-f-step">Current step</label>
+                    <select id="wca-f-step" class="wca-select" name="step"><option value="">All</option>@foreach (\App\Modules\Chloe\Support\CandidacyAppealPresenter::STAGES as $k => $label)<option value="{{ $k }}" @selected($f['step'] === $k)>{{ $label }}</option>@endforeach</select></div>
+                <div class="wca-field"><label for="wca-f-months">Months requested</label>
+                    <select id="wca-f-months" class="wca-select" name="months"><option value="">All</option>@foreach (range(1, 12) as $m)<option value="{{ $m }}" @selected($f['months'] === $m)>{{ $m }}</option>@endforeach</select></div>
+                <div class="wca-field"><label for="wca-f-wait">Waiting at least</label>
+                    <select id="wca-f-wait" class="wca-select" name="waiting"><option value="">Any time</option>@foreach ([1, 3, 5, 10, 14] as $d)<option value="{{ $d }}" @selected($f['waiting'] === $d)>{{ $d }} day(s)</option>@endforeach</select></div>
+                <div class="wca-field"><label for="wca-f-round">Round</label>
+                    <select id="wca-f-round" class="wca-select" name="round"><option value="">All</option>@foreach (range(1, 5) as $r)<option value="{{ $r }}" @selected($f['round'] === $r)>{{ $r }}</option>@endforeach</select></div>
             </div>
-        @endforeach
+            <div class="wca-actions"><button type="submit" class="wca-btn is-primary">Apply filters</button><a class="wca-btn" href="{{ route('candidacy.cgs.operations') }}">Clear</a></div>
+        </form>
+
+        @include('chloe::candidacy.wca._live', ['liveVersion' => $liveVersion, 'liveRegionUrl' => route('candidacy.cgs.operations.region', $query), 'liveVersionUrl' => route('candidacy.cgs.live.version'), 'liveStatsUrl' => route('candidacy.cgs.live.stats', $query)])
+
+        <div id="wca-live-region">
+            @include('chloe::candidacy.cgs._operations_region')
+        </div>
     </div>
-
-    <div class="card card-wide">
-        <h3>Pending Appeals</h3>
-        <div class="card-divider"></div>
-
-        @if ($pendingAppeals->isEmpty())
-            <div class="empty-state">No appeals currently pending.</div>
-        @else
-            <div class="wca-table-wrap"><table class="recent-activity-table">
-                <thead><tr><th>Appeal No.</th><th>Student</th><th>Current step</th><th>Submitted</th></tr></thead>
-                <tbody>
-                    @foreach ($pendingAppeals as $appeal)
-                        <tr>
-                            <td><a class="wca-link" href="{{ route('candidacy.appeals.show', $appeal) }}">{{ $appeal->displayNo() }}</a></td>
-                            <td>{{ $appeal->identity()?->name ?? '—' }}</td>
-                            <td>{{ \App\Modules\Chloe\Support\CandidacyAppealPresenter::currentStep($appeal) }}</td>
-                            <td>{{ $appeal->submitted_at?->format('j M Y') }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table></div>
-        @endif
-    </div>
-</div>
-
-<div class="card-container-inline">
-    <div class="card card-wide">
-        <h3>Students Near Candidacy Expiry</h3>
-        <p style="color: var(--text-grey); font-size: 13px;">Active candidacies expiring within 3 months.</p>
-        <div class="card-divider"></div>
-
-        @if ($nearExpiry->isEmpty())
-            <div class="empty-state">No students currently near expiry.</div>
-        @else
-            <table class="recent-activity-table">
-                <thead><tr><th>Student</th><th>Expiry Date</th><th>Days Remaining</th></tr></thead>
-                <tbody>
-                    @foreach ($nearExpiry as $candidacy)
-                        <tr>
-                            <td>{{ $candidacy->student->name ?? '—' }}</td>
-                            <td>{{ $candidacy->candidacy_expiry_date->format('j M Y') }}</td>
-                            <td>{{ $candidacy->daysUntilExpiry() }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        @endif
-    </div>
-</div>
-@include('chloe::workstation._assistant-widget', ['wsaStatic' => 'The Study Candidacy assistant is coming soon.'])
+    @include('chloe::workstation._assistant-widget', ['wsaStatic' => 'The Study Candidacy assistant is coming soon.'])
 @endsection

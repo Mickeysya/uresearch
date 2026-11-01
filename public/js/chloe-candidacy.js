@@ -70,32 +70,45 @@
         });
     }
 
-    // ---- live updates
+    // ---- live updates (same design as Workstation): every 15 s while the tab is visible, at once when it becomes visible again,
+    // the "Pause updates" control, and the region is replaced in place with the scroll position kept.
     var cfg = $('#wca-live');
     var region = $('#wca-live-region');
     if (cfg && region) {
-        var version = cfg.getAttribute('data-version'), busy = false, timer = null;
+        var version = cfg.getAttribute('data-version'), busy = false, timer = null, paused = false;
         var interval = parseInt(cfg.getAttribute('data-interval') || '15000', 10);
-        var status = $('#wca-live-status');
+        var status = $('#wca-live-status'), dot = $('#wca-live-dot'), pauseBtn = $('#wca-live-pause');
+        var clock = function () { return new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kuala_Lumpur', hour12: false }); };
         var safe = function () {
             var a = document.activeElement;
             var typing = a && region.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
             return !typing && !document.documentElement.hasAttribute('data-wca-modal');
         };
+        var stamp = function () { if (status) { status.textContent = 'Live \u00b7 updated ' + clock(); } };
+        var applyStats = function (j) {
+            if (!j || !j.stats) { return; }
+            Object.keys(j.stats).forEach(function (k) {
+                $all('[data-live-stat="' + k + '"], [data-live-stat="tab_' + k + '"]', region).forEach(function (el) { el.textContent = String(j.stats[k]); });
+            });
+        };
+        var json = function (url) { return fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { 'Accept': 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; }); };
         var check = function () {
-            if (document.hidden || busy) { return; }
+            if (document.hidden || busy || paused) { return; }
             busy = true;
-            fetch(cfg.getAttribute('data-version-url'), { credentials: 'same-origin', cache: 'no-store', headers: { 'Accept': 'application/json' } })
-                .then(function (r) { return r.ok ? r.json() : null; })
+            json(cfg.getAttribute('data-version-url'))
                 .then(function (j) {
-                    if (!j || j.version === version) { return null; }
+                    if (!j) { return null; }
+                    if (j.version === version) { stamp(); return null; }
                     if (!safe()) { return null; }
-                    return fetch(cfg.getAttribute('data-region-url'), { credentials: 'same-origin', cache: 'no-store' })
+                    var statsUrl = cfg.getAttribute('data-stats-url');
+                    return (statsUrl ? json(statsUrl).then(applyStats) : Promise.resolve())
+                        .then(function () { return fetch(cfg.getAttribute('data-region-url'), { credentials: 'same-origin', cache: 'no-store' }); })
                         .then(function (r) { return r.ok ? r.text() : null; })
                         .then(function (html) {
                             if (html === null || !safe()) { return; }
+                            var y = window.scrollY;
                             region.innerHTML = html; version = j.version;
-                            if (status) { status.textContent = 'Updated just now.'; }
+                            window.scrollTo(0, y); stamp();
                         });
                 })
                 .catch(function () {})
@@ -103,7 +116,15 @@
         };
         var start = function () { if (!timer) { timer = window.setInterval(check, interval); } };
         var stop = function () { if (timer) { window.clearInterval(timer); timer = null; } };
-        document.addEventListener('visibilitychange', function () { if (document.hidden) { stop(); } else { check(); start(); } });
+        document.addEventListener('visibilitychange', function () { if (document.hidden) { stop(); } else if (!paused) { check(); start(); } });
+        if (pauseBtn) {
+            pauseBtn.addEventListener('click', function () {
+                paused = !paused;
+                pauseBtn.textContent = paused ? 'Resume updates' : 'Pause updates';
+                if (dot) { dot.classList.toggle('is-green', !paused); dot.classList.toggle('is-slate', paused); }
+                if (paused) { stop(); if (status) { status.textContent = 'Paused'; } } else { check(); start(); }
+            });
+        }
         if (!document.hidden) { start(); }
     }
 })();

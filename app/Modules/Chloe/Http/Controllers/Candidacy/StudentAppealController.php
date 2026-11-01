@@ -11,6 +11,8 @@ use App\Modules\Chloe\Services\CandidacyAppealService;
 use App\Modules\Chloe\Services\CandidacyDocumentService;
 use App\Modules\Chloe\Support\CandidacyAppealPresenter;
 use App\Modules\Chloe\Support\CandidacyLiveVersion;
+use App\Modules\Chloe\Support\CandidacyPortalQuery;
+use App\Modules\Chloe\Support\CandidacyReturnPath;
 use App\Modules\Chloe\Support\CandidacyStaffDirectory;
 use App\Modules\Core\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -220,18 +222,38 @@ class StudentAppealController extends Controller
         return view('chloe::candidacy.wca._detail_region', $this->detailData($request, $appeal));
     }
 
-    /** @return array<string, mixed> */
+    /** @return array<string, mixed> everything the ONE appeal page shows, for the student, a named approver and CGS alike */
     public function detailData(Request $request, CandidacyAppeal $appeal): array
     {
         $appeal->load(['approvals', 'events', 'publications', 'documents', 'department', 'supervisorProfile', 'chairProfile', 'deanProfile', 'candidacy']);
+        $user = $request->user();
+        $canAct = $user->can('act', $appeal);
+        $stage = $appeal->current_stage;
+        $profile = $stage && $stage !== 'cgs' ? match ($stage) { 'supervisor' => $appeal->supervisorProfile, 'chair' => $appeal->chairProfile, default => $appeal->deanProfile } : CandidacyStaffDirectory::profileForUser($user);
+        $candidacy = $appeal->candidacy;
+        $months = (int) $appeal->requested_months;
+        $isOwner = $appeal->student_id === $user->id;
+        $default = $isOwner ? route('candidacy.status', [], false) : (CandidacyPortalQuery::isCgs($user) ? route('candidacy.cgs.operations', [], false) : route('candidacy.portal.queue', [], false));
 
         return [
-            'appeal' => $appeal, 'identity' => $appeal->identity(), 'candidacy' => $appeal->candidacy,
-            'isOwner' => $appeal->student_id === $request->user()->id,
-            'canEdit' => $request->user()->can('edit', $appeal),
-            'canMemo' => $request->user()->can('downloadMemo', $appeal),
+            'appeal' => $appeal, 'identity' => $appeal->identity(), 'candidacy' => $candidacy,
+            'isOwner' => $isOwner,
+            'canEdit' => $user->can('edit', $appeal),
+            'canMemo' => $user->can('downloadMemo', $appeal),
             'liveVersion' => CandidacyLiveVersion::forAppeal($appeal),
-            'portal' => false,
+            'back' => CandidacyReturnPath::resolve($request, $default),
+            'return' => CandidacyReturnPath::validate($request->query('return')),
+            // "Your action" exists only while the appeal is waiting for THIS user
+            'canAct' => $canAct, 'stage' => $stage,
+            'needsSignature' => $canAct && in_array($stage, (array) config('candidacy.signature_required_stages'), true) && ! $profile?->hasSignature(),
+            'returnReasons' => (array) config("candidacy.reasons.{$stage}.return", []),
+            'rejectReasons' => (array) config("candidacy.reasons.{$stage}.reject", []),
+            'showContext' => ! $isOwner,
+            'earlier' => $isOwner ? collect() : CandidacyAppeal::where('student_id', $appeal->student_id)->where('id', '!=', $appeal->id)->whereNotNull('appeal_no')->orderByDesc('id')->get(),
+            'preview' => $candidacy && $months > 0 ? [
+                'new_expiry' => $candidacy->candidacy_expiry_date->copy()->addMonthsNoOverflow($months),
+                'allowance_after' => $candidacy->allowanceUsed() + $months,
+            ] : null,
         ];
     }
 

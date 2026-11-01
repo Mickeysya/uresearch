@@ -74,11 +74,11 @@ return [
     // {{requested_months}} {{approved_months}} {{new_expiry_date}} {{expiry_date}} {{link}}. The subject always starts with the appeal number.
     'mail' => [
         'turn' => [
-            'subject' => '{{appeal_no}}: appeal waiting for your action ({{stage}})',
-            'title' => 'Appeal {{appeal_no}} is waiting for your action at the {{stage}} step.',
+            'subject' => '{{appeal_no}}: appeal pending your action ({{stage}})',
+            'title' => 'Appeal {{appeal_no}} is pending your action at the {{stage}} step.',
             'lines' => [
                 'Dear colleague,',
-                'The Study Candidacy Appeal {{appeal_no}} of {{student_name}} requests an extension of {{requested_months}} month(s) and is now waiting for your action ({{stage}}).',
+                'The Study Candidacy Appeal {{appeal_no}} of {{student_name}} requests an extension of {{requested_months}} month(s) and is now pending your action ({{stage}}).',
                 'Please open the appeal to review it: {{link}}',
             ],
         ],

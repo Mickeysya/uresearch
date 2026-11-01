@@ -6,7 +6,7 @@
 
 @section('content')
     <div class="wca-page">
-        <x-core::page-header title="Approval Portal" subtitle="Study Candidacy Appeals waiting for you, and the ones you decided.">
+        <x-core::page-header title="Approval Portal" subtitle="Study Candidacy Appeals you are named on.">
             <a href="{{ route('dashboard') }}" class="wca-home">Home</a>
         </x-core::page-header>
 
@@ -25,7 +25,7 @@
                 <div class="wca-field"><label for="wca-f-round">Round</label>
                     <select id="wca-f-round" class="wca-select" name="round"><option value="">All</option>@foreach (range(1, 5) as $r)<option value="{{ $r }}" @selected($filters['round'] === $r)>{{ $r }}</option>@endforeach</select></div>
             </div>
-            <div class="wca-actions"><button type="submit" class="wca-btn is-primary">Apply filters</button><a class="wca-btn" href="{{ route('candidacy.portal.queue', ['tab' => $tab]) }}">Clear</a><a class="wca-btn" href="{{ route('candidacy.signature.show') }}">My Signature</a></div>
+            <div class="wca-actions"><button type="submit" class="wca-btn is-primary">Apply filters</button><a class="wca-btn" href="{{ route('candidacy.portal.queue', ['tab' => $tab === 'pending' ? null : $tab]) }}">Clear</a><a class="wca-btn" href="{{ route('candidacy.signature.show') }}">My Signature</a></div>
         </form>
 
         @include('chloe::candidacy.wca._live', ['liveVersion' => $liveVersion, 'liveRegionUrl' => route('candidacy.portal.region', $query), 'liveVersionUrl' => route('candidacy.portal.live.version')])

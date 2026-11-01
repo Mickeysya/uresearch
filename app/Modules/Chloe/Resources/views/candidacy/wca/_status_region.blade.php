@@ -52,7 +52,7 @@
                 @if ($open && $open->status === 'returned')
                     <a class="wca-btn is-primary" href="{{ route('candidacy.appeals.edit', $open) }}">Edit and resubmit</a>
                 @elseif ($open)
-                    <a class="wca-btn" href="{{ route('candidacy.appeals.show', $open) }}">View appeal</a>
+                    <a class="wca-btn" href="{{ route('candidacy.appeals.show', ['appeal' => $open->id, 'return' => '/candidacy']) }}">View appeal</a>
                 @elseif ($draft)
                     <a class="wca-btn is-primary" href="{{ route('candidacy.appeals.draft', ['step' => 1]) }}">Continue draft</a>
                 @elseif ($canStart)
@@ -91,7 +91,7 @@
                                 @if ($appeal->isDraft())
                                     <a href="{{ route('candidacy.appeals.draft', ['step' => 1]) }}">Continue</a>
                                 @else
-                                    <a href="{{ route('candidacy.appeals.show', $appeal) }}">View full details &rarr;</a>
+                                    <a href="{{ route('candidacy.appeals.show', ['appeal' => $appeal->id, 'return' => '/candidacy']) }}">View full details &rarr;</a>
                                 @endif
                             </td>
                         </tr>

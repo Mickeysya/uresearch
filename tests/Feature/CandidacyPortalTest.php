@@ -35,14 +35,14 @@ class CandidacyPortalTest extends TestCase
         $appeal = $this->submitted();
         $other = $this->supervisor('o@test.my');
 
-        $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue'))->assertOk()->assertSee('SCA-22001001-01')->assertSee('Waiting for my action')->assertSee('Decided by me');
+        $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue'))->assertOk()->assertSee('SCA-22001001-01')->assertSee('Pending my action')->assertSee('Ongoing')->assertSee('History')->assertDontSee('Decided by me');
         $this->actingAs($other)->get(route('candidacy.portal.queue'))->assertOk()->assertDontSee('SCA-22001001-01');
         $this->actingAs($this->chairUser)->get(route('candidacy.portal.queue'))->assertOk()->assertDontSee('SCA-22001001-01');
 
         $this->service->decide($this->lecturer, $appeal, 'approve');
         $this->actingAs($this->chairUser)->get(route('candidacy.portal.queue'))->assertSee('SCA-22001001-01');
-        $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue'))->assertDontSee('Review');
-        $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue', ['tab' => 'decided']))->assertSee('SCA-22001001-01')->assertSee('Approved');
+        $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue'))->assertDontSee('>Review<', false);
+        $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue', ['tab' => 'ongoing']))->assertSee('SCA-22001001-01')->assertSee('Programme Chair');
     }
 
     public function test_cgs_roles_see_the_cgs_stage_queue_and_other_roles_are_refused(): void
@@ -66,8 +66,8 @@ class CandidacyPortalTest extends TestCase
         CandidacyStaffAssignment::create(['department_id' => $dept2->id, 'staff_profile_id' => $p->id, 'role' => 'chair']);
 
         foreach ([$this->supervisor('o@test.my'), $chair2, $this->student('22009999', 'x@test.my'), $this->user(Role::DEAN_PGR, ['email' => 'd2@test.my'])] as $user) {
-            $this->actingAs($user)->get(route('candidacy.portal.review', $appeal))->assertForbidden();
-            $this->actingAs($user)->get(route('candidacy.portal.review.region', $appeal))->assertForbidden();
+            $this->actingAs($user)->get(route('candidacy.appeals.show', $appeal))->assertForbidden();
+            $this->actingAs($user)->get(route('candidacy.appeals.region', $appeal))->assertForbidden();
             $this->decide($user, $appeal, ['action' => 'approve'])->assertForbidden();
         }
         $this->assertSame('with_supervisor', $appeal->fresh()->status);
@@ -116,22 +116,22 @@ class CandidacyPortalTest extends TestCase
     public function test_the_action_panel_has_no_reject_at_supervisor_chair_and_cgs_but_does_at_the_dean(): void
     {
         $appeal = $this->submitted();
-        $this->actingAs($this->lecturer)->get(route('candidacy.portal.review', $appeal))->assertSee('Approve')->assertSee('Return to student')->assertDontSee('Reject (final)')->assertDontSee('wca-modal-reject', false)->assertDontSee('value="reject"', false);
+        $this->actingAs($this->lecturer)->get(route('candidacy.appeals.show', $appeal))->assertSee('Your action')->assertSee('Approve')->assertSee('Return to student')->assertDontSee('Reject (final)')->assertDontSee('wca-modal-reject', false)->assertDontSee('value="reject"', false);
 
         $appeal = $this->service->decide($this->lecturer, $appeal, 'approve');
-        $this->actingAs($this->chairUser)->get(route('candidacy.portal.review', $appeal))->assertSee('Approve')->assertDontSee('Reject (final)')->assertDontSee('value="reject"', false);
+        $this->actingAs($this->chairUser)->get(route('candidacy.appeals.show', $appeal))->assertSee('Approve')->assertDontSee('Reject (final)')->assertDontSee('value="reject"', false);
 
         $appeal = $this->service->decide($this->chairUser, $appeal, 'approve');
-        $this->actingAs($this->cgsUser)->get(route('candidacy.portal.review', $appeal))->assertSee('Verify')->assertSee('Documents complete')->assertDontSee('Reject (final)')->assertDontSee('value="reject"', false);
+        $this->actingAs($this->cgsUser)->get(route('candidacy.appeals.show', $appeal))->assertSee('Verify')->assertSee('Documents complete')->assertDontSee('Reject (final)')->assertDontSee('value="reject"', false);
 
         $appeal = $this->service->decide($this->cgsUser, $appeal, 'verify', documentsComplete: true);
-        $this->actingAs($this->deanUser)->get(route('candidacy.portal.review', $appeal))->assertSee('Reject (final)')->assertSee('New expiry date preview')->assertSee('Allowance after approval')->assertSee('31 Jul 2027');
+        $this->actingAs($this->deanUser)->get(route('candidacy.appeals.show', $appeal))->assertSee('Reject (final)')->assertSee('New expiry date preview')->assertSee('Allowance after approval')->assertSee('31 Jul 2027');
     }
 
     public function test_decisions_are_modal_only_and_never_use_a_browser_confirm(): void
     {
         $appeal = $this->submitted();
-        $html = $this->actingAs($this->lecturer)->get(route('candidacy.portal.review', $appeal))->getContent();
+        $html = $this->actingAs($this->lecturer)->get(route('candidacy.appeals.show', $appeal))->getContent();
 
         $this->assertStringContainsString('data-modal-open="wca-modal-approve"', $html);
         $this->assertStringContainsString('role="dialog"', $html);
@@ -196,7 +196,7 @@ class CandidacyPortalTest extends TestCase
         $appeal = $this->submitted();
         $this->service_signatures()->remove($this->profile($this->lecturer));
 
-        $this->actingAs($this->lecturer)->get(route('candidacy.portal.review', $appeal))->assertSee('Upload your signature')->assertSee(route('candidacy.signature.show'), false)->assertDontSee('data-modal-open="wca-modal-approve"', false);
+        $this->actingAs($this->lecturer)->get(route('candidacy.appeals.show', $appeal))->assertSee('Upload your signature')->assertSee(route('candidacy.signature.show'), false)->assertDontSee('data-modal-open="wca-modal-approve"', false);
         $this->decide($this->lecturer, $appeal, ['action' => 'approve'])->assertSessionHasErrors('signature');
         $this->assertSame('with_supervisor', $appeal->fresh()->status);
     }
@@ -242,7 +242,7 @@ class CandidacyPortalTest extends TestCase
     public function test_portal_pages_are_no_store_wca_prefixed_and_free_of_inline_styles_and_handlers(): void
     {
         $appeal = $this->submitted();
-        $pages = [route('candidacy.portal.queue'), route('candidacy.portal.queue', ['tab' => 'decided']), route('candidacy.portal.region'), route('candidacy.portal.review', $appeal), route('candidacy.portal.review.region', $appeal), route('candidacy.signature.show'), route('candidacy.portal.live.version')];
+        $pages = [route('candidacy.portal.queue'), route('candidacy.portal.queue', ['tab' => 'ongoing']), route('candidacy.portal.queue', ['tab' => 'history']), route('candidacy.portal.region'), route('candidacy.appeals.show', $appeal), route('candidacy.appeals.region', $appeal), route('candidacy.signature.show'), route('candidacy.portal.live.version')];
 
         foreach ($pages as $url) {
             $response = $this->actingAs($this->lecturer)->get($url)->assertOk();

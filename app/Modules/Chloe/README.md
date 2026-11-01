@@ -210,3 +210,5 @@ to bind before the dynamic one gets a chance to).
 The appeal no longer runs on the shared WorkflowEngine: it has its own tables, state machine (`Services/CandidacyAppealService`), policy
 (`Policies/CandidacyAppealPolicy`), memo (`Services/CandidacyMemoService`) and Approval Portal. See `docs/candidacy-appeal-inventory.md`.
 The older sections of this README that mention `CandidacyAppealController` describe the replaced flow.
+
+All appeal pages (student, Approval Portal, Operations) share one appeal page, `/candidacy/appeals/{id}`; see the inventory for the tabs, Operations cards, return path and live updates.

@@ -66,11 +66,52 @@ All routes send `Cache-Control: no-store, max-age=0` (`NoStoreResponse`). Access
 | Route | Who |
 |---|---|
 | `/candidacy` (My Study Candidacy), `/candidacy/appeals/new`, `/candidacy/appeals/draft/{1-4}`, documents upload/remove, `/candidacy/appeals/{id}/edit` + `resubmit` | students (own appeals only) |
-| `/candidacy/appeals/{id}` (detail), `.../region`, `.../documents/{doc}`, `.../memo`, `/candidacy/live/version` | the student, the appeal's named people, CGS roles (drafts: the student only; the memo: only once approved) |
-| `/candidacy/portal` (queue), `/candidacy/portal/appeals/{id}` (review), `.../decide` | supervisor, chair, dean, CGS roles; the policy limits each to their own appeals |
+| **`/candidacy/appeals/{id}`: THE appeal page** (one URL for everyone), `.../region`, `.../documents/{doc}`, `.../memo`, `/candidacy/live/version` | the student, the people named on that appeal (also before it has reached them: read-only), CGS roles; drafts: the student only. The "Your action" card appears only while the appeal is pending that user's action |
+| `/candidacy/portal` (Approval Portal), `.../region`, `.../live/version`, `POST .../appeals/{id}/decide` | supervisor, chair, dean, CGS roles |
+| `/candidacy/portal/appeals/{id}` (old review URL) | redirects to the appeal page |
 | `/candidacy/signature` (My Signature), `.../image` | the same roles; the image only to its owner |
-| `/cgs/candidacy`, `/cgs/candidacy/dismissals` | CGS team (read the new tables; Pending Appeals link to the detail page) |
+| `/cgs/candidacy` (Candidacy Management > Operations), `.../region`, `/cgs/candidacy/live/version`, `/cgs/candidacy/live/stats`, `/cgs/candidacy/dismissals` | CGS team |
 | `/candidacy-appeal/*` (old URLs) | redirect to the new pages; nothing can be decided through them |
+
+Every non-named user gets 403 on the appeal URL and never sees the appeal in any list.
+
+### Approval Portal tabs
+
+| Role | Tabs |
+|---|---|
+| Supervisor, Chair, Dean | **Pending my action** (button *Review*; waiting-days dot and legend; "Re-check after Dean return" tag) / **Ongoing** (named on it, no final result, not pending me; *Current step* column; *View details*) / **History** (named on it, final result: Approved, Rejected, Closed expired; *My decision* = Approved / Returned / Rejected (the Dean's own rejection) / Not reached, and *Final outcome*; *View details*). The three never overlap |
+| CGS roles | **Pending my action** / **Decided by me**, plus the text link "View all appeals →" to Operations (no other role gets it) |
+
+Filters (search, department, months, waiting at least, round) apply to the active tab. Counts on the tabs refresh live.
+
+### Operations (CGS)
+
+Four cards: **In progress** (with supervisor, chair, CGS or dean; not returned), **Returned**, **Approved**, **Rejected**. Closed expired is not a card; it is
+listed under **All** and the Status filter. A card click filters the list (active card highlighted, click again to clear; the state is in the URL, so a refresh keeps it).
+Cards, tabs (In progress / Returned / Approved / Rejected / All) and the table come from `CandidacyOperationsQuery` with the same filters, so they cannot disagree.
+Filters: search, department, status, current step, months, waiting at least, round. 25 rows per page. Below 1100 px the table stacks into labelled rows.
+"View details" opens the appeal page; Back returns to this page with its group, filters and page number.
+
+### Back and the return path
+Lists add `?return=<their own URL>` to the appeal link. `CandidacyReturnPath` accepts it only if it is an internal `/candidacy…` or `/cgs/candidacy…` path (never an
+absolute or protocol-relative URL, a backslash, control characters or `..`); otherwise Back goes to the role's default list.
+
+### Live updates (same design as Workstation)
+Poll every 15 s while the tab is visible, check at once when it becomes visible, a "Pause updates" control, the list region replaced in place (scroll position,
+filters, tab, active card and page kept). Endpoints: Portal `/candidacy/portal/live/version` (only the caller's own tabs and counts), Operations
+`/cgs/candidacy/live/version` and `/cgs/candidacy/live/stats` (CGS only, throttled with the shared `workstation-live` limiter), appeal page `/candidacy/live/version?appeal=`.
+All send `Cache-Control: no-store`.
+
+### Assistant icon
+The candidacy pages include the Workstation widget (`workstation/_assistant-widget`) in static mode (`wsaStatic`): identical markup, styles, blink, eye follow and
+greeting bubble, one fixed line, no suggestions, no input, no request (the endpoint URLs are not rendered). A test compares the two renderings.
+Every candidacy page leaves 120 px free at the bottom so the icon never covers the last row's button.
+
+### One wording
+Tabs and text use **Pending my action** everywhere. Statuses come from one map, `CandidacyAppealPresenter::statusLabel()`. A test scans the module and its docs for the old words.
+
+### Planned: Excel export of Operations list
+Not built yet (no Export button). Next phase: export exactly the filtered Operations list (same query and columns as the table) to `.xlsx`, CGS roles only.
 
 Navigation uses the module mechanism, not a shared edit: `CandidacyAppealWorkflow::queueRoute()` = `candidacy.portal.queue` and
 `ProvidesLinks::links()` adds "My Appeal Signature" (and "Candidacy Appeals" for CGS roles that own no engine stage).

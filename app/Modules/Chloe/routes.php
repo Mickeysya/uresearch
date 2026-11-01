@@ -144,8 +144,8 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
         Route::get('/candidacy/portal', [PortalController::class, 'queue'])->name('candidacy.portal.queue');
         Route::get('/candidacy/portal/region', [PortalController::class, 'queueRegion'])->name('candidacy.portal.region');
         Route::get('/candidacy/portal/live/version', [PortalController::class, 'queueVersion'])->middleware('throttle:workstation-live')->name('candidacy.portal.live.version');
-        Route::get('/candidacy/portal/appeals/{appeal}', [PortalController::class, 'review'])->whereNumber('appeal')->name('candidacy.portal.review');
-        Route::get('/candidacy/portal/appeals/{appeal}/region', [PortalController::class, 'reviewRegion'])->whereNumber('appeal')->name('candidacy.portal.review.region');
+        // ONE appeal page for everyone: /candidacy/appeals/{id}. The old review URL redirects to it.
+        Route::get('/candidacy/portal/appeals/{appeal}', fn (\App\Modules\Chloe\Models\CandidacyAppeal $appeal) => redirect()->route('candidacy.appeals.show', $appeal))->whereNumber('appeal')->name('candidacy.portal.review');
         Route::post('/candidacy/portal/appeals/{appeal}/decide', [PortalController::class, 'decide'])->whereNumber('appeal')->name('candidacy.portal.decide');
 
         Route::get('/candidacy/signature', [PortalController::class, 'signature'])->name('candidacy.signature.show');
@@ -160,6 +160,9 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
 
     Route::middleware('role:'.implode(',', Role::cgsTeam()))->group(function () {
         Route::get('/cgs/candidacy', [CandidacyOperationsController::class, 'index'])->name('candidacy.cgs.operations');
+        Route::get('/cgs/candidacy/region', [CandidacyOperationsController::class, 'region'])->name('candidacy.cgs.operations.region');
+        Route::get('/cgs/candidacy/live/version', [CandidacyOperationsController::class, 'liveVersion'])->middleware('throttle:workstation-live')->name('candidacy.cgs.live.version');
+        Route::get('/cgs/candidacy/live/stats', [CandidacyOperationsController::class, 'liveStats'])->middleware('throttle:workstation-live')->name('candidacy.cgs.live.stats');
 
         Route::get('/cgs/candidacy/dismissals', [CandidacyDismissalController::class, 'index'])->name('candidacy.cgs.dismissals');
         Route::post('/cgs/candidacy/dismissals/refresh', [CandidacyDismissalController::class, 'refresh'])->name('candidacy.cgs.dismissals.refresh');

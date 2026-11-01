@@ -684,9 +684,7 @@ class CandidacyAppealService
 
     protected function linkFor(CandidacyAppeal $appeal, bool $staff): string
     {
-        $name = $staff ? 'candidacy.portal.review' : 'candidacy.appeals.show';
-
-        return \Illuminate\Support\Facades\Route::has($name) ? route($name, $appeal) : route('candidacy.status');
+        return route('candidacy.appeals.show', $appeal); // one page for everyone
     }
 
     public function stageLabel(string $stage): string

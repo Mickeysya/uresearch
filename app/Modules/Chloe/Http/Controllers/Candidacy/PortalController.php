@@ -10,6 +10,7 @@ use App\Modules\Chloe\Services\CandidacySignatureService;
 use App\Modules\Chloe\Support\CandidacyAppealPresenter;
 use App\Modules\Chloe\Support\CandidacyLiveVersion;
 use App\Modules\Chloe\Support\CandidacyPortalQuery;
+use App\Modules\Chloe\Support\CandidacyReturnPath;
 use App\Modules\Chloe\Support\CandidacyStaffDirectory;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\User;
@@ -43,72 +44,36 @@ class PortalController extends Controller
     protected function queueData(Request $request): array
     {
         $user = $request->user();
-        $tab = $request->query('tab') === 'decided' ? 'decided' : 'waiting';
+        $tabs = CandidacyPortalQuery::tabs($user);
+        $tab = in_array($request->query('tab'), $tabs, true) ? $request->query('tab') : 'pending';
         $filters = [
-            'q' => $request->query('q'), 'department' => $request->integer('department') ?: null, 'months' => $request->integer('months') ?: null,
-            'waiting' => $request->integer('waiting') ?: null, 'round' => $request->integer('round') ?: null,
+            'q' => $request->query('q') ? mb_substr(trim((string) $request->query('q')), 0, 100) : null, 'department' => $request->integer('department') ?: null,
+            'months' => $request->integer('months') ?: null, 'waiting' => $request->integer('waiting') ?: null, 'round' => $request->integer('round') ?: null,
         ];
 
-        $base = $tab === 'waiting' ? CandidacyPortalQuery::waiting($user) : CandidacyPortalQuery::decided($user);
-        $rows = CandidacyPortalQuery::filter($base, $filters)
-            ->with(['student', 'demoProfile', 'department', 'approvals'])
-            ->orderByRaw($tab === 'waiting' ? 'stage_entered_at asc' : 'COALESCE(last_action_at, updated_at) desc')
+        $rows = CandidacyPortalQuery::filter(CandidacyPortalQuery::forTab($user, $tab), $filters)
+            ->with(['student', 'demoProfile', 'department', 'approvals', 'supervisorProfile', 'chairProfile', 'deanProfile'])
+            ->orderByRaw($tab === 'pending' ? 'stage_entered_at asc' : 'COALESCE(last_action_at, updated_at) desc')
             ->get();
 
+        $query = array_filter(['tab' => $tab === 'pending' ? null : $tab, 'q' => $filters['q'], 'department' => $filters['department'], 'months' => $filters['months'], 'waiting' => $filters['waiting'], 'round' => $filters['round']]);
+
         return [
-            'tab' => $tab, 'rows' => $rows, 'filters' => $filters, 'user' => $user,
-            'waitingCount' => CandidacyPortalQuery::waiting($user)->count(),
-            'decidedCount' => CandidacyPortalQuery::decided($user)->count(),
+            'tab' => $tab, 'tabs' => $tabs, 'rows' => $rows, 'filters' => $filters, 'user' => $user, 'isCgs' => CandidacyPortalQuery::isCgs($user),
+            'counts' => CandidacyPortalQuery::counts($user),
             'departments' => CandidacyDepartment::orderBy('name')->get(),
             'liveVersion' => CandidacyPortalQuery::version($user),
-            'query' => array_filter($request->only(['tab', 'q', 'department', 'months', 'waiting', 'round'])),
+            'query' => $query,
+            'returnTo' => CandidacyReturnPath::current($request, '/candidacy/portal', $query),
         ];
     }
 
     public function queueVersion(Request $request)
     {
-        return response()->json(['version' => CandidacyPortalQuery::version($request->user())]);
+        return response()->json(['version' => CandidacyPortalQuery::version($request->user()), 'counts' => CandidacyPortalQuery::counts($request->user())]);
     }
 
-    // ------------------------------------------------------------ review and decide
-
-    public function review(Request $request, CandidacyAppeal $appeal)
-    {
-        Gate::authorize('view', $appeal);
-
-        return view('chloe::candidacy.wca.portal.review', $this->reviewData($request, $appeal));
-    }
-
-    public function reviewRegion(Request $request, CandidacyAppeal $appeal)
-    {
-        Gate::authorize('view', $appeal);
-
-        return view('chloe::candidacy.wca.portal._review_region', $this->reviewData($request, $appeal));
-    }
-
-    /** @return array<string, mixed> */
-    protected function reviewData(Request $request, CandidacyAppeal $appeal): array
-    {
-        $data = app(StudentAppealController::class)->detailData($request, $appeal);
-        $user = $request->user();
-        $canAct = $user->can('act', $appeal);
-        $stage = $appeal->current_stage;
-        $profile = $stage && $stage !== 'cgs' ? match ($stage) { 'supervisor' => $appeal->supervisorProfile, 'chair' => $appeal->chairProfile, default => $appeal->deanProfile } : CandidacyStaffDirectory::profileForUser($user);
-        $candidacy = $appeal->candidacy;
-        $months = (int) $appeal->requested_months;
-
-        return $data + [
-            'portal' => true, 'canAct' => $canAct, 'stage' => $stage,
-            'needsSignature' => $canAct && in_array($stage, (array) config('candidacy.signature_required_stages'), true) && ! $profile?->hasSignature(),
-            'returnReasons' => (array) config("candidacy.reasons.{$stage}.return", []),
-            'rejectReasons' => (array) config("candidacy.reasons.{$stage}.reject", []),
-            'earlier' => CandidacyAppeal::where('student_id', $appeal->student_id)->where('id', '!=', $appeal->id)->whereNotNull('appeal_no')->orderByDesc('id')->get(),
-            'preview' => $candidacy && $months > 0 ? [
-                'new_expiry' => $candidacy->candidacy_expiry_date->copy()->addMonthsNoOverflow($months),
-                'allowance_after' => $candidacy->allowanceUsed() + $months,
-            ] : null,
-        ];
-    }
+    // ------------------------------------------------------------ decide (the page itself is the shared appeal page)
 
     public function decide(Request $request, CandidacyAppeal $appeal)
     {
@@ -126,7 +91,7 @@ class PortalController extends Controller
 
         $verb = ['approve' => 'approved', 'verify' => 'verified', 'return' => 'returned to the student', 'reject' => 'rejected (final)'][$data['action']];
 
-        return redirect()->route('candidacy.portal.queue')->with('wca_status', "Appeal {$done->appeal_no} was {$verb}.");
+        return redirect(CandidacyReturnPath::resolve($request, route('candidacy.portal.queue', [], false)))->with('wca_status', "Appeal {$done->appeal_no} was {$verb}.");
     }
 
     // ------------------------------------------------------------ My Signature

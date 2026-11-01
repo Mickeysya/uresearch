@@ -4,9 +4,7 @@
 @endphp
 <section class="wca-card" aria-labelledby="wca-h-act">
     <h3 id="wca-h-act">Your action</h3>
-    @if (! $canAct)
-        <p class="wca-muted">This appeal is not waiting for you ({{ \App\Modules\Chloe\Support\CandidacyAppealPresenter::currentStep($appeal) }}). You can read everything on this page.</p>
-    @elseif ($needsSignature)
+    @if ($needsSignature)
         <div class="wca-banner is-note" role="alert">You have no signature on file. Your approval is stamped with your signature, so upload it before you decide. <a href="{{ route('candidacy.signature.show') }}">Upload your signature</a></div>
     @else
         @if ($appeal->needs_cgs_recheck && $isCgs)<p><strong>Re-check after Dean return:</strong> the Dean returned this appeal and the student revised it. Verify it again before it goes back to the Dean.</p>@endif

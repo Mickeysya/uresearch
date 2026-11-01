@@ -40,7 +40,7 @@ final class CandidacyAppealPresenter
             CandidacyAppeal::STATUS_RETURNED => 'Returned to student',
             CandidacyAppeal::STATUS_APPROVED => 'Approved',
             CandidacyAppeal::STATUS_REJECTED => 'Rejected (final)',
-            CandidacyAppeal::STATUS_CLOSED_EXPIRED => 'Closed (expired)',
+            CandidacyAppeal::STATUS_CLOSED_EXPIRED => 'Closed expired',
             default => ucfirst($appeal->status),
         };
     }
