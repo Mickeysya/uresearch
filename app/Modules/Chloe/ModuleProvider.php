@@ -9,7 +9,9 @@ use App\Modules\Chloe\Console\Commands\AssistantAsk;
 use App\Modules\Chloe\Console\Commands\BackfillCandidacyAppeals;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoClear;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoSeed;
+use App\Modules\Chloe\Console\Commands\CandidacyDemoSoftbound;
 use App\Modules\Chloe\Console\Commands\CheckCandidacyAllowance;
+use App\Modules\Chloe\Console\Commands\CheckCandidacyStatusSource;
 use App\Modules\Chloe\Console\Commands\CloseExpiredCandidacyAppeals;
 use App\Modules\Chloe\Console\Commands\AssistantCatalogue;
 use App\Modules\Chloe\Console\Commands\AssistantCheck;
@@ -110,6 +112,8 @@ class ModuleProvider extends ServiceProvider
                 CloseExpiredCandidacyAppeals::class,
                 CandidacyDemoSeed::class,
                 CandidacyDemoClear::class,
+                CandidacyDemoSoftbound::class,
+                CheckCandidacyStatusSource::class,
                 VerifyCandidacyMemo::class,
                 AssistantAsk::class,
                 AssistantLogList::class,

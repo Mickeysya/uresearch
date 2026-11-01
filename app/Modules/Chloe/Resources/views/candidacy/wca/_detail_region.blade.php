@@ -141,6 +141,13 @@
         <dt>Original expiry date</dt><dd>{{ ($candidacy?->original_expiry_date ?? $appeal->expiry_at_submission)?->format('j M Y') ?? '—' }}</dd>
         <dt>Current expiry date</dt><dd>{{ $candidacy?->candidacy_expiry_date?->format('j M Y') ?? '—' }}</dd>
         <dt>Allowance used</dt><dd>{{ $candidacy?->allowanceUsed() ?? 0 }} of {{ config('candidacy.max_extension_months') }} months</dd>
+        @if ($studentStatus)
+            @php $demoTag = fn ($key) => $studentStatus->sources[$key] === 'overlay' ? ' · Demo data' : ''; @endphp
+            <dt>Softbound</dt><dd>{{ $studentStatus->softboundSubmitted ? 'Submitted'.($studentStatus->softboundDate ? ' '.$studentStatus->softboundDate->format('j M Y') : '') : 'Not submitted' }}{{ $demoTag('softbound') }}</dd>
+            <dt>Completed</dt><dd>{{ $studentStatus->completed ? 'Yes' : 'No' }}{{ $demoTag('completed') }}</dd>
+            <dt>Inactive (including deferred)</dt><dd>{{ $studentStatus->inactive ? 'Yes' : 'No' }}{{ $demoTag('inactive') }}</dd>
+            <dt>Dismissed</dt><dd>{{ $studentStatus->dismissed ? 'Yes' : 'No' }}</dd>
+        @endif
     </dl>
     <h4>Earlier appeals of this student</h4>
     @forelse ($earlier as $e)

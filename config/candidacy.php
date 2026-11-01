@@ -42,6 +42,36 @@ return [
     // These login accounts always belong to Computer & Information Sciences (the live demo accounts).
     'cis_demo_accounts' => ['student@utp.edu.my', 'chloe_26005007@utp.edu.my'],
 
+    // Where the student's Softbound / completed / inactive status is read from (Support\StudentStatusReader). The shared Softbound module's table is
+    // NOT known yet, so only `demo` is meaningful today:
+    //   demo                       our labelled demo overlay only (until the modules are merged)
+    //   shared_with_demo_fallback  the shared table first; the overlay only for demo students the shared source has no record of (recommended after merge)
+    //   shared                     production: the shared table only, overlay off
+    'status_source' => 'demo',
+
+    // The shared source. To be filled in once the module owner gives the table name and fields; nothing is read while `table` is null.
+    'status_source_table' => [
+        'table' => null,              // e.g. the Softbound submissions table
+        'student_id_column' => null,  // the student ID (matric number) column
+        'submitted_at_column' => null,
+        'status_column' => null,
+        'submitted_values' => [],     // status values meaning "Softbound submitted"
+        'completed_values' => [],
+        'inactive_values' => [],      // inactive / deferred
+    ],
+
+    // Automatic expiry reminders (Support\CandidacyReminderEngine, command candidacy:send-reminders, daily 07:25 Asia/Kuala_Lumpur).
+    'reminders' => [
+        // Programme types that get reminders. "research" = Full-Time and Part-Time research; Coursework is excluded.
+        'programme_types' => ['research'],
+        // Variant B (no further appeal possible: 12 months used, or the last appeal was rejected by the Dean): still send the Softbound reminder?
+        'send_when_appeal_blocked' => true,
+        // Milestones in months before the expiry date.
+        'milestones' => [3, 2, 1],
+        // Our demo students (Workstation demo profiles) get reminders too, so the feature can be shown; switch off where demo students share a real mail system.
+        'demo_students' => env('CANDIDACY_REMINDERS_DEMO_STUDENTS', env('APP_ENV') !== 'production'),
+    ],
+
     // The CGS roles: the four CGS-team roles the Workstation module's CGS routes accept (Role::cgsTeam()), plus a role named "cgs".
     // They may open every appeal read-only and act at the CGS verification stage.
     'cgs_roles' => ['cgs', 'non_exec_cgs', 'senior_exec_cgs', 'manager_cgs', 'senior_director_cgs'],

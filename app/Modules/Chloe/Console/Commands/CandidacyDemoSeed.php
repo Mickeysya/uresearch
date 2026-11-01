@@ -102,9 +102,34 @@ class CandidacyDemoSeed extends Command
             $this->created++;
         }
 
+        $this->seedOverlay();
         $this->info("Demo appeals created this run: {$this->created}. Demo appeals now: ".CandidacyAppeal::where('is_demo', true)->count().'.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * DEMO overlay rows (never a shared table): Softbound submitted, completed and inactive/deferred for several demo students that have no appeal,
+     * the ones whose expiry date comes first, so the reminder rules have something to stop on. Deterministic (by expiry date, then id).
+     */
+    protected function seedOverlay(): void
+    {
+        $withAppeal = CandidacyAppeal::where('is_demo', true)->whereNotNull('demo_profile_id')->pluck('demo_profile_id')->all();
+        $pool = DemoStudentProfile::whereNotIn('id', $withAppeal)->orderBy('candidacy_expiry_date')->orderBy('id')->limit(40)->get()->values();
+        $plan = [['softbound', 4], ['softbound', 11], ['softbound', 19], ['softbound', 26], ['softbound', 33], ['softbound', 41], ['softbound', 52], ['completed', 0], ['completed', 0], ['completed', 0], ['inactive', 0], ['inactive', 0], ['inactive', 0]];
+
+        foreach ($plan as $i => [$kind, $daysAgo]) {
+            $profile = $pool[$i * 3 + 1] ?? null; // every third student, so neighbours stay ordinary
+
+            if (! $profile) {
+                continue;
+            }
+
+            \App\Modules\Chloe\Models\CandidacyDemoStudentStatus::updateOrCreate(['demo_profile_id' => $profile->id], [
+                'softbound_submitted_at' => $kind === 'softbound' ? $this->now->copy()->subDays($daysAgo)->toDateString() : null,
+                'completed' => $kind === 'completed', 'inactive' => $kind === 'inactive', 'label' => 'Demo data',
+            ]);
+        }
     }
 
     // ------------------------------------------------------------------ staff and departments

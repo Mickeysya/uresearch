@@ -44,6 +44,8 @@ class CandidacyDemoClear extends Command
             DB::table('candidacy_staff_assignments')->whereIn('staff_profile_id', $profiles->pluck('id'))->delete();
             DB::table('candidacy_staff_profiles')->whereIn('id', $profiles->pluck('id'))->delete();
             CandidacyDepartment::where('is_demo', true)->delete();
+            DB::table('candidacy_demo_student_statuses')->delete();                                      // the demo overlay: all of it is demo data
+            DB::table('candidacy_reminder_log')->whereNotNull('demo_profile_id')->delete();            // reminder rows made for demo students
         });
 
         foreach (array_filter($files) as $file) {

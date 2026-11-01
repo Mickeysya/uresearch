@@ -14,6 +14,7 @@ use App\Modules\Chloe\Support\CandidacyDepartmentResolver;
 use App\Modules\Chloe\Support\CandidacyLiveVersion;
 use App\Modules\Chloe\Support\CandidacyPortalQuery;
 use App\Modules\Chloe\Support\CandidacyReturnPath;
+use App\Modules\Chloe\Support\StudentStatusReader;
 use App\Modules\Chloe\Support\CandidacyStaffDirectory;
 use App\Modules\Core\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -256,6 +257,7 @@ class StudentAppealController extends Controller
             'returnReasons' => (array) config("candidacy.reasons.{$stage}.return", []),
             'rejectReasons' => (array) config("candidacy.reasons.{$stage}.reject", []),
             'showContext' => ! $isOwner,
+            'studentStatus' => ! $isOwner && ($identity = $appeal->identity()) ? StudentStatusReader::for($identity) : null,
             'earlier' => $isOwner ? collect() : CandidacyAppeal::where('student_id', $appeal->student_id)->where('id', '!=', $appeal->id)->whereNotNull('appeal_no')->orderByDesc('id')->get(),
             'preview' => $candidacy && $months > 0 ? [
                 'new_expiry' => $candidacy->candidacy_expiry_date->copy()->addMonthsNoOverflow($months),
