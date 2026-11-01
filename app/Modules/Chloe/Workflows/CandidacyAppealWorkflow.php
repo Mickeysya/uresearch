@@ -63,6 +63,11 @@ class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDeta
             $links[] = ['label' => 'Candidacy Appeals', 'route' => 'candidacy.portal.queue'];
         }
 
+        if (in_array($user->role, (array) config('candidacy.cgs_roles'), true)) {
+            // The shared CGS sidebar hard-codes Operations and Dismissal List; Insights is added here (Actions) until a line is added there.
+            $links[] = ['label' => 'Candidacy Insights', 'route' => 'candidacy.cgs.insights'];
+        }
+
         if (in_array($user->role, array_merge(Role::cgsTeam(), [Role::REGISTRY]), true)) {
             $links[] = ['label' => 'Dismissal Upload', 'route' => 'candidacy.cgs.dismissal-upload'];
         }

@@ -260,4 +260,34 @@ final class CandidacyStatistics
 
         return $out;
     }
+
+    /** Everything the Insights page embeds and the live endpoint returns (one flat, secret-free payload; names and IDs go to CGS only). @return array<string,mixed> */
+    public static function payload(?CarbonImmutable $today = null): array
+    {
+        $today ??= self::today();
+        $departments = \App\Modules\Chloe\Models\CandidacyDepartment::orderBy('name')->get(['code', 'name', 'faculty']);
+        $appeals = CandidacyAppeal::whereIn('status', self::IN_REVIEW)->get()->map(function ($a) {
+            $programme = $a->identity()?->programme;
+
+            return ['id' => $a->id, 'status' => $a->status, 'dept' => $a->department?->code, 'level' => CandidacyDismissalList::levelOf($programme), 'mode' => stripos((string) $programme, 'part-time') !== false ? 'part' : 'full'];
+        })->values()->all();
+        $candidates = CandidacyDismissalList::candidates($today)->map(fn ($r) => ['dept' => $r['department']?->code, 'level' => $r['level'], 'mode' => stripos((string) $r['programme'], 'part-time') !== false ? 'part' : 'full', 'exported' => $r['exportedAt'] !== null])->values()->all();
+
+        return [
+            'today' => $today->toDateString(), 'now' => now(self::TZ)->format('H:i:s'),
+            'rows' => self::population($today)->all(), 'appeals' => $appeals, 'candidates' => $candidates,
+            'dismissed' => self::dismissedRows(), 'reminders' => self::reminderRows($today),
+            'departments' => $departments->map(fn ($d) => ['code' => $d->code, 'name' => $d->name, 'faculty' => $d->faculty])->all(),
+            'categories' => self::CATEGORIES, 'bands' => self::BANDS,
+        ];
+    }
+
+    /** A hash of the payload without the clock: changes when and only when a number on the page would change. */
+    public static function version(?CarbonImmutable $today = null): string
+    {
+        $p = self::payload($today);
+        unset($p['now']);
+
+        return sha1(json_encode($p));
+    }
 }

@@ -4,6 +4,7 @@ use App\Modules\Chloe\Http\Controllers\CandidacyAppealController;
 use App\Modules\Chloe\Http\Controllers\Candidacy\PortalController;
 use App\Modules\Chloe\Http\Controllers\Candidacy\StudentAppealController;
 use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyDismissalController;
+use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyInsightsController;
 use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyDismissalUploadController;
 use App\Modules\Chloe\Http\Controllers\Cgs\CandidacyOperationsController;
 use App\Modules\Chloe\Http\Controllers\Cgs\WorkstationCatalogController;
@@ -164,6 +165,10 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
         Route::get('/cgs/candidacy/region', [CandidacyOperationsController::class, 'region'])->name('candidacy.cgs.operations.region');
         Route::get('/cgs/candidacy/live/version', [CandidacyOperationsController::class, 'liveVersion'])->middleware('throttle:workstation-live')->name('candidacy.cgs.live.version');
         Route::get('/cgs/candidacy/live/stats', [CandidacyOperationsController::class, 'liveStats'])->middleware('throttle:workstation-live')->name('candidacy.cgs.live.stats');
+
+        Route::get('/cgs/candidacy/insights', [CandidacyInsightsController::class, 'index'])->name('candidacy.cgs.insights');
+        Route::get('/cgs/candidacy/insights/live/version', [CandidacyInsightsController::class, 'liveVersion'])->middleware('throttle:workstation-live')->name('candidacy.cgs.insights.live.version');
+        Route::get('/cgs/candidacy/insights/live/stats', [CandidacyInsightsController::class, 'liveStats'])->middleware('throttle:workstation-live')->name('candidacy.cgs.insights.live.stats');
 
         Route::get('/cgs/candidacy/dismissals', [CandidacyDismissalController::class, 'index'])->name('candidacy.cgs.dismissals');
         Route::get('/cgs/candidacy/dismissals/region', [CandidacyDismissalController::class, 'region'])->name('candidacy.cgs.dismissals.region');

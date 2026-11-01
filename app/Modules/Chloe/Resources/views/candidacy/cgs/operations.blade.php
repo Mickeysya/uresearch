@@ -7,6 +7,7 @@
 @section('content')
     <div class="wca-page">
         <x-core::page-header title="Candidacy Management" subtitle="Operations: every study candidacy appeal.">
+            <a href="{{ route('candidacy.cgs.insights') }}" class="wca-home">Insights</a>
             <a href="{{ route('dashboard') }}" class="wca-home">Home</a>
         </x-core::page-header>
 
