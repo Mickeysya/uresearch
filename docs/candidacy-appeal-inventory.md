@@ -204,22 +204,19 @@ unchanged (`chair`, `with_chair`, `Role::CHAIR`), and the memo verification code
 
 1. **Applied appeals are flagged**: a student with an open appeal is flagged and is not listed as a dismissal candidate while the appeal is open.
 2. **Dismissal candidate rule**: today is after the current expiry date **and** no Softbound submitted **and** no open appeal **and** the student is not inactive, completed or dismissed.
-   A Dean rejection alone does **not** make a student a candidate (Handbook 4.3). CGS reviews the list; the final decision is outside our scope.
-3. **Softbound and other student statuses (inactive, completed, dismissed) are read-only from the other module through ONE reader class.** Lookup order, stop at the first hit:
-   1. the shared Softbound module's real table;
-   2. our own, clearly labelled **demo overlay** table, used ONLY when the shared source has no record for that student AND the student is one of our demo students;
-   3. no record = not submitted.
-   The overlay never overrides a shared record and never applies to real students. We never write to the shared tables. Config `candidacy.softbound_source`:
-   `demo` (overlay only, until merge) / `shared_with_demo_fallback` (recommended after merge) / `shared` (production, overlay off).
-   The overlay table is filled by `candidacy:demo-seed` and cleared by `candidacy:demo-clear`. A demo-only command `candidacy:demo-softbound <studentID>` writes only to the overlay.
-   Any screen that shows a value resolved from the overlay marks it **"Demo data"**. A planned command `candidacy:check-softbound-source` prints how many students resolve from shared, overlay and none.
-   Reminders and dismissal candidates query the reader at run time and never copy the status. No page lets CGS set Softbound.
-   **Open item:** the shared Softbound table name and its student ID, submitted date and status fields are still to be obtained from the module owner.
-4. **Registry upload page** (Registry and CGS roles). Upload types: (a) confirmed dismissals; (b) expiry-date changes with a reason (deferment, change of mode, change of programme, other) and a letter reference.
-   Preview with row errors, confirm to apply, log old and new date, who and when; reminders recalculate; `extension_months_used` is unchanged; a CGS manual adjustment with a reason is the backup.
-   **Open item:** confirm with CGS whether the Registry's new expiry date already includes approved appeal months (assumed yes).
-5. **Excel export of the Operations list** (to be reminded to the user in the next phase): exactly the filtered list, same query and columns, CGS roles only.
-6. The "Students Near Candidacy Expiry" information was removed from Operations in this round; it returns later on the CGS overview page.
+   A Dean rejection alone does **not** make a student a candidate (Handbook 4.3). CGS reviews the list; the final decision is outside our scope. The dismissal list will ask
+   `Support\StudentStatusReader` at run time and never copy the status.
+3. **Registry upload page** (Registry and CGS roles) is ONLY for **dismissal confirmation** (the Registry's confirmed dismissals, with preview, row errors, confirm to apply, who/when logged).
+   Expiry-date changes outside appeals (deferment, change of mode or programme, other) are made by **CGS** as a manual adjustment with a reason and a letter reference; an optional CGS Excel upload may come later.
+   Reminders recalculate on their own (the log is keyed by the expiry date) and `extension_months_used` is unchanged.
+   **Open item:** confirm with CGS whether a changed expiry date already includes approved appeal months (assumed yes).
+4. **Reminder log page**: not now (the log table exists; a page for CGS to see it is later).
+5. **CGS menu order reserved**: Operations, Insights, Dismissal List. The Insights forecast chart "expiring within 3 months" will filter the student list when clicked, like Workstation Insights
+   (this replaces the "Students Near Candidacy Expiry" card removed from Operations).
+6. **Excel export of the Operations list** (to be reminded to the user in the next phase): exactly the filtered list, same query and columns, CGS roles only.
+7. **Improvements to discuss with CGS**: urgent reminders 3 days and 1 day before the expiry date.
+8. **Shared Softbound source**: the reader's shared adapter is written but inactive. **Open item:** the shared Softbound table name and its student ID, submitted date and status fields are to be obtained from the module owner. Then set
+   `candidacy.status_source` to `shared_with_demo_fallback` (recommended after the merge) or `shared` (production, overlay off).
 
 ## 14. Rule sources
 
@@ -290,3 +287,31 @@ a department name with "&" on the pages, filters, e-mail, bell and memo.
 **Known limits of the demo data.** Only the six departments whose programmes appear among the Workstation demo students (Chemical, Civil, Electrical, Mechanical, Petroleum, Computer & Information Sciences)
 have demo appeals; Geoscience has one (a real account placed there by the hash rule) and Applied Science and Management and Humanities have none, because giving them students would mean adding rows that
 Workstation reads. The legacy appeal SCA-22001001-01 (account `student@utp.edu.my`) falls under Computer & Information Sciences and is left alone, so that account has 6 of 12 months used (it can still submit for up to 6 months).
+
+## 17. Dean rejection confirmation, student status reader, automatic reminders
+
+**Dean rejection (two steps).** "Reject (final)" opens the existing modal (reasons, remark for Other); its button only opens a SECOND dialog, "Confirm rejection of <appeal no.>", that
+lists the consequences (closed as Rejected (final); no further appeal; the expiry date stays; the student can still submit the Softbound thesis before the expiry date, otherwise becomes a dismissal
+candidate for CGS to review; the student, Supervisor, Department Chair and CGS are notified by e-mail and bell) and the chosen reasons and remark. Nothing is saved until "Confirm rejection"
+(red; "Discard" is the secondary button and has the focus). Esc, clicking outside and Discard close only the second dialog (the first keeps what was entered) and change nothing. The final button is
+disabled after one click, and the server refuses a second post (the appeal is no longer pending the Dean), so a double click rejects once. The student's e-mail and the appeal page say the student may
+still submit the Softbound thesis before the expiry date.
+
+**Student status reader** (`Support\StudentStatusReader`, one place): Softbound submitted (with date), completed, inactive (deferred included), dismissed, and which source answered. Lookup order, stop at the first hit:
+1 the shared Softbound table (`SharedStatusAdapter`, **inactive** until the table is known); 2 the labelled **demo overlay** table `candidacy_demo_student_statuses`, only when the shared source has no record AND the student is
+one of our demo students; 3 none = not submitted. A real student's own candidacy record (`study_candidacies.status`, `dismissed_at`) is read after the shared source. Config `candidacy.status_source` = `demo` | `shared_with_demo_fallback` | `shared`.
+Any screen that shows a value resolved from the overlay says "Demo data" (the "Student candidacy" card of the appeal page for staff; the dry-run output). Commands: `candidacy:demo-softbound <studentID>` (writes only the overlay, demo students only),
+`candidacy:check-status-source` (counts shared / overlay / candidacy record / none). The overlay is filled by `candidacy:demo-seed` and cleared by `candidacy:demo-clear`. No page lets CGS set Softbound.
+
+**Expiry reminders** (`Support\CandidacyReminderEngine`, command `candidacy:send-reminders [--dry-run] [--date=YYYY-MM-DD]`, daily **07:25 Asia/Kuala_Lumpur**, after `candidacy:close-expired-appeals` at 07:20).
+- Eligible: research students (Full-Time or Part-Time; Coursework excluded, `candidacy.reminders.programme_types`), with a current expiry date, today on or before it, and no Softbound submitted / completed / dismissed / inactive-or-deferred.
+- An appeal in review (with supervisor, chair, CGS or dean) **pauses** reminders; they resume when the appeal is returned (variant C), rejected or approved. A pause records nothing.
+- Milestones: expiry date minus 3, 2 and 1 calendar months, no month overflow (31 May minus 3 months = the last day of February). A milestone is sent by the first run on or after its date. If several are due and unsent, ONLY the latest is sent and the earlier ones are recorded as skipped.
+- De-duplication: `candidacy_reminder_log`, unique on (candidacy, expiry date, milestone) (and on (demo student, expiry date, milestone)). Keyed by the expiry date, so a new expiry date starts a new cycle. Running twice or restarting never sends twice.
+- Variants: **A** normal; **B** no further appeal possible (12 months used, or the Dean rejected the last appeal; `candidacy.reminders.send_when_appeal_blocked`); **C** an appeal is returned to the student.
+  E-mail wording as agreed (subjects "Candidacy expiry reminder: n month(s) left (expires date)" and "Action needed: your extension appeal was returned (candidacy expires date)") plus a bell notification that carries a link.
+- `--dry-run` writes and sends nothing. `--date` is allowed only with `--dry-run` or in the local environment.
+- Demo students (Workstation demo profiles) are reminded by e-mail only (no login); their log rows are removed by `candidacy:demo-clear`. `candidacy.reminders.demo_students` switches this off (default: on except in production).
+- The old `candidacy:remind` (still scheduled at 07:00 by the shared `routes/console.php`, which is not ours to edit) is now a no-op, so nothing is sent twice. No reminder log page and no 3-day/1-day reminders yet (section 13).
+- Walkthrough with exact commands and real output: `docs/candidacy-reminder-demo.md`. Items to confirm with CGS: `docs/candidacy-cgs-confirmation-list.md`.
+- Known gap (shared file): the shared notification feed only follows `application_id`, so clicking the reminder in the bell stays on the notification page; the link is in the notification data (`url`) and in the e-mail.

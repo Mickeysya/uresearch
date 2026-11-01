@@ -60,7 +60,7 @@ class CandidacyDemoDataTest extends TestCase
     /** @return array<string,int> */
     protected function counts(): array
     {
-        return collect(['candidacy_appeals', 'candidacy_appeal_events', 'candidacy_appeal_approvals', 'candidacy_appeal_documents', 'candidacy_appeal_publications', 'candidacy_staff_profiles', 'candidacy_staff_assignments', 'candidacy_departments', 'demo_student_profiles', 'users', 'study_candidacies'])
+        return collect(['candidacy_appeals', 'candidacy_appeal_events', 'candidacy_appeal_approvals', 'candidacy_appeal_documents', 'candidacy_appeal_publications', 'candidacy_staff_profiles', 'candidacy_staff_assignments', 'candidacy_departments', 'demo_student_profiles', 'users', 'study_candidacies', 'candidacy_demo_student_statuses', 'candidacy_reminder_log'])
             ->mapWithKeys(fn ($t) => [$t => DB::table($t)->count()])->all();
     }
 
@@ -279,5 +279,48 @@ class CandidacyDemoDataTest extends TestCase
         $this->artisan('candidacy:demo-seed')->assertSuccessful();
 
         $this->artisan('candidacy:check-allowance')->assertSuccessful();
+    }
+
+    public function test_the_overlay_rows_are_demo_students_only_and_are_cleared_with_the_demo_data(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $rows = \App\Modules\Chloe\Models\CandidacyDemoStudentStatus::all();
+
+        $this->assertGreaterThanOrEqual(10, $rows->count());
+        $this->assertGreaterThanOrEqual(4, $rows->whereNotNull('softbound_submitted_at')->count());
+        $this->assertGreaterThanOrEqual(2, $rows->where('completed', true)->count());
+        $this->assertGreaterThanOrEqual(2, $rows->where('inactive', true)->count());
+        $this->assertTrue($rows->every(fn ($r) => $r->label === 'Demo data' && DemoStudentProfile::find($r->demo_profile_id)));
+        $this->assertSame(0, CandidacyAppeal::whereIn('demo_profile_id', $rows->pluck('demo_profile_id'))->count(), 'overlay students have no appeal');
+
+        $this->artisan('candidacy:send-reminders', ['--date' => '2027-03-01', '--dry-run' => true])->assertSuccessful();
+        $this->app['env'] = 'local';
+        \Illuminate\Support\Facades\Notification::fake();
+        $this->artisan('candidacy:send-reminders', ['--date' => '2027-03-01'])->assertSuccessful();
+        $this->assertGreaterThan(0, \App\Modules\Chloe\Models\CandidacyReminderLog::whereNotNull('demo_profile_id')->count());
+
+        $this->artisan('candidacy:demo-clear')->assertSuccessful();
+
+        $this->assertSame(0, \App\Modules\Chloe\Models\CandidacyDemoStudentStatus::count());
+        $this->assertSame(0, \App\Modules\Chloe\Models\CandidacyReminderLog::whereNotNull('demo_profile_id')->count());
+    }
+
+    public function test_the_demo_appeals_cover_reminder_variants_a_b_and_c_and_the_paused_case(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $engine = app(\App\Modules\Chloe\Support\CandidacyReminderEngine::class);
+        $seen = [];
+
+        foreach (DemoStudentProfile::pluck('candidacy_expiry_date')->map(fn ($d) => \Illuminate\Support\Carbon::parse($d)->toDateString())->unique() as $expiry) {
+            $day = \Carbon\CarbonImmutable::parse($expiry)->subMonthsNoOverflow(3);
+
+            foreach ($engine->run($day, true) as $r) {
+                $seen[$r['action'] === 'send' ? 'variant '.$r['variant'] : $r['reason']] = true;
+            }
+        }
+
+        foreach (['variant A', 'variant B', 'variant C', 'appeal in review', 'softbound submitted', 'completed', 'inactive'] as $case) {
+            $this->assertArrayHasKey($case, $seen, $case);
+        }
     }
 }

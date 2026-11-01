@@ -72,7 +72,7 @@ class CandidacyExpiryReminder extends Notification implements ShouldQueue
 
             return $mail
                 ->line("Your extension appeal {$this->appeal?->appeal_no} was returned to you at the {$stage} step.")
-                ->line('Reasons: '.($reasons !== '' ? $reasons : 'see the appeal').($returned?->remark ? '. Remark: '.$returned->remark : '').'.')
+                ->line('Reasons: '.($reasons !== '' ? $reasons : 'see the appeal').'.'.($returned?->remark ? ' Remark: '.rtrim($returned->remark, '.').'.' : ''))
                 ->line("Please revise it and resubmit it on or before {$date}, the day your candidacy period ends.")
                 ->action('Open appeal', $this->link())
                 ->line('Contact the Centre for Graduate Studies (CGS) if you need help.');
