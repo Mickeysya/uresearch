@@ -4,7 +4,7 @@
     <dl class="wca-kv">
         <dt>Department</dt><dd>{{ $department?->name ?? '—' }}</dd>
         <dt>Supervisor</dt><dd>{{ $appeal->supervisorProfile?->full_name ?? ($lecturers->firstWhere('id', $appeal->supervisor_profile_id)?->full_name ?? '—') }}</dd>
-        <dt>Programme Chair</dt><dd>{{ $chair?->full_name ?? '—' }}</dd>
+        <dt>Department Chair</dt><dd>{{ $chair?->full_name ?? '—' }}</dd>
         <dt>Dean of PGR</dt><dd>{{ $dean?->full_name ?? '—' }}</dd>
         <dt>Current phase</dt><dd>{{ $phases[$appeal->phase] ?? '—' }}</dd>
         <dt>Thesis written</dt><dd>{{ $appeal->percent_complete !== null ? $appeal->percent_complete.'%' : '—' }}</dd>

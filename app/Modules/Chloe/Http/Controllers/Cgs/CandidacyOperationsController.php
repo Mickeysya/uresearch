@@ -3,7 +3,6 @@
 namespace App\Modules\Chloe\Http\Controllers\Cgs;
 
 use App\Modules\Chloe\Models\CandidacyDepartment;
-use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Chloe\Support\CandidacyOperationsQuery as Q;
 use App\Modules\Chloe\Support\CandidacyReturnPath;
 use App\Modules\Core\Http\Controllers\Controller;
@@ -59,7 +58,6 @@ class CandidacyOperationsController extends Controller
             'returnTo' => CandidacyReturnPath::current($request, '/cgs/candidacy', $query),
             'departments' => CandidacyDepartment::orderBy('name')->get(),
             'liveVersion' => Q::version(),
-            'nearExpiry' => StudyCandidacy::where('status', StudyCandidacy::STATUS_ACTIVE)->whereDate('candidacy_expiry_date', '<=', now()->addMonths(3))->with('student')->orderBy('candidacy_expiry_date')->get(),
         ];
     }
 }

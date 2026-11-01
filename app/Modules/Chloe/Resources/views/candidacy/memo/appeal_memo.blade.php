@@ -33,7 +33,7 @@
 <body>
 @php
     $by = fn ($stage) => $approvals->get($stage);
-    $stageName = ['supervisor' => 'Lecturer/Supervisor', 'chair' => 'Chair of Department', 'cgs' => 'CGS verification', 'dean' => 'Dean of Postgraduate and Research'];
+    $stageName = ['supervisor' => 'Lecturer/Supervisor', 'chair' => 'Department Chair', 'cgs' => 'CGS verification', 'dean' => 'Dean of Postgraduate and Research'];
     $dean = $by('dean');
 @endphp
     <div class="logo">@if ($logo)<img src="{{ $logo }}" alt="Universiti Teknologi PETRONAS">@endif</div>
@@ -44,7 +44,7 @@
         <tr>
             <td class="label">Through</td><td class="sep">:</td>
             <td>
-                {{ $by('chair')?->full_name ?? $appeal->chairProfile?->full_name }} (Programme Chair)
+                {{ $by('chair')?->full_name ?? $appeal->chairProfile?->full_name }} (Department Chair)
                 @if ($by('chair'))<div class="stamp">@if ($signatures->get('chair'))<div class="sig"><img src="{{ $signatures->get('chair') }}" alt=""></div>@endif<div class="txt">{{ $stamp($by('chair')) }}</div></div>@endif
             </td>
         </tr>

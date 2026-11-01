@@ -61,13 +61,23 @@ return [
                 'justification_insufficient' => 'Justification insufficient',
                 'other' => 'Other',
             ],
+            // Starting list (CGS will confirm it later). Keys are stored with the decision, so do not rename them; the labels are display-only.
             'reject' => [
-                'justification_insufficient' => 'Justification insufficient',
-                'progress_not_satisfactory' => 'Research progress not satisfactory',
-                'policy_not_met' => 'Policy requirement not met',
-                'other' => 'Other',
+                'progress_insufficient' => 'Research progress is insufficient to justify an extension',
+                'plan_not_realistic' => 'Completion plan is not realistic within the requested period',
+                'documents_insufficient' => 'Supporting documents are insufficient or invalid',
+                'delay_reason_not_acceptable' => 'Reason for the delay is not acceptable',
+                'previous_extension_not_used' => 'Previous extension was not used as planned',
+                'other' => 'Other (remark required)',
             ],
         ],
+    ],
+
+    // Reason keys that were stored before the list above was replaced: still shown with their old wording, never an error.
+    'legacy_reject_reasons' => [
+        'justification_insufficient' => 'Justification insufficient',
+        'progress_not_satisfactory' => 'Research progress not satisfactory',
+        'policy_not_met' => 'Policy requirement not met',
     ],
 
     // E-mail wording. Placeholders: {{student_name}} {{appeal_no}} {{stage}} {{decision}} {{reasons}} {{remarks}}
@@ -115,7 +125,7 @@ return [
         ],
         'rejected' => [
             'subject' => '{{appeal_no}}: the appeal was rejected (final)',
-            'title' => 'Appeal {{appeal_no}} was rejected by the Dean (final).',
+            'title' => 'Appeal {{appeal_no}} was rejected by the Dean (final). Reasons: {{reasons}}',
             'lines' => [
                 'Dear colleague,',
                 'The Study Candidacy Appeal {{appeal_no}} of {{student_name}} was rejected by the Dean of Postgraduate and Research. This decision is final: no further appeal can be submitted for this candidacy.',
@@ -126,7 +136,7 @@ return [
         ],
         'rejected_student' => [
             'subject' => '{{appeal_no}}: your appeal was rejected (final)',
-            'title' => 'Your appeal {{appeal_no}} was rejected by the Dean (final).',
+            'title' => 'Your appeal {{appeal_no}} was rejected by the Dean (final). Reasons: {{reasons}}',
             'lines' => [
                 'Dear {{student_name}},',
                 'Your Study Candidacy Appeal {{appeal_no}} was rejected by the Dean of Postgraduate and Research. This decision is final: no further appeal can be submitted for this candidacy.',

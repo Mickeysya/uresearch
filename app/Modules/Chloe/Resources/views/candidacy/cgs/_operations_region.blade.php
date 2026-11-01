@@ -63,17 +63,3 @@
         @endif
     @endif
 </section>
-
-<section class="wca-card" aria-labelledby="wca-h-near">
-    <h3 id="wca-h-near">Students Near Candidacy Expiry</h3>
-    <p class="wca-muted wca-small">Active candidacies expiring within 3 months.</p>
-    @if ($nearExpiry->isEmpty())
-        <p class="wca-empty">No students currently near expiry.</p>
-    @else
-        <div class="wca-table-wrap"><table class="wca-table is-stack"><thead><tr><th>Student</th><th>Expiry Date</th><th class="wca-num">Days Remaining</th></tr></thead><tbody>
-            @foreach ($nearExpiry as $c)
-                <tr><td data-label="Student">{{ $c->student->name ?? '—' }}</td><td class="wca-nowrap" data-label="Expiry Date">{{ $c->candidacy_expiry_date->format('j M Y') }}</td><td class="wca-num" data-label="Days Remaining">{{ $c->daysUntilExpiry() }}</td></tr>
-            @endforeach
-        </tbody></table></div>
-    @endif
-</section>

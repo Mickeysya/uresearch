@@ -144,7 +144,7 @@ class PortalController extends Controller
         return CandidacyStaffDirectory::profileForUser($user) ?? CandidacyStaffProfile::create([
             'user_id' => $user->id, 'full_name' => $user->name,
             'designation' => match ($user->role) {
-                Role::SUPERVISOR => 'Lecturer', Role::CHAIR => 'Programme Chair', Role::DEAN_PGR => 'Dean of Postgraduate and Research',
+                Role::SUPERVISOR => 'Lecturer', Role::CHAIR => 'Department Chair', Role::DEAN_PGR => 'Dean of Postgraduate and Research',
                 default => 'Centre for Graduate Studies (CGS)',
             },
         ]);

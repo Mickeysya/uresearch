@@ -109,9 +109,9 @@ it isn't a shared Core table with Norhanis' unbuilt RPD trio).
   one eligibility rule both the command and CGS's on-demand "Refresh List"
   button call.
 - **Appeal** (`candidacy_appeal`) *is* a real `WorkflowModule` —
-  Student → Supervisor → Programme Chair → CGS Verification → Dean of PGR —
+  Student → Supervisor → Department Chair → CGS Verification → Dean of PGR —
   and reuses the existing stage-key pairings already reserved for exactly
-  this chain in `docs/module-keys.md`. "Programme Chair" reuses `Role::CHAIR`
+  this chain in `docs/module-keys.md`. "Department Chair" reuses `Role::CHAIR`
   (see that doc's actor table; CGS confirmation is still outstanding).
   The submission form mirrors CGS's actual paper appeal template — Section A
   (phase + RCS), B (prior GSC/VC extension), C (repeatable publications

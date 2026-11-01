@@ -51,6 +51,16 @@
     </section>
 @endif
 
+@if ($appeal->status === 'rejected')
+    @php $rej = $appeal->events->where('action', 'rejected')->last(); $rejReasons = P::reasonLabels('dean', 'rejected', $rej?->reason_codes); @endphp
+    <section class="wca-card" aria-labelledby="wca-h-rej">
+        <h3 id="wca-h-rej">Reasons for rejection</h3>
+        <p>{{ $rejReasons !== '' ? $rejReasons : 'Not recorded' }}</p>
+        @if ($rej?->remark)<p class="wca-muted">Remark: {{ $rej->remark }}</p>@endif
+        <p class="wca-muted wca-small">This decision is final. No further appeals are accepted for this candidacy; the expiry date stays unchanged.</p>
+    </section>
+@endif
+
 <div class="wca-grid wca-grid-2">
     <section class="wca-card" aria-labelledby="wca-h-dec">
         <h3 id="wca-h-dec">Decision summary</h3>
@@ -107,7 +117,7 @@
         <h3 id="wca-h-rem">Remarks and reasons</h3>
         @forelse (P::remarks($appeal) as $e)
             <p><strong>{{ P::eventLabel($e) }}</strong> &middot; {{ $e->actor_name }} &middot; {{ P::date($e->occurred_at, 'j M Y, H:i') }}<br>
-                @if ($e->reason_codes)Reasons: {{ P::reasonLabels($e->stage, $e->action, $e->reason_codes) }}<br>@endif
+                @if ($e->reason_codes)Reasons: {{ P::reasonLabels($e->stage, $e->action, $e->reason_codes) }}<br>@elseif ($e->action === 'rejected')Reasons: Not recorded<br>@endif
                 {{ $e->remark ? 'Remark: '.$e->remark : '' }}</p>
         @empty <p class="wca-muted">No remarks yet.</p> @endforelse
     </section>
@@ -116,7 +126,8 @@
         <ul class="wca-timeline">
             @foreach (P::timeline($appeal) as $e)
                 @php $tone = match ($e->action) { 'approved', 'verified' => 'green', 'returned' => 'orange', 'rejected' => 'red', 'submitted', 'resubmitted' => 'blue', default => 'slate' }; @endphp
-                <li class="is-{{ $tone }}"><strong>{{ P::eventLabel($e) }}</strong><br><span class="wca-muted wca-small">{{ $e->actor_name }} &middot; {{ P::date($e->occurred_at, 'j M Y, H:i') }}</span></li>
+                <li class="is-{{ $tone }}"><strong>{{ P::eventLabel($e) }}</strong><br><span class="wca-muted wca-small">{{ $e->actor_name }} &middot; {{ P::date($e->occurred_at, 'j M Y, H:i') }}</span>
+                    @if (in_array($e->action, ['returned', 'rejected'], true))<br><span class="wca-small">Reasons: {{ P::reasonLabels($e->stage, $e->action, $e->reason_codes) ?: 'Not recorded' }}</span>@endif</li>
             @endforeach
         </ul>
         <ul class="wca-legend" aria-label="History colours"><li><span class="wca-dot is-blue"></span>Submitted</li><li><span class="wca-dot is-green"></span>Approved</li><li><span class="wca-dot is-orange"></span>Returned</li><li><span class="wca-dot is-red"></span>Rejected</li><li><span class="wca-dot is-slate"></span>Other</li></ul>

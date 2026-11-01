@@ -42,6 +42,7 @@ class CandidacyAppealNotice extends Notification implements ShouldQueue
             'approved' => $this->approved,
             'next_stage' => $this->nextStage,
             'appeal_no' => $this->vars['appeal_no'] ?? null,
+            'reasons' => ($this->vars['reasons'] ?? '—') !== '—' ? $this->vars['reasons'] : null,
         ];
     }
 

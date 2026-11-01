@@ -12,7 +12,7 @@ final class CandidacyAppealPresenter
 {
     public const STAGES = [
         'supervisor' => 'Supervisor',
-        'chair' => 'Programme Chair',
+        'chair' => 'Department Chair',
         'cgs' => 'CGS Verification',
         'dean' => 'Dean of PGR',
     ];
@@ -34,7 +34,7 @@ final class CandidacyAppealPresenter
         return match ($appeal->status) {
             CandidacyAppeal::STATUS_DRAFT => 'Draft',
             CandidacyAppeal::STATUS_WITH_SUPERVISOR => 'With Supervisor',
-            CandidacyAppeal::STATUS_WITH_CHAIR => 'With Programme Chair',
+            CandidacyAppeal::STATUS_WITH_CHAIR => 'With Department Chair',
             CandidacyAppeal::STATUS_WITH_CGS => 'With CGS',
             CandidacyAppeal::STATUS_WITH_DEAN => 'With Dean',
             CandidacyAppeal::STATUS_RETURNED => 'Returned to student',
@@ -111,6 +111,7 @@ final class CandidacyAppealPresenter
         return ['done' => 'Done', 'current' => 'Waiting here', 'returned' => 'Returned the appeal', 'rejected' => 'Rejected', 'pending' => 'Not reached yet'][$state] ?? $state;
     }
 
+    /** The reasons of a return or rejection as one line; '' when none were recorded (pages then say "Not recorded"). */
     public static function reasonLabels(?string $stage, ?string $action, ?array $codes): string
     {
         if (! $codes) {
@@ -118,6 +119,10 @@ final class CandidacyAppealPresenter
         }
 
         $list = (array) config("candidacy.reasons.{$stage}.".($action === 'rejected' ? 'reject' : 'return'), []);
+
+        if ($action === 'rejected') {
+            $list += (array) config('candidacy.legacy_reject_reasons', []); // keys stored before the list was replaced
+        }
 
         return implode('; ', array_map(fn ($c) => $list[$c] ?? $c, $codes));
     }
@@ -156,3 +161,4 @@ final class CandidacyAppealPresenter
         return $date ? $date->copy()->setTimezone('Asia/Kuala_Lumpur')->format($format) : '—';
     }
 }
+

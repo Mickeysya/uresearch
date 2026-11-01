@@ -132,7 +132,7 @@ class CandidacyAppealServiceTest extends TestCase
     public function test_a_second_submitted_appeal_gets_the_next_number_after_the_first_closed(): void
     {
         $first = $this->toStage('dean', 3);
-        $this->service->decide($this->deanUser, $first, 'reject', ['policy_not_met']);
+        $this->service->decide($this->deanUser, $first, 'reject', ['progress_insufficient']);
         // a final rejection blocks every later appeal
         $this->assertNotSame([], $this->service->eligibilityProblems($this->candidacy->fresh()));
     }
@@ -325,7 +325,7 @@ class CandidacyAppealServiceTest extends TestCase
     public function test_dean_rejection_is_final_and_marks_the_candidacy(): void
     {
         $appeal = $this->toStage('dean');
-        $appeal = $this->service->decide($this->deanUser, $appeal, 'reject', ['progress_not_satisfactory']);
+        $appeal = $this->service->decide($this->deanUser, $appeal, 'reject', ['progress_insufficient']);
 
         $this->assertSame(CandidacyAppeal::STATUS_REJECTED, $appeal->status);
         $this->assertSame('rejected_final', $appeal->final_outcome);

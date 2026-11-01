@@ -11,11 +11,11 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 
 /**
- * Student -> Supervisor -> Programme Chair -> CGS Verification -> Dean of PGR.
+ * Student -> Supervisor -> Department Chair -> CGS Verification -> Dean of PGR.
  *
- * "Programme Chair" reuses Role::CHAIR (see app/Modules/Chloe/README.md —
+ * "Department Chair" reuses Role::CHAIR (see app/Modules/Chloe/README.md —
  * docs/module-keys.md and TODO.md both already tentatively concluded this is
- * the same person as Norhanis' "Chair of Department", still unconfirmed with
+ * the same person as Norhanis' "Department Chair", still unconfirmed with
  * CGS). "CGS Verification" and "Dean" reuse the `cgs_verify`/`non_exec_cgs`
  * and `dean`/`dean_pgr` pairing already listed in docs/module-keys.md's
  * stage-key table, put there for exactly this chain.
@@ -36,7 +36,7 @@ class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDeta
     {
         return [
             new Stage('supervisor', 'Lecturer/Supervisor', Role::SUPERVISOR, 'endorsed'),
-            new Stage('chair', 'Programme Chair', Role::CHAIR, 'endorsed'),
+            new Stage('chair', 'Department Chair', Role::CHAIR, 'endorsed'),
             new Stage('cgs_verify', 'CGS Verification', Role::NON_EXEC_CGS, 'verified'),
             new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'approved'),
         ];

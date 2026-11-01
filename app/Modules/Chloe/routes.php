@@ -107,7 +107,7 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
     /*
     | Study Candidacy Reminder / Appeal / Dismiss. Appeal IS an approval
     | chain and is built on the shared WorkflowEngine, routed
-    | Student -> Supervisor -> Programme Chair -> CGS Verification -> Dean.
+    | Student -> Supervisor -> Department Chair -> CGS Verification -> Dean.
     | See app/Modules/Chloe/README.md.
     */
     Route::middleware('role:'.Role::STUDENT)->group(function () {
@@ -138,7 +138,7 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
     Route::get('/candidacy/appeals/{appeal}/memo', [StudentAppealController::class, 'downloadMemo'])->whereNumber('appeal')->name('candidacy.appeals.memo');
     Route::get('/candidacy/live/version', [StudentAppealController::class, 'liveVersion'])->middleware('throttle:workstation-live')->name('candidacy.live.version');
 
-    // The Approval Portal: Supervisor, Programme Chair, CGS verification and Dean of PGR share one set of pages.
+    // The Approval Portal: Supervisor, Department Chair, CGS verification and Dean of PGR share one set of pages.
     // Visibility is decided by CandidacyAppealPolicy (named person only), not by the role list alone.
     Route::middleware('role:'.implode(',', array_unique(array_merge([Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], (array) config('candidacy.cgs_roles')))))->group(function () {
         Route::get('/candidacy/portal', [PortalController::class, 'queue'])->name('candidacy.portal.queue');

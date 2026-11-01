@@ -11,6 +11,7 @@ use App\Modules\Chloe\Models\CandidacyStaffProfile;
 use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Chloe\Notifications\CandidacyAppealNotice;
 use App\Modules\Chloe\Policies\CandidacyAppealPolicy;
+use App\Modules\Chloe\Support\CandidacyAppealPresenter;
 use App\Modules\Chloe\Support\CandidacyStaffDirectory;
 use App\Modules\Chloe\Support\CandidacyVerification;
 use App\Modules\Chloe\Support\StudentDirectory;
@@ -689,14 +690,12 @@ class CandidacyAppealService
 
     public function stageLabel(string $stage): string
     {
-        return ['supervisor' => 'Lecturer/Supervisor', 'chair' => 'Programme Chair', 'cgs' => 'CGS Verification', 'dean' => 'Dean of PGR'][$stage] ?? ucfirst($stage);
+        return ['supervisor' => 'Lecturer/Supervisor', 'chair' => 'Department Chair', 'cgs' => 'CGS Verification', 'dean' => 'Dean of PGR'][$stage] ?? ucfirst($stage);
     }
 
     /** @param list<string> $reasons */
     protected function reasonLabels(string $stage, string $decision, array $reasons): string
     {
-        $list = (array) config("candidacy.reasons.{$stage}.".($decision === 'rejected' ? 'reject' : 'return'), []);
-
-        return $reasons === [] ? '—' : implode('; ', array_map(fn ($key) => $list[$key] ?? $key, $reasons));
+        return CandidacyAppealPresenter::reasonLabels($stage, $decision, $reasons) ?: '—';
     }
 }

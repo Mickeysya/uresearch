@@ -55,7 +55,7 @@ trait BuildsCandidacyWorld
         $this->deanUser = $this->user(Role::DEAN_PGR, ['name' => 'Prof. Dean', 'email' => 'dean@test.my']);
         $this->cgsUser = $this->cgs();
 
-        foreach ([[$this->lecturer, 'Lecturer', CandidacyStaffAssignment::ROLE_LECTURER], [$this->chairUser, 'Chair of Department', CandidacyStaffAssignment::ROLE_CHAIR], [$this->deanUser, 'Dean of PGR', CandidacyStaffAssignment::ROLE_DEAN]] as [$user, $title, $role]) {
+        foreach ([[$this->lecturer, 'Lecturer', CandidacyStaffAssignment::ROLE_LECTURER], [$this->chairUser, 'Department Chair', CandidacyStaffAssignment::ROLE_CHAIR], [$this->deanUser, 'Dean of PGR', CandidacyStaffAssignment::ROLE_DEAN]] as [$user, $title, $role]) {
             $profile = CandidacyStaffProfile::create(['user_id' => $user->id, 'full_name' => $user->name, 'designation' => $title, 'department_id' => $dept->id]);
             CandidacyStaffAssignment::create(['department_id' => $dept->id, 'staff_profile_id' => $profile->id, 'role' => $role]);
             $this->service_signatures()->placeholder($profile);

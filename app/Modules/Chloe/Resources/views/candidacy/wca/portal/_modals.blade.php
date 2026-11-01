@@ -33,7 +33,7 @@
 <div class="wca-modal" id="wca-modal-reject" role="dialog" aria-modal="true" aria-labelledby="wca-m-reject-t" hidden>
     <div class="wca-modal-box">
         <h3 id="wca-m-reject-t">Reject appeal {{ $appeal->appeal_no }}?</h3>
-        <p><strong>This is final.</strong> The student cannot appeal again for this candidacy.</p>
+        <p><strong>This is final.</strong> No further appeals will be accepted for this candidacy. The expiry date stays unchanged.</p>
         <form method="POST" action="{{ $decideUrl }}">
             @csrf @if ($return)<input type="hidden" name="return" value="{{ $return }}">@endif <input type="hidden" name="action" value="reject">
             <div class="wca-field"><span class="wca-label">Reasons (tick at least one)</span>

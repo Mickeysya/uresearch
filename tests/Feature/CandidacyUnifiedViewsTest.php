@@ -242,6 +242,8 @@ class CandidacyUnifiedViewsTest extends TestCase
         }
         $this->assertStringNotContainsString('Pending Appeals', $html);
         $this->assertStringNotContainsString('Export', $html);
+        $this->assertStringNotContainsString('Students Near Candidacy Expiry', $html); // only the four agreed cards
+        $this->assertSame(4, preg_match_all('~class="wca-statcard( is-active)?"~', $html));
         $this->assertStringNotContainsString('>'.$a->appeal_no.'</a>', $html); // the number is plain text, not a link
         $this->assertStringContainsString($a->appeal_no, $html);
     }
@@ -316,7 +318,7 @@ class CandidacyUnifiedViewsTest extends TestCase
 
     public function test_the_old_wordings_are_gone_from_the_module_and_its_docs(): void
     {
-        $banned = ['Needs my action', 'Waiting for my action', 'Pending Appeals', 'waiting for your action', 'is waiting for you'];
+        $banned = ['Needs my action', 'Waiting for my action', 'Pending Appeals', 'waiting for your action', 'is waiting for you', 'Programme Chair', 'Chair of Department'];
         $files = collect([
             ...glob(base_path('app/Modules/Chloe/Resources/views/candidacy/**/*.php')) ?: [], base_path('config/candidacy.php'), base_path('docs/candidacy-appeal-inventory.md'), base_path('app/Modules/Chloe/README.md'),
         ]);

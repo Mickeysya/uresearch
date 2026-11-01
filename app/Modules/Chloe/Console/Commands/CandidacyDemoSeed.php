@@ -153,7 +153,7 @@ class CandidacyDemoSeed extends Command
                 $lecturers[] = $this->assign($dept, $this->demoProfile($lecturerName, "Lecturer, {$name}", $dept, $signatures), 'lecturer');
             }
 
-            $chair ??= $this->assign($dept, $this->demoProfile(self::CHAIRS[$code], "Programme Chair, {$name}", $dept, $signatures), 'chair');
+            $chair ??= $this->assign($dept, $this->demoProfile(self::CHAIRS[$code], "Department Chair, {$name}", $dept, $signatures), 'chair');
             $dean ??= $this->assign($dept, $this->demoProfile(self::DEANS[$code], 'Dean of Postgraduate and Research', $dept, $signatures), 'dean');
             $this->staff[$code] = ['lecturers' => $lecturers, 'chair' => $chair, 'dean' => $dean];
         }
@@ -488,13 +488,18 @@ class CandidacyDemoSeed extends Command
     protected function rejectIt(CandidacyAppeal $appeal, CandidacyStaffProfile $dean, int $round, Carbon $at): void
     {
         $at = $at->copy()->startOfSecond();
+        // every demo rejection carries reasons from the Dean's list (chosen from the appeal number, so the seed stays deterministic)
+        $keys = array_values(array_diff(array_keys(config('candidacy.reasons.dean.reject')), ['other']));
+        $h = crc32((string) $appeal->appeal_no);
+        $reasons = array_values(array_unique([$keys[$h % count($keys)], ...($h % 2 === 0 ? [$keys[($h >> 3) % count($keys)]] : [])]));
+        $remark = 'The reasons above were recorded by the Dean.';
 
         $this->approvalRow([
             'candidacy_appeal_id' => $appeal->id, 'round' => $round, 'stage' => 'dean', 'profile_id' => $dean->id, 'user_id' => $dean->user_id,
-            'full_name' => $dean->full_name, 'designation' => $dean->designation, 'decision' => 'rejected', 'remark' => 'Progress is not satisfactory.',
+            'full_name' => $dean->full_name, 'designation' => $dean->designation, 'decision' => 'rejected', 'remark' => $remark,
             'decided_at' => $at, 'verification_code' => CandidacyVerification::code((string) $appeal->appeal_no, 'dean', $dean->id, $at), 'created_at' => $at, 'updated_at' => $at,
         ]);
-        $this->event($appeal, $this->actor($appeal, $dean, $dean->full_name, 'dean', $dean->user_id), 'rejected', 'dean', null, 'rejected', $at, $round, ['progress_not_satisfactory'], 'Progress is not satisfactory.');
+        $this->event($appeal, $this->actor($appeal, $dean, $dean->full_name, 'dean', $dean->user_id), 'rejected', 'dean', null, 'rejected', $at, $round, $reasons, $remark);
     }
 
     protected function finishApproved(CandidacyAppeal $appeal, string $stage, CandidacyMemoService $memos, array $sc): void

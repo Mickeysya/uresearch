@@ -42,7 +42,7 @@ class CandidacyPortalTest extends TestCase
         $this->service->decide($this->lecturer, $appeal, 'approve');
         $this->actingAs($this->chairUser)->get(route('candidacy.portal.queue'))->assertSee('SCA-22001001-01');
         $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue'))->assertDontSee('>Review<', false);
-        $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue', ['tab' => 'ongoing']))->assertSee('SCA-22001001-01')->assertSee('Programme Chair');
+        $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue', ['tab' => 'ongoing']))->assertSee('SCA-22001001-01')->assertSee('Department Chair');
     }
 
     public function test_cgs_roles_see_the_cgs_stage_queue_and_other_roles_are_refused(): void
@@ -62,7 +62,7 @@ class CandidacyPortalTest extends TestCase
         $appeal = $this->submitted();
         $dept2 = CandidacyDepartment::create(['code' => 'EEE', 'name' => 'Electrical']);
         $chair2 = $this->user(Role::CHAIR, ['email' => 'chair2@test.my']);
-        $p = CandidacyStaffProfile::create(['user_id' => $chair2->id, 'full_name' => 'Chair Two', 'designation' => 'Programme Chair', 'department_id' => $dept2->id]);
+        $p = CandidacyStaffProfile::create(['user_id' => $chair2->id, 'full_name' => 'Chair Two', 'designation' => 'Department Chair', 'department_id' => $dept2->id]);
         CandidacyStaffAssignment::create(['department_id' => $dept2->id, 'staff_profile_id' => $p->id, 'role' => 'chair']);
 
         foreach ([$this->supervisor('o@test.my'), $chair2, $this->student('22009999', 'x@test.my'), $this->user(Role::DEAN_PGR, ['email' => 'd2@test.my'])] as $user) {
@@ -173,7 +173,7 @@ class CandidacyPortalTest extends TestCase
         $appeal = $this->service->decide($this->deanUser, $appeal, 'return', ['clarification_needed']);
         $this->service->resubmit($this->student, $appeal);
         $this->decide($this->cgsUser, $appeal->fresh(), ['action' => 'verify', 'documents_complete' => 'yes']);
-        $this->decide($this->deanUser, $appeal->fresh(), ['action' => 'reject', 'reasons' => ['policy_not_met']])->assertSessionHasNoErrors();
+        $this->decide($this->deanUser, $appeal->fresh(), ['action' => 'reject', 'reasons' => ['progress_insufficient']])->assertSessionHasNoErrors();
 
         $this->assertSame('rejected', $appeal->fresh()->status);
         $this->assertNotSame([], $this->service->eligibilityProblems($this->candidacy->fresh()));

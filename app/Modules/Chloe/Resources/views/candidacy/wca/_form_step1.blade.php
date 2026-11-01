@@ -24,7 +24,7 @@
     </div>
     <p class="wca-muted wca-small">For your information, the appeal will go on to these people. You cannot change them.</p>
     <div class="wca-row">
-        <div class="wca-field"><label for="wca-chair">Programme Chair</label><input id="wca-chair" class="wca-input" type="text" value="{{ $chair?->full_name ?? '—' }}" readonly></div>
+        <div class="wca-field"><label for="wca-chair">Department Chair</label><input id="wca-chair" class="wca-input" type="text" value="{{ $chair?->full_name ?? '—' }}" readonly></div>
         <div class="wca-field"><label for="wca-dean">Dean of PGR</label><input id="wca-dean" class="wca-input" type="text" value="{{ $dean?->full_name ?? '—' }}" readonly></div>
     </div>
 </section>
