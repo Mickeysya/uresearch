@@ -267,4 +267,12 @@ class CandidacyAssistantTest extends TestCase
         $this->actingAs($this->student)->postJson(route('workstation.assistant.suggestion'), ['id' => 'cand_my_expiry'])->assertOk()->assertJsonPath('outcome', 'answered');
         $this->actingAs($this->student)->postJson(route('workstation.assistant.suggestion'), ['id' => 'cand_cgs_expiring'])->assertOk()->assertJsonPath('outcome', 'error');
     }
+
+    public function test_the_interpreted_as_line_reads_naturally_with_and_without_parameters(): void
+    {
+        $this->assertSame('How many students expire within 2 months?', $this->ask($this->cgsUser, 'students expiring within 2 months', 'cand_cgs_expiring', ['months' => 2])['interpreted_as']);
+        $this->assertSame('How many students expire within 3 months?', $this->ask($this->cgsUser, 'how many are expiring', 'cand_cgs_expiring')['interpreted_as']);
+        $this->assertSame('How many students were dismissed last month?', $this->ask($this->cgsUser, 'dismissed last month', 'cand_cgs_dismissed', ['window' => 'last_month'])['interpreted_as']);
+        $this->assertSame('How many students were dismissed this month?', $this->ask($this->cgsUser, 'dismissed lately', 'cand_cgs_dismissed')['interpreted_as']);
+    }
 }

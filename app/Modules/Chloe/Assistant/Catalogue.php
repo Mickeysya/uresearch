@@ -269,6 +269,7 @@ final class Catalogue
     public static function interpretedAs(array $entry, array $params): string
     {
         $question = $entry['question'];
+        $params += (array) ($entry['defaults'] ?? []); // a default shown in the line when the question named none (e.g. 3 months)
         $usedKeys = [];
 
         $question = preg_replace_callback('/\{([a-z_]+)\}/i', function ($m) use ($params, &$usedKeys) {
@@ -309,6 +310,10 @@ final class Catalogue
 
         if ($key === 'gender' && is_string($value) && $value !== '') {
             return mb_strtolower($value).' rooms';
+        }
+
+        if ($key === 'window' && is_string($value)) {
+            return \App\Modules\Chloe\Assistant\CandidacyLookups::WINDOWS[$value] ?? '';
         }
 
         if ($key === 'months' && is_numeric($value)) {

@@ -665,12 +665,16 @@ class AssistantRouterTest extends TestCase
         $this->assertGreaterThanOrEqual(250, count($rows));
 
         foreach ($rows as $row) {
-            $this->assertContains($row['role'], ['student', 'cgs']);
-            $this->assertContains($row['group'], ['original', 'contrast', 'messy', 'standard', 'followup']);
+            $this->assertContains($row['role'], ['student', 'approver', 'cgs']);
+            $this->assertContains($row['group'], ['original', 'contrast', 'messy', 'standard', 'followup', 'candidacy']);
             foreach ([$row['id'], ...($row['accept'] ?? [])] as $id) {
+                if ($id === 'refused_before_router') {
+                    continue; // a person's name: refused before the router, so there is no catalogue entry to check
+                }
+
                 $this->assertTrue(Catalogue::isAllowed($id, $row['role']), "'{$row['q']}' is labelled with '{$id}', not in the {$row['role']} catalogue.");
             }
-            foreach (array_keys($row['params'] ?? []) as $param) {
+            foreach ($row['id'] === 'refused_before_router' ? [] : array_keys($row['params'] ?? []) as $param) {
                 $this->assertArrayHasKey($param, Catalogue::find($row['id'])['parameters'], "'{$row['q']}' expects an undeclared parameter '{$param}'.");
             }
         }

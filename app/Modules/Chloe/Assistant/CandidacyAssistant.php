@@ -272,8 +272,8 @@ final class CandidacyAssistant
 
         foreach (self::lookupSpecs() as $id => $spec) {
             $entries[] = [
-                'id' => $id, 'kind' => 'lookup', 'domain' => self::DOMAIN, 'roles' => $spec['roles'], 'question' => $suggested[$id] ?? $spec['question'], 'description' => $spec['description'],
-                'examples' => $spec['examples'], 'parameters' => $spec['parameters'] ?? [], 'link' => $spec['link'] ?? null, 'template' => CandidacyLookups::methods()[$id],
+                'id' => $id, 'kind' => 'lookup', 'domain' => self::DOMAIN, 'roles' => $spec['roles'], 'question' => $spec['question'], 'description' => $spec['description'],
+                'examples' => $spec['examples'], 'parameters' => $spec['parameters'] ?? [], 'defaults' => $spec['defaults'] ?? [], 'link' => $spec['link'] ?? null, 'template' => CandidacyLookups::methods()[$id],
             ];
         }
 
@@ -338,7 +338,7 @@ final class CandidacyAssistant
                 'examples' => ['appeals waiting over 10 days', 'how many appeals are late', 'overdue appeals count', 'appeals stuck for 10 days or more', 'appeals waiting longer than ten days']],
             'cand_cgs_avg_waiting' => ['roles' => $C, 'question' => 'What is the average waiting time at each step?', 'description' => 'The average number of days appeals have waited at each step right now.', 'link' => 'candidacy.cgs.operations',
                 'examples' => ['average days waiting per step', 'how long do appeals wait on average', 'mean waiting time at the dean', 'average wait by stage', 'typical delay at each step']],
-            'cand_cgs_expiring' => ['roles' => $C, 'question' => 'How many students expire within {months} months?', 'description' => 'How many students\' candidacies expire within 1, 2 or 3 months, ALL students and not only workstation seat holders (the candidacy Insights numbers). Contrast: seat holders only is candidacy_expiring.', 'link' => 'candidacy.cgs.insights',
+            'cand_cgs_expiring' => ['roles' => $C, 'question' => 'How many students expire within {months} months?', 'defaults' => ['months' => 3], 'description' => 'How many students\' candidacies expire within 1, 2 or 3 months, ALL students and not only workstation seat holders (the candidacy Insights numbers). Contrast: seat holders only is candidacy_expiring.', 'link' => 'candidacy.cgs.insights',
                 'parameters' => ['months' => ['type' => 'integer', 'required' => false, 'hint' => 'optional 1, 2 or 3']],
                 'examples' => ['how many candidacies expire soon', 'students expiring in the next 3 months', 'candidacy expiries within a month', 'number of expiring candidacies', 'who is about to expire count', 'how many expire in 2 months']],
             'cand_cgs_no_action' => ['roles' => $C, 'question' => 'How many of them have taken no action?', 'description' => 'Of the students expiring within 3 months, how many have taken no action yet (the high-risk count on Insights).', 'link' => 'candidacy.cgs.insights',
@@ -347,13 +347,13 @@ final class CandidacyAssistant
                 'examples' => ['students who used the full extension', 'how many have no more appeal months', 'twelve months used count', 'maxed out extension students', 'who cannot appeal any more']],
             'cand_cgs_by_department' => ['roles' => $C, 'question' => 'How many appeals are there per department?', 'description' => 'Submitted appeals counted by department.', 'link' => 'candidacy.cgs.operations',
                 'examples' => ['appeals by department', 'which department has the most appeals', 'appeal count per department', 'department breakdown of appeals', 'appeals split by faculty department']],
-            'cand_cgs_reminders_sent' => ['roles' => $C, 'question' => 'How many reminders were sent {window}?', 'description' => 'Candidacy expiry reminders sent this month and last month (or the named window).', 'link' => 'candidacy.cgs.insights', 'parameters' => $window,
+            'cand_cgs_reminders_sent' => ['roles' => $C, 'question' => 'How many candidacy reminders were sent this month and last month?', 'description' => 'Candidacy expiry reminders sent this month and last month (or the named window).', 'link' => 'candidacy.cgs.insights', 'parameters' => $window,
                 'examples' => ['reminders sent this month', 'how many expiry reminders went out', 'number of reminders last month', 'reminder count for the last 30 days', 'how many reminder e-mails were sent']],
             'cand_cgs_reminder_response' => ['roles' => $C, 'question' => 'What is the reminder response rate?', 'description' => 'The share of reminders followed by a Softbound submission or an appeal within 30 days.', 'link' => 'candidacy.cgs.insights',
                 'examples' => ['do reminders work', 'response rate to reminders', 'how many students act after a reminder', 'reminder effectiveness', 'percentage who respond to reminders']],
             'cand_cgs_dismissal_candidates' => ['roles' => $C, 'question' => 'How many dismissal candidates are there?', 'description' => 'Dismissal candidates today, how many are exported and how many are not yet exported.', 'link' => 'candidacy.cgs.dismissals',
                 'examples' => ['size of the dismissal list', 'how many students are on the dismissal list', 'dismissal candidates not yet exported', 'candidates awaiting the registry', 'number of expired candidacies to dismiss']],
-            'cand_cgs_dismissed' => ['roles' => $C, 'question' => 'How many students were dismissed {window}?', 'description' => 'How many students were dismissed in the window (default this month).', 'link' => 'candidacy.cgs.dismissal-upload', 'parameters' => $window,
+            'cand_cgs_dismissed' => ['roles' => $C, 'question' => 'How many students were dismissed {window}?', 'defaults' => ['window' => 'this_month'], 'description' => 'How many students were dismissed in the window (default this month).', 'link' => 'candidacy.cgs.dismissal-upload', 'parameters' => $window,
                 'examples' => ['dismissed students this month', 'how many dismissals last month', 'number dismissed recently', 'dismissals in the last 30 days', 'how many did the registry dismiss']],
         ];
     }
