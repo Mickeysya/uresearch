@@ -240,6 +240,13 @@ final class Pipeline
                 : $this->fallbackAsk($user, $role, $maskedQuestion, $idMap, $recentMasked, false, $modelUsed, 'invalid_id');
         }
 
+        if (($alike = CandidacyAssistant::preferCandidacy($id, QuestionNormaliser::normalise($maskedQuestion), $role)) !== null) {
+            $this->traceLine("validation: {$id} names no workstation word -> {$alike} (all students)");
+            $id = $alike;
+            $entry = Catalogue::find($id);
+            $routed['id'] = $id;
+        }
+
         $params = $this->validatedParams($entry, $routed['params'] ?? [], $idMap);
 
         // A short follow-up that itself names a period ("and january?")

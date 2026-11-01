@@ -275,4 +275,14 @@ class CandidacyAssistantTest extends TestCase
         $this->assertSame('How many students were dismissed last month?', $this->ask($this->cgsUser, 'dismissed last month', 'cand_cgs_dismissed', ['window' => 'last_month'])['interpreted_as']);
         $this->assertSame('How many students were dismissed this month?', $this->ask($this->cgsUser, 'dismissed lately', 'cand_cgs_dismissed')['interpreted_as']);
     }
+
+    public function test_a_question_about_students_is_not_answered_with_the_seat_holder_lookup(): void
+    {
+        $swapped = $this->ask($this->cgsUser, 'how many students expire within 2 months', 'candidacy_expiring', ['months' => 2]);
+        $this->assertSame('cand_cgs_expiring', $swapped['meta']['catalogue_id']);
+        $this->assertStringContainsString('Students whose candidacy expires within 2 months', $swapped['answer']);
+
+        $kept = $this->ask($this->cgsUser, 'how many seat holders expire within 2 months', 'candidacy_expiring', ['months' => 2]);
+        $this->assertSame('candidacy_expiring', $kept['meta']['catalogue_id']);
+    }
 }
