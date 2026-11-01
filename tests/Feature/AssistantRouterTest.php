@@ -392,7 +392,7 @@ class AssistantRouterTest extends TestCase
         $call = FakeModel::routeCalls()[0];
         $this->assertSame('is <ID1> still in seat or not', $call['maskedQuestion']);
         $this->assertSame(['what about <ID1> key', 'J2 room status'], $call['recentMaskedQuestions']);
-        $this->assertSame(Catalogue::forRole('cgs'), $call['catalogue']);
+        $this->assertSame(Catalogue::forRole('cgs', 'workstation'), $call['catalogue']);
         $this->assertSame(RouterFewShots::all(), $call['fewShots']);
         $this->assertSame('Friday, 30 October 2026', $call['todayLabel']);
 
@@ -426,7 +426,7 @@ class AssistantRouterTest extends TestCase
             }
 
             return $body['input'] === 'where to take my key, my id <ID1>'
-                && $enum === array_column(Catalogue::forRole('student'), 'id')
+                && $enum === array_column(Catalogue::forRole('student', 'workstation'), 'id')
                 && ! in_array('release_forecast', $enum, true)
                 && ! str_contains(json_encode($body), '22011111')
                 && isset($body['response_format']['schema']['properties']['params']['properties']['period']);
@@ -546,7 +546,7 @@ class AssistantRouterTest extends TestCase
             $this->assertStringNotContainsString($needle, json_encode($row));
         }
         $this->assertEqualsCanonicalizing(
-            ['id', 'user_id', 'role', 'occurred_at', 'source', 'lookup', 'catalogue_kind', 'outcome', 'refusal_reason', 'result_count', 'answered_by', 'model_used', 'error_code'],
+            ['id', 'user_id', 'role', 'domain', 'occurred_at', 'source', 'lookup', 'catalogue_kind', 'outcome', 'refusal_reason', 'result_count', 'answered_by', 'model_used', 'error_code'],
             Schema::getColumnListing('assistant_logs')
         );
     }
@@ -624,7 +624,7 @@ class AssistantRouterTest extends TestCase
         $this->pipeline()->ask($this->eligibleStudent(), 'how many seats will be released next month', []);
 
         $ids = array_column(FakeModel::routeCalls()[0]['catalogue'], 'id');
-        $this->assertSame(array_column(Catalogue::forRole('student'), 'id'), $ids);
+        $this->assertSame(array_column(Catalogue::forRole('student', 'workstation'), 'id'), $ids);
         foreach ($ids as $id) {
             $this->assertContains('student', Catalogue::find($id)['roles']);
         }

@@ -79,6 +79,7 @@ final class Catalogue
             [
                 'id' => 'out_of_scope',
                 'kind' => 'out_of_scope',
+                'domain' => 'any',
                 'roles' => [Role::STUDENT, 'cgs', 'approver'],
                 'question' => '',
                 'description' => 'The question is not about the Workstation/locker-key system or Study Candidacy at all, or is unrelated small talk -- or it asks for something no entry in THIS catalogue answers (for a student: CGS-only information such as release forecasts, other students, or staff-wide statistics).',
@@ -136,14 +137,26 @@ final class Catalogue
         return mb_strlen($summary) > 240 ? rtrim(mb_substr($summary, 0, 237)).'...' : $summary;
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /**
+     * The entries of this role. With a $domain the catalogue is STRICTLY that domain's (plus the shared out_of_scope, worded for the domain): the model is only ever given
+     * the catalogue of the current domain, so it cannot pick an entry of the other one. Without a domain: every entry (tests and tools).
+     *
+     * @return array<int, array<string, mixed>>
+     */
     public static function forRole(string $role, ?string $domain = null): array
     {
-        $entries = array_values(array_filter(self::all(), fn ($e) => AssistantRoles::covers($role, $e['roles'])));
+        $entries = array_values(array_filter(self::all(), fn ($e) => AssistantRoles::covers($role, $e['roles']) && ($domain === null || in_array($e['domain'], [$domain, 'any'], true))));
 
         if ($domain !== null) {
-            // the current page only gives a PRIOR: that domain's entries first (stable), nothing is removed
-            usort($entries, fn ($a, $b) => (($a['domain'] === $domain) ? 0 : 1) <=> (($b['domain'] === $domain) ? 0 : 1));
+            $entries = array_map(function ($e) use ($domain) {
+                if ($e['kind'] === 'out_of_scope') {
+                    $e['description'] = $domain === 'candidacy'
+                        ? 'The question is not about Study Candidacy (appeals, approvers, extension, reminders, expiry date, Softbound, dismissal) at all, or is unrelated small talk -- or it asks for something no entry in THIS catalogue answers (including anything about workstations or locker keys).'
+                        : 'The question is not about workstations, seats, rooms, blocks, locker keys or the Term of Use at all, or is unrelated small talk -- or it asks for something no entry in THIS catalogue answers (including anything about Study Candidacy, appeals or dismissal).';
+                }
+
+                return $e;
+            }, $entries);
         }
 
         return $entries;
@@ -160,11 +173,11 @@ final class Catalogue
         return null;
     }
 
-    public static function isAllowed(string $id, string $role): bool
+    public static function isAllowed(string $id, string $role, ?string $domain = null): bool
     {
         $entry = self::find($id);
 
-        return $entry !== null && AssistantRoles::covers($role, $entry['roles']);
+        return $entry !== null && AssistantRoles::covers($role, $entry['roles']) && ($domain === null || in_array($entry['domain'], [$domain, 'any'], true));
     }
 
     /**
@@ -174,12 +187,12 @@ final class Catalogue
      * responsible for the interrogative guard and the how-to lead-ins --
      * this only answers "which operation", never "is it an action".
      */
-    public static function actionIdForText(string $normalisedText, string $role): ?string
+    public static function actionIdForText(string $normalisedText, string $role, ?string $domain = null): ?string
     {
         foreach (self::ACTION_MATCH_ORDER as $id) {
             $entry = self::find($id);
 
-            if ($entry !== null && AssistantRoles::covers($role, $entry['roles']) && preg_match($entry['pattern'], $normalisedText)) {
+            if ($entry !== null && AssistantRoles::covers($role, $entry['roles']) && ($domain === null || $entry['domain'] === $domain) && preg_match($entry['pattern'], $normalisedText)) {
                 return $id;
             }
         }
@@ -212,7 +225,7 @@ final class Catalogue
      *
      * @return array<int, array{id: string, score: int}>
      */
-    public static function keywordCandidates(string $normalisedText, string $role, int $limit = 3, int $minScore = 2): array
+    public static function keywordCandidates(string $normalisedText, string $role, int $limit = 3, int $minScore = 2, ?string $domain = null): array
     {
         $words = self::significantWords($normalisedText);
 
@@ -222,7 +235,7 @@ final class Catalogue
 
         $scored = [];
 
-        foreach (self::forRole($role) as $entry) {
+        foreach (self::forRole($role, $domain) as $entry) {
             if ($entry['kind'] === 'out_of_scope') {
                 continue;
             }

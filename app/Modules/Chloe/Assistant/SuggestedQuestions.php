@@ -8,7 +8,7 @@ use App\Modules\Core\Support\Role;
  * PART C: twelve fixed questions with PREWRITTEN answers (six per role) --
  * answering one (POST .../suggestion) never touches the model or the
  * keyword matcher, so picking one never spends quota. 'static' answers
- * come from docs/knowledge/assistant/suggested_answers.md
+ * come from docs/knowledge/workstation/suggested_answers.md
  * (SuggestedAnswers::staticText()); 'dynamic' ones are built live from the
  * database through SuggestedAnswers::dynamic(), using the same lookups/
  * functions the chat's own lookups and the Insights page use. Fixed by
@@ -25,6 +25,22 @@ final class SuggestedQuestions
             $role === AssistantRoles::APPROVER => [],
             default => self::cgs(),
         };
+    }
+
+    /** The six questions of this role IN this domain: id => ['text' => ..., 'type' => ..., 'target' => ..., 'catalogue_id' => ...]. Candidacy ones are answered by catalogue id, no model call. */
+    public static function forDomain(string $role, string $domain): array
+    {
+        if ($domain === 'candidacy') {
+            $out = [];
+
+            foreach (CandidacyAssistant::suggestions($role) as $id => $text) {
+                $out[$id] = ['text' => $text, 'type' => 'catalogue', 'target' => $id, 'catalogue_id' => $id];
+            }
+
+            return $out;
+        }
+
+        return self::forRole($role);
     }
 
     public static function find(string $id, string $role): ?array

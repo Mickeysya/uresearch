@@ -63,6 +63,10 @@ final class Pipeline
     /** Out of scope, but the question still sounds like it is about this system. */
     public const ASKED_BACK_DOMAIN_MESSAGE = "I'm not sure I understood. You can ask about seats, locker keys, the Term of Use, or use one of the suggested questions.";
 
+    public const OUT_OF_SCOPE_CANDIDACY_MESSAGE = "I can't help with that. You can ask about your candidacy, appeals, reminders and the dismissal list.";
+
+    public const ASKED_BACK_CANDIDACY_MESSAGE = "I'm not sure I understood. You can ask about candidacy expiry, appeals, reminders or dismissal, or use one of the suggested questions.";
+
     public const MISSING_TOPIC_MESSAGE = 'Sorry, I could not find information on that topic. Please contact the Centre for Graduate Studies (CGS).';
 
     /** assistant:ask --trace only: masked text, router ids/params and the decisions, never the key, a real ID or a name. Never logged. */
@@ -79,13 +83,13 @@ final class Pipeline
     protected bool $composeEnabled = true;
 
     /** The page the question comes from gives a PRIOR only (that domain's entries first); no entry is hidden by it. */
-    protected ?string $domain = null;
+    protected string $domain = 'workstation';
 
     public function __construct(protected AssistantModel $model) {}
 
     public function setDomain(?string $domain): static
     {
-        $this->domain = in_array($domain, ['workstation', 'candidacy'], true) ? $domain : null;
+        $this->domain = AssistantDomains::valid($domain) ? $domain : 'workstation';
 
         return $this;
     }
@@ -125,7 +129,7 @@ final class Pipeline
     public function ask(User $user, string $message, array $recentUserQuestions, bool $bypassKeywordRules = false, bool $allowFallback = true): array
     {
         $this->answeredByOverride = null;
-        $role = AssistantRoles::roleFor($user);
+        $role = AssistantDomains::effectiveRole($user, $this->domain);
 
         if ($role === null) {
             return $this->finish($user, $user->role, AssistantLog::SOURCE_TYPED, 'role_not_supported', AssistantLog::OUTCOME_REFUSED, self::ROLE_NOT_SUPPORTED_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'role_not_supported');
@@ -161,7 +165,7 @@ final class Pipeline
         }
 
         // The exact suggested-question texts, answered without any model call.
-        $exactSuggestionId = SuggestedQuestions::findIdByExactText($message, $role);
+        $exactSuggestionId = $this->domain === 'workstation' ? SuggestedQuestions::findIdByExactText($message, $role) : null;
 
         if ($exactSuggestionId !== null) {
             $this->traceLine("decision: exact suggested question {$exactSuggestionId} (no model call)");
@@ -170,7 +174,7 @@ final class Pipeline
         }
 
         // the candidacy chips' exact texts: answered by catalogue id, no model call
-        if (($candidacyChip = CandidacyAssistant::findIdByExactText($message, $role)) !== null) {
+        if ($this->domain === 'candidacy' && ($candidacyChip = CandidacyAssistant::findIdByExactText($message, $role)) !== null) {
             $this->traceLine("decision: exact candidacy suggested question {$candidacyChip} (no model call)");
 
             return $this->askCatalogueChip($user, $role, $candidacyChip, []);
@@ -180,6 +184,13 @@ final class Pipeline
             $this->traceLine('decision: refused, manipulation phrase (no model call)');
 
             return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_RULE, 'manipulation_phrase');
+        }
+
+        // a question that clearly belongs to the OTHER domain is redirected without any model call
+        if (AssistantDomains::belongsToOther(QuestionNormaliser::normalise($maskedQuestion), $this->domain) !== null) {
+            $this->traceLine('decision: redirected, the question belongs to the other domain (no model call)');
+
+            return $this->redirect($user, $role, AssistantLog::ANSWERED_BY_RULE);
         }
 
         $recentTurns = (int) config('assistant.recent_turns', 5);
@@ -203,7 +214,7 @@ final class Pipeline
         $catalogue = Catalogue::forRole($role, $this->domain);
         $todayLabel = Carbon::now('Asia/Kuala_Lumpur')->format('l, j F Y');
 
-        $routed = $this->callRouterWithReliability($maskedQuestion, $recentMasked, $catalogue, RouterFewShots::all(), $todayLabel, $allowFallback);
+        $routed = $this->callRouterWithReliability($maskedQuestion, $recentMasked, $catalogue, RouterFewShots::all($this->domain), $todayLabel, $allowFallback);
 
         $this->traceLine('router: '.($routed['outcome'] === 'ok'
             ? json_encode(['id' => $routed['id'], 'params' => (object) $routed['params'], 'confidence' => $routed['confidence'], 'alternatives' => $routed['alternatives'], 'clarify' => $routed['clarify'] ?? ''], JSON_UNESCAPED_SLASHES).' via '.$routed['model_used']
@@ -232,19 +243,12 @@ final class Pipeline
 
         // The id must exist in the ROLE's own catalogue -- a student never
         // gets a CGS entry, whatever the model said. Invalid output.
-        if ($entry === null || ! AssistantRoles::covers($role, $entry['roles'])) {
-            $this->traceLine("validation: id {$id} is not in the {$role} catalogue -> invalid output");
+        if ($entry === null || ! AssistantRoles::covers($role, $entry['roles']) || ! in_array($entry['domain'], [$this->domain, 'any'], true)) {
+            $this->traceLine("validation: id {$id} is not in the {$role} {$this->domain} catalogue -> invalid output");
 
             return $bypassKeywordRules
                 ? $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'unavailable', AssistantLog::OUTCOME_UNAVAILABLE, self::UNAVAILABLE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'provider_unavailable', suggestions: $this->suggestionsList($role), modelUsed: $modelUsed, errorCode: 'invalid_id')
                 : $this->fallbackAsk($user, $role, $maskedQuestion, $idMap, $recentMasked, false, $modelUsed, 'invalid_id');
-        }
-
-        if (($alike = CandidacyAssistant::preferCandidacy($id, QuestionNormaliser::normalise($maskedQuestion), $role)) !== null) {
-            $this->traceLine("validation: {$id} names no workstation word -> {$alike} (all students)");
-            $id = $alike;
-            $entry = Catalogue::find($id);
-            $routed['id'] = $id;
         }
 
         $params = $this->validatedParams($entry, $routed['params'] ?? [], $idMap);
@@ -263,7 +267,7 @@ final class Pipeline
 
         // A student's question that is plainly a CGS-only forecast is
         // never answered with the nearest student lookup instead.
-        if ($role === Role::STUDENT && $entry['kind'] === 'lookup' && self::hasReleaseCue(QuestionNormaliser::normalise($maskedQuestion)) && PeriodExtractor::parseDeterministic(QuestionNormaliser::normalise($maskedQuestion)) !== null) {
+        if ($this->domain === 'workstation' && $role === Role::STUDENT && $entry['kind'] === 'lookup' && self::hasReleaseCue(QuestionNormaliser::normalise($maskedQuestion)) && PeriodExtractor::parseDeterministic(QuestionNormaliser::normalise($maskedQuestion)) !== null) {
             $this->traceLine("validation: a student asked for a release forecast -> not {$id}, staff-only refusal");
             $result = $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'staff_only', AssistantLog::OUTCOME_REFUSED, self::STAFF_ONLY_MESSAGE, [], null, AssistantLog::ANSWERED_BY_MODEL_ROUTER, 'staff_only', suggestions: $this->suggestionsList($role), modelUsed: $modelUsed);
 
@@ -271,7 +275,7 @@ final class Pipeline
         }
 
         $confidence = (float) ($routed['confidence'] ?? 0.0);
-        $alternatives = array_values(array_filter($routed['alternatives'] ?? [], fn ($alt) => Catalogue::isAllowed($alt, $role) && $alt !== $id));
+        $alternatives = array_values(array_filter($routed['alternatives'] ?? [], fn ($alt) => Catalogue::isAllowed($alt, $role, $this->domain) && $alt !== $id));
         // router_params: the router's own params, still MASKED (placeholders, never a real ID) -- for assistant:evaluate's parameter check.
         $meta = ['catalogue_id' => $id, 'kind' => $entry['kind'], 'confidence' => $confidence, 'alternatives' => $alternatives, 'router_params' => $routed['params'] ?? [], 'model_used' => $modelUsed, 'answered_by' => AssistantLog::ANSWERED_BY_MODEL_ROUTER];
 
@@ -400,6 +404,17 @@ final class Pipeline
      */
     protected function outOfScope(User $user, string $role, string $maskedQuestion, string $answeredBy, ?string $modelUsed): array
     {
+        // the model (which only sees THIS domain) found no match, and the words belong to the other domain: the redirect, not a generic refusal
+        if (AssistantDomains::belongsToOther(QuestionNormaliser::normalise($maskedQuestion), $this->domain) !== null) {
+            return $this->redirect($user, $role, $answeredBy, $modelUsed);
+        }
+
+        if ($this->domain === 'candidacy') {
+            return AssistantDomains::hasStrongTerm(QuestionNormaliser::normalise($maskedQuestion), 'candidacy')
+                ? $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_ASKED_BACK, self::ASKED_BACK_CANDIDACY_MESSAGE, [], null, $answeredBy, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed)
+                : $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_CANDIDACY_MESSAGE, [], null, $answeredBy, 'out_of_scope', modelUsed: $modelUsed);
+        }
+
         if ($role === Role::STUDENT && (ParameterExtractor::seatNumber($maskedQuestion) !== null || ParameterExtractor::studentIdPlaceholder($maskedQuestion) !== null)) {
             $this->traceLine('decision: student named a seat number or ID -> only their own workstation');
 
@@ -427,13 +442,17 @@ final class Pipeline
      */
     protected function looksLikeStaffOnlyQuestion(string $maskedQuestion): bool
     {
+        if ($this->domain !== 'workstation') {
+            return false; // the student/CGS split of the Workstation catalogue; candidacy answers are role-gated by their own entries
+        }
+
         $normalised = QuestionNormaliser::normalise($maskedQuestion);
 
         if (self::hasReleaseCue($normalised) && PeriodExtractor::parseDeterministic($normalised) !== null) {
             return true;
         }
 
-        $cgsOnly = collect(Catalogue::keywordCandidates($normalised, 'cgs', 1, 2))
+        $cgsOnly = collect(Catalogue::keywordCandidates($normalised, 'cgs', 1, 2, 'workstation'))
             ->filter(fn ($c) => ! Catalogue::isAllowed($c['id'], Role::STUDENT))
             ->first();
 
@@ -441,7 +460,7 @@ final class Pipeline
             return false;
         }
 
-        $bestStudent = Catalogue::keywordCandidates($normalised, Role::STUDENT, 1, 1)[0]['score'] ?? 0;
+        $bestStudent = Catalogue::keywordCandidates($normalised, Role::STUDENT, 1, 1, 'workstation')[0]['score'] ?? 0;
 
         return $cgsOnly['score'] > $bestStudent;
     }
@@ -485,11 +504,12 @@ final class Pipeline
     protected function fallbackDecide(User $user, string $role, string $normalised, string $maskedQuestion, array $idMap, array $recentMasked, bool $providerDown, ?string $modelUsed, ?string $errorCode): array
     {
         $answeredBy = AssistantLog::ANSWERED_BY_RULE_FALLBACK;
-        $rawMatches = KeywordRules::matchAll($normalised);
-        $deterministic = KeywordRules::extractDeterministic($normalised, $role);
+        // the Workstation keyword rules only exist in the Workstation domain; the candidacy keyword layer (CandidacyAssistant::keywordMatch) only in the candidacy one
+        $rawMatches = $this->domain === 'workstation' ? KeywordRules::matchAll($normalised) : [];
+        $deterministic = $this->domain === 'workstation' ? KeywordRules::extractDeterministic($normalised, $role) : null;
         $deterministicName = $deterministic['name'] ?? null;
 
-        if ($role === Role::STUDENT
+        if ($this->domain === 'workstation' && $role === Role::STUDENT
             && (array_intersect($rawMatches, ['seat_lookup', 'student_lookup']) !== [] || in_array($deterministicName, ['seat_lookup', 'student_lookup'], true))) {
             $this->traceLine('fallback: student asked about someone else\'s seat');
 
@@ -500,7 +520,7 @@ final class Pipeline
         $actionId = $this->fallbackActionId($normalised, $role);
 
         if ($actionId === null && $deterministicName === 'action_request') {
-            $actionId = Catalogue::actionIdForText($normalised, $role) ?? 'action_other';
+            $actionId = Catalogue::actionIdForText($normalised, $role, $this->domain) ?? ($this->domain === 'workstation' ? 'action_other' : null);
         }
 
         if ($actionId !== null) {
@@ -514,7 +534,7 @@ final class Pipeline
         }
 
         // a plain Study Candidacy question (keyword layer of the fallback): the lookup or topic it names, for THIS role only
-        if (($candidacyId = CandidacyAssistant::keywordMatch($normalised, $role)) !== null) {
+        if ($this->domain === 'candidacy' && ($candidacyId = CandidacyAssistant::keywordMatch($normalised, $role)) !== null) {
             $entry = Catalogue::find($candidacyId);
             $this->traceLine("fallback: candidacy {$candidacyId}");
             $answer = match ($entry['kind']) {
@@ -531,7 +551,7 @@ final class Pipeline
         $isFollowUp = $period !== null && str_word_count(preg_replace('/\d+/', '', $normalised)) <= 4
             && $recentMasked !== [] && self::hasReleaseCue(QuestionNormaliser::normalise(end($recentMasked)));
 
-        if ($period !== null && (self::hasReleaseCue($normalised) || $isFollowUp)) {
+        if ($this->domain === 'workstation' && $period !== null && (self::hasReleaseCue($normalised) || $isFollowUp)) {
             if ($role === Role::STUDENT) {
                 return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'staff_only', AssistantLog::OUTCOME_REFUSED, self::STAFF_ONLY_MESSAGE, [], null, $answeredBy, 'staff_only', suggestions: $this->suggestionsList($role));
             }
@@ -590,13 +610,13 @@ final class Pipeline
             return $this->withInterpretation($this->answerGuidance($user, $role, $guidanceTopic, AssistantLog::SOURCE_TYPED, $answeredBy, $modelUsed), $guidanceTopic, []);
         }
 
-        if ($role === Role::STUDENT && $this->looksLikeStaffOnlyQuestion($maskedQuestion)) {
+        if ($this->domain === 'workstation' && $role === Role::STUDENT && $this->looksLikeStaffOnlyQuestion($maskedQuestion)) {
             return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'staff_only', AssistantLog::OUTCOME_REFUSED, self::STAFF_ONLY_MESSAGE, [], null, $answeredBy, 'staff_only', suggestions: $this->suggestionsList($role));
         }
 
         // Nothing matched: "Did you mean" chips by keyword score, plus the suggested questions.
         // Action entries are left out: clicking one could only ever give a refusal.
-        $candidates = array_filter(Catalogue::keywordCandidates($normalised, $role, 6), fn ($c) => Catalogue::find($c['id'])['kind'] !== 'action');
+        $candidates = array_filter(Catalogue::keywordCandidates($normalised, $role, 6, 2, $this->domain), fn ($c) => Catalogue::find($c['id'])['kind'] !== 'action');
         $chips = $this->chipsFor(array_column($candidates, 'id'), []);
         $this->traceLine('fallback: no match, '.count($chips).' keyword chip(s)');
 
@@ -614,7 +634,7 @@ final class Pipeline
             return null;
         }
 
-        $actionId = Catalogue::actionIdForText($normalised, $role);
+        $actionId = Catalogue::actionIdForText($normalised, $role, $this->domain);
 
         if ($actionId === null) {
             return null;
@@ -655,7 +675,7 @@ final class Pipeline
      */
     protected function answerGuidance(User $user, string $role, string $topicId, string $source, string $answeredBy, ?string $modelUsed, ?string $maskedQuestion = null, array $recentMasked = [], bool $allowFallback = true): array
     {
-        $sourceText = GuidanceLibrary::isAllowed($topicId, $role) ? GuidanceLibrary::sourceText($topicId) : null;
+        $sourceText = GuidanceLibrary::isAllowed($topicId, $role, $this->domain) ? GuidanceLibrary::sourceText($topicId) : null;
 
         if ($sourceText === null) {
             return $this->finish($user, $role, $source, 'guidance:unknown', AssistantLog::OUTCOME_ERROR, self::MISSING_TOPIC_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'missing_topic', modelUsed: $modelUsed);
@@ -690,7 +710,7 @@ final class Pipeline
      */
     protected function answerLookup(User $user, string $role, string $lookup, array $parameters, string $answeredBy, string $source = AssistantLog::SOURCE_TYPED, ?string $maskedQuestion = null, bool $allowCompose = false, ?string $modelUsed = null): array
     {
-        if (! Lookups::isAllowed($lookup, $role)) {
+        if (! Lookups::isAllowed($lookup, $role, $this->domain)) {
             return $role === Role::STUDENT && in_array($lookup, ['seat_lookup', 'student_lookup'], true)
                 ? $this->finish($user, $role, $source, 'anyone_else', AssistantLog::OUTCOME_REFUSED, self::ANYONE_ELSE_MESSAGE, [], null, $answeredBy, 'anyone_else', modelUsed: $modelUsed)
                 : $this->finish($user, $role, $source, 'staff_only', AssistantLog::OUTCOME_REFUSED, self::STAFF_ONLY_MESSAGE, [], null, $answeredBy, 'role_not_permitted', modelUsed: $modelUsed);
@@ -812,13 +832,13 @@ final class Pipeline
     public function askSuggestion(User $user, string $suggestionId, array $params = []): array
     {
         $this->answeredByOverride = null;
-        $role = AssistantRoles::roleFor($user);
+        $role = AssistantDomains::effectiveRole($user, $this->domain);
 
         if ($role === null) {
             return $this->finish($user, $user->role, AssistantLog::SOURCE_SUGGESTION, 'role_not_supported', AssistantLog::OUTCOME_REFUSED, self::ROLE_NOT_SUPPORTED_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'role_not_supported');
         }
 
-        $suggestion = SuggestedQuestions::find($suggestionId, $role);
+        $suggestion = $this->domain === 'workstation' ? SuggestedQuestions::find($suggestionId, $role) : null;
 
         if ($suggestion === null) {
             return $this->askCatalogueChip($user, $role, $suggestionId, $params);
@@ -851,7 +871,7 @@ final class Pipeline
     {
         $entry = Catalogue::find($catalogueId);
 
-        if ($entry === null || ! AssistantRoles::covers($role, $entry['roles'])) {
+        if ($entry === null || ! AssistantRoles::covers($role, $entry['roles']) || ! in_array($entry['domain'], [$this->domain, 'any'], true)) {
             return $this->finish($user, $role, AssistantLog::SOURCE_SUGGESTION, 'unknown_suggestion', AssistantLog::OUTCOME_ERROR, 'That suggested question is not available.', [], null, AssistantLog::ANSWERED_BY_DIRECT, 'unknown_suggestion');
         }
 
@@ -1067,10 +1087,10 @@ final class Pipeline
     protected function isAllowedForRole(string $name, string $role): bool
     {
         if (str_starts_with($name, 'guidance:')) {
-            return GuidanceLibrary::isAllowed(substr($name, strlen('guidance:')), $role);
+            return GuidanceLibrary::isAllowed(substr($name, strlen('guidance:')), $role, $this->domain);
         }
 
-        return Lookups::isAllowed($name, $role);
+        return Lookups::isAllowed($name, $role, $this->domain);
     }
 
     /**
@@ -1227,7 +1247,7 @@ final class Pipeline
         // Metadata only: the catalogue id (in lookup) and its kind, the
         // outcome, who decided, the model and the error code -- never
         // any question or answer text.
-        AssistantLog::record($user->id, $role, $source, $lookup, $outcome, $refusalReason, $resultCount, $this->answeredByOverride ?? $answeredBy, $modelUsed ?? $this->fallbackModelUsed, $errorCode ?? $this->fallbackErrorCode, Catalogue::kindForLogLookup($lookup));
+        AssistantLog::record($user->id, $role, $source, $lookup, $outcome, $refusalReason, $resultCount, $this->answeredByOverride ?? $answeredBy, $modelUsed ?? $this->fallbackModelUsed, $errorCode ?? $this->fallbackErrorCode, Catalogue::kindForLogLookup($lookup), $this->domain);
 
         return [
             'answer' => $text,
@@ -1238,10 +1258,18 @@ final class Pipeline
         ];
     }
 
+    /** The other domain's question asked here: a short redirect with a link to the user's page there, and the CURRENT domain's suggested questions below it. */
+    protected function redirect(User $user, string $role, string $answeredBy, ?string $modelUsed = null): array
+    {
+        $result = $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'wrong_domain', AssistantLog::OUTCOME_REFUSED, AssistantDomains::redirectMessage($this->domain), AssistantDomains::redirectLinks($user, $this->domain), null, $answeredBy, 'wrong_domain', suggestions: $this->suggestionsList($role), modelUsed: $modelUsed);
+
+        return [...$result, 'meta' => ['catalogue_id' => 'wrong_domain', 'kind' => null, 'answered_by' => $answeredBy]];
+    }
+
     /** @return array<int, array{id: string, text: string}> */
     protected function suggestionsList(string $role): array
     {
-        return collect(SuggestedQuestions::forRole($role))
+        return collect(SuggestedQuestions::forDomain($role, $this->domain))
             ->map(fn (array $s, string $id) => ['id' => $id, 'text' => $s['text']])
             ->values()
             ->all();

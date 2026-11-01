@@ -31,24 +31,26 @@ use Illuminate\Support\Carbon;
 final class Lookups
 {
     /** @return array<int, string> */
-    public static function forRole(string $role): array
+    public static function forRole(string $role, ?string $domain = null): array
     {
         $names = [];
 
         foreach (AssistantRoles::set($role) as $plain) {
-            $names = array_merge($names, match ($plain) {
-                Role::STUDENT => [...self::studentNames(), ...CandidacyAssistant::lookupNames('student')],
-                AssistantRoles::APPROVER => CandidacyAssistant::lookupNames('approver'),
-                default => [...self::cgsNames(), ...CandidacyAssistant::lookupNames('cgs')],
-            });
+            $workstation = match ($plain) {
+                Role::STUDENT => self::studentNames(),
+                AssistantRoles::APPROVER => [],
+                default => self::cgsNames(),
+            };
+            $candidacy = CandidacyAssistant::lookupNames($plain);
+            $names = array_merge($names, $domain === 'workstation' ? $workstation : ($domain === 'candidacy' ? $candidacy : [...$workstation, ...$candidacy]));
         }
 
         return array_values(array_unique($names));
     }
 
-    public static function isAllowed(string $name, string $role): bool
+    public static function isAllowed(string $name, string $role, ?string $domain = null): bool
     {
-        return in_array($name, self::forRole($role), true);
+        return in_array($name, self::forRole($role, $domain), true);
     }
 
     /** @return array<int, string> */
@@ -93,7 +95,7 @@ final class Lookups
      *
      * @return array<string, array{description: string, parameters: array<string, string>}>
      */
-    public static function definitionsForRole(string $role): array
+    public static function definitionsForRole(string $role, ?string $domain = null): array
     {
         $all = [
             'my_workstation' => ['description' => "The student's own block, room, seat, loan-valid-until date, and any termination notice.", 'parameters' => []],
@@ -131,7 +133,7 @@ final class Lookups
 
         $all += CandidacyAssistant::definitions();
 
-        return array_intersect_key($all, array_flip(self::forRole($role)));
+        return array_intersect_key($all, array_flip(self::forRole($role, $domain)));
     }
 
     /**

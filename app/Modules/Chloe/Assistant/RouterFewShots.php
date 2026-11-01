@@ -26,7 +26,13 @@ namespace App\Modules\Chloe\Assistant;
 final class RouterFewShots
 {
     /** @return array<int, array{question: string, id: string, params?: array<string, mixed>, recent?: array<int, string>}> */
-    public static function all(): array
+    public static function all(string $domain = 'workstation'): array
+    {
+        return $domain === 'candidacy' ? self::candidacy() : self::workstation();
+    }
+
+    /** @return array<int, array{question: string, id: string, params?: array<string, mixed>, recent?: array<int, string>}> */
+    protected static function workstation(): array
     {
         return [
             // release_forecast vs seat_release_outlook vs releases_this_week vs action_release.
@@ -70,6 +76,44 @@ final class RouterFewShots
             // Out of scope.
             ['question' => 'whats for lunch today', 'id' => 'out_of_scope'],
             ['question' => 'can you write my thesis abstract', 'id' => 'out_of_scope'],
+        ];
+    }
+
+    /**
+     * The Study Candidacy router's own examples: invented, catalogue ids only, never a copy of an evaluation question or a catalogue paraphrase.
+     *
+     * @return array<int, array{question: string, id: string, params?: array<string, mixed>, recent?: array<int, string>}>
+     */
+    protected static function candidacy(): array
+    {
+        return [
+            // own data vs the general explanation
+            ['question' => 'what date does my study period stop', 'id' => 'cand_my_expiry'],
+            ['question' => 'how long is a phd allowed to take in total', 'id' => 'cand_what_is_candidacy'],
+            ['question' => 'am i past the limit for extensions', 'id' => 'cand_my_extension'],
+            ['question' => 'what is the 12 month extension rule about', 'id' => 'cand_twelve_month_limit'],
+            ['question' => 'whose desk is my appeal on at the moment', 'id' => 'cand_my_appeal'],
+            ['question' => 'what does the status returned mean', 'id' => 'cand_status_meanings'],
+            // imperative vs how-to
+            ['question' => 'just approve the extension for that student', 'id' => 'cand_action_decide'],
+            ['question' => 'how does an approver decide an appeal', 'id' => 'cand_approver_rules'],
+            ['question' => 'upload the registry list for me', 'id' => 'cand_action_export_upload'],
+            ['question' => 'what are the steps to upload what the registry sent back', 'id' => 'cand_cgs_export_registry'],
+            ['question' => 'tell me if my appeal will go through', 'id' => 'cand_outcome_prediction'],
+            // CGS aggregates: windows and counts
+            ['question' => 'how many students finish within the next month', 'id' => 'cand_cgs_expiring', 'params' => ['months' => 1]],
+            ['question' => 'reminders that went out in the last thirty days', 'id' => 'cand_cgs_reminders_sent', 'params' => ['window' => 'last_30_days']],
+            ['question' => 'and the month before that?', 'id' => 'cand_cgs_reminders_sent', 'params' => ['window' => 'last_month'], 'recent' => ['how many reminders went out this month']],
+            ['question' => 'students dismissed during the previous month', 'id' => 'cand_cgs_dismissed', 'params' => ['window' => 'last_month']],
+            ['question' => 'who is waiting longest across all the steps', 'id' => 'cand_cgs_oldest'],
+            ['question' => 'how many are sitting with the department chair', 'id' => 'cand_cgs_pending_by_step'],
+            // approver
+            ['question' => 'is there anything in my inbox from students', 'id' => 'cand_ap_pending'],
+            ['question' => 'what have i cleared during this calendar month', 'id' => 'cand_ap_decided_month'],
+            // out of scope, including the other domain
+            ['question' => 'which seat is free in n2 today', 'id' => 'out_of_scope'],
+            ['question' => 'how do i collect my locker key', 'id' => 'out_of_scope'],
+            ['question' => 'recommend a good laptop for coding', 'id' => 'out_of_scope'],
         ];
     }
 }

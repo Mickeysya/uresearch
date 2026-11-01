@@ -11,9 +11,12 @@
     // $wsaDomain: 'workstation' (default) or 'candidacy' -- the page only gives the assistant a PRIOR (that domain's entries first and its own suggested questions);
     // it is the same assistant, endpoint and rules either way. $wsaStatic is the old "coming soon" mode and is no longer used by any page.
     $wsaStatic = $wsaStatic ?? null;
-    $wsaDomain = ($wsaDomain ?? 'workstation') === 'candidacy' ? 'candidacy' : 'workstation';
-    $wsaName = $wsaDomain === 'candidacy' ? 'Study Candidacy Assistant' : 'Workstation Assistant';
-    $wsaRole = auth()->check() ? ($wsaStatic ? 'static' : \App\Modules\Chloe\Assistant\AssistantRoles::roleFor(auth()->user())) : null;
+    $wsaPage = request()->route()?->getName();
+    // the page's domain comes from config('assistant.domain_pages'); the include's own $wsaDomain is only used for a page that is not mapped (and then the server will refuse it)
+    $wsaDomain = \App\Modules\Chloe\Assistant\AssistantDomains::forPage($wsaPage) ?? (($wsaDomain ?? 'workstation') === 'candidacy' ? 'candidacy' : 'workstation');
+    $wsaName = \App\Modules\Chloe\Assistant\AssistantDomains::title($wsaDomain);
+    $wsaRole = auth()->check() ? ($wsaStatic ? 'static' : \App\Modules\Chloe\Assistant\AssistantDomains::effectiveRole(auth()->user(), $wsaDomain)) : null;
+    $wsaToken = auth()->check() && $wsaPage ? \App\Modules\Chloe\Assistant\AssistantDomains::token($wsaDomain, auth()->id(), $wsaPage) : '';
 @endphp
 @if ($wsaRole !== null)
     @php
@@ -47,6 +50,9 @@
         id="wsa-root"
         data-role="{{ $wsaRole }}"
         data-domain="{{ $wsaDomain }}"
+        data-page="{{ $wsaPage }}"
+        data-token="{{ $wsaToken }}"
+        data-placeholder="{{ \App\Modules\Chloe\Assistant\AssistantDomains::placeholder($wsaDomain) }}"
         data-csrf="{{ csrf_token() }}"
         data-char-limit="{{ (int) config('assistant.max_question_length', 300) }}"
         data-recent-turns="{{ (int) config('assistant.recent_turns', 5) }}"
@@ -123,7 +129,7 @@
 
             <form id="wsa-form" class="wsa-footer" autocomplete="off">
                 <div class="wsa-input-row">
-                    <input type="text" id="wsa-input" class="wsa-input" placeholder="Ask a question" maxlength="{{ (int) config('assistant.max_question_length', 300) }}" aria-label="Ask a question">
+                    <input type="text" id="wsa-input" class="wsa-input" placeholder="{{ \App\Modules\Chloe\Assistant\AssistantDomains::placeholder($wsaDomain) }}" maxlength="{{ (int) config('assistant.max_question_length', 300) }}" aria-label="Ask a question">
                     <button type="submit" id="wsa-send" class="wsa-send-btn" aria-label="Send">
                         {{-- Round 6 PART 7: an upward arrow, ChatGPT-style, not the old paper plane. --}}
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -542,6 +548,9 @@
             // Static (coming soon) mode: one fixed line, nothing to ask, and no request is ever made.
             var isStatic = root.getAttribute('data-static') === '1';
             var wsaDomain = root.getAttribute('data-domain') || 'workstation';
+            var wsaPage = root.getAttribute('data-page') || '', wsaToken = root.getAttribute('data-token') || '';
+            var wsaDomainQuery = 'domain=' + encodeURIComponent(wsaDomain) + '&page=' + encodeURIComponent(wsaPage) + '&token=' + encodeURIComponent(wsaToken);
+            var wsaClaim = { domain: wsaDomain, page: wsaPage, token: wsaToken };
             if (isStatic) { input.disabled = true; input.placeholder = 'Coming soon'; sendBtn.disabled = true; }
 
             // PART 2 #8: conversation lives only in this closure's memory --
@@ -745,7 +754,7 @@
                 if (isStatic) return Promise.resolve([]);
                 if (suggestionsCache) return Promise.resolve(suggestionsCache);
 
-                return fetch(suggestionsUrl + (wsaDomain === 'candidacy' ? (suggestionsUrl.indexOf('?') === -1 ? '?' : '&') + 'domain=candidacy' : ''), {
+                return fetch(suggestionsUrl + (suggestionsUrl.indexOf('?') === -1 ? '?' : '&') + wsaDomainQuery, {
                     headers: { Accept: 'application/json' },
                     credentials: 'same-origin',
                 }).then(function (res) {
@@ -781,7 +790,7 @@
                             'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': csrfToken,
                         },
-                        body: JSON.stringify({ id: suggestion.id, params: suggestion.params || {} }),
+                        body: JSON.stringify(Object.assign({ id: suggestion.id, params: suggestion.params || {} }, wsaClaim)),
                     });
                 });
             }
@@ -803,7 +812,7 @@
                             'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': csrfToken,
                         },
-                        body: JSON.stringify({ message: text, recent: recentUserQuestions.slice(0, -1), domain: wsaDomain }),
+                        body: JSON.stringify(Object.assign({ message: text, recent: recentUserQuestions.slice(0, -1) }, wsaClaim)),
                     });
                 });
             }
@@ -921,7 +930,7 @@
 
                 var alreadyShown = false;
                 try {
-                    alreadyShown = sessionStorage.getItem('wsaGreetingShown') === '1';
+                    alreadyShown = sessionStorage.getItem('wsaGreetingShown:' + wsaDomain) === '1';
                 } catch (e) {}
 
                 if (alreadyShown) return;
@@ -934,7 +943,7 @@
                     requestAnimationFrame(function () { greeting.classList.add('wsa-greeting-visible'); });
 
                     try {
-                        sessionStorage.setItem('wsaGreetingShown', '1');
+                        sessionStorage.setItem('wsaGreetingShown:' + wsaDomain, '1');
                     } catch (e) {}
 
                     setTimeout(hideGreeting, 6000);
@@ -993,6 +1002,8 @@
 
             function resetConversation() {
                 recentUserQuestions = [];
+                // the conversation lives only in this page (never stored); the one thing kept per domain is the greeting flag, and New chat clears both domains' keys
+                try { ['workstation', 'candidacy'].forEach(function (d) { sessionStorage.removeItem('wsaGreetingShown:' + d); }); } catch (e) { /* storage may be blocked */ }
                 if (pendingController) pendingController.abort();
                 messages.textContent = '';
                 hasOpenedBefore = true;

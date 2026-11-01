@@ -257,6 +257,39 @@ return [
     // Every phrase here must be recognised by one Catalogue action entry's
     // own 'pattern', and every action entry by at least one phrase here --
     // CatalogueTest checks both directions.
+    /*
+    |--------------------------------------------------------------------------
+    | Domains: "workstation" and "candidacy"
+    |--------------------------------------------------------------------------
+    | Two assistants' worth of CONTENT on one engine. Each domain has its own catalogue, suggested questions, guidance topics, router prompt, evaluation set and
+    | log value; one never answers the other. A page belongs to a domain by its route name (domain_pages, first match wins): to give a new page a domain, add ONE
+    | line there. strong_terms are words that clearly belong to a domain: a question with strong terms of the OTHER domain and none of the current one is redirected
+    | without any model call. Words that exist in both worlds (expiry, student, CGS, programme) are deliberately in neither list.
+    */
+    'domains' => [
+        'workstation' => [
+            'title' => 'Workstation Assistant',
+            'placeholder' => 'Ask about workstations or locker keys',
+            'roles' => ['student', 'cgs'],
+            'redirect' => 'I can only answer questions about workstations and locker keys here. For Study Candidacy questions, please use the assistant on the Study Candidacy pages.',
+            'strong_terms' => ['seat', 'seats', 'workstation', 'workstations', 'locker', 'key', 'keys', 'block', 'room', 'rooms', 'vacate', 'term of use', 'desk', 'maintenance', 'occupancy', 'occupied', 'n2', 'j2'],
+        ],
+        'candidacy' => [
+            'title' => 'Study Candidacy Assistant',
+            'placeholder' => 'Ask about your candidacy or appeals',
+            'roles' => ['student', 'approver', 'cgs'],
+            'redirect' => 'I can only answer questions about Study Candidacy (appeals, approvals, reminders, expiry and dismissal) here. For workstation or locker key questions, please use the assistant on the Workstation pages.',
+            'strong_terms' => ['appeal', 'appeals', 'approver', 'approvers', 'approve', 'supervisor', 'chair', 'dean', 'memo', 'softbound', 'soft bound', 'soft-bound', 'dismissal', 'dismiss', 'dismissed', 'reminder', 'reminders', 'signature', 'extension', 'candidacy', 'candidature'],
+        ],
+    ],
+
+    'domain_pages' => [
+        'workstation.assistant.*' => null,
+        'workstation.*' => 'workstation',
+        'candidacy.*' => 'candidacy',
+        'candidacy-appeal.*' => 'candidacy',
+    ],
+
     'action_phrases' => [
         'release', 'reassign', 'assign', 'mark as collected', 'mark as returned',
         'mark the key', 'set maintenance', 'terminate', 'withdraw',

@@ -313,8 +313,8 @@ in code without an entry, or the reverse.
 chart reads; the last seven reuse the exact `WorkstationStatistics` methods
 the Insights charts read, so chat and page numbers cannot disagree.
 
-**Guidance topics:** 15 student (`docs/knowledge/assistant/student/*.md`) +
-15 CGS (`docs/knowledge/assistant/cgs/*.md`), loaded fresh on every call.
+**Guidance topics:** 15 student (`docs/knowledge/workstation/student/*.md`) +
+15 CGS (`docs/knowledge/workstation/cgs/*.md`), loaded fresh on every call.
 
 **Actions (11, never executed):** release, reassign, assign, mark key
 collected, mark key returned, set maintenance, restore, terminate or

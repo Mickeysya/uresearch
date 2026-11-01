@@ -57,6 +57,7 @@ class AssistantLog extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'domain',
         'user_id', 'role', 'occurred_at', 'source', 'lookup',
         'outcome', 'refusal_reason', 'result_count', 'answered_by',
         'model_used', 'error_code', 'catalogue_kind',
@@ -92,6 +93,7 @@ class AssistantLog extends Model
         ?string $modelUsed = null,
         ?string $errorCode = null,
         ?string $catalogueKind = null,
+        string $domain = 'workstation',
     ): self {
         return self::create([
             'user_id' => $userId,
@@ -105,6 +107,7 @@ class AssistantLog extends Model
             'model_used' => $modelUsed,
             'error_code' => $errorCode,
             'catalogue_kind' => $catalogueKind,
+            'domain' => $domain,
         ]);
     }
 }

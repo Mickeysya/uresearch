@@ -39,13 +39,24 @@ class CandidacyAssistantTest extends TestCase
         $this->candidacy->update(['candidacy_expiry_date' => '2027-03-01', 'original_expiry_date' => '2027-03-01']);
     }
 
+    protected function candidacy(): Pipeline
+    {
+        return app(Pipeline::class)->setDomain('candidacy');
+    }
+
     protected function ask(User $user, string $question, ?string $routeTo = null, array $params = []): array
     {
         if ($routeTo !== null) {
             FakeModel::queueRoute(['id' => $routeTo, 'params' => $params]);
         }
 
-        return app(Pipeline::class)->ask($user, $question, []);
+        return $this->candidacy()->ask($user, $question, []);
+    }
+
+    /** What a candidacy page's widget sends with every request: its domain, its page and the token it was rendered with. */
+    protected function claim(User $user, string $domain = 'candidacy', string $page = 'candidacy.status'): array
+    {
+        return ['domain' => $domain, 'page' => $page, 'token' => \App\Modules\Chloe\Assistant\AssistantDomains::token($domain, $user->id, $page)];
     }
 
     protected function userFor(string $role): User
@@ -80,7 +91,7 @@ class CandidacyAssistantTest extends TestCase
 
             $allowed = AssistantRoles::covers($role, $entry['roles']);
             $this->assertSame($allowed, Catalogue::isAllowed($entry['id'], $role), "{$entry['id']} for {$role}");
-            $this->assertSame($allowed, in_array($entry['id'], array_column(Catalogue::forRole($role), 'id'), true), "{$entry['id']} listed for {$role}");
+            $this->assertSame($allowed, in_array($entry['id'], array_column(Catalogue::forRole($role, 'candidacy'), 'id'), true), "{$entry['id']} listed for {$role}");
 
             // the model naming an entry the role does not own never answers with it
             $result = $this->ask($user, 'tell me about my candidacy appeal', $entry['id']);
@@ -98,7 +109,7 @@ class CandidacyAssistantTest extends TestCase
 
     public function test_the_catalogue_has_the_required_number_of_entries_per_role(): void
     {
-        $count = fn (string $role) => count(array_filter(Catalogue::forRole($role), fn ($e) => $e['domain'] === 'candidacy' && $e['kind'] !== 'action'));
+        $count = fn (string $role) => count(array_filter(Catalogue::forRole($role, 'candidacy'), fn ($e) => $e['kind'] !== 'action' && $e['kind'] !== 'out_of_scope'));
 
         $this->assertGreaterThanOrEqual(18, $count('student'));
         $this->assertGreaterThanOrEqual(12, $count('approver'));
@@ -193,7 +204,7 @@ class CandidacyAssistantTest extends TestCase
     public function test_the_fallback_keyword_layer_and_the_imperative_guard(): void
     {
         FakeModel::forceUnavailable();
-        $pipeline = app(Pipeline::class);
+        $pipeline = $this->candidacy();
 
         $this->assertStringContainsString('expires on 1 Mar 2027', $pipeline->ask($this->student, 'when does my candidacy expire', [])['answer']);
         $this->assertSame('refused', $pipeline->ask($this->student, 'submit my appeal for me', [])['outcome']);
@@ -260,12 +271,12 @@ class CandidacyAssistantTest extends TestCase
         $this->assertSame($before, FakeModel::routeCallCount());
         $this->assertStringContainsString('1 Mar 2027', $result['answer']);
 
-        $suggestions = $this->actingAs($this->student)->getJson(route('workstation.assistant.suggestions', ['domain' => 'candidacy']))->assertOk()->json('suggestions');
+        $suggestions = $this->actingAs($this->student)->getJson(route('workstation.assistant.suggestions', $this->claim($this->student)))->assertOk()->json('suggestions');
         $this->assertCount(6, $suggestions);
         $this->assertSame('cand_my_expiry', $suggestions[0]['id']);
 
-        $this->actingAs($this->student)->postJson(route('workstation.assistant.suggestion'), ['id' => 'cand_my_expiry'])->assertOk()->assertJsonPath('outcome', 'answered');
-        $this->actingAs($this->student)->postJson(route('workstation.assistant.suggestion'), ['id' => 'cand_cgs_expiring'])->assertOk()->assertJsonPath('outcome', 'error');
+        $this->actingAs($this->student)->postJson(route('workstation.assistant.suggestion'), ['id' => 'cand_my_expiry'] + $this->claim($this->student))->assertOk()->assertJsonPath('outcome', 'answered');
+        $this->actingAs($this->student)->postJson(route('workstation.assistant.suggestion'), ['id' => 'cand_cgs_expiring'] + $this->claim($this->student))->assertOk()->assertJsonPath('outcome', 'error');
     }
 
     public function test_the_interpreted_as_line_reads_naturally_with_and_without_parameters(): void
@@ -274,15 +285,5 @@ class CandidacyAssistantTest extends TestCase
         $this->assertSame('How many students expire within 3 months?', $this->ask($this->cgsUser, 'how many are expiring', 'cand_cgs_expiring')['interpreted_as']);
         $this->assertSame('How many students were dismissed last month?', $this->ask($this->cgsUser, 'dismissed last month', 'cand_cgs_dismissed', ['window' => 'last_month'])['interpreted_as']);
         $this->assertSame('How many students were dismissed this month?', $this->ask($this->cgsUser, 'dismissed lately', 'cand_cgs_dismissed')['interpreted_as']);
-    }
-
-    public function test_a_question_about_students_is_not_answered_with_the_seat_holder_lookup(): void
-    {
-        $swapped = $this->ask($this->cgsUser, 'how many students expire within 2 months', 'candidacy_expiring', ['months' => 2]);
-        $this->assertSame('cand_cgs_expiring', $swapped['meta']['catalogue_id']);
-        $this->assertStringContainsString('Students whose candidacy expires within 2 months', $swapped['answer']);
-
-        $kept = $this->ask($this->cgsUser, 'how many seat holders expire within 2 months', 'candidacy_expiring', ['months' => 2]);
-        $this->assertSame('candidacy_expiring', $kept['meta']['catalogue_id']);
     }
 }

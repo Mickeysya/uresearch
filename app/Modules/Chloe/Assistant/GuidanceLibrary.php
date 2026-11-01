@@ -9,7 +9,7 @@ use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\File;
 
 /**
- * PART 5. One markdown section per topic, under docs/knowledge/assistant/
+ * PART 5. One markdown section per topic, under docs/knowledge/workstation/
  * {student,cgs}/<topic>.md -- loaded fresh on every call (never cached, so
  * an edit to a knowledge file takes effect immediately), with
  * {{placeholder}} tokens filled from the real code constants at load time
@@ -40,24 +40,26 @@ final class GuidanceLibrary
     ];
 
     /** CGS may also ask the student topics; a student must never reach a CGS one. */
-    public static function topicsForRole(string $role): array
+    public static function topicsForRole(string $role, ?string $domain = null): array
     {
         $topics = [];
 
         foreach (AssistantRoles::set($role) as $plain) {
-            $topics = array_merge($topics, match ($plain) {
-                Role::STUDENT => [...self::STUDENT_TOPICS, ...CandidacyAssistant::topicsFor('student')],
-                AssistantRoles::APPROVER => CandidacyAssistant::topicsFor('approver'),
-                default => [...self::STUDENT_TOPICS, ...self::CGS_TOPICS, ...CandidacyAssistant::topicsFor('cgs')],
-            });
+            $workstation = match ($plain) {
+                Role::STUDENT => self::STUDENT_TOPICS,
+                AssistantRoles::APPROVER => [],
+                default => [...self::STUDENT_TOPICS, ...self::CGS_TOPICS],
+            };
+            $candidacy = CandidacyAssistant::topicsFor($plain);
+            $topics = array_merge($topics, $domain === 'workstation' ? $workstation : ($domain === 'candidacy' ? $candidacy : [...$workstation, ...$candidacy]));
         }
 
         return array_values(array_unique($topics));
     }
 
-    public static function isAllowed(string $topic, string $role): bool
+    public static function isAllowed(string $topic, string $role, ?string $domain = null): bool
     {
-        return in_array($topic, self::topicsForRole($role), true);
+        return in_array($topic, self::topicsForRole($role, $domain), true);
     }
 
     /**
@@ -115,7 +117,7 @@ final class GuidanceLibrary
         }
 
         $directory = in_array($topic, self::CGS_TOPICS, true) ? 'cgs' : 'student';
-        $path = base_path("docs/knowledge/assistant/{$directory}/{$topic}.md");
+        $path = base_path("docs/knowledge/workstation/{$directory}/{$topic}.md");
 
         if (! File::exists($path)) {
             return null;
@@ -192,7 +194,7 @@ final class GuidanceLibrary
      */
     public static function knowledgeTextForRole(string $role, string $maskedQuestion = ''): array
     {
-        $topics = self::topicsForRole($role);
+        $topics = self::topicsForRole($role, 'workstation'); // the model's knowledge text is the Workstation domain's only; candidacy topics are shown as written
         $sections = [];
 
         foreach ($topics as $topic) {

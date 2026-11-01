@@ -183,26 +183,6 @@ final class CandidacyAssistant
         return null;
     }
 
-    // ------------------------------------------------------------------ router guard
-
-    /** Workstation lookups that a candidacy question is easily mistaken for => the candidacy lookup that answers the same words about ALL students. */
-    protected const LOOK_ALIKES = ['candidacy_expiring' => 'cand_cgs_expiring'];
-
-    /**
-     * The router's choice is checked, never trusted: "how many students expire within 2 months" names students, not seat holders, so when the chosen Workstation lookup has a
-     * candidacy look-alike the role owns and the question carries no workstation word (seat, room, key, loan, holder ...), the candidacy lookup answers it.
-     */
-    public static function preferCandidacy(string $chosenId, string $normalisedQuestion, string $role): ?string
-    {
-        $alike = self::LOOK_ALIKES[$chosenId] ?? null;
-
-        if ($alike === null || ! AssistantRoles::covers($role, ['cgs']) || ! Catalogue::isAllowed($alike, $role)) {
-            return null;
-        }
-
-        return preg_match('/\b(seat|seats|workstation|workstations|desk|room|rooms|locker|key|keys|loan|holder|holders|block|occupied|occupancy)\b/', $normalisedQuestion) ? null : $alike;
-    }
-
     // ------------------------------------------------------------------ refusals
 
     /** @return array{text:string, links: array<int, array{label:string,url:string}>} */

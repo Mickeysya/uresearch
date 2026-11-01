@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\File;
 /**
  * PART C: the twelve suggested questions' answers -- never a model call,
  * so picking one never spends quota. STATIC ones (S1, S4, S5, S6, C4, C5,
- * C6) are one "### id" section of docs/knowledge/assistant/
+ * C6) are one "### id" section of docs/knowledge/workstation/
  * suggested_answers.md, substituted through GuidanceLibrary's own
  * {{token}} values. DYNAMIC ones (S2, S3, C1, C2, C3) are built here from
  * the exact same lookups/functions the chat's own lookups and the
@@ -32,7 +32,7 @@ final class SuggestedAnswers
             return $sections;
         }
 
-        $path = base_path('docs/knowledge/assistant/suggested_answers.md');
+        $path = base_path('docs/knowledge/workstation/suggested_answers.md');
         $sections = [];
 
         if (! File::exists($path)) {
