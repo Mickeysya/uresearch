@@ -170,9 +170,9 @@
             });
             var hit = svgEl('rect', { x: padL + slot * i, y: padT, width: slot, height: plotH + padB - 6, fill: 'transparent' });
             grp.appendChild(hit);
-            var lab = svgEl('text', { x: x + bw / 2, y: height - padB + 16, 'text-anchor': 'middle', class: 'wsi-category-label' }); lab.textContent = g.short || g.label; svg.appendChild(lab);
-            if (g.sub) { var sub = svgEl('text', { x: x + bw / 2, y: height - padB + 30, 'text-anchor': 'middle', class: 'wsi-axis-label' }); sub.textContent = g.sub; svg.appendChild(sub); }
-            if (totals[i] > 0) { var tt = svgEl('text', { x: x + bw / 2, y: y(totals[i]) - 4, 'text-anchor': 'middle', class: 'wsi-value-label' }); tt.textContent = totals[i]; svg.appendChild(tt); }
+            var narrow = slot < 30, lab = svgEl('text', { x: x + bw / 2, y: height - padB + 16, 'text-anchor': 'middle', class: 'wsi-category-label' }); lab.textContent = narrow ? (g.narrow || (g.short || g.label).slice(0, 1)) : (g.short || g.label); svg.appendChild(lab);
+            if (g.sub) { var sub = svgEl('text', { x: x + bw / 2, y: height - padB + 30, 'text-anchor': 'middle', class: 'wsi-axis-label' }); sub.textContent = (narrow && /^\d{4}$/.test(g.sub)) ? "'" + g.sub.slice(2) : g.sub; svg.appendChild(sub); }
+            if (totals[i] > 0 && slot >= 20) { var tt = svgEl('text', { x: x + bw / 2, y: y(totals[i]) - 4, 'text-anchor': 'middle', class: 'wsi-value-label' }); tt.textContent = totals[i]; svg.appendChild(tt); }
             svg.appendChild(grp);
             wire(grp, g.dim, g.value, function () { return g.tip; }, g.onClick);
         });
@@ -264,6 +264,72 @@
     function renderAll() { renderStrip(); renderKpis(); charts.forEach(function (c) { c.paint(); }); }
     // (chart builders are registered below, one stage at a time)
     //@@CHARTS@@
+    // ================================================================ Chart 1: Candidacy expiry forecast (Year / Quarter / Month, drill down)
+    var grain = 'month', drill = []; // drill = [{grain:'year', key:'2027'}, {grain:'quarter', key:'2027-Q2'}]
+    function ymAdd(ym, n) { var y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(5, 7), 10) - 1 + n; y += Math.floor(m / 12); m = ((m % 12) + 12) % 12; return y + '-' + ('0' + (m + 1)).slice(-2); }
+    function quarterOf(ym) { return ym.slice(0, 4) + '-Q' + Math.ceil(parseInt(ym.slice(5, 7), 10) / 3); }
+    function monthsOfQuarter(q) { var y = q.slice(0, 4), n = parseInt(q.slice(6), 10); return [0, 1, 2].map(function (i) { return y + '-' + ('0' + ((n - 1) * 3 + i + 1)).slice(-2); }); }
+    function monthsOfYear(y) { var out = []; for (var i = 1; i <= 12; i++) { out.push(y + '-' + ('0' + i).slice(-2)); } return out; }
+    function lastExpiryMonth() { var m = DATA.rows.reduce(function (a, r) { return r.month > a ? r.month : a; }, DATA.today.slice(0, 7)); return m; }
+    function forecastPeriods() {
+        var thisMonth = DATA.today.slice(0, 7), out = [], last = drill.length ? drill[drill.length - 1] : null;
+        if (grain === 'month') {
+            var months = last ? monthsOfQuarter(last.key) : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(function (i) { return ymAdd(thisMonth, i); });
+            return months.map(function (m) { return { key: m, label: monthLabel(m), short: monthShort(m), sub: (m === months[0] || m.slice(5) === '01') ? m.slice(0, 4) : '', months: [m] }; });
+        }
+        if (grain === 'quarter') {
+            var qs = [];
+            if (last) { for (var i = 1; i <= 4; i++) { qs.push(last.key + '-Q' + i); } }
+            else { var q = quarterOf(thisMonth), end = quarterOf(lastExpiryMonth()); var yy = parseInt(q.slice(0, 4), 10), qq = parseInt(q.slice(6), 10); for (var n = 0; n < 40; n++) { var key = yy + '-Q' + qq; qs.push(key); if (key >= end && qs.length >= 4) { break; } qq++; if (qq > 4) { qq = 1; yy++; } } }
+            return qs.map(function (k) { return { key: k, label: 'Q' + k.slice(6) + ' ' + k.slice(0, 4), short: 'Q' + k.slice(6), sub: k.slice(0, 4), months: monthsOfQuarter(k) }; });
+        }
+        var ys = [], y0 = parseInt(thisMonth.slice(0, 4), 10), y1 = parseInt(lastExpiryMonth().slice(0, 4), 10);
+        for (var y = y0; y <= Math.max(y1, y0); y++) { ys.push(String(y)); }
+        return ys.map(function (k) { return { key: k, label: k, short: k, sub: '', months: monthsOfYear(k) }; });
+    }
+    function sameMonths(a, b) { return a.length === b.length && a.every(function (x) { return b.indexOf(x) !== -1; }); }
+    function paintForecast() {
+        var periods = forecastPeriods(), ctx = ctxRows(), hl = hlRows(ctx), active = hlActive();
+        var rowsIn = function (rows, p) { return rows.filter(function (r) { return p.months.indexOf(r.month) !== -1; }); };
+        var running = 0, line = periods.map(function (p) { running += rowsIn(ctx, p).length; return running; });
+        var groups = periods.map(function (p) {
+            var inCtx = rowsIn(ctx, p), segs = catSegs(inCtx), solid = active ? catSegs(rowsIn(hl, p)) : null, total = inCtx.length;
+            var tip = [p.label, plural(total, 'student', 'students') + ' expire'].concat(CAT_ORDER.map(function (k) { return DATA.categories[k] + ': ' + segs[k] + (solid ? ' (' + solid[k] + ' highlighted)' : ''); }));
+            return { key: p.key, label: p.label, short: p.short, sub: p.sub, segs: segs, solid: solid, tip: tip, dim: 'period', value: p.months[0],
+                onClick: function (additive) {
+                    if (!additive) { setHighlight('period', p.months); return; }
+                    var all = p.months.every(function (m) { return isOn('period', m); });
+                    p.months.forEach(function (m) { var i = highlight.period.indexOf(m); if (all && i !== -1) { highlight.period.splice(i, 1); } else if (!all && i === -1) { highlight.period.push(m); } });
+                    onChange();
+                } };
+        });
+        var box = document.getElementById('wci-forecast');
+        stackedColumns(box, { label: 'Candidacy expiry forecast by period', groups: groups, order: CAT_ORDER, colors: CAT_COLOR, line: line, lineColor: C.slate, height: 300, emptyText: 'No candidacy expires in this period for these filters.' });
+        catLegend(box, ctx); legend(box, [{ label: 'Running total of the periods shown', color: C.slate, kind: 'line' }]);
+        // pressed state of the bars follows the highlighted months
+        box.querySelectorAll('g.wsi-mark').forEach(function (g, i) { g.setAttribute('aria-pressed', periods[i].months.every(function (m) { return highlight.period.indexOf(m) !== -1; }) ? 'true' : 'false'); });
+        document.querySelectorAll('#wci-grain button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.grain === grain ? 'true' : 'false'); });
+        document.getElementById('wci-forecast-subtitle').textContent = ({ year: 'Year by year.', quarter: 'Quarter by quarter.', month: 'Month by month' + (drill.length ? ' in ' + drill[drill.length - 1].key + '.' : ', the next 12 months.') })[grain];
+        // breadcrumb and the drill-down button
+        var bc = document.getElementById('wci-breadcrumb'); clear(bc);
+        var levels = ['year', 'quarter', 'month'], showCrumb = drill.length > 0;
+        bc.hidden = !(showCrumb);
+        if (showCrumb) {
+            var all = el('button', { type: 'button', class: 'wsi-link' }, 'All years'); all.addEventListener('click', function () { drill = []; grain = 'year'; highlight.period = []; onChange(); });
+            bc.appendChild(all);
+            drill.forEach(function (d, i) { bc.appendChild(document.createTextNode(' › ')); if (i === drill.length - 1) { bc.appendChild(el('span', {}, d.key)); } else { var b2 = el('button', { type: 'button', class: 'wsi-link' }, d.key); b2.addEventListener('click', function () { drill = drill.slice(0, i + 1); grain = levels[i + 1]; highlight.period = []; onChange(); }); bc.appendChild(b2); } });
+        }
+        var old = box.querySelector('.wsi-drill-btn'); if (old) { old.remove(); }
+        var sel = highlight.period.length ? periods.filter(function (p) { return p.months.every(function (m) { return highlight.period.indexOf(m) !== -1; }); }) : [];
+        if (grain !== 'month' && sel.length === 1 && sameMonths(highlight.period, sel[0].months)) {
+            var db = el('button', { type: 'button', class: 'wsi-drill-btn' }, 'Drill down into ' + sel[0].label + ' ›');
+            db.addEventListener('click', function () { drill.push({ grain: grain, key: sel[0].key }); grain = grain === 'year' ? 'quarter' : 'month'; highlight.period = []; onChange(); });
+            box.appendChild(db);
+        }
+    }
+    document.querySelectorAll('#wci-grain button').forEach(function (b) { b.addEventListener('click', function () { grain = b.dataset.grain; drill = []; highlight.period = []; onChange(); }); });
+    charts.push({ id: 'forecast', paint: paintForecast });
+
 
     // ---------------------------------------------------------------- live update
     var liveVersion = LIVE.version, livePaused = false, liveTimer = null;
