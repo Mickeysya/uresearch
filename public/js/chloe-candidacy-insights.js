@@ -432,6 +432,24 @@
     }
     charts.push({ id: 'reminders', paint: paintReminders });
 
+    // ================================================================ Chart 4: Dismissal pipeline
+    function paintDismissals() {
+        var months = []; for (var i = 11; i >= 0; i--) { months.push(ymAdd(DATA.today.slice(0, 7), -i)); }
+        var rows = DATA.dismissed.filter(demographic), sel = highlight.dismissedMonth, active = sel.length > 0;
+        var groups = months.map(function (m) {
+            var n = rows.filter(function (r) { return r.month === m; }).length;
+            return { key: m, label: monthLabel(m), short: monthShort(m), sub: (m === months[0] || m.slice(5) === '01') ? m.slice(0, 4) : '', segs: { d: n }, solid: active ? { d: sel.indexOf(m) !== -1 ? n : 0 } : null, tip: [monthLabel(m), plural(n, 'student', 'students') + ' dismissed'], dim: 'dismissedMonth', value: m };
+        });
+        var box = document.getElementById('wci-dismissals');
+        stackedColumns(box, { label: 'Students dismissed per month', groups: groups, order: ['d'], colors: { d: C.blue }, height: 240, emptyText: 'Nobody has been dismissed in these months for these filters.' });
+        var cands = candidatesCtx(), tiles = document.getElementById('wci-dismissal-tiles'); clear(tiles);
+        [['Candidates not yet exported', cands.filter(function (c) { return !c.exported; }).length], ['Exported, awaiting Registry', cands.filter(function (c) { return c.exported; }).length]].forEach(function (t) {
+            var tile = el('a', { class: 'wsi-tile', href: LIVE.dismissalsUrl + (t[0].indexOf('not yet') !== -1 ? '?group=not_exported' : '?group=exported') });
+            tile.appendChild(el('div', { class: 'wsi-tile-value wsi-tabular' }, String(t[1]))); tile.appendChild(el('div', { class: 'wsi-tile-label' }, t[0])); tiles.appendChild(tile);
+        });
+    }
+    charts.push({ id: 'dismissals', paint: paintDismissals });
+
 
     // ---------------------------------------------------------------- live update
     var liveVersion = LIVE.version, livePaused = false, liveTimer = null;

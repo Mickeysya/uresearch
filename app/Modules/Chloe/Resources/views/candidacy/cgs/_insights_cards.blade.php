@@ -58,3 +58,20 @@
                 <div class="wsi-card-body" id="wci-reminders"></div>
                 <p class="wsi-footer-note">Line = students who submitted the Softbound thesis or an appeal within 30 days after a reminder, counted in the month the reminder was sent. Response rate = those reminders divided by all reminders in the six months shown plus this month.</p>
             </div>
+
+            <div class="wsi-layer-head">
+                <h2 class="wsi-layer-title">Where are the dismissals?</h2>
+                <p class="wsi-layer-desc">The live Dismissal List and the students the Registry has confirmed so far.</p>
+            </div>
+
+            <div class="wsi-span-12 wsi-card" id="wsi-card-dismissals">
+                <div class="wsi-card-head-row">
+                    <div>
+                        <h3 class="wsi-card-title">Dismissal pipeline</h3>
+                        <p class="wsi-card-subtitle">Students dismissed per month, the last 12 months.</p>
+                    </div>
+                    <div class="wsi-tile-row" id="wci-dismissal-tiles"></div>
+                </div>
+                <div class="wsi-card-body" id="wci-dismissals"></div>
+                <p class="wsi-footer-note">The two numbers are the Dismissal List's own counts for the same filters. A student is counted in the month the Registry's result was uploaded and applied.</p>
+            </div>
