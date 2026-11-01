@@ -72,7 +72,7 @@
             <p class="wca-empty">You have not started an appeal.</p>
         @else
             <div class="wca-table-wrap">
-                <table class="wca-table is-stack">
+                <table class="wca-table is-stack is-compact">
                     <thead><tr>
                         <th>Appeal No.</th><th>Submitted</th><th class="wca-num">Requested (months)</th><th class="wca-num">Approved (months)</th>
                         <th>Status</th><th>Current step (who)</th><th>Last updated</th><th></th>

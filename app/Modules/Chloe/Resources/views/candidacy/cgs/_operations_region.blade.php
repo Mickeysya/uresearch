@@ -28,7 +28,7 @@
         <p class="wca-empty">No appeals match.</p>
     @else
         <div class="wca-table-wrap">
-            <table class="wca-table is-stack">
+            <table class="wca-table is-stack is-compact">
                 <thead><tr>
                     <th>Appeal No.</th><th>Student</th><th>Programme</th><th>Department</th><th class="wca-num">Requested (mo)</th><th class="wca-num">Approved (mo)</th>
                     <th>Status</th><th>Current step</th><th>Submitted</th><th>Last updated</th><th>Waiting days</th><th></th>
@@ -45,8 +45,8 @@
                         <td class="wca-num" data-label="Approved (mo)">{{ $a->approved_months ?? '—' }}</td>
                         <td data-label="Status">@include('chloe::candidacy.wca._status_badge', ['appeal' => $a])</td>
                         <td data-label="Current step">{{ P::currentStep($a) }}</td>
-                        <td class="wca-nowrap" data-label="Submitted">{{ P::date($a->submitted_at) }}</td>
-                        <td class="wca-nowrap" data-label="Last updated">{{ P::date($a->last_action_at ?? $a->updated_at, 'j M Y, H:i') }}</td>
+                        <td data-label="Submitted">{{ P::date($a->submitted_at) }}</td>
+                        <td data-label="Last updated">{{ P::date($a->last_action_at ?? $a->updated_at, 'j M Y, H:i') }}</td>
                         <td class="wca-num" data-label="Waiting days">{{ $a->current_stage ? $a->waitingDays() : '—' }}</td>
                         <td class="wca-nowrap" data-label="Open"><a class="wca-btn is-small is-primary" href="{{ $detail($a) }}">View details</a></td>
                     </tr>

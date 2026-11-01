@@ -215,3 +215,14 @@
 .wca-pager > span { margin: 0 auto 0 0; }
 @media (max-width: 1100px) { .wca-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wca-filter-grid.is-ops { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .wca-cards, .wca-filter-grid.is-ops { grid-template-columns: minmax(0, 1fr); } }
+.wca-page .wca-btn, .wca-page .wca-btn:hover, .wca-page .wca-btn:active, .wca-page .wca-link-btn, .wca-page .wca-link-btn:hover { box-shadow: none; }
+/* the 12-column Operations table must fit between 1100 px and 1440 px without scrolling */
+.wca-table.is-compact { font-size: 12px; }
+.wca-table.is-compact th, .wca-table.is-compact td { padding: 8px 4px; }
+@media (min-width: 1101px) { .wca-table.is-compact .wca-btn.is-small { padding: 0 10px; } }
+.wca-table.is-compact .wca-status { white-space: normal; }
+.wca-table.is-compact .wca-nowrap { white-space: normal; }
+.wca-table.is-compact td:first-child { white-space: nowrap; }
+.wca-page .wca-table .wca-btn.is-small { white-space: nowrap; }
+.wca-table.is-compact td:nth-child(3) { min-width: 0; }
+.wca-page .page-header-back { width: fit-content; max-width: 100%; }

@@ -26,7 +26,7 @@
         <p class="wca-empty">{{ ['pending' => 'Nothing is pending your action.', 'ongoing' => 'No ongoing appeals.', 'history' => 'No appeals with a final result yet.', 'decided' => 'You have not decided any appeal yet.'][$tab] }}</p>
     @else
         <div class="wca-table-wrap">
-            <table class="wca-table is-stack">
+            <table class="wca-table is-stack is-compact">
                 <thead><tr>
                     <th>Appeal No.</th><th>Student</th><th>Programme</th><th>Department</th><th class="wca-num">Requested</th><th class="wca-num">Round</th>
                     @if ($tab === 'pending')<th>Arrived at my stage</th><th>Waiting days</th>
