@@ -284,9 +284,12 @@ class CandidacyDemoSeed extends Command
                 continue;
             }
 
-            \App\Modules\Chloe\Models\CandidacyReminderLog::firstOrCreate(
-                ['demo_profile_id' => $profile->id, 'expiry_date' => $expiry->toDateString(), 'milestone' => $months],
-                ['variant' => 'A', 'status' => 'sent', 'sent_at' => $date->copy()->setTime(8, 0)->min($this->now->copy()->subMinute())],
+            if (\App\Modules\Chloe\Models\CandidacyReminderLog::where('demo_profile_id', $profile->id)->whereDate('expiry_date', $expiry->toDateString())->where('milestone', $months)->exists()) {
+                continue; // already there (a second run)
+            }
+
+            \App\Modules\Chloe\Models\CandidacyReminderLog::create(
+                ['demo_profile_id' => $profile->id, 'expiry_date' => $expiry->toDateString(), 'milestone' => $months, 'variant' => 'A', 'status' => 'sent', 'sent_at' => $date->copy()->setTime(8, 0)->min($this->now->copy()->subMinute())],
             );
         }
     }

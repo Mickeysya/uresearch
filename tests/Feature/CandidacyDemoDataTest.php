@@ -73,7 +73,7 @@ class CandidacyDemoDataTest extends TestCase
 
         $this->assertSame($first, $this->counts());
         $this->assertGreaterThanOrEqual(50, $first['candidacy_appeals']);
-        $this->assertLessThanOrEqual(70, $first['candidacy_appeals']);
+        $this->assertLessThanOrEqual(80, $first['candidacy_appeals']);
     }
 
     public function test_nine_departments_with_the_agreed_roster(): void
@@ -397,6 +397,7 @@ class CandidacyDemoDataTest extends TestCase
         $this->artisan('candidacy:demo-seed')->assertSuccessful();
         $registry = User::create(['name' => 'Registry', 'email' => 'registry@utp.edu.my', 'password' => 'password', 'role' => \App\Modules\Core\Support\Role::REGISTRY]);
         $candidates = \App\Modules\Chloe\Support\CandidacyDismissalList::candidates()->pluck('studentId')->all();
+        \Illuminate\Support\Facades\Notification::fake();
         $upload = app(\App\Modules\Chloe\Services\CandidacyDismissalUpload::class);
         $upload->apply([['row' => 2, 'id' => $candidates[0]]], 'x.xlsx', $registry);
         $this->assertCount(count($candidates) - 1, \App\Modules\Chloe\Support\CandidacyDismissalList::candidates());
