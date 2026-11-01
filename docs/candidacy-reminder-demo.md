@@ -95,7 +95,7 @@ none (softbound submitted): 21010089 Lee Wei Ming (demo student) expires 2027-01
 
 ### 6. Inactive / deferred stops reminders
 
-Amir Hakim bin Hassan, 21010111, inactive (demo overlay), expires 2027-05-29.
+Yeoh Zhi Hao, 21010015, inactive (demo overlay), expires 2027-06-29.
 
 ```bash
 php artisan candidacy:send-reminders --dry-run -v --date=2027-02-28
@@ -104,12 +104,12 @@ php artisan candidacy:send-reminders --dry-run -v --date=2027-02-28
 The line for this student:
 
 ```
-none (inactive): 21010111 Amir Hakim bin Hassan (demo student) expires 2027-05-29
+none (inactive): 21010015 Yeoh Zhi Hao (demo student) expires 2027-06-29
 ```
 
 ### 7. Completed stops reminders
 
-Chan Jia Ying, 21010121, completed (demo overlay), expires 2027-04-29.
+Thomas Wright, 21010011, completed (demo overlay), expires 2027-05-29.
 
 ```bash
 php artisan candidacy:send-reminders --dry-run -v --date=2027-01-29
@@ -118,7 +118,7 @@ php artisan candidacy:send-reminders --dry-run -v --date=2027-01-29
 The line for this student:
 
 ```
-none (completed): 21010121 Chan Jia Ying (demo student) expires 2027-04-29
+none (completed): 21010011 Thomas Wright (demo student) expires 2027-05-29
 ```
 
 ### 8. Dismissed stops reminders
@@ -151,7 +151,7 @@ paused (appeal in review): 21010080 Hafiz bin Kassim (demo student) expires 2028
 
 ### 10. Returned appeal: variant C
 
-Daniel Robertson, 21010013, appeal returned by the Supervisor, expires 2028-10-29.
+Qistina binti Kassim, 21010038, appeal returned, expires 2028-10-29.
 
 ```bash
 php artisan candidacy:send-reminders --dry-run --date=2028-07-29
@@ -160,12 +160,26 @@ php artisan candidacy:send-reminders --dry-run --date=2028-07-29
 The line for this student:
 
 ```
-WOULD SEND milestone 3 month(s), variant C: 21010013 Daniel Robertson (demo student) expires 2028-10-29
+WOULD SEND milestone 3 month(s), variant C: 21010038 Qistina binti Kassim (demo student) expires 2028-10-29
 ```
 
 ### 11. No further appeal possible: variant B (12 of 12 months used)
 
-Ravindran a/l Rajan, 21010010, 6 + 6 months approved, expires 2028-09-29 (3-month date 2028-06-29).
+Nadia binti Yusof, 21010124, 6 + 6 months approved, expires 2028-07-29 (3-month date 2028-04-29).
+
+```bash
+php artisan candidacy:send-reminders --dry-run --date=2028-04-29
+```
+
+The line for this student:
+
+```
+WOULD SEND milestone 3 month(s), variant B: 21010124 Nadia binti Yusof (demo student) expires 2028-07-29
+```
+
+### 12. No further appeal possible: variant B (Dean rejected the last appeal)
+
+Ravindran a/l Rajan, 21010010, rejected by the Dean, expires 2028-09-29.
 
 ```bash
 php artisan candidacy:send-reminders --dry-run --date=2028-06-29
@@ -175,20 +189,6 @@ The line for this student:
 
 ```
 WOULD SEND milestone 3 month(s), variant B: 21010010 Ravindran a/l Rajan (demo student) expires 2028-09-29
-```
-
-### 12. No further appeal possible: variant B (Dean rejected the last appeal)
-
-Shalini a/p Rajan, 21010029, rejected by the Dean, expires 2028-09-29.
-
-```bash
-php artisan candidacy:send-reminders --dry-run --date=2028-06-29
-```
-
-The line for this student:
-
-```
-WOULD SEND milestone 3 month(s), variant B: 21010029 Shalini a/p Rajan (demo student) expires 2028-09-29
 ```
 
 ### 13. Expired: no reminder
