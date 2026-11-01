@@ -143,10 +143,10 @@
     function stackedColumns(container, cfg) {
         clear(container);
         var width = Math.max(240, container.clientWidth || 600), height = cfg.height || 260;
-        var padL = 34, padR = cfg.line ? 34 : 8, padT = 10, padB = 46;
+        var padL = 34, padR = (cfg.line && !cfg.sharedAxis) ? 34 : 8, padT = 10, padB = 46;
         var plotW = width - padL - padR, plotH = height - padT - padB;
         var totals = cfg.groups.map(function (g) { return sum(cfg.order.map(function (k) { return g.segs[k] || 0; })); });
-        var maxV = niceMax(Math.max.apply(null, [1].concat(totals)));
+        var maxV = niceMax(Math.max.apply(null, [1].concat(totals, cfg.sharedAxis && cfg.line ? cfg.line : [])));
         var svg = svgEl('svg', { width: width, height: height, role: 'img', 'aria-label': cfg.label });
         container.appendChild(svg);
         var y = function (v) { return padT + plotH - (v / maxV) * plotH; };
@@ -177,12 +177,12 @@
             wire(grp, g.dim, g.value, function () { return g.tip; }, g.onClick);
         });
         if (cfg.line) {
-            var maxL = niceMax(Math.max.apply(null, [1].concat(cfg.line)));
+            var maxL = cfg.sharedAxis ? maxV : niceMax(Math.max.apply(null, [1].concat(cfg.line)));
             var yl = function (v) { return padT + plotH - (v / maxL) * plotH; };
             var pts = cfg.line.map(function (v, i) { return (padL + slot * i + slot / 2) + ',' + yl(v); }).join(' ');
             svg.appendChild(svgEl('polyline', { points: pts, fill: 'none', stroke: cfg.lineColor || C.slate, 'stroke-width': 2, 'pointer-events': 'none' }));
             cfg.line.forEach(function (v, i) { svg.appendChild(svgEl('circle', { cx: padL + slot * i + slot / 2, cy: yl(v), r: 3, fill: cfg.lineColor || C.slate, 'pointer-events': 'none' })); });
-            [0, maxL / 2, maxL].forEach(function (v) { var tl2 = svgEl('text', { x: width - padR + 4, y: yl(v) + 4, class: 'wsi-axis-label' }); tl2.textContent = Math.round(v); svg.appendChild(tl2); });
+            if (!cfg.sharedAxis) { [0, maxL / 2, maxL].forEach(function (v) { var tl2 = svgEl('text', { x: width - padR + 4, y: yl(v) + 4, class: 'wsi-axis-label' }); tl2.textContent = Math.round(v); svg.appendChild(tl2); }); }
         }
         if (n === 0 || totals.every(function (z) { return z === 0; })) {
             var none = svgEl('text', { x: width / 2, y: padT + plotH / 2, 'text-anchor': 'middle', class: 'wsi-axis-label' }); none.textContent = cfg.emptyText || 'Nothing to show for these filters.'; svg.appendChild(none);
@@ -404,6 +404,33 @@
     }
     document.getElementById('wci-search').addEventListener('input', function (e) { tableState.q = e.target.value; tableState.page = 1; paintList(); });
     charts.push({ id: 'list', paint: paintList });
+
+    // ================================================================ Chart 3: Reminders sent (by milestone) and the response line
+    function remMonths() { var m = DATA.today.slice(0, 7), out = []; for (var i = 6; i >= 0; i--) { out.push(ymAdd(m, -i)); } return out; }
+    function remCtx() {
+        return DATA.reminders.filter(function (r) { return (!filters.dept || r.dept === filters.dept) && (!filters.level || r.level === filters.level) && (!filters.mode || r.mode === filters.mode) && (!filters.category || r.category === filters.category); });
+    }
+    function remHl(r) {
+        return (!highlight.category.length || (r.category && highlight.category.indexOf(r.category) !== -1)) && (!highlight.remMonth.length || highlight.remMonth.indexOf(r.month) !== -1) && (!highlight.milestone.length || highlight.milestone.indexOf(r.m) !== -1);
+    }
+    function paintReminders() {
+        var months = remMonths(), ctx = remCtx().filter(function (r) { return months.indexOf(r.month) !== -1; });
+        var active = highlight.category.length || highlight.remMonth.length || highlight.milestone.length, hl = active ? ctx.filter(remHl) : ctx;
+        var mk = function (rows) { var s = { 3: 0, 2: 0, 1: 0 }; rows.forEach(function (r) { s[r.m]++; }); return s; };
+        var groups = months.map(function (m) {
+            var inC = ctx.filter(function (r) { return r.month === m; }), segs = mk(inC), solid = active ? mk(inC.filter(remHl)) : null, ans = inC.filter(function (r) { return r.responded; }).length;
+            return { key: m, label: monthLabel(m), short: monthShort(m), sub: (m === months[0] || m.slice(5) === '01') ? m.slice(0, 4) : '', segs: segs, solid: solid, dim: 'remMonth', value: m,
+                tip: [monthLabel(m), plural(inC.length, 'reminder', 'reminders') + ' sent', '3 months: ' + segs[3] + ' · 2 months: ' + segs[2] + ' · 1 month: ' + segs[1], ans + ' answered within 30 days'], ans: ans };
+        });
+        var box = document.getElementById('wci-reminders');
+        stackedColumns(box, { label: 'Reminders sent per month by milestone', groups: groups, order: [3, 2, 1], colors: MILESTONE_COLOR, line: groups.map(function (g) { return g.ans; }), sharedAxis: true, lineColor: C.green, height: 260, emptyText: 'No reminders were sent in these months for these filters.' });
+        var counts = mk(ctx);
+        legend(box, [3, 2, 1].map(function (k) { return { label: k + '-month reminder', color: MILESTONE_COLOR[k], count: counts[k], dim: 'milestone', value: k }; }).concat([{ label: 'Answered within 30 days (line)', color: C.green, kind: 'line' }]));
+        var answered = ctx.filter(function (r) { return r.responded; }).length, tile = document.getElementById('wci-response-tile'); clear(tile);
+        tile.appendChild(el('div', { class: 'wsi-tile-value wsi-tabular' }, ctx.length ? Math.round(100 * answered / ctx.length) + '%' : '—'));
+        tile.appendChild(el('div', { class: 'wsi-tile-label' }, 'Response rate · ' + answered + ' of ' + ctx.length));
+    }
+    charts.push({ id: 'reminders', paint: paintReminders });
 
 
     // ---------------------------------------------------------------- live update

@@ -411,4 +411,24 @@ class CandidacyDemoDataTest extends TestCase
         $this->artisan('candidacy:demo-seed')->assertSuccessful();
         $this->assertSame($candidates, \App\Modules\Chloe\Support\CandidacyDismissalList::candidates()->pluck('studentId')->all(), 'dismissed_at is back to its seed value');
     }
+
+    public function test_the_demo_reminder_history_never_changes_what_the_engine_would_send(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $rows = \App\Modules\Chloe\Models\CandidacyReminderLog::whereNotNull('demo_profile_id')->get();
+        $this->assertGreaterThan(20, $rows->count());
+        $profiles = \Illuminate\Support\Facades\DB::table('demo_student_profiles')->whereIn('id', $rows->pluck('demo_profile_id'))->get();
+        $this->assertTrue($profiles->every(fn ($p) => $p->candidacy_only && $p->candidacy_expiry_date < now()->toDateString()), 'history only for expired candidacy-only students');
+        $this->assertTrue($rows->every(fn ($r) => $r->sent_at->lt(now())), 'every history row is in the past');
+
+        $run = function (string $date) {
+            \Illuminate\Support\Facades\Artisan::call('candidacy:send-reminders', ['--dry-run' => true, '-v' => true, '--date' => $date]);
+
+            return \Illuminate\Support\Facades\Artisan::output();
+        };
+        $with = [$run(now()->toDateString()), $run(now()->addDay()->toDateString())];
+        \Illuminate\Support\Facades\DB::table('candidacy_reminder_log')->delete();
+
+        $this->assertSame($with, [$run(now()->toDateString()), $run(now()->addDay()->toDateString())]);
+    }
 }

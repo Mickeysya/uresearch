@@ -41,3 +41,20 @@
                 </div>
                 <div class="wsi-card-body" id="wci-students"></div>
             </div>
+
+            <div class="wsi-layer-head">
+                <h2 class="wsi-layer-title">Are the reminders working?</h2>
+                <p class="wsi-layer-desc">Automatic expiry reminders (3, 2 and 1 month before), and whether students then act.</p>
+            </div>
+
+            <div class="wsi-span-12 wsi-card" id="wsi-card-reminders">
+                <div class="wsi-card-head-row">
+                    <div>
+                        <h3 class="wsi-card-title">Reminders sent</h3>
+                        <p class="wsi-card-subtitle">The last 6 months and this month, by milestone.</p>
+                    </div>
+                    <div class="wsi-tile" id="wci-response-tile" aria-live="polite"></div>
+                </div>
+                <div class="wsi-card-body" id="wci-reminders"></div>
+                <p class="wsi-footer-note">Line = students who submitted the Softbound thesis or an appeal within 30 days after a reminder, counted in the month the reminder was sent. Response rate = those reminders divided by all reminders in the six months shown plus this month.</p>
+            </div>

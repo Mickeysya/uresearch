@@ -230,9 +230,40 @@ class CandidacyDemoSeed extends Command
                 }
             }
 
+            $this->seedHistoricReminders($profile, $expiry, $case);
+
             if (! empty($x['exported']) && $cgs) {
                 \App\Modules\Chloe\Models\CandidacyDismissalExport::firstOrCreate(['demo_profile_id' => $profile->id], ['exported_at' => $this->now->copy()->subDays(2)->setTime(15, 30), 'exported_by' => $cgs->id]);
             }
+        }
+    }
+
+    /**
+     * Past reminders for a candidacy-only demo student, so the Insights "Reminders" chart has six months of history. Each milestone date that is already
+     * past gets a "sent" row dated that day, unless the student had already submitted an appeal or the Softbound by then (the engine would have stopped).
+     * The students are expired, so the engine never reads these rows again: today's dry-run output is unchanged. candidacy:demo-clear removes them with the students.
+     */
+    protected function seedHistoricReminders(DemoStudentProfile $profile, Carbon $expiry, string $case): void
+    {
+        if (str_contains((string) $profile->programme, 'Coursework')) {
+            return;
+        }
+
+        $firstAppeal = CandidacyAppeal::where('demo_profile_id', $profile->id)->min('submitted_at');
+        $stop = $firstAppeal ? Carbon::parse($firstAppeal, 'Asia/Kuala_Lumpur')->startOfDay() : ($case === 'softbound' ? $expiry->copy()->subDays(30) : null);
+        $today = $this->now->copy()->startOfDay();
+
+        foreach ([3, 2, 1] as $months) {
+            $date = $expiry->copy()->subMonthsNoOverflow($months)->startOfDay();
+
+            if ($date->gte($today) || ($stop && $date->gte($stop)) || $expiry->lt($today) === false) {
+                continue;
+            }
+
+            \App\Modules\Chloe\Models\CandidacyReminderLog::firstOrCreate(
+                ['demo_profile_id' => $profile->id, 'expiry_date' => $expiry->toDateString(), 'milestone' => $months],
+                ['variant' => 'A', 'status' => 'sent', 'sent_at' => $date->copy()->setTime(8, 0)],
+            );
         }
     }
 
