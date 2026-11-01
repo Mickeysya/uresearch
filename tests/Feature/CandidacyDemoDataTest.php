@@ -418,7 +418,7 @@ class CandidacyDemoDataTest extends TestCase
         $rows = \App\Modules\Chloe\Models\CandidacyReminderLog::whereNotNull('demo_profile_id')->get();
         $this->assertGreaterThan(20, $rows->count());
         $profiles = \Illuminate\Support\Facades\DB::table('demo_student_profiles')->whereIn('id', $rows->pluck('demo_profile_id'))->get();
-        $this->assertTrue($profiles->every(fn ($p) => $p->candidacy_only && $p->candidacy_expiry_date < now()->toDateString()), 'history only for expired candidacy-only students');
+        $this->assertTrue($profiles->every(fn ($p) => $p->candidacy_only), 'history only for candidacy-only students');
         $this->assertTrue($rows->every(fn ($r) => $r->sent_at->lt(now())), 'every history row is in the past');
 
         $run = function (string $date) {
@@ -426,9 +426,30 @@ class CandidacyDemoDataTest extends TestCase
 
             return \Illuminate\Support\Facades\Artisan::output();
         };
-        $with = [$run(now()->toDateString()), $run(now()->addDay()->toDateString())];
-        \Illuminate\Support\Facades\DB::table('candidacy_reminder_log')->delete();
+        $today = now()->toDateString();
 
-        $this->assertSame($with, [$run(now()->toDateString()), $run(now()->addDay()->toDateString())]);
+        // the engine sends nothing to a candidacy-only student today: every milestone already due is on record
+        $this->assertDoesNotMatchRegularExpression('/WOULD SEND.*2102\d{4}/', $run($today));
+
+        // and the rows of the EXPIRED students (the six-month history) never change a decision: the engine stops at "expired" before it reads them
+        $with = [$run($today), $run(now()->addDay()->toDateString())];
+        $expired = \Illuminate\Support\Facades\DB::table('demo_student_profiles')->where('candidacy_only', true)->whereDate('candidacy_expiry_date', '<', $today)->pluck('id');
+        \Illuminate\Support\Facades\DB::table('candidacy_reminder_log')->whereIn('demo_profile_id', $expired)->delete();
+
+        $this->assertSame($with, [$run($today), $run(now()->addDay()->toDateString())]);
+    }
+
+    public function test_the_demo_forecast_has_something_to_show_in_every_band_and_in_the_next_twelve_months(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $rows = \App\Modules\Chloe\Support\CandidacyStatistics::population();
+        $summary = \App\Modules\Chloe\Support\CandidacyStatistics::summary($rows);
+
+        foreach (['m1', 'm2', 'm3'] as $band) {
+            $this->assertGreaterThanOrEqual(4, array_sum($summary['bands'][$band]), $band);
+        }
+
+        $this->assertGreaterThanOrEqual(40, array_sum(array_column(\App\Modules\Chloe\Support\CandidacyStatistics::forecast($rows, 'month'), 'total')));
+        $this->assertSame(['softbound', 'in_review', 'returned', 'none'], array_keys(array_filter($summary['by_category'], fn ($n) => $n > 0)), 'every status category is represented');
     }
 }

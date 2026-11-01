@@ -179,6 +179,28 @@ class CandidacyDemoSeed extends Command
             ['21020028', 'Yap Xin Rui', 'CIS', 'coursework:Master of Science in Predictive Analytics', 'coursework', -30, []],
             ['21020029', 'Zulaikha binti Mansor', 'CEE', 'coursework:MSc in Asset Management & Maintenance', 'coursework', -90, []],
             ['21020030', 'Ng Kah Hou', 'CIS', 'coursework:MSc in Applied Computing', 'coursework', -10, []],
+            // active research students expiring soon (the Insights forecast and bands): up to 1 month, 1 to 2 months, 2 to 3 months, then later
+            ['21020031', 'Ismail bin Zakaria', 'CIS', 'master_research', 'active_none', 3, []],
+            ['21020032', 'Tan Pei Ying', 'CHE', 'phd', 'active_none', 7, []],
+            ['21020033', 'Muthu a/l Arumugam', 'MEC', 'master_research', 'active_review', 11, ['state' => 'with_chair', 'months' => 3, 'age' => 6, 'wait' => 4]],
+            ['21020034', 'Nabilah binti Hamdan', 'EEE', 'phd', 'active_none', 16, []],
+            ['21020035', 'Lee Jun Kai', 'CEE', 'master_research', 'active_returned', 22, ['state' => 'returned', 'months' => 4, 'age' => 14, 'wait' => 6, 'by' => 'supervisor']],
+            ['21020036', 'Aisyah binti Roslan', 'PET', 'phd', 'active_none', 27, []],
+            ['21020037', 'Deepak a/l Kumar', 'GEO', 'master_research', 'active_softbound', 30, []],
+            ['21020038', 'Chin Mei Fong', 'APS', 'phd', 'active_none', 35, ['mode' => 'Part-Time']],
+            ['21020039', 'Zainab binti Osman', 'MHU', 'master_research', 'active_review', 41, ['state' => 'with_dean', 'months' => 5, 'age' => 20, 'wait' => 9]],
+            ['21020040', 'Pravin a/l Selvam', 'CIS', 'phd', 'active_none', 47, []],
+            ['21020041', 'Goh Shu Min', 'CHE', 'master_research', 'active_softbound', 52, []],
+            ['21020042', 'Rizal bin Hashim', 'MEC', 'phd', 'active_none', 58, []],
+            ['21020043', 'Wong Li Xin', 'EEE', 'master_research', 'active_returned', 60, ['state' => 'returned', 'months' => 3, 'age' => 18, 'wait' => 10, 'by' => 'chair']],
+            ['21020044', 'Hana binti Yusof', 'CEE', 'phd', 'active_none', 66, []],
+            ['21020045', 'Suresh a/l Pillai', 'PET', 'master_research', 'active_review', 72, ['state' => 'with_cgs', 'months' => 6, 'age' => 12, 'wait' => 3]],
+            ['21020046', 'Cheong Wai Lun', 'GEO', 'phd', 'active_none', 79, ['mode' => 'Part-Time']],
+            ['21020047', 'Farid bin Ahmad', 'APS', 'master_research', 'active_none', 85, []],
+            ['21020048', 'Amanda Lim', 'MHU', 'phd', 'active_softbound', 90, []],
+            ['21020049', 'Hakim bin Daud', 'CIS', 'master_research', 'active_review', 100, ['state' => 'with_supervisor', 'months' => 2, 'age' => 9, 'wait' => 7]],
+            ['21020050', 'Ng Yee Ling', 'CHE', 'phd', 'active_none', 120, []],
+            ['21020051', 'Samad bin Idris', 'CEE', 'master_research', 'active_none', 150, []],
         ];
     }
 
@@ -193,7 +215,7 @@ class CandidacyDemoSeed extends Command
                 $programme = substr($level, 11).' (Coursework)';
             } else {
                 $entry = collect((array) config('candidacy.programmes'))->first(fn ($e) => $e[2] === $code && $e[1] === $level);
-                $programme = $entry[0].' (Full-Time)';
+                $programme = $entry[0].' ('.($x['mode'] ?? 'Full-Time').')';
             }
 
             $profile = DemoStudentProfile::withoutGlobalScopes()->firstOrNew(['matric_no' => $id]);
@@ -212,13 +234,13 @@ class CandidacyDemoSeed extends Command
             ])->save();
 
             match ($case) {
-                'softbound' => CandidacyDemoStudentStatus::updateOrCreate(['demo_profile_id' => $profile->id], ['softbound_submitted_at' => $expiry->copy()->subDays(30)->toDateString(), 'completed' => false, 'inactive' => false, 'label' => 'Demo data']),
+                'softbound', 'active_softbound' => CandidacyDemoStudentStatus::updateOrCreate(['demo_profile_id' => $profile->id], ['softbound_submitted_at' => ($case === 'softbound' ? $expiry->copy()->subDays(30) : $today->copy()->subDays(10))->toDateString(), 'completed' => false, 'inactive' => false, 'label' => 'Demo data']),
                 'completed' => CandidacyDemoStudentStatus::updateOrCreate(['demo_profile_id' => $profile->id], ['softbound_submitted_at' => null, 'completed' => true, 'inactive' => false, 'label' => 'Demo data']),
                 'inactive' => CandidacyDemoStudentStatus::updateOrCreate(['demo_profile_id' => $profile->id], ['softbound_submitted_at' => null, 'completed' => false, 'inactive' => true, 'label' => 'Demo data']),
                 default => null,
             };
 
-            if (in_array($case, ['rejected', 'closed_expired', 'approved', 'in_review'], true)) {
+            if (in_array($case, ['rejected', 'closed_expired', 'approved', 'in_review', 'active_review', 'active_returned'], true)) {
                 $no = sprintf('SCA-%s-01', $id);
 
                 if (! CandidacyAppeal::where('appeal_no', $no)->exists()) {
@@ -249,20 +271,22 @@ class CandidacyDemoSeed extends Command
             return;
         }
 
-        $firstAppeal = CandidacyAppeal::where('demo_profile_id', $profile->id)->min('submitted_at');
-        $stop = $firstAppeal ? Carbon::parse($firstAppeal, 'Asia/Kuala_Lumpur')->startOfDay() : ($case === 'softbound' ? $expiry->copy()->subDays(30) : null);
         $today = $this->now->copy()->startOfDay();
+        $expired = $expiry->lt($today);
+        $firstAppeal = CandidacyAppeal::where('demo_profile_id', $profile->id)->min('submitted_at');
+        // an expired student stopped being reminded when they acted; a student who has NOT expired gets every milestone that is already due logged, so the engine sends nothing new today
+        $stop = ! $expired ? null : ($firstAppeal ? Carbon::parse($firstAppeal, 'Asia/Kuala_Lumpur')->startOfDay() : ($case === 'softbound' ? $expiry->copy()->subDays(30) : null));
 
         foreach ([3, 2, 1] as $months) {
             $date = $expiry->copy()->subMonthsNoOverflow($months)->startOfDay();
 
-            if ($date->gte($today) || ($stop && $date->gte($stop)) || $expiry->lt($today) === false) {
+            if ($date->gt($today) || ($stop && $date->gte($stop))) {
                 continue;
             }
 
             \App\Modules\Chloe\Models\CandidacyReminderLog::firstOrCreate(
                 ['demo_profile_id' => $profile->id, 'expiry_date' => $expiry->toDateString(), 'milestone' => $months],
-                ['variant' => 'A', 'status' => 'sent', 'sent_at' => $date->copy()->setTime(8, 0)],
+                ['variant' => 'A', 'status' => 'sent', 'sent_at' => $date->copy()->setTime(8, 0)->min($this->now->copy()->subMinute())],
             );
         }
     }
