@@ -159,7 +159,9 @@ class AttendanceEarlyWarningTest extends TestCase
 
         $this->sync();
 
-        $this->assertSame('both', AttendanceRiskState::where('student_id', $student->id)->value('reason'));
+        // 'current', not 'both': with three periods the projection exists
+        // but may not flag yet (projection_min_periods_to_flag = 4).
+        $this->assertSame('current', AttendanceRiskState::where('student_id', $student->id)->value('reason'));
         $this->assertTrue($latest->fresh()->at_risk);
     }
 

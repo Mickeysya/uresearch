@@ -52,6 +52,19 @@ return [
         // through two points.
         'projection_min_periods' => 3,
 
+        // When the projection may FLAG a student (it is still computed and
+        // shown to CGS outside this window; the original rule always
+        // applies). Tuned on the backtest (`attendance:backtest --compare`):
+        // a line through the first three periods is too noisy to act on,
+        // and late in the semester the rule already sees what the
+        // projection would. Shared by the live check and the backtest via
+        // AttendanceRiskEvaluator::projectionMayFlag().
+        //   projection_min_periods_to_flag: at least this many periods so far
+        //   projection_active_until: up to this share of the semester
+        //     (0.6 of 14 periods = up to period 8); 1.0 = all semester
+        'projection_min_periods_to_flag' => (int) env('NUREEN_ATTENDANCE_PROJECTION_MIN_PERIODS_TO_FLAG', 4),
+        'projection_active_until' => (float) env('NUREEN_ATTENDANCE_PROJECTION_ACTIVE_UNTIL', 0.6),
+
         // A student already alerted is emailed again only if their projected
         // end-of-semester % has fallen by MORE than this many percentage
         // points since that alert. See Support\AttendanceEarlyWarning.

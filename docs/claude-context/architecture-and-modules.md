@@ -218,7 +218,15 @@ of a CGS staffer uploading a spreadsheet by hand.
   rule / projection / combined precision, recall and F1 at 25/50/75% of the
   semester, plus earliness. In memory only; a Markdown report goes to
   `storage/app/backtest/`. Runs on a seeded synthetic dataset (labelled as
-  such) until CGS supplies an anonymised real export.
+  such) until CGS supplies an anonymised real export. `--runs=N` reports
+  mean ± sample SD over N seeds; `--compare` adds the original window.
+- **Projection window:** the projection may flag only from
+  `projection_min_periods_to_flag` (4) periods up to
+  `projection_active_until` (0.6) of the semester; outside it the figure is
+  still computed and stored for CGS, but only the rule flags. Chosen from
+  the backtest; one gate (`AttendanceRiskEvaluator::projectionMayFlag()`)
+  serves the live check, the dashboard card (via `assess()`) and the
+  backtest.
 - **Demo semester:** weekly periods from `semester_start` = 5 Oct 2026
   (`NureenAttendanceDemoSeeder`), with three deliberate cases owned by
   `AttendanceRiskDemoSeeder` (run on its own for the viva; prints each

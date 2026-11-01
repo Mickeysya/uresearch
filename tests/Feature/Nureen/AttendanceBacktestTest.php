@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Nureen;
 
+use App\Modules\Nureen\Console\Commands\BacktestAttendance;
 use App\Modules\Nureen\Models\AttendanceRecord;
 use App\Modules\Nureen\Support\AttendanceEarlyWarning;
 use App\Modules\Nureen\Support\Backtest\AttendanceBacktester;
@@ -115,7 +116,9 @@ class AttendanceBacktestTest extends TestCase
 
     public function test_the_command_reads_the_tiny_dataset_through_the_upload_parser(): void
     {
-        $this->artisan('attendance:backtest', ['file' => $this->tinyCsv(), '--cutoff' => '3', '--output' => $report = $this->dir.'/tiny.md'])
+        // The original projection window (flag from the first projection,
+        // all semester), which the hand-worked answers above assume.
+        $this->artisan('attendance:backtest', ['file' => $this->tinyCsv(), '--cutoff' => '3', '--min-periods-to-flag' => '3', '--active-until' => '1', '--output' => $report = $this->dir.'/tiny.md'])
             ->assertSuccessful();
 
         $md = File::get($report);
@@ -186,6 +189,63 @@ class AttendanceBacktestTest extends TestCase
             $this->assertStringContainsString($pattern['label'], $help);
             $this->assertStringContainsString(round($pattern['share'] * 100).'%', $help);
         }
+    }
+
+    public function test_mean_and_sample_standard_deviation_skip_undefined_runs(): void
+    {
+        $this->assertEqualsWithDelta(['mean' => 2.5, 'sd' => sqrt(5 / 3), 'n' => 4], BacktestAttendance::stats([1, 2, 3, null, 4]), 1e-12);
+        $this->assertSame(['mean' => 7.0, 'sd' => null, 'n' => 1], BacktestAttendance::stats([7.0]));
+        $this->assertSame(['mean' => null, 'sd' => null, 'n' => 0], BacktestAttendance::stats([null]));
+    }
+
+    public function test_runs_repeat_over_consecutive_seeds_and_report_mean_plus_minus_sd(): void
+    {
+        $this->artisan('attendance:backtest', ['--synthetic' => true, '--runs' => 3, '--students' => 60, '--output' => $report = $this->dir.'/runs.md'])
+            ->expectsOutputToContain('seeds 2026–2028')
+            ->assertSuccessful();
+
+        // The mean MAE at the midpoint is the mean of the three seeds' own runs.
+        $mae = array_map(fn (int $seed) => (new AttendanceBacktester(14, 3, 80.0, 4, 0.6))
+            ->run((new SyntheticAttendance($seed))->generate(60, 14)['students'], [7])['cutoffs'][0]['mae'], [2026, 2027, 2028]);
+        $stats = BacktestAttendance::stats($mae);
+
+        $md = File::get($report);
+        $this->assertStringContainsString('| Runs | 3 (each metric is mean ± sample standard deviation over the runs) |', $md);
+        $this->assertStringContainsString('seeds 2026–2028', $md);
+        $this->assertStringContainsString('| 7 of 14 (50%) | '.number_format($stats['mean'], 2).' ± '.number_format($stats['sd'], 2).' |', $md);
+        $this->assertStringContainsString('**Synthetic data.**', $md);
+
+        // Repeating a single file would just repeat the same answer.
+        $this->artisan('attendance:backtest', ['file' => $this->tinyCsv(), '--runs' => 3])->assertExitCode(2);
+    }
+
+    public function test_compare_puts_the_original_and_tuned_windows_side_by_side_on_the_same_data(): void
+    {
+        $this->artisan('attendance:backtest', ['--synthetic' => true, '--compare' => true, '--output' => $report = $this->dir.'/compare.md'])
+            ->expectsOutputToContain('Comparison')
+            ->assertSuccessful();
+
+        $students = (new SyntheticAttendance(2026))->generate(200, 14)['students'];
+        $at = fn (int $min, float $until) => (new AttendanceBacktester(14, 3, 80.0, $min, $until))->run($students, [7])['cutoffs'][0];
+        $original = $at(3, 1.0);
+        $tuned = $at(4, 0.6);
+        $pct = fn ($v) => number_format(100 * $v, 1).'%';
+
+        $md = File::get($report);
+        $this->assertStringContainsString('| Configuration: Original | projection flags from period 3, all semester |', $md);
+        $this->assertStringContainsString('| Configuration: Tuned | projection flags from period 4, until 60% of the semester |', $md);
+        $this->assertStringContainsString('## Comparison: Original vs Tuned', $md);
+        $this->assertStringContainsString(
+            '| 7 of 14 (50%) | '
+            .$pct($original['methods']['combined']['recall']).' / '.$pct($tuned['methods']['combined']['recall']).' | '
+            .$pct($original['methods']['combined']['precision']).' / '.$pct($tuned['methods']['combined']['precision']).' | '
+            .$pct($original['methods']['combined']['f1']).' / '.$pct($tuned['methods']['combined']['f1']).' | '
+            .number_format($original['mean_lead'], 2).' / '.number_format($tuned['mean_lead'], 2).' |',
+            $md,
+        );
+
+        // The window changes flagging only, never the projected figure itself.
+        $this->assertSame($original['mae'], $tuned['mae']);
     }
 
     public function test_running_it_writes_no_attendance_data_and_sends_nothing(): void

@@ -80,7 +80,9 @@ class AttendanceRiskEvaluator
         $projector = new AttendanceProjector((int) config('nureen.attendance.projection_min_periods', 3));
         $projection = $projector->project($periods, (int) config('nureen.attendance.semester_periods', 14));
 
-        $byProjection = $projection !== null && $projection['projected'] < self::THRESHOLD;
+        $byProjection = $projection !== null
+            && $projection['projected'] < self::THRESHOLD
+            && self::projectionMayFlag($records->count(), (int) config('nureen.attendance.semester_periods', 14));
 
         $total = $records->sum(fn ($r) => $r->countedTotal());
         $current = $total > 0 ? round(100 * $records->sum(fn ($r) => $r->countedAttended()) / $total, 1) : null;
@@ -116,6 +118,24 @@ class AttendanceRiskEvaluator
             $priorTwo->count() === 2 ? (float) $priorTwo[0]->percentage : null,
             $priorTwo->count() === 2 ? (float) $priorTwo[1]->percentage : null,
         );
+    }
+
+    /**
+     * Whether the projection may flag a student who has $periodsSoFar
+     * periods of a $semesterPeriods-period semester: at least
+     * projection_min_periods_to_flag periods, and no later than
+     * projection_active_until of the semester. Outside that window the
+     * projection is still computed (CGS sees it) but only the rule flags.
+     * The backtest passes both settings explicitly to compare configurations;
+     * the live check reads them from config.
+     */
+    public static function projectionMayFlag(int $periodsSoFar, int $semesterPeriods, ?int $minPeriods = null, ?float $activeUntil = null): bool
+    {
+        $minPeriods ??= (int) config('nureen.attendance.projection_min_periods_to_flag', 4);
+        $activeUntil ??= (float) config('nureen.attendance.projection_active_until', 0.6);
+
+        // The epsilon keeps 0.5 x 14 = 7.000000001 from excluding period 7.
+        return $periodsSoFar >= $minPeriods && $periodsSoFar <= $activeUntil * $semesterPeriods + 1e-9;
     }
 
     /**

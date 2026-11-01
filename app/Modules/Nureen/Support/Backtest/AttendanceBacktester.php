@@ -19,7 +19,10 @@ use App\Modules\Nureen\Support\AttendanceRiskEvaluator;
  *   - per-period percentage: AttendanceRecord::countedPercentage(), on an
  *     unsaved model (nothing is written);
  *   - the original rule: AttendanceRiskEvaluator::ruleFlags();
- *   - the projection: AttendanceProjector::project().
+ *   - the projection: AttendanceProjector::project(), allowed to flag only
+ *     where AttendanceRiskEvaluator::projectionMayFlag() says so, with the
+ *     window passed in ($minPeriodsToFlag, $activeUntil) so two
+ *     configurations can be compared.
  *
  * Definitions (also printed in the report):
  *   - Actual final % = all attended / all scheduled sessions over the whole
@@ -34,9 +37,10 @@ use App\Modules\Nureen\Support\AttendanceRiskEvaluator;
  *     with a projection at k (none before projection_min_periods, or when
  *     period lengths are inconsistent). The baseline carries the student's
  *     attendance so far (cumulative % at k) forward unchanged.
- *   - Earliness: over the whole semester, for truly at-risk students, the
- *     first period the combined approach flagged them versus the first
- *     period the rule alone did.
+ *   - Earliness: for truly at-risk students, the first period the combined
+ *     approach flagged them versus the first period the rule alone did --
+ *     per cut-off over the students both had flagged by then, and over the
+ *     whole semester.
  *
  * Pure: no database writes, no notifications, no clock.
  */
@@ -46,6 +50,10 @@ final class AttendanceBacktester
         private readonly int $semesterPeriods,
         private readonly int $minPeriods = 3,
         private readonly float $threshold = AttendanceRiskEvaluator::THRESHOLD,
+        // The defaults are the original behaviour: flag from the first
+        // projection, all semester.
+        private readonly ?int $minPeriodsToFlag = null,
+        private readonly float $activeUntil = 1.0,
     ) {}
 
     /**
@@ -55,7 +63,7 @@ final class AttendanceBacktester
      */
     public function run(array $students, array $cutoffs): array
     {
-        $timelines = array_map(fn (array $periods) => $this->timeline($periods), $students);
+        $timelines = array_map(fn (array $periods) => $this->replay($periods), $students);
 
         return [
             'students' => count($timelines),
@@ -80,10 +88,12 @@ final class AttendanceBacktester
     /**
      * Each period's percentage, rule flag and projection, as the live
      * check would have seen them at that point, plus the actual outcome.
+     * Public so a test can hold it against the live check period by period.
      *
      * @param  array<int, array{attended: int, total: int, end: string}>  $periods
+     * @return array{steps: array<int, array{rule: bool, projected: ?float, projection: bool, so_far: ?float}>, actual: float, label: bool}
      */
-    private function timeline(array $periods): array
+    public function replay(array $periods): array
     {
         $periods = array_values($periods);
         $projector = new AttendanceProjector($this->minPeriods);
@@ -106,7 +116,9 @@ final class AttendanceBacktester
             $steps[$i + 1] = [
                 'rule' => AttendanceRiskEvaluator::ruleFlags($rates[$i], $rates[$i - 1] ?? null, $i >= 2 ? $rates[$i - 2] : null),
                 'projected' => $projection['projected'] ?? null,
-                'projection' => $projection !== null && $projection['projected'] < $this->threshold,
+                'projection' => $projection !== null
+                    && $projection['projected'] < $this->threshold
+                    && AttendanceRiskEvaluator::projectionMayFlag($i + 1, $this->semesterPeriods, $this->minPeriodsToFlag ?? $this->minPeriods, $this->activeUntil),
                 'so_far' => $total > 0 ? 100 * $attended / $total : null,
             ];
         }
@@ -121,8 +133,18 @@ final class AttendanceBacktester
         $confusion = ['rule' => [0, 0, 0, 0], 'projection' => [0, 0, 0, 0], 'combined' => [0, 0, 0, 0]];
         $errors = [];
         $baselineErrors = [];
+        $leads = [];
 
         foreach ($timelines as $t) {
+            if ($t['label']) {
+                $firstRule = self::first($t['steps'], fn ($s) => $s['rule']);
+                $firstCombined = self::first($t['steps'], fn ($s) => $s['rule'] || $s['projection']);
+
+                if ($firstRule !== null && $firstRule <= $k && $firstCombined <= $k) {
+                    $leads[] = $firstRule - $firstCombined;
+                }
+            }
+
             $visible = array_slice($t['steps'], 0, $k, true);
             $byRule = in_array(true, array_column($visible, 'rule'), true);
             $byProjection = in_array(true, array_column($visible, 'projection'), true);
@@ -148,6 +170,8 @@ final class AttendanceBacktester
             'rmse' => $errors === [] ? null : sqrt(array_sum(array_map(fn ($e) => $e * $e, $errors)) / count($errors)),
             'baseline_mae' => self::mae($baselineErrors),
             'methods' => array_map(fn (array $c) => self::scores(...$c), $confusion),
+            // Periods earlier, over truly at-risk students both had flagged by k.
+            'mean_lead' => $leads === [] ? null : array_sum($leads) / count($leads),
         ];
     }
 

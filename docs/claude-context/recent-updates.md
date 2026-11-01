@@ -8,6 +8,82 @@ diff alone.
 
 ---
 
+## 2026-11-01 — Attendance backtest: repeated runs, and a tuned projection window
+
+**Branch:** `develop`, uncommitted. Nureen only.
+
+### The ask
+
+(1) Robustness: `--runs=N` repeats the synthetic backtest over seeds 2026,
+2027, … and reports every metric as mean ± standard deviation. (2) Tuning:
+two settings limit when the projection may flag. They apply in the live
+check and the backtest alike, and the original and tuned windows are
+compared side by side over ten runs.
+
+### The design
+
+- **One gate:** `AttendanceRiskEvaluator::projectionMayFlag(periodsSoFar,
+  semesterPeriods, ?min, ?until)`, true from `projection_min_periods_to_flag`
+  (default 4) periods up to `projection_active_until` (default 0.6) of the
+  semester, inclusive (0.6 × 14 = period 8). `assess()` reads the window from
+  config. The backtester takes both values explicitly (its defaults are the
+  original behaviour) so two windows can be compared on one dataset.
+  Outside the window the projection is still computed and stored for CGS;
+  only the rule flags. The dashboard's Attendance Action card and the
+  emails follow automatically, since both go through `assess()`.
+- **`--runs=N`** (synthetic only): seeds `--seed` … `--seed+N-1`, each metric
+  as mean ± SAMPLE standard deviation. A run where a metric is undefined
+  (precision when nothing was flagged) is left out and marked `(n=k)`.
+- **`--compare`:** runs "Original" (flag from the first projection, all
+  semester) and "Tuned" (the configured window, or `--min-periods-to-flag`
+  / `--active-until`) on the very same datasets, with a comparison table for
+  rule OR projection: recall, precision, F1 and periods earlier, per
+  cut-off. Periods earlier is now also given per cut-off, over truly
+  at-risk students flagged by both approaches by then.
+- The report header records the exact command, so a reader can reproduce
+  it.
+
+### What changed
+
+- `config/nureen.php`: the two settings (env-overridable).
+- `Support/AttendanceRiskEvaluator.php`: `projectionMayFlag()`; `assess()`
+  applies it.
+- `Support/Backtest/AttendanceBacktester.php`: window parameters,
+  per-cut-off `mean_lead`, `timeline()` made public as `replay()`.
+- `Console/Commands/BacktestAttendance.php`: `--runs`, `--compare`,
+  `--min-periods-to-flag`, `--active-until`; summary tables and report.
+- Tests: `AttendanceProjectionWindowTest` (new, 5 tests, including the live
+  check vs the backtest replay, period by period, for 21 synthetic students
+  under both windows) and 3 new `AttendanceBacktestTest` tests.
+  `AttendanceEarlyWarningTest`'s three-period rule case now expects reason
+  `current`, not `both` (by design: the projection may not flag at three
+  periods); the tiny-dataset command test pins the original window.
+
+### Bugs caught
+
+- None. The new consistency test passed first time, over more than 1,000
+  period-by-period comparisons.
+
+### Verification
+
+- Full suite: 459 passed.
+- `attendance:backtest --synthetic --runs=10 --compare` (seeds 2026–2035,
+  200 students each, 38.1 ± 3.4 truly at risk per run), rule OR
+  projection, Original / Tuned:
+
+  | Cut-off | Recall | Precision | F1 | Periods earlier |
+  |---|---|---|---|---|
+  | 4 of 14 (29%) | 48.5 ± 6.7% / 44.8 ± 6.4% | 24.9 ± 5.7% / 28.3 ± 6.4% | 32.8 ± 6.4% / 34.6 ± 6.5% | 0.00 (n=6) / 0.00 (n=6) |
+  | 7 of 14 (50%) | 80.8 ± 4.9% / 80.8 ± 4.9% | 32.5 ± 4.5% / 36.5 ± 4.7% | 46.3 ± 5.1% / 50.2 ± 5.1% | 1.54 ± 0.26 / 1.15 ± 0.21 |
+  | 11 of 14 (79%) | 100.0 ± 0.0% / 100.0 ± 0.0% | 33.3 ± 3.6% / 35.9 ± 3.5% | 49.8 ± 4.1% / 52.8 ± 3.8% | 2.17 ± 0.19 / 1.81 ± 0.17 |
+
+- Dev data needs no re-check: the demo students have four weekly periods,
+  which is inside the window, so their stored outcomes are unchanged.
+- 93 failed jobs that teammates' tests leaked onto the dev queue during the
+  suite run were deleted (the known §7 issue).
+
+---
+
 ## 2026-11-01 — Attendance: a backtest of the projection's predictive accuracy
 
 **Branch:** `develop`, uncommitted. Nureen only.
