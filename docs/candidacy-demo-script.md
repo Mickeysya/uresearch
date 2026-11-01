@@ -14,3 +14,5 @@ Seed first: `php artisan candidacy:demo-seed` then `php artisan candidacy:demo-r
 10. **Workstation.** For a real student who holds a seat, the next 07:30 refresh (`php artisan workstation:refresh-daily`) starts a termination with the reason "Dismissal". (The demo students hold no seat, by design.)
 11. **Reminders stopped.** `php artisan candidacy:send-reminders --dry-run -v` lists the dismissed students as "none (dismissed)" and the Coursework students as "none (coursework)".
 12. **Start again.** `php artisan candidacy:demo-clear` then `candidacy:demo-seed` and `candidacy:demo-registry-file` restore everything, including the dismissed students.
+
+> Test status of this round: full suite 1040 passed; pinned to Friday 6 Nov and Saturday 7 Nov 2026 also 1040 passed. The Sunday / first-of-month / quarter-end date sweep is deferred to the end of the assistant round.
