@@ -243,7 +243,7 @@ class CandidacyUnifiedViewsTest extends TestCase
         $this->assertStringNotContainsString('Pending Appeals', $html);
         $this->assertStringNotContainsString('Export', $html);
         $this->assertStringNotContainsString('Students Near Candidacy Expiry', $html); // only the four agreed cards
-        $this->assertSame(4, preg_match_all('~class="wca-statcard( is-active)?"~', $html));
+        $this->assertSame(4, preg_match_all('~class="wca-statcard\s*(is-active)?\s*"~', $html));
         $this->assertStringNotContainsString('>'.$a->appeal_no.'</a>', $html); // the number is plain text, not a link
         $this->assertStringContainsString($a->appeal_no, $html);
     }

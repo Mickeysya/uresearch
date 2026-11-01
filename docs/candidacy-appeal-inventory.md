@@ -28,7 +28,7 @@ appeal, allowance 0..12. Files live on the private `local` disk under `candidacy
 
 `draft -> with_supervisor -> with_chair -> with_cgs -> with_dean -> approved | rejected`; any stage can send the appeal to `returned`;
 `returned -> (resubmit) -> the returning stage`, except a **Dean return**, which resubmits to `with_cgs` (flag `needs_cgs_recheck`) and then
-goes back to the Dean; a returned appeal whose candidacy expires is set to `closed_expired` by the daily job. `approved`, `rejected`
+goes back to the Dean; a returned appeal whose candidacy has expired (today is AFTER the expiry date) is set to `closed_expired` by the daily job; it can still be resubmitted on the expiry date itself. `approved`, `rejected`
 (final) and `closed_expired` are end states. There is **no withdraw** anywhere. Only `CandidacyAppealService` writes `status` / `current_stage`.
 
 | Stage | Who | Actions |
@@ -40,19 +40,19 @@ goes back to the Dean; a returned appeal whose candidacy expires is set to `clos
 
 Dean approval (one transaction): approved months = requested months (the Dean cannot change them), new expiry = current expiry + months
 (calendar months, no overflow), `study_candidacies.candidacy_expiry_date` and `extension_months_used` updated, the memo built, history written.
-Dean rejection is final: `final_outcome = rejected_final`, `study_candidacies.last_rejection_at` set (the dismissal logic then lists the candidate with the reason "appeal rejected").
+Dean rejection is final and needs at least one reason from the Dean's list ("Other" needs a remark): `final_outcome = rejected_final`, `study_candidacies.last_rejection_at` set, the expiry date stays unchanged, and no further appeal is accepted. The reasons are stored with the decision (event `reason_codes`, approval `remark`), shown on the appeal page and in the history, and sent in the rejection e-mails and bell. (Per Handbook 4.3 a rejection alone does not make a student a dismissal candidate; see Planned. The existing dismissal generator is unchanged in this round.)
 
 ## 3. Rules, numbers and where to change them
 
 | Rule | Where |
 |---|---|
-| eligibility: active candidacy; expiry today or later (Asia/Kuala_Lumpur); no open appeal; no earlier final rejection; at least 1 month left; 1..remaining months | `CandidacyAppealService::eligibilityProblems()` |
+| eligibility: active candidacy; **on or before the expiry date** (the expiry day itself is still a valid day; compared as Asia/Kuala_Lumpur calendar dates, not UTC; the day after is refused); no open appeal; no earlier final rejection; at least 1 month left; 1..remaining months | `CandidacyAppealService::eligibilityProblems()` |
 | allowance 12 months | `config('candidacy.max_extension_months')` |
 | waiting markers: gold dot from 5 days, red from 10 (no reminders, no escalation) | `config('candidacy.waiting_marker')` |
 | CGS roles (view every appeal, act at the CGS stage): `cgs`, `non_exec_cgs`, `senior_exec_cgs`, `manager_cgs`, `senior_director_cgs` | `config('candidacy.cgs_roles')` (the four are `Role::cgsTeam()`, the roles the Workstation CGS routes accept) |
 | signature required to approve (lecturer, chair, dean; optional for CGS) | `config('candidacy.signature_required_stages')` |
 | signature image limits (PNG/JPG, 1 MB, min 200x60, resized into 600x200) | `config('candidacy.signature')` |
-| return / reject reason lists per stage; "Other" needs a remark | `config('candidacy.reasons')` |
+| return / reject reason lists per stage; "Other" needs a remark. The Dean's rejection list is the agreed starting list (CGS will confirm it); keys are stored with the decision, labels are display-only; rows made before the list changed use `candidacy.legacy_reject_reasons`, and a rejection with no reason shows "Not recorded" | `config('candidacy.reasons')` |
 | e-mail wording and placeholders | `config('candidacy.mail')` |
 | default dean when a department has none | `config('candidacy.default_dean_profile')`, else the first `dean_pgr` user's profile |
 | documents: official form `.xlsx` required, up to 4 supporting (`xlsx`/`pdf`/`docx`), 10 MB each, extension **and** content checked | `CandidacyDocumentService` |
@@ -197,3 +197,43 @@ and docs. Two existing Workstation tests got a pinned clock (`WorkstationInsight
 5. The floating assistant icon can sit on top of the last column of a table at the far right (same behaviour as the Workstation widget).
 6. The required-documents list is generic (official form + up to four supporting files) and is to be reviewed.
 7. The shared stylesheet colours the CGS stat numbers and the shared "Back" link blue; the CGS candidacy pages keep that existing design.
+
+## 12. Naming
+The chair step is called **Department Chair** in every display text (pages, step bars, filters, e-mails, bell, memo, reason lists, demo data). Stored values are
+unchanged (`chair`, `with_chair`, `Role::CHAIR`), and the memo verification code does not use the label, so `candidacy:verify-memo` still prints OK for existing memos.
+
+## 13. Planned (documentation only: nothing here is built)
+
+1. **Applied appeals are flagged**: a student with an open appeal is flagged and is not listed as a dismissal candidate while the appeal is open.
+2. **Dismissal candidate rule**: today is after the current expiry date **and** no Softbound submitted **and** no open appeal **and** the student is not inactive, completed or dismissed.
+   A Dean rejection alone does **not** make a student a candidate (Handbook 4.3). CGS reviews the list; the final decision is outside our scope.
+3. **Softbound and other student statuses (inactive, completed, dismissed) are read-only from the other module through ONE reader class.** Lookup order, stop at the first hit:
+   1. the shared Softbound module's real table;
+   2. our own, clearly labelled **demo overlay** table, used ONLY when the shared source has no record for that student AND the student is one of our demo students;
+   3. no record = not submitted.
+   The overlay never overrides a shared record and never applies to real students. We never write to the shared tables. Config `candidacy.softbound_source`:
+   `demo` (overlay only, until merge) / `shared_with_demo_fallback` (recommended after merge) / `shared` (production, overlay off).
+   The overlay table is filled by `candidacy:demo-seed` and cleared by `candidacy:demo-clear`. A demo-only command `candidacy:demo-softbound <studentID>` writes only to the overlay.
+   Any screen that shows a value resolved from the overlay marks it **"Demo data"**. A planned command `candidacy:check-softbound-source` prints how many students resolve from shared, overlay and none.
+   Reminders and dismissal candidates query the reader at run time and never copy the status. No page lets CGS set Softbound.
+   **Open item:** the shared Softbound table name and its student ID, submitted date and status fields are still to be obtained from the module owner.
+4. **Registry upload page** (Registry and CGS roles). Upload types: (a) confirmed dismissals; (b) expiry-date changes with a reason (deferment, change of mode, change of programme, other) and a letter reference.
+   Preview with row errors, confirm to apply, log old and new date, who and when; reminders recalculate; `extension_months_used` is unchanged; a CGS manual adjustment with a reason is the backup.
+   **Open item:** confirm with CGS whether the Registry's new expiry date already includes approved appeal months (assumed yes).
+5. **Excel export of the Operations list** (to be reminded to the user in the next phase): exactly the filtered list, same query and columns, CGS roles only.
+6. The "Students Near Candidacy Expiry" information was removed from Operations in this round; it returns later on the CGS overview page.
+
+## 14. Rule sources
+
+| Rule | Source |
+|---|---|
+| Extension appeal basics and eligibility | Postgraduate Student Handbook 2025, 2.1 (p.7) and 2.1.1 (p.8) |
+| Candidacy period and its extension | Handbook 2025, 2.5 to 2.7 |
+| Dismissal: a rejection alone is not a ground; candidate conditions | Handbook 2025, 4.3 (p.19) |
+| Softbound and the standing of the student | Handbook 2025, 4.4 (p.20) |
+| Appeals and decisions | Handbook 2025, 5.3 (p.30) |
+| Approval order including the Dean | confirmed with CGS during requirement gathering |
+| 12-month cap on extensions | confirmed with CGS during requirement gathering |
+| A Dean rejection blocks all future appeals | confirmed with CGS during requirement gathering |
+| An appeal is allowed on the last day of the expiry date | confirmed with CGS during requirement gathering |
+| Dean rejection reasons list | starting list, to be confirmed by CGS |

@@ -212,3 +212,5 @@ The appeal no longer runs on the shared WorkflowEngine: it has its own tables, s
 The older sections of this README that mention `CandidacyAppealController` describe the replaced flow.
 
 All appeal pages (student, Approval Portal, Operations) share one appeal page, `/candidacy/appeals/{id}`; see the inventory for the tabs, Operations cards, return path and live updates.
+
+Handbook alignment (2025): the chair step is displayed as "Department Chair"; the expiry day is still a valid day to appeal; the Dean's rejection needs reasons; Operations has four cards. The planned (not built) items are in `docs/candidacy-appeal-inventory.md` section 13.
