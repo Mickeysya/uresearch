@@ -16,43 +16,78 @@ final class CandidacyAssistant
 {
     public const DOMAIN = 'candidacy';
 
-    /** topic id => roles. The text lives in docs/knowledge/candidacy/<id>.md */
-    public const TOPICS = [
-        'cand_what_is_candidacy' => ['student', 'approver', 'cgs'],
-        'cand_when_how_appeal' => ['student', 'cgs'],
-        'cand_required_documents' => ['student', 'cgs'],
-        'cand_approval_route' => ['student', 'approver', 'cgs'],
-        'cand_status_meanings' => ['student', 'approver', 'cgs'],
-        'cand_after_return_rejection' => ['student', 'approver', 'cgs'],
-        'cand_twelve_month_limit' => ['student', 'approver', 'cgs'],
-        'cand_deadline' => ['student', 'approver', 'cgs'],
-        'cand_after_approval' => ['student', 'approver', 'cgs'],
-        'cand_reminders' => ['student', 'cgs'],
-        'cand_if_expires' => ['student', 'cgs'],
-        'cand_softbound_ends' => ['student', 'cgs'],
-        'cand_deferment_mode_programme' => ['student', 'cgs'],
-        'cand_my_signature' => ['approver', 'cgs'],
-        'cand_approver_rules' => ['approver', 'cgs'],
-        'cand_return_effect' => ['approver', 'cgs'],
-        'cand_appeal_rules' => ['student', 'approver', 'cgs'],
-        'cand_faq' => ['student', 'approver', 'cgs'],
-        'cand_outcome_prediction' => ['student', 'approver', 'cgs'],
-        'cand_cgs_operations_guide' => ['cgs'],
-        'cand_cgs_insights_guide' => ['cgs'],
-        'cand_cgs_dismissal_list_guide' => ['cgs'],
-        'cand_cgs_export_registry' => ['cgs'],
-        'cand_cgs_process_summary' => ['cgs'],
-    ];
+    /** The knowledge files, in the order a role looks in them: its own file first, then the shared ones (system flow, Handbook). */
+    protected const FILES = ['student' => '10-student.md', 'approver' => '20-approver.md', 'cgs' => '30-cgs.md'];
+
+    protected const SHARED_FILES = ['00-system-flow.md', '01-handbook.md'];
+
+    /** @var array<string, array<string, string>>|null topic id => ['student'|'approver'|'cgs'|'shared' => section text] */
+    protected static ?array $knowledge = null;
+
+    /**
+     * Every `## cand_<intent>` section of the five knowledge files. A topic is answered for a role only when that role's file has the section, or a shared file has it
+     * (shared = every role); so the role list of a topic is never typed in code and a role cannot be handed another role's text.
+     *
+     * @return array<string, array<string, string>>
+     */
+    public static function knowledge(): array
+    {
+        if (self::$knowledge !== null) {
+            return self::$knowledge;
+        }
+
+        $out = [];
+        $read = function (string $file, string $key) use (&$out): void {
+            $path = base_path('docs/knowledge/candidacy/'.$file);
+
+            if (! File::exists($path)) {
+                return;
+            }
+
+            $parts = preg_split('/^## (cand_[a-z0-9_]+)\s*$/m', File::get($path), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+
+            for ($i = 1; $i < count($parts); $i += 2) {
+                $out[$parts[$i]][$key] = trim($parts[$i + 1] ?? '');
+            }
+        };
+
+        foreach (self::FILES as $key => $file) {
+            $read($file, $key);
+        }
+
+        foreach (self::SHARED_FILES as $file) {
+            $read($file, 'shared');
+        }
+
+        return self::$knowledge = $out;
+    }
+
+    public static function flushKnowledge(): void
+    {
+        self::$knowledge = null;
+    }
+
+    /** @return array<string, list<string>> topic id => the plain roles that have an answer */
+    public static function topicRoles(): array
+    {
+        $out = [];
+
+        foreach (self::knowledge() as $topic => $sections) {
+            $out[$topic] = isset($sections['shared']) ? ['student', 'approver', 'cgs'] : array_values(array_intersect(array_keys(self::FILES), array_keys($sections)));
+        }
+
+        return $out;
+    }
 
     public static function isTopic(string $id): bool
     {
-        return isset(self::TOPICS[$id]);
+        return isset(self::knowledge()[$id]);
     }
 
     /** @return list<string> */
     public static function topicsFor(string $plainRole): array
     {
-        return array_keys(array_filter(self::TOPICS, fn ($roles) => in_array($plainRole, $roles, true)));
+        return array_keys(array_filter(self::topicRoles(), fn ($roles) => in_array($plainRole, $roles, true)));
     }
 
     /** @return list<string> */
@@ -67,11 +102,26 @@ final class CandidacyAssistant
         return array_values(array_filter(array_keys(CandidacyLookups::methods()), fn ($n) => collect($prefix)->contains(fn ($p) => str_starts_with($n, $p))));
     }
 
-    public static function sourceText(string $topic): ?string
+    /** The text of a topic for the role: that role's section (CGS before approver before student for a CGS user who is also an approver), else the shared one. Null when the role has none. */
+    public static function sourceText(string $topic, ?string $role = null): ?string
     {
-        $path = base_path("docs/knowledge/candidacy/{$topic}.md");
+        $sections = self::knowledge()[$topic] ?? null;
 
-        return File::exists($path) ? GuidanceLibrary::applyPlaceholders(File::get($path)) : null;
+        if ($sections === null) {
+            return null;
+        }
+
+        $order = $role === null ? ['cgs', 'approver', 'student'] : array_values(array_intersect(['cgs', 'approver', 'student'], AssistantRoles::set($role)));
+        $text = null;
+
+        foreach ([...$order, 'shared'] as $key) {
+            if (isset($sections[$key])) {
+                $text = $sections[$key];
+                break;
+            }
+        }
+
+        return $text === null ? null : GuidanceLibrary::applyPlaceholders($text);
     }
 
     /** @return array<string, array{description:string, parameters: array<string,string>}> */
@@ -94,14 +144,22 @@ final class CandidacyAssistant
     /** @return array<int, array{label:string,url:string}> */
     public static function linksForTopic(string $topic, string $role): array
     {
-        $links = match (true) {
-            str_starts_with($topic, 'cand_cgs_') && in_array($topic, ['cand_cgs_dismissal_list_guide'], true) => [['Dismissal List', route('candidacy.cgs.dismissals')]],
-            $topic === 'cand_cgs_export_registry' => [['Dismissal List', route('candidacy.cgs.dismissals')], ['Dismissal Upload', route('candidacy.cgs.dismissal-upload')]],
-            $topic === 'cand_cgs_insights_guide' => [['Candidacy Insights', route('candidacy.cgs.insights')]],
-            $topic === 'cand_cgs_operations_guide' => [['Candidacy Operations', route('candidacy.cgs.operations')]],
-            $topic === 'cand_my_signature' => [['My Signature', route('candidacy.signature.show')]],
-            in_array($topic, ['cand_approver_rules', 'cand_return_effect'], true) => [['Approval Portal', route('candidacy.portal.queue')]],
-            in_array($topic, ['cand_when_how_appeal', 'cand_required_documents'], true) && AssistantRoles::set($role) === ['student'] => [['New appeal', route('candidacy.appeals.new')]],
+        $plain = AssistantRoles::set($role);
+        $student = $plain === ['student'];
+        $cgs = in_array('cgs', $plain, true);
+        $portal = [['Approval Portal', route('candidacy.portal.queue')]];
+
+        $links = match ($topic) {
+            'cand_see_all_appeals' => $student ? [['My Candidacy', route('candidacy.status')]] : ($cgs ? [['Candidacy Operations', route('candidacy.cgs.operations')], ['Approval Portal', route('candidacy.portal.queue')]] : $portal),
+            'cand_when_how_appeal', 'cand_required_documents' => $student ? [['New appeal', route('candidacy.appeals.new')]] : [],
+            'cand_resubmit', 'cand_after_return_rejection', 'cand_after_approval' => $student ? [['My Candidacy', route('candidacy.status')]] : [],
+            'cand_how_decide', 'cand_approver_rules', 'cand_return_effect', 'cand_portal_guide', 'cand_waiting_colours' => $portal,
+            'cand_my_signature' => [['My Signature', route('candidacy.signature.show')]],
+            'cand_cgs_dismissal_list_guide' => [['Dismissal List', route('candidacy.cgs.dismissals')]],
+            'cand_cgs_export_registry' => [['Dismissal List', route('candidacy.cgs.dismissals')]],
+            'cand_cgs_registry_upload' => [['Dismissal Upload', route('candidacy.cgs.dismissal-upload')]],
+            'cand_cgs_insights_guide' => [['Candidacy Insights', route('candidacy.cgs.insights')]],
+            'cand_cgs_operations_guide' => [['Candidacy Operations', route('candidacy.cgs.operations')]],
             default => [],
         };
 
@@ -110,8 +168,12 @@ final class CandidacyAssistant
 
     // ------------------------------------------------------------------ keyword rules (the fallback when the model is busy)
 
-    /** id => regexes over the NORMALISED question; every one needs a candidacy word, so a Workstation question is never taken for one. */
+    /**
+     * id => regexes over the NORMALISED question. A rule can only ever answer a role that the catalogue gives that id to (see keywordMatch), and every pattern names what it
+     * is about, so a vague "how ... appeal" can no longer reach a how-to written for another role. Order matters: the more specific first.
+     */
     protected const KEYWORDS = [
+        'cand_see_all_appeals' => ['/\b(see|view|find|show|list|open|check|where|access)\b.*\b(all|every|full|complete|whole)\b.*\bappeals?\b/', '/\b(full|complete|whole)\b.*\bappeals?\s+(list|table)\b/', '/\bappeals?\s+list\b/', '/\ball\s+(the\s+|my\s+)?appeals?\b/'],
         'cand_my_expiry' => ['/\b(my\s+)?candidacy\b.*\b(expire|expiry|end|deadline|days\s+left)\b/', '/\b(expire|expiry)\s+date\b.*\bcandidacy\b/'],
         'cand_my_extension' => ['/\bextension\b.*\b(left|remain|used|much|many)\b/', '/\b(left|remain|used)\b.*\bextension\b/'],
         'cand_can_appeal' => ['/\b(can|may|allowed|eligible)\b.*\b(i|we)\b.*\bappeal\b/', '/\bappeal\b.*\b(still|now|eligible|possible)\b/'],
@@ -138,31 +200,47 @@ final class CandidacyAssistant
         'cand_cgs_dismissal_candidates' => ['/\bdismissal\s+(candidates?|list)\b.*\b(how\s+many|count|size|number)\b/', '/\b(how\s+many)\b.*\bdismissal\b/'],
         'cand_cgs_dismissed' => ['/\b(dismissed|dismissals?)\b.*\b(this|last)\s+(month|30)/'],
         'cand_cgs_in_progress' => ['/\bappeals?\b.*\bin\s+progress\b/'],
+        'cand_how_decide' => ['/\bhow\b.*\b(approve|return|reject|verify|decide)\b.*\bappeals?\b/', '/\bhow\b.*\b(do|can)\b.*\b(i|we)\b.*\b(approve|return|reject|verify)\b/'],
         'cand_required_documents' => ['/\b(documents?|attach|files?|form)\b.*\bappeal\b/', '/\bappeal\b.*\b(documents?|attach|form)\b/'],
-        'cand_when_how_appeal' => ['/\bhow\b.*\b(appeal|extend|extension)\b/'],
+        'cand_when_how_appeal' => ['/\bhow\b.*\b(do|can|to)\b.*\b(appeal|apply\s+for\s+(an\s+)?extension|extend)\b/', '/\b(steps?|process)\b.*\b(appeal|extension)\b/', '/\bhow\b.*\b(submit|make|start|file)\b.*\b(an?\s+)?appeal\b/'],
         'cand_if_expires' => ['/\b(candidacy|candidature)\b.*\b(expires?|expired|ends?|miss)\b.*\b(what|happen)/', '/\bwhat\b.*\bhappens?\b.*\bcandidacy\b.*\bexpir/'],
         'cand_reminders' => ['/\b(candidacy|expiry)\s+reminders?\b/'],
         'cand_outcome_prediction' => ['/\b(will|going\s+to|chance|likely)\b.*\bappeal\b.*\b(approved|accepted|rejected|pass)/', '/\bappeal\b.*\b(approved|rejected)\b.*\b(will|chance|likely)/'],
         'cand_my_signature' => ['/\bsignature\b/'],
+        'cand_return_reasons' => ['/\b(return|returning)\s+reasons?\b/', '/\breasons?\b.*\b(return|returned)\b/'],
         'cand_return_effect' => ['/\b(return|returned)\b.*\bappeal\b.*\b(what|happen|after)/'],
+        'cand_dean_rejection' => ['/\b(dean|reject\w*)\b.*\b(reject\w*|final)\b/'],
+        'cand_withdraw' => ['/\bwithdraw/', '/\bcancel\b.*\bappeal\b/'],
+        'cand_resubmit' => ['/\bresubmit/'],
         'cand_twelve_month_limit' => ['/\b(12|twelve)\s*-?\s*months?\b.*\b(limit|maximum|rule)/', '/\bmaximum\b.*\bextension\b/'],
         'cand_deadline' => ['/\bappeal\b.*\b(deadline|last\s+day|on\s+or\s+before)\b/'],
-        'cand_cgs_export_registry' => ['/\b(export|upload)\b.*\b(dismissal|registry)\b/'],
+        'cand_waiting_colours' => ['/\b(colou?rs?|dots?)\b.*\b(waiting|days)\b/', '/\bwaiting\b.*\b(colou?rs?|dots?)\b/'],
+        'cand_notifications' => ['/\b(notif\w*|e\s*mail|bell)\b.*\b(appeal|approve|return)\w*/'],
+        'cand_cgs_registry_upload' => ['/\bupload\b.*\bregistry\b/', '/\bdismissal\s+upload\b/'],
+        'cand_cgs_export_registry' => ['/\bexport\b.*\b(dismissal|list)\b/'],
         'cand_cgs_dismissal_list_guide' => ['/\b(who|why|rule)\b.*\bdismissal\s+list\b/'],
         'cand_cgs_insights_guide' => ['/\binsights\b.*\b(read|mean|explain|calculated)\b/'],
+        'cand_cgs_operations_guide' => ['/\boperations\b.*\b(read|use|filter|explain|mean)\w*/'],
         'cand_approver_rules' => ['/\b(what|which)\b.*\b(can|do)\b.*\b(my\s+step|as\s+an?\s+(approver|supervisor|chair|dean))\b/', '/\bwhat\s+can\s+i\s+do\b.*\bappeal/'],
         'cand_approval_route' => ['/\b(who|which)\b.*\b(approves?|decides?|signs?)\b.*\bappeal/', '/\bappeal\b.*\b(route|order\s+of\s+approvers|approval\s+steps)\b/'],
         'cand_status_meanings' => ['/\bappeal\b.*\bstatus(es)?\b.*\bmean\b/', '/\bwhat\b.*\b(returned|closed\s+expired|with\s+cgs)\b.*\bmean\b/'],
-        'cand_after_approval' => ['/\bafter\b.*\b(appeal\s+)?(is\s+)?approved\b/', '/\bapproval\s+memo\b/'],
+        'cand_after_approval' => ['/\bafter\b.*\b(appeal\s+)?(is\s+)?approved\b/', '/\bapproval\s+memo\b/', '/\bmemo\b/'],
         'cand_appeal_rules' => ['/\bappeal\s+rules\b/', '/\brules?\b.*\b(for|of)\b.*\bappeals?\b/'],
         'cand_what_is_candidacy' => ['/\b(how\s+long|maximum|duration|period)\b.*\bcandidacy\b/', '/\bwhat\s+is\b.*\bcandidacy\b/'],
         'cand_after_return_rejection' => ['/\bappeal\b.*\b(rejected|returned)\b.*\b(now|next|what)\b/', '/\b(rejected|returned)\b.*\bappeal\b.*\b(now|next)\b/'],
     ];
 
-    /** The catalogue id a question plainly names, for the role, or null. Used by the fallback only (the model is the primary router). */
+    /** Words that carry no meaning for the match score. */
+    protected const STOP = ['the', 'and', 'for', 'are', 'was', 'what', 'when', 'how', 'can', 'does', 'did', 'you', 'your', 'our', 'with', 'from', 'that', 'this', 'there', 'have', 'has', 'any', 'all', 'please', 'tell', 'about', 'into', 'out', 'not', 'who', 'where', 'which', 'would', 'could', 'should', 'get', 'got', 'need', 'want', 'know', 'give', 'show'];
+
+    /**
+     * The catalogue id a question plainly names, for THIS role only, or null. The role's own catalogue decides what may be answered (an id the role is not given is never
+     * returned), a regex rule needs a candidacy word in the question, and the word-overlap check below needs a minimum score and a clear winner. The model is the primary
+     * router; this runs only when the model is busy.
+     */
     public static function keywordMatch(string $normalised, string $role): ?string
     {
-        if (! preg_match('/\b(candidacy|candidature|appeals?|extension|softbound|soft\s+bound|dismissal|dismissed|reminders?|approver|signature)\b/', $normalised)) {
+        if (! preg_match('/\b(candidacy|candidature|appeals?|extension|softbound|soft\s+bound|dismissal|dismissed|reminders?|approver|signature|memo|operations|insights)\b/', $normalised)) {
             return null;
         }
 
@@ -180,7 +258,109 @@ final class CandidacyAssistant
             }
         }
 
+        return self::scoredMatch($normalised, $role);
+    }
+
+    /** @return list<string> */
+    protected static function words(string $text): array
+    {
+        $out = [];
+
+        foreach (preg_split('/[^a-z0-9]+/', mb_strtolower($text)) ?: [] as $t) {
+            if (mb_strlen($t) >= 3 && ! in_array($t, self::STOP, true)) {
+                $out[] = preg_replace('/(ing|ed|es|s)$/', '', $t) ?: $t;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /** The one entry of the role that shares most of the question's meaningful words: at least 3 shared, at least 60% of the question's words, and one more than the runner-up. */
+    protected static function scoredMatch(string $normalised, string $role): ?string
+    {
+        $words = self::words($normalised);
+
+        if (count($words) < 3) {
+            return null;
+        }
+
+        $scores = [];
+
+        foreach (Catalogue::forRole($role, self::DOMAIN) as $entry) {
+            if ($entry['kind'] === 'action' || $entry['kind'] === 'out_of_scope') {
+                continue;
+            }
+
+            $entryWords = array_flip(self::words($entry['question'].' '.implode(' ', $entry['examples'])));
+            $scores[$entry['id']] = count(array_filter($words, fn ($w) => isset($entryWords[$w])));
+        }
+
+        arsort($scores);
+        $ids = array_keys($scores);
+        $best = $scores[$ids[0] ?? ''] ?? 0;
+        $second = $scores[$ids[1] ?? ''] ?? 0;
+
+        return $best >= 3 && $best / count($words) >= 0.6 && $best >= $second + 1 ? $ids[0] : null;
+    }
+
+    // ------------------------------------------------------------------ scope and role guards
+
+    /** Handbook topics outside Study Candidacy (config candidacy domain `out_of_scope_terms`). */
+    public static function isOutsideScope(string $normalised): bool
+    {
+        $found = false;
+
+        foreach ((array) config('assistant.domains.candidacy.out_of_scope_terms') as $term) {
+            if (preg_match('/(?<![a-z0-9])'.preg_quote($term, '/').'(?![a-z0-9])/i', $normalised) === 1) {
+                $found = true;
+                break;
+            }
+        }
+
+        // a core candidacy word keeps the question in scope ("appeal" is not enough to override "thesis correction" only when the word is just "extension")
+        return $found && ! preg_match('/\b(candidacy|candidature|appeals?|softbound|soft\s*-?\s*bound|dismissal|dismissed|dismiss|reminders?|memo|approvers?)\b/', $normalised);
+    }
+
+    /** The pages and words that belong to one role only, and whom they belong to. */
+    protected const ROLE_ONLY = [
+        'cgs' => ['/\b(operations|insights|dismissal\s+list|dismissal\s+upload|registry\s+(file|result)|export)\b/'],
+        'approver' => ['/\b(approval\s+portal|pending\s+my\s+action|verify)\b/'],
+        'student' => ['/\b(submit\s+an\s+appeal|new\s+appeal)\b/', '/\bhow\b.*\b(appeal|apply|ask)\b.*\b(for\s+)?(an?\s+)?(extension|more\s+time)\b/'],
+    ];
+
+    /** The plain role a question is plainly about when it is not the asking role's, or null. */
+    public static function wrongRoleFor(string $normalised, string $role): ?string
+    {
+        $mine = AssistantRoles::set($role);
+
+        foreach (self::ROLE_ONLY as $owner => $patterns) {
+            if (in_array($owner, $mine, true) || ($owner === 'approver' && in_array('cgs', $mine, true))) {
+                continue;
+            }
+
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $normalised) === 1) {
+                    return $owner;
+                }
+            }
+        }
+
         return null;
+    }
+
+    /** What the assistant says when nothing fits: honest, with the asking role's own suggestions shown under it by the pipeline. */
+    public static function noMatchMessage(string $normalised, string $role): string
+    {
+        $owner = self::wrongRoleFor($normalised, $role);
+        $label = ['student' => 'students', 'approver' => 'approvers', 'cgs' => 'CGS'];
+
+        if ($owner !== null) {
+            $mine = AssistantRoles::set($role);
+
+            return 'That is for '.$label[$owner].', so I can\'t answer it for your account. As '.($mine === ['student'] ? 'a student' : ($mine === ['approver'] ? 'an approver' : 'CGS')).', you can ask me about the questions below.';
+        }
+
+        return 'I could not match that to something I can answer. Try one of these questions, or ask it in other words.';
     }
 
     // ------------------------------------------------------------------ refusals
@@ -230,14 +410,17 @@ final class CandidacyAssistant
                 'student' => [
                     'cand_my_expiry' => 'When does my candidacy expire?', 'cand_my_extension' => 'How many months of extension do I have left?', 'cand_can_appeal' => 'Can I still submit an appeal?',
                     'cand_my_appeal' => 'Where is my appeal now?', 'cand_required_documents' => 'What documents do I need for an appeal?', 'cand_if_expires' => 'What happens if my candidacy expires?',
+                    'cand_when_how_appeal' => 'When and how do I appeal for an extension?', 'cand_reminders' => 'When do I get candidacy reminders?', 'cand_see_all_appeals' => 'How can I see the full appeal list?',
                 ],
                 'approver' => [
                     'cand_ap_pending' => 'How many appeals are waiting for me?', 'cand_ap_oldest' => 'Which appeal has waited the longest?', 'cand_approver_rules' => 'What can I do at my step?',
                     'cand_my_signature' => 'How do I upload my signature?', 'cand_return_effect' => 'What happens when I return an appeal?', 'cand_appeal_rules' => 'What are the appeal rules?',
+                    'cand_how_decide' => 'How do I approve or return an appeal?', 'cand_see_all_appeals' => 'How can I see the full appeal list?', 'cand_waiting_colours' => 'What do the waiting-day colours mean?',
                 ],
                 default => [
                     'cand_cgs_expiring' => 'How many students expire within 3 months?', 'cand_cgs_no_action' => 'How many of them have taken no action?', 'cand_cgs_pending_by_step' => 'How many appeals are waiting at each step?',
                     'cand_cgs_waiting_10' => 'Which appeals have waited more than 10 days?', 'cand_cgs_dismissal_candidates' => 'How many dismissal candidates are there?', 'cand_cgs_export_registry' => 'How do I export the dismissal list?',
+                    'cand_see_all_appeals' => 'How can I see the full appeal list?', 'cand_cgs_operations_guide' => 'How do I read the Operations page?', 'cand_cgs_registry_upload' => 'How do I upload the Registry\'s result?',
                 ],
             };
         }
@@ -278,8 +461,12 @@ final class CandidacyAssistant
         }
 
         foreach (self::topicSpecs() as $id => $spec) {
+            if (! isset(self::topicRoles()[$id])) {
+                continue;
+            }
+
             $entries[] = [
-                'id' => $id, 'kind' => 'guidance', 'domain' => self::DOMAIN, 'roles' => self::TOPICS[$id], 'question' => $suggested[$id] ?? $spec['question'], 'description' => $spec['description'],
+                'id' => $id, 'kind' => 'guidance', 'domain' => self::DOMAIN, 'roles' => self::topicRoles()[$id], 'question' => $suggested[$id] ?? $spec['question'], 'description' => $spec['description'],
                 'examples' => $spec['examples'], 'parameters' => [], 'link' => null,
             ];
         }
@@ -391,6 +578,19 @@ final class CandidacyAssistant
             'cand_cgs_insights_guide' => ['question' => 'How do I read the Candidacy Insights page?', 'description' => 'What each CANDIDACY Insights chart shows (expiry forecast, high risk, bands, reminders, dismissal pipeline), how it is calculated and that the forecast is a projection from known expiry dates.', 'examples' => ['how to read candidacy insights', 'what does the expiry forecast show', 'how is high risk defined', 'explain the insights charts', 'is the forecast a prediction']],
             'cand_cgs_dismissal_list_guide' => ['question' => 'Who is on the Dismissal List?', 'description' => 'The rule for who is on the Dismissal List (expired, no Softbound, no appeal in review and so on) and how to read it.', 'examples' => ['who appears on the dismissal list', 'why is a student on the dismissal list', 'dismissal list rule', 'who is excluded from the dismissal list', 'when does someone leave the dismissal list']],
             'cand_cgs_export_registry' => ['question' => 'How do I export the dismissal list?', 'description' => 'How to export the Dismissal List to Excel, send it to the Registry, and upload the Registry\'s result (preview, then confirm).', 'examples' => ['how to export dismissal candidates', 'sending the list to the registry', 'how do i upload the registry result', 'dismissal upload steps', 'what happens after the registry confirms']],
+            'cand_see_all_appeals' => ['question' => 'How can I see the full appeal list?', 'description' => 'Where to see the whole list of appeals: a student their own My Appeals table, an approver the Approval Portal tabs, CGS the Operations page.', 'examples' => ['where do i see all appeals', 'full list of appeals', 'show me every appeal', 'view all the appeals', 'how to see the appeal list', 'where can i find the complete appeal list']],
+            'cand_hb_extension' => ['question' => 'What does the Handbook say about extending candidacy?', 'description' => 'The Handbook rule for an extension: apply to CGS on the supervisor or Chair recommendation, before or on the day candidacy ends, decided by the University.', 'examples' => ['handbook extension of candidacy', 'who recommends an extension', 'when must the extension be applied for', 'does the university approve extensions', 'graduate studies academic committee extension']],
+            'cand_hb_dismissal' => ['question' => 'What does the Handbook say about dismissal and reinstatement?', 'description' => 'The Handbook rule that exceeding the maximum candidacy duration leads to dismissal, and that a reinstatement appeal goes to the Registry.', 'examples' => ['handbook dismissal rule', 'who decides dismissal', 'how do i appeal for reinstatement', 'reinstatement after dismissal', 'senate dismissal discretion']],
+            'cand_how_decide' => ['question' => 'How do I approve or return an appeal?', 'description' => 'How an approver acts on an appeal in the Approval Portal: Review, then Approve or Return to student (Supervisor, Department Chair), Verify or Return (CGS), Approve, Return or Reject (Dean).', 'examples' => ['how do i approve an appeal', 'how to return an appeal to the student', 'how does the dean reject', 'where is the approve button', 'steps to verify an appeal', 'how do i act on an appeal']],
+            'cand_return_reasons' => ['question' => 'What are the return reasons?', 'description' => 'The reasons that can be given when an appeal is returned (or, for the Dean, rejected) and what they mean.', 'examples' => ['why do appeals get returned', 'list of return reasons', 'what reasons can i choose when returning', 'common reasons for return', 'reject reasons for the dean']],
+            'cand_dean_rejection' => ['question' => 'What happens when the Dean rejects an appeal?', 'description' => 'What a Dean rejection means: it is final, the expiry date stays, no further appeal, and what follows.', 'examples' => ['what if the dean rejects', 'is a rejection final', 'can i appeal again after rejection', 'effects of a dean rejection', 'dean reject confirmation']],
+            'cand_withdraw' => ['question' => 'Can I withdraw an appeal?', 'description' => 'Whether an appeal can be withdrawn once submitted (it cannot).', 'examples' => ['can i cancel my appeal', 'withdraw an appeal after submitting', 'undo a submitted appeal', 'take back my appeal', 'is withdrawal possible']],
+            'cand_resubmit' => ['question' => 'How do I resubmit a returned appeal?', 'description' => 'How a returned appeal is corrected and resubmitted, and where it goes next.', 'examples' => ['how to resubmit an appeal', 'edit my returned appeal', 'fix and send the appeal again', 'where does a resubmitted appeal go', 'resubmit after return']],
+            'cand_notifications' => ['question' => 'Who is notified when?', 'description' => 'Who gets an e-mail and bell notification at each appeal event.', 'examples' => ['will i get an email when it is approved', 'who is notified when an appeal is returned', 'notifications for appeals', 'do i get a bell notification', 'when do emails go out']],
+            'cand_waiting_colours' => ['question' => 'What do the waiting-day colours mean?', 'description' => 'The waiting-days dot colours: grey under 5 days, amber 5 to 9, red 10 or more.', 'examples' => ['what do the dots mean', 'waiting days colours', 'red dot meaning', 'amber dot on an appeal', 'colour legend for waiting days']],
+            'cand_portal_guide' => ['question' => 'How do I use the Approval Portal?', 'description' => 'The Approval Portal tabs and filters and how to open an appeal.', 'examples' => ['approval portal tabs', 'filters in the approval portal', 'what is pending my action', 'how to use the portal', 'difference between ongoing and history']],
+            'cand_cgs_registry_upload' => ['question' => 'How do I upload the Registry\'s result?', 'description' => 'How CGS uploads the Registry\'s confirmed list on Dismissal Upload: preview, then confirm.', 'examples' => ['upload the registry file', 'dismissal upload preview', 'how to confirm dismissals', 'what does will be dismissed mean', 'registry result upload steps']],
+            'cand_cgs_not_built' => ['question' => 'What is not available yet?', 'description' => 'Candidacy features CGS may expect that are not built yet: Excel export of Operations, reminder log page, urgent reminders, manual expiry change.', 'examples' => ['can i export the operations list', 'is there a reminder log', 'urgent reminders 3 days', 'change a students expiry date manually', 'features not available yet']],
             'cand_cgs_process_summary' => ['question' => 'What is the CGS process for appeals and dismissals end to end?', 'description' => 'The whole CGS process in order: appeals route, reminders, the dismissal list, export, the Registry and upload.', 'examples' => ['explain the whole candidacy process', 'cgs process from appeal to dismissal', 'end to end candidacy workflow', 'overview of the candidacy system for cgs', 'how does everything fit together']],
         ];
     }

@@ -82,7 +82,7 @@ class CandidacyAssistantTest extends TestCase
     {
         $user = $this->userFor($role);
         $this->assertSame($role, AssistantRoles::roleFor($user));
-        $expected = array_merge(...array_map(fn ($plain) => array_keys(array_filter(CandidacyAssistant::TOPICS, fn ($r) => in_array($plain, $r, true))), AssistantRoles::set($role)));
+        $expected = array_merge(...array_map(fn ($plain) => CandidacyAssistant::topicsFor($plain), AssistantRoles::set($role)));
 
         foreach (Catalogue::all() as $entry) {
             if ($entry['domain'] !== 'candidacy') {
@@ -102,7 +102,7 @@ class CandidacyAssistantTest extends TestCase
             }
         }
 
-        foreach (CandidacyAssistant::TOPICS as $topic => $roles) {
+        foreach (CandidacyAssistant::topicRoles() as $topic => $roles) {
             $this->assertSame(in_array($topic, $expected, true), \App\Modules\Chloe\Assistant\GuidanceLibrary::isAllowed($topic, $role), "topic {$topic} for {$role}");
         }
     }
@@ -217,16 +217,16 @@ class CandidacyAssistantTest extends TestCase
 
     public function test_every_topic_has_a_source_line_and_the_answer_shows_it(): void
     {
-        foreach (array_keys(CandidacyAssistant::TOPICS) as $topic) {
-            $text = CandidacyAssistant::sourceText($topic);
+        foreach (array_keys(CandidacyAssistant::topicRoles()) as $topic) {
+            $text = CandidacyAssistant::sourceText($topic, CandidacyAssistant::topicRoles()[$topic][0]);
             $this->assertNotNull($text, $topic);
             $this->assertMatchesRegularExpression('/^Source: .+/m', $text, $topic);
             $this->assertStringNotContainsString('{{', $text, "unreplaced placeholder in {$topic}");
         }
 
-        $roleOf = fn (string $topic) => in_array('student', CandidacyAssistant::TOPICS[$topic], true) ? $this->student : $this->cgsUser;
+        $roleOf = fn (string $topic) => in_array('student', CandidacyAssistant::topicRoles()[$topic], true) ? $this->student : $this->cgsUser;
         $answer = $this->ask($roleOf('cand_required_documents'), 'what documents do i need', 'cand_required_documents');
-        $this->assertStringContainsString('Source: CGS process', $answer['answer']);
+        $this->assertStringContainsString('Source: UResearch Study Candidacy design', $answer['answer']);
         $this->assertStringContainsString('10 MB', $answer['answer']);
     }
 
@@ -259,10 +259,10 @@ class CandidacyAssistantTest extends TestCase
         }
     }
 
-    public function test_suggested_questions_are_six_per_role_and_answered_without_a_model_call(): void
+    public function test_suggested_questions_are_at_least_eight_per_role_and_answered_without_a_model_call(): void
     {
         foreach (['student', 'approver', 'cgs'] as $role) {
-            $this->assertCount(6, CandidacyAssistant::suggestions($role));
+            $this->assertGreaterThanOrEqual(8, count(CandidacyAssistant::suggestions($role)));
         }
 
         $before = FakeModel::routeCallCount();
@@ -272,7 +272,7 @@ class CandidacyAssistantTest extends TestCase
         $this->assertStringContainsString('1 Mar 2027', $result['answer']);
 
         $suggestions = $this->actingAs($this->student)->getJson(route('workstation.assistant.suggestions', $this->claim($this->student)))->assertOk()->json('suggestions');
-        $this->assertCount(6, $suggestions);
+        $this->assertCount(9, $suggestions);
         $this->assertSame('cand_my_expiry', $suggestions[0]['id']);
 
         $this->actingAs($this->student)->postJson(route('workstation.assistant.suggestion'), ['id' => 'cand_my_expiry'] + $this->claim($this->student))->assertOk()->assertJsonPath('outcome', 'answered');

@@ -110,10 +110,10 @@ final class GuidanceLibrary
         ];
     }
 
-    public static function sourceText(string $topic): ?string
+    public static function sourceText(string $topic, ?string $role = null): ?string
     {
         if (CandidacyAssistant::isTopic($topic)) {
-            return CandidacyAssistant::sourceText($topic);
+            return CandidacyAssistant::sourceText($topic, $role);
         }
 
         $directory = in_array($topic, self::CGS_TOPICS, true) ? 'cgs' : 'student';

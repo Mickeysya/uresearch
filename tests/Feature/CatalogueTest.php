@@ -53,7 +53,7 @@ class CatalogueTest extends TestCase
 
     public function test_every_guidance_topic_has_a_catalogue_entry_and_every_guidance_entry_is_a_real_topic(): void
     {
-        $allTopics = [...GuidanceLibrary::STUDENT_TOPICS, ...GuidanceLibrary::CGS_TOPICS, ...array_keys(\App\Modules\Chloe\Assistant\CandidacyAssistant::TOPICS)];
+        $allTopics = [...GuidanceLibrary::STUDENT_TOPICS, ...GuidanceLibrary::CGS_TOPICS, ...array_keys(\App\Modules\Chloe\Assistant\CandidacyAssistant::topicRoles())];
         $catalogueGuidanceIds = collect(Catalogue::all())->where('kind', 'guidance')->pluck('id')->all();
 
         foreach ($allTopics as $topic) {

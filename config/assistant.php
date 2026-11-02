@@ -279,6 +279,9 @@ return [
             'placeholder' => 'Ask about your candidacy or appeals',
             'roles' => ['student', 'approver', 'cgs'],
             'redirect' => 'I can only answer questions about Study Candidacy (appeals, approvals, reminders, expiry and dismissal) here. For workstation or locker key questions, please use the assistant on the Workstation pages.',
+            // Handbook topics that are NOT Study Candidacy (RPD/RCS, viva, marks, allowances and stage gates, thesis correction, registration, probation, credit transfer, leave,
+            // supervisor change, fees, visa, upgrade, IP): with one of these and no core candidacy word the assistant refuses without a model call.
+            'out_of_scope_terms' => ['rpd', 'rcs', 'research proposal', 'proposal defence', 'proposal defense', 'viva', 'viva voce', 'conference', 'progress mark', 'progress marks', 'progress report', 'gra', 'ga', 'ta', 'allowance', 'allowances', 'stipend', 'stage gate', 'stage gates', 'thesis correction', 'thesis corrections', 'correction period', 'late registration', 'semester registration', 'course registration', 'probation', 'credit transfer', 'annual leave', 'leave of absence', 'change supervisor', 'change my supervisor', 'changing supervisor', 'change of supervisor', 'supervisor change', 'new supervisor', 'fee', 'fees', 'tuition', 'visa', 'upgrade', 'upgrading', 'master to phd', 'intellectual property', 'patent', 'patents'],
             'strong_terms' => ['appeal', 'appeals', 'approver', 'approvers', 'approve', 'supervisor', 'chair', 'dean', 'memo', 'softbound', 'soft bound', 'soft-bound', 'dismissal', 'dismiss', 'dismissed', 'reminder', 'reminders', 'signature', 'extension', 'candidacy', 'candidature'],
         ],
     ],

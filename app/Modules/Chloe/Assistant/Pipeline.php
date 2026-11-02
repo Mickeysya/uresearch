@@ -63,7 +63,7 @@ final class Pipeline
     /** Out of scope, but the question still sounds like it is about this system. */
     public const ASKED_BACK_DOMAIN_MESSAGE = "I'm not sure I understood. You can ask about seats, locker keys, the Term of Use, or use one of the suggested questions.";
 
-    public const OUT_OF_SCOPE_CANDIDACY_MESSAGE = "I can't help with that. You can ask about your candidacy, appeals, reminders and the dismissal list.";
+    public const OUT_OF_SCOPE_CANDIDACY_MESSAGE = "I only cover Study Candidacy (expiry, extension appeals, approvals, reminders and dismissal), so I can't help with that. Try one of these questions.";
 
     public const ASKED_BACK_CANDIDACY_MESSAGE = "I'm not sure I understood. You can ask about candidacy expiry, appeals, reminders or dismissal, or use one of the suggested questions.";
 
@@ -191,6 +191,13 @@ final class Pipeline
             $this->traceLine('decision: redirected, the question belongs to the other domain (no model call)');
 
             return $this->redirect($user, $role, AssistantLog::ANSWERED_BY_RULE);
+        }
+
+        // a Handbook topic that is not Study Candidacy (config domains.candidacy.out_of_scope_terms) is refused without a model call
+        if ($this->domain === 'candidacy' && CandidacyAssistant::isOutsideScope(QuestionNormaliser::normalise($maskedQuestion))) {
+            $this->traceLine('decision: refused, outside Study Candidacy (no model call)');
+
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_CANDIDACY_MESSAGE, [], null, AssistantLog::ANSWERED_BY_RULE, 'out_of_scope', suggestions: $this->suggestionsList($role));
         }
 
         $recentTurns = (int) config('assistant.recent_turns', 5);
@@ -410,8 +417,13 @@ final class Pipeline
         }
 
         if ($this->domain === 'candidacy') {
+            // a page or button that belongs to another role: say so and show what THIS role can ask
+            if (CandidacyAssistant::wrongRoleFor(QuestionNormaliser::normalise($maskedQuestion), $role) !== null) {
+                return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_ASKED_BACK, CandidacyAssistant::noMatchMessage(QuestionNormaliser::normalise($maskedQuestion), $role), [], null, $answeredBy, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed);
+            }
+
             return AssistantDomains::hasStrongTerm(QuestionNormaliser::normalise($maskedQuestion), 'candidacy')
-                ? $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_ASKED_BACK, self::ASKED_BACK_CANDIDACY_MESSAGE, [], null, $answeredBy, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed)
+                ? $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_ASKED_BACK, CandidacyAssistant::noMatchMessage(QuestionNormaliser::normalise($maskedQuestion), $role), [], null, $answeredBy, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed)
                 : $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_CANDIDACY_MESSAGE, [], null, $answeredBy, 'out_of_scope', modelUsed: $modelUsed);
         }
 
@@ -620,9 +632,9 @@ final class Pipeline
         $chips = $this->chipsFor(array_column($candidates, 'id'), []);
         $this->traceLine('fallback: no match, '.count($chips).' keyword chip(s)');
 
-        $result = $providerDown
+        $result = $providerDown && ! ($this->domain === 'candidacy' && CandidacyAssistant::wrongRoleFor($normalised, $role) !== null)
             ? $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'unavailable', AssistantLog::OUTCOME_UNAVAILABLE, self::UNAVAILABLE_MESSAGE, [], null, $answeredBy, 'provider_unavailable', suggestions: $this->suggestionsList($role), modelUsed: $modelUsed, errorCode: $errorCode)
-            : $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_ASKED_BACK, self::ASKED_BACK_DOMAIN_MESSAGE, [], null, $answeredBy, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed, errorCode: $errorCode);
+            : $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_ASKED_BACK, $this->domain === 'candidacy' ? CandidacyAssistant::noMatchMessage($normalised, $role) : self::ASKED_BACK_DOMAIN_MESSAGE, [], null, $answeredBy, null, suggestions: $this->suggestionsList($role), modelUsed: $modelUsed, errorCode: $errorCode);
 
         return $chips === [] ? $result : [...$result, 'chips' => $chips];
     }
@@ -675,7 +687,7 @@ final class Pipeline
      */
     protected function answerGuidance(User $user, string $role, string $topicId, string $source, string $answeredBy, ?string $modelUsed, ?string $maskedQuestion = null, array $recentMasked = [], bool $allowFallback = true): array
     {
-        $sourceText = GuidanceLibrary::isAllowed($topicId, $role, $this->domain) ? GuidanceLibrary::sourceText($topicId) : null;
+        $sourceText = GuidanceLibrary::isAllowed($topicId, $role, $this->domain) ? GuidanceLibrary::sourceText($topicId, $role) : null;
 
         if ($sourceText === null) {
             return $this->finish($user, $role, $source, 'guidance:unknown', AssistantLog::OUTCOME_ERROR, self::MISSING_TOPIC_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'missing_topic', modelUsed: $modelUsed);
@@ -730,6 +742,7 @@ final class Pipeline
             $this->recordModelCall($primaryModel, $composeEstimatedTokens);
             $timeout = (int) min(10, (int) config('assistant.total_deadline_seconds', 22));
             $aggregate = $this->model->composeAggregate($maskedQuestion, $lookup, $result, $primaryModel, $timeout);
+            $this->refundUnsentCall($aggregate, $primaryModel, $composeEstimatedTokens);
 
             if ($aggregate['outcome'] === 'ok' && is_string($aggregate['text']) && trim($aggregate['text']) !== '') {
                 $candidate = self::stripInventedPersonalData(trim($aggregate['text']));
@@ -937,6 +950,7 @@ final class Pipeline
 
                 $this->recordModelCall($primaryModel, $estimatedTokens);
                 $result = $this->model->answer($maskedQuestion, $recentMasked, $knowledgeText, $lookupCatalogue, $primaryModel, $timeout, $topicHints, $preferCgsTopics, $isCgsRole);
+                $this->refundUnsentCall($result, $primaryModel, $estimatedTokens);
 
                 if ($result['outcome'] === 'ok') {
                     $this->recordModelOutcome($primaryModel, true);
@@ -970,6 +984,7 @@ final class Pipeline
         if ($timeout !== null && $this->modelBudgetAvailable($fallbackModel, $estimatedTokens)) {
             $this->recordModelCall($fallbackModel, $estimatedTokens);
             $result = $this->model->answer($maskedQuestion, $recentMasked, $knowledgeText, $lookupCatalogue, $fallbackModel, $timeout, $topicHints, $preferCgsTopics, $isCgsRole);
+            $this->refundUnsentCall($result, $fallbackModel, $estimatedTokens);
 
             if ($result['outcome'] === 'ok') {
                 $this->recordModelOutcome($fallbackModel, true);
@@ -1025,6 +1040,7 @@ final class Pipeline
 
                 $this->recordModelCall($primaryModel, $estimatedTokens);
                 $result = $this->model->route($maskedQuestion, $recentMasked, $catalogue, $fewShots, $todayLabel, $primaryModel, $timeout);
+                $this->refundUnsentCall($result, $primaryModel, $estimatedTokens);
 
                 if ($result['outcome'] === 'ok') {
                     $this->recordModelOutcome($primaryModel, true);
@@ -1056,6 +1072,7 @@ final class Pipeline
         if ($timeout !== null && $this->modelBudgetAvailable($fallbackModel, $estimatedTokens)) {
             $this->recordModelCall($fallbackModel, $estimatedTokens);
             $result = $this->model->route($maskedQuestion, $recentMasked, $catalogue, $fewShots, $todayLabel, $fallbackModel, $timeout);
+            $this->refundUnsentCall($result, $fallbackModel, $estimatedTokens);
 
             if ($result['outcome'] === 'ok') {
                 $this->recordModelOutcome($fallbackModel, true);
@@ -1144,6 +1161,12 @@ final class Pipeline
         return true;
     }
 
+    /** For callers outside the pipeline that really send a request (assistant:check): the same counter, the same keys. */
+    public static function countSentCall(string $model): void
+    {
+        (new static(app(AssistantModel::class)))->recordModelCall($model);
+    }
+
     protected function recordModelCall(string $model, int $estimatedTokens = 0): void
     {
         $minuteKey = "assistant:calls:minute:{$model}:".now()->format('YmdHi');
@@ -1155,6 +1178,24 @@ final class Pipeline
         if ($estimatedTokens > 0) {
             $tokensKey = "assistant:tokens:minute:{$model}:".now()->format('YmdHi');
             Cache::put($tokensKey, (int) Cache::get($tokensKey, 0) + $estimatedTokens, 70);
+        }
+    }
+
+    /** The counter counts HTTP requests really sent to Gemini: a call that never left (no key configured) is taken back, so it cannot burn the daily budget. */
+    protected function refundUnsentCall(array $result, string $model, int $estimatedTokens = 0): void
+    {
+        if (($result['error_code'] ?? null) !== 'no_credentials') {
+            return;
+        }
+
+        $minuteKey = "assistant:calls:minute:{$model}:".now()->format('YmdHi');
+        $dayKey = "assistant:calls:day:{$model}:".$this->dayCacheDate();
+        Cache::put($minuteKey, max(0, (int) Cache::get($minuteKey, 0) - 1), 70);
+        Cache::put($dayKey, max(0, (int) Cache::get($dayKey, 0) - 1), 90000);
+
+        if ($estimatedTokens > 0) {
+            $tokensKey = "assistant:tokens:minute:{$model}:".now()->format('YmdHi');
+            Cache::put($tokensKey, max(0, (int) Cache::get($tokensKey, 0) - $estimatedTokens), 70);
         }
     }
 

@@ -90,6 +90,10 @@ Demo knowledge text for assistant:check only.', [
             'overall_stats' => ['description' => 'Total seat counts.', 'parameters' => []],
         ], $modelName, 15);
         $elapsedMs = (int) round((microtime(true) - $start) * 1000);
+
+        if (($result['error_code'] ?? null) !== 'no_credentials') {
+            \App\Modules\Chloe\Assistant\Pipeline::countSentCall($modelName);
+        }
         $status = $model instanceof GeminiModel ? $model->lastHttpStatus() : null;
 
         $this->line('HTTP status: '.($status ?? '(not applicable)'));

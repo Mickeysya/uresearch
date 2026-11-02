@@ -18,6 +18,7 @@ use App\Modules\Chloe\Console\Commands\GenerateCandidacyDismissals;
 use App\Modules\Chloe\Console\Commands\WorkstationRefreshDaily;
 use App\Modules\Chloe\Console\Commands\WorkstationSendRemindersDaily;
 use App\Modules\Chloe\Console\Commands\AssistantCatalogue;
+use App\Modules\Chloe\Console\Commands\AssistantBudget;
 use App\Modules\Chloe\Console\Commands\AssistantCheck;
 use App\Modules\Chloe\Console\Commands\AssistantEvaluate;
 use App\Modules\Chloe\Console\Commands\AssistantLogList;
@@ -117,6 +118,7 @@ class ModuleProvider extends ServiceProvider
                 WorkstationDemoLogin::class,
                 WorkstationDemoSeed::class,
                 WorkstationDemoClear::class,
+                AssistantBudget::class,
                 AssistantCheck::class,
                 AssistantCatalogue::class,
                 BackfillCandidacyAppeals::class,
