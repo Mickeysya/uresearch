@@ -146,7 +146,21 @@ class LetterRenderer
         $date = $draft ? now() : ($approval?->created_at ?? now());
         $reference = $draft ? null : $detail->reference_number;
 
-        $period = $detail->period_start->format('j F Y').' to '.$detail->period_end->format('j F Y');
+        // config('nureen.ga_certification.ask_period'): when the form stops
+        // asking for the period, the letter stops printing one.
+        $period = config('nureen.ga_certification.ask_period') && $detail->period_start && $detail->period_end
+            ? $detail->period_start->format('j F Y').' to '.$detail->period_end->format('j F Y')
+            : null;
+
+        // CGS's online form: level, study type and mode, e.g. "Master,
+        // Research, Full-time ODL". The identity number and personal email
+        // are for CGS's records, not the letter.
+        $options = config('nureen.ga_certification.options');
+        $study = collect([
+            $options['level_of_study'][$detail->level_of_study] ?? null,
+            $options['study_level'][$detail->study_level] ?? null,
+            $options['mode_of_study'][$detail->mode_of_study] ?? null,
+        ])->filter()->implode(', ');
 
         $details = $isGra
             ? [
@@ -159,10 +173,13 @@ class LetterRenderer
                 'Course Name' => $detail->course_name,
                 'Course Owner' => $detail->course_owner_name,
             ];
-        $details += ['Semester' => $detail->semester, 'Period' => $period];
+        $details += ['Semester' => $detail->semester, 'Period' => $period, 'Level of Study' => $study ?: null];
+
+        $when = $period ? "from {$period}" : ($detail->semester ? "during the {$detail->semester} semester" : null);
 
         $paragraphs = [
-            "This is to certify that you served as a {$post} ({$detail->appointment_type}) at Universiti Teknologi PETRONAS from {$period}. The details of the assistantship are as follows:",
+            "This is to certify that you served as a {$post} ({$detail->appointment_type}) at Universiti Teknologi PETRONAS"
+                .($when ? " {$when}" : '').'. The details of the assistantship are as follows:',
         ];
 
         if ($detail->purpose) {
@@ -186,6 +203,49 @@ class LetterRenderer
             'cc' => $supervisor ? ["{$supervisor->name}, Supervisor"] : [],
             'verificationUrl' => $reference ? route('certificate.verify', $reference) : null,
             'revoked' => ! $draft && $detail->isRevoked(),
+        ];
+    }
+
+    /* -----------------------------------------------------------------
+     | The course owner's attachment (GA/GRA certification)
+     |------------------------------------------------------------------*/
+
+    /**
+     * CGS's "Attachment for Request for GA/GRA Certification Letter"
+     * (docs/forms/GA_GRA_Certification_form_-_Attachment.pdf), recreated
+     * and pre-filled: the student's name and programme (from their profile),
+     * today's date, and the first course row from what they entered. The
+     * signature and stamp stay blank -- the course owner signs it, and the
+     * student uploads the signed copy as the supporting document.
+     *
+     * A GRA has no course: its row carries the grant/project code, the
+     * project title and the project leader, under the same three columns.
+     */
+    public function certificationAttachment(Application $application): string
+    {
+        return $this->render('nureen::letters.certification_attachment', $this->certificationAttachmentData($application));
+    }
+
+    /** @return array<string, mixed> */
+    public function certificationAttachmentData(Application $application): array
+    {
+        $detail = GaCertificationDetail::where('application_id', $application->id)->first();
+        $student = $application->student;
+        $isGra = $detail?->appointment_type === 'GRA';
+
+        $first = $isGra
+            ? ['code' => $detail?->grant_code, 'course' => $detail?->project_title, 'owner' => $detail?->project_leader_name]
+            : ['code' => $detail?->course_code, 'course' => $detail?->course_name, 'owner' => $detail?->course_owner_name];
+
+        return [
+            'name' => $student?->name,
+            'matric' => $student?->matric_no,
+            'programme' => $student?->programme,
+            'date' => now(),
+            'isGra' => $isGra,
+            // Five rows, as on CGS's form; only the first is pre-filled.
+            'rows' => array_merge([$first], array_fill(0, 4, ['code' => null, 'course' => null, 'owner' => null])),
+            'verificationUrl' => null,
         ];
     }
 

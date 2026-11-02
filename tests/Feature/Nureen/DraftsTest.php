@@ -250,6 +250,12 @@ class DraftsTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'project_leader_name' => 'Dr. Lim',
             'semester' => 'Jan 2026',
+            'study_level' => 'research',
+            'level_of_study' => 'phd',
+            'mode_of_study' => 'full_time',
+            'identity_number' => '900101-08-1234',
+            'personal_email' => 'student.personal@gmail.test',
+            'declaration' => '1',
         ])->assertSessionHasNoErrors();
 
         $application = $draft->fresh();

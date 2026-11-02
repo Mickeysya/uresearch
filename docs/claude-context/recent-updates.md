@@ -8,6 +8,161 @@ diff alone.
 
 ---
 
+## 2026-11-05 — GA/GRA Certification form aligned with CGS's online form
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core
+edit was needed, so there is no new SHARED_CHANGES section.
+
+### The ask
+
+Make the GA/GRA Certification Letter form match CGS's official online form:
+- **Student details:** profile fields shown read-only; Level, Level of Study
+  and Mode of Study as selects.
+- **Application type:** Reason/Purpose and GA/GRA.
+- **Supporting details:** MyKad/Passport number, and PDF-only supporting
+  documents.
+- **Approval & notification:** personal email, and the supervisor's email
+  from the profile.
+- **Agreement:** a declaration.
+
+Also:
+- Keep the GA/GRA type fields, and put the period behind a config switch.
+- Add a "Download pre-filled attachment" that recreates CGS's course-owner
+  attachment and works from a draft.
+- Mask the identity number for everyone but CGS staff, and keep drafts
+  working.
+
+### Key findings before writing any code
+
+- **The stepper showed an empty step:** `form-stepper` shows every `.fstep`
+  in turn and sets `hidden` itself. The committed form had one fieldset per
+  type (`data-type-fields`), so a GA applicant was walked through an empty
+  "GRA details" step of disabled fields. The browser check caught it, and it
+  was already in HEAD.
+- **The stepper's "first submit button" rule** (see the drafts entry) means
+  the attachment download can't be a submit button inside a step. It is a
+  `type="button"` that saves the draft with a flag, plus a `<noscript>`
+  submit fallback.
+- **Dompdf ignores `<colgroup>` widths,** so the attachment's columns are
+  sized on the `th` cells.
+- **`AppointmentVerifier::verify()` required both period dates.** With
+  `ask_period` off and the (also optional) appointment check on, the queue
+  would have thrown a TypeError.
+
+### The design
+
+- **Migration `2026_11_05_000100`:** six nullable columns on
+  `ga_certification_details`: `study_level`, `level_of_study`,
+  `mode_of_study`, `identity_number` (text, `encrypted` cast),
+  `personal_email` and `declaration_accepted_at`. They are nullable because
+  drafts must save half-filled. "Required" lives in `store()`'s validation,
+  as with the drafts work.
+- **Config, `nureen.ga_certification`:**
+  - `options`: the three option lists, which feed both the `in:` rules and
+    the selects;
+  - `ask_period` (env `NUREEN_GA_CERTIFICATION_ASK_PERIOD`, default true);
+  - `declaration`: its text;
+  - `supporting_document_types`: `['pdf']`.
+- **Profile fields** are rendered from `auth()->user()` and never read from
+  the request, so there is nothing to override.
+- **Identity number:**
+  - `GaCertificationDetail::identityFor($viewer)` gives the full number for
+    `isCgs()` and `•••• 1234` otherwise;
+  - the form never redisplays it ("On file: … Leave blank to keep it."), and
+    a blank submit keeps the stored value.
+- **Attachment:**
+  - `LetterRenderer::certificationAttachment()` renders the new
+    `letters/certification_attachment` view: name and matric, programme,
+    today, and the first of five course rows (for a GRA, grant code /
+    project / leader). Signature and stamp are blank.
+  - Route `ga-certification.attachment`: owner only.
+  - The button sets `download_attachment=1` and clicks Save draft. The draft
+    page it returns to carries a `data-auto-download` link, which the
+    script follows.
+- **Period:** when `ask_period` is false it is hidden, has no rules, isn't
+  stored, and the letter drops the Period row. The letter's first paragraph
+  then says "during the {semester} semester". When no period is given, the
+  appointment check uses today.
+- **Letter:** adds a "Level of Study" row. The identity number and personal
+  email are not printed.
+
+### What changed
+
+- **New:**
+  - the migration above;
+  - `letters/certification_attachment.blade.php`;
+  - `tests/Feature/Nureen/CertificationOnlineFormTest.php` (17 tests).
+- **`CertificationController`:**
+  - `form()` passes the profile, options, `askPeriod`, the declaration text,
+    the allowed types and the pending download;
+  - `saveDraft()` and `store()` take the new fields, through
+    `onlineFormRules()`, `periodRules()`, a PDF-only
+    `supportingDocumentRules()` and a declaration `accepted` rule (submit
+    only);
+  - new `attachment()`;
+  - the queue eager-loads the supervisor.
+- **`ga_certification/form.blade.php`:**
+  - laid out as Student details → Application type → GA/GRA details →
+    Supporting details → Approval & notification → Agreement (then the
+    stepper's Review);
+  - the GA and GRA fields are now one step;
+  - the attachment block and the auto-download.
+- **`ga_certification/_detail.blade.php`:**
+  - adds department/programme, the study summary, the masked identity, the
+    personal email, the supervisor's email and the declaration time;
+  - the period is now null-safe.
+- **`components/multi-file-upload`:** a new `allowed` prop, so the help
+  text and client-side check say "PDF only".
+- **`GaCertificationDetail`:** fillable, casts, `identityFor()`, `mask()`,
+  `studySummary()`.
+- **`LetterRenderer`:** the attachment, plus the period and Level of Study
+  in the letter. **`AppointmentVerifier`:** nullable period.
+- **Existing tests:** the `CertificationTest`, `DraftsTest` and
+  `LetterWorstCaseTest` payloads gained the new required fields.
+- **README:** a new "GA/GRA Certification form" section and a test-table
+  row.
+
+### Bugs caught
+
+- **The empty "GRA details" step** for GA applicants. It was already in
+  HEAD; the fix merges both types into one step.
+- **A Blade parse error:** `@php($x = …)` in `_detail` broke compilation,
+  because the same file has a `@php … @endphp` block. It is now one block.
+- **The queue crash,** found while reading the code: `AppointmentVerifier`
+  would have thrown on a null period with `ask_period` off.
+
+### Verification
+
+- **Full suite:** 488 passed (run with `QUEUE_CONNECTION=sync` and
+  `MAIL_MAILER=array`). `failed_jobs` and `jobs` were 0 before and after;
+  nothing was deleted.
+- **Headless browser,** as `student@utp.edu.my` (22001001):
+  - filled every step and went to "Download pre-filled attachment" on
+    Supporting details;
+  - the draft was saved (#190), the page returned to the same step, and the
+    PDF downloaded as `GA_GRA_Certification_Attachment_22001001.pdf`;
+  - the PDF is one page, with the name, matric, programme, date and
+    TDB2073 / Database Systems / Dr. Aisyah Rahman in row 1;
+  - the identity number showed as "On file: •••• 5678";
+  - Continue on Agreement was blocked until the declaration was ticked, and
+    the Review step listed everything;
+  - submitted.
+- **Approvals:**
+  - `supervisor@` saw the identity masked;
+  - `cgs@` (in dark mode) and `director@` saw it in full;
+  - each approved, and #190 ended `approved`.
+- **Final letter,** downloaded as the student through `documents/61`: one
+  page, period printed, a "Level of Study: PhD, Research, Full-time ODL"
+  row, signed by the Senior Director.
+- **The attachment route after submit:** 200 for the student, 403 for the
+  supervisor.
+- **Dark mode:** the form's Student details and Supporting details steps
+  checked. No console errors.
+- **Not done here:** an `ask_period=false` browser run (it is covered by
+  tests), and a no-JavaScript run.
+
+---
+
 ## 2026-11-04 — Save draft for GA Extension and GA/GRA Certification
 
 **Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit;

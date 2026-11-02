@@ -214,6 +214,41 @@ return [
             'GRA' => "Evidence of Work Done (signed by Project Leader)",
         ],
 
+        // CGS's official online form, sections 1-5 (see the migration
+        // 2026_11_05_000100). One list per choice, read by the form, the
+        // validation, the approver's detail view and the letter, so none
+        // can drift. Keys are what is stored; labels are display-only.
+        'options' => [
+            'study_level' => [
+                'coursework' => 'Coursework',
+                'research' => 'Research',
+            ],
+            'level_of_study' => [
+                'master' => 'Master',
+                'phd' => 'PhD',
+            ],
+            'mode_of_study' => [
+                'full_time' => 'Full-time',
+                'full_time_odl' => 'Full-time ODL',
+                'part_time' => 'Part-time',
+            ],
+        ],
+
+        // The online form does not ask for the appointment period; this
+        // portal always has. Pending CGS's answer: when false the two date
+        // fields are hidden, not validated, and the letter does not print a
+        // period. Stored values on older applications are left alone.
+        'ask_period' => (bool) env('NUREEN_GA_CERTIFICATION_ASK_PERIOD', true),
+
+        // Section 5 of the online form, shown beside the checkbox and
+        // recorded (declaration_accepted_at) when ticked.
+        'declaration' => 'I confirm that the information given in this application is true and complete. '
+            .'I understand that UTP may reject an application that is false or incomplete.',
+
+        // The supporting document is the course owner's signed attachment,
+        // as a PDF only (CGS's online form).
+        'supporting_document_types' => ['pdf'],
+
     ],
 
     // The Client Charter ('charter_days' below) now decides when a stage's

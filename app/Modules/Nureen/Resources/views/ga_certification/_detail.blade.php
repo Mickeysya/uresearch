@@ -3,12 +3,26 @@
 @php
     $detail = $details[$application->id] ?? null;
     $check = $appointmentChecks[$application->id] ?? null;
+    $student = $application->student;
 @endphp
 
 @if ($detail)
     <p>Appointment Type: <b>{{ $detail->appointment_type }}</b></p>
-    <p>Supervisor: {{ $detail->supervisor?->name ?? 'Not recorded' }}</p>
-    <p>Period: {{ $detail->period_start->format('j M Y') }} – {{ $detail->period_end->format('j M Y') }}</p>
+    <p>Department / Programme: {{ $student?->department ?? '—' }} · {{ $student?->programme ?? '—' }}</p>
+    @if ($detail->studySummary())
+        <p>Study: {{ $detail->studySummary() }}</p>
+    @endif
+    {{-- Full number for CGS staff only; everyone else sees the last 4. --}}
+    @if ($detail->identity_number)
+        <p>MyKad/Passport: {{ $detail->identityFor(auth()->user()) }}</p>
+    @endif
+    @if ($detail->personal_email)
+        <p>Personal email: {{ $detail->personal_email }}</p>
+    @endif
+    <p>Supervisor: {{ $detail->supervisor?->name ?? 'Not recorded' }}@if ($detail->supervisor?->email) ({{ $detail->supervisor->email }})@endif</p>
+    @if ($detail->period_start && $detail->period_end)
+        <p>Period: {{ $detail->period_start->format('j M Y') }} – {{ $detail->period_end->format('j M Y') }}</p>
+    @endif
 
     @foreach ($detail->typeFields() as $key => $field)
         @continue(empty($detail->{$key}))
@@ -17,6 +31,10 @@
 
     @if ($detail->purpose)
         <p>Purpose: {{ $detail->purpose }}</p>
+    @endif
+
+    @if ($detail->declaration_accepted_at)
+        <p class="queue-meta">Declaration accepted {{ $detail->declaration_accepted_at->format('j M Y, g:i a') }}</p>
     @endif
 
     {{-- The Senior Director sees the exact letter, in their own name,

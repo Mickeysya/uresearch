@@ -30,9 +30,14 @@ class AppointmentVerifier
     public function verify(
         User $student,
         string $appointmentType,
-        CarbonInterface $periodStart,
-        CarbonInterface $periodEnd,
+        ?CarbonInterface $periodStart,
+        ?CarbonInterface $periodEnd,
     ): array {
+        // No period asked (config('nureen.ga_certification.ask_period')
+        // off): check the appointment is current today instead.
+        $periodStart ??= now()->startOfDay();
+        $periodEnd ??= now()->startOfDay();
+
         $records = GaAppointmentRecord::where('student_id', $student->id)->get();
 
         if ($records->isEmpty()) {

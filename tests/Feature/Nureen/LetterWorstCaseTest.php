@@ -194,6 +194,10 @@ class LetterWorstCaseTest extends TestCase
             'period_end' => '2026-12-31',  // "31 December" -- the longest date
             'purpose' => $purpose,
             'reference_number' => $issued ? 'CGS/GACERT/2026/9999' : null,
+            // The longest "Level of Study" line the letter can print.
+            'study_level' => 'coursework',
+            'level_of_study' => 'master',
+            'mode_of_study' => 'full_time_odl',
         ] + $fields);
 
         $this->decided($application, $supervisor, 'supervisor', 'endorsed', '2026-10-21 10:00:00');
@@ -296,7 +300,9 @@ class LetterWorstCaseTest extends TestCase
         $student->update(['supervisor_id' => $this->user(Role::SUPERVISOR, ['email' => 'limits-supervisor@test.my'])->id]);
 
         foreach (['GA', 'GRA'] as $type) {
-            $valid = ['appointment_type' => $type, 'period_start' => '2026-01-05', 'period_end' => '2026-06-30'];
+            $valid = ['appointment_type' => $type, 'period_start' => '2026-01-05', 'period_end' => '2026-06-30',
+                'study_level' => 'research', 'level_of_study' => 'phd', 'mode_of_study' => 'full_time',
+                'identity_number' => '900101-08-1234', 'personal_email' => 'me@gmail.test', 'declaration' => '1'];
             foreach (config("nureen.ga_certification.fields.{$type}") as $key => $field) {
                 $valid[$key] = 'x';
             }

@@ -43,6 +43,14 @@ class CertificationController extends Controller
     protected function form(Request $request, ?Application $draft)
     {
         return view('nureen::ga_certification.form', [
+            // Section 1 comes from the profile, read-only -- never from the form.
+            'student' => $request->user()->loadMissing('supervisor'),
+            'options' => config('nureen.ga_certification.options'),
+            'askPeriod' => (bool) config('nureen.ga_certification.ask_period'),
+            'declaration' => config('nureen.ga_certification.declaration'),
+            'documentTypes' => config('nureen.ga_certification.supporting_document_types', ['pdf']),
+            // Set by saveDraft() when the student asked for the pre-filled attachment.
+            'downloadAttachment' => session('download_attachment') && $draft ? route('ga-certification.attachment', $draft) : null,
             'fields' => config('nureen.ga_certification.fields'),
             'supportingDocumentLabel' => config('nureen.ga_certification.supporting_document_label'),
             'hasSupervisor' => $request->user()->supervisor_id !== null,
@@ -71,11 +79,13 @@ class CertificationController extends Controller
 
         $rules = [
             'appointment_type' => ['nullable', 'in:GA,GRA'],
-            'period_start' => ['nullable', 'date'],
-            'period_end' => ['nullable', 'date'],
             'purpose' => ['nullable', 'string', 'max:'.config('nureen.ga_certification.purpose_max')],
             'draft_step' => ['nullable', 'integer', 'min:0', 'max:20'],
-        ] + $this->supportingDocumentRules($application, $removing, required: false);
+            'declaration' => ['nullable', 'boolean'],
+            'download_attachment' => ['nullable', 'boolean'],
+        ] + $this->onlineFormRules(required: false, identityOnFile: false)
+          + $this->periodRules(required: false)
+          + $this->supportingDocumentRules($application, $removing, required: false);
 
         // Every type field, never required, with the same length limits.
         foreach (config('nureen.ga_certification.fields', []) as $typeFields) {
@@ -84,7 +94,7 @@ class CertificationController extends Controller
             }
         }
 
-        $data = $request->validate($rules, DocumentStore::manyMessages('supporting_documents'));
+        $data = $request->validate($rules, $this->documentMessages());
 
         $application = DB::transaction(function () use ($request, $data, $application, $removing, $documents) {
             $application ??= Application::create([
@@ -94,13 +104,30 @@ class CertificationController extends Controller
                 'status' => Application::STATUS_DRAFT,
             ]);
 
+            $existing = GaCertificationDetail::where('application_id', $application->id)->first();
+
             $values = [
                 'appointment_type' => $data['appointment_type'] ?? null,
-                'period_start' => $data['period_start'] ?? null,
-                'period_end' => $data['period_end'] ?? null,
                 'purpose' => $data['purpose'] ?? null,
                 'draft_step' => $data['draft_step'] ?? null,
+                'study_level' => $data['study_level'] ?? null,
+                'level_of_study' => $data['level_of_study'] ?? null,
+                'mode_of_study' => $data['mode_of_study'] ?? null,
+                'personal_email' => $data['personal_email'] ?? null,
+                // Ticking it on a draft is kept (the first time it was
+                // ticked); unticking clears it. Submit requires it.
+                'declaration_accepted_at' => ! empty($data['declaration']) ? ($existing?->declaration_accepted_at ?? now()) : null,
             ];
+
+            // Never shown back on the form, so blank means "keep what is on file".
+            if (filled($data['identity_number'] ?? null)) {
+                $values['identity_number'] = $data['identity_number'];
+            }
+
+            if (config('nureen.ga_certification.ask_period')) {
+                $values['period_start'] = $data['period_start'] ?? null;
+                $values['period_end'] = $data['period_end'] ?? null;
+            }
 
             // Every type field cleared, then the chosen type's filled in --
             // as submitting would (GA and GRA share 'semester', so the
@@ -128,9 +155,31 @@ class CertificationController extends Controller
             return $application;
         });
 
-        return redirect()
+        $redirect = redirect()
             ->route('ga-certification.draft.edit', $application)
             ->with('status', 'Draft saved at '.now()->format('g:ia').'. Continue it any time from My Drafts.');
+
+        // "Download pre-filled attachment" saves first, so the PDF carries
+        // what is on screen, then the page starts the download.
+        return ! empty($data['download_attachment']) ? $redirect->with('download_attachment', true) : $redirect;
+    }
+
+    /**
+     * The pre-filled course-owner attachment (LetterRenderer::
+     * certificationAttachment()), for the owning student only -- from a
+     * draft or a submitted request alike.
+     */
+    public function attachment(Request $request, Application $application, LetterRenderer $letters)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($application->student_id === $request->user()->id, 403, 'This request is not yours.');
+
+        $filename = 'GA_GRA_Certification_Attachment_'.($request->user()->matric_no ?: $application->id).'.pdf';
+
+        return response($letters->certificationAttachment($application), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 
     /** Delete a draft: its stored files, its detail row and the application row. */
@@ -159,13 +208,20 @@ class CertificationController extends Controller
             return back()->with('error', 'No supervisor is assigned to your account. Please contact CGS.');
         }
 
+        $identityOnFile = $draft && filled(GaCertificationDetail::where('application_id', $draft->id)->first()?->identity_number);
+
         $data = $request->validate([
             'appointment_type' => ['required', 'in:GA,GRA'],
-            'period_start' => ['required', 'date'],
-            'period_end' => ['required', 'date', 'after:period_start'],
             // Printed on the letter -- see config('nureen.ga_certification.purpose_max').
             'purpose' => ['nullable', 'string', 'max:'.config('nureen.ga_certification.purpose_max')],
+            // Section 5: required on submit, never on a draft save.
+            'declaration' => ['accepted'],
+        ] + $this->onlineFormRules(required: true, identityOnFile: $identityOnFile)
+          + $this->periodRules(required: true), [
+            'declaration.accepted' => 'Please tick the declaration to confirm the information is true and complete.',
+            'identity_number.required' => 'Enter your MyKad or passport number.',
         ]);
+        unset($data['declaration']);
 
         // "The form shows only the fields for the chosen type" -- validated
         // the same way, from config('nureen.ga_certification.fields'), so
@@ -187,7 +243,7 @@ class CertificationController extends Controller
         // Required unless the draft already has supporting documents.
         $request->validate(
             $this->supportingDocumentRules($draft, $removing, required: true),
-            DocumentStore::manyMessages('supporting_documents') + ['supporting_documents.required' => "Attach {$documentLabel}."],
+            $this->documentMessages() + ['supporting_documents.required' => "Attach {$documentLabel}."],
         );
 
         $application = DB::transaction(function () use ($request, $student, $data, $typeData, $draft, $removing, $documentLabel, $engine, $documents) {
@@ -220,7 +276,9 @@ class CertificationController extends Controller
                 // reasoning.
                 'supervisor_id' => $student->supervisor_id,
                 'draft_step' => null,
-            ] + $data + $typeData + $otherFields);
+                'declaration_accepted_at' => now(),
+            ] + array_filter($data, fn ($value, $key) => $key !== 'identity_number' || filled($value), ARRAY_FILTER_USE_BOTH)
+              + $typeData + $otherFields);
 
             Drafts::removeDocuments($application, $removing);
 
@@ -257,6 +315,13 @@ class CertificationController extends Controller
     {
         $already = $draft ? Drafts::attached($draft, $removing)->flatten(1)->count() : 0;
         $rules = DocumentStore::manyRules('supporting_documents', $required && $already === 0);
+
+        // CGS's online form takes the signed attachment as a PDF only.
+        $types = config('nureen.ga_certification.supporting_document_types', ['pdf']);
+        $rules['supporting_documents.*'] = array_map(
+            fn ($rule) => is_string($rule) && str_starts_with($rule, 'mimes:') ? 'mimes:'.implode(',', $types) : $rule,
+            $rules['supporting_documents.*'],
+        );
         $rules['supporting_documents'][] = function (string $attribute, $value, \Closure $fail) use ($already) {
             if ($already + count((array) $value) > DocumentStore::MULTI_MAX_FILES) {
                 $fail('You may attach at most '.DocumentStore::MULTI_MAX_FILES." supporting documents ({$already} already attached).");
@@ -264,6 +329,50 @@ class CertificationController extends Controller
         };
 
         return $rules;
+    }
+
+    /** DocumentStore's messages, with this form's PDF-only wording. */
+    protected function documentMessages(): array
+    {
+        $types = strtoupper(implode(', ', config('nureen.ga_certification.supporting_document_types', ['pdf'])));
+
+        return ['supporting_documents.*.mimes' => count(config('nureen.ga_certification.supporting_document_types', ['pdf'])) === 1
+            ? "Each file must be a {$types}."
+            : "Each file must be one of: {$types}."] + DocumentStore::manyMessages('supporting_documents');
+    }
+
+    /**
+     * Sections 1-4 of CGS's online form that the profile doesn't hold, from
+     * the option lists in config('nureen.ga_certification.options').
+     * Matric ID, Name, Department, Programme and the supervisor's email are
+     * the profile's and are never read from the request.
+     */
+    protected function onlineFormRules(bool $required, bool $identityOnFile): array
+    {
+        $options = config('nureen.ga_certification.options');
+        $need = $required ? 'required' : 'nullable';
+
+        return [
+            'study_level' => [$need, 'in:'.implode(',', array_keys($options['study_level']))],
+            'level_of_study' => [$need, 'in:'.implode(',', array_keys($options['level_of_study']))],
+            'mode_of_study' => [$need, 'in:'.implode(',', array_keys($options['mode_of_study']))],
+            // MyKad (digits, often with dashes) or a passport number.
+            'identity_number' => [$required && ! $identityOnFile ? 'required' : 'nullable', 'string', 'max:30', 'regex:/^[A-Za-z0-9][A-Za-z0-9\- ]*$/'],
+            'personal_email' => [$need, 'email', 'max:150'],
+        ];
+    }
+
+    /** The appointment period, only while config('nureen.ga_certification.ask_period') is on. */
+    protected function periodRules(bool $required): array
+    {
+        if (! config('nureen.ga_certification.ask_period')) {
+            return [];
+        }
+
+        return [
+            'period_start' => [$required ? 'required' : 'nullable', 'date'],
+            'period_end' => array_values(array_filter([$required ? 'required' : 'nullable', 'date', $required ? 'after:period_start' : null])),
+        ];
     }
 
     /** The ids ticked "Remove" on the form -- only meaningful on a draft. @return array<int, int> */
@@ -300,6 +409,7 @@ class CertificationController extends Controller
             });
 
         $details = GaCertificationDetail::whereIn('application_id', $queue['applications']->pluck('id'))
+            ->with('supervisor')
             ->get()
             ->keyBy('application_id');
 
