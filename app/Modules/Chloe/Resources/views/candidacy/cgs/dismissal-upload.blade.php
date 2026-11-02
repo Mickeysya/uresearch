@@ -7,7 +7,9 @@
 @section('content')
     <div class="wca-page">
         <x-core::page-header title="Dismissal Upload" subtitle="Upload the Registry's confirmed list. Only students who are still dismissal candidates are dismissed." :back="auth()->user()->role === \App\Modules\Core\Support\Role::REGISTRY ? route('dashboard') : route('candidacy.cgs.dismissals')" :back-history="false">
-            <a href="{{ \App\Modules\Chloe\Support\CandidacyHeaderLinks::home() }}"><button type="button">Home</button></a>
+            @if (\App\Modules\Chloe\Support\CandidacyHeaderLinks::home() !== route('candidacy.cgs.operations'))
+                <a href="{{ \App\Modules\Chloe\Support\CandidacyHeaderLinks::home() }}"><button type="button">Home</button></a>
+            @endif
         </x-core::page-header>
 
         @include('chloe::candidacy.wca._flash')
