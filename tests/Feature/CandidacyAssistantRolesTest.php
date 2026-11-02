@@ -30,13 +30,6 @@ class CandidacyAssistantRolesTest extends TestCase
     use MakesUsers;
     use RefreshDatabase;
 
-    /** The words that belong to the other roles' pages and buttons, per role: an answer for this role must contain none of them. */
-    protected const FORBIDDEN = [
-        'student' => ['Operations', 'Insights', 'Dismissal List', 'Dismissal Upload', 'Approval Portal', 'Pending my action', 'Return to student', 'Reject (final)', 'My Signature', 'Review button', '/\bApprove\b/', '/\bVerify\b/'],
-        'approver' => ['Operations', 'Insights', 'Dismissal List', 'Dismissal Upload', 'Submit an Appeal', 'New appeal', 'Edit and resubmit', 'Download memo'],
-        'cgs' => ['Edit and resubmit', 'Download memo'],
-    ];
-
     protected function setUp(): void
     {
         $this->worldSetUp();
@@ -60,7 +53,7 @@ class CandidacyAssistantRolesTest extends TestCase
 
     protected function assertNoForbidden(string $role, string $text, string $label): void
     {
-        foreach (self::FORBIDDEN[$role] as $term) {
+        foreach (CandidacyAssistant::FORBIDDEN[$role] as $term) {
             $hit = str_starts_with($term, '/') ? preg_match($term, $text) === 1 : str_contains($text, $term);
             $this->assertFalse($hit, "{$label}: a {$role} answer mentions \"{$term}\"");
         }

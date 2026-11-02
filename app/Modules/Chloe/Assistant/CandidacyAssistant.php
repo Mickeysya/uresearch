@@ -173,12 +173,22 @@ final class CandidacyAssistant
      * is about, so a vague "how ... appeal" can no longer reach a how-to written for another role. Order matters: the more specific first.
      */
     protected const KEYWORDS = [
-        'cand_see_all_appeals' => ['/\b(see|view|find|show|list|open|check|where|access)\b.*\b(all|every|full|complete|whole)\b.*\bappeals?\b/', '/\b(full|complete|whole)\b.*\bappeals?\s+(list|table)\b/', '/\bappeals?\s+list\b/', '/\ball\s+(the\s+|my\s+)?appeals?\b/'],
+        'cand_hb_dismissal' => ['/\breinstate\w*\b/', '/\bhandbook\b.*\b(dismiss\w*|maximum\s+duration)\b/', '/\bwho\b.*\bdecides?\b.*\bdismiss/'],
+        'cand_hb_extension' => ['/\bhandbook\b.*\bextension\b/', '/\bwho\b.*\brecommends?\b.*\bextension\b/'],
+        'cand_cgs_not_built' => ['/\b(export|excel)\b.*\boperations\b/', '/\breminder\s+log\b/', '/\b(change|adjust)\b.*\bexpiry\b.*\b(manual|hand)\w*/', '/\bnot\s+available\s+yet\b/'],
+        'cand_see_all_appeals' => ['/\b(see|view|find|show|list|open|check|where|access)\b.*\b(all|every|full|complete|whole)\b.*\bappeals?\b/', '/\b(full|complete|whole)\b.*\bappeals?\s+(list|table)\b/', '/\bappeals?\s+list\b/'],
+        'cand_withdraw' => ['/\bwithdraw/', '/\bcancel\b.*\bappeal\b/', '/\btake\s+back\b.*\bappeal\b/'],
+        'cand_resubmit' => ['/\bresubmit/', '/\b(send|submit)\b.*\bappeal\b.*\bagain\b/', '/\bfix\b.*\bappeal\b/'],
+        'cand_dean_rejection' => ['/\b(dean|reject\w*)\b.*\b(reject\w*|final)\b/', '/\bdean\b.*\b(says?\s+no|declines?)\b/'],
+        'cand_deadline' => ['/\bappeal\b.*\b(deadline|last\s+day|on\s+or\s+before|until\s+when)\b/', '/\buntil\s+when\b.*\bappeal\b/', '/\bappeal\b.*\b(very\s+)?last\s+day\b/'],
+        'cand_twelve_month_limit' => ['/\b(12|twelve)\s*-?\s*months?\b.*\b(limit|maximum|rule)/', '/\bmaximum\b.*\bextension\b/'],
+        'cand_my_return_reason' => ['/\bwhy\b.*\bappeal\b.*\breturned\b/', '/\bappeal\b.*\b(sent|send)\s+back\b/', '/\breason\b.*\b(return|returned)\b.*\bmy\s+appeal\b/', '/\bmy\s+appeal\b.*\b(came|come)\s+back\b/'],
+        'cand_return_reasons' => ['/\b(return|returning)\s+reasons?\b/', '/\b(common|list|which|what)\b.*\breasons?\b.*\b(return\w*|send\w*\s+back)\b/', '/\bwhy\b.*\bappeals\b.*\b(returned|get\s+returned)\b/'],
+        'cand_after_return_rejection' => ['/\bappeal\b.*\b(rejected|returned)\b.*\b(now|next|what)\b/', '/\b(rejected|returned)\b.*\bappeal\b.*\b(now|next)\b/'],
         'cand_my_expiry' => ['/\b(my\s+)?candidacy\b.*\b(expire|expiry|end|deadline|days\s+left)\b/', '/\b(expire|expiry)\s+date\b.*\bcandidacy\b/'],
         'cand_my_extension' => ['/\bextension\b.*\b(left|remain|used|much|many)\b/', '/\b(left|remain|used)\b.*\bextension\b/'],
-        'cand_can_appeal' => ['/\b(can|may|allowed|eligible)\b.*\b(i|we)\b.*\bappeal\b/', '/\bappeal\b.*\b(still|now|eligible|possible)\b/'],
-        'cand_my_appeal' => ['/\b(status|where|who has|progress)\b.*\b(my\s+)?appeal\b/', '/\bmy\s+appeal\b.*\b(now|status|step|stage)\b/'],
-        'cand_my_return_reason' => ['/\bwhy\b.*\bappeal\b.*\breturned\b/', '/\bappeal\b.*\b(sent|send)\s+back\b/'],
+        'cand_can_appeal' => ['/^(?!.*\b(again|reject\w*|return\w*|withdraw|cancel|take\s+back|last\s+day|deadline|resubmit|after|dean)\b).*\b(can|may|allowed|eligible)\b.*\b(i|we)\b.*\bappeal\b/', '/\bappeal\b.*\b(still|now|eligible|possible)\b/'],
+        'cand_my_appeal' => ['/\b(status|where|who\s+has|who\s+is\s+holding|progress)\b.*\b(my\s+)?(extension\s+)?appeal\b/', '/\bmy\s+appeal\b.*\b(now|status|step|stage)\b/', '/\bappeal\b.*\b(stuck|at\s+which\s+step|which\s+step)\b/'],
         'cand_next_reminder' => ['/\b(next|another|when)\b.*\b(candidacy|expiry)?\s*reminder\b/'],
         'cand_my_softbound' => ['/\bsoft\s*bound\b.*\b(recorded|received|status|submitted)\b/'],
         'cand_ap_pending' => ['/\b(how\s+many|number)\b.*\bappeals?\b.*\b(waiting|pending)\b.*\b(me|my)\b/', '/\bappeals?\b.*\bpending\s+my\s+action\b/'],
@@ -207,13 +217,7 @@ final class CandidacyAssistant
         'cand_reminders' => ['/\b(candidacy|expiry)\s+reminders?\b/'],
         'cand_outcome_prediction' => ['/\b(will|going\s+to|chance|likely)\b.*\bappeal\b.*\b(approved|accepted|rejected|pass)/', '/\bappeal\b.*\b(approved|rejected)\b.*\b(will|chance|likely)/'],
         'cand_my_signature' => ['/\bsignature\b/'],
-        'cand_return_reasons' => ['/\b(return|returning)\s+reasons?\b/', '/\breasons?\b.*\b(return|returned)\b/'],
         'cand_return_effect' => ['/\b(return|returned)\b.*\bappeal\b.*\b(what|happen|after)/'],
-        'cand_dean_rejection' => ['/\b(dean|reject\w*)\b.*\b(reject\w*|final)\b/'],
-        'cand_withdraw' => ['/\bwithdraw/', '/\bcancel\b.*\bappeal\b/'],
-        'cand_resubmit' => ['/\bresubmit/'],
-        'cand_twelve_month_limit' => ['/\b(12|twelve)\s*-?\s*months?\b.*\b(limit|maximum|rule)/', '/\bmaximum\b.*\bextension\b/'],
-        'cand_deadline' => ['/\bappeal\b.*\b(deadline|last\s+day|on\s+or\s+before)\b/'],
         'cand_waiting_colours' => ['/\b(colou?rs?|dots?)\b.*\b(waiting|days)\b/', '/\bwaiting\b.*\b(colou?rs?|dots?)\b/'],
         'cand_notifications' => ['/\b(notif\w*|e\s*mail|bell)\b.*\b(appeal|approve|return)\w*/'],
         'cand_cgs_registry_upload' => ['/\bupload\b.*\bregistry\b/', '/\bdismissal\s+upload\b/'],
@@ -227,7 +231,6 @@ final class CandidacyAssistant
         'cand_after_approval' => ['/\bafter\b.*\b(appeal\s+)?(is\s+)?approved\b/', '/\bapproval\s+memo\b/', '/\bmemo\b/'],
         'cand_appeal_rules' => ['/\bappeal\s+rules\b/', '/\brules?\b.*\b(for|of)\b.*\bappeals?\b/'],
         'cand_what_is_candidacy' => ['/\b(how\s+long|maximum|duration|period)\b.*\bcandidacy\b/', '/\bwhat\s+is\b.*\bcandidacy\b/'],
-        'cand_after_return_rejection' => ['/\bappeal\b.*\b(rejected|returned)\b.*\b(now|next|what)\b/', '/\b(rejected|returned)\b.*\bappeal\b.*\b(now|next)\b/'],
     ];
 
     /** Words that carry no meaning for the match score. */
@@ -241,6 +244,11 @@ final class CandidacyAssistant
     public static function keywordMatch(string $normalised, string $role): ?string
     {
         if (! preg_match('/\b(candidacy|candidature|appeals?|extension|softbound|soft\s+bound|dismissal|dismissed|reminders?|approver|signature|memo|operations|insights)\b/', $normalised)) {
+            return null;
+        }
+
+        // a page or button of another role: never answered, the caller shows "that is for ..." and this role's own questions
+        if (self::wrongRoleFor($normalised, $role) !== null) {
             return null;
         }
 
@@ -324,8 +332,8 @@ final class CandidacyAssistant
     /** The pages and words that belong to one role only, and whom they belong to. */
     protected const ROLE_ONLY = [
         'cgs' => ['/\b(operations|insights|dismissal\s+list|dismissal\s+upload|registry\s+(file|result)|export)\b/'],
-        'approver' => ['/\b(approval\s+portal|pending\s+my\s+action|verify)\b/'],
-        'student' => ['/\b(submit\s+an\s+appeal|new\s+appeal)\b/', '/\bhow\b.*\b(appeal|apply|ask)\b.*\b(for\s+)?(an?\s+)?(extension|more\s+time)\b/'],
+        'approver' => ['/\b(approval\s+portal|pending\s+my\s+action|verify)\b/', '/\bhow\b.*\b(approve|reject)\b.*\bappeals?\b/', '/\bapprove\b.*\bas\b.*\b(dean|chair|supervisor)\b/'],
+        'student' => ['/\b(submit\s+an\s+appeal|new\s+appeal|edit\s+and\s+resubmit|download\s+my\s+memo|my\s+appeals\s+table)\b/', '/\bhow\b.*\b(appeal|apply|ask)\b.*\b(for\s+)?(an?\s+)?(extension|more\s+time)\b/'],
     ];
 
     /** The plain role a question is plainly about when it is not the asking role's, or null. */
@@ -338,7 +346,12 @@ final class CandidacyAssistant
                 continue;
             }
 
-            foreach ($patterns as $pattern) {
+            foreach ($patterns as $n => $pattern) {
+                // the how-to pattern of a student's procedure is not wrong for CGS: CGS explains it to students
+                if ($owner === 'student' && $n === 1 && in_array('cgs', $mine, true)) {
+                    continue;
+                }
+
                 if (preg_match($pattern, $normalised) === 1) {
                     return $owner;
                 }
@@ -346,6 +359,25 @@ final class CandidacyAssistant
         }
 
         return null;
+    }
+
+    /** Words that must never appear in an answer to this role (they belong to pages and buttons the role does not have). Used by the tests and the evaluation. */
+    public const FORBIDDEN = [
+        'student' => ['Operations', 'Insights', 'Dismissal List', 'Dismissal Upload', 'Approval Portal', 'Pending my action', 'Return to student', 'Reject (final)', 'My Signature', 'Review button', '/\bApprove\b/', '/\bVerify\b/'],
+        'approver' => ['Operations', 'Insights', 'Dismissal List', 'Dismissal Upload', 'Submit an Appeal', 'New appeal', 'Edit and resubmit', 'Download memo'],
+        'cgs' => ['Edit and resubmit', 'Download memo'],
+    ];
+
+    /** True when the answer text names something that belongs to another role. A CGS user who is also an approver (cgs_approver) may see both sets, so only the plain roles are checked. */
+    public static function mentionsOtherRole(string $text, string $role): bool
+    {
+        foreach (self::FORBIDDEN[$role] ?? [] as $term) {
+            if (str_starts_with($term, '/') ? preg_match($term, $text) === 1 : str_contains($text, $term)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** What the assistant says when nothing fits: honest, with the asking role's own suggestions shown under it by the pipeline. */
@@ -491,7 +523,7 @@ final class CandidacyAssistant
                 'examples' => ['when does my candidacy end', 'my candidacy expiry date pls', 'how many days left on my candidacy', 'when will my candidature finish', 'candidacy deadline for me', 'expiry date of my study candidacy']],
             'cand_my_extension' => ['roles' => $S, 'question' => 'How many months of extension do I have left?', 'description' => "The student's own months of extension used and left, out of the maximum (12) across all appeals.", 'link' => 'candidacy.status',
                 'examples' => ['how many extension months remain', 'extension months used so far', 'how much extension can i still get', 'months left to appeal for', 'my remaining extension', 'have i used up my extension']],
-            'cand_can_appeal' => ['roles' => $S, 'question' => 'Can I still submit an appeal?', 'description' => "Whether the student may submit an appeal NOW, with the reason when not (same check as the New appeal button). Not how to appeal (that is cand_when_how_appeal).", 'link' => 'candidacy.appeals.new',
+            'cand_can_appeal' => ['roles' => $S, 'question' => 'Can I still submit an appeal?', 'description' => 'Whether the student may submit an appeal NOW, with the reason when not (same check as the New appeal button). Not how to appeal (that is cand_when_how_appeal).', 'link' => 'candidacy.appeals.new',
                 'examples' => ['am i allowed to appeal now', 'can i apply for more time', 'is my appeal still possible', 'can i send in an appeal', 'eligible to appeal or not', 'why cant i start an appeal']],
             'cand_my_appeal' => ['roles' => $S, 'question' => 'Where is my appeal now?', 'description' => "The student's own latest appeal: its number, status, current step and who has it.", 'link' => 'candidacy.appeals.show',
                 'examples' => ['what is the status of my appeal', 'who has my appeal', 'has my appeal been approved yet', 'my appeal progress', 'which step is my appeal at', 'where did my appeal get to']],
@@ -508,9 +540,9 @@ final class CandidacyAssistant
                 'examples' => ['oldest appeal in my queue', 'which appeal is the most overdue for me', 'longest waiting appeal at my step', 'what has been waiting the longest', 'my most delayed appeal']],
             'cand_ap_waiting_days' => ['roles' => $A, 'question' => 'How many of my appeals have waited 5 or 10 days or more?', 'description' => "How many of the approver's own waiting appeals have waited 5 days or more and 10 days or more.", 'link' => 'candidacy.portal.queue',
                 'examples' => ['how many of mine are over 5 days', 'appeals waiting more than 10 days for me', 'count of my late appeals', 'which of my appeals are overdue', 'how many have i kept waiting 10 days']],
-            'cand_ap_decided_month' => ['roles' => $A, 'question' => 'How many appeals did I approve or return this month?', 'description' => "How many appeals the approver themself approved and returned this month.", 'link' => 'candidacy.portal.queue',
+            'cand_ap_decided_month' => ['roles' => $A, 'question' => 'How many appeals did I approve or return this month?', 'description' => 'How many appeals the approver themself approved and returned this month.', 'link' => 'candidacy.portal.queue',
                 'examples' => ['how many appeals have i approved this month', 'my returns this month', 'number i decided this month', 'approved and returned by me this month', 'what did i get through this month']],
-            'cand_ap_ongoing' => ['roles' => $A, 'question' => 'How many of my appeals are ongoing?', 'description' => "How many appeals the approver is named on that are ongoing and not waiting for them now.", 'link' => 'candidacy.portal.queue',
+            'cand_ap_ongoing' => ['roles' => $A, 'question' => 'How many of my appeals are ongoing?', 'description' => 'How many appeals the approver is named on that are ongoing and not waiting for them now.', 'link' => 'candidacy.portal.queue',
                 'examples' => ['how many ongoing appeals do i have', 'appeals i am named on still open', 'ongoing appeals count', 'my appeals not waiting on me', 'open appeals under my name']],
 
             'cand_cgs_in_progress' => ['roles' => $C, 'question' => 'How many appeals are in progress?', 'description' => 'The total number of appeals in progress across all steps (the Operations "In progress" card).', 'link' => 'candidacy.cgs.operations',

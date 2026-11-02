@@ -2,7 +2,10 @@
 
 namespace App\Modules\Chloe\Console\Commands;
 
+use App\Modules\Chloe\Assistant\AssistantRoles;
+use App\Modules\Chloe\Assistant\CandidacyAssistant;
 use App\Modules\Chloe\Assistant\Catalogue;
+use App\Modules\Chloe\Assistant\FakeModel;
 use App\Modules\Chloe\Assistant\GeminiModel;
 use App\Modules\Chloe\Assistant\Pipeline;
 use App\Modules\Chloe\Models\AssistantLog;
@@ -11,6 +14,7 @@ use App\Modules\Core\Support\Role;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 
 /**
@@ -53,13 +57,14 @@ class AssistantEvaluate extends Command
         {--heldout : Use docs/assistant-ml/heldout-labelled.jsonl instead of the built-in set}
         {--report : Print the saved results only -- no calls}
         {--allow-fallback : Also allow the fallback model}
+        {--stub= : Offline run with NO provider: "route" = a stub model answers with the expected id, "fallback" = the model is unavailable so the keyword fallback answers. Nothing is sent, counted or logged}
         {--model-only : Kept for compatibility; a run is always router-only}';
 
     protected $description = 'Measure the assistant router against the real provider and report accuracy';
 
     protected function progressPath(): string
     {
-        return storage_path('app/assistant-evaluate-progress'.($this->option('heldout') ? '-heldout' : '').'.json');
+        return storage_path('app/assistant-evaluate-progress'.($this->option('heldout') ? '-heldout' : '').($this->option('stub') ? '-stub-'.$this->option('stub') : '').'.json');
     }
 
     public function handle(): int
@@ -93,7 +98,7 @@ class AssistantEvaluate extends Command
 
         $studentUser = User::where('role', Role::STUDENT)->first();
         // a plain CGS user (not also an approver), so a CGS question is judged against the CGS catalogue alone
-        $cgsUser = User::whereIn('role', Role::cgsTeam())->get()->first(fn (User $u) => \App\Modules\Chloe\Assistant\AssistantRoles::roleFor($u) === 'cgs') ?? User::whereIn('role', Role::cgsTeam())->first();
+        $cgsUser = User::whereIn('role', Role::cgsTeam())->get()->first(fn (User $u) => AssistantRoles::roleFor($u) === 'cgs') ?? User::whereIn('role', Role::cgsTeam())->first();
         $approverUser = User::whereIn('role', [Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR])->first();
 
         if (! $studentUser || ! $cgsUser) {
@@ -102,7 +107,23 @@ class AssistantEvaluate extends Command
             return self::FAILURE;
         }
 
-        $pipeline = new Pipeline(new GeminiModel);
+        $stub = $this->option('stub') ? (string) $this->option('stub') : null;
+
+        if ($stub !== null) {
+            if (! in_array($stub, ['route', 'fallback'], true)) {
+                $this->error('--stub must be "route" or "fallback".');
+
+                return self::FAILURE;
+            }
+
+            // nothing real is touched: an array cache (so the live counters are never read or written), model names that match no real model, and a transaction that is rolled back (no log rows)
+            $unlimited = ['requests_per_minute' => 1000000, 'requests_per_day' => 1000000, 'tokens_per_minute' => 1000000000];
+            config(['cache.default' => 'array', 'assistant.gemini.model' => 'stub-primary', 'assistant.fallback_model' => 'stub-fallback', 'assistant.rate_limits' => ['stub-primary' => $unlimited, 'stub-fallback' => $unlimited, 'default' => $unlimited]]);
+            FakeModel::reset();
+            DB::beginTransaction();
+        }
+
+        $pipeline = new Pipeline($stub !== null ? new FakeModel : new GeminiModel);
         $pipeline->disableCompose();
         $allowFallback = (bool) $this->option('allow-fallback');
         $primaryModel = (string) config('assistant.gemini.model');
@@ -127,11 +148,26 @@ class AssistantEvaluate extends Command
             }
 
             $q = $questions[$i];
-            $user = match ($q['role']) { 'student' => $studentUser, 'approver' => $approverUser ?? $cgsUser, default => $cgsUser };
+            $user = match ($q['role']) {
+                'student' => $studentUser, 'approver' => $approverUser ?? $cgsUser, default => $cgsUser
+            };
             $this->line(sprintf('[%d/%d] (%s, %s) %s', $n + 1, count($indices), $q['role'], $q['group'], $q['q']));
 
+            if ($stub !== null) {
+                FakeModel::reset();
+            }
+
+            if ($stub === 'route') {
+                $role = AssistantRoles::roleFor($user);
+                $id = $q['id'];
+                $routable = Catalogue::find($id) !== null && Catalogue::isAllowed($id, (string) $role) && ($q['domain'] ?? 'workstation') === (Catalogue::find($id)['domain'] ?? null);
+                FakeModel::queueRoute(['id' => $routable ? $id : 'out_of_scope', 'params' => $q['params'] ?? [], 'confidence' => 0.95]);
+            } elseif ($stub === 'fallback') {
+                FakeModel::forceUnavailable(true, 'stub');
+            }
+
             $start = microtime(true);
-            $result = $pipeline->setDomain($q['domain'] ?? 'workstation')->ask($user, $q['q'], $q['recent'] ?? [], true, $allowFallback);
+            $result = $pipeline->setDomain($q['domain'] ?? 'workstation')->ask($user, $q['q'], $q['recent'] ?? [], $stub !== 'fallback', $allowFallback);
             $elapsedMs = (int) round((microtime(true) - $start) * 1000);
             $meta = $result['meta'] ?? [];
 
@@ -139,16 +175,20 @@ class AssistantEvaluate extends Command
             if (($q['id'] ?? null) === 'refused_before_router' && ($result['outcome'] ?? null) === AssistantLog::OUTCOME_REFUSED) {
                 $meta['catalogue_id'] = 'refused_before_router';
             }
+            // a Handbook topic outside Study Candidacy is refused before the router: that refusal is the out_of_scope answer
+            if (($q['id'] ?? null) === 'out_of_scope' && ($result['outcome'] ?? null) === AssistantLog::OUTCOME_REFUSED && empty($meta['catalogue_id'])) {
+                $meta['catalogue_id'] = 'out_of_scope';
+            }
             $errorCode = AssistantLog::where('user_id', $user->id)->latest('id')->value('error_code');
 
-            if ($result['outcome'] === AssistantLog::OUTCOME_UNAVAILABLE) {
+            if ($result['outcome'] === AssistantLog::OUTCOME_UNAVAILABLE && $stub !== 'fallback') {
                 $stopped = 'provider unavailable (error '.($errorCode ?? 'unknown').')';
                 $this->warn("{$stopped} -- stopping cleanly; this question was NOT RUN.");
 
                 break;
             }
 
-            $usedRouter = ($meta['answered_by'] ?? null) === AssistantLog::ANSWERED_BY_MODEL_ROUTER;
+            $usedRouter = $stub === 'fallback' ? true : ($meta['answered_by'] ?? null) === AssistantLog::ANSWERED_BY_MODEL_ROUTER;
             $routerCalls += $usedRouter ? 1 : 0;
 
             $thisRun[$i] = $saved[$i] = $this->score($q, $meta, $result, $usedRouter, $elapsedMs);
@@ -161,9 +201,13 @@ class AssistantEvaluate extends Command
                 break;
             }
 
-            if ($usedRouter && $n < count($indices) - 1) {
+            if ($stub === null && $usedRouter && $n < count($indices) - 1) {
                 sleep($delaySeconds);
             }
+        }
+
+        if ($stub !== null) {
+            DB::rollBack();
         }
 
         $wall = (int) round(microtime(true) - $runStart);
@@ -179,6 +223,8 @@ class AssistantEvaluate extends Command
         if ($stopped !== null) {
             $remaining = count(array_diff(array_keys($questions), array_keys($saved)));
             $this->warn("Stopped: {$stopped}. {$remaining} question(s) not yet run.");
+            $reset = now(config('assistant.day_timezone', 'America/Los_Angeles'))->startOfDay()->addDay()->setTimezone(config('app.timezone'));
+            $this->warn('The daily request counter resets at '.$reset->format('H:i (Y-m-d)').' ('.config('app.timezone').'); run assistant:budget to see what is left.');
             $this->warn('Continue with: docker exec uresearch-app php artisan assistant:evaluate --resume'.($this->option('heldout') ? ' --heldout' : '').($this->option('group') ? ' --group='.$this->option('group') : ''));
         }
 
@@ -272,7 +318,19 @@ class AssistantEvaluate extends Command
             }
         }
 
+        // a role leak: an answer from an entry the asking role is not given, or an answer that names another role's pages (candidacy)
+        $leak = false;
+
+        if ($actual !== null && Catalogue::find($actual) !== null && ! in_array($actual, ['out_of_scope'], true)) {
+            $leak = ! Catalogue::isAllowed($actual, (string) ($q['role'] === 'approver' ? 'approver' : $q['role']));
+        }
+
+        if (($q['domain'] ?? 'workstation') === 'candidacy' && ($result['outcome'] ?? null) === AssistantLog::OUTCOME_ANSWERED && ($q['id'] ?? null) !== 'wrong_domain') {
+            $leak = $leak || CandidacyAssistant::mentionsOtherRole((string) ($result['answer'] ?? ''), (string) $q['role']);
+        }
+
         return [
+            'leak' => $leak,
             'actual' => $actual,
             'actual_kind' => $actual !== null ? (Catalogue::find($actual)['kind'] ?? null) : null,
             'confidence' => isset($meta['confidence']) ? round((float) $meta['confidence'], 2) : null,
@@ -307,7 +365,7 @@ class AssistantEvaluate extends Command
         // per set: all rows (router-answered or not). Cross-domain rows also say how many were redirected WITHOUT a model call.
         $setRows = [];
         foreach ($results as $i => $r) {
-            $setRows[$questions[$i]['set'] ?? 'workstation'][] = $r + ['expected_id' => $questions[$i]['id']];
+            $setRows[$questions[$i]['set'] ?? 'workstation'][] = $r + ['expected_id' => $questions[$i]['id'], '__i' => $i];
         }
         foreach (['workstation', 'candidacy', 'cross'] as $set) {
             $rs = collect($setRows[$set] ?? []);
@@ -317,6 +375,15 @@ class AssistantEvaluate extends Command
             }
 
             $line = sprintf('Set %-11s %d question(s): strict %s, with accepted alternatives %s', $set, $rs->count(), round($rs->where('pass_strict', true)->count() / $rs->count() * 100, 1).'%', round($rs->where('pass_accept', true)->count() / $rs->count() * 100, 1).'%');
+
+            if ($set === 'candidacy') {
+                $byRole = collect(['student', 'approver', 'cgs'])->map(function ($role) use ($rs, $questions) {
+                    $mine = $rs->filter(fn ($r) => ($questions[$r['__i']]['role'] ?? null) === $role);
+
+                    return $mine->isEmpty() ? null : sprintf('%s %d: strict %s, accepted %s', $role, $mine->count(), round($mine->where('pass_strict', true)->count() / $mine->count() * 100, 1).'%', round($mine->where('pass_accept', true)->count() / $mine->count() * 100, 1).'%');
+                })->filter()->implode(' | ');
+                $line .= "\n    per role: {$byRole}\n    role leaks: ".$rs->where('leak', true)->count();
+            }
 
             if ($set === 'cross') {
                 $redirects = $rs->where('expected_id', 'wrong_domain');

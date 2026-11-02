@@ -110,7 +110,23 @@ final class RouterFewShots
             // approver
             ['question' => 'is there anything in my inbox from students', 'id' => 'cand_ap_pending'],
             ['question' => 'what have i cleared during this calendar month', 'id' => 'cand_ap_decided_month'],
-            // out of scope, including the other domain
+            // informal, typed-fast and misspelled, per role (a shot is only shown to a role whose catalogue has its id)
+            ['question' => 'wer can i see all my appeals', 'id' => 'cand_see_all_appeals'],
+            ['question' => 'my appeal got sent back, y?', 'id' => 'cand_my_return_reason'],
+            ['question' => 'can i cancel the appeal i already sent', 'id' => 'cand_withdraw'],
+            ['question' => 'how to redo the appeal after they returned it', 'id' => 'cand_resubmit'],
+            ['question' => 'wat docs to attch for the extension', 'id' => 'cand_required_documents'],
+            ['question' => 'how i approve this thing', 'id' => 'cand_how_decide'],
+            ['question' => 'which page got all the appeals i need to sign', 'id' => 'cand_see_all_appeals'],
+            ['question' => 'what the red dot mean on my queue', 'id' => 'cand_waiting_colours'],
+            ['question' => 'it says i need a signature before i can approve', 'id' => 'cand_my_signature'],
+            ['question' => 'wher the whole list of appeals for everyone', 'id' => 'cand_see_all_appeals'],
+            ['question' => 'registry sent the file back, what now', 'id' => 'cand_cgs_registry_upload'],
+            ['question' => 'can i get the operations list in excel', 'id' => 'cand_cgs_not_built'],
+            ['question' => 'students ending dis month how many', 'id' => 'cand_cgs_expiring', 'params' => ['months' => 1]],
+            // out of scope, including the other domain and the other Handbook topics
+            ['question' => 'am i allowed to change my supervisor', 'id' => 'out_of_scope'],
+            ['question' => 'when is my proposal defence', 'id' => 'out_of_scope'],
             ['question' => 'which seat is free in n2 today', 'id' => 'out_of_scope'],
             ['question' => 'how do i collect my locker key', 'id' => 'out_of_scope'],
             ['question' => 'recommend a good laptop for coding', 'id' => 'out_of_scope'],
