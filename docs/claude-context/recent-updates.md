@@ -8,6 +8,147 @@ diff alone.
 
 ---
 
+## 2026-11-02 — Track My Applications redesign (module-neutral tabs, filters and cards)
+
+**Branch:** `feature/track-applications-redesign`, uncommitted. **Changes Core**
+(every file is listed in `SHARED_CHANGES.md` §10).
+
+### The ask
+
+Redesign the student's Track My Applications page to the design in
+`docs/design/track-my-applications.png`. Requirements:
+- **Tabs:** grouped by a category each module declares about itself.
+- **Status filters:** All, Needs you, In progress, Approved, Rejected.
+- **Cards:** each with a stepper built from the application's own chain,
+  a plain footer sentence and the right buttons.
+- **State:** tab and filter kept in the URL; 20 cards a page.
+- **Module-neutral:** Core names no module.
+- **Shared calendar:** move the working-day calendar into Core with no
+  date changes.
+
+### Key findings before writing any code
+
+- **The old page** listed applications with no grouping and no paging; the
+  shared `<x-core::stepper>` is also used by `applications.show` and
+  Chloe's appeal page, so it is left alone.
+- **No calendar in Core:** the only working-day calendar was Nureen's.
+- **Download tracking exists:** Core's document download logs every
+  "viewed", so "letter not yet opened" needs no new table.
+- **No resubmission flag:** only Chloe's Study Candidacy Appeal can be
+  returned to the student, and no module says a rejection expects
+  resubmission.
+- **Tones by hash collide:** no hash of the five category names gives five
+  different tones (both crc32 and md5 collided), so the tones live in a
+  small config map instead.
+
+### The design
+
+- **Tabs:**
+  - **Declaration:** `public const CATEGORY = '<key>';` on the workflow
+    class, read by `ModuleRegistry::categoryFor()`.
+  - **Labels, tones and icons:** `config/tracking.php` (key → label, fixed
+    tone, default icon). Renaming a tab is a config edit; a key not listed
+    still gets a tab (headline label, neutral tone); no CATEGORY means
+    "Other".
+  - **Display:** only tabs with applications are shown; they wrap, with no
+    scrollbar.
+- **Two passes** (`Core\Services\ApplicationTracker`):
+  - **Light pass, every application:** category, status, needs-you and
+    last activity, for the counts and filters.
+  - **Full build, the page's 20 cards only:** stepper, expected date,
+    overdue flag, sentence and buttons.
+- **The stepper:** "Submitted", then `WorkflowEngine::progress()`, which
+  reads the module's `stages($application)` and therefore its stored
+  snapshot.
+  - **Done steps:** the decision and date from `approval_history`
+    ("Endorsed 13 Oct").
+  - **Current step:** "Waiting N working days" (or "Since <date>" in its
+    first two days) on the shared calendar.
+  - **Rejected step:** a cross, and the chain stops there.
+  - **Approved cards:** the stepper is left off, as in the design.
+  - **Accessibility:** an `<ol>` with screen-reader text such as "Step 3 of
+    4, current: …"; vertical below 720px.
+- **Optional contracts:**
+  - `DescribesApplicationProgress` (sentence, actions, reference,
+    needs_student, resubmission_expected);
+  - `SuppliesOverdueStatus` (kept separate from `SuppliesDecisionDates`);
+  - the existing `SuppliesDecisionDates` (expected date).
+
+  Core adds the calm overdue note itself, so a module's own sentence cannot
+  drop it.
+- **"Needs you":**
+  - status `returned`;
+  - `needs_student` from the module (Nureen: an issued, unrevoked letter the
+    student has not opened);
+  - a rejection only with `resubmission_expected`.
+
+  The card gets a warm border and a "NEEDS YOU" badge in words, and the
+  module's action is the primary button.
+- **Calendar:** `Core\Support\WorkingDayCalendar` with `config/calendar.php`
+  (`holidays => []`). Nureen's class extends it and adds
+  `nureen.charter.holidays`.
+
+### What changed
+
+- **Core and shared** (see SHARED_CHANGES §10):
+  - controller, new service, `ModuleRegistry::categoryFor()`;
+  - 2 new contracts and the shared calendar;
+  - `config/calendar.php` and `config/tracking.php`;
+  - the rewritten index view, the new `track-card` component, the
+    stylesheets list, new `tracking.css`, and 4 new tokens in
+    `tokens.css`.
+- **Nureen:**
+  - `CATEGORY` and `ICON` on all four workflows;
+  - `DescribesApplicationProgress` on Supervision, Certification and GA
+    Extension (new `Support/TrackingDescriptions.php`);
+  - `SuppliesOverdueStatus` through the charter trait;
+  - `WorkingDayCalendar` now extends Core's;
+  - GA Extension and Supervision read their detail row once per
+    application object (`detailFor()`).
+- **Tests:**
+  - New: `tests/Feature/Core/TrackApplicationsTest.php` (12).
+  - Added: 2 tests in `WorkingDayCalendarTest`.
+  - `docs/design/track-my-applications.png` is the design image, copied
+    from your message because it wasn't in the repo.
+
+### Bugs caught
+
+- **Queries:** 131 for 20 cards at first. My GA Extension workflow
+  re-read its snapshot row every time anything asked for the chain. With
+  the detail row cached per application object (never cached before it
+  exists), it is now 31.
+- **Contradictory sentence:** "0 of 4 required documents received… No
+  action needed from you." on older demo rows. The documents sentence now
+  appears only when all of them arrived.
+- **Shared `.btn` offsets:** a 16px top margin, and a taller
+  `.btn-secondary`, misaligned the action row; both are normalised inside
+  the card.
+- **`layout.css` phone gap:** `.page-header-text` (flex-basis 24rem)
+  becomes a 24rem height when the header stacks below 720px, leaving a
+  blank gap on every page with header actions. Fixed for this page only,
+  and reported in SHARED_CHANGES §10.
+- **Verification side effect:** my first browser run fetched Lee's two
+  letters, which logged them as "opened". Those two activity rows were
+  deleted, and the check now never requests `/documents/`.
+
+### Verification
+
+- **Tests:** full suite, 473 passed.
+- **Browser** (Tan Wei Jian: Travel, Examiner Nomination and three of
+  Nureen's modules; Lee Xin Yi: two unopened appointment letters), at
+  1440/820/390px, light and dark, with the All, Needs you and Rejected
+  filters:
+  - no horizontal scroll, and tabs never scroll;
+  - the stepper is vertical and buttons are full width at 390px;
+  - no console errors;
+  - lowest text contrast 4.76:1 in light and 5.74:1 in dark;
+  - a 2px focus outline on the card buttons;
+  - every View details link returns 200.
+- **Teammates' data:** no rows were created; their existing dev rows
+  rendered without errors.
+
+---
+
 ## 2026-11-01 — Attendance backtest: repeated runs, and a tuned projection window
 
 **Branch:** `develop`, uncommitted. Nureen only.

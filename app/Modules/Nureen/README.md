@@ -102,6 +102,20 @@ implement Core's `SuppliesDecisionDates` (`Workflows\Concerns\ExpectsDecisionByC
 Demo data: `NureenClientCharterDemoSeeder` (matric numbers 22091001–22091024,
 on-time and overdue at every stage).
 
+## Track My Applications (Core page, this module's part)
+
+Each workflow declares its tab and icon (`public const CATEGORY` / `ICON`):
+GA Extension and Certification under `assistantships`, Supervision under
+`supervision`, Attendance Appeal under `candidacy`. Supervision and
+Certification implement Core's `DescribesApplicationProgress`
+(`Support\TrackingDescriptions`): an issued letter's real reference,
+Download letter (PDF) as the primary button, and "Needs you" until the
+student first opens it. Revoked letters say so. GA Extension says "All 4
+required documents received." when they all arrived. The three charter
+workflows implement `SuppliesOverdueStatus` through the charter trait.
+`Support\WorkingDayCalendar` now extends Core's shared calendar and adds
+`nureen.charter.holidays`. See `SHARED_CHANGES.md` §10.
+
 ## Official letters
 
 Both letters, the Supervision appointment letter and the GA/GRA
@@ -215,7 +229,7 @@ role-scoped pending that decision.
 | `AttendanceAppealTest` | the single stage being final, and that a student cannot attach another student's flagged record to their own appeal (403) |
 | `SupervisionTest` | the required document, that it lands on the private disk under a random name, and that a supervisor sees only the requests naming them |
 | `CertificationTest` | the letter being generated, attached as an `ApplicationDocument`, and actually dispatched |
-| `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday |
+| `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday; the charter calendar agreeing with Core's shared one for every day of 2026; both holiday lists applied |
 | `ClientCharterTest` | each chain's expected date (GA Extension both modes, Supervision `'automatic'`, Certification), a `null` stage never inventing a date, overdue never giving a past date, a returned application timed from its actual stage, decided/draft returning nothing |
 | `ClientCharterDisplayTest` | the student page (pending shown, decided not, overdue message only when overdue, own rows only) and the queue's overdue marker and order |
 | `StalledReminderTest` | reminders on charter breach and not before, no reminder on a weekend alone, the `stalled_days` fallback, and Supervision's escalation |

@@ -3,6 +3,12 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
+use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
+use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Core\Contracts\DescribesApplicationProgress;
+use App\Modules\Core\Contracts\SuppliesOverdueStatus;
+use App\Modules\Nureen\Support\TrackingDescriptions;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
@@ -25,8 +31,47 @@ use App\Modules\Nureen\Models\GaCertificationDetail;
  * SupervisionController does, not to everyone holding the Supervisor role.
  * The Senior Director's approval is still what triggers PDF generation.
  */
-class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates
+class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus, DescribesApplicationProgress, DescribesApplicationDetails
 {
+    /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
+    use DescribesApplicationDetailsDefaults;
+
+    public function details(Application $application): array
+    {
+        return app(ApplicationDetailsContent::class)->certification($application);
+    }
+
+    public function timelineEvents(Application $application): array
+    {
+        return [
+            ...app(ApplicationDetailsContent::class)->reminders($application),
+            ...app(ApplicationDetailsContent::class)->letterEvents($this->issuedDocument($application)),
+        ];
+    }
+
+    public function stageTargetDays(Application $application, string $stageKey): ?int
+    {
+        return app(ApplicationDetailsContent::class)->target($application, $stageKey);
+    }
+
+    public function issuedDocument(Application $application): ?array
+    {
+        return app(ApplicationDetailsContent::class)->certificationLetter($application);
+    }
+
+    /** Track My Applications tab (config/tracking.php) and card icon. */
+    public const CATEGORY = 'assistantships';
+
+    public const ICON = 'certificate';
+
+    /** Track My Applications: Core\Contracts\DescribesApplicationProgress -- see Support\TrackingDescriptions. */
+    public function describeProgress(Application $application): array
+    {
+        $detail = \App\Modules\Nureen\Models\GaCertificationDetail::where('application_id', $application->id)->first();
+
+        return app(TrackingDescriptions::class)->letter($application, \App\Modules\Nureen\Support\LetterRenderer::CERTIFICATION_DOC_TYPE, $detail?->reference_number, $detail?->revoked_at);
+    }
+
     /** expectedDecisionDate(): the Client Charter date, for the student dashboard. */
     use ExpectsDecisionByCharter;
 

@@ -443,8 +443,17 @@ class WorkflowEngine
     /**
      * Everything the stepper needs, computed in one place.
      *
+     * A stage before the current position counts as completed ONLY if
+     * approval_history records a decision there. One with no row was never
+     * gone through -- typically a stage added to the chain after this
+     * application had already moved past that point (e.g. a certification
+     * submitted before its Supervisor stage existed) -- and is 'skipped':
+     * shown as "Not required for this application", never as done. Reads
+     * the history relation when it is already loaded (no extra query on a
+     * page of cards).
+     *
      * @return array<int, array{stage: Stage, state: string}>
-     *         state is one of: completed, current, rejected, upcoming
+     *         state is one of: completed, current, rejected, upcoming, skipped
      */
     public function progress(Application $application): array
     {
@@ -468,12 +477,16 @@ class WorkflowEngine
 
         $currentIndex ??= 0;
 
+        $history = $application->relationLoaded('history') ? $application->history : $application->history()->get();
+        $decided = $history->pluck('stage_key')->unique()->flip();
+
         $out = [];
 
         foreach ($stages as $i => $stage) {
             $state = match (true) {
                 $isRejected && $i === $currentIndex => 'rejected',
                 $isRejected && $i > $currentIndex => 'upcoming',
+                $i < $currentIndex && ! $decided->has($stage->key) => 'skipped',
                 $i < $currentIndex => 'completed',
                 $i === $currentIndex => 'current',
                 default => 'upcoming',
