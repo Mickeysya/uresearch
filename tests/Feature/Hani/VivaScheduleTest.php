@@ -9,6 +9,7 @@ use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaEligibility;
+use App\Modules\Hani\Notifications\VivaNominateExaminers;
 use App\Modules\Hani\Notifications\VivaScheduled;
 use App\Modules\Hani\Support\VivaInvite;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -112,6 +113,13 @@ class VivaScheduleTest extends TestCase
             'chair_name' => 'Prof. Chair',
             'chair_email' => 'chair@test.my',
         ]);
+    }
+
+    public function test_acknowledging_the_notice_asks_the_supervisor_to_nominate(): void
+    {
+        // setUp() acknowledged the notice.
+        Notification::assertSentTo($this->supervisor, VivaNominateExaminers::class);
+        Notification::assertNotSentTo($this->student, VivaNominateExaminers::class);
     }
 
     public function test_no_date_until_the_nomination_is_approved(): void

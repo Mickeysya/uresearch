@@ -10,12 +10,15 @@ use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaEligibility;
+use App\Modules\Hani\Notifications\VivaAwaitingAcademicExec;
+use App\Modules\Hani\Notifications\VivaNominateExaminers;
 use App\Modules\Hani\Notifications\VivaNoticeSubmitted;
 use App\Modules\Hani\Support\VivaChecklist;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\UnauthorizedException;
 
 class VivaController extends Controller
 {
@@ -143,9 +146,12 @@ class VivaController extends Controller
             report($e);
         }
 
+        VivaProgress::notifyAcademicExecs($student,
+            new VivaAwaitingAcademicExec($application, 'Notice of Thesis Submission', 'viva.queue'));
+
         return redirect()
             ->route('applications.index')
-            ->with('status', "Notice of Thesis Submission #{$application->id} submitted. A confirmation has been sent to your email.");
+            ->with('status', "Notice of Thesis Submission #{$application->id} submitted. Your Academic Executive has been notified, and a confirmation has been sent to your email.");
     }
 
     /**
@@ -194,6 +200,50 @@ class VivaController extends Controller
     }
 
     // ---- Academic Executive queue -----------------------------------------
+
+    /**
+     * The shared decide, plus the guideline's next step: once the AE has
+     * acknowledged the notice, the supervisor is asked to nominate examiners.
+     * Authorisation and the stage move stay the engine's.
+     */
+    public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $data = $request->validate([
+            'decision' => ['required', 'in:approve,reject'],
+            'remarks' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
+        } catch (UnauthorizedException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\LogicException $e) {
+            return back()->with('error', 'That notice has already been decided.');
+        }
+
+        if ($application->status !== Application::STATUS_APPROVED) {
+            return back()->with('status', "Notice #{$application->id} rejected.");
+        }
+
+        $supervisor = $application->student?->supervisor;
+
+        if ($supervisor) {
+            try {
+                $supervisor->notify(new VivaNominateExaminers(
+                    $application,
+                    (string) VivaDetail::where('application_id', $application->id)->value('thesis_title'),
+                    $request->user()->name,
+                ));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        return back()->with('status', "Notice #{$application->id} acknowledged."
+            .($supervisor ? " {$supervisor->name} has been asked to nominate examiners." : ' No supervisor is recorded for this student, so nobody was asked to nominate examiners.'));
+    }
 
     public function queue(Request $request, WorkflowEngine $engine)
     {

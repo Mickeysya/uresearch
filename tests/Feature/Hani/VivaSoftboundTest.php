@@ -6,6 +6,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Hani\Models\VivaEligibility;
 use App\Modules\Hani\Models\VivaSoftboundDetail;
+use App\Modules\Hani\Notifications\VivaAwaitingAcademicExec;
 use App\Modules\Hani\Notifications\VivaSoftboundReturned;
 use App\Modules\Hani\Notifications\VivaSoftboundSubmitted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -182,6 +183,28 @@ class VivaSoftboundTest extends TestCase
         // Verified: nothing more to file.
         $this->actingAs($this->student)->get(route('viva.softbound.create'))
             ->assertRedirect(route('viva.eligibility'));
+    }
+
+    public function test_the_students_own_academic_executive_is_told_about_new_work(): void
+    {
+        $elsewhere = $this->user('academic_exec', ['email' => 'ae2@test.my', 'department' => 'Chemical Engineering']);
+
+        $notice = $this->fileNotice();
+        Notification::assertSentTo($this->ae, VivaAwaitingAcademicExec::class,
+            fn ($n) => str_contains($n->toArray($this->ae)['title'], 'New Notice of Thesis Submission from Ahmad Danial'));
+
+        $this->acknowledge($notice);
+        $this->actingAs($this->student)->post(route('viva.softbound.store'), $this->softbound());
+        $first = Application::where('module_type', 'viva_softbound')->sole();
+        Notification::assertSentTo($this->ae, VivaAwaitingAcademicExec::class,
+            fn ($n) => str_contains($n->toArray($this->ae)['title'], 'New softbound thesis'));
+
+        $this->actingAs($this->ae)->post(route('viva.softbound.decide', $first), ['decision' => 'reject', 'remarks' => 'Fix the abstract.']);
+        $this->actingAs($this->student)->post(route('viva.softbound.store'), $this->softbound());
+        Notification::assertSentTo($this->ae, VivaAwaitingAcademicExec::class,
+            fn ($n) => str_contains($n->toArray($this->ae)['title'], 'Resubmitted softbound thesis'));
+
+        Notification::assertNotSentTo($elsewhere, VivaAwaitingAcademicExec::class);
     }
 
     public function test_phd_word_limit_is_one_hundred_thousand(): void

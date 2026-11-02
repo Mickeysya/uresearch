@@ -4,9 +4,11 @@ namespace App\Modules\Hani\Support;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\VivaDetail;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * Where one student is in the viva, read across the three applications it
@@ -161,6 +163,33 @@ final class VivaProgress
     public static function nominationsFor(iterable $studentIds): Collection
     {
         return self::latestPerStudent(self::NOMINATION, $studentIds);
+    }
+
+    /**
+     * The Academic Executives who own this student's viva: the AEs of the
+     * student's department, the same scoping the engine applies to their queues.
+     *
+     * @return Collection<int, User>
+     */
+    public static function academicExecsFor(User $student): Collection
+    {
+        return User::where('role', Role::ACADEMIC_EXEC)
+            ->where('department', $student->department)
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Best effort: tell those AEs that new work is in their queue. After the
+     * commit, and never failing the student's own submission.
+     */
+    public static function notifyAcademicExecs(User $student, object $notification): void
+    {
+        try {
+            Notification::send(self::academicExecsFor($student), $notification);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /** @return Collection<int, Application> keyed by student_id */

@@ -5,11 +5,10 @@ namespace App\Modules\Hani\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
-use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
-use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\VivaSoftboundDetail;
+use App\Modules\Hani\Notifications\VivaAwaitingAcademicExec;
 use App\Modules\Hani\Notifications\VivaSoftboundReturned;
 use App\Modules\Hani\Notifications\VivaSoftboundSubmitted;
 use App\Modules\Hani\Support\VivaProgress;
@@ -47,8 +46,7 @@ class VivaSoftboundController extends Controller
             'student' => $student,
             'level' => $level,
             'noticeTitle' => $progress->detail?->thesis_title,
-            'academicExecs' => User::where('role', Role::ACADEMIC_EXEC)
-                ->where('department', $student->department)->orderBy('name')->get(),
+            'academicExecs' => VivaProgress::academicExecsFor($student),
             'uploads' => VivaSoftboundDetail::uploadsFor($level),
             'wordLimit' => VivaSoftboundDetail::wordLimitFor($level),
             'similarityMax' => VivaSoftboundDetail::SIMILARITY_MAX,
@@ -66,6 +64,7 @@ class VivaSoftboundController extends Controller
         }
 
         $notice = $progress->notice;
+        $resubmitting = $progress->softboundReturnReason() !== null;
         $level = $progress->detail?->programme_level;
         $wordLimit = VivaSoftboundDetail::wordLimitFor($level);
         $uploads = VivaSoftboundDetail::uploadsFor($level);
@@ -138,9 +137,12 @@ class VivaSoftboundController extends Controller
             report($e);
         }
 
+        VivaProgress::notifyAcademicExecs($student,
+            new VivaAwaitingAcademicExec($application, 'softbound thesis', 'viva.softbound.queue', $resubmitting));
+
         return redirect()
             ->route('viva.eligibility')
-            ->with('status', "Softbound thesis #{$application->id} submitted. A confirmation has been sent to your email.");
+            ->with('status', "Softbound thesis #{$application->id} submitted. Your Academic Executive has been notified, and a confirmation has been sent to your email.");
     }
 
     public function queue(Request $request, WorkflowEngine $engine)
