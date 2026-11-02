@@ -471,6 +471,21 @@ without naming any module:
   expects resubmission.
 - **Cost:** 31 queries for a page of 20 GA Extension cards. See
   `SHARED_CHANGES.md` §10.
+- **The details page** (`applications.show`, `Core\Services\ApplicationDetails`)
+  has these parts:
+  - header with the current holder and the expected-date card (or the
+    student's action);
+  - progress, with who acted and working days against each stage's target
+    (`DescribesApplicationDetails::stageTargetDays()`);
+  - "What happens next";
+  - Activity, newest first (decisions, reminders, letter events);
+  - "Your application" (`details()`);
+  - documents with the issued letter;
+  - "Need help?".
+
+  12 queries for a certification. `WorkflowEngine::progress()` marks a stage
+  with no `approval_history` row as `skipped` ("Not required for this
+  application"), never as completed.
 
 ## Dashboards (brief)
 

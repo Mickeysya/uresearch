@@ -279,6 +279,14 @@ required documents received." when they all arrived. The three charter
 workflows implement `SuppliesOverdueStatus` through the charter trait.
 `Support\WorkingDayCalendar` now extends Core's shared calendar and adds
 `nureen.charter.holidays`. See `SHARED_CHANGES.md` §10.
+The details page ("View details"): all four workflows implement
+`DescribesApplicationDetails` (`Support\ApplicationDetailsContent`) for
+"Your application" (GA Extension: dates and reason; Certification: the GA
+course or GRA project fields, never the appointment check; Supervision:
+supervisor, role, type and justification; Attendance Appeal: period and
+sessions), reminders ("CGS Staff reminded", never a name), letter issued and
+revoked events, the issued letter with its verification link, and each
+stage's charter target. See `SHARED_CHANGES.md` §10b.
 
 ## Official letters
 

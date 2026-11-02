@@ -504,6 +504,125 @@ half-finished GA Extension or Certification request and come back later.
 
 ---
 
+## 2026-11-03 — Application details page redesign, and a "done but never decided" stepper bug
+
+**Branch:** `feature/track-applications-redesign`, uncommitted. **Changes Core**
+(SHARED_CHANGES.md §10b).
+
+### The ask
+
+First fix: certification #144 showed its Supervisor stage as done while
+saying "No decisions recorded yet". Then redesign the student's "View
+details" page to `docs/design/application-details.png`, module-neutral:
+- breadcrumb back to the list's tab and filter;
+- a header with the current holder and the expected date (or the student's
+  action);
+- progress with who acted and working days against each stage's charter
+  target, plus "What happens next";
+- an activity timeline;
+- "Your application", the documents with the issued letter, and help.
+
+### Key findings before writing any code
+
+- **The bug's source:** `WorkflowEngine::progress()` marked every stage
+  before the current position as completed by position alone. #144 (Lee
+  Xin Yi, `ga_certification`, at `cgs_verify`, submitted 11 Oct 2026) has
+  no history at all: it was submitted on the old chain, before the
+  Supervisor stage existed.
+- **No design image:** `docs/design/application-details.png` was not in the
+  repo, and no image came with the request; the page follows the written
+  spec and the Track My Applications visual language.
+- **Reminders store only the latest:** one row per application holds the
+  latest reminder (time, count, stage) — `application_reminders` for GA
+  Extension and Certification, columns on `supervision_details` for
+  Supervision. So the timeline shows one reminder event with the count.
+- **Two revocation fields:** a revoked letter has a `revoked_reason`, which
+  CGS is told "is shown nowhere public", and a separate internal
+  `letter_revoke_note`. The page shows the reason to the student whose
+  letter it is, and never the note.
+- **Page shell rule:** `PageShellTest` requires every signed-in screen to
+  open with `<x-core::page-header>`; the header uses it.
+
+### The design
+
+- **The fix:** in `progress()`, a stage before the current position with
+  no `approval_history` row is `'skipped'`. It reads loaded history, so no
+  extra query on a page of cards. Card and page show "Not required for
+  this application" (muted, dashed ring, words).
+- **`Core\Services\ApplicationDetails`:** reuses
+  `ApplicationTracker::summarise()` (now public), so "needs you" is one
+  rule for list and page.
+  - **Steps:** who (approver name), when ("Endorsed 7 Oct 2026"), and
+    working days on the shared calendar. Reading: "2 of 3 working days",
+    "18 working days · target 2" in the overdue colour (with "(over
+    target)" for screen readers), "Waiting since …" for the current stage,
+    "Next · target 2 working days" for later ones.
+  - **"What happens next":** a module's `next`, or a generic line ending
+    with whether the student must act.
+  - **Activity:** submission, every decision (remarks as a quote), and the
+    module's events. Newest first, with the later-recorded event first on
+    equal timestamps.
+- **A new optional `DescribesApplicationDetails` interface** with a
+  defaults trait: `details()`, `timelineEvents()`, `issuedDocument()`,
+  `stageTargetDays()`. It is a separate interface, not a method added to
+  `DescribesApplicationProgress`, so no implementer can break.
+- **Nureen (`Support\ApplicationDetailsContent`):** details per module.
+  - **Certification:** the GA course or GRA project fields from the same
+    config list the form uses; never the appointment check.
+  - **Reminders:** "CGS Staff reminded" (the role, never a person).
+  - **Letters:** issued and revoked events; the issued letter with its real
+    reference and verification URL (the same route the QR code uses).
+  - **Charter targets:** from `ClientCharter::charterDays()`.
+- **Layout:**
+  - header and progress across the page;
+  - two columns below (Activity and Your application; Documents and Need
+    help), stacked under 1000px;
+  - the stepper turns vertical under 720px.
+
+### What changed
+
+- **Core:**
+  - `WorkflowEngine::progress()`;
+  - new `ApplicationDetails` service and new contract plus defaults trait;
+  - the tracker (public `summarise()`, back-link params, skipped steps);
+  - `show()` and its view;
+  - the track card;
+  - `config/tracking.php` `help` (placeholders);
+  - `tracking.css`.
+- **Nureen:** `Support/ApplicationDetailsContent.php` (new); the four
+  workflows implement `DescribesApplicationDetails`; `TrackingDescriptions`
+  adds `next` for letters.
+- **Tests:** new `tests/Feature/Core/ApplicationDetailsTest.php` (15).
+
+### Bugs caught
+
+- **The #144 stepper bug,** above.
+- **Module events losing their text:** a module's timeline events were
+  merged with the defaults on the wrong side of PHP's `+`, so their detail
+  and quote were dropped. The module's keys now win.
+- **Timeline order on equal timestamps:** "Submitted" listed above
+  decisions made in the same second (seen on #154's demo data). Fixed,
+  with a test.
+
+### Verification
+
+- **Tests:** full suite, 488 passed; the details page uses 12 queries.
+- **Browser**, as the owning student, for:
+  - #144 (pending, overdue certification);
+  - #154 (approved certification with an unopened letter);
+  - #78 (rejected Examiner Nomination, a teammate's module);
+  - #9 (pending Travel, a teammate's module).
+
+  Each at 1440 and 390px, light and dark:
+  - all returned 200, with no horizontal scroll and no console errors;
+  - lowest contrast 4.76:1 (light) and 5.74:1 (dark);
+  - `aria-current="step"` on the current stage;
+  - two columns on desktop, one on a phone, and a vertical stepper at
+    390px.
+- **No document URL was requested,** so no letter was marked as opened.
+
+---
+
 ## 2026-11-02 — Track My Applications redesign (module-neutral tabs, filters and cards)
 
 **Branch:** `feature/track-applications-redesign`, uncommitted. **Changes Core**

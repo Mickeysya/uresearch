@@ -562,6 +562,86 @@ header actions. Fixed only on this page (`.trk .page-header-text { flex-basis: a
 Suggested global fix: the same rule inside the existing `@media (max-width: 720px)` block
 in `layout.css`.
 
+### 10b. The application details page ("View details"), same branch
+
+`ApplicationTrackingController::show()` now renders a full details page from
+`Core\Services\ApplicationDetails`:
+- **Header:** breadcrumb back to the list's own tab and filter; label,
+  reference, title; "Pending · with CGS Staff"; the expected-date card, or
+  the student's action when they must act.
+- **Progress:** who acted, when, and working days against each stage's
+  target.
+- **"What happens next".**
+- **Activity:** newest first.
+- **"Your application"** (optional).
+- **Documents:** with the issued letter, its reference and verification
+  link.
+- **"Need help?".**
+
+**Bug fixed in `WorkflowEngine::progress()` (affects every module, in a good way).**
+A stage before the current position used to count as completed by its
+position alone. Now it is completed only if `approval_history` has a decision
+for it; otherwise its state is `'skipped'`, shown as "Not required for this
+application". That is the case of a stage added to a chain after an
+application had already passed that point. Found on certification #144: it
+was submitted before the Supervisor stage existed, and showed Supervisor as
+done with "No decisions recorded yet" underneath. The shared
+`<x-core::stepper>` (Chloe's appeal page) no longer ticks such a stage either.
+No existing test changed.
+
+**For teammates: optional, to fill the "Your application" section and more.**
+Implement `Core\Contracts\DescribesApplicationDetails` on your workflow class
+with its defaults trait, and override only what you have:
+
+```php
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
+use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
+
+class TravelWorkflow implements WorkflowModule, DescribesApplicationDetails
+{
+    use DescribesApplicationDetailsDefaults;
+
+    public function details(Application $application): array
+    {
+        return ['Destination' => '...', 'Dates' => '...'];   // label => value
+    }
+}
+```
+
+The interface's four methods are below. Each one has a do-nothing default in
+the trait, so a method added later never breaks you:
+
+| Method | Returns |
+|---|---|
+| `details()` | label => value |
+| `timelineEvents()` | your own events, e.g. reminders, letters; never staff names |
+| `issuedDocument()` | the letter you issue, with reference, verify URL and revocation |
+| `stageTargetDays()` | each stage's promised working days |
+
+It is a separate interface rather than a `details()` method added to
+`DescribesApplicationProgress`, for the same reason as `SuppliesOverdueStatus`.
+`DescribesApplicationProgress` also accepts an optional `next` key, which sets
+the "What happens next" text.
+
+**Never return internal-only data** from these: everything is shown to the
+student.
+
+| File | Change |
+|---|---|
+| `Core/Services/WorkflowEngine.php` | `progress()`: a stage with no decision is `'skipped'`, never `'completed'`; reads loaded history (no extra query) |
+| `Core/Services/ApplicationDetails.php` (new) | the page's data |
+| `Core/Services/ApplicationTracker.php` | `summarise()` public (one "needs you" rule for list and page); View details links carry `?tab=&status=`; skipped steps on cards |
+| `Core/Contracts/DescribesApplicationDetails.php` (new) + `Contracts/Defaults/DescribesApplicationDetailsDefaults.php` (new) | above |
+| `Core/Contracts/DescribesApplicationProgress.php` | documents the optional `next` key |
+| `Core/Http/Controllers/ApplicationTrackingController.php` | `show()`: same owner check, validates `tab`/`status`, renders from the service |
+| `Core/Resources/views/applications/show.blade.php` | rewritten (still opens with `<x-core::page-header>`) |
+| `Core/Resources/views/components/track-card.blade.php` | "not required" wording for skipped steps |
+| `config/tracking.php` | `help` contact for "Need help?" (PLACEHOLDERS until CGS confirms) |
+| `public/css/tracking.css` | `.trk-detail` styles; muted, dashed "skipped" step |
+
+**Who can open it:** students only, their own applications only, as before.
+Approvers never had this page and still don't.
+
 ## 11. Saved drafts (GA Extension, Certification): what Core shows, and two small Core proposals
 
 Nureen's GA Extension and GA/GRA Certification forms now have **Save draft**.
