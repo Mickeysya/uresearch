@@ -8,6 +8,150 @@ diff alone.
 
 ---
 
+## 2026-11-04 — Save draft for GA Extension and GA/GRA Certification
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit;
+Core follow-ups are in SHARED_CHANGES.md §14.
+
+### The ask
+
+Some documents take days to collect, so a student must be able to save a
+half-finished GA Extension or Certification request and come back later.
+- **Storage:** use Core's existing draft support (status `draft`,
+  `current_stage` NULL), with no new table.
+- **Saving:** light validation; files attach immediately.
+- **Submitting:** the full validation, reusing the draft.
+- **Access:** only the owner can see or touch a draft.
+- **My Drafts:** a page listing them.
+- **Continuing:** pre-fill, list attached files, reopen on the last step.
+- **Never part of the workflow:** no queue, reminder or analytics.
+
+### Key findings before writing any code
+
+- **Drafts never persisted before:** both controllers created a draft and
+  submitted it within one transaction. Making drafts persist exposes them
+  to Core: Track My Applications lists every application (a draft would
+  show the first stage as "current"), and the student dashboard panel
+  labels it "Pending Approval". Core is out of bounds, so SHARED §14 a–c.
+- **Approver queues already exclude drafts:** they use
+  `WorkflowEngine::queue()`, which reads pending rows only.
+  `StalledApplicationReminder`, the supervision reminder, the Client
+  Charter, the overdue list and the calendar all read pending (or approved)
+  only. `ProcessingTimeAnalytics::complianceByStageAndModule()` loaded
+  every application; it now excludes drafts by name.
+- **`summary()` would crash on a draft:** both workflows assumed the dates
+  were set, and Core's tracking page calls it.
+- **`DocumentStore` can't remove a file** (SHARED §14e).
+- **`form-stepper` can't open on a given step** (SHARED §14d). It also
+  treats the FIRST submit button in the form as "Submit" and moves it, so
+  Save draft must come after Submit, and per-file "Remove" has to be a
+  checkbox, not a submit button inside a step.
+- **This branch starts at `c18a3e4`,** before the `phpunit.xml` fix on
+  `feature/track-applications-redesign`. So the full suite was run with
+  `QUEUE_CONNECTION=sync` and `MAIL_MAILER=array` set for the test process,
+  and `failed_jobs` stayed at 0.
+
+### The design
+
+- **Migration `2026_11_04_000100`:** makes the fields a half-finished form
+  can't fill nullable:
+  - GA Extension: `current_end_date`, `requested_new_end_date`,
+    `reason_for_extension`;
+  - Certification: `appointment_type`, `period_start`, `period_end`.
+
+  It also adds `draft_step` to both detail tables. `down()` deletes drafts
+  first, then restores NOT NULL.
+- **`Support\Drafts`:**
+  - `ownedBy()`: 404 if not this module or no longer a draft, 403 if not
+    the student's own;
+  - `of()`, `lastSaved()` (the touched `updated_at`), `attached()`;
+  - `removeDocuments()` (stored file and row);
+  - `delete()` (files, documents, detail row, application).
+- **`saveDraft()`** (create, then update):
+  - nullable rules only;
+  - documents through `DocumentStore::manyRules($field, false)` plus a
+    limit counting already-attached files;
+  - ticked `remove_documents[]` applied;
+  - redirects to the draft's Continue URL.
+- **`store()`:**
+  - optional `draft_id`, owner-checked first;
+  - the full existing validation, except that a document type the draft
+    already has (after removals) is no longer required;
+  - in the transaction the draft row is locked and re-checked, so it can't
+    be submitted twice;
+  - the supervisor is snapshotted at submission, and `draft_step` cleared;
+  - a Certification's files are relabelled to the submitted type;
+  - then `$engine->submit()`.
+- **Forms:**
+  - **Pre-fill:** every field via `old(..., $detail->…)`.
+  - **Attached files:** the upload component's new `existing` prop lists
+    them with a link and a **Remove** checkbox. They count towards the
+    limit, the label reads "(1 attached, up to 4 more files)", and the input
+    is no longer required.
+  - **Save draft:** `formnovalidate` + `formaction`, placed after Submit.
+  - **Shared script:** moves Save draft beside Submit on every step,
+    records the current step on save, and on Continue presses the stepper's
+    own Continue up to the saved step (stopping early if a step is
+    invalid; the server's "open on the error" wins). In the Certification
+    form it runs after the GA/GRA script.
+- **My Drafts** (`/my-drafts`, a student sidebar link from
+  `GaExtensionWorkflow::links()`): module, summary, last saved, file count,
+  Continue, and Delete with a confirmation prompt. A fresh form also offers
+  the latest draft of that form.
+
+### What changed
+
+- **New:**
+  - migration `2026_11_04_000100_allow_drafts_in_ga_extension_and_certification_details`;
+  - `Support/Drafts.php`, `Http/Controllers/DraftsController.php`;
+  - `Resources/views/drafts/index.blade.php`,
+    `Resources/views/partials/draft-form-script.blade.php`;
+  - `tests/Feature/Nureen/DraftsTest.php` (12).
+- **Changed:**
+  - `GaExtensionController` and `CertificationController`: `editDraft`,
+    `saveDraft`, `destroyDraft`, draft-aware `store`;
+  - both form views and `components/multi-file-upload`;
+  - `routes.php`: 8 draft routes and `/my-drafts`;
+  - `GaExtensionDetail` and `GaCertificationDetail` fillable;
+  - both workflows' `summary()`; `GaExtensionWorkflow::links()`;
+  - `ProcessingTimeAnalytics`;
+  - README and SHARED_CHANGES §14.
+
+### Bugs caught
+
+- **Additional fields:** marking them nullable for drafts first dropped
+  `nullable` along with `required`; now `required` is swapped for
+  `nullable`.
+- **Certification draft fields:** the first version of the type-field
+  handling was wrong for the shared `semester` key; rewritten as "clear all,
+  then fill the chosen type".
+- **Script order:** the draft script ran before the Certification form's
+  GA/GRA script, so resuming would have judged steps on the wrong
+  required/disabled state. It is now included last.
+- **Two visual issues from the live check:** an attached type was labelled
+  "(optional, …)", and Save draft sat 8px higher than Continue. Both fixed.
+
+### Verification
+
+- **Tests:** full suite, 471 passed. `failed_jobs` was 0 before and after.
+- **Browser, as `student@utp.edu.my`:**
+  - Save draft showed beside Continue on step 1. On the documents step,
+    with `ga-form.pdf` attached, Save draft created #187 ("Draft saved at
+    3:13am…").
+  - After signing out and back in, My Drafts listed it (last saved, 1
+    file, Continue, Delete).
+  - Continue reopened on **Supporting documents**, with all three fields
+    pre-filled and the file listed with Remove.
+  - The other three files were added and the request submitted as the
+    same #187. My Drafts was then empty.
+  - `supervisor@`'s GA Extension queue shows "#187 Ahmad Danial … 4 files,
+    today". No console errors.
+- **Certification draft:** saved and pre-filled correctly, then deleted.
+  Draft #186 (an earlier interrupted run) was also deleted through the
+  Delete button.
+
+---
+
 ## 2026-11-01 — Attendance backtest: repeated runs, and a tuned projection window
 
 **Branch:** `develop`, uncommitted. Nureen only.

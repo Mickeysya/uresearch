@@ -62,6 +62,37 @@
   `DocumentStore::storeGenerated()` attaches it, so the existing download
   route and permission check apply with no extra code.
 
+## Saved drafts (GA Extension, GA/GRA Certification)
+
+**Save draft** sits beside Submit on both forms. Some documents take days to
+collect, so a student can leave and resume.
+
+- **Storage:** Core's own draft support. An `applications` row with status
+  `draft` and `current_stage` NULL, plus the detail row (whose half-finished
+  columns are nullable, migration `2026_11_04_000100`). There is no new table.
+- **Saving:** `saveDraft()` creates the draft on the first save and updates
+  it after that. It checks types, lengths, file types and sizes only, never
+  "required". Files attach through `DocumentStore` immediately; a ticked
+  **Remove** box deletes a file (from the disk too). The 5-file limit counts
+  files already attached. `draft_step` records the form step.
+- **Submitting:** `store()` runs the full validation. A document type the
+  draft already has is satisfied by those files. It reuses the draft (row
+  locked, so a double-click can't submit twice), snapshots the supervisor at
+  submission, and calls `$engine->submit()`. On a Certification, files saved
+  under the other type's label take the submitted type's label.
+- **Who can act on it:** only the owning student can open, continue, submit
+  or delete it (`Support\Drafts::ownedBy()`: 403 for anyone else, 404 once
+  submitted). Delete removes the detail row, the documents and their stored
+  files.
+- **Continuing:** **My Drafts** (`/my-drafts`, sidebar link) lists drafts
+  with the last saved time, Continue and Delete. Continue pre-fills every
+  field, lists attached files, and reopens on the step last saved
+  (`partials/draft-form-script`).
+- **Never part of the workflow:** drafts are in no queue, reminder or
+  analytics.
+- **Core caveats:** Core's Track My Applications and dashboard panel still
+  list drafts on this branch; see `SHARED_CHANGES.md` §14.
+
 ## The Client Charter
 
 CGS commits to a number of working days per approval stage
@@ -216,6 +247,7 @@ role-scoped pending that decision.
 | `SupervisionTest` | the required document, that it lands on the private disk under a random name, and that a supervisor sees only the requests naming them |
 | `CertificationTest` | the letter being generated, attached as an `ApplicationDocument`, and actually dispatched |
 | `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday |
+| `DraftsTest` | empty draft saves (both modules); saving again updates the same draft and keeps files; light validation only; Remove deletes the file; the 5-file limit counts attached files; an incomplete draft fails submit with the normal messages; a complete one goes to pending at the first stage as the same application, files intact; a Certification switching GA→GRA relabels its files; another student (or staff) can't open, change, submit or delete it; delete removes everything; no queue, reminder or analytics sees a draft |
 | `ClientCharterTest` | each chain's expected date (GA Extension both modes, Supervision `'automatic'`, Certification), a `null` stage never inventing a date, overdue never giving a past date, a returned application timed from its actual stage, decided/draft returning nothing |
 | `ClientCharterDisplayTest` | the student page (pending shown, decided not, overdue message only when overdue, own rows only) and the queue's overdue marker and order |
 | `StalledReminderTest` | reminders on charter breach and not before, no reminder on a weekend alone, the `stalled_days` fallback, and Supervision's escalation |

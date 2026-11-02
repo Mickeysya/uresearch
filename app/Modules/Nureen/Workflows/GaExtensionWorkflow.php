@@ -176,8 +176,13 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
             return 'GA extension request';
         }
 
-        return 'Extend to '.$detail->requested_new_end_date->format('j M Y')
-            .', '.Str::limit($detail->reason_for_extension, 70);
+        // A saved draft may not have these yet (they are nullable for drafts).
+        $parts = array_filter([
+            $detail->requested_new_end_date ? 'Extend to '.$detail->requested_new_end_date->format('j M Y') : null,
+            $detail->reason_for_extension ? Str::limit($detail->reason_for_extension, 70) : null,
+        ]);
+
+        return $parts === [] ? 'GA extension request' : implode(', ', $parts);
     }
 
     public function createRoute(): ?string
@@ -199,7 +204,11 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
     public function links(User $user): array
     {
         return $user->role === Role::STUDENT
-            ? [['label' => 'Expected Decision Dates', 'route' => 'nureen.expected-dates']]
+            ? [
+                ['label' => 'Expected Decision Dates', 'route' => 'nureen.expected-dates'],
+                // Saved GA Extension and Certification drafts -- Support\Drafts.
+                ['label' => 'My Drafts', 'route' => 'nureen.drafts'],
+            ]
             : [];
     }
 

@@ -13,7 +13,7 @@ class GaCertificationDetail extends Model
         'application_id', 'supervisor_id', 'appointment_type', 'period_start', 'period_end', 'purpose',
         'course_code', 'course_name', 'course_owner_name',
         'project_title', 'project_leader_name', 'grant_code', 'semester',
-        'reference_number', 'revoked_at', 'revoked_reason',
+        'reference_number', 'revoked_at', 'revoked_reason', 'draft_step',
     ];
 
     protected function casts(): array

@@ -27,6 +27,11 @@
     'label',
     'required' => true,
     'hint' => null,
+    // Files already attached to a saved draft (ApplicationDocument rows).
+    // They count towards the limit and satisfy "required"; each can be
+    // ticked to remove on the next Save draft or Submit
+    // (remove_documents[] -- Support\Drafts::removeDocuments()).
+    'existing' => collect(),
 ])
 @php
     use App\Modules\Core\Services\DocumentStore;
@@ -37,6 +42,10 @@
     $allowed = DocumentStore::MULTI_ALLOWED;
     $accept = implode(',', array_map(fn ($ext) => ".{$ext}", $allowed));
     $inputId = $name.'-input-'.uniqid();
+    $existing = collect($existing);
+    // Already attached files: required is met, and fewer new files fit.
+    $required = $required && $existing->isEmpty();
+    $maxFiles = max(0, $maxFiles - $existing->count());
 @endphp
 
 <div class="doc-upload" data-doc-upload
@@ -47,12 +56,34 @@
 
     <label for="{{ $inputId }}">
         {{ $label }}
-        <span style="color: var(--text-grey)">({{ $required ? 'required' : 'optional' }}, up to {{ $maxFiles }} files)</span>
+        @if ($existing->isNotEmpty())
+            {{-- Still required on submit; the attached file already counts. --}}
+            <span style="color: var(--text-grey)">({{ $existing->count() }} attached, up to {{ $maxFiles }} more {{ $maxFiles === 1 ? 'file' : 'files' }})</span>
+        @else
+            <span style="color: var(--text-grey)">({{ $required ? 'required' : 'optional' }}, up to {{ $maxFiles }} files)</span>
+        @endif
     </label>
+
+    @if ($existing->isNotEmpty())
+        <ul class="doc-upload-existing" aria-label="{{ $label }}: already attached">
+            @foreach ($existing as $document)
+                <li>
+                    <a href="{{ $document->url() }}">{{ $document->original_name }}</a>
+                    <span class="queue-meta">saved {{ $document->created_at->format('j M, g:ia') }}</span>
+                    <label class="doc-upload-remove">
+                        <input type="checkbox" name="remove_documents[]" value="{{ $document->id }}"
+                               aria-label="Remove {{ $document->original_name }}">
+                        Remove
+                    </label>
+                </li>
+            @endforeach
+        </ul>
+    @endif
 
     <input type="file" id="{{ $inputId }}" name="{{ $name }}[]" multiple
            accept="{{ $accept }}"
            data-doc-upload-input
+           @if ($existing->isNotEmpty()) data-has-existing @endif
            @required($required)
            class="@error($name) is-invalid @enderror">
 
@@ -80,6 +111,16 @@
     </p>
 </div>
 
+@once
+    @push('head')
+        <style>
+            .doc-upload-existing { list-style: none; margin: 4px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+            .doc-upload-existing li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 10px; border: 1px solid var(--border-grey); border-radius: 8px; font-size: 13.5px; }
+            .doc-upload-existing a { color: var(--navy); font-weight: 600; overflow-wrap: anywhere; }
+            .doc-upload-remove { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 0 auto; font-weight: 400; color: var(--danger-fg); }
+        </style>
+    @endpush
+@endonce
 @once
 <style>
     .doc-upload-list {

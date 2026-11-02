@@ -12,6 +12,7 @@ use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Notifications\CertificationIssued;
 use App\Modules\Nureen\Support\AppointmentVerifier;
 use App\Modules\Nureen\Support\ClientCharter;
+use App\Modules\Nureen\Support\Drafts;
 use App\Modules\Nureen\Support\LetterRenderer;
 use App\Modules\Nureen\Support\CertificateReferenceGenerator;
 use Illuminate\Http\RedirectResponse;
@@ -30,17 +31,125 @@ class CertificationController extends Controller
 
     public function create(Request $request)
     {
+        return $this->form($request, null);
+    }
+
+    /** Continue a saved draft: the same form, pre-filled, on the step last saved. */
+    public function editDraft(Request $request, Application $application)
+    {
+        return $this->form($request, Drafts::ownedBy($request->user(), $application, $this->moduleKey()));
+    }
+
+    protected function form(Request $request, ?Application $draft)
+    {
         return view('nureen::ga_certification.form', [
             'fields' => config('nureen.ga_certification.fields'),
             'supportingDocumentLabel' => config('nureen.ga_certification.supporting_document_label'),
             'hasSupervisor' => $request->user()->supervisor_id !== null,
             'purposeMax' => config('nureen.ga_certification.purpose_max'),
+            'draft' => $draft,
+            'detail' => $draft ? GaCertificationDetail::where('application_id', $draft->id)->first() : null,
+            // Supporting documents, whichever type's label they were saved under.
+            'attachedDocuments' => $draft ? Drafts::attached($draft)->flatten(1)->values() : collect(),
+            'otherDrafts' => $draft ? collect() : Drafts::of($request->user(), $this->moduleKey()),
         ]);
+    }
+
+    /**
+     * "Save draft": creates the draft on the first save, updates it after.
+     * Light validation only (types, lengths, file types and sizes); files
+     * attach through DocumentStore immediately; ticked "Remove" boxes take
+     * files off.
+     */
+    public function saveDraft(Request $request, DocumentStore $documents, ?Application $application = null): RedirectResponse
+    {
+        if ($application) {
+            Drafts::ownedBy($request->user(), $application, $this->moduleKey());
+        }
+
+        $removing = $this->removing($request, $application);
+
+        $rules = [
+            'appointment_type' => ['nullable', 'in:GA,GRA'],
+            'period_start' => ['nullable', 'date'],
+            'period_end' => ['nullable', 'date'],
+            'purpose' => ['nullable', 'string', 'max:'.config('nureen.ga_certification.purpose_max')],
+            'draft_step' => ['nullable', 'integer', 'min:0', 'max:20'],
+        ] + $this->supportingDocumentRules($application, $removing, required: false);
+
+        // Every type field, never required, with the same length limits.
+        foreach (config('nureen.ga_certification.fields', []) as $typeFields) {
+            foreach ($typeFields as $key => $field) {
+                $rules[$key] = ['nullable', 'string', 'max:'.($field['max'] ?? 255)];
+            }
+        }
+
+        $data = $request->validate($rules, DocumentStore::manyMessages('supporting_documents'));
+
+        $application = DB::transaction(function () use ($request, $data, $application, $removing, $documents) {
+            $application ??= Application::create([
+                'student_id' => $request->user()->id,
+                'submitted_by_id' => $request->user()->id,
+                'module_type' => $this->moduleKey(),
+                'status' => Application::STATUS_DRAFT,
+            ]);
+
+            $values = [
+                'appointment_type' => $data['appointment_type'] ?? null,
+                'period_start' => $data['period_start'] ?? null,
+                'period_end' => $data['period_end'] ?? null,
+                'purpose' => $data['purpose'] ?? null,
+                'draft_step' => $data['draft_step'] ?? null,
+            ];
+
+            // Every type field cleared, then the chosen type's filled in --
+            // as submitting would (GA and GRA share 'semester', so the
+            // order matters).
+            foreach (config('nureen.ga_certification.fields', []) as $typeFields) {
+                foreach (array_keys($typeFields) as $key) {
+                    $values[$key] = null;
+                }
+            }
+
+            foreach (array_keys(config('nureen.ga_certification.fields.'.($data['appointment_type'] ?? ''), [])) as $key) {
+                $values[$key] = $data[$key] ?? null;
+            }
+
+            GaCertificationDetail::updateOrCreate(['application_id' => $application->id], $values);
+
+            Drafts::removeDocuments($application, $removing);
+
+            if ($files = $request->file('supporting_documents')) {
+                $documents->attachMany($application, $files, $this->supportingDocumentLabel($data['appointment_type'] ?? null));
+            }
+
+            $application->touch();
+
+            return $application;
+        });
+
+        return redirect()
+            ->route('ga-certification.draft.edit', $application)
+            ->with('status', 'Draft saved at '.now()->format('g:ia').'. Continue it any time from My Drafts.');
+    }
+
+    /** Delete a draft: its stored files, its detail row and the application row. */
+    public function destroyDraft(Request $request, Application $application): RedirectResponse
+    {
+        Drafts::delete(Drafts::ownedBy($request->user(), $application, $this->moduleKey()), GaCertificationDetail::class);
+
+        return redirect()->route('nureen.drafts')->with('status', 'Draft deleted.');
     }
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
         $student = $request->user();
+
+        // Submitting a saved draft reuses it rather than creating a second
+        // application -- only the student's own, and only while still a draft.
+        $draft = $request->filled('draft_id')
+            ? Drafts::ownedBy($student, Application::findOrFail((int) $request->input('draft_id')), $this->moduleKey())
+            : null;
 
         // "Block submission with a clear message instead of creating an
         // application nobody can review" -- the new first stage is
@@ -72,34 +181,56 @@ class CertificationController extends Controller
 
         $typeData = $request->validate($typeRules);
 
-        $documentField = 'supporting_documents';
-        $documentLabel = config("nureen.ga_certification.supporting_document_label.{$data['appointment_type']}");
+        $removing = $this->removing($request, $draft);
+        $documentLabel = $this->supportingDocumentLabel($data['appointment_type']);
 
-        $documentRules = DocumentStore::manyRules($documentField);
-        $documentMessages = DocumentStore::manyMessages($documentField)
-            + ["{$documentField}.required" => "Attach {$documentLabel}."];
+        // Required unless the draft already has supporting documents.
+        $request->validate(
+            $this->supportingDocumentRules($draft, $removing, required: true),
+            DocumentStore::manyMessages('supporting_documents') + ['supporting_documents.required' => "Attach {$documentLabel}."],
+        );
 
-        $request->validate($documentRules, $documentMessages);
+        $application = DB::transaction(function () use ($request, $student, $data, $typeData, $draft, $removing, $documentLabel, $engine, $documents) {
+            if ($draft) {
+                // Locked and re-checked, so a double-click can never submit
+                // the same draft twice.
+                $application = Application::whereKey($draft->id)->lockForUpdate()->first();
+                abort_unless($application?->status === Application::STATUS_DRAFT, 409, 'This draft has already been submitted.');
+            } else {
+                $application = Application::create([
+                    'student_id' => $student->id,
+                    'submitted_by_id' => $student->id,
+                    'module_type' => $this->moduleKey(),
+                    'status' => Application::STATUS_DRAFT,
+                ]);
+            }
 
-        $application = DB::transaction(function () use ($request, $student, $data, $typeData, $documentField, $documentLabel, $engine, $documents) {
-            $application = Application::create([
-                'student_id' => $student->id,
-                'submitted_by_id' => $student->id,
-                'module_type' => $this->moduleKey(),
-                'status' => Application::STATUS_DRAFT,
-            ]);
+            // The other type's fields are cleared: a draft that switched
+            // from GA to GRA must not carry stale course details.
+            $otherFields = collect(config('nureen.ga_certification.fields', []))
+                ->except($data['appointment_type'])->flatMap(fn ($fields) => array_keys($fields))
+                ->diff(array_keys($typeData))
+                ->mapWithKeys(fn ($key) => [$key => null])->all();
 
-            GaCertificationDetail::create([
-                'application_id' => $application->id,
+            GaCertificationDetail::updateOrCreate(['application_id' => $application->id], [
                 // Snapshotted now, not re-read later -- if the student's
                 // supervisor changes afterwards, this application still
                 // goes to whoever it was addressed to at submission. See
                 // SupervisionDetail::requested_supervisor_id for the same
                 // reasoning.
                 'supervisor_id' => $student->supervisor_id,
-            ] + $data + $typeData);
+                'draft_step' => null,
+            ] + $data + $typeData + $otherFields);
 
-            $documents->attachMany($application, $request->file($documentField), $documentLabel);
+            Drafts::removeDocuments($application, $removing);
+
+            // Files saved while drafting under the other type's label take
+            // the submitted type's label.
+            $application->documents()->update(['doc_type' => $documentLabel]);
+
+            if ($files = $request->file('supporting_documents')) {
+                $documents->attachMany($application, $files, $documentLabel);
+            }
 
             return $engine->submit($application);
         });
@@ -107,6 +238,44 @@ class CertificationController extends Controller
         return redirect()
             ->route('applications.index')
             ->with('status', "Certification request #{$application->id} submitted.");
+    }
+
+    /** The supporting documents' label for a type, or a neutral one before a type is chosen. */
+    protected function supportingDocumentLabel(?string $type): string
+    {
+        return config("nureen.ga_certification.supporting_document_label.{$type}") ?? 'Supporting Document';
+    }
+
+    /**
+     * Required on submit unless the draft already has supporting documents
+     * (after removals); never required on a draft save. The 5-file limit
+     * counts the files already attached.
+     *
+     * @param  array<int, int>  $removing
+     */
+    protected function supportingDocumentRules(?Application $draft, array $removing, bool $required): array
+    {
+        $already = $draft ? Drafts::attached($draft, $removing)->flatten(1)->count() : 0;
+        $rules = DocumentStore::manyRules('supporting_documents', $required && $already === 0);
+        $rules['supporting_documents'][] = function (string $attribute, $value, \Closure $fail) use ($already) {
+            if ($already + count((array) $value) > DocumentStore::MULTI_MAX_FILES) {
+                $fail('You may attach at most '.DocumentStore::MULTI_MAX_FILES." supporting documents ({$already} already attached).");
+            }
+        };
+
+        return $rules;
+    }
+
+    /** The ids ticked "Remove" on the form -- only meaningful on a draft. @return array<int, int> */
+    protected function removing(Request $request, ?Application $draft): array
+    {
+        if (! $draft) {
+            return [];
+        }
+
+        $ids = $request->validate(['remove_documents' => ['nullable', 'array'], 'remove_documents.*' => ['integer']])['remove_documents'] ?? [];
+
+        return array_map('intval', $ids);
     }
 
     public function queue(Request $request, WorkflowEngine $engine, AppointmentVerifier $verifier, ClientCharter $charter)
