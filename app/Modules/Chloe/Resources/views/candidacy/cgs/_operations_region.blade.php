@@ -1,20 +1,9 @@
 @php
     use App\Modules\Chloe\Support\CandidacyAppealPresenter as P;
-    $cards = ['in_progress' => ['In progress', 'gold'], 'returned' => ['Returned', 'orange'], 'approved' => ['Approved', 'green'], 'rejected' => ['Rejected', 'red']];
     $base = array_diff_key($query, ['group' => 1, 'page' => 1]);
     $link = fn (?string $group, ?int $page = null) => route('candidacy.cgs.operations', array_filter($base + ['group' => $group, 'page' => $page]));
     $detail = fn ($a) => route('candidacy.appeals.show', ['appeal' => $a->id, 'return' => $returnTo]);
 @endphp
-<div class="wca-cards" role="group" aria-label="Appeals by status">
-    @foreach ($cards as $key => [$label, $tone])
-        @php $active = $f['group'] === $key; @endphp
-        <a class="wca-statcard {{ $active ? 'is-active' : '' }}" href="{{ $active ? $link(null) : $link($key) }}" aria-pressed="{{ $active ? 'true' : 'false' }}">
-            <span class="wca-statcard-label"><span class="wca-dot is-{{ $tone }}"></span>{{ $label }}</span>
-            <span class="wca-statcard-number" data-live-stat="{{ $key }}">{{ $counts[$key] }}</span>
-        </a>
-    @endforeach
-</div>
-
 <section class="wca-card" aria-label="Appeals">
     <div class="wca-tabs" role="tablist">
         @foreach (['in_progress' => 'In progress', 'returned' => 'Returned', 'approved' => 'Approved', 'rejected' => 'Rejected', 'all' => 'All'] as $key => $label)

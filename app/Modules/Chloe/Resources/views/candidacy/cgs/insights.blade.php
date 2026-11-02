@@ -9,8 +9,8 @@
 
 @section('content')
     <div class="wsi-page" id="wsi-page">
-        <x-core::page-header title="Candidacy Insights" subtitle="Operational monitoring from the known candidacy expiry dates. A projection, not a prediction." :back="route('candidacy.cgs.operations')" :back-history="false">
-            <a href="{{ route('dashboard') }}"><button type="button">Home</button></a>
+        <x-core::page-header title="Candidacy Insights" :back="route('candidacy.cgs.operations')" :back-history="false">
+            <a href="{{ route('candidacy.cgs.operations') }}"><button type="button">Home</button></a>
         </x-core::page-header>
 
         <p class="wsi-meta wsi-live-row">

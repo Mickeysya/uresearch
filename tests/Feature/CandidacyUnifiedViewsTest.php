@@ -214,8 +214,8 @@ class CandidacyUnifiedViewsTest extends TestCase
         $this->assertStringContainsString('is-active', $html);
         $this->assertStringContainsString('aria-pressed="true"', $html);
         // clicking the active card again clears it (the link goes to the list without a group)
-        $this->assertMatchesRegularExpression('~wca-statcard is-active"\s+href="[^"?]*(\?[^"]*)?"~', $html);
-        $this->assertDoesNotMatchRegularExpression('~wca-statcard is-active"\s+href="[^"]*group=approved~', html_entity_decode($html));
+        $this->assertMatchesRegularExpression('~<a href="[^"?]*(\?[^"]*)?" class="is-active" aria-pressed="true"~', $html);
+        $this->assertDoesNotMatchRegularExpression('~<a href="[^"]*group=approved[^"]*" class="is-active"~', html_entity_decode($html));
 
         $all = $this->actingAs($this->cgsUser)->get(route('candidacy.cgs.operations'))->getContent();
         $this->assertSame(8, substr_count($all, 'View details')); // all, incl. the closed one
@@ -243,7 +243,7 @@ class CandidacyUnifiedViewsTest extends TestCase
         $this->assertStringNotContainsString('Pending Appeals', $html);
         $this->assertStringNotContainsString('Export', $html);
         $this->assertStringNotContainsString('Students Near Candidacy Expiry', $html); // only the four agreed cards
-        $this->assertSame(4, preg_match_all('~class="wca-statcard\s*(is-active)?\s*"~', $html));
+        $this->assertSame(4, preg_match_all('~class="stat-card accent-[a-z]+"~', $html));
         $this->assertStringNotContainsString('>'.$a->appeal_no.'</a>', $html); // the number is plain text, not a link
         $this->assertStringContainsString($a->appeal_no, $html);
     }

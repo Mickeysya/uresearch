@@ -7,7 +7,7 @@
 @section('content')
     <div class="wca-page">
         <x-core::page-header title="My Signature" subtitle="Your signature is stamped on every appeal you approve." :back="$back" :back-history="false">
-            <a href="{{ route('dashboard') }}" class="wca-home">Home</a>
+            <a href="{{ \App\Modules\Chloe\Support\CandidacyHeaderLinks::home() }}"><button type="button">Home</button></a>
         </x-core::page-header>
 
         @include('chloe::candidacy.wca._flash')

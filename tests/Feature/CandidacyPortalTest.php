@@ -248,14 +248,14 @@ class CandidacyPortalTest extends TestCase
             $response = $this->actingAs($this->lecturer)->get($url)->assertOk();
             $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'), $url);
             $html = $response->getContent();
-            $page = preg_match('~<div class="wca-page"[^>]*>(.*?)<div\s+id="wsa-root"~s', $html, $m) ? $m[1] : $html;
+            $page = preg_match('~<div class="[^"]*wca-page[^"]*"[^>]*>(.*?)<div\s+id="wsa-root"~s', $html, $m) ? $m[1] : $html;
             $this->assertDoesNotMatchRegularExpression('~\sstyle\s*=~i', $page, "inline style on {$url}");
             $this->assertDoesNotMatchRegularExpression('~\son[a-z]+\s*=~i', $page, "inline handler on {$url}");
             preg_match_all('~class="([^"]*)"~', $page, $classes);
             foreach ($classes[1] as $list) {
                 foreach (preg_split('/\s+/', trim($list)) as $class) {
-                    if ($class !== '' && ! str_starts_with($class, 'wca-') && ! str_starts_with($class, 'is-') && ! in_array($class, ['page-header', 'page-header-text', 'page-header-back', 'page-header-actions'], true)) {
-                        $this->fail("class '{$class}' on {$url} is not prefixed wca-");
+                    if ($class !== '' && ! str_starts_with($class, 'wca-') && ! str_starts_with($class, 'is-') && ! str_starts_with($class, 'cgs-') && ! str_starts_with($class, 'accent-') && ! in_array($class, ['page-header', 'page-header-text', 'page-header-back', 'page-header-actions', 'card', 'card-wide', 'card-container-inline', 'field', 'clear-link', 'btn-secondary', 'stat-card', 'stat-number', 'stat-label'], true)) {
+                        $this->fail("class '{$class}' on {$url} is neither wca- prefixed nor one of the shared Workstation classes");
                     }
                 }
             }

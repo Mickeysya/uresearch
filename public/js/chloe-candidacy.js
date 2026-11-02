@@ -119,7 +119,7 @@
         var applyStats = function (j) {
             if (!j || !j.stats) { return; }
             Object.keys(j.stats).forEach(function (k) {
-                $all('[data-live-stat="' + k + '"], [data-live-stat="tab_' + k + '"]', region).forEach(function (el) { el.textContent = String(j.stats[k]); });
+                $all('[data-live-stat="' + k + '"], [data-live-stat="tab_' + k + '"]', document).forEach(function (el) { el.textContent = String(j.stats[k]); });
             });
         };
         var json = function (url) { return fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { 'Accept': 'application/json' } }).then(function (r) { return r.ok ? r.json() : null; }); };
@@ -138,7 +138,10 @@
                         .then(function (html) {
                             if (html === null || !safe()) { return; }
                             var y = window.scrollY;
-                            region.innerHTML = html; version = j.version;
+                            // a region that also carries the stat cards (they sit in the filter card, like Workstation) is split at the marker
+                            var slot = $('#wca-live-cards'), cut = html.indexOf('<!--wca-split-->');
+                            if (slot && cut > -1) { slot.innerHTML = html.slice(0, cut); region.innerHTML = html.slice(cut + 16); } else { region.innerHTML = html; }
+                            version = j.version;
                             window.scrollTo(0, y); stamp();
                         });
                 })

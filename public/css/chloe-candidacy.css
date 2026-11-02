@@ -6,7 +6,7 @@
     --wca-blue: #004B85; --wca-blue-2: #0066B3; --wca-gold: #C88A12; --wca-orange: #F68B33;
     --wca-red: #C62828; --wca-green: #2E8B57; --wca-slate: #606C73;
     --wca-ink: #1B232B; --wca-grey: #4A555D; --wca-line: #D9E0E7; --wca-hover: #F2F6FA; --wca-soft: #F7F9FB;
-    color: var(--wca-ink); font-family: inherit; font-size: 14px; line-height: 1.5; position: relative; width: 100%;
+    font-family: inherit; position: relative; width: 100%; /* colour, size and line height are inherited from the shared stylesheet, exactly as on the Workstation pages */
 }
 .wca-page *, .wca-page *::before, .wca-page *::after { box-sizing: border-box; }
 .wca-page :focus, .wca-page :focus-visible, .wca-page :active { outline: none; box-shadow: none; }
@@ -20,13 +20,12 @@
 .wca-hidden { display: none !important; }
 
 /* header buttons: Home (blue solid) in the shared page header */
-.wca-home { display: inline-flex; align-items: center; justify-content: center; margin: 0; padding: 0 20px; min-height: 40px; line-height: 1.2; position: static; transform: none; font: inherit; font-weight: 600; background: var(--wca-blue); color: #fff; border: 0; border-radius: 8px; cursor: pointer; text-decoration: none; }
-.wca-home:hover { background: #003A66; color: #fff; }
 
 /* cards and grids */
 .wca-grid { display: grid; gap: 20px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 0 20px; padding: 0; width: 100%; }
 .wca-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.wca-card { background: #fff; border: 1px solid var(--wca-line); border-radius: 12px; padding: 20px; margin: 0 0 20px; min-width: 0; overflow-wrap: anywhere; position: relative; }
+.wca-card { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); padding: var(--space-8); margin: 0 0 20px; min-width: 0; overflow-wrap: anywhere; position: relative; } /* = the shared .card */
+.wca-card:has(.wca-table-wrap) { padding: 24px; } /* room for the 12-column tables */
 .wca-grid > .wca-card { margin: 0; }
 .wca-kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; margin: 0; padding: 0; }
 .wca-kv dt { margin: 0; padding: 0; color: var(--wca-grey); font-weight: 400; }
@@ -49,13 +48,6 @@
 .wca-tip[data-tip]:hover::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); width: max-content; max-width: 240px; padding: 6px 10px; background: #fff; color: #000; border: 1px solid var(--wca-line); border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); font-size: 12px; font-weight: 400; line-height: 1.4; text-align: left; z-index: 50; white-space: normal; }
 
 /* buttons */
-.wca-btn { display: inline-flex; align-items: center; justify-content: center; position: relative; transform: none; margin: 0; padding: 0 20px; min-height: 40px; line-height: 1.2; font: inherit; font-weight: 600; font-size: 14px; color: var(--wca-ink); background: #fff; border: 1px solid #B8C3CE; border-radius: 8px; cursor: pointer; text-decoration: none; white-space: normal; text-align: center; }
-.wca-btn:hover { background: var(--wca-hover); color: var(--wca-ink); text-decoration: none; }
-.wca-btn.is-primary { background: var(--wca-blue); border-color: var(--wca-blue); color: #fff; }
-.wca-btn.is-primary:hover { background: #003A66; border-color: #003A66; color: #fff; }
-.wca-btn.is-small { min-height: 32px; padding: 0 12px; font-size: 13px; }
-.wca-btn[aria-disabled="true"], .wca-btn:disabled { background: #EEF1F4; border-color: #D5DBE1; color: #4F5961; cursor: not-allowed; }
-.wca-btn[aria-disabled="true"]:hover, .wca-btn:disabled:hover { background: #EEF1F4; color: #4F5961; }
 .wca-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 0; padding: 0; }
 .wca-link-btn { display: inline; margin: 0; padding: 2px 4px; min-height: 0; line-height: 1.4; font: inherit; color: var(--wca-ink); background: none; border: 0; text-decoration: underline; cursor: pointer; position: static; transform: none; }
 .wca-link-btn:hover { background: var(--wca-hover); }
@@ -130,7 +122,6 @@
     .wca-grid, .wca-grid-2, .wca-row, .wca-row.is-3, .wca-chain { grid-template-columns: minmax(0, 1fr); }
     .wca-stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .wca-pub-row { grid-template-columns: minmax(0, 1fr); padding: 0 0 10px; border-bottom: 1px solid #EDF1F4; }
-    .wca-card { padding: 16px; }
     .wca-kv { grid-template-columns: minmax(0, 1fr); gap: 2px 0; } .wca-kv dd { text-align: left; margin: 0 0 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .wca-page * { animation: none !important; transition: none !important; } }
@@ -215,7 +206,6 @@
 .wca-pager > span { margin: 0 auto 0 0; }
 @media (max-width: 1100px) { .wca-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wca-filter-grid.is-ops { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .wca-cards, .wca-filter-grid.is-ops { grid-template-columns: minmax(0, 1fr); } }
-.wca-page .wca-btn, .wca-page .wca-btn:hover, .wca-page .wca-btn:active, .wca-page .wca-link-btn, .wca-page .wca-link-btn:hover { box-shadow: none; }
 /* the 12-column Operations table must fit between 1100 px and 1440 px without scrolling */
 .wca-table.is-compact { font-size: 12px; }
 .wca-table.is-compact th, .wca-table.is-compact td { padding: 8px 4px; }
@@ -248,9 +238,6 @@
 
 /* the Dean's second (final) dialog sits above the first modal */
 .wca-confirm { z-index: 3100; }
-.wca-page .wca-btn.is-danger { background: #C62828; border-color: #C62828; color: #fff; }
-.wca-page .wca-btn.is-danger:hover { background: #A81F1F; border-color: #A81F1F; color: #fff; }
-.wca-page .wca-btn.is-danger:disabled { background: #D98A8A; border-color: #D98A8A; color: #fff; cursor: not-allowed; }
 .wca-consequences { margin: 0 0 12px; padding: 0 0 0 20px; }
 .wca-consequences li { margin: 0 0 6px; padding: 0; line-height: 1.45; }
 
@@ -265,3 +252,45 @@
 .wca-upload-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .wca-inline { display: inline; }
 .wca-result h3 { margin-top: 0; }
+
+/* ===== Workstation components, copied value for value (Workstation defines them inline in workstation/cgs/operations.blade.php and must not be edited) =====
+   Candidacy pages use the same shared classes (card, card-wide, stat-card, accent-*, btn-secondary, page-header) plus these. */
+@media (max-width: 480px) { .page-header-actions { flex-wrap: wrap; max-width: 100%; } .page-header-actions button { white-space: normal; } }
+.cgs-top-card { display: flex; flex-direction: column; gap: 16px; }
+.cgs-search-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.cgs-search-wrap { position: relative; flex: 1 1 260px; min-width: 220px; }
+.cgs-search-wrap input[type="search"] { width: 100%; margin: 0; }
+.cgs-filters-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.cgs-filters-row .field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cgs-filters-row label { margin: 0; }
+.cgs-filters-row select { margin: 0; min-width: 160px; }
+.cgs-filters-row button, .cgs-filters-row a.clear-link { margin: 0; }
+.cgs-filters-row a.clear-link { align-self: center; font-size: 13px; color: var(--text-grey); }
+.cgs-quick-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.cgs-quick-row a button { margin: 0; }
+.cgs-quick-row a.is-active button { background-color: var(--navy-dark); box-shadow: inset 0 0 0 2px var(--gold); }
+.cgs-stats-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.cgs-stats-row a { text-decoration: none; color: inherit; flex: 1; min-width: 130px; }
+.cgs-stats-row a:hover { background: none; }
+.cgs-stats-row .stat-card { cursor: pointer; width: 100%; }
+.cgs-stats-row a.is-active .stat-card { box-shadow: inset 0 0 0 2px var(--navy); }
+.cgs-export-row { display: flex; gap: 10px; justify-content: flex-end; }
+.cgs-export-row button { margin: 0; }
+.cgs-export-row .btn-secondary { background: white; color: var(--navy); border: 1px solid var(--navy); }
+/* the live-update line: same as workstation/_live.blade.php (.wsl-status-row) */
+.wca-live-note { height: 18px; margin: 2px 0 4px; font-size: 12px; line-height: 18px; color: #6B7280; display: flex; align-items: center; }
+.page-header-actions a, .page-header-actions a:hover { text-decoration: none; background: none; }
+
+
+/* ===== buttons: the shared stylesheet's own button styles (layout.css), through the same tokens =====
+   .wca-btn is Workstation's outline button (.btn-secondary); .wca-btn.is-primary is the solid one (button / .btn); .is-danger is .btn-reject. */
+.wca-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); background: var(--surface); color: var(--navy); border: 1px solid var(--navy); padding: var(--space-3) var(--space-5); border-radius: var(--radius-sm); font-family: inherit; font-size: var(--text-md); font-weight: var(--weight-semi); line-height: 1.2; text-decoration: none; cursor: pointer; margin: 0; min-height: 0; position: static; transform: none; }
+.wca-btn:hover { background: var(--surface-hover); color: var(--navy); text-decoration: none; }
+.wca-btn.is-primary { background-color: var(--accent-solid); color: var(--text-on-accent); border: 1px solid transparent; padding: var(--space-3) var(--space-6); }
+.wca-btn.is-primary:hover { background-color: var(--accent-hover); color: var(--text-on-accent); box-shadow: var(--shadow-sm); }
+.wca-btn.is-small { padding: var(--space-2) var(--space-4); }
+.wca-btn[aria-disabled="true"], .wca-btn:disabled { background-color: var(--border-grey); border-color: transparent; color: var(--text-grey); cursor: not-allowed; box-shadow: none; }
+.wca-btn.is-danger { background: var(--surface); color: var(--danger-fg); border: 1px solid var(--danger-border); }
+.wca-btn.is-danger:hover { background: var(--danger-bg); color: var(--danger-fg); }
+.wca-btn.is-danger:disabled { background: var(--border-grey); color: var(--text-grey); border-color: transparent; }
+.cgs-search-row + .cgs-filters-row { margin-top: 12px; }

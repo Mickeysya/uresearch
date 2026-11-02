@@ -276,7 +276,7 @@ class CandidacyAssistantRolesTest extends TestCase
         foreach (['Submit an Appeal', 'Edit and resubmit', 'Download memo', 'Return to student', 'Reject (final)', 'Confirm rejection', 'Save signature', 'Remove my signature', 'Pending my action', 'Decided by me', 'View all appeals',
             'My Appeals', 'Study Candidacy Approval Portal', 'Candidacy Management', 'Candidacy Insights', 'Dismissal List', 'Dismissal Upload', 'Confirm and dismiss', 'Preview', 'Review', 'Approve', 'Verify', 'Track My Applications', 'My Candidacy',
             'Department and supervisor', 'Research and extension', 'Documents', 'Review and submit', 'Section A: Research progress', 'Section B: Earlier extensions', 'Section C: Publications', 'Section D: Extension requested',
-            'Pause updates', 'Waiting at least', 'Months requested', 'Export filtered list to Excel'] as $label) {
+            'Pause updates', 'Waiting At Least', 'Months Requested', 'Export filtered list to Excel'] as $label) {
             $this->assertStringContainsString($label, $views, "The answers name \"{$label}\" but no candidacy view has it.");
         }
     }
