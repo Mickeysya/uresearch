@@ -69,6 +69,11 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
         return app(ApplicationDetailsContent::class)->target($application, $stageKey);
     }
 
+    public function waitingFor(Application $application): ?string
+    {
+        return app(ApplicationDetailsContent::class)->waitingFor($application);
+    }
+
     /** Track My Applications tab (config/tracking.php) and card icon. */
     public const CATEGORY = 'assistantships';
 
@@ -259,9 +264,12 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
      */
     public function links(User $user): array
     {
-        return $user->role === Role::STUDENT
-            ? [['label' => 'Expected Decision Dates', 'route' => 'nureen.expected-dates']]
-            : [];
+        return match ($user->role) {
+            Role::STUDENT => [['label' => 'Expected Decision Dates', 'route' => 'nureen.expected-dates']],
+            // Requests no account can act on -- Support\StuckSupervisorStages.
+            Role::NON_EXEC_CGS => [['label' => 'Stuck Reviews', 'route' => 'nureen.stuck-reviews']],
+            default => [],
+        };
     }
 
     /**

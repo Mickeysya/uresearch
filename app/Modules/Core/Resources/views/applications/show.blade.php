@@ -69,6 +69,9 @@
             @endif
             <span>Submitted {{ $application->submitted_at?->format('j M Y, g:ia') ?? 'not yet' }}</span>
         </p>
+        @if ($waiting_for)
+            <p class="trk-waiting">Waiting for <b>{{ $waiting_for }}</b>.</p>
+        @endif
         @if ($rejection)
             <p class="trk-detail-reason">
                 <b>Reason from {{ $rejection->stage_label }}:</b>
@@ -100,6 +103,8 @@
                         <span class="trk-step-label">{{ $step['label'] }}</span>
                         @if ($step['who'])
                             <span class="trk-step-who">{{ $step['who'] }}</span>
+                        @elseif ($step['state'] === 'current' && $waiting_for)
+                            <span class="trk-step-who">{{ $waiting_for }}</span>
                         @endif
                         <span class="trk-step-detail">{{ $step['when'] }}</span>
                         @if ($step['timing'])

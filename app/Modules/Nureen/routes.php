@@ -10,6 +10,7 @@ use App\Modules\Nureen\Http\Controllers\CertificationController;
 use App\Modules\Nureen\Http\Controllers\ExpectedDecisionController;
 use App\Modules\Nureen\Http\Controllers\GaExtensionController;
 use App\Modules\Nureen\Http\Controllers\SupervisionController;
+use App\Modules\Nureen\Http\Controllers\StuckReviewsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -114,6 +115,11 @@ Route::middleware('auth')->group(function () {
 
         // ---- Processing time analytics ---------------------------------
         Route::get('/reports/processing-time', [AnalyticsController::class, 'index'])->name('nureen.analytics');
+
+        // ---- Requests no account can act on ----------------------------
+        // See Support\StuckSupervisorStages.
+        Route::get('/reviews/stuck', [StuckReviewsController::class, 'index'])->name('nureen.stuck-reviews');
+        Route::post('/reviews/stuck/{application}/reassign', [StuckReviewsController::class, 'reassign'])->name('nureen.stuck-reviews.reassign');
     });
 
 });

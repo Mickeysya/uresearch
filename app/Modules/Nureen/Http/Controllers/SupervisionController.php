@@ -2,6 +2,7 @@
 
 namespace App\Modules\Nureen\Http\Controllers;
 
+use App\Modules\Nureen\Support\SubmissionNotifier;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
@@ -117,6 +118,10 @@ class SupervisionController extends Controller
 
             return $engine->submit($application);
         });
+
+        // Whoever acts first is told now -- Core's engine only notifies a
+        // stage when an earlier one decides. See Support\SubmissionNotifier.
+        app(SubmissionNotifier::class)->notify($application);
 
         return redirect()
             ->route('applications.index')
@@ -352,7 +357,7 @@ class SupervisionController extends Controller
         $data = $request->validate([
             'revoked_reason' => ['required', 'string', 'max:255'],
         ], [
-            'revoked_reason.required' => 'Say why this letter is being revoked — it is shown nowhere public, but is kept for the record.',
+            'revoked_reason.required' => 'Say why this letter is being revoked. This reason is shown to the student and their supervisor. It is not shown on the public verification page.',
         ]);
 
         $note = null;

@@ -25,14 +25,13 @@
     </div>
 
     {{-- The first stage is addressed to this supervisor, so there has to
-         be one -- GaExtensionController::store() refuses without. --}}
-    @unless ($student->supervisor_id)
-        <div class="card card-wide" style="margin-bottom: var(--space-6); border-color: var(--danger-border);">
-            <p style="color: var(--danger-fg); margin: 0;">
-                No supervisor is assigned to your account. Please contact CGS before applying for a GA extension.
-            </p>
+         be one who can act -- Support\SupervisorCheck, enforced again by
+         GaExtensionController::store(). --}}
+    @if ($supervisorProblem)
+        <div class="card card-wide" role="alert" style="margin-bottom: var(--space-6); border-color: var(--danger-border);">
+            <p style="color: var(--danger-fg); margin: 0;">{{ $supervisorProblem }}</p>
         </div>
-    @endunless
+    @endif
 
     <div class="card card-wide">
         <form method="POST" action="{{ route('ga-extension.store') }}" enctype="multipart/form-data" data-stepper>

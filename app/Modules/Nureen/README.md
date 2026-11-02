@@ -124,6 +124,25 @@ sessions), reminders ("CGS Staff reminded", never a name), letter issued and
 revoked events, the issued letter with its verification link, and each
 stage's charter target. See `SHARED_CHANGES.md` §10b.
 
+**Supervisor safeguards (3 Nov 2026):**
+- **Blocked submission:** GA Extension and Certification can't be submitted
+  without a supervisor who can act (`Support\SupervisorCheck`, on the form
+  and on submit).
+- **Submission email:** whoever acts first is emailed when a request is
+  submitted, with the charter due date and a queue link
+  (`Support\SubmissionNotifier`, `Notifications\ApplicationAwaitingYou`):
+  the named supervisor for GA Extension, Certification and Supervision, and
+  every Non-Executive CGS for an Attendance Appeal.
+- **Waiting-for:** the details page names who it is waiting for
+  (`waitingFor()`).
+- **Stuck Reviews:** CGS's page at `/reviews/stuck`
+  (`Support\StuckSupervisorStages`) lists requests nobody can act on, and
+  reassigns a GA Extension or Certification to another supervisor. The
+  reassignment is recorded in approval_history as `reassigned`, with the
+  reason; it restarts the charter clock and is not counted as a decision.
+- **Revocation email:** a revoked certification emails the student and the
+  supervisor (`Notifications\CertificationRevoked`).
+
 ## Official letters
 
 Both letters, the Supervision appointment letter and the GA/GRA

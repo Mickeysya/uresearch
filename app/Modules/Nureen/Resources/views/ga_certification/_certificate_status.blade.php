@@ -28,7 +28,9 @@
             @csrf
             <label for="revoked_reason-{{ $application->id }}">Revoke this certificate</label>
             <textarea id="revoked_reason-{{ $application->id }}" name="revoked_reason" rows="2" required
+                      aria-describedby="revoked_reason-hint-{{ $application->id }}"
                       placeholder="Why this certificate is being revoked."></textarea>
+            <p class="queue-meta" id="revoked_reason-hint-{{ $application->id }}">This reason is shown to the student and their supervisor. It is not shown on the public verification page.</p>
             <button type="submit" class="btn-reject">Revoke Certificate</button>
         </form>
     @endif

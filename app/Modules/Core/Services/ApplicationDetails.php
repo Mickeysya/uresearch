@@ -66,6 +66,9 @@ class ApplicationDetails
             'reference' => $application->reference(),
             'status' => $application->status,
             'holder' => $current['label'] ?? null,
+            // A named person when the module can say who ("Dr. X, your
+            // supervisor"); otherwise the page falls back to the role.
+            'waiting_for' => $pending ? $about?->waitingFor($application) : null,
             'expected' => $pending && $module instanceof SuppliesDecisionDates ? $module->expectedDecisionDate($application) : null,
             'overdue' => $pending && $module instanceof SuppliesOverdueStatus && $module->decisionIsOverdue($application),
             'needs_student' => $summary['needs_student'],

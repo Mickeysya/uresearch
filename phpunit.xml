@@ -24,17 +24,38 @@
             exactly as they are in the app, so the schema under test is the
             real one.
         -->
-        <env name="APP_ENV" value="testing"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <server name="APP_ENV" value="testing" force="true"/>
+        <env name="DB_CONNECTION" value="sqlite" force="true"/>
+        <server name="DB_CONNECTION" value="sqlite" force="true"/>
+        <env name="DB_DATABASE" value=":memory:" force="true"/>
+        <server name="DB_DATABASE" value=":memory:" force="true"/>
 
-        <!-- Nothing should reach a broker, a mail server or a cache here. -->
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="CACHE_STORE" value="array"/>
-        <env name="SESSION_DRIVER" value="array"/>
+        <!--
+            Nothing should reach a broker, a mail server or a cache here.
+
+            Each setting is FORCED twice, as <env> and as <server>. Without
+            force, PHPUnit only sets a variable the environment does not
+            already have, and the Docker app container exports
+            QUEUE_CONNECTION=redis. And <env> alone is not enough: PHP copies
+            the container's environment into $_SERVER, which Laravel reads
+            BEFORE $_ENV, so config('queue.default') stayed 'redis'. Tests
+            then queued notifications onto the REAL Redis queue, where the
+            dev worker failed them against a test database it cannot see
+            (thousands of rows in failed_jobs). Forced in both, a test run
+            never reaches the real queue, mail or cache.
+        -->
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <server name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <server name="MAIL_MAILER" value="array" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <server name="CACHE_STORE" value="array" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <server name="SESSION_DRIVER" value="array" force="true"/>
 
         <!-- Hashing is the slowest thing in an auth test; 4 rounds is plenty. -->
-        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <server name="BCRYPT_ROUNDS" value="4" force="true"/>
     </php>
 </phpunit>
