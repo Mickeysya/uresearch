@@ -143,6 +143,18 @@ stage's charter target. See `SHARED_CHANGES.md` §10b.
 - **Revocation email:** a revoked certification emails the student and the
   supervisor (`Notifications\CertificationRevoked`).
 
+**Every email link opens for its recipient** (`EmailLinksTest` follows each
+button as that person and expects 200):
+- **Staff:** they land on `nureen.application`
+  (`StaffApplicationController`), a read-only view of one application. It is
+  open only to staff with a part in it (`Support\StaffApplicationAccess`):
+  the named or requested supervisor, anyone who decided on it, a role on its
+  chain (Chair: own department only), and for GA Extension the Senior
+  Director.
+- **Students:** they land on their own details page.
+- **The appointment letter:** now emailed to the supervisor as their own
+  message, not a CC on the student's.
+
 ## Official letters
 
 Both letters, the Supervision appointment letter and the GA/GRA

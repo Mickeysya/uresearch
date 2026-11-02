@@ -41,7 +41,9 @@ class GaExtensionFinalDecisionInformational extends Notification implements Shou
             ->line("GA Extension application #{$this->application->id} for {$this->application->student?->name} ".
                 "has been {$verb} by {$this->stage->label}.")
             ->line('No action is needed from you -- this is for your information only.')
-            ->action('View the application', route('ga-extension.queue'))
+            // The staff view: in 'cgs' mode the Senior Director has no GA
+            // Extension stage, so the queue showed nothing about it.
+            ->action('View the application', route('nureen.application', $this->application))
             ->line('Thank you for using UResearch 2.0.');
     }
 }

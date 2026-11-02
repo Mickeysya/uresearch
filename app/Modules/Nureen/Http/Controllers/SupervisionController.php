@@ -262,9 +262,11 @@ class SupervisionController extends Controller
             LetterRenderer::APPOINTMENT_DOC_TYPE,
         );
 
-        // Emailed to the student with the appointed supervisor in CC --
-        // see AppointmentLetterIssued.
+        // Emailed to the student, and separately to the appointed
+        // supervisor, each with a link they can open -- see
+        // AppointmentLetterIssued.
         $application->student?->notify(new AppointmentLetterIssued($application, $detail, $letter, $supervisor));
+        $supervisor?->notify(new AppointmentLetterIssued($application, $detail, $letter, $supervisor));
 
         // "Non-Executive CGS is notified of every issued letter" -- being
         // able to find it on the Issued Appointment Letters list is not

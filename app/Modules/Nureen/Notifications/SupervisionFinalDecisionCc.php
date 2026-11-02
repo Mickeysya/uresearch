@@ -52,7 +52,8 @@ class SupervisionFinalDecisionCc extends Notification implements ShouldQueue
 
         return $mail
             ->line('This is a copy for your records -- no action is needed from you.')
-            ->action('View the application', route('applications.index'))
+            // The staff view: applications.index is students-only.
+            ->action('View the application', route('nureen.application', $this->application))
             ->line('Thank you for using UResearch 2.0.');
     }
 }

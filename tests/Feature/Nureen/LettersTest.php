@@ -147,10 +147,15 @@ class LettersTest extends TestCase
         $this->assertStringContainsString('Digitally endorsed via UResearch 2.0 on', $html);
         $this->assertStringContainsString('following the endorsement of the Centre for Graduate Studies, your Main Supervisor has been appointed', $html);
 
-        // Emailed to the student with the supervisor copied in.
+        // Emailed to the student and, as a separate message rather than a
+        // CC (3 Nov 2026), to the appointed supervisor -- the letter
+        // attached to both, each linking to a page that person can open.
         Notification::assertSentTo($application->student, AppointmentLetterIssued::class,
-            fn ($n, $channels, $notifiable) => collect($n->toMail($notifiable)->cc)->flatten()->contains($this->supervisor->email)
+            fn ($n, $channels, $notifiable) => $n->toMail($notifiable)->cc === []
                 && count($n->toMail($notifiable)->rawAttachments) === 1);
+        Notification::assertSentTo($this->supervisor, AppointmentLetterIssued::class,
+            fn ($n, $channels, $notifiable) => count($n->toMail($notifiable)->rawAttachments) === 1
+                && $n->toMail($notifiable)->actionUrl === route('nureen.application', $application));
     }
 
     public function test_rejecting_at_the_cgs_stage_issues_nothing_and_needs_a_reason(): void
