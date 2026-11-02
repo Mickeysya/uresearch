@@ -169,6 +169,17 @@ Only entries of the asking role and domain can be answered, and only with a clea
 one more than the runner-up. Otherwise the reply is "I could not match that to something I can answer. Try one of these questions, or ask it in other words." with that role's suggested questions (and "Did you mean" chips). It never shows a loosely related topic, and never
 guidance written for another role.
 
+## Model first, and what the log records
+
+Both domains share one rule: a question that is not a suggested-question chip and not refused before the model (out of scope, a name, the other domain) goes to Gemini first. The keyword fallback runs only when the model call failed or the app budget is used up
+(or the model named an id the role does not have). `assistant_logs.route` records which path answered, never any text: `static` (a chip), `refused` (before the model), `cache`, `model`, `fallback_error`, `fallback_budget`.
+
+- **Retry and order:** on a 429, a 5xx or a timeout, one retry on the same model after 1.5 s (a `Retry-After` header is honoured, 1 to 3 s), then the secondary model, then the keyword fallback. A request that never reached Gemini (no key, cannot connect) is not counted.
+- **Reserve:** `assistant.reserve_per_day` (60, `ASSISTANT_DAILY_RESERVE`). `assistant:evaluate` stops at (daily cap - reserve) and bypasses the routing cache; people may use the whole cap. Per-user limit: 10 questions per minute (`assistant-user`).
+- **Routing cache:** the model's `{id, params, confidence}` is kept 24 hours under `assistant:route:<domain>:<role>:<sha1 of the normalised, masked question>` (no name, ID, e-mail or appeal number can be in it). The answer is built fresh from templates and live data on every request, and a cache hit costs nothing.
+- **Fallback notice:** a keyword answer carries "Smart understanding is temporarily unavailable, so I used simple matching. Try rephrasing if this is not what you meant." (a small grey line under the answer; never for model, cache or chip answers).
+- `assistant:budget` shows used, cap, reserve, left for people and for evaluation, the next reset and today's routes by type.
+
 ## The request counter and `assistant:budget`
 
 The day counter (`assistant:calls:day:<model>:<LA date>`, cache store `database`; per-minute and token keys beside it) counts HTTP requests sent to Gemini, per model, in Pacific time (Google's quota day; it resets at 16:00 in Kuala Lumpur). Caps stay below

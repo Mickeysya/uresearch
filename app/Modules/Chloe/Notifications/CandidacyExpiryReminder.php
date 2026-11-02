@@ -63,7 +63,7 @@ class CandidacyExpiryReminder extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $date = $this->date();
-        $mail = (new MailMessage)->subject($this->subject())->greeting("Dear {$this->name},");
+        $mail = (new MailMessage)->subject($this->subject())->greeting("Dear {$this->name},")->salutation("Best regards,\nCentre for Graduate Studies (CGS)\nUniversiti Teknologi PETRONAS");
 
         if ($this->variant === 'C') {
             $returned = $this->appeal?->events()->where('action', 'returned')->get()->last();

@@ -49,9 +49,15 @@ class CandidacyAppealNotice extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $config = config("candidacy.mail.{$this->template}");
-        $mail = (new MailMessage)->subject($this->fill($config['subject']));
+        // the same greeting and sign-off as the Workstation e-mails (LockerKeyNotice): "Dear {name}," first, the CGS salutation last
+        $mail = (new MailMessage)->subject($this->fill($config['subject']))->salutation("Best regards,\nCentre for Graduate Studies (CGS)\nUniversiti Teknologi PETRONAS");
+        $lines = $config['lines'];
 
-        foreach ($config['lines'] as $line) {
+        if (isset($lines[0]) && str_starts_with($lines[0], 'Dear ')) {
+            $mail->greeting($this->fill(array_shift($lines)));
+        }
+
+        foreach ($lines as $line) {
             $mail->line($this->fill($line));
         }
 

@@ -34,8 +34,8 @@ class CandidacyDismissed extends Notification implements ShouldQueue
     {
         return (new MailMessage)
             ->subject('Study Candidacy — Candidacy Ended')
-            ->greeting('Hi '.$this->studentName.',')
+            ->greeting('Dear '.$this->studentName.',')
             ->line(self::MESSAGE)
-            ->line('Thank you for using UResearch 2.0.');
+            ->salutation("Best regards,\nCentre for Graduate Studies (CGS)\nUniversiti Teknologi PETRONAS");
     }
 }
