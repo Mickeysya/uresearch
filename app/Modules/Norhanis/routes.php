@@ -2,22 +2,18 @@
 
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
+use App\Modules\Norhanis\Http\Controllers\ApplicationPackController;
 use App\Modules\Norhanis\Http\Controllers\ApplicationReportController;
-use App\Modules\Norhanis\Http\Controllers\CandidacyController;
 use App\Modules\Norhanis\Http\Controllers\ClaimsController;
 use App\Modules\Norhanis\Http\Controllers\PublicationCertificationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationEvaluationController;
-use App\Modules\Norhanis\Http\Controllers\PublicationMemoController;
-use App\Modules\Norhanis\Models\PublicationMemo;
-use App\Modules\Norhanis\Http\Controllers\RpdAppealController;
-use App\Modules\Norhanis\Http\Controllers\RpdDismissalController;
 use App\Modules\Norhanis\Http\Controllers\TravelController;
 use Illuminate\Support\Facades\Route;
 
 /*
 | Norhanis Erna Natasha (22006318)
-| Travel · Publication · Claims · RPD
+| Travel · Publication · Claims
 */
 
 Route::middleware('auth')->group(function () {
@@ -32,14 +28,27 @@ Route::middleware('auth')->group(function () {
             ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
             ->name('norhanis.overview');
 
+        // One application to keep: a summary PDF of what the student filled
+        // in, or that summary with every attached file as a ZIP. Which
+        // applications, and which files, is decided in the controller.
+        Route::get('/applications-pack/{application}/summary.pdf', [ApplicationPackController::class, 'pdf'])
+            ->name('norhanis.pack.pdf');
+        Route::get('/applications-pack/{application}/documents.zip', [ApplicationPackController::class, 'zip'])
+            ->middleware('throttle:20,1')
+            ->name('norhanis.pack.zip');
+
         // The same applications, counted: totals, where they are waiting and
-        // how long each stage takes, with a CSV of the rows behind it.
-        Route::get('/applications-report/{module?}', [ApplicationReportController::class, 'index'])
-            ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
-            ->name('norhanis.report');
-        Route::get('/applications-report-export/{module?}', [ApplicationReportController::class, 'export'])
-            ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
-            ->name('norhanis.report.export');
+        // how long each stage takes, with a CSV of the rows behind it. CGS
+        // only: analysing the whole process is CGS's job, and every other
+        // approver's dashboard is their own decisions, on the list above.
+        Route::middleware('role:'.implode(',', ApplicationReportController::REPORT_ROLES))->group(function () {
+            Route::get('/applications-report/{module?}', [ApplicationReportController::class, 'index'])
+                ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
+                ->name('norhanis.report');
+            Route::get('/applications-report-export/{module?}', [ApplicationReportController::class, 'export'])
+                ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
+                ->name('norhanis.report.export');
+        });
     });
 
     // ---- Travel -------------------------------------------------------
@@ -54,7 +63,7 @@ Route::middleware('auth')->group(function () {
     // screen; ?stage= selects which. The engine re-checks the role against
     // the application's actual stage before allowing any decision.
     Route::middleware('role:'.implode(',', [
-        Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS, Role::DEAN_PGR,
+        Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS, Role::DEAN_PGR, Role::SENIOR_DIRECTOR_CGS,
     ]))->group(function () {
         Route::get('/travel/queue', [TravelController::class, 'queue'])->name('travel.queue');
         Route::post('/travel/{application}/decide', [TravelController::class, 'decide'])->name('travel.decide');
@@ -101,15 +110,6 @@ Route::middleware('auth')->group(function () {
             ->name('publication.evaluations.replace');
         Route::post('/publication/{application}/evaluations/{evaluation}/respond', [PublicationEvaluationController::class, 'respond'])
             ->name('publication.evaluations.respond');
-
-        // And for the split budget memo: a nudge for whoever's turn it is to
-        // sign, and correcting it after a signer sends it back.
-        Route::post('/publication/{application}/memo/remind', [PublicationMemoController::class, 'remind'])
-            ->middleware('throttle:6,1')
-            ->name('publication.memo.remind');
-        Route::post('/publication/{application}/memo/revise', [PublicationMemoController::class, 'revise'])
-            ->middleware('throttle:6,1')
-            ->name('publication.memo.revise');
     });
 
     Route::middleware('role:'.implode(',', [
@@ -117,53 +117,6 @@ Route::middleware('auth')->group(function () {
     ]))->group(function () {
         Route::get('/publication/queue', [PublicationController::class, 'queue'])->name('publication.queue');
         Route::post('/publication/{application}/decide', [PublicationController::class, 'decide'])->name('publication.decide');
-    });
-
-    /*
-    |----------------------------------------------------------------------
-    | RPD Candidacy: three flows off one masterlist
-    |
-    |   reminders  a scheduled command, no routes (see rpd:remind)
-    |   appeals    student files, Supervisor -> Chair -> CGS -> Dean
-    |   dismissals CGS opens, Dean -> Faculty (Registry only emails afterwards)
-    |----------------------------------------------------------------------
-    */
-
-    // ---- The masterlist ---------------------------------------------------
-    Route::middleware('role:'.Role::STUDENT)->group(function () {
-        Route::get('/my-candidacy', [CandidacyController::class, 'mine'])->name('candidacies.mine');
-    });
-
-    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::MANAGER_CGS, Role::SENIOR_DIRECTOR_CGS]))->group(function () {
-        Route::get('/candidacies', [CandidacyController::class, 'index'])->name('candidacies.index');
-        Route::get('/candidacies/new', [CandidacyController::class, 'create'])->name('candidacies.create');
-        Route::post('/candidacies', [CandidacyController::class, 'store'])->name('candidacies.store');
-        Route::post('/candidacies/{candidacy}/defended', [CandidacyController::class, 'markDefended'])->name('candidacies.defended');
-    });
-
-    // ---- RPD extension appeal --------------------------------------------
-    Route::middleware('role:'.Role::STUDENT)->group(function () {
-        Route::get('/rpd-appeal/new', [RpdAppealController::class, 'create'])->name('rpd-appeal.create');
-        Route::post('/rpd-appeal', [RpdAppealController::class, 'store'])->name('rpd-appeal.store');
-    });
-
-    Route::middleware('role:'.implode(',', [
-        Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS, Role::DEAN_PGR,
-    ]))->group(function () {
-        Route::get('/rpd-appeal/queue', [RpdAppealController::class, 'queue'])->name('rpd-appeal.queue');
-        Route::post('/rpd-appeal/{application}/decide', [RpdAppealController::class, 'decide'])->name('rpd-appeal.decide');
-    });
-
-    // ---- RPD dismissal ----------------------------------------------------
-    // Opened by CGS, who is the author and NOT a stage in the chain.
-    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
-        Route::get('/rpd-dismissal/new', [RpdDismissalController::class, 'create'])->name('rpd-dismissal.create');
-        Route::post('/rpd-dismissal', [RpdDismissalController::class, 'store'])->name('rpd-dismissal.store');
-    });
-
-    Route::middleware('role:'.implode(',', [Role::DEAN_PGR, Role::FACULTY]))->group(function () {
-        Route::get('/rpd-dismissal/queue', [RpdDismissalController::class, 'queue'])->name('rpd-dismissal.queue');
-        Route::post('/rpd-dismissal/{application}/decide', [RpdDismissalController::class, 'decide'])->name('rpd-dismissal.decide');
     });
 
 });
@@ -187,15 +140,4 @@ Route::middleware(['signed:relative', 'throttle:30,1'])->group(function () {
         ->name('publication.evaluate.submit');
     Route::post('/publication/evaluate/{evaluation}/decline', [PublicationEvaluationController::class, 'decline'])
         ->name('publication.evaluate.decline');
-
-    // {signer} is part of the signed path, so the supervisor's link cannot be
-    // turned into the centre head's.
-    Route::whereIn('signer', array_keys(PublicationMemo::SIGNERS))->group(function () {
-        Route::get('/publication/memo/{memo}/{signer}', [PublicationMemoController::class, 'show'])
-            ->name('publication.memo');
-        Route::post('/publication/memo/{memo}/{signer}', [PublicationMemoController::class, 'sign'])
-            ->name('publication.memo.sign');
-        Route::post('/publication/memo/{memo}/{signer}/decline', [PublicationMemoController::class, 'decline'])
-            ->name('publication.memo.decline');
-    });
 });

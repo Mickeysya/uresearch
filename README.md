@@ -200,14 +200,14 @@ Created by the seeder. **Every one uses the password `password`.**
 | `student@utp.edu.my` | Student | submit Travel and GA Extension applications, track them |
 | `student2@utp.edu.my` | Student | a second candidate, for examiner nominations |
 | `supervisor@utp.edu.my` | Supervisor | first endorsement on every chain; files examiner nominations |
-| `chair@utp.edu.my` | Chair of Department | second endorsement, and **final approval for local travel** |
+| `chair@utp.edu.my` | Chair of Department | second endorsement on every chain |
 | `cgs@utp.edu.my` | Non-Executive CGS | reviews international travel, verifies GA extensions |
 | `dean@utp.edu.my` | Dean of PGR | **final approval for international travel** |
 | `director@utp.edu.my` | Senior Director CGS | final approval for GA extensions |
 | `ae@utp.edu.my` | Academic Executive | approves examiner nominations |
 | `seniorexec@utp.edu.my` | Senior Executive CGS | rules on hardbound appeals |
 | `manager@utp.edu.my` | Manager CGS | approves claims |
-| `faculty@utp.edu.my` | Faculty | signs off an RPD dismissal before the Registry |
+| `faculty@utp.edu.my` | Faculty | no module uses this role at present |
 | `registry@utp.edu.my` | Registry | closes a dismissed candidacy and sends the termination email |
 | `admin@utp.edu.my` | Admin | no admin screens exist yet |
 
@@ -227,11 +227,12 @@ To get back to a clean database at any time:
 
 This walks the conditional routing, which is the most interesting part of the
 system: the same form produces a different approval chain depending on what
-the student ticks.
+the student chooses. Local travel ends with the Senior Director CGS
+(`director@utp.edu.my`); international travel with the Dean of PGR.
 
 **1. Submit an international trip.** Log in as `student@utp.edu.my` →
-*New Application → Travel*. Fill it in and **tick "International Travel"**.
-Submit.
+*New Application → Travel*. Fill it in and choose **International** under
+*Local or International Travel*. Submit.
 
 **2. Look at the tracker.** *Track My Applications*. The stepper shows
 **four** steps: Supervisor → Chair → Non-Executive CGS → Dean of PGR.
@@ -344,7 +345,7 @@ rm -rf vendor
 ├── app/
 │   ├── Modules/
 │   │   ├── Core/        shared foundation: auth, engine, UI, models
-│   │   ├── Norhanis/    Travel · Publication · Claims · RPD
+│   │   ├── Norhanis/    Travel · Publication · Claims
 │   │   ├── Nureen/      Attendance · GA Extension · Supervision · Certification
 │   │   ├── Hani/        Examiner Nomination · Conflict Detection · Re-viva
 │   │   ├── Jason/       Hardbound · Appeal Hardbound · Appointment Letters
@@ -374,7 +375,7 @@ central lists the modules, so adding one causes no merge conflict.
 | Folder | Owner | Modules |
 |---|---|---|
 | `Core/` | the team | shared foundation, changes by agreement |
-| `Norhanis/` | Norhanis Erna Natasha (22006318) | Travel · Publication · Claims · RPD |
+| `Norhanis/` | Norhanis Erna Natasha (22006318) | Travel · Publication · Claims |
 | `Nureen/` | Nureen Nellysha (22006973) | Attendance · GA Extension · Supervision · Certification |
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
 | `Jason/` | Jason | Hardbound Submission · Appeal Hardbound Submission · Appointment Letters |
@@ -403,8 +404,8 @@ for every stage, authorisation, the student's progress stepper, the tracking
 page row, the notification email, and the sidebar links.
 
 Because `stages()` receives the application, conditional routing is just an
-`if`. See `Norhanis\Workflows\TravelWorkflow`, where international travel
-returns a four-stage chain and local travel a two-stage one. When it is called
+`if`. See `Norhanis\Workflows\TravelWorkflow`, where local travel ends with the
+Senior Director CGS and international travel with the Dean of PGR. When it is called
 with `null` it must return the **superset**: every stage the module can ever
 use, which is what the sidebar and the approval queues are built from.
 

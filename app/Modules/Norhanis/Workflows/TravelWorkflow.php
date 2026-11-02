@@ -16,8 +16,9 @@ use Carbon\CarbonInterface;
 /**
  * Travel requests.
  *
- * Local travel stops at the Chair. International travel continues to CGS for
- * review and the Dean of PGR for final approval.
+ * Both routes run Supervisor -> Chair -> Non-Executive CGS; what differs is
+ * who has the final say: the Senior Director CGS for local travel, the Dean
+ * of PGR for international (as agreed with CGS).
  *
  * In the legacy app that branch lived inside travel_chair_approval.php, which
  * queried is_international and picked the next stage by hand. Expressing it as
@@ -41,7 +42,31 @@ class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
 
     public function stages(?Application $application = null): array
     {
-        $chain = [
+        // null means "every stage this module can use": both final stages,
+        // so the Dean and the Senior Director each get a travel queue.
+        if ($application === null) {
+            return [...$this->route(international: true), $this->seniorDirector()];
+        }
+
+        return $this->route(international: $this->isInternational($application));
+    }
+
+    /**
+     * The two routes on their own, for a reader that needs to know which
+     * stages follow which: in stages(null) the Senior Director comes after
+     * the Dean, yet no application passes through both.
+     *
+     * @return array<string, array<int, Stage>>
+     */
+    public function routes(): array
+    {
+        return ['local' => $this->route(international: false), 'international' => $this->route(international: true)];
+    }
+
+    /** @return array<int, Stage> */
+    protected function route(bool $international): array
+    {
+        return [
             new Stage(
                 key: 'supervisor',
                 label: 'Lecturer/Supervisor',
@@ -49,20 +74,17 @@ class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
                 decision: 'endorsed',
                 queueTitle: 'Pending My Endorsement',
             ),
+            new Stage('chair', 'Chair of Department', Role::CHAIR, 'endorsed'),
+            new Stage('cgs_review', 'Non-Executive CGS', Role::NON_EXEC_CGS, 'reviewed'),
+            $international
+                ? new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'approved')
+                : $this->seniorDirector(),
         ];
+    }
 
-        // null means "every stage this module can use" -- that is the
-        // international chain, which is a superset of the local one.
-        if ($application === null || $this->isInternational($application)) {
-            $chain[] = new Stage('chair', 'Chair of Department', Role::CHAIR, 'endorsed');
-            $chain[] = new Stage('cgs_review', 'Non-Executive CGS', Role::NON_EXEC_CGS, 'reviewed');
-            $chain[] = new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'approved');
-        } else {
-            // Local travel: the Chair has the final say.
-            $chain[] = new Stage('chair', 'Chair of Department', Role::CHAIR, 'approved');
-        }
-
-        return $chain;
+    protected function seniorDirector(): Stage
+    {
+        return new Stage('senior_director', 'Senior Director CGS', Role::SENIOR_DIRECTOR_CGS, 'approved');
     }
 
     public function summary(Application $application): string

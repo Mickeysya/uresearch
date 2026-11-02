@@ -2,18 +2,19 @@
 
 namespace App\Modules\Norhanis\Http\Controllers;
 
-use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
+use App\Modules\Norhanis\Http\Controllers\Concerns\ApprovesAndNotifies;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Norhanis\Support\ApproverNotifier;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ClaimsController extends Controller
 {
-    use ApprovesApplications;
+    use ApprovesAndNotifies;
 
     /**
      * The named upload fields on page 2, in display order, each attached
@@ -43,7 +44,7 @@ class ClaimsController extends Controller
         return view('norhanis::claims.form');
     }
 
-    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
+    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents, ApproverNotifier $notifier)
     {
         $data = $request->validate([
             'bank_name' => ['required', 'string', 'max:100'],
@@ -96,9 +97,11 @@ class ClaimsController extends Controller
             return $engine->submit($application);
         });
 
+        $notifier->submitted($application);
+
         return redirect()
             ->route('applications.index')
-            ->with('status', "Claims application #{$application->id} submitted. Your supervisor has been notified.");
+            ->with('status', "Claims application #{$application->id} submitted. It is now waiting for your supervisor's decision.");
     }
 
     public function queue(Request $request, WorkflowEngine $engine)

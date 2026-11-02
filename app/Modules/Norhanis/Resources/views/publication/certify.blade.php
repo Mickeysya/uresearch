@@ -4,6 +4,7 @@
      signed link in their email; there is no login, and the page only ever
      shows the one paper that link names. --}}
 @section('content')
+@include('norhanis::publication._pinned_header')
 <div class="card-container">
     <div class="card">
         <h2>Authorship Certification</h2>

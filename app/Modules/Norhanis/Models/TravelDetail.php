@@ -12,7 +12,7 @@ class TravelDetail extends Model
     protected $fillable = [
         'application_id', 'type_of_request', 'other_request_specify',
         'travel_start_date', 'travel_end_date', 'duration_days',
-        'reason_for_travel', 'destination_address', 'is_international',
+        'reason_for_travel', 'destination_address', 'cost_centre', 'is_international',
         'contact_person_name', 'contact_person_no', 'contact_person_email',
         'is_ga_gra',
     ];

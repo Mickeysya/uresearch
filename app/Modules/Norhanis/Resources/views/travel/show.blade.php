@@ -30,6 +30,7 @@
            &middot; {{ \App\Modules\Norhanis\Models\TravelDetail::requestTypes()[$detail->type_of_request] ?? $detail->type_of_request }}
            @if ($detail->other_request_specify) ({{ $detail->other_request_specify }}) @endif
         </p>
+        @if ($detail->cost_centre) <p>Cost Centre: {{ $detail->cost_centre }}</p> @endif
         <p>Dates: {{ $detail->travel_start_date->format('j M Y') }}
            to {{ $detail->travel_end_date->format('j M Y') }}
            ({{ $detail->duration_days }} {{ Str::plural('day', $detail->duration_days) }})</p>

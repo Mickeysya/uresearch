@@ -4,6 +4,7 @@
      from the signed link in their email; there is no login, and the page only
      ever shows the one paper that link names. --}}
 @section('content')
+@include('norhanis::publication._pinned_header')
 @php($ratings = \App\Modules\Norhanis\Models\PublicationEvaluation::RATINGS)
 <div class="card-container">
     <div class="card card-wide">

@@ -189,7 +189,7 @@ class SeedDemoApplications extends Command
             'organizer_publisher' => 'Demo Publisher',
             'conference_journal_fee' => mt_rand(8, 30) * 100,
             'currency_type' => 'MYR',
-            'cost_centre' => 'CGS(015BD1-001)',
+            'cost_centre' => ['cgs_pay_and_claims', 'cgs_letter_of_undertaking', 'split_memo'][mt_rand(0, 2)],
             'conference_start_date' => $start,
             'conference_end_date' => $start->copy()->addDays(2),
         ]);

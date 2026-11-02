@@ -6,14 +6,13 @@ use App\Modules\Core\Models\Application;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class PublicationDetail extends Model
 {
     protected $fillable = [
         'application_id', 'type_of_request', 'conference_scope', 'title_of_paper', 'title_of_conference_journal',
         'organizer_publisher', 'venue', 'conference_journal_fee', 'currency_type', 'cost_centre',
-        'wants_letter_of_undertaking', 'conference_start_date', 'conference_end_date',
+        'cost_centre_other', 'wants_letter_of_undertaking', 'conference_start_date', 'conference_end_date',
     ];
 
     protected function casts(): array
@@ -36,12 +35,6 @@ class PublicationDetail extends Model
         return $this->hasMany(PublicationAuthor::class);
     }
 
-    /** The split budget memo, only when the fee is above the CGS cap. */
-    public function memo(): HasOne
-    {
-        return $this->hasOne(PublicationMemo::class);
-    }
-
     /** Every reviewer ever asked, including those since replaced. */
     public function evaluations(): HasMany
     {
@@ -52,6 +45,27 @@ class PublicationDetail extends Model
     public function activeEvaluations(): HasMany
     {
         return $this->evaluations()->whereNull('replaced_at');
+    }
+
+    /** The cost centre a student chooses, as agreed with CGS: stored key => label. */
+    public const COST_CENTRES = [
+        'cgs_pay_and_claims' => 'CGS – Pay and Claims',
+        'cgs_letter_of_undertaking' => 'CGS – Letter of Undertaking',
+        'split_memo' => 'Split Memo',
+        'others' => 'Others',
+    ];
+
+    /**
+     * "CGS – Pay and Claims", or the student's own words for "Others".
+     * Applications filed before the choice existed hold free text, shown as is.
+     */
+    public function costCentreLabel(): string
+    {
+        if ($this->cost_centre === 'others') {
+            return 'Others: '.($this->cost_centre_other ?: '—');
+        }
+
+        return self::COST_CENTRES[$this->cost_centre] ?? (string) $this->cost_centre;
     }
 
     /** @return array<string, string> */

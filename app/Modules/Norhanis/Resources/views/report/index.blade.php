@@ -7,8 +7,8 @@
 @section('content')
     @include('core::dashboard.partials.chartjs')
 
-    <x-core::page-header title="{{ $title }}"
-                         subtitle="How many applications came in, where they are waiting, and how long each stage takes.">
+    <x-core::page-header :title="$title"
+                         subtitle="Applications in, where they wait, and how long each stage takes.">
         <a href="{{ route('norhanis.report.export', ['module' => $scope, 'period' => $period ?: null]) }}" class="btn-secondary">Export as CSV</a>
         <a href="{{ route('norhanis.overview', ['module' => $scope]) }}" class="btn-secondary">See the applications</a>
     </x-core::page-header>

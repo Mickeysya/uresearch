@@ -19,7 +19,7 @@ trait OwnsPublication
         abort_unless($application->student_id === $request->user()->id, 403);
 
         return PublicationDetail::where('application_id', $application->id)
-            ->with('authors', 'activeEvaluations', 'memo')
+            ->with('authors', 'activeEvaluations')
             ->firstOrFail();
     }
 }

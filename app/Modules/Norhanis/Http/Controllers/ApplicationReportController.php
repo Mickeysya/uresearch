@@ -5,6 +5,7 @@ namespace App\Modules\Norhanis\Http\Controllers;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Services\ModuleRegistry;
+use App\Modules\Core\Support\Role;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -24,6 +25,12 @@ use Illuminate\Support\Collection;
  */
 class ApplicationReportController extends ApplicationOverviewController
 {
+    /**
+     * Who may open the report: the CGS roles that hold a stage in these
+     * chains. Senior Executive CGS holds none, so is not among them.
+     */
+    public const REPORT_ROLES = [Role::NON_EXEC_CGS, Role::MANAGER_CGS, Role::SENIOR_DIRECTOR_CGS];
+
     /** The periods on offer: days back from today, or 0 for everything. */
     protected const PERIODS = [30 => 'Last 30 days', 90 => 'Last 90 days', 365 => 'Last 12 months', 0 => 'All time'];
 

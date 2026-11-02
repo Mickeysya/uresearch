@@ -28,6 +28,18 @@ class PublicationTest extends TestCase
     use MakesUsers;
     use RefreshDatabase;
 
+    public function test_a_fresh_form_carries_no_error_markup_so_it_opens_on_the_first_step(): void
+    {
+        // The form stepper opens on the first step that holds a .field-error.
+        // The signature box once carried an empty, hidden one for upload
+        // errors, which opened every new form on the Authors step.
+        $this->actingAs($this->student())
+            ->get(route('publication.create'))
+            ->assertOk()
+            ->assertDontSee('class="field-error"', false)
+            ->assertDontSee('class="is-invalid"', false);
+    }
+
     public function test_a_scalar_author_list_is_a_validation_error_not_a_server_error(): void
     {
         // count() on a string is a TypeError in PHP 8, so an unvalidated
@@ -51,14 +63,55 @@ class PublicationTest extends TestCase
         $response = $this->actingAs($this->student())
             ->post(route('publication.store'), array_diff_key($this->payload(), $this->documents()));
 
+        // Every document is required, as CGS asked.
         $response->assertSessionHasErrors([
             'invoice', 'index_proof', 'turnitin_report', 'letter_of_acceptance',
             'conference_journal_details', 'manuscript',
+            'response_to_reviewer_comment', 'corrected_conference_journal_paper',
         ]);
-        $response->assertSessionDoesntHaveErrors([
-            'authorship_contribution_form', 'response_to_reviewer_comment',
-            'corrected_conference_journal_paper', 'memo.grant_name',
-        ]);
+        // The Authorship Contribution Form is gone, however many authors.
+        $response->assertSessionDoesntHaveErrors(['authorship_contribution_form']);
+    }
+
+    public function test_the_cost_centre_is_chosen_from_the_list(): void
+    {
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload(['cost_centre' => 'CGS(015BD1-001)']))
+            ->assertSessionHasErrors('cost_centre');
+
+        // "Others" needs the student's own words.
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload(['cost_centre' => 'others']))
+            ->assertSessionHasErrors('cost_centre_other');
+    }
+
+    public function test_the_letter_of_undertaking_and_split_memo_come_from_the_cost_centre(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $this->actingAs($this->student())
+            ->post(route('publication.store'), $this->payload(['cost_centre' => 'cgs_letter_of_undertaking']))
+            ->assertSessionHasNoErrors();
+
+        $lou = PublicationDetail::sole();
+        $this->assertTrue($lou->wants_letter_of_undertaking);
+        $this->assertSame('CGS – Letter of Undertaking', $lou->costCentreLabel());
+
+        $this->actingAs($this->student('22001009', 'other@test.my', ['email' => 'other@test.my']))
+            ->post(route('publication.store'), $this->payload([
+                'cost_centre' => 'split_memo',
+                'authors' => [['author_name' => 'Other Student', 'email' => 'other@test.my']],
+            ]))
+            ->assertSessionHasNoErrors();
+
+        // A split memo is handled outside UResearch: nothing to sign here,
+        // so only the student's own certification and the reviewers remain.
+        $split = PublicationDetail::where('cost_centre', 'split_memo')->sole();
+        $this->assertFalse($split->wants_letter_of_undertaking);
+        $this->assertSame('Split Memo', $split->costCentreLabel());
     }
 
     public function test_a_journal_is_filed_with_two_reviewers_and_waits_for_them(): void
@@ -79,8 +132,7 @@ class PublicationTest extends TestCase
         $this->assertSame('Online', $detail->venue);
         $this->assertSame([1, 2], $detail->activeEvaluations->pluck('position')->all());
         $this->assertSame(1, $application->documents()->where('doc_type', 'Manuscript for Review')->count());
-        // RM2500 is within what the CGS fund covers, so there is no memo.
-        $this->assertNull($detail->memo);
+        $this->assertSame('CGS – Pay and Claims', $detail->costCentreLabel());
     }
 
     public function test_the_form_renders_with_no_downloads_left_on_it(): void
@@ -88,7 +140,9 @@ class PublicationTest extends TestCase
         $this->actingAs($this->student())
             ->get(route('publication.create'))
             ->assertOk()
-            ->assertSee('Split budget memo')
+            ->assertSee('Cost Centre to be Utilized')
+            ->assertDontSee('Fee in Ringgit')
+            ->assertDontSee('Authorship Contribution Form')
             ->assertDontSee('Download');
     }
 

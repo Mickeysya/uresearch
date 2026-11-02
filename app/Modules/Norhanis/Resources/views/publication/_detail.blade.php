@@ -10,8 +10,11 @@
     @if ($detail->venue) <p><b>Venue:</b> {{ $detail->venue }}</p> @endif
     <p><b>Dates:</b> {{ $detail->conference_start_date->format('j M Y') }} – {{ $detail->conference_end_date->format('j M Y') }}</p>
     <p><b>Fee:</b> {{ $detail->currency_type }} {{ number_format($detail->conference_journal_fee, 2) }}</p>
-    <p><b>Cost Centre (CGS):</b> {{ $detail->cost_centre }}</p>
-    <p><b>Letter of Undertaking Requested:</b> {{ $detail->wants_letter_of_undertaking ? 'Yes' : 'No' }}</p>
+    <p><b>Cost Centre to be Utilized:</b> {{ $detail->costCentreLabel() }}</p>
+    @if ($detail->cost_centre === 'split_memo')
+        <p style="color: var(--text-grey);">CGS will email the split memo template; the supervisor completes it outside UResearch.</p>
+    @endif
+    @include('norhanis::pack._buttons', ['application' => $application])
 
     <table class="recent-activity-table" style="margin-top: 12px;">
         <tr>
@@ -31,14 +34,6 @@
             </tr>
         @endforeach
     </table>
-
-    @if ($memo = $detail->memo)
-        <p style="margin-top: 12px;"><b>Split Budget Memo:</b>
-            from {{ $memo->supervisor_name }} (signed {{ $memo->supervisor_signed_at?->format('j M Y') ?? 'not yet' }}),
-            through {{ $memo->head_name }}, {{ $memo->centre_name }} (signed {{ $memo->head_signed_at?->format('j M Y') ?? 'not yet' }}).
-            Final approval of this application approves the memo.</p>
-        @include('norhanis::publication._memo_split')
-    @endif
 
     {{-- Every reviewer ever asked, replaced ones included, so a rejection
          the student moved past is still in front of the approver. --}}

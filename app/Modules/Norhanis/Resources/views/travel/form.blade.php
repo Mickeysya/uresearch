@@ -27,6 +27,17 @@
                    class="@error('other_request_specify') is-invalid @enderror">
             @error('other_request_specify') <p class="field-error">{{ $message }}</p> @enderror
 
+            {{-- Decides the final approver: the Senior Director CGS for local
+                 travel, the Dean of PGR for international. --}}
+            <label for="is_international">Local or International Travel</label>
+            <select name="is_international" id="is_international" required
+                    class="@error('is_international') is-invalid @enderror">
+                <option value="">-- Select --</option>
+                <option value="0" @selected(old('is_international') === '0')>Local</option>
+                <option value="1" @selected(old('is_international') === '1')>International</option>
+            </select>
+            @error('is_international') <p class="field-error">{{ $message }}</p> @enderror
+
             <label for="travel_start_date">Start Date</label>
             {{-- min mirrors the controller's after_or_equal:today. Without it
                  the wizard's checkValidity() gate waves a past date through and
@@ -46,30 +57,30 @@
             {{-- Duration is computed from the dates on save, so there is no
                  field for it here. --}}
 
-            <label for="reason_for_travel">Reason for Travel</label>
+            <label for="reason_for_travel">Reason for Travelling</label>
             <input type="text" name="reason_for_travel" id="reason_for_travel" required
                    value="{{ old('reason_for_travel') }}"
                    class="@error('reason_for_travel') is-invalid @enderror">
             @error('reason_for_travel') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="destination_address">Destination</label>
+            <label for="destination_address">Destination While Travelling</label>
             <input type="text" name="destination_address" id="destination_address" required
                    value="{{ old('destination_address') }}"
                    class="@error('destination_address') is-invalid @enderror">
             @error('destination_address') <p class="field-error">{{ $message }}</p> @enderror
 
-            <div class="checkbox-row">
-                <input type="checkbox" name="is_international" id="is_international" value="1"
-                       @checked(old('is_international'))>
-                <label for="is_international">International Travel</label>
-            </div>
+            <label for="cost_centre">Cost Centre to be utilized <span style="color: var(--text-grey)">(if any)</span></label>
+            <input type="text" name="cost_centre" id="cost_centre" maxlength="100"
+                   value="{{ old('cost_centre') }}"
+                   class="@error('cost_centre') is-invalid @enderror">
+            @error('cost_centre') <p class="field-error">{{ $message }}</p> @enderror
             </fieldset>
 
-            {{-- International travel routes through CGS and the Dean as well,
-                 so which of these two steps you are on does not change the
-                 chain -- TravelWorkflow::stages() decides that from
-                 is_international on submit. --}}
+            {{-- TravelWorkflow::stages() picks the final approver from the
+                 Local / International choice on step 1 when this is submitted. --}}
             <fieldset class="fstep" data-label="Contact &amp; documents">
+            <p class="fstep-hint" style="font-weight: 600; color: var(--text-dark);">Contact Person While Travelling</p>
+
             <label for="contact_person_name">Contact Person Name</label>
             <input type="text" name="contact_person_name" id="contact_person_name"
                    value="{{ old('contact_person_name') }}">
@@ -84,29 +95,26 @@
                    class="@error('contact_person_email') is-invalid @enderror">
             @error('contact_person_email') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="supporting_document">Supporting Document <span style="color: var(--text-grey)">(optional)</span></label>
-            <input type="file" name="supporting_document" id="supporting_document"
+            <label for="supporting_document">Supporting Document</label>
+            <input type="file" name="supporting_document" id="supporting_document" required
                    class="@error('supporting_document') is-invalid @enderror">
             @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
-            <p class="field-hint">Required for international travel. Upload the
-               approved memo here or later from your application page.</p>
             </fieldset>
 
             <fieldset class="fstep" data-label="Teaching Assistant (TA) Plan">
             <p class="fstep-hint">This section is compulsory for GA/GRA students.</p>
 
-            <label>Are you a GA/GRA recipient?</label>
+            {{-- Drop-downs rather than radios here: the review step reads a
+                 select's chosen text and its <label for>, so it shows
+                 "Are you a GA/GRA recipient? Yes", not "Yes: yes". --}}
+            <label for="is_ga_gra">Are you a GA/GRA recipient?</label>
+            <select name="is_ga_gra" id="is_ga_gra" required
+                    class="@error('is_ga_gra') is-invalid @enderror">
+                <option value="">-- Select --</option>
+                <option value="yes" @selected(old('is_ga_gra') === 'yes')>Yes</option>
+                <option value="no" @selected(old('is_ga_gra') === 'no')>No</option>
+            </select>
             @error('is_ga_gra') <p class="field-error">{{ $message }}</p> @enderror
-            <div class="checkbox-row">
-                <input type="radio" name="is_ga_gra" id="is_ga_gra_yes" value="yes" required
-                       @checked(old('is_ga_gra') === 'yes')>
-                <label for="is_ga_gra_yes" style="margin: 0;">Yes</label>
-            </div>
-            <div class="checkbox-row">
-                <input type="radio" name="is_ga_gra" id="is_ga_gra_no" value="no" required
-                       @checked(old('is_ga_gra') === 'no')>
-                <label for="is_ga_gra_no" style="margin: 0;">No</label>
-            </div>
 
             <fieldset id="ta-fields" style="border: none; padding: 0; margin: 0;"
                       @if (old('is_ga_gra') !== 'yes') hidden disabled @endif>
@@ -125,15 +133,15 @@
                        class="@error('ta_hours_during_travel') is-invalid @enderror">
                 @error('ta_hours_during_travel') <p class="field-error">{{ $message }}</p> @enderror
 
-                <label>How will the affected TA hours be managed</label>
+                <label for="ta_management_method">How will the affected TA hours be managed</label>
+                <select name="ta_management_method" id="ta_management_method" required
+                        class="@error('ta_management_method') is-invalid @enderror">
+                    <option value="">-- Select --</option>
+                    @foreach (\App\Modules\Norhanis\Models\TravelTaPlan::managementMethods() as $value => $labelText)
+                        <option value="{{ $value }}" @selected(old('ta_management_method') === $value)>{{ $labelText }}</option>
+                    @endforeach
+                </select>
                 @error('ta_management_method') <p class="field-error">{{ $message }}</p> @enderror
-                @foreach (\App\Modules\Norhanis\Models\TravelTaPlan::managementMethods() as $value => $labelText)
-                    <div class="checkbox-row">
-                        <input type="radio" name="ta_management_method" id="ta_management_method_{{ $value }}"
-                               value="{{ $value }}" @checked(old('ta_management_method') === $value)>
-                        <label for="ta_management_method_{{ $value }}" style="margin: 0;">{{ $labelText }}</label>
-                    </div>
-                @endforeach
 
                 <fieldset id="ta-dates-wrap" style="border: none; padding: 0; margin: 0;"
                      @if (! in_array(old('ta_management_method'), \App\Modules\Norhanis\Models\TravelTaPlan::methodsNeedingDates(), true)) hidden disabled @endif>
@@ -143,8 +151,10 @@
                     <div id="ta-dates">
                         @foreach (old('ta_plan_dates', ['']) as $date)
                             <div class="ta-date-row" style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
-                                <input type="date" name="ta_plan_dates[]" value="{{ $date }}" style="flex: 1;"
-                                       @if ($loop->first) required @endif>
+                                {{-- Wrapped in a label so the review step names it. --}}
+                                <label style="flex: 1; margin: 0;"><span hidden>Proposed date</span>
+                                <input type="date" name="ta_plan_dates[]" value="{{ $date }}"
+                                       @if ($loop->first) required @endif></label>
                                 <button type="button" class="remove-ta-date" style="padding: 8px 12px;"
                                         @if ($loop->first) hidden @endif>Remove</button>
                             </div>
@@ -167,31 +177,28 @@
 
 <script @cspNonce>
     (function () {
-        const gaGraYes = document.getElementById('is_ga_gra_yes');
-        const gaGraNo = document.getElementById('is_ga_gra_no');
+        const gaGra = document.getElementById('is_ga_gra');
         const taFields = document.getElementById('ta-fields');
 
         function syncGaGra() {
-            const show = gaGraYes.checked;
+            const show = gaGra.value === 'yes';
             taFields.hidden = ! show;
             taFields.disabled = ! show;
         }
 
-        gaGraYes.addEventListener('change', syncGaGra);
-        gaGraNo.addEventListener('change', syncGaGra);
+        gaGra.addEventListener('change', syncGaGra);
 
-        const methodRadios = document.querySelectorAll('input[name="ta_management_method"]');
+        const method = document.getElementById('ta_management_method');
         const datesWrap = document.getElementById('ta-dates-wrap');
-        const needsDates = ['rescheduled_after_travel', 'replacement_arrangement'];
+        const needsDates = @json(\App\Modules\Norhanis\Models\TravelTaPlan::methodsNeedingDates());
 
         function syncDates() {
-            const picked = document.querySelector('input[name="ta_management_method"]:checked');
-            const show = picked && needsDates.indexOf(picked.value) > -1;
+            const show = needsDates.indexOf(method.value) > -1;
             datesWrap.hidden = ! show;
             datesWrap.disabled = ! show;
         }
 
-        methodRadios.forEach((radio) => radio.addEventListener('change', syncDates));
+        method.addEventListener('change', syncDates);
 
         const list = document.getElementById('ta-dates');
         const add = document.getElementById('add-ta-date');
@@ -224,4 +231,5 @@
 </script>
 
 @include('core::partials.form-stepper')
+@include('norhanis::partials.file-remove')
 @endsection

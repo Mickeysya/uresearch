@@ -29,7 +29,7 @@ trait FilesPublications
             'organizer_publisher' => 'Elsevier',
             'conference_journal_fee' => '2500.00',
             'currency_type' => 'MYR',
-            'cost_centre' => 'CGS(015BD1-001)',
+            'cost_centre' => 'cgs_pay_and_claims',
             'conference_start_date' => now()->addDays(30)->toDateString(),
             'conference_end_date' => now()->addDays(32)->toDateString(),
             'authors' => [['author_name' => 'Ahmad Danial', 'email' => 'student@test.my']],
@@ -55,6 +55,7 @@ trait FilesPublications
         $fields = [
             'invoice', 'index_proof', 'turnitin_report', 'letter_of_acceptance',
             'conference_journal_details', 'manuscript',
+            'response_to_reviewer_comment', 'corrected_conference_journal_paper',
         ];
 
         return array_combine($fields, array_map(fn ($field) => $this->pdf($field.'.pdf'), $fields));

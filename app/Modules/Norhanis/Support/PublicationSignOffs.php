@@ -9,9 +9,7 @@ use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Models\PublicationAuthor;
 use App\Modules\Norhanis\Models\PublicationDetail;
 use App\Modules\Norhanis\Models\PublicationEvaluation;
-use App\Modules\Norhanis\Models\PublicationMemo;
 use App\Modules\Norhanis\Notifications\AuthorshipCertificationRequested;
-use App\Modules\Norhanis\Notifications\MemoSignatureRequested;
 use App\Modules\Norhanis\Notifications\PaperEvaluationRequested;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
@@ -24,9 +22,10 @@ use Illuminate\Validation\ValidationException;
  * approval chain.
  *
  * A publication is saved as a draft, and stays one while its authors sign the
- * Authorship Certification, its internal reviewers complete their Paper
- * Evaluation Sheets and, where the fee needs one, the split budget memo is
- * signed -- all online. When the last of those is in, the application is
+ * Authorship Certification and its internal reviewers complete their Paper
+ * Evaluation Sheets -- all online. (A split budget memo is no longer signed
+ * here: CGS emails the template and the supervisor completes it outside
+ * UResearch.) When the last of those is in, the application is
  * handed to WorkflowEngine::submit(), so approvers only ever see applications
  * that are already fully signed and evaluated.
  */
@@ -185,110 +184,11 @@ class PublicationSignOffs
         }
     }
 
-    // ---- Split budget memo ------------------------------------------------
-
-    /** The link the supervisor or the centre head signs the memo from. */
-    public function memoUrl(PublicationMemo $memo, string $signer): string
-    {
-        return $this->signedUrl('publication.memo', ['memo' => $memo, 'signer' => $signer]);
-    }
-
-    /** Email whoever's turn it is to sign (first time or as a reminder). */
-    public function inviteMemoSigner(PublicationMemo $memo, PublicationDetail $detail, string $studentName): void
-    {
-        $signer = $memo->awaiting();
-
-        if ($signer === null) {
-            return;
-        }
-
-        Notification::route('mail', $memo->{"{$signer}_email"})->notify(new MemoSignatureRequested(
-            $memo->{"{$signer}_name"},
-            $studentName,
-            $detail->title_of_paper,
-            number_format((float) $memo->grant_amount, 2),
-            $this->memoUrl($memo, $signer),
-        ));
-
-        $memo->forceFill(["{$signer}_invited_at" => now()])->save();
-    }
-
-    /**
-     * @param  array<string, string>  $corrections  grant details the supervisor put right while signing
-     */
-    public function signMemo(PublicationMemo $memo, string $signer, string $signature, ?string $ip, array $corrections = []): void
-    {
-        $memo->forceFill($corrections + [
-            "{$signer}_signature_png" => $signature,
-            "{$signer}_signed_at" => now(),
-            "{$signer}_signed_ip" => $ip,
-        ])->save();
-    }
-
-    public function declineMemo(PublicationMemo $memo, string $signer, string $reason): void
-    {
-        $memo->forceFill(['declined_at' => now(), 'declined_by' => $signer, 'decline_reason' => $reason])->save();
-    }
-
-    /**
-     * The student's corrected memo. Every signature starts again: nobody's
-     * signature may stay on a memo that changed after they signed it.
-     *
-     * @param  array<string, mixed>  $details
-     */
-    public function reviseMemo(PublicationMemo $memo, array $details): void
-    {
-        $reset = ['declined_at' => null, 'declined_by' => null, 'decline_reason' => null];
-
-        foreach (array_keys(PublicationMemo::SIGNERS) as $signer) {
-            $reset += [
-                "{$signer}_invited_at" => null,
-                "{$signer}_signature_png" => null,
-                "{$signer}_signed_at" => null,
-                "{$signer}_signed_ip" => null,
-            ];
-        }
-
-        $memo->forceFill($details + $reset)->save();
-    }
-
-    /**
-     * On final approval: file the memo again, now carrying the Senior
-     * Director's approval, which is the answer to it.
-     */
-    public function fileApprovedMemo(Application $application): ?ApplicationDocument
-    {
-        $detail = PublicationDetail::where('application_id', $application->id)->with('memo')->first();
-
-        if (! $detail?->memo) {
-            return null;
-        }
-
-        return $this->storeMemo($application, $detail, 'Approved Memo for Utilizing Grant');
-    }
-
-    protected function storeMemo(Application $application, PublicationDetail $detail, string $docType): ApplicationDocument
-    {
-        $pdf = Pdf::setOption('isFontSubsettingEnabled', true)
-            ->loadView('norhanis::publication.memo_pdf', [
-                'application' => $application,
-                'detail' => $detail,
-                'memo' => $detail->memo,
-                'student' => $application->student,
-                // Present only once the chain has finished in approval.
-                'approval' => $application->status === Application::STATUS_APPROVED
-                    ? $application->history()->with('approver')->get()->last()
-                    : null,
-            ]);
-
-        return $this->storeOrFail($application, $pdf->output(), "split-budget-memo-{$application->id}.pdf", $docType);
-    }
-
     // ---- Completion ---------------------------------------------------------
 
     /**
-     * Once every author has signed, every reviewer's sheet is settled and any
-     * memo is signed: generate the forms and put the application onto its
+     * Once every author has signed and every reviewer's sheet is settled:
+     * generate the form and put the application onto its
      * first stage. Returns the generated form, or null if something is outstanding.
      */
     public function finishIfComplete(Application $application): ?ApplicationDocument
@@ -303,15 +203,11 @@ class PublicationSignOffs
             }
 
             $detail = PublicationDetail::where('application_id', $application->id)
-                ->with('authors', 'activeEvaluations', 'memo')
+                ->with('authors', 'activeEvaluations')
                 ->firstOrFail();
 
             if (! $this->isComplete($detail)) {
                 return null;
-            }
-
-            if ($detail->memo) {
-                $this->storeMemo($application, $detail, 'Memo Request Split Budget');
             }
 
             // Subsetting embeds only the letters used, not the whole font:
@@ -331,17 +227,17 @@ class PublicationSignOffs
 
             $this->engine->submit($application);
 
+            // The student hears from the sign-off email that completed it;
+            // the supervisor hears from here, once the submit has committed.
+            DB::afterCommit(fn () => app(ApproverNotifier::class)->arrived($application));
+
             return $form;
         });
     }
 
-    /** Has every author signed, is every evaluation settled, and is any memo signed? */
+    /** Has every author signed, and is every evaluation settled? */
     public function isComplete(PublicationDetail $detail): bool
     {
-        if ($detail->memo && ! $detail->memo->isSigned()) {
-            return false;
-        }
-
         if ($detail->authors->contains(fn (PublicationAuthor $author) => ! $author->hasSigned())) {
             return false;
         }

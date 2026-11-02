@@ -5,6 +5,7 @@ namespace Tests\Feature\Norhanis;
 use App\Modules\Core\Models\Application;
 use App\Modules\Norhanis\Models\PublicationEvaluation;
 use App\Modules\Norhanis\Notifications\AuthorshipCertificationSigned;
+use App\Modules\Norhanis\Notifications\ApplicationAwaitingAction;
 use App\Modules\Norhanis\Notifications\PaperEvaluationReceived;
 use App\Modules\Norhanis\Notifications\PaperEvaluationRequested;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -73,7 +74,8 @@ class PublicationEvaluationTest extends TestCase
 
     public function test_the_last_recommendation_files_the_sheets_and_submits_the_application(): void
     {
-        $student = $this->student();
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
         $application = $this->file($student);
         [$first, $second] = PublicationEvaluation::orderBy('position')->get()->all();
 
@@ -95,6 +97,8 @@ class PublicationEvaluationTest extends TestCase
         $this->assertSame(2, $application->documents()->where('doc_type', 'like', 'Paper Evaluation Sheet%')->count());
         $this->assertSame(1, $application->documents()->where('doc_type', 'Authorship Certification Form')->count());
         Notification::assertSentToTimes($student, PaperEvaluationReceived::class, 2);
+        // Submitted by the last sheet, so the supervisor is told it is waiting.
+        Notification::assertSentToTimes($supervisor, ApplicationAwaitingAction::class, 1);
     }
 
     public function test_a_sheet_needs_every_rating_a_recommendation_and_a_signature(): void
@@ -159,7 +163,10 @@ class PublicationEvaluationTest extends TestCase
         $application->refresh();
         $this->assertSame('Added in section 3.', $second->refresh()->response);
         $this->assertSame(Application::STATUS_PENDING, $application->status);
-        $this->assertSame(1, $application->documents()->where('doc_type', 'Corrected Conference/Journal Paper')->count());
+        // One filed with the application (now required), and the one sent
+        // in answer to this reviewer's corrections.
+        $this->assertSame(2, $application->documents()->where('doc_type', 'Corrected Conference/Journal Paper')->count());
+        $this->assertTrue($application->documents()->where('original_name', 'corrected.pdf')->exists());
     }
 
     public function test_a_rejection_stops_the_application_until_someone_else_recommends_it(): void

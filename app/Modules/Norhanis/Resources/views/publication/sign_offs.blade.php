@@ -10,7 +10,7 @@
     @php($collecting = $application->status === \App\Modules\Core\Models\Application::STATUS_DRAFT)
 
     <x-core::page-header title="Publication Application #{{ $application->id }}"
-                         subtitle="{{ $detail->title_of_paper }}" />
+                         :subtitle="$detail->title_of_paper" />
 
     @if ($errors->any())
         <p class="message-error">{{ $errors->first() }}</p>
@@ -20,9 +20,6 @@
         @if ($collecting)
             <p><b>Collecting sign-offs:</b> {{ $signed }} of {{ $total }} authors have signed,
                and {{ $settled }} of {{ $reviewers }} paper evaluations are complete.
-               @if ($memo = $detail->memo)
-                   The split budget memo {{ $memo->isSigned() ? 'is signed' : 'is not fully signed yet' }}.
-               @endif
             </p>
             <p style="color: var(--text-grey);">
                 When the last one is in, your application goes to your supervisor by itself.
@@ -170,83 +167,6 @@
         </div>
     @endforeach
 
-    {{-- ---- Split budget memo ------------------------------------------- --}}
-    @if ($memo = $detail->memo)
-        <div class="app-item">
-            <h4>Split Budget Memo</h4>
-
-            @if ($memoPdf = $generated->get('Approved Memo for Utilizing Grant') ?? $generated->get('Memo Request Split Budget'))
-                <p><a href="{{ route('documents.show', $memoPdf) }}" class="btn-secondary">Download the memo (PDF)</a></p>
-            @endif
-
-            @include('norhanis::publication._memo_split')
-
-            <table class="recent-activity-table" style="margin-top: 12px;">
-                <tr><th></th><th>Signer</th><th>Email</th><th>Status</th></tr>
-                @foreach (\App\Modules\Norhanis\Models\PublicationMemo::SIGNERS as $signer => $line)
-                    <tr>
-                        <td>{{ $line }}</td>
-                        <td>{{ $memo->{$signer.'_name'} }}</td>
-                        <td>{{ $memo->{$signer.'_email'} }}</td>
-                        <td>
-                            @if ($memo->hasSigned($signer))
-                                Signed {{ $memo->{$signer.'_signed_at'}->format('j M Y, g:ia') }}
-                            @elseif ($memo->awaiting() === $signer)
-                                Waiting
-                                @if ($memo->{$signer.'_invited_at'})
-                                    <span style="color: var(--text-grey);">(emailed {{ $memo->{$signer.'_invited_at'}->format('j M Y, g:ia') }})</span>
-                                @endif
-                            @else
-                                Not yet their turn
-                            @endif
-                        </td>
-                    </tr>
-                @endforeach
-                <tr>
-                    <td>To</td>
-                    <td colspan="2">Senior Director, Centre for Graduate Studies</td>
-                    <td>Approves it with the application</td>
-                </tr>
-            </table>
-
-            @if ($memo->isDeclined())
-                <p class="message-error" style="margin-top: 12px;">
-                    {{ $memo->{$memo->declined_by.'_name'} }} sent the memo back ({{ $memo->declined_at->format('j M Y, g:ia') }}):
-                    {{ $memo->decline_reason }} Correct it below to send it for signature again.
-                </p>
-            @elseif ($collecting && $memo->awaiting())
-                <form method="POST" action="{{ route('publication.memo.remind', $application) }}" style="margin-top: 12px;">
-                    @csrf
-                    <button type="submit" class="btn-secondary">Send reminder</button>
-                </form>
-            @endif
-
-            @if ($collecting)
-                <details style="margin-top: 12px;" @if ($memo->isDeclined()) open @endif>
-                    <summary>Correct the grant or centre details</summary>
-                    <form method="POST" action="{{ route('publication.memo.revise', $application) }}" class="app-form">
-                        @csrf
-                        <p class="queue-meta">Saving a correction clears any signature already on the memo and sends it to your supervisor again.</p>
-
-                        @foreach ([
-                            'grant_name' => ['Grant name', 'text'],
-                            'grant_cost_centre' => ['Grant cost centre', 'text'],
-                            'centre_name' => ['Research centre that holds the grant', 'text'],
-                            'head_name' => ['Head of that centre', 'text'],
-                            'head_email' => ["Centre head's email", 'email'],
-                        ] as $field => [$label, $type])
-                            <label for="memo_{{ $field }}">{{ $label }}</label>
-                            <input type="{{ $type }}" name="{{ $field }}" id="memo_{{ $field }}" required
-                                   value="{{ old($field, $memo->{$field}) }}">
-                        @endforeach
-
-                        <button type="submit" class="btn-secondary" style="margin-top: 12px;">Save and send for signature</button>
-                    </form>
-                </details>
-            @endif
-        </div>
-    @endif
-
     @if ($replaced->isNotEmpty())
         <div class="app-item">
             <h4>Earlier reviewers</h4>
@@ -262,4 +182,5 @@
             @endforeach
         </div>
     @endif
+@include('norhanis::partials.file-remove')
 @endsection

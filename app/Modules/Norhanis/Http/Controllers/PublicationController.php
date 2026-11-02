@@ -2,27 +2,23 @@
 
 namespace App\Modules\Norhanis\Http\Controllers;
 
-use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
+use App\Modules\Norhanis\Http\Controllers\Concerns\ApprovesAndNotifies;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Models\PublicationAuthor;
 use App\Modules\Norhanis\Models\PublicationDetail;
 use App\Modules\Norhanis\Models\PublicationEvaluation;
-use App\Modules\Norhanis\Models\PublicationMemo;
 use App\Modules\Norhanis\Support\PublicationSignOffs;
 use App\Modules\Norhanis\Support\SignatureImage;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class PublicationController extends Controller
 {
-    use ApprovesApplications {
-        decide as protected decideApplication;
-    }
+    use ApprovesAndNotifies;
 
     /**
      * The named upload fields on the form, each attached under its own
@@ -39,12 +35,8 @@ class PublicationController extends Controller
         'conference_journal_details' => 'Conference/Journal Details',
         'response_to_reviewer_comment' => 'Response to Reviewer Comment',
         'corrected_conference_journal_paper' => 'Corrected Conference/Journal Paper',
-        'authorship_contribution_form' => 'Authorship Contribution Form',
         'manuscript' => PublicationSignOffs::MANUSCRIPT,
     ];
-
-    /** Above this many authors, the Authorship Contribution Form stops being optional. */
-    protected const AUTHORSHIP_CONTRIBUTION_THRESHOLD = 5;
 
     protected function moduleKey(): string
     {
@@ -63,27 +55,13 @@ class PublicationController extends Controller
                 ->get(),
             'requestTypes' => PublicationDetail::requestTypes(),
             'conferenceScopes' => PublicationDetail::conferenceScopes(),
-            'cgsCap' => PublicationMemo::CGS_CAP,
-            'supervisor' => $request->user()->supervisor,
-            'authorshipContributionThreshold' => self::AUTHORSHIP_CONTRIBUTION_THRESHOLD,
+            'costCentres' => PublicationDetail::COST_CENTRES,
         ]);
     }
 
     public function store(Request $request, DocumentStore $documents, PublicationSignOffs $signOffs)
     {
-        // Read before validate() so the author count can drive whether the
-        // Authorship Contribution Form is required — the same way
-        // TravelController derives duration_days instead of trusting the
-        // client, this can't be a client-side-only rule since the rows come
-        // from a JS-managed repeating section the student's browser controls.
-        // Because it runs first, `authors` is still whatever was posted: the
-        // (array) cast is what stops a scalar (`authors=foo`) throwing a
-        // TypeError out of count() and returning a blank 500. Cast, it
-        // becomes a one-element array and fails the `array` rule properly.
-        $authorCount = count((array) $request->input('authors', []));
-        $requiresAuthorshipContribution = $authorCount > self::AUTHORSHIP_CONTRIBUTION_THRESHOLD;
-
-        // Likewise read early: the publication type decides how many internal
+        // Read before validate(): the publication type decides how many internal
         // reviewers must be named. Anything that is not a string compares
         // false below and falls back to two, and validate() then rejects the
         // bad value itself.
@@ -91,23 +69,6 @@ class PublicationController extends Controller
             is_string($request->input('type_of_request')) ? $request->input('type_of_request') : null,
             is_string($request->input('conference_scope')) ? $request->input('conference_scope') : null,
         );
-
-        // And the fee, in ringgit, decides whether a split budget memo is
-        // owed: the CGS fund covers up to the cap and a grant pays the rest.
-        // A fee in another currency is compared by the ringgit amount the
-        // student gives for it.
-        $feeMyr = $request->input('currency_type') === 'MYR'
-            ? $request->input('conference_journal_fee')
-            : $request->input('fee_in_myr');
-        $needsMemo = is_numeric($feeMyr) && PublicationMemo::neededFor((float) $feeMyr);
-
-        // The memo is FROM the student's supervisor. Only a student with no
-        // supervisor on record is asked to name one.
-        $supervisor = $request->user()->supervisor;
-        $memoRules = ! $needsMemo ? [] : PublicationMemoController::memoRules('memo.') + ($supervisor ? [] : [
-            'memo.supervisor_name' => ['required', 'string', 'max:150'],
-            'memo.supervisor_email' => ['required', 'email', 'max:255'],
-        ]);
 
         // The student signs the Authorship Certification on the form itself;
         // their co-authors are emailed a link afterwards.
@@ -125,10 +86,11 @@ class PublicationController extends Controller
             'venue' => ['nullable', 'string', 'max:255'],
             'conference_journal_fee' => ['required', 'numeric', 'min:0'],
             'currency_type' => ['required', 'string', 'max:10'],
-            'fee_in_myr' => ['nullable', 'required_unless:currency_type,MYR', 'numeric', 'min:0'],
-            ...$memoRules,
-            'cost_centre' => ['required', 'string', 'max:100'],
-            'wants_letter_of_undertaking' => ['nullable', 'boolean'],
+            // One choice from the list agreed with CGS. A split memo is not
+            // handled here: CGS emails the template and the supervisor
+            // completes it outside UResearch.
+            'cost_centre' => ['required', 'in:'.implode(',', array_keys(PublicationDetail::COST_CENTRES))],
+            'cost_centre_other' => ['nullable', 'required_if:cost_centre,others', 'string', 'max:150'],
             'conference_start_date' => ['required', 'date'],
             'conference_end_date' => ['required', 'date', 'after_or_equal:conference_start_date'],
             'authors' => ['required', 'array', 'min:1', 'max:50'],
@@ -151,22 +113,20 @@ class PublicationController extends Controller
                 'ends_with:'.PublicationEvaluation::REVIEWER_EMAIL_DOMAIN,
             ],
             'manuscript' => DocumentStore::rules(true),
-            // The Authorship Contribution Form is only needed above five
-            // authors. The response and the corrected paper are
-            // for comments the paper already has when it is filed; an internal
-            // reviewer's corrections are answered later, on the sign-off page.
+            // Every document is required, as CGS asked. An internal
+            // reviewer's corrections are still answered later, on the
+            // sign-off page.
             'invoice' => DocumentStore::rules(true),
             'index_proof' => DocumentStore::rules(true),
             'turnitin_report' => DocumentStore::rules(true),
             'letter_of_acceptance' => DocumentStore::rules(true),
             'conference_journal_details' => DocumentStore::rules(true),
-            'response_to_reviewer_comment' => DocumentStore::rules(),
-            'corrected_conference_journal_paper' => DocumentStore::rules(),
-            'authorship_contribution_form' => DocumentStore::rules($requiresAuthorshipContribution),
+            'response_to_reviewer_comment' => DocumentStore::rules(true),
+            'corrected_conference_journal_paper' => DocumentStore::rules(true),
         ], [
             'conference_end_date.after_or_equal' => 'The end date must fall on or after the start date.',
-            'fee_in_myr.required_unless' => 'Give the fee in ringgit, so the system can tell whether it is above what the CGS fund covers.',
-            'memo.*.required' => 'This is needed for the split budget memo, because the fee is above RM'.number_format(PublicationMemo::CGS_CAP).'.',
+            'cost_centre.required' => 'Choose the cost centre to be utilized.',
+            'cost_centre_other.required_if' => 'Say which cost centre, as you chose "Others".',
             'authors.required' => 'Add at least one author.',
             'authors.max' => 'A publication cannot list more than 50 authors.',
             'authors.*.email.required' => 'Every author needs an email address to receive their signing link.',
@@ -181,7 +141,6 @@ class PublicationController extends Controller
             'reviewers.*.email.ends_with' => 'An internal reviewer must have a UTP email address ('.PublicationEvaluation::REVIEWER_EMAIL_DOMAIN.').',
             'reviewers.*.email.distinct' => 'Each reviewer must be a different person.',
             'manuscript.required' => 'Upload the paper for your reviewers to read.',
-            'authorship_contribution_form.required' => 'The Authorship Contribution Form is required when more than '.self::AUTHORSHIP_CONTRIBUTION_THRESHOLD.' authors are listed.',
         ]);
 
         // The student's own signature has to land on one of the author rows,
@@ -205,7 +164,7 @@ class PublicationController extends Controller
             'reviewers',
         );
 
-        $application = DB::transaction(function () use ($request, $data, $documents, $signOffs, $reviewers, $signature, $isApplicant, $needsMemo, $feeMyr, $supervisor) {
+        $application = DB::transaction(function () use ($request, $data, $documents, $signOffs, $reviewers, $signature, $isApplicant) {
             $application = Application::create([
                 'student_id' => $request->user()->id,
                 'module_type' => $this->moduleKey(),
@@ -226,7 +185,9 @@ class PublicationController extends Controller
                 'conference_journal_fee' => $data['conference_journal_fee'],
                 'currency_type' => $data['currency_type'],
                 'cost_centre' => $data['cost_centre'],
-                'wants_letter_of_undertaking' => $request->boolean('wants_letter_of_undertaking'),
+                'cost_centre_other' => $data['cost_centre'] === 'others' ? $data['cost_centre_other'] : null,
+                // Kept for reports: the LOU is now one of the cost centre choices.
+                'wants_letter_of_undertaking' => $data['cost_centre'] === 'cgs_letter_of_undertaking',
                 'conference_start_date' => $data['conference_start_date'],
                 'conference_end_date' => $data['conference_end_date'],
             ]);
@@ -243,15 +204,6 @@ class PublicationController extends Controller
                 if ($isApplicant($author)) {
                     $signOffs->sign($row, $signature, $data['applicant_conflict_disclosure'] ?? null, $request->ip());
                 }
-            }
-
-            if ($needsMemo) {
-                $publicationDetail->memo()->create([
-                    'supervisor_name' => $supervisor?->name ?? $data['memo']['supervisor_name'],
-                    'supervisor_email' => strtolower($supervisor?->email ?? $data['memo']['supervisor_email']),
-                    'supervisor_department' => $supervisor?->department,
-                    'head_email' => strtolower($data['memo']['head_email']),
-                ] + PublicationMemo::split((float) $feeMyr) + $data['memo']);
             }
 
             foreach ($reviewers as $index => $reviewer) {
@@ -277,12 +229,8 @@ class PublicationController extends Controller
         // After the transaction, so nobody is emailed about rows that a
         // rollback then removes.
         $detail = PublicationDetail::where('application_id', $application->id)
-            ->with('authors', 'activeEvaluations', 'memo')
+            ->with('authors', 'activeEvaluations')
             ->firstOrFail();
-
-        if ($detail->memo) {
-            $signOffs->inviteMemoSigner($detail->memo, $detail, $request->user()->name);
-        }
 
         foreach ($detail->authors->reject(fn (PublicationAuthor $author) => $author->hasSigned()) as $author) {
             $signOffs->invite($author, $detail, $request->user()->name);
@@ -298,31 +246,6 @@ class PublicationController extends Controller
                 .'has been emailed a link. It goes to your supervisor once every one of them has signed.');
     }
 
-    /**
-     * The shared decide(), plus one thing: the memo is addressed TO the
-     * Senior Director, so their final approval is the answer to it, and the
-     * memo is filed again carrying that approval.
-     */
-    public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
-    {
-        $response = $this->decideApplication($request, $application, $engine);
-
-        $application->refresh();
-
-        if ($application->module_type === $this->moduleKey() && $application->status === Application::STATUS_APPROVED
-            && ! $application->documents()->where('doc_type', 'Approved Memo for Utilizing Grant')->exists()) {
-            // The approval already stands. A PDF that fails to generate
-            // must not turn it into an error page for the approver.
-            try {
-                app(PublicationSignOffs::class)->fileApprovedMemo($application);
-            } catch (\Throwable $e) {
-                report($e);
-            }
-        }
-
-        return $response;
-    }
-
     public function queue(Request $request, WorkflowEngine $engine)
     {
         $queue = $this->queueFor($request, $engine, ['documents']);
@@ -330,7 +253,7 @@ class PublicationController extends Controller
         // One query for all publication rows, eager-loading authors and
         // evaluations so the queue view can list them without an N+1 query.
         $details = PublicationDetail::whereIn('application_id', $queue['applications']->pluck('id'))
-            ->with('authors', 'evaluations', 'memo')
+            ->with('authors', 'evaluations')
             ->get()
             ->keyBy('application_id');
 

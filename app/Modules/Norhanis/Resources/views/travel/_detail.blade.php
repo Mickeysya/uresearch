@@ -2,8 +2,9 @@
 @php($detail = $details[$application->id] ?? null)
 
 @if ($detail)
-    <p>Reason: {{ $detail->reason_for_travel }}</p>
-    <p>Destination: {{ $detail->destination_address }}</p>
+    <p>Reason for Travelling: {{ $detail->reason_for_travel }}</p>
+    <p>Destination While Travelling: {{ $detail->destination_address }}</p>
+    @if ($detail->cost_centre) <p>Cost Centre: {{ $detail->cost_centre }}</p> @endif
     <p>Dates: {{ $detail->travel_start_date->format('j M Y') }}
        to {{ $detail->travel_end_date->format('j M Y') }}
        ({{ $detail->duration_days }} {{ Str::plural('day', $detail->duration_days) }})</p>
@@ -31,6 +32,7 @@
     @endif
 
     <p><a href="{{ route('travel.show', $application) }}">View full application</a></p>
+    @include('norhanis::pack._buttons', ['application' => $application])
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif

@@ -13,8 +13,8 @@ Add a row here in the same commit that registers the workflow.
 | `examiner_nomination` | Examiner Nomination | Hani | built |
 | `publication` | Publication | Norhanis | built |
 | `claims_student` | Student Claims | Norhanis | built |
-| `rpd_appeal` | RPD Appeal / Extension | Norhanis | built |
-| `rpd_dismissal` | RPD Dismissal | Norhanis | built |
+| `rpd_appeal` | RPD Appeal / Extension | — | **retired** (removed 2026-10-30) · do not reuse |
+| `rpd_dismissal` | RPD Dismissal | — | **retired** (removed 2026-10-30) · do not reuse |
 | `attendance_appeal` | Attendance Appeal | Nureen | built |
 | `supervision` | Supervisor Appointment | Nureen | built |
 | `ga_certification` | GA/GRA Certification Letter | Nureen | built |
@@ -30,8 +30,8 @@ Add a row here in the same commit that registers the workflow.
 | `ga_application` | GA Application | Haziq | planned · see overlap note |
 
 **Overlap note — do not claim these without agreeing first.** Chloe's three
-candidacy keys duplicate the *shape* of Norhanis' `rpd_appeal` and
-`rpd_dismissal` (different deadline, near-identical machinery), and Haziq's
+candidacy keys once duplicated the *shape* of the retired `rpd_appeal` and
+`rpd_dismissal` (RPD was removed from Norhanis' scope on 2026-10-30), and Haziq's
 two keys duplicate the *subject* of Nureen's already-built `ga_extension` and
 `ga_certification`. See the overlap section in `TODO.md`.
 
@@ -80,6 +80,6 @@ first whether an existing role already means the same person.
 | Project Director | `norhanis.md` | may be a post-approval export, not a stage |
 
 **Resolved.** `Faculty` is now a role (`App\Modules\Core\Support\Role::FACULTY`),
-claimed by `RpdDismissalWorkflow` as the final approver between the Dean's
-endorsement and the Registry's termination email. Jason's modules may reuse it.
+first claimed by the RPD dismissal chain, which has since been removed; no module
+uses it at present. Jason's or Chloe's modules may reuse it.
 Seeded as `faculty@utp.edu.my`.

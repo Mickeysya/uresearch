@@ -28,7 +28,15 @@ class TravelTest extends TestCase
         return $this->sup ??= $this->supervisor();
     }
 
-    public function test_local_travel_ends_at_the_chair(): void
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The supporting document is required, so every submission uploads one.
+        \Illuminate\Support\Facades\Storage::fake('local');
+    }
+
+    public function test_local_travel_goes_through_cgs_to_the_senior_director(): void
     {
         $application = $this->submit(['is_international' => 0]);
 
@@ -38,10 +46,53 @@ class TravelTest extends TestCase
         $this->actingAs($this->chair())
             ->post(route('travel.decide', $application), ['decision' => 'approve']);
 
-        $application->refresh();
+        // The Chair no longer has the final say on local travel.
+        $this->assertSame(Application::STATUS_PENDING, $application->refresh()->status);
+        $this->assertSame('cgs_review', $application->current_stage);
 
-        // The Chair holds the final say on local travel -- no CGS, no Dean.
-        $this->assertSame(Application::STATUS_APPROVED, $application->status);
+        $this->actingAs($this->cgs())
+            ->post(route('travel.decide', $application), ['decision' => 'approve']);
+
+        // Local travel ends with the Senior Director CGS, never the Dean.
+        $this->assertSame('senior_director', $application->refresh()->current_stage);
+
+        $this->actingAs($this->dean())
+            ->post(route('travel.decide', $application), ['decision' => 'approve']);
+        $this->assertSame(Application::STATUS_PENDING, $application->refresh()->status);
+
+        $this->actingAs($this->seniorDirector())
+            ->post(route('travel.decide', $application), ['decision' => 'approve']);
+
+        $this->assertSame(Application::STATUS_APPROVED, $application->refresh()->status);
+    }
+
+    public function test_local_or_international_must_be_chosen(): void
+    {
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('travel.store'), array_diff_key($this->payload(), ['is_international' => true]))
+            ->assertSessionHasErrors('is_international');
+
+        $this->actingAs($student)
+            ->post(route('travel.store'), $this->payload(['is_international' => 'maybe']))
+            ->assertSessionHasErrors('is_international');
+    }
+
+    public function test_the_supporting_document_is_required(): void
+    {
+        $this->actingAs($this->student())
+            ->post(route('travel.store'), array_diff_key($this->payload(), ['supporting_document' => true]))
+            ->assertSessionHasErrors('supporting_document');
+    }
+
+    public function test_the_cost_centre_is_optional_and_saved_when_given(): void
+    {
+        $with = $this->submitAs($this->student('22001001', 'a@test.my'), ['cost_centre' => 'YUTP-015LC0-123']);
+        $without = $this->submitAs($this->student('22001002', 'b@test.my'));
+
+        $this->assertSame('YUTP-015LC0-123', \App\Modules\Norhanis\Models\TravelDetail::where('application_id', $with->id)->value('cost_centre'));
+        $this->assertNull(\App\Modules\Norhanis\Models\TravelDetail::where('application_id', $without->id)->value('cost_centre'));
     }
 
     public function test_international_travel_continues_to_cgs_and_the_dean(): void
@@ -309,6 +360,7 @@ class TravelTest extends TestCase
             'destination_address' => 'Universiti Malaya, Kuala Lumpur',
             'is_international' => 0,
             'contact_person_email' => 'contact@utp.edu.my',
+            'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('memo.pdf', 20, 'application/pdf'),
             'is_ga_gra' => 'no',
         ];
     }

@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
-use App\Modules\Norhanis\Models\Candidacy;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -45,8 +44,6 @@ class DatabaseSeeder extends Seeder
             'department' => 'Computer & Information Sciences',
             'faculty' => 'FSMC',
         ]);
-        // Faculty signs off an RPD dismissal between the Dean's endorsement
-        // and the Registry's termination email -- see RpdDismissalWorkflow.
         $this->user('Faculty Office', 'faculty@utp.edu.my', Role::FACULTY, [
             'department' => 'Faculty of Engineering', 'faculty' => 'FOE',
         ]);
@@ -72,7 +69,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->examiners();
-        $this->candidacies($student, $student2);
 
         $this->command->newLine();
         $this->command->info('Seeded. Every account uses the password: '.self::PASSWORD);
@@ -147,29 +143,5 @@ class DatabaseSeeder extends Seeder
                 'assigned_until' => $assigned ? now()->modify($assigned) : null,
             ]);
         }
-    }
-
-    /**
-     * One candidacy inside its 1-month reminder window (exercises the reminder
-     * command and the appeal chain) and one already overdue (exercises the CGS
-     * dismissal screen), so both RPD flows have data on a fresh database.
-     */
-    protected function candidacies(User $fullTimeStudent, User $partTimeStudent): void
-    {
-        $start = now()->subMonths(7);
-        Candidacy::updateOrCreate(['student_id' => $fullTimeStudent->id], [
-            'programme_type' => 'msc_ft',
-            'candidature_start_date' => $start,
-            'rpd_deadline' => Candidacy::initialDeadline('msc_ft', $start),
-            'status' => Candidacy::STATUS_ACTIVE,
-        ]);
-
-        $start = now()->subMonths(14);
-        Candidacy::updateOrCreate(['student_id' => $partTimeStudent->id], [
-            'programme_type' => 'phd_pt',
-            'candidature_start_date' => $start,
-            'rpd_deadline' => Candidacy::initialDeadline('phd_pt', $start),
-            'status' => Candidacy::STATUS_ACTIVE,
-        ]);
     }
 }

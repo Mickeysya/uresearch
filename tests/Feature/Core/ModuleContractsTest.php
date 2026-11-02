@@ -62,8 +62,9 @@ class ModuleContractsTest extends TestCase
     }
 
     /**
-     * The reference module's conditional routing. Local travel finishes at the
-     * Chair; international continues to CGS and the Dean. Same form, same
+     * The reference module's conditional routing. Both routes pass through
+     * the Chair and CGS; local travel ends with the Senior Director CGS and
+     * international with the Dean of PGR. Same form, same
      * module, chain chosen from the application's own data -- which is what
      * lets the student's stepper show the right number of steps immediately.
      */
@@ -73,10 +74,11 @@ class ModuleContractsTest extends TestCase
         $module = app(ModuleRegistry::class)->get('travel');
 
         $local = $module->stages($this->travelApplication($student, international: false));
-        $this->assertSame(['supervisor', 'chair'], array_map(fn ($s) => $s->key, $local));
-        // The Chair has the final say on local travel, so that is where the
-        // 'approved' verb lives.
-        $this->assertSame('approved', $local[1]->decision);
+        $this->assertSame(['supervisor', 'chair', 'cgs_review', 'senior_director'], array_map(fn ($s) => $s->key, $local));
+        // The Senior Director has the final say on local travel, so that is
+        // where the 'approved' verb lives; the Chair only endorses.
+        $this->assertSame('endorsed', $local[1]->decision);
+        $this->assertSame('approved', $local[3]->decision);
 
         $abroad = $module->stages($this->travelApplication($student, international: true));
         $this->assertSame(

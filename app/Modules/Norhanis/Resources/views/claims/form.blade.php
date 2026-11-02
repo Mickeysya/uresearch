@@ -81,4 +81,5 @@
 </script>
 
 @include('core::partials.form-stepper')
+@include('norhanis::partials.file-remove')
 @endsection

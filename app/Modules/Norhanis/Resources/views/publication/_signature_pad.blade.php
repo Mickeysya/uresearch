@@ -15,6 +15,11 @@
         <button type="button" class="btn-secondary" data-signature-upload>Upload an image instead</button>
         <button type="button" class="btn-secondary" data-signature-clear>Clear</button>
     </p>
+    <p class="field-hint">Draw in the box, or upload a PNG or JPG image of your signature.</p>
+    {{-- No .field-error class until there is an error to show: the form
+         stepper opens on the first step holding a .field-error, so an empty
+         one here would open every form on the signature step. --}}
+    <p data-signature-error hidden></p>
 </div>
 @error($name) <p class="field-error">{{ $message }}</p> @enderror
 
@@ -78,9 +83,20 @@
         commit();
     });
 
+    var error = pad.querySelector('[data-signature-error]');
+
+    function showError(message) {
+        error.textContent = message;
+        error.hidden = ! message;
+        error.className = message ? 'field-error' : '';
+    }
+
     // The picker is created on demand and never added to the form, so the
     // image file itself is not uploaded: it is drawn into the box, scaled to
     // fit, and leaves as the same PNG a drawn signature would.
+    //
+    // Read as a data: URL, not URL.createObjectURL(): the portal's CSP allows
+    // img-src 'self' data: only, so a blob: image is blocked and never loads.
     pad.querySelector('[data-signature-upload]').addEventListener('click', function () {
         var picker = document.createElement('input');
         picker.type = 'file';
@@ -89,19 +105,36 @@
         picker.addEventListener('change', function () {
             if (! picker.files.length) return;
 
-            var image = new Image();
-            image.onload = function () {
-                var scale = Math.min(canvas.width / image.width, canvas.height / image.height);
-                var w = image.width * scale;
-                var h = image.height * scale;
+            var file = picker.files[0];
 
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-                URL.revokeObjectURL(image.src);
-                signed = true;
-                commit();
+            if (['image/png', 'image/jpeg'].indexOf(file.type) === -1) {
+                showError('Use a PNG or JPG image of your signature.');
+                return;
+            }
+
+            var reader = new FileReader();
+            reader.onload = function () {
+                var image = new Image();
+                image.onload = function () {
+                    var scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+                    var w = image.width * scale;
+                    var h = image.height * scale;
+
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+                    showError('');
+                    signed = true;
+                    commit();
+                };
+                image.onerror = function () {
+                    showError('That image could not be read. Try another PNG or JPG.');
+                };
+                image.src = reader.result;
             };
-            image.src = URL.createObjectURL(picker.files[0]);
+            reader.onerror = function () {
+                showError('That image could not be read. Try another PNG or JPG.');
+            };
+            reader.readAsDataURL(file);
         });
 
         picker.click();
