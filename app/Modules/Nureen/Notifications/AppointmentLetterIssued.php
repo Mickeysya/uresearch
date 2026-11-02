@@ -13,10 +13,13 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * The issued appointment letter, delivered to the student with the
- * appointed supervisor CC'd -- same shape as CertificationIssued, but with a
- * literal mail CC rather than a second notification: this class belongs to
- * Nureen, not Core, so there is nothing stopping MailMessage::cc() here.
+ * The issued appointment letter, sent to the student AND, as a separate
+ * message, to the appointed supervisor -- each with the letter attached and
+ * a button to a page that recipient can open: the student's details page,
+ * or the staff view (nureen.application) for the supervisor.
+ *
+ * It used to CC the supervisor on the student's message, so both got the
+ * student's link, and the supervisor's click was refused (3 Nov 2026).
  */
 class AppointmentLetterIssued extends Notification implements ShouldQueue
 {
@@ -40,15 +43,26 @@ class AppointmentLetterIssued extends Notification implements ShouldQueue
             ? 'Co-Supervisor'
             : 'Main Supervisor';
 
-        $mail = (new MailMessage)
-            ->subject('Your Supervisor Appointment Letter: '.$this->detail->letter_reference)
-            ->greeting('Hi '.$notifiable->name.',')
-            ->line("Your {$roleLabel} appointment of {$this->supervisor->name} has been approved. ".
-                'The appointment letter is attached to this email.')
-            ->line('Reference: '.$this->detail->letter_reference)
-            ->cc($this->supervisor->email, $this->supervisor->name)
-            ->action('View it in UResearch', route('applications.show', $this->application))
-            ->line('Thank you for using UResearch 2.0.');
+        $toStudent = $notifiable->is($this->application->student);
+        $student = $this->application->student;
+
+        $mail = $toStudent
+            ? (new MailMessage)
+                ->subject('Your Supervisor Appointment Letter: '.$this->detail->letter_reference)
+                ->greeting('Hi '.$notifiable->name.',')
+                ->line("Your {$roleLabel} appointment of {$this->supervisor->name} has been approved. ".
+                    'The appointment letter is attached to this email.')
+                ->line('Reference: '.$this->detail->letter_reference)
+                ->action('View it in UResearch', route('applications.show', $this->application))
+            : (new MailMessage)
+                ->subject('Appointment Letter Issued: you are '.$roleLabel.' to '.($student?->name ?? 'a student'))
+                ->greeting('Hi '.$notifiable->name.',')
+                ->line("You have been appointed {$roleLabel} to {$student?->name}"
+                    .($student?->matric_no ? " ({$student->matric_no})" : '').'. A copy of the appointment letter is attached.')
+                ->line('Reference: '.$this->detail->letter_reference)
+                ->action('View the application', route('nureen.application', $this->application));
+
+        $mail = $mail->line('Thank you for using UResearch 2.0.');
 
         if ($this->letter->exists()) {
             // MailMessage has no attachFromStorageDisk(); this is the

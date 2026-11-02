@@ -144,6 +144,29 @@ there is no Electrical & Electronics Chair (see below).
 
 ---
 
+## Recommended student for testing and the viva
+
+**`student@utp.edu.my`**, Ahmad Danial (22001001), MSc Full-Time,
+**Computing**:
+- **Supervisor:** `supervisor@utp.edu.my` (Dr. Aisyah Rahman), who receives
+  their GA Extension and Certification requests.
+- **Chair:** `chair@utp.edu.my` (Dr. Lim Wei Chun), Chair of Computing,
+  whose department-scoped queue covers them.
+- **CGS:** `cgs@utp.edu.my`.
+- **Senior Director:** `director@utp.edu.my`.
+
+No Electrical & Electronics Chair gap applies, so every module runs end to
+end. Checked live on 3 Nov 2026: Supervision request #185 (Co-Supervisor:
+Prof. Dr. Kumaran Vellu, `kumaran.vellu@utp.edu.my`) went requested
+supervisor → Chair → CGS, and letter CGS/SVAPPT/2026/0009 was issued.
+
+For a Supervision request, ask for a **Co-Supervisor**, such as Prof. Dr.
+Kumaran Vellu. An approved *Main* Supervisor request moves the student to
+the new supervisor, which is how Lee Xin Yi moved. Naming their own main
+supervisor as Co-Supervisor is refused, and a second request for an already
+active Co-Supervisor is refused too. So for another live run, ask a
+different supervisor, e.g. `co-supervisor-demo@utp.edu.my`.
+
 ## Who covers whom
 
 Taken from the seeded database on 3 Nov 2026. A GA Extension or Certification

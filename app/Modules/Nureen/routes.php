@@ -11,6 +11,7 @@ use App\Modules\Nureen\Http\Controllers\DraftsController;
 use App\Modules\Nureen\Http\Controllers\ExpectedDecisionController;
 use App\Modules\Nureen\Http\Controllers\GaExtensionController;
 use App\Modules\Nureen\Http\Controllers\SupervisionController;
+use App\Modules\Nureen\Http\Controllers\StaffApplicationController;
 use App\Modules\Nureen\Http\Controllers\StuckReviewsController;
 use Illuminate\Support\Facades\Route;
 
@@ -20,6 +21,11 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware('auth')->group(function () {
+    // Read-only view of one application for the staff who have a part in it
+    // -- what staff emails link to (applications.show is students-only).
+    // Access: Support\StaffApplicationAccess.
+    Route::get('/nureen/applications/{application}', [StaffApplicationController::class, 'show'])->name('nureen.application');
+
 
     // ---- GA Extension -------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {

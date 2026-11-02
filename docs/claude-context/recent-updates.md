@@ -622,6 +622,93 @@ Run with `db:seed --class=...`; none are wired into Core's seeder:
 
 ---
 
+## 2026-11-03 — Every email link opens for its recipient; a recommended demo student
+
+**Branch:** `feature/track-applications-redesign`, uncommitted. Nureen only
+(no Core change).
+
+### The ask
+
+1. Delete the 6 kept failed letter emails; don't resend them.
+2. Make every email link to a page its recipient can open, with a test per
+   email.
+3. Recommend one Computing demo student for testing and the viva, and
+   confirm a full Supervision chain for them.
+4. Leave `app/Modules/Nureen/docs/forms/GA_Extension_Form.pdf` alone.
+
+### Findings
+
+- **Six emails linked staff to pages they can't open:**
+  - the supervisor's GA Extension and Supervision outcome copies →
+    `applications.index` (students-only, 403);
+  - the appointment-letter revocation, sent to student AND supervisor →
+    `applications.index` (403 for the supervisor);
+  - the Senior Director's GA Extension information email → the GA
+    Extension queue, which in `cgs` mode has nothing for them;
+  - the certification revocation's supervisor copy, which had no button;
+  - the appointment letter itself, which CC'd the supervisor on the
+    student's message, so the supervisor's click went to the student's page
+    (found during the live check, not in the audit).
+- **Core's emails are fine:** ApplicationDecided goes to students only,
+  and ApplicationReturned links staff to the dashboard.
+- **There was no staff page for one application:** `applications.show` is
+  students-only, and queues hold pending rows only.
+
+### What changed
+
+- **A new read-only staff view, `nureen.application`**
+  (`/nureen/applications/{id}`, `StaffApplicationController`): progress,
+  activity, details and documents, built from Core's ApplicationDetails.
+  - **Who may open it** (`Support\StaffApplicationAccess`): the named or
+    requested supervisor; anyone who decided on it; a role owning a stage
+    of its chain (Chair: own department only; a supervisor only as the
+    named one); and for GA Extension the Senior Director.
+  - **Scope:** only Nureen's four modules. A document is a link only when
+    Core's document rule lets that viewer open it.
+- **Email links fixed:**
+  - `GaExtensionFinalDecisionCc`, `GaExtensionFinalDecisionInformational`
+    and `SupervisionFinalDecisionCc` now link to the staff view.
+  - `AppointmentLetterRevoked` and `CertificationRevoked` link the student
+    to their details page and the supervisor to the staff view.
+  - `AppointmentLetterIssued` is now sent to the supervisor as their own
+    message (letter attached, staff-view link) instead of a CC on the
+    student's.
+- **Tests:**
+  - New: `EmailLinksTest` (12): every email this module sends, for each
+    recipient, followed as that person and expected to return 200; plus the
+    staff view's access limits.
+  - Updated: `LettersTest`'s letter-email assertion (no CC; the supervisor's
+    own copy).
+- **Docs:** `docs/test-accounts.md` gains "Recommended student for testing
+  and the viva".
+
+### Recommended demo student
+
+`student@utp.edu.my` (Ahmad Danial, 22001001, Computing). Supervisor
+`supervisor@utp.edu.my`, Chair `chair@utp.edu.my` (Computing), CGS
+`cgs@utp.edu.my`.
+
+### Verification
+
+- **Tests:** full suite, 511 passed.
+- **failed_jobs:** the 6 approved rows deleted (0 left).
+- **Supervision #185, live:**
+  - submitted as `student@` (Co-Supervisor: Prof. Dr. Kumaran Vellu);
+  - endorsed by `kumaran.vellu@`, `chair@` and `cgs@`;
+  - letter CGS/SVAPPT/2026/0009 issued;
+  - the student's details page shows all three people and the letter.
+- **Staff view, live:**
+  - `supervisor@` and `director@` open #183 and are refused #185;
+  - `kumaran.vellu@` opens #185 only;
+  - `farid.kamal@` is refused both.
+- **A failure I caused:** the supervisor's outcome copy for #185 failed
+  once, because the long-running queue worker had loaded the routes before
+  `nureen.application` existed. After `queue:restart` it was retried (by
+  UUID; `queue:retry` takes UUIDs, not row ids) and arrived linking to
+  `/nureen/applications/185`. `failed_jobs` is empty.
+
+---
+
 ## 2026-11-03 — Supervisor safeguards, submission emails, certification revocation emails, failed_jobs clean-up
 
 **Branch:** `feature/track-applications-redesign`, uncommitted.

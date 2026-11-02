@@ -35,11 +35,12 @@ class CertificationRevoked extends Notification implements ShouldQueue
             ->line('Reason given: '.$this->detail->revoked_reason)
             ->line('The application itself remains approved -- this only means the letter already issued is no longer valid.');
 
-        // Only the student can open the tracking page.
-        if ($notifiable->isStudent()) {
-            $mail = $mail->action('View the application', route('applications.show', $this->detail->application_id));
-        }
-
-        return $mail->line('Thank you for using UResearch 2.0.');
+        // Each recipient gets a page they can open: the student their
+        // details page, the supervisor the staff view.
+        return $mail
+            ->action('View the application', $notifiable->isStudent()
+                ? route('applications.show', $this->detail->application_id)
+                : route('nureen.application', $this->detail->application_id))
+            ->line('Thank you for using UResearch 2.0.');
     }
 }
