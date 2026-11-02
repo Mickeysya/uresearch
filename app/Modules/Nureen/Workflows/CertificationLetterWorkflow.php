@@ -75,8 +75,12 @@ class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime, 
             return 'GA/GRA certification request';
         }
 
-        return $detail->appointment_type.' certification, '
-            .$detail->period_start->format('M Y').' – '.$detail->period_end->format('M Y');
+        // A saved draft may not have these yet (they are nullable for drafts).
+        $type = $detail->appointment_type ? $detail->appointment_type.' certification' : 'GA/GRA certification request';
+
+        return $detail->period_start && $detail->period_end
+            ? $type.', '.$detail->period_start->format('M Y').' – '.$detail->period_end->format('M Y')
+            : $type;
     }
 
     public function createRoute(): ?string

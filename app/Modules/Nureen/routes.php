@@ -7,6 +7,7 @@ use App\Modules\Nureen\Http\Controllers\AttendanceController;
 use App\Modules\Nureen\Http\Controllers\AttendanceIngestController;
 use App\Modules\Nureen\Http\Controllers\CertificateVerificationController;
 use App\Modules\Nureen\Http\Controllers\CertificationController;
+use App\Modules\Nureen\Http\Controllers\DraftsController;
 use App\Modules\Nureen\Http\Controllers\ExpectedDecisionController;
 use App\Modules\Nureen\Http\Controllers\GaExtensionController;
 use App\Modules\Nureen\Http\Controllers\SupervisionController;
@@ -23,6 +24,15 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/ga-extension/new', [GaExtensionController::class, 'create'])->name('ga-extension.create');
         Route::post('/ga-extension', [GaExtensionController::class, 'store'])->name('ga-extension.store');
+
+        // Saved drafts -- the owning student only (Support\Drafts::ownedBy()).
+        Route::post('/ga-extension/draft', [GaExtensionController::class, 'saveDraft'])->name('ga-extension.draft.save');
+        Route::get('/ga-extension/draft/{application}', [GaExtensionController::class, 'editDraft'])->name('ga-extension.draft.edit');
+        Route::post('/ga-extension/draft/{application}', [GaExtensionController::class, 'saveDraft'])->name('ga-extension.draft.update');
+        Route::delete('/ga-extension/draft/{application}', [GaExtensionController::class, 'destroyDraft'])->name('ga-extension.draft.destroy');
+
+        // Every saved draft, both modules.
+        Route::get('/my-drafts', [DraftsController::class, 'index'])->name('nureen.drafts');
     });
 
     Route::middleware('role:'.implode(',', [
@@ -64,6 +74,11 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/ga-certification/new', [CertificationController::class, 'create'])->name('ga-certification.create');
         Route::post('/ga-certification', [CertificationController::class, 'store'])->name('ga-certification.store');
+
+        Route::post('/ga-certification/draft', [CertificationController::class, 'saveDraft'])->name('ga-certification.draft.save');
+        Route::get('/ga-certification/draft/{application}', [CertificationController::class, 'editDraft'])->name('ga-certification.draft.edit');
+        Route::post('/ga-certification/draft/{application}', [CertificationController::class, 'saveDraft'])->name('ga-certification.draft.update');
+        Route::delete('/ga-certification/draft/{application}', [CertificationController::class, 'destroyDraft'])->name('ga-certification.draft.destroy');
     });
 
     Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS]))->group(function () {

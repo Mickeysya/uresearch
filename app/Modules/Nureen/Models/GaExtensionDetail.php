@@ -11,7 +11,7 @@ class GaExtensionDetail extends Model
 {
     protected $fillable = [
         'application_id', 'supervisor_id', 'current_end_date', 'requested_new_end_date', 'reason_for_extension',
-        'additional_info', 'final_approver_snapshot',
+        'additional_info', 'final_approver_snapshot', 'draft_step',
     ];
 
     protected function casts(): array

@@ -477,3 +477,52 @@ row with `sessions_requested` set. Also, its attendance appeals now need the
 two required document types (`config('nureen.attendance_appeal.required_documents')`);
 appeals it seeds without them show "missing" in CGS's checks.
 
+
+---
+
+## 14. Saved drafts (GA Extension, Certification): what Core shows, and two small Core proposals
+
+Numbered 14 so it doesn't collide with §10–§13 on `feature/track-applications-redesign`
+when the branches merge.
+
+Nureen's GA Extension and GA/GRA Certification forms now have **Save draft**.
+A draft uses Core's existing draft support: an `applications` row with status
+`'draft'` and `current_stage` NULL, plus the module's detail row. There is no new
+table, no Core edit, and no new column on a Core table (the nullable columns and
+`draft_step` are on Nureen's own detail tables). Drafts never reach a queue
+(`WorkflowEngine::queue()` reads pending rows only), a reminder, the Client
+Charter or Nureen's analytics. Students manage them on Nureen's **My Drafts**
+page (`/my-drafts`, a sidebar link).
+
+**What Core shows today (from reading the code on this branch). Not changed:**
+
+a. **Track My Applications lists drafts.** `ApplicationTrackingController::index()`
+   loads every application the student has, so a draft appears with a "draft"
+   badge and a stepper that marks the first stage as current, as if it were
+   with the supervisor. **Proposed:** `->where('status', '!=', Application::STATUS_DRAFT)`
+   on that query. The redesign branch's `ApplicationTracker` already excludes
+   drafts, so merging that branch fixes this.
+
+b. **The student dashboard's "My Application Status" panel lists drafts as
+   "Pending Approval".** `StudentDashboard::applications()` has no status
+   filter, and the partial labels anything not approved, rejected or returned
+   as pending. **Proposed:** the same exclusion. Alternatively a "Draft · Continue" row,
+   but that would need a link each module supplies.
+
+c. **`applications.show` opens a draft** and shows its (empty) progress.
+   **Proposed:** 404 for a draft, or a redirect to the module's own Continue link.
+
+d. **`core::partials.form-stepper` cannot open on a given step.** Nureen
+   resumes a draft on the step last saved by pressing the stepper's own
+   Continue (stopping early if a step still needs something). A one-line
+   option would let it open there directly:
+
+   ```js
+   show(firstBad > -1 ? firstBad : (parseInt(form.dataset.stepperStart || '0', 10) || 0), false);
+   ```
+
+e. **`DocumentStore` has no way to remove a file.** Drafts let a student
+   remove an attached file, so `Nureen\Support\Drafts::removeDocuments()`
+   deletes the stored file and its `application_documents` row itself. A
+   `DocumentStore::remove(ApplicationDocument)` would keep uploads and
+   removals in one place.

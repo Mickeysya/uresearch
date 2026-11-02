@@ -34,28 +34,50 @@
         </div>
     @endunless
 
+    @if ($otherDrafts->isNotEmpty())
+        <div class="card card-wide" style="margin-bottom: var(--space-6);">
+            <p style="margin: 0;">
+                You have {{ $otherDrafts->count() === 1 ? 'a saved draft' : $otherDrafts->count().' saved drafts' }} of this form.
+                <a href="{{ route('ga-extension.draft.edit', $otherDrafts->first()) }}">Continue the latest</a>
+                or see <a href="{{ route('nureen.drafts') }}">My Drafts</a>.
+            </p>
+        </div>
+    @endif
+
     <div class="card card-wide">
-        <form method="POST" action="{{ route('ga-extension.store') }}" enctype="multipart/form-data" data-stepper>
+        {{-- Submit posts to store(); "Save draft" posts the same form to
+             saveDraft() (formaction) without the browser's required checks
+             (formnovalidate). A draft being continued carries its id, and
+             the step the student was on is saved with it. --}}
+        <form method="POST" action="{{ route('ga-extension.store') }}" enctype="multipart/form-data" data-stepper
+              data-draft-form data-resume-step="{{ $detail?->draft_step ?? 0 }}">
             @csrf
+            @if ($draft)
+                <input type="hidden" name="draft_id" value="{{ $draft->id }}">
+                <p class="queue-meta" style="margin-top: 0;">
+                    Continuing your draft, last saved {{ \App\Modules\Nureen\Support\Drafts::lastSaved($draft)->format('j M Y, g:ia') }}.
+                </p>
+            @endif
+            <input type="hidden" name="draft_step" value="{{ $detail?->draft_step ?? 0 }}" data-draft-step>
 
             <fieldset class="fstep" data-label="Extension details">
             <p class="fstep-hint">Your current end date, the date you are asking for, and why.</p>
 
             <label for="current_end_date">Current GA End Date</label>
             <input type="date" name="current_end_date" id="current_end_date" required
-                   value="{{ old('current_end_date') }}"
+                   value="{{ old('current_end_date', $detail?->current_end_date?->format('Y-m-d')) }}"
                    class="@error('current_end_date') is-invalid @enderror">
             @error('current_end_date') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="requested_new_end_date">Requested New End Date</label>
             <input type="date" name="requested_new_end_date" id="requested_new_end_date" required
-                   value="{{ old('requested_new_end_date') }}"
+                   value="{{ old('requested_new_end_date', $detail?->requested_new_end_date?->format('Y-m-d')) }}"
                    class="@error('requested_new_end_date') is-invalid @enderror">
             @error('requested_new_end_date') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="reason_for_extension">Reason for Extension</label>
             <textarea name="reason_for_extension" id="reason_for_extension" rows="4" required
-                      class="@error('reason_for_extension') is-invalid @enderror">{{ old('reason_for_extension') }}</textarea>
+                      class="@error('reason_for_extension') is-invalid @enderror">{{ old('reason_for_extension', $detail?->reason_for_extension) }}</textarea>
             @error('reason_for_extension') <p class="field-error">{{ $message }}</p> @enderror
 
             </fieldset>
@@ -75,17 +97,17 @@
                     @case('textarea')
                         <textarea name="additional_info[{{ $key }}]" id="additional_info_{{ $key }}" rows="4"
                                   @required($field['required'] ?? false)
-                                  class="@error('additional_info.'.$key) is-invalid @enderror">{{ old("additional_info.$key") }}</textarea>
+                                  class="@error('additional_info.'.$key) is-invalid @enderror">{{ old("additional_info.$key", $detail?->additional_info[$key] ?? null) }}</textarea>
                         @break
                     @case('date')
                         <input type="date" name="additional_info[{{ $key }}]" id="additional_info_{{ $key }}"
-                               value="{{ old("additional_info.$key") }}"
+                               value="{{ old("additional_info.$key", $detail?->additional_info[$key] ?? null) }}"
                                @required($field['required'] ?? false)
                                class="@error('additional_info.'.$key) is-invalid @enderror">
                         @break
                     @default
                         <input type="text" name="additional_info[{{ $key }}]" id="additional_info_{{ $key }}"
-                               value="{{ old("additional_info.$key") }}"
+                               value="{{ old("additional_info.$key", $detail?->additional_info[$key] ?? null) }}"
                                @required($field['required'] ?? false)
                                class="@error('additional_info.'.$key) is-invalid @enderror">
                 @endswitch
@@ -104,13 +126,19 @@
                 <x-nureen::multi-file-upload
                     :name="$field"
                     :label="$label"
-                    :required="true" />
+                    :required="true"
+                    :existing="$attached->get($label, collect())" />
             @endforeach
             </fieldset>
 
+            {{-- Submit first: form-stepper treats the first submit button
+                 as the form's own and moves it into its navigation. --}}
             <button type="submit">Submit Application</button>
+            <button type="submit" class="btn-secondary" data-save-draft formnovalidate
+                    formaction="{{ $draft ? route('ga-extension.draft.update', $draft) : route('ga-extension.draft.save') }}">Save draft</button>
         </form>
     </div>
 </div>
 @include('core::partials.form-stepper')
+@include('nureen::partials.draft-form-script')
 @endsection

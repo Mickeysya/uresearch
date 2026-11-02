@@ -63,6 +63,9 @@ class ProcessingTimeAnalytics
     {
         $applications = Application::query()
             ->whereIn('module_type', self::MODULES)
+            // A saved draft has never been submitted, so it has no stage
+            // time to report -- excluded by name, not by accident.
+            ->where('status', '!=', Application::STATUS_DRAFT)
             ->with('history')
             ->get();
 

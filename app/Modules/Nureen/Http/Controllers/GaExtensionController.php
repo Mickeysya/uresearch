@@ -15,6 +15,7 @@ use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionInformational;
 use App\Modules\Nureen\Support\ClientCharter;
+use App\Modules\Nureen\Support\Drafts;
 use App\Modules\Nureen\Workflows\GaExtensionWorkflow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,15 +33,117 @@ class GaExtensionController extends Controller
 
     public function create(Request $request)
     {
+        return $this->form($request, null);
+    }
+
+    /** Continue a saved draft: the same form, pre-filled, on the step last saved. */
+    public function editDraft(Request $request, Application $application)
+    {
+        return $this->form($request, Drafts::ownedBy($request->user(), $application, $this->moduleKey()));
+    }
+
+    protected function form(Request $request, ?Application $draft)
+    {
         return view('nureen::ga_extension.form', [
             'student' => $request->user(),
             'requiredDocuments' => config('nureen.ga_extension.required_documents'),
             'additionalFields' => config('nureen.ga_extension.additional_fields'),
+            'draft' => $draft,
+            'detail' => $draft ? GaExtensionDetail::where('application_id', $draft->id)->first() : null,
+            'attached' => $draft ? Drafts::attached($draft) : collect(),
+            // On a fresh form, offer any draft already in progress.
+            'otherDrafts' => $draft ? collect() : Drafts::of($request->user(), $this->moduleKey()),
         ]);
+    }
+
+    /**
+     * "Save draft": creates the draft on the first save, updates it after.
+     * Light validation only -- types, lengths, file types and sizes, never
+     * "required" -- so a half-finished form always saves. Files are attached
+     * through DocumentStore straight away, so they survive between
+     * sessions; ticked "Remove" boxes take files off.
+     */
+    public function saveDraft(Request $request, DocumentStore $documents, ?Application $application = null): RedirectResponse
+    {
+        if ($application) {
+            Drafts::ownedBy($request->user(), $application, $this->moduleKey());
+        }
+
+        $requiredDocuments = config('nureen.ga_extension.required_documents');
+        $additionalFields = config('nureen.ga_extension.additional_fields');
+        $removing = $this->removing($request, $application);
+
+        $rules = [
+            'current_end_date' => ['nullable', 'date'],
+            'requested_new_end_date' => ['nullable', 'date'],
+            'reason_for_extension' => ['nullable', 'string', 'max:2000'],
+            'draft_step' => ['nullable', 'integer', 'min:0', 'max:20'],
+        ];
+        $messages = [];
+
+        foreach ($requiredDocuments as $field => $label) {
+            $rules += $this->documentRules($field, $label, $application, $removing, required: false);
+            $messages += DocumentStore::manyMessages($field);
+        }
+
+        foreach ($additionalFields as $key => $field) {
+            // The same rules as submit, minus "required".
+            $rules["additional_info.{$key}"] = array_map(fn ($rule) => $rule === 'required' ? 'nullable' : $rule, $this->additionalFieldRules($field));
+        }
+
+        $data = $request->validate($rules, $messages);
+
+        $application = DB::transaction(function () use ($request, $data, $application, $requiredDocuments, $additionalFields, $removing, $documents) {
+            $application ??= Application::create([
+                'student_id' => $request->user()->id,
+                'submitted_by_id' => $request->user()->id,
+                'module_type' => $this->moduleKey(),
+                'status' => Application::STATUS_DRAFT,
+            ]);
+
+            GaExtensionDetail::updateOrCreate(['application_id' => $application->id], [
+                'current_end_date' => $data['current_end_date'] ?? null,
+                'requested_new_end_date' => $data['requested_new_end_date'] ?? null,
+                'reason_for_extension' => $data['reason_for_extension'] ?? null,
+                'additional_info' => $additionalFields === [] ? null : ($data['additional_info'] ?? []),
+                'draft_step' => $data['draft_step'] ?? null,
+            ]);
+
+            Drafts::removeDocuments($application, $removing);
+
+            foreach ($requiredDocuments as $field => $label) {
+                if ($files = $request->file($field)) {
+                    $documents->attachMany($application, $files, $label);
+                }
+            }
+
+            // "Last saved" is the draft row's updated_at.
+            $application->touch();
+
+            return $application;
+        });
+
+        return redirect()
+            ->route('ga-extension.draft.edit', $application)
+            ->with('status', 'Draft saved at '.now()->format('g:ia').'. Continue it any time from My Drafts.');
+    }
+
+    /** Delete a draft: its stored files, its detail row and the application row. */
+    public function destroyDraft(Request $request, Application $application): RedirectResponse
+    {
+        Drafts::delete(Drafts::ownedBy($request->user(), $application, $this->moduleKey()), GaExtensionDetail::class);
+
+        return redirect()->route('nureen.drafts')->with('status', 'Draft deleted.');
     }
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
+        // Submitting a saved draft reuses it rather than creating a second
+        // application -- only the student's own, and only while still a draft.
+        $draft = $request->filled('draft_id')
+            ? Drafts::ownedBy($request->user(), Application::findOrFail((int) $request->input('draft_id')), $this->moduleKey())
+            : null;
+
         // The first stage is addressed to the student's own named
         // supervisor, so there has to be one -- same rule as
         // CertificationController::store().
@@ -50,6 +153,7 @@ class GaExtensionController extends Controller
 
         $requiredDocuments = config('nureen.ga_extension.required_documents');
         $additionalFields = config('nureen.ga_extension.additional_fields');
+        $removing = $this->removing($request, $draft);
 
         $rules = [
             'current_end_date' => ['required', 'date'],
@@ -66,9 +170,10 @@ class GaExtensionController extends Controller
         // application may reach CGS, so each required type is enforced
         // separately rather than as one undifferentiated upload -- see
         // DocumentStore::manyRules()/manyMessages() for the shared
-        // count/size/type limits and their matching messages.
+        // count/size/type limits and their matching messages. A type the
+        // draft already has a file for is satisfied by that file.
         foreach ($requiredDocuments as $field => $label) {
-            $rules += DocumentStore::manyRules($field);
+            $rules += $this->documentRules($field, $label, $draft, $removing, required: true);
             $messages["{$field}.required"] = "Attach at least one file for \"{$label}\".";
             $messages += DocumentStore::manyMessages($field);
         }
@@ -82,19 +187,26 @@ class GaExtensionController extends Controller
 
         $data = $request->validate($rules, $messages);
 
-        $application = DB::transaction(function () use ($request, $data, $requiredDocuments, $additionalFields, $engine, $documents) {
-            $application = Application::create([
-                'student_id' => $request->user()->id,
-                'submitted_by_id' => $request->user()->id,
-                'module_type' => $this->moduleKey(),
-                'status' => Application::STATUS_DRAFT,
-            ]);
+        $application = DB::transaction(function () use ($request, $data, $draft, $removing, $requiredDocuments, $additionalFields, $engine, $documents) {
+            if ($draft) {
+                // Locked and re-checked, so a double-click can never submit
+                // the same draft twice.
+                $application = Application::whereKey($draft->id)->lockForUpdate()->first();
+                abort_unless($application?->status === Application::STATUS_DRAFT, 409, 'This draft has already been submitted.');
+            } else {
+                $application = Application::create([
+                    'student_id' => $request->user()->id,
+                    'submitted_by_id' => $request->user()->id,
+                    'module_type' => $this->moduleKey(),
+                    'status' => Application::STATUS_DRAFT,
+                ]);
+            }
 
-            GaExtensionDetail::create([
-                'application_id' => $application->id,
+            GaExtensionDetail::updateOrCreate(['application_id' => $application->id], [
                 // Snapshotted like Certification's supervisor_id: if the
                 // student's supervisor changes later, this application
-                // stays with whoever it was addressed to.
+                // stays with whoever it was addressed to -- at SUBMISSION,
+                // not when the draft was first saved.
                 'supervisor_id' => $request->user()->supervisor_id,
                 'current_end_date' => $data['current_end_date'],
                 'requested_new_end_date' => $data['requested_new_end_date'],
@@ -105,10 +217,15 @@ class GaExtensionController extends Controller
                 // config must never alter which chain an already-submitted
                 // application is running.
                 'final_approver_snapshot' => config('nureen.ga_extension.final_approver'),
+                'draft_step' => null,
             ]);
 
+            Drafts::removeDocuments($application, $removing);
+
             foreach ($requiredDocuments as $field => $label) {
-                $documents->attachMany($application, $request->file($field), $label);
+                if ($files = $request->file($field)) {
+                    $documents->attachMany($application, $files, $label);
+                }
             }
 
             return $engine->submit($application);
@@ -117,6 +234,38 @@ class GaExtensionController extends Controller
         return redirect()
             ->route('applications.index')
             ->with('status', "GA Extension application #{$application->id} submitted.");
+    }
+
+    /**
+     * One document type's rules. Required on submit unless the draft
+     * already has a file of that type (after removals); never required on
+     * a draft save. The 5-file limit counts the files already attached.
+     *
+     * @param  array<int, int>  $removing
+     */
+    protected function documentRules(string $field, string $label, ?Application $draft, array $removing, bool $required): array
+    {
+        $already = $draft ? (Drafts::attached($draft, $removing)->get($label)?->count() ?? 0) : 0;
+        $rules = DocumentStore::manyRules($field, $required && $already === 0);
+        $rules[$field][] = function (string $attribute, $value, \Closure $fail) use ($already) {
+            if ($already + count((array) $value) > DocumentStore::MULTI_MAX_FILES) {
+                $fail('You may attach at most '.DocumentStore::MULTI_MAX_FILES." files of this type ({$already} already attached).");
+            }
+        };
+
+        return $rules;
+    }
+
+    /** The ids ticked "Remove" on the form -- only meaningful on a draft. @return array<int, int> */
+    protected function removing(Request $request, ?Application $draft): array
+    {
+        if (! $draft) {
+            return [];
+        }
+
+        $ids = $request->validate(['remove_documents' => ['nullable', 'array'], 'remove_documents.*' => ['integer']])['remove_documents'] ?? [];
+
+        return array_map('intval', $ids);
     }
 
     public function queue(Request $request, WorkflowEngine $engine, ClientCharter $charter)
