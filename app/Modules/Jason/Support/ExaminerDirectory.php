@@ -77,6 +77,31 @@ final class ExaminerDirectory
         return $panel;
     }
 
+    /**
+     * Everyone on the list, for a candidate to pick their examiners from.
+     *
+     * Grouped by kind, because the submission names one of each and a
+     * single list of everybody would have to be read twice.
+     *
+     * @return array<string, \Illuminate\Support\Collection>
+     */
+    public static function all(): array
+    {
+        if (! self::available()) {
+            return ['internal' => collect(), 'external' => collect()];
+        }
+
+        $rows = DB::table(self::POOL)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'department', 'faculty', 'institution', 'type']);
+
+        return [
+            'internal' => $rows->where('type', 'internal')->values(),
+            'external' => $rows->where('type', 'external')->values(),
+        ];
+    }
+
     /** @return array<string, string>|null */
     public static function byId(int|string $id): ?array
     {

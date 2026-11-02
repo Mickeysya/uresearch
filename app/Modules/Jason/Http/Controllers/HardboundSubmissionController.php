@@ -15,6 +15,7 @@ use App\Modules\Jason\Models\HardboundExaminerSignature;
 use App\Modules\Jason\Models\HardboundSignature;
 use App\Modules\Jason\Models\HardboundSubmissionDetail;
 use App\Modules\Jason\Notifications\HardboundSubmissionRejected;
+use App\Modules\Jason\Support\ExaminerDirectory;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\UnauthorizedException;
+use Illuminate\Validation\Rule;
 
 class HardboundSubmissionController extends Controller
 {
@@ -219,6 +221,7 @@ class HardboundSubmissionController extends Controller
             'filed' => $filed,
             'filedDetails' => HardboundSubmissionDetail::whereIn('application_id', $filed->pluck('id'))
                 ->get()->keyBy('application_id'),
+            'examiners' => ExaminerDirectory::all(),
         ]);
     }
 
@@ -253,6 +256,7 @@ class HardboundSubmissionController extends Controller
             'awaitingDetails' => collect(),
             'filed' => collect(),
             'filedDetails' => collect(),
+            'examiners' => ExaminerDirectory::all(),
         ]);
     }
 
@@ -322,19 +326,18 @@ class HardboundSubmissionController extends Controller
                 ->with('error', 'Upload your signature first. Approving stamps it onto the Confirmation of Correction to Thesis.');
         }
 
-        // CGS accepts a form all three signatories have signed. The examiner
-        // signs through an emailed link rather than a queue, so without this
-        // the submission could complete with their block empty -- which is
-        // what the form is for. Only enforced where there is an examiner to
-        // chase: a candidate whose panel was appointed off-system has none
-        // on record, and blocking CGS on somebody the portal cannot name
-        // would strand the submission.
-        if (! $returning && $stage?->key === self::FINAL_STAGE
-            && $this->appointedExaminers($application)->isNotEmpty()
+        // The Chairman certifies a form the examiner has already signed, so
+        // the chain waits here. The examiner signs through an emailed link
+        // rather than a queue, so nothing else would notice. Only enforced
+        // where the candidate named one: a submission that names nobody
+        // cannot be waiting on anybody, and blocking it would strand them.
+        if (! $returning && $stage?->key === 'chair'
+            && $this->namedExaminers($application) !== []
             && ! HardboundExaminerSignature::forApplication($application->id)) {
             return back()->with('error',
                 'The examiner has not signed the Confirmation yet. They were emailed a signing link when the '
-                .'Chairman approved; resend it from this queue, or ask CGS to collect the signature on paper.');
+                .'supervisor confirmed the corrections; resend it from this queue, or ask CGS to collect the '
+                .'signature on paper.');
         }
 
         try {
@@ -350,9 +353,11 @@ class HardboundSubmissionController extends Controller
             $this->issueConfirmation($application);
         }
 
-        // The Chairman is the last of the two signatories with an account.
-        // With both of them on the form, the examiner is asked for theirs.
-        if (! $returning && $stage?->key === 'chair') {
+        // The examiner countersigns between the Supervisor and the Chairman:
+        // the supervisor confirms the corrections were made, the examiner who
+        // asked for them agrees, and only then does it reach the viva
+        // chairman. So they are asked the moment the Supervisor approves.
+        if (! $returning && $stage?->key === 'supervisor') {
             $this->inviteExaminers($application);
         }
 
@@ -400,6 +405,9 @@ class HardboundSubmissionController extends Controller
 
     protected function validateSubmission(Request $request, bool $resubmission = false): array
     {
+        $lists = ExaminerDirectory::all();
+        $anyExaminers = $lists['internal']->isNotEmpty() || $lists['external']->isNotEmpty();
+
         return $request->validate([
             'thesis_title' => ['required', 'string', 'max:500'],
             'programme' => ['required', 'string', 'max:150'],
@@ -415,6 +423,25 @@ class HardboundSubmissionController extends Controller
             'passport_no' => ['nullable', 'string', 'max:40'],
             'date_of_birth' => ['nullable', 'date', 'before:today'],
             'supervisor_name' => ['required', 'string', 'max:150'],
+            // The viva happens before the hardbound submission, so the
+            // candidate knows who examined them and says so. At least one
+            // is required: the Confirmation has a single examiner block and
+            // either of them signing fills it.
+            //
+            // Unless there is nobody to name. On a database where the
+            // nomination chain's records are absent or empty the lists are
+            // empty too, and refusing the submission would leave the
+            // candidate unable to file at all over a list they do not keep.
+            'internal_examiner_id' => [
+                'nullable',
+                ...($anyExaminers ? ['required_without:external_examiner_id'] : []),
+                Rule::exists(ExaminerDirectory::POOL, 'id')->where('type', 'internal'),
+            ],
+            'external_examiner_id' => [
+                'nullable',
+                ...($anyExaminers ? ['required_without:internal_examiner_id'] : []),
+                Rule::exists(ExaminerDirectory::POOL, 'id')->where('type', 'external'),
+            ],
             // The Confirmation of Correction (UTP/CGS/017A) is generated from
             // these; the approvers sign it as it moves.
             'viva_date' => ['required', 'date', 'before_or_equal:today'],
@@ -424,6 +451,10 @@ class HardboundSubmissionController extends Controller
             'viva_date.required' => 'Enter the date of your viva voce examination.',
             'viva_date.before_or_equal' => 'The viva date cannot be in the future.',
             'date_of_birth.before' => 'A date of birth has to be in the past.',
+            'internal_examiner_id.required_without' => 'Name at least one of your examiners.',
+            'external_examiner_id.required_without' => 'Name at least one of your examiners.',
+            'internal_examiner_id.exists' => 'That internal examiner is not in the examiner records.',
+            'external_examiner_id.exists' => 'That external examiner is not in the examiner records.',
             'response_to_comments.required' => 'Explain what you changed in response to the comments.',
         ]);
     }
@@ -449,7 +480,20 @@ class HardboundSubmissionController extends Controller
                 'status' => Application::STATUS_DRAFT,
             ]);
 
-            HardboundSubmissionDetail::create([
+            // Snapshot beside the id: a record edited later must not
+            // rewrite a submission already filed, nor break a link sent.
+            $examiners = [];
+
+            foreach (['internal', 'external'] as $slot) {
+                $id = $data[$slot.'_examiner_id'] ?? null;
+                $known = $id ? ExaminerDirectory::byId($id) : null;
+
+                $examiners[$slot.'_examiner_id'] = $known ? $id : null;
+                $examiners[$slot.'_examiner_name'] = $known['examiner_name'] ?? null;
+                $examiners[$slot.'_examiner_email'] = $known['examiner_email'] ?? null;
+            }
+
+            HardboundSubmissionDetail::create($examiners + [
                 'application_id' => $application->id,
                 'thesis_title' => $data['thesis_title'],
                 'matric_no' => $student->matric_no ?? '',
@@ -513,29 +557,19 @@ class HardboundSubmissionController extends Controller
     }
 
     /**
-     * The examiners the Dean appointed for this candidate, from the
-     * Appointment Letter chain.
+     * The examiners this candidate named on their submission.
      *
-     * The same people sign the Confirmation, so they are read back rather
-     * than retyped -- and read from an approved appointment only, because an
-     * examiner whose appointment is still moving has not been appointed yet.
+     * Read from the submission's own rows rather than from the appointment
+     * pack: the viva has happened by now, so the candidate knows which two
+     * examiners actually examined them, and a candidate whose appointment
+     * was handled off-system can still name them.
      *
-     * @return \Illuminate\Support\Collection<int, AppointmentExaminer>
+     * @return array<string, array{name: string, email: string}>
      */
-    protected function appointedExaminers(Application $application)
+    protected function namedExaminers(Application $application): array
     {
-        if (! $application->student_id) {
-            return collect();
-        }
-
-        $appointments = Application::where('module_type', 'appointment_letter')
-            ->where('student_id', $application->student_id)
-            ->where('status', Application::STATUS_APPROVED)
-            ->pluck('id');
-
-        return AppointmentExaminer::whereIn('application_id', $appointments)
-            ->orderByRaw("CASE WHEN examiner_type = 'internal' THEN 0 ELSE 1 END")
-            ->get();
+        return HardboundSubmissionDetail::where('application_id', $application->id)
+            ->first()?->namedExaminers() ?? [];
     }
 
     /**
@@ -553,25 +587,26 @@ class HardboundSubmissionController extends Controller
      */
     protected function inviteExaminers(Application $application): void
     {
-        $examiners = $this->appointedExaminers($application);
+        $examiners = $this->namedExaminers($application);
 
-        if ($examiners->isEmpty() || HardboundExaminerSignature::forApplication($application->id)) {
+        if ($examiners === [] || HardboundExaminerSignature::forApplication($application->id)) {
             return;
         }
 
         $detail = HardboundSubmissionDetail::where('application_id', $application->id)->first();
 
-        foreach ($examiners as $examiner) {
+        foreach ($examiners as $slot => $examiner) {
             $url = URL::temporarySignedRoute(
                 'hardbound.examiner.sign',
                 now()->addDays(HardboundExaminerSignature::LINK_DAYS),
-                ['application' => $application->id, 'examiner' => $examiner->id],
+                ['application' => $application->id, 'slot' => $slot],
             );
 
             try {
-                Mail::to($examiner->examiner_email)->send(new ExaminerSignatureRequest(
+                Mail::to($examiner['email'])->send(new ExaminerSignatureRequest(
                     $application,
-                    $examiner,
+                    $examiner['name'],
+                    $slot,
                     $url,
                     $application->student?->name ?? 'the candidate',
                     $detail?->thesis_title ?? '',
@@ -589,13 +624,14 @@ class HardboundSubmissionController extends Controller
      * `signed` middleware rejects a tampered or expired one before this
      * runs.
      */
-    public function examinerSignForm(Request $request, Application $application, AppointmentExaminer $examiner)
+    public function examinerSignForm(Request $request, Application $application, string $slot)
     {
-        $this->examinerMaySign($application, $examiner);
+        $examiner = $this->examinerMaySign($application, $slot);
 
         return view('jason::hardbound.examiner_sign', [
             'application' => $application,
             'examiner' => $examiner,
+            'slot' => $slot,
             'student' => $application->student,
             'detail' => HardboundSubmissionDetail::where('application_id', $application->id)->first(),
             'signed' => HardboundExaminerSignature::forApplication($application->id),
@@ -605,13 +641,13 @@ class HardboundSubmissionController extends Controller
     /**
      * Takes the examiner's signature and re-issues the Confirmation with it.
      */
-    public function storeExaminerSignature(Request $request, Application $application, AppointmentExaminer $examiner)
+    public function storeExaminerSignature(Request $request, Application $application, string $slot)
     {
-        $this->examinerMaySign($application, $examiner);
+        $examiner = $this->examinerMaySign($application, $slot);
 
         if ($existing = HardboundExaminerSignature::forApplication($application->id)) {
             return back()->with('warning',
-                'This form has already been signed by '.($existing->examiner?->examiner_name ?? 'an examiner').'.');
+                'This form has already been signed by '.($existing->examiner_name ?: 'the other examiner').'.');
         }
 
         $request->validate(['signature' => HardboundExaminerSignature::rules()]);
@@ -622,7 +658,9 @@ class HardboundSubmissionController extends Controller
 
         HardboundExaminerSignature::create([
             'application_id' => $application->id,
-            'appointment_examiner_id' => $examiner->id,
+            'examiner_slot' => $slot,
+            'examiner_name' => $examiner['name'],
+            'examiner_email' => $examiner['email'],
             'path' => $path,
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $file->getMimeType(),
@@ -636,28 +674,33 @@ class HardboundSubmissionController extends Controller
     }
 
     /**
-     * The checks that stand behind the signed URL: the link has to belong to
-     * this module, to this application, and to a submission that has
-     * actually reached the examiner.
+     * The checks that stand behind the signed URL, and the examiner it was
+     * issued for.
+     *
+     * The link names a slot on this submission rather than a row in anybody
+     * else's list, so one examiner's link cannot sign as the other and a
+     * link outlives nothing but the submission itself.
+     *
+     * @return array{name: string, email: string}
      */
-    protected function examinerMaySign(Application $application, AppointmentExaminer $examiner): void
+    protected function examinerMaySign(Application $application, string $slot): array
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
 
-        abort_unless(
-            $this->appointedExaminers($application)->contains('id', $examiner->id),
-            403,
-            'That signing link is not for this submission.'
-        );
+        $examiner = $this->namedExaminers($application)[$slot] ?? null;
 
-        // Before the Chairman approves there is nothing to countersign, and
-        // after CGS accepts it the form is closed.
+        abort_unless($examiner !== null, 403, 'That signing link is not for this submission.');
+
+        // Before the supervisor confirms there is nothing to countersign,
+        // and once the Chairman has certified it the form has moved on.
         abort_unless(
             $application->status === Application::STATUS_PENDING
-                && $application->current_stage === self::FINAL_STAGE,
+                && $application->current_stage === 'chair',
             403,
             'This form is not waiting for an examiner signature.'
         );
+
+        return $examiner;
     }
 
     /**
@@ -690,7 +733,7 @@ class HardboundSubmissionController extends Controller
         // blank, for a physical signature and official stamp.
         if ($examiner = HardboundExaminerSignature::forApplication($application->id)) {
             $signatures['examiner'] = [
-                'name' => $examiner->examiner?->examiner_name ?? '—',
+                'name' => $examiner->examiner_name ?: 'Examiner',
                 'date' => $examiner->signed_at,
                 'image' => $examiner->dataUri(),
             ];

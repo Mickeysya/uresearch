@@ -154,6 +154,47 @@
             @endif
             </fieldset>
 
+            <fieldset class="fstep" data-label="Your examiners">
+            <p class="fstep-hint">Who examined you at your viva voce. They are asked to
+               countersign the Confirmation of Correction once your supervisor has
+               confirmed the corrections, and before it reaches the viva chairman.</p>
+
+            @foreach (['internal' => 'Internal Examiner', 'external' => 'External Examiner'] as $slot => $label)
+                @php($list = $examiners[$slot] ?? collect())
+
+                <label for="{{ $slot }}_examiner_id">{{ $label }}</label>
+
+                @if ($list->isEmpty())
+                    <p class="field-hint">
+                        No {{ $slot }} examiners are on record yet, so this one cannot be named.
+                    </p>
+                @else
+                    <input type="search" class="examiner-filter" data-for="{{ $slot }}_examiner_id"
+                           autocomplete="off" placeholder="Search {{ $slot }} examiners by name or institution"
+                           aria-label="Search {{ $label }}">
+
+                    <select name="{{ $slot }}_examiner_id" id="{{ $slot }}_examiner_id"
+                            class="examiner-select @error($slot.'_examiner_id') is-invalid @enderror">
+                        <option value="">Not naming an {{ $slot }} examiner</option>
+                        @foreach ($list as $examiner)
+                            <option value="{{ $examiner->id }}"
+                                    @selected(old($slot.'_examiner_id', $detail?->{$slot.'_examiner_id'}) == $examiner->id)>
+                                {{ $examiner->name }}@if ($examiner->institution || $examiner->department), {{ $examiner->institution ?: $examiner->department }}@endif
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="examiner-count field-hint" data-for="{{ $slot }}_examiner_id"></p>
+                @endif
+
+                @error($slot.'_examiner_id') <p class="field-error">{{ $message }}</p> @enderror
+            @endforeach
+
+            <p class="field-hint">
+                Name both where you can. The Confirmation has one examiner signature block, so
+                whichever of them signs first releases the submission to the chairman.
+            </p>
+            </fieldset>
+
             <fieldset class="fstep" data-label="Confirmation of Correction">
             <p class="fstep-hint">Fills UTP/CGS/017A. Your supervisor and the viva
                chairman sign this one electronically as they approve, so you do not
@@ -180,3 +221,48 @@
 
 @include('core::partials.form-stepper')
 @endsection
+
+@push('scripts')
+{{-- @cspNonce is not optional: script-src is 'self' plus this request's
+     nonce, with no unsafe-inline, so without it the browser refuses to run
+     this and the search boxes silently do nothing. --}}
+<script @cspNonce>
+    (function () {
+        // The whole list is in the markup; this only hides what does not
+        // match, so nothing depends on a round trip and the posted value is
+        // still a plain examiner id.
+        document.querySelectorAll('.examiner-filter').forEach(function (box) {
+            var select = document.getElementById(box.dataset.for);
+            var count = document.querySelector('.examiner-count[data-for="' + box.dataset.for + '"]');
+            if (! select) return;
+
+            function apply() {
+                var needle = box.value.trim().toLowerCase();
+                var shown = 0;
+
+                select.querySelectorAll('option').forEach(function (option) {
+                    if (option.value === '') return;
+                    var match = needle === '' || option.textContent.toLowerCase().includes(needle);
+                    option.hidden = ! match;
+                    option.disabled = ! match;
+                    if (match) shown++;
+                });
+
+                // A name filtered out from under a choice must not stay chosen.
+                var chosen = select.selectedOptions[0];
+                if (chosen && chosen.value !== '' && chosen.hidden) select.value = '';
+
+                if (! count) return;
+                count.textContent = needle === ''
+                    ? shown + ' on record.'
+                    : (shown === 0
+                        ? 'No examiner matches \u201c' + needle + '\u201d.'
+                        : shown + ' match \u201c' + needle + '\u201d.');
+            }
+
+            box.addEventListener('input', apply);
+            apply();
+        });
+    })();
+</script>
+@endpush

@@ -15,6 +15,11 @@ use Illuminate\Support\Facades\Storage;
  * every form they will ever sign. An examiner has no account, signs one
  * form, and reaches it through an emailed link -- so this is per
  * application, not per person.
+ *
+ * It records which slot signed and who they were at the time, rather than
+ * pointing at a row in anybody's examiner list: the candidate names their
+ * examiners on the submission, and a list edited afterwards must not change
+ * what a signed form says.
  */
 class HardboundExaminerSignature extends Model
 {
@@ -29,7 +34,8 @@ class HardboundExaminerSignature extends Model
     public const LINK_DAYS = 30;
 
     protected $fillable = [
-        'application_id', 'appointment_examiner_id', 'path', 'original_name', 'mime_type', 'signed_at',
+        'application_id', 'examiner_slot', 'examiner_name', 'examiner_email',
+        'path', 'original_name', 'mime_type', 'signed_at',
     ];
 
     protected function casts(): array
@@ -40,12 +46,6 @@ class HardboundExaminerSignature extends Model
     public function application(): BelongsTo
     {
         return $this->belongsTo(Application::class);
-    }
-
-    /** The appointed examiner who signed; carries their name and email. */
-    public function examiner(): BelongsTo
-    {
-        return $this->belongsTo(AppointmentExaminer::class, 'appointment_examiner_id');
     }
 
     public static function forApplication(int $applicationId): ?self
