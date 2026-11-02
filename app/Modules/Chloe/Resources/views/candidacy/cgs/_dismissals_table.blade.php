@@ -17,7 +17,7 @@
         <div class="wca-table-wrap">
             <table class="wca-table is-stack is-compact">
                 <thead><tr>
-                    <th>Student</th><th>Programme</th><th>Department</th><th>Expiry date</th><th class="wca-num">Days since expiry</th><th>Last appeal outcome</th><th>Exported on</th><th></th>
+                    <th>Student</th><th>Programme</th><th>Department</th><th>Expiry date</th><th class="wca-num">Days since expiry</th><th>Last appeal outcome</th><th>Exported on</th><th>Action</th>
                 </tr></thead>
                 <tbody>
                 @foreach ($rows as $r)
@@ -30,7 +30,7 @@
                         <td class="wca-num" data-label="Days since expiry">{{ $r['daysSince'] }}</td>
                         <td data-label="Last appeal outcome">{{ L::OUTCOMES[$r['outcome']] }}</td>
                         <td class="wca-nowrap" data-label="Exported on">{{ $r['exportedAt'] ? $r['exportedAt']->format('j M Y, H:i') : '—' }}</td>
-                        <td class="wca-nowrap" data-label="Open">@if ($url)<a class="wca-btn is-small" href="{{ $url }}">View student</a>@else<span class="wca-muted wca-small">No appeal</span>@endif</td>
+                        <td class="wca-nowrap" data-label="Action">@if ($url)<a class="wca-btn is-row" href="{{ $url }}">View student</a>@else<span class="wca-btn is-row" aria-disabled="true" role="link" title="This student has no appeal to open">View student</span>@endif</td>
                     </tr>
                 @endforeach
                 </tbody>

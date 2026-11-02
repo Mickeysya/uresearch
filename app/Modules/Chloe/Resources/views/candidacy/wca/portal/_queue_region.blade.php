@@ -31,7 +31,7 @@
                     @elseif ($tab === 'ongoing')<th>Current step</th><th>Last updated</th>
                     @elseif ($tab === 'history')<th>My decision</th><th>Final outcome</th>
                     @else<th>My decision</th><th>Status</th>@endif
-                    <th></th>
+                    <th>Action</th>
                 </tr></thead>
                 <tbody>
                 @foreach ($rows as $a)
@@ -60,7 +60,7 @@
                             <td data-label="My decision">{{ ucfirst($mine?->decision ?? '—') }}<br><span class="wca-muted wca-small">{{ P::date($mine?->decided_at, 'j M Y, H:i') }}</span></td>
                             <td data-label="Status">@include('chloe::candidacy.wca._status_badge', ['appeal' => $a])</td>
                         @endif
-                        <td class="wca-nowrap" data-label="Open"><a class="wca-btn is-small is-primary" href="{{ $detail($a) }}">{{ $tab === 'pending' ? 'Review' : 'View details' }}</a></td>
+                        <td class="wca-nowrap" data-label="Action"><a class="wca-btn is-row is-primary" href="{{ $detail($a) }}">{{ $tab === 'pending' ? 'Review' : 'View details' }}</a></td>
                     </tr>
                 @endforeach
                 </tbody>

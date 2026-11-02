@@ -75,7 +75,7 @@
                 <table class="wca-table is-stack is-compact">
                     <thead><tr>
                         <th>Appeal No.</th><th>Submitted</th><th class="wca-num">Requested (months)</th><th class="wca-num">Approved (months)</th>
-                        <th>Status</th><th>Current step (who)</th><th>Last updated</th><th></th>
+                        <th>Status</th><th>Current step (who)</th><th>Last updated</th><th>Action</th>
                     </tr></thead>
                     <tbody>
                     @foreach ($appeals as $appeal)
@@ -87,11 +87,11 @@
                             <td data-label="Status">@include('chloe::candidacy.wca._status_badge', ['appeal' => $appeal])</td>
                             <td data-label="Current step (who)">{{ P::currentStep($appeal) }}</td>
                             <td class="wca-nowrap" data-label="Last updated">{{ P::date($appeal->last_action_at ?? $appeal->updated_at, 'j M Y, H:i') }}</td>
-                            <td class="wca-nowrap" data-label="Details">
+                            <td class="wca-nowrap" data-label="Action">
                                 @if ($appeal->isDraft())
-                                    <a href="{{ route('candidacy.appeals.draft', ['step' => 1]) }}">Continue</a>
+                                    <a class="wca-btn is-row is-primary" href="{{ route('candidacy.appeals.draft', ['step' => 1]) }}">Continue</a>
                                 @else
-                                    <a href="{{ route('candidacy.appeals.show', ['appeal' => $appeal->id, 'return' => '/candidacy']) }}">View full details &rarr;</a>
+                                    <a class="wca-btn is-row is-long" href="{{ route('candidacy.appeals.show', ['appeal' => $appeal->id, 'return' => '/candidacy']) }}">View full details &rarr;</a>
                                 @endif
                             </td>
                         </tr>
