@@ -11,7 +11,7 @@ diff alone.
 ## 2026-11-06 — GA Extension Form generated instead of uploaded (UTP/CGS/001-A2)
 
 **Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only. There was no
-Core edit; one Core proposal is in SHARED_CHANGES.md §15.
+Core edit; one Core proposal is in SHARED_CHANGES.md §12.
 
 ### The ask
 
@@ -111,7 +111,7 @@ Also:
   For the student, the link is on the draft form ("Download the form
   (PDF)" saves first, then auto-downloads) and in a list of their
   applications on `/ga-extension/new`. Core's application page has no slot
-  for it; SHARED §15 proposes one.
+  for it; SHARED §12 proposes one.
 
 ### What changed
 
@@ -152,7 +152,7 @@ Also:
   document types. Their fixed dates became relative where a fixed date
   would one day be backdated.
 - **Docs:** README ("The GA Extension Form, generated" and test rows) and
-  SHARED_CHANGES §15.
+  SHARED_CHANGES §12.
 
 ### Bugs caught
 
@@ -363,7 +363,7 @@ Also:
 ## 2026-11-04 — Save draft for GA Extension and GA/GRA Certification
 
 **Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit;
-Core follow-ups are in SHARED_CHANGES.md §14.
+Core follow-ups are in SHARED_CHANGES.md §11.
 
 ### The ask
 
@@ -384,7 +384,7 @@ half-finished GA Extension or Certification request and come back later.
   submitted it within one transaction. Making drafts persist exposes them
   to Core: Track My Applications lists every application (a draft would
   show the first stage as "current"), and the student dashboard panel
-  labels it "Pending Approval". Core is out of bounds, so SHARED §14 a–c.
+  labels it "Pending Approval". Core is out of bounds, so SHARED §11 a–c.
 - **Approver queues already exclude drafts:** they use
   `WorkflowEngine::queue()`, which reads pending rows only.
   `StalledApplicationReminder`, the supervision reminder, the Client
@@ -393,8 +393,8 @@ half-finished GA Extension or Certification request and come back later.
   every application; it now excludes drafts by name.
 - **`summary()` would crash on a draft:** both workflows assumed the dates
   were set, and Core's tracking page calls it.
-- **`DocumentStore` can't remove a file** (SHARED §14e).
-- **`form-stepper` can't open on a given step** (SHARED §14d). It also
+- **`DocumentStore` can't remove a file** (SHARED §11e).
+- **`form-stepper` can't open on a given step** (SHARED §11d). It also
   treats the FIRST submit button in the form as "Submit" and moves it, so
   Save draft must come after Submit, and per-file "Remove" has to be a
   checkbox, not a submit button inside a step.
@@ -467,7 +467,7 @@ half-finished GA Extension or Certification request and come back later.
   - `GaExtensionDetail` and `GaCertificationDetail` fillable;
   - both workflows' `summary()`; `GaExtensionWorkflow::links()`;
   - `ProcessingTimeAnalytics`;
-  - README and SHARED_CHANGES §14.
+  - README and SHARED_CHANGES §11.
 
 ### Bugs caught
 
@@ -501,6 +501,147 @@ half-finished GA Extension or Certification request and come back later.
 - **Certification draft:** saved and pre-filled correctly, then deleted.
   Draft #186 (an earlier interrupted run) was also deleted through the
   Delete button.
+
+---
+
+## 2026-11-02 — Track My Applications redesign (module-neutral tabs, filters and cards)
+
+**Branch:** `feature/track-applications-redesign`, uncommitted. **Changes Core**
+(every file is listed in `SHARED_CHANGES.md` §10).
+
+### The ask
+
+Redesign the student's Track My Applications page to the design in
+`docs/design/track-my-applications.png`. Requirements:
+- **Tabs:** grouped by a category each module declares about itself.
+- **Status filters:** All, Needs you, In progress, Approved, Rejected.
+- **Cards:** each with a stepper built from the application's own chain,
+  a plain footer sentence and the right buttons.
+- **State:** tab and filter kept in the URL; 20 cards a page.
+- **Module-neutral:** Core names no module.
+- **Shared calendar:** move the working-day calendar into Core with no
+  date changes.
+
+### Key findings before writing any code
+
+- **The old page** listed applications with no grouping and no paging; the
+  shared `<x-core::stepper>` is also used by `applications.show` and
+  Chloe's appeal page, so it is left alone.
+- **No calendar in Core:** the only working-day calendar was Nureen's.
+- **Download tracking exists:** Core's document download logs every
+  "viewed", so "letter not yet opened" needs no new table.
+- **No resubmission flag:** only Chloe's Study Candidacy Appeal can be
+  returned to the student, and no module says a rejection expects
+  resubmission.
+- **Tones by hash collide:** no hash of the five category names gives five
+  different tones (both crc32 and md5 collided), so the tones live in a
+  small config map instead.
+
+### The design
+
+- **Tabs:**
+  - **Declaration:** `public const CATEGORY = '<key>';` on the workflow
+    class, read by `ModuleRegistry::categoryFor()`.
+  - **Labels, tones and icons:** `config/tracking.php` (key → label, fixed
+    tone, default icon). Renaming a tab is a config edit; a key not listed
+    still gets a tab (headline label, neutral tone); no CATEGORY means
+    "Other".
+  - **Display:** only tabs with applications are shown; they wrap, with no
+    scrollbar.
+- **Two passes** (`Core\Services\ApplicationTracker`):
+  - **Light pass, every application:** category, status, needs-you and
+    last activity, for the counts and filters.
+  - **Full build, the page's 20 cards only:** stepper, expected date,
+    overdue flag, sentence and buttons.
+- **The stepper:** "Submitted", then `WorkflowEngine::progress()`, which
+  reads the module's `stages($application)` and therefore its stored
+  snapshot.
+  - **Done steps:** the decision and date from `approval_history`
+    ("Endorsed 13 Oct").
+  - **Current step:** "Waiting N working days" (or "Since <date>" in its
+    first two days) on the shared calendar.
+  - **Rejected step:** a cross, and the chain stops there.
+  - **Approved cards:** the stepper is left off, as in the design.
+  - **Accessibility:** an `<ol>` with screen-reader text such as "Step 3 of
+    4, current: …"; vertical below 720px.
+- **Optional contracts:**
+  - `DescribesApplicationProgress` (sentence, actions, reference,
+    needs_student, resubmission_expected);
+  - `SuppliesOverdueStatus` (kept separate from `SuppliesDecisionDates`);
+  - the existing `SuppliesDecisionDates` (expected date).
+
+  Core adds the calm overdue note itself, so a module's own sentence cannot
+  drop it.
+- **"Needs you":**
+  - status `returned`;
+  - `needs_student` from the module (Nureen: an issued, unrevoked letter the
+    student has not opened);
+  - a rejection only with `resubmission_expected`.
+
+  The card gets a warm border and a "NEEDS YOU" badge in words, and the
+  module's action is the primary button.
+- **Calendar:** `Core\Support\WorkingDayCalendar` with `config/calendar.php`
+  (`holidays => []`). Nureen's class extends it and adds
+  `nureen.charter.holidays`.
+
+### What changed
+
+- **Core and shared** (see SHARED_CHANGES §10):
+  - controller, new service, `ModuleRegistry::categoryFor()`;
+  - 2 new contracts and the shared calendar;
+  - `config/calendar.php` and `config/tracking.php`;
+  - the rewritten index view, the new `track-card` component, the
+    stylesheets list, new `tracking.css`, and 4 new tokens in
+    `tokens.css`.
+- **Nureen:**
+  - `CATEGORY` and `ICON` on all four workflows;
+  - `DescribesApplicationProgress` on Supervision, Certification and GA
+    Extension (new `Support/TrackingDescriptions.php`);
+  - `SuppliesOverdueStatus` through the charter trait;
+  - `WorkingDayCalendar` now extends Core's;
+  - GA Extension and Supervision read their detail row once per
+    application object (`detailFor()`).
+- **Tests:**
+  - New: `tests/Feature/Core/TrackApplicationsTest.php` (12).
+  - Added: 2 tests in `WorkingDayCalendarTest`.
+  - `docs/design/track-my-applications.png` is the design image, copied
+    from your message because it wasn't in the repo.
+
+### Bugs caught
+
+- **Queries:** 131 for 20 cards at first. My GA Extension workflow
+  re-read its snapshot row every time anything asked for the chain. With
+  the detail row cached per application object (never cached before it
+  exists), it is now 31.
+- **Contradictory sentence:** "0 of 4 required documents received… No
+  action needed from you." on older demo rows. The documents sentence now
+  appears only when all of them arrived.
+- **Shared `.btn` offsets:** a 16px top margin, and a taller
+  `.btn-secondary`, misaligned the action row; both are normalised inside
+  the card.
+- **`layout.css` phone gap:** `.page-header-text` (flex-basis 24rem)
+  becomes a 24rem height when the header stacks below 720px, leaving a
+  blank gap on every page with header actions. Fixed for this page only,
+  and reported in SHARED_CHANGES §10.
+- **Verification side effect:** my first browser run fetched Lee's two
+  letters, which logged them as "opened". Those two activity rows were
+  deleted, and the check now never requests `/documents/`.
+
+### Verification
+
+- **Tests:** full suite, 473 passed.
+- **Browser** (Tan Wei Jian: Travel, Examiner Nomination and three of
+  Nureen's modules; Lee Xin Yi: two unopened appointment letters), at
+  1440/820/390px, light and dark, with the All, Needs you and Rejected
+  filters:
+  - no horizontal scroll, and tabs never scroll;
+  - the stepper is vertical and buttons are full width at 390px;
+  - no console errors;
+  - lowest text contrast 4.76:1 in light and 5.74:1 in dark;
+  - a 2px focus outline on the card buttons;
+  - every View details link returns 200.
+- **Teammates' data:** no rows were created; their existing dev rows
+  rendered without errors.
 
 ---
 

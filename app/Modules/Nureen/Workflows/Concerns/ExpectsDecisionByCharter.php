@@ -19,4 +19,16 @@ trait ExpectsDecisionByCharter
     {
         return app(ClientCharter::class)->expectedDecision($application)['expected_date'] ?? null;
     }
+
+    /**
+     * Core\Contracts\SuppliesOverdueStatus: past its charter due date --
+     * only where the current stage HAS a charter figure, exactly as the
+     * Expected Decision Dates page judges it.
+     */
+    public function decisionIsOverdue(Application $application): bool
+    {
+        $clock = app(ClientCharter::class)->stageClock($application);
+
+        return $clock !== null && $clock['on_charter'] && $clock['overdue'];
+    }
 }

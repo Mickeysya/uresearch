@@ -3,6 +3,9 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
+use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
+use App\Modules\Nureen\Support\ApplicationDetailsContent;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
@@ -22,8 +25,21 @@ use Illuminate\Support\Str;
  * already exposes. A student's own Overview/History pair lives in the app's
  * fixed sidebar tree instead, not declared here.
  */
-class AttendanceAppealWorkflow implements WorkflowModule, ProvidesLinks, DecidesOneAtATime
+class AttendanceAppealWorkflow implements WorkflowModule, ProvidesLinks, DecidesOneAtATime, DescribesApplicationDetails
 {
+    /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
+    use DescribesApplicationDetailsDefaults;
+
+    public function details(Application $application): array
+    {
+        return app(ApplicationDetailsContent::class)->attendanceAppeal($application);
+    }
+
+    /** Track My Applications tab (config/tracking.php) and card icon. */
+    public const CATEGORY = 'candidacy';
+
+    public const ICON = 'calendar';
+
     public function key(): string
     {
         return 'attendance_appeal';

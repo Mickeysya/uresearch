@@ -3,6 +3,12 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
+use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
+use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Core\Contracts\DescribesApplicationProgress;
+use App\Modules\Core\Contracts\SuppliesOverdueStatus;
+use App\Modules\Nureen\Support\TrackingDescriptions;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
@@ -43,8 +49,37 @@ use Carbon\CarbonInterface;
  * stuck on step 1. Declaring the chain here puts it on the same footing as
  * everything else.
  */
-class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, DecidesOneAtATime, ProvidesLinks, SuppliesDecisionDates
+class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, DecidesOneAtATime, ProvidesLinks, SuppliesDecisionDates, SuppliesOverdueStatus, DescribesApplicationProgress, DescribesApplicationDetails
 {
+    /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
+    use DescribesApplicationDetailsDefaults;
+
+    public function details(Application $application): array
+    {
+        return app(ApplicationDetailsContent::class)->gaExtension($application);
+    }
+
+    public function timelineEvents(Application $application): array
+    {
+        return app(ApplicationDetailsContent::class)->reminders($application);
+    }
+
+    public function stageTargetDays(Application $application, string $stageKey): ?int
+    {
+        return app(ApplicationDetailsContent::class)->target($application, $stageKey);
+    }
+
+    /** Track My Applications tab (config/tracking.php) and card icon. */
+    public const CATEGORY = 'assistantships';
+
+    public const ICON = 'clock';
+
+    /** Track My Applications: Core\Contracts\DescribesApplicationProgress -- see Support\TrackingDescriptions. */
+    public function describeProgress(Application $application): array
+    {
+        return app(TrackingDescriptions::class)->gaExtension($application);
+    }
+
     /** expectedDecisionDate(): the Client Charter date, for the student dashboard. */
     use ExpectsDecisionByCharter;
 
@@ -158,7 +193,7 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
     public function modeFor(?Application $application): string
     {
         if ($application) {
-            $detail = GaExtensionDetail::where('application_id', $application->id)->first();
+            $detail = $this->detailFor($application);
 
             if ($detail?->final_approver_snapshot) {
                 return $detail->final_approver_snapshot;
@@ -168,9 +203,35 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
         return config('nureen.ga_extension.final_approver');
     }
 
+    /**
+     * The application's detail row, read once per Application object: the
+     * stored snapshot never changes once written, and Track My Applications
+     * asks for one card's chain (and summary) several times. A row not
+     * written yet -- mid-submit -- is never cached.
+     */
+    protected function detailFor(Application $application): ?GaExtensionDetail
+    {
+        $this->details ??= new \WeakMap();
+
+        if (isset($this->details[$application])) {
+            return $this->details[$application];
+        }
+
+        $detail = GaExtensionDetail::where('application_id', $application->id)->first();
+
+        if ($detail) {
+            $this->details[$application] = $detail;
+        }
+
+        return $detail;
+    }
+
+    /** @var \WeakMap<Application, GaExtensionDetail>|null see detailFor() */
+    private ?\WeakMap $details = null;
+
     public function summary(Application $application): string
     {
-        $detail = GaExtensionDetail::where('application_id', $application->id)->first();
+        $detail = $this->detailFor($application);
 
         if (! $detail) {
             return 'GA extension request';

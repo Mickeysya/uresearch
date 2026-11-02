@@ -480,10 +480,89 @@ appeals it seeds without them show "missing" in CGS's checks.
 
 ---
 
-## 14. Saved drafts (GA Extension, Certification): what Core shows, and two small Core proposals
+## 10. Track My Applications redesign (branch `feature/track-applications-redesign`, uncommitted)
 
-Numbered 14 so it doesn't collide with §10–§13 on `feature/track-applications-redesign`
-when the branches merge.
+The student's Track My Applications page (`/applications`) now has tabs by
+category, status filters ("Needs you", "In progress", "Approved",
+"Rejected") and one card per application, with a stepper built from that
+application's own chain. **Core still names no module.** Every module
+already appears and works with no change; the lines below are optional
+extras.
+
+### For teammates: the ONE line that gives your module its own tab
+
+Add a `CATEGORY` constant to your workflow class (the class you register
+in your `ModuleProvider`):
+
+```php
+public const CATEGORY = 'thesis';
+```
+
+Use one of these keys (the labels live in `config/tracking.php`, so a
+rename never touches your module):
+
+| Key | Tab label | Suggested for |
+|---|---|---|
+| `assistantships` | Assistantships | GA Extension, Certification Letter (Nureen, done) |
+| `supervision` | Supervision & Examination | Supervision Request (Nureen, done), Examiner Nomination, Re-viva Monitoring (Hani), Appointment Letter (Jason) |
+| `candidacy` | Candidacy & Progress | Attendance Appeal (Nureen, done), Study Candidacy Appeal (Chloe), RPD Extension Appeal, RPD Dismissal (Norhanis) |
+| `thesis` | Thesis Submission | Hardbound Submission, Appeal Hardbound Submission (Jason) |
+| `travel-funding` | Travel & Funding | Travel, Student Claims, Publication (Norhanis) |
+
+Without the line, your applications show under **Other**. A key not in the
+table still gets its own tab (labelled from the key, in a neutral colour).
+Optionally, a second line picks the card icon from
+`core::dashboard.partials.icon`, e.g. `public const ICON = 'book';`.
+
+### Optional contracts (implement only if you want them; checked with `instanceof`)
+
+- **`Core\Contracts\DescribesApplicationProgress`**: `describeProgress(Application $application): array`.
+  Return any of these keys:
+  - `sentence`: your own footer line;
+  - `actions`: extra buttons, as `[['label' => ..., 'url' => ..., 'primary' => true]]`;
+  - `reference`: e.g. an issued letter's real reference, shown beside the
+    application reference;
+  - `needs_student`: counts under "Needs you"; make your action the primary
+    button;
+  - `resubmission_expected`: a REJECTED application counts as "Needs you"
+    only when this is true.
+
+  Return `[]` for nothing. Without it, Core writes a generic sentence ("Now
+  with CGS Staff. No action needed from you.") and offers View details.
+- **`Core\Contracts\SuppliesOverdueStatus`**: `decisionIsOverdue(Application $application): bool`
+  marks the current step "Taking longer than usual". It was deliberately
+  NOT added to `SuppliesDecisionDates`, because adding a method to an
+  existing interface would break anyone already implementing it.
+
+### Every Core / shared change
+
+| File | Change |
+|---|---|
+| `Core/Http/Controllers/ApplicationTrackingController.php` | `index()`: validates `tab`, `status`, `page` and hands off to the service. `show()` unchanged |
+| `Core/Services/ApplicationTracker.php` (new) | tabs, counts, filters, cards, 20 per page |
+| `Core/Services/ModuleRegistry.php` | `categoryFor($key)` reads a module's optional `CATEGORY` / `ICON` constants plus `config/tracking.php` |
+| `Core/Contracts/DescribesApplicationProgress.php` (new) | optional contract, above |
+| `Core/Contracts/SuppliesOverdueStatus.php` (new) | optional contract, above |
+| `Core/Support/WorkingDayCalendar.php` (new) | the portal's one working-day calculator (Mon to Fri minus `config('calendar.holidays')`), moved from Nureen. Nureen's calendar now extends it, unchanged in behaviour (tested day by day for all of 2026) |
+| `config/calendar.php` (new) | `holidays => []`, portal-wide |
+| `config/tracking.php` (new) | category key → label, fixed tone, default icon. Tones are fixed per category, not per tab position, so a category has the same colour for every student. No modules are listed |
+| `Core/Resources/views/applications/index.blade.php` | rewritten |
+| `Core/Resources/views/components/track-card.blade.php` (new) | one card |
+| `Core/Resources/views/partials/stylesheets.blade.php` | loads `tracking.css` |
+| `public/css/tracking.css` (new) | scoped to `.trk` |
+| `public/css/tokens.css` | adds `--purple-fg/-bg` and `--teal-fg/-bg` (light and both dark blocks), text-safe at 4.5:1 or better |
+
+The shared `<x-core::stepper>` (also used by `applications.show` and
+Chloe's appeal page) is **unchanged**; the new stepper lives in the card.
+
+**Found, not fixed globally:** in `layout.css`, `.page-header-text { flex: 1 1 24rem }`
+becomes a 24rem *height* once `.page-header` stacks into a column below
+720px, leaving a ~380px blank gap above the actions on every page that has
+header actions. Fixed only on this page (`.trk .page-header-text { flex-basis: auto; }`).
+Suggested global fix: the same rule inside the existing `@media (max-width: 720px)` block
+in `layout.css`.
+
+## 11. Saved drafts (GA Extension, Certification): what Core shows, and two small Core proposals
 
 Nureen's GA Extension and GA/GRA Certification forms now have **Save draft**.
 A draft uses Core's existing draft support: an `applications` row with status
@@ -527,7 +606,7 @@ e. **`DocumentStore` has no way to remove a file.** Drafts let a student
    `DocumentStore::remove(ApplicationDocument)` would keep uploads and
    removals in one place.
 
-## 15. Generated GA Extension Form: a module download on Core's application page
+## 12. Generated GA Extension Form: a module download on Core's application page
 
 The GA Extension Form (UTP/CGS/001-A2) is no longer uploaded: Nureen generates
 it from what the student enters (`LetterRenderer::gaExtensionForm()`, route
