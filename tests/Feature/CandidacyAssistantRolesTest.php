@@ -264,4 +264,22 @@ class CandidacyAssistantRolesTest extends TestCase
         $this->pipeline()->ask($this->student, 'when does my candidacy end', []);
         $this->assertGreaterThanOrEqual(1, (int) Cache::get($day, 0));
     }
+
+    public function test_every_page_and_button_the_answers_name_exists_in_the_views(): void
+    {
+        $views = '';
+
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(base_path('app/Modules/Chloe/Resources/views/candidacy'))) as $file) {
+            $views .= $file->isFile() ? file_get_contents($file->getPathname()) : '';
+        }
+
+        $views .= file_get_contents(base_path('app/Modules/Core/Resources/views/partials/sidebar-student-nav.blade.php'));
+
+        foreach (['Submit an Appeal', 'Edit and resubmit', 'Download memo', 'Return to student', 'Reject (final)', 'Confirm rejection', 'Save signature', 'Remove my signature', 'Pending my action', 'Decided by me', 'View all appeals',
+            'My Appeals', 'Study Candidacy Approval Portal', 'Candidacy Management', 'Candidacy Insights', 'Dismissal List', 'Dismissal Upload', 'Confirm and dismiss', 'Preview', 'Review', 'Approve', 'Verify', 'Track My Applications', 'My Candidacy',
+            'Department and supervisor', 'Research and extension', 'Documents', 'Review and submit', 'Section A: Research progress', 'Section B: Earlier extensions', 'Section C: Publications', 'Section D: Extension requested',
+            'Pause updates', 'Waiting at least', 'Months requested', 'Export filtered list to Excel'] as $label) {
+            $this->assertStringContainsString($label, $views, "The answers name \"{$label}\" but no candidacy view has it.");
+        }
+    }
 }

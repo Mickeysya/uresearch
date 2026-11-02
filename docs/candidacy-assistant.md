@@ -12,7 +12,7 @@ and the same "Interpreted as:" line and "Did you mean" chips. Everything that is
 | Title, placeholder | Workstation Assistant, "Ask about workstations or locker keys" | Study Candidacy Assistant, "Ask about your candidacy or appeals" |
 | Roles | student, CGS | student, approver, CGS |
 | Catalogue | `Catalogue::forRole($role, 'workstation')` | `Catalogue::forRole($role, 'candidacy')` |
-| Suggested questions (6 per role) | `SuggestedQuestions` | `CandidacyAssistant::suggestions()` (answered by catalogue id, no model call) |
+| Suggested questions (9 per role) | `SuggestedQuestions` | `CandidacyAssistant::suggestions()` (answered by catalogue id, no model call) |
 | Guidance topics | `docs/knowledge/workstation/{student,cgs}/` | `docs/knowledge/candidacy/` |
 | Router prompt and examples | `GeminiModel::routerInstruction` (workstation head), `RouterFewShots::workstation()` | the candidacy head and `RouterFewShots::candidacy()` |
 | Evaluation set | `set: workstation` | `set: candidacy` (and `cross`) |
@@ -46,15 +46,14 @@ A role never receives another role's entries: the router only sees its role's ca
 
 ## What the candidacy domain answers (candidacy entries, plus actions)
 
-Counts today (candidacy domain, data lookups + guidance topics): **student 23** (7 + 16), **approver 18** (5 + 13), **CGS 38** (14 + 24); Workstation entries are unchanged.
+Counts today (candidacy domain, data lookups + guidance topics, without the five refusals): **student 31**, **approver 31**, **CGS 50** (63 intents in all; see the matrix below). Workstation entries are unchanged.
 
 - **Student, own record only:** expiry date and days left; extension months used and left; whether an appeal is possible now (the same `eligibilityProblems()` as the New Appeal button, with the reason); appeal number, status, step and who has it;
   why an appeal was returned; when the next reminder is sent (the reminder engine's own decision); whether the Softbound is recorded ("Demo data" is shown for the demo overlay).
 - **Approver, own appeals only:** how many wait for me (the portal's "Pending my action"), the longest wait, how many waited 5 or 10 days or more, how many I approved or returned this month, how many are ongoing.
 - **CGS:** appeals per step; returned, approved, rejected and closed-expired counts; the five longest waits (linked); appeals waiting 10 days or more; average waiting per step; students expiring within 1, 2 and 3 months; how many took no action;
   students at 12 of 12 months; appeals by department; reminders sent this and last month (or `window`: this_month, last_month, last_30_days); the reminder response rate; dismissal candidates, exported and not; dismissed this month.
-- **Guidance (24 topics, `docs/knowledge/candidacy/*.md`):** what candidacy is and how long; when and how to appeal; documents; the approval route; statuses; after a return or rejection; the 12-month limit; the deadline; after approval; reminders; if candidacy expires;
-  Softbound; deferment, change of mode and programme; My Signature; approver rules; the effect of a return; the appeal rules; FAQ; outcome prediction; and for CGS: reading Operations, Insights and the Dismissal List, export and Registry upload, the end-to-end process.
+- **Guidance (38 intents, `docs/knowledge/candidacy/*.md`, one section per intent and role):** what candidacy is and how long; the Handbook rules on extension, deferment, dismissal and the Softbound; where to see the full appeal list; when and how to appeal; documents; the approval route; how to approve or return; statuses; returns, resubmitting and the Dean's rejection; the return reasons; the 12-month limit; the deadline; withdrawal; after approval and the memo; reminders; notifications; My Signature; the portal and the waiting-day colours; the appeal rules; FAQ; outcome prediction; and for CGS: reading Operations, Insights and the Dismissal List, export and Registry upload, the end-to-end process, and what is not built yet.
 
 Every number comes from the same query or class the page uses (`CandidacyOperationsQuery`, `CandidacyPortalQuery`, `CandidacyStatistics`, `CandidacyDismissalList`, `CandidacyAppealService::eligibilityProblems`, `StudentStatusReader`); tests prove the assistant's numbers equal the pages'.
 Lists and numbers are produced by the backend and never go to the model.
@@ -64,11 +63,128 @@ Lists and numbers are produced by the backend and never go to the model.
 It explains and shows data. It **never** approves, returns, rejects, submits or withdraws an appeal, sends reminders, exports, uploads or dismisses, and never predicts a decision. Such requests are refused with a short reason and a link to the page that does it
 (`cand_action_decide`, `cand_action_submit`, `cand_action_reminders`, `cand_action_export_upload`, `cand_action_dismiss`). "Will my appeal be approved?" gets: the approvers and the Dean decide; I can explain the rules and the current status.
 
-## Sources (every guidance answer ends with a "Source:" line)
+## Answers depend on the role (the intent x role matrix)
 
-Topic text keeps **"The Handbook says"** apart from **"CGS process"**. Handbook references: sections 2.1 p.7, 2.1.1 p.8, 2.5 pp.12-13, 2.6, 2.7, 4.3 p.19, 4.4 p.20, 5.3 p.30, 7.4 p.38 of the Postgraduate Student Handbook 2025. **The Handbook PDF was not in the project folder, so the sections and pages
-are those given in the brief and every source line says "(Handbook; verify page)"; verify them against the PDF before showing the assistant to CGS.** No form number, deadline or fee is invented: where the Handbook is silent the text says "CGS process" and
-`docs/candidacy-cgs-confirmation-list.md` lists the item for CGS to confirm. Numbers in the text (12 months, 4 supporting documents, 10 MB, reminder months) are `{{placeholders}}` filled from the code and config.
+The knowledge base is five files in `docs/knowledge/candidacy/`; each guidance answer is a `## cand_<intent>` section, shown as written (never rewritten by the model) and ending with a `Source:` line.
+
+| File | Holds | Shown to |
+|---|---|---|
+| `00-system-flow.md` | the confirmed system design (source "UResearch Study Candidacy design (confirmed with CGS)") and the answers that are the same for everyone | every role |
+| `01-handbook.md` | only the in-scope Handbook items, each with its section and page ("Postgraduate Student Handbook 2025, section 2.1, p.7") | every role |
+| `10-student.md` | the student's version of an answer (their pages and buttons only) | students |
+| `20-approver.md` | the approver's version (Approval Portal, Review, Approve / Return, Reject for the Dean, My Signature) | Supervisor, Chair, Dean |
+| `30-cgs.md` | the CGS version (Operations, Insights, Dismissal List, Dismissal Upload, CGS Verification) | CGS |
+
+**A role's answer for an intent is that role's own section, else a shared one, else the intent does not exist for the role** ("not for this role"). Which roles may ask an intent is therefore never typed in code: it is whatever sections the files hold
+(`CandidacyAssistant::knowledge()` and `topicRoles()`). The router only sees the asking role's entries, the pipeline re-checks the chosen id, and `CandidacyAssistant::sourceText($topic, $role)` can only return that role's text.
+A CGS user who is also an approver (`cgs_approver`) gets the CGS section first, then the approver one.
+
+When a question names a page or button that belongs to another role ("how do I read the Operations page" from a student, "how do I submit an appeal" from an approver), the reply is "That is for CGS, so I can't answer it for your account. As a student,
+you can ask me about the questions below." with the asking role's own suggested questions, never the other role's instructions. Each role has 9 suggested questions, answered without a model call.
+
+| Intent | Student | Approver | CGS |
+|---|---|---|---|
+| `cand_see_all_appeals` | yes | yes | yes |
+| `cand_when_how_appeal` | yes | not for this role | yes |
+| `cand_required_documents` | yes | yes | yes |
+| `cand_approval_route` | yes | yes | yes |
+| `cand_after_return_rejection` | yes | not for this role | not for this role |
+| `cand_return_reasons` | yes | yes | yes |
+| `cand_dean_rejection` | yes | yes | yes |
+| `cand_resubmit` | yes | yes | yes |
+| `cand_after_approval` | yes | yes | yes |
+| `cand_reminders` | yes | not for this role | yes |
+| `cand_notifications` | yes | yes | yes |
+| `cand_if_expires` | yes | not for this role | yes |
+| `cand_how_decide` | not for this role | yes | yes |
+| `cand_approver_rules` | not for this role | yes | yes |
+| `cand_my_signature` | not for this role | yes | yes |
+| `cand_return_effect` | not for this role | yes | yes |
+| `cand_portal_guide` | not for this role | yes | yes |
+| `cand_waiting_colours` | not for this role | yes | yes |
+| `cand_cgs_operations_guide` | not for this role | not for this role | yes |
+| `cand_cgs_insights_guide` | not for this role | not for this role | yes |
+| `cand_cgs_dismissal_list_guide` | not for this role | not for this role | yes |
+| `cand_cgs_export_registry` | not for this role | not for this role | yes |
+| `cand_cgs_registry_upload` | not for this role | not for this role | yes |
+| `cand_cgs_process_summary` | not for this role | not for this role | yes |
+| `cand_cgs_not_built` | not for this role | not for this role | yes |
+| `cand_status_meanings` | yes | yes | yes |
+| `cand_twelve_month_limit` | yes | yes | yes |
+| `cand_deadline` | yes | yes | yes |
+| `cand_withdraw` | yes | yes | yes |
+| `cand_appeal_rules` | yes | yes | yes |
+| `cand_faq` | yes | yes | yes |
+| `cand_outcome_prediction` | yes | yes | yes |
+| `cand_what_is_candidacy` | yes | yes | yes |
+| `cand_hb_extension` | yes | yes | yes |
+| `cand_deferment_mode_programme` | yes | yes | yes |
+| `cand_hb_dismissal` | yes | yes | yes |
+| `cand_softbound_ends` | yes | yes | yes |
+| `cand_my_expiry` (data) | yes | not for this role | not for this role |
+| `cand_my_extension` (data) | yes | not for this role | not for this role |
+| `cand_can_appeal` (data) | yes | not for this role | not for this role |
+| `cand_my_appeal` (data) | yes | not for this role | not for this role |
+| `cand_my_return_reason` (data) | yes | not for this role | not for this role |
+| `cand_next_reminder` (data) | yes | not for this role | not for this role |
+| `cand_my_softbound` (data) | yes | not for this role | not for this role |
+| `cand_ap_pending` (data) | not for this role | yes | not for this role |
+| `cand_ap_oldest` (data) | not for this role | yes | not for this role |
+| `cand_ap_waiting_days` (data) | not for this role | yes | not for this role |
+| `cand_ap_decided_month` (data) | not for this role | yes | not for this role |
+| `cand_ap_ongoing` (data) | not for this role | yes | not for this role |
+| `cand_cgs_in_progress` (data) | not for this role | not for this role | yes |
+| `cand_cgs_pending_by_step` (data) | not for this role | not for this role | yes |
+| `cand_cgs_outcome_counts` (data) | not for this role | not for this role | yes |
+| `cand_cgs_oldest` (data) | not for this role | not for this role | yes |
+| `cand_cgs_waiting_10` (data) | not for this role | not for this role | yes |
+| `cand_cgs_avg_waiting` (data) | not for this role | not for this role | yes |
+| `cand_cgs_expiring` (data) | not for this role | not for this role | yes |
+| `cand_cgs_no_action` (data) | not for this role | not for this role | yes |
+| `cand_cgs_twelve_of_twelve` (data) | not for this role | not for this role | yes |
+| `cand_cgs_by_department` (data) | not for this role | not for this role | yes |
+| `cand_cgs_reminders_sent` (data) | not for this role | not for this role | yes |
+| `cand_cgs_reminder_response` (data) | not for this role | not for this role | yes |
+| `cand_cgs_dismissal_candidates` (data) | not for this role | not for this role | yes |
+| `cand_cgs_dismissed` (data) | not for this role | not for this role | yes |
+
+Verified against the code: page names (Track My Applications > My Candidacy, "My Study Candidacy", Approval Portal with the tabs Pending my action, Ongoing, History; for CGS Pending my action, Decided by me and the "View all appeals" link; Candidacy Management > Operations,
+Insights, Dismissal List, Dismissal Upload; My Signature), buttons (Submit an Appeal, Edit and resubmit, Download memo, Review, Approve, Return to student, Verify, Reject (final) and Confirm rejection, Save signature, Remove my signature, Export to Excel, Preview,
+Confirm and dismiss), the four New Appeal steps and Sections A to D, the document limits (placeholders), the reason lists in `config/candidacy.php`, the waiting-day dots (grey under 5, amber from 5, red from 10), and the memo file name.
+
+**Not built (answered "not available yet", `cand_cgs_not_built`):** an Excel export of the Operations list, a reminder log page, 3-day and 1-day urgent reminders, and a CGS page to change an expiry date by hand. Differences from the brief: the Softbound status
+is demo data until the Softbound module's table is known; the reminders are sent at 08:00 by `candidacy:send-reminders` (the "07:30 refresh" is not in the code: 07:30 is when `candidacy:close-expired-appeals` runs, and 07:15 `candidacy:generate-dismissals`);
+the old `candidacy:remind` in `routes/console.php` is a deprecated no-op (a shared file, left alone).
+
+## Handbook scope
+
+In scope (and nothing else from the Handbook): 2.1 p.7 durations, 2.1.1 p.8 extension, 2.5 pp.12-13 deferment, 2.6 p.13 change of mode, 2.7 pp.13-14 change of programme, 4.3 p.19 dismissal, 4.4 p.20 reinstatement (outside the system), 5.3 p.30 item ix the soft-bound thesis.
+Anything else (RPD/RCS deadlines, viva, conference and progress marks, GA/GRA/TA allowances and stage gates, thesis correction, registration, probation, credit transfer, leave, supervisor change, fees, visa, upgrade, IP) is refused:
+the terms are `config('assistant.domains.candidacy.out_of_scope_terms')`; when one is present and the question has no core candidacy word (candidacy, appeal, Softbound, dismissal, reminder, memo, approver) the assistant says it only covers Study Candidacy,
+**without a model call**. The 12-month limit comes from the CGS process (confirmed), not from the Handbook.
+
+## When the model is busy (the keyword fallback)
+
+Only entries of the asking role and domain can be answered, and only with a clear match: a regex rule that names what it is about (specific rules first), or a word-overlap score of at least 3 shared words, at least 60% of the question's words and
+one more than the runner-up. Otherwise the reply is "I could not match that to something I can answer. Try one of these questions, or ask it in other words." with that role's suggested questions (and "Did you mean" chips). It never shows a loosely related topic, and never
+guidance written for another role.
+
+## The request counter and `assistant:budget`
+
+The day counter (`assistant:calls:day:<model>:<LA date>`, cache store `database`; per-minute and token keys beside it) counts HTTP requests sent to Gemini, per model, in Pacific time (Google's quota day; it resets at 16:00 in Kuala Lumpur). Caps stay below
+Google's free tier: primary 12 per minute and 400 per day (Google 15 and 500), fallback 4 and 15 (Google 5 and 20). A call that never leaves because no key is configured is taken back; `assistant:check` is counted; the tests and `assistant:evaluate --stub` use an array
+cache and model names that match no real model, so they can never touch the live counter.
+
+- `php artisan assistant:budget` prints the counter, the calls logged today (`assistant_logs.model_used`), our caps and Google's limits, and warns when they disagree.
+- `php artisan assistant:budget --reset` (only when `APP_ENV=local`) sets each day counter to the number of calls logged today.
+- Google AI Studio's own panel is the reference for what Google counted; the log holds one row per answered question, so retries and failed attempts raise the counter above the log (a difference of a few is normal).
+
+## Evaluation
+
+`app/Modules/Chloe/Assistant/evaluation_questions_candidacy.php`: 353 questions (student 105, approver 89, CGS 159), at least 3 per catalogue entry, informal and misspelled wording, ten "see all appeals" paraphrases per role (the CGS one that failed in production among them),
+wrong-role questions, action requests, outcome predictions, out-of-scope Handbook questions, name questions, "did you mean" triggers and window questions. `assistant:evaluate --set=candidacy` runs it live (one router call per question, paced);
+`--stub=route` answers with the expected id (proves the plumbing, the role filter, the templates and the refusals), `--stub=fallback` runs the keyword fallback alone; both are offline. The report adds accuracy per role and the number of role leaks
+(an id the role does not have, or an answer naming another role's page or button: `CandidacyAssistant::FORBIDDEN`).
 
 ## Privacy and PDPA notes
 
@@ -86,9 +202,10 @@ are those given in the brief and every source line says "(Handbook; verify page)
 3. As `cgs@utp.edu.my`, open Operations: "How many students expire within 3 months?" (the Insights number), "How many dismissal candidates are there?", then "export the dismissal list now" (refused, with the links).
 4. Ask a CGS question as the student: it is out of scope. Type a student's name: refused.
 
-## How to add a topic
+## How to add an intent
 
-1. Write `docs/knowledge/candidacy/<id>.md` in plain text (the widget shows plain text: `•` for bullets), starting with a plain sentence and ending with a `Source:` line. Use `{{cand_max_extension_months}}`-style tokens (`GuidanceLibrary::placeholderValues()`) instead of typing numbers.
-2. Add the id and its roles to `CandidacyAssistant::TOPICS`, and its question, description and 5 paraphrases to `topicSpecs()`. Optionally a keyword rule in `KEYWORDS` (the fallback when the model is busy).
-3. Run `php artisan test --filter="CatalogueTest|CandidacyAssistantTest"`: the catalogue test fails if an entry has no topic file or the reverse.
+1. Write a `## cand_<id>` section in the file of every role that may ask it (or in `00-system-flow.md` / `01-handbook.md` if the answer is the same for everyone): plain text (the widget shows plain text, `•` for bullets), only that role's pages and buttons, ending with a `Source:` line.
+   Use `{{cand_max_extension_months}}`-style tokens for numbers (`GuidanceLibrary::placeholderValues()`).
+2. Add its question, description and 5 or 6 paraphrases to `CandidacyAssistant::topicSpecs()`; optionally a specific regex in `KEYWORDS` (the fallback), and a link in `linksForTopic()`.
+3. Add 3 questions to `evaluation_questions_candidacy.php` and run `php artisan test --filter="CatalogueTest|CandidacyAssistant"`: the tests fail if an intent has no spec or the reverse, if any role's text names another role's page, or if a source line is missing.
 To add a data answer: a method in `CandidacyLookups`, its name in `methods()`, and its spec in `CandidacyAssistant::lookupSpecs()`.

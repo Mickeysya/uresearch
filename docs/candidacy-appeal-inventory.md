@@ -392,5 +392,5 @@ Demo students for it are candidacy-only (see section 18). The 07:30 / 08:00 rule
 ## 20. Study Candidacy in the assistant
 
 The candidacy pages have their own assistant **domain** on the shared engine (the same widget, endpoint, Gemini setup, router design, privacy rules and fallback as Workstation), with its own catalogue, suggested questions, topic files (`docs/knowledge/candidacy/`),
-router prompt, evaluation set and log value; a question of the other domain is redirected without a model call. Roles: student, approver, CGS. It explains and shows data and never acts or predicts a decision. Details, sources, PDPA notes, the demo and how to add a topic or a
+router prompt, evaluation set and log value; a question of the other domain is redirected without a model call. Roles: student, approver, CGS; **every answer is written for the role asking** (five knowledge files, an intent x role matrix of 63 intents, role sections that name only that role's pages and buttons, a strict role-and-score keyword fallback and a "could not match" reply with the role's own suggested questions). It explains and shows data and never acts or predicts a decision. Details, sources, PDPA notes, the demo and how to add a topic or a
 page to a domain: `docs/candidacy-assistant.md`. The old "coming soon" placeholder is gone.

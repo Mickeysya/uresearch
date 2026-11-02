@@ -260,5 +260,5 @@ live update. See `docs/candidacy-insights.md`.
 ## Study Candidacy assistant
 
 The assistant has two separate domains on one engine: `workstation` and `candidacy` (which page belongs to which is `config('assistant.domain_pages')`). The candidacy domain has its own catalogue (roles student, approver, CGS), data lookups
-(`Assistant\CandidacyLookups`, numbers from the page queries), guidance topics (`docs/knowledge/candidacy/`, each with a "Source:" line) and router prompt; it never makes changes or predicts a decision, and a question of the other domain is redirected without a model call.
-Commands take `--domain=workstation|candidacy`. See `docs/candidacy-assistant.md`.
+(`Assistant\CandidacyLookups`, numbers from the page queries), guidance written per role (`docs/knowledge/candidacy/`: `00-system-flow.md`, `01-handbook.md`, `10-student.md`, `20-approver.md`, `30-cgs.md`; one `## cand_<intent>` section per role, each with a "Source:" line) and router prompt; it never makes changes or predicts a decision, and a question of the other domain is redirected without a model call.
+Commands take `--domain=workstation|candidacy`. `php artisan assistant:budget` shows the request counter against the log and Google's free-tier limits (`--reset`, local only); `assistant:evaluate --stub=route|fallback` runs the candidacy evaluation offline. See `docs/candidacy-assistant.md`.
