@@ -642,6 +642,19 @@ student.
 **Who can open it:** students only, their own applications only, as before.
 Approvers never had this page and still don't.
 
+### 10c. Addition to `DescribesApplicationDetails` (3 Nov 2026)
+
+`waitingFor(Application): ?string` names who a pending application is waiting
+for ("Dr. Aisyah Rahman, your supervisor"). The details page shows it in the
+status line and on the current step; without it, the page names the role.
+Its default in `DescribesApplicationDetailsDefaults` returns null, so no
+implementer breaks.
+
+Files: `Core/Contracts/DescribesApplicationDetails.php`,
+`Core/Contracts/Defaults/DescribesApplicationDetailsDefaults.php`,
+`Core/Services/ApplicationDetails.php` (the `waiting_for` key),
+`Core/Resources/views/applications/show.blade.php`, `public/css/tracking.css`.
+
 ## 11. Saved drafts (GA Extension, Certification): what Core shows, and two small Core proposals
 
 Nureen's GA Extension and GA/GRA Certification forms now have **Save draft**.
@@ -718,3 +731,88 @@ interface ProvidesApplicationDownloads
 Core's application page would list these next to the documents. Nureen
 would return the GA Extension Form, and the GA/GRA certification attachment
 could use it too. Modules that don't implement it are unaffected.
+
+---
+
+## 13. `phpunit.xml`: tests no longer leak jobs onto the real queue (done on `feature/track-applications-redesign`)
+
+**Symptom everyone has seen:** after every `php artisan test`, the dev queue
+worker logs about 120 `FAIL` lines (`ApplicationDecided`, `ApplicationReturned`,
+Chloe's `CandidacyAppealApproved`, Jason's `HardboundSubmissionRejected`, …),
+`storage/logs/laravel.log` fills with "Database file at path [uresearch] does
+not exist (Connection: sqlite)", and `failed_jobs` grows. It held over 8,000
+rows on 3 Nov 2026.
+
+**Cause:**
+- **The container's variable wins.** The Docker app container exports
+  `QUEUE_CONNECTION=redis`, and `phpunit.xml`'s `<env>` lines are ignored for
+  any variable the environment already has (no `force`).
+- **`force` alone wasn't enough.** Even forced, `<env>` only sets `$_ENV` and
+  `getenv()`, while PHP also copies the container environment into
+  `$_SERVER`, which Laravel reads first. A probe test showed
+  `config('queue.default') === 'redis'` inside tests.
+- **What then happened:** tests queued their notifications onto the REAL
+  Redis queue, and the dev worker tried to run them against the tests'
+  in-memory SQLite database.
+
+**Change:** every setting in the `<php>` block is now set twice, both forced:
+
+```xml
+<env name="QUEUE_CONNECTION" value="sync" force="true"/>
+<server name="QUEUE_CONNECTION" value="sync" force="true"/>
+```
+
+(The same for `APP_ENV`, `DB_CONNECTION`, `DB_DATABASE`, `MAIL_MAILER`,
+`CACHE_STORE`, `SESSION_DRIVER` and `BCRYPT_ROUNDS`.)
+
+**Verified:** a clean full run (488 tests) sent **0** jobs to the worker,
+and `failed_jobs` didn't change.
+
+**Nothing for teammates to do.** Per-test workarounds such as Nureen's
+`KeepsJobsOffTheDevQueue` trait still work but are no longer needed. The
+8,000+ old rows in `failed_jobs` are leftovers from before this fix. They
+are safe to clear once someone has looked at them (`php artisan queue:flush`),
+but do not clear them blindly: a genuine failure could be among them.
+
+## 14. Revocation reason: who sees it (Nureen, both letter types)
+
+The CGS revoke forms said the reason was "shown nowhere public, but is kept
+for the record". That was already inaccurate for Supervision, where the
+revocation email to the student AND the supervisor quotes it. The forms now
+show this hint under the reason box (linked with `aria-describedby`), and the
+validation message says the same:
+
+> This reason is shown to the student and their supervisor. It is not shown on the public verification page.
+
+**Caveat:** for a GA/GRA **certification**, the reason is shown to the
+student (application details page) but nothing currently shows it to the
+supervisor. Either the hint drops "and their supervisor" there, or the
+certification revocation also emails the supervisor. That decision is open.
+
+## 15. No Electrical & Electronics Chair in the seeded data (for whoever owns `DemoDataSeeder`)
+
+Core's seeders create Chair accounts for **Computing** (`chair@utp.edu.my`) and
+**Chemical Engineering** (`meiling.tan@utp.edu.my`) only. Five roster students
+are in **Electrical & Electronics Engineering**:
+- Tan Wei Jian (22001012)
+- Lee Xin Yi (22001015)
+- Siti Khadijah Yusof (22001018)
+- Ravindran Subramaniam (22001021)
+- Ahmad Zaki Hilmi (22001024)
+
+The Chair's queue is department-scoped, so a Supervision request from any of
+them stops at the Chair stage with nobody able to act. Tan Wei Jian's #88
+will, once endorsed. `docs/test-accounts.md` used to list
+`chair-electrical-electronics-engineering@utp.edu.my`, but no seeder creates
+it; it came from a hand-made account on someone's machine.
+
+**Proposed:** add one line to `DemoDataSeeder`'s staff list, next to Dr. Mei
+Ling Tan:
+
+```php
+['<name>', '<email>@utp.edu.my', Role::CHAIR, 'Electrical & Electronics Engineering', 'FOE'],
+```
+
+**Until then:** Nureen's CGS **Stuck Reviews** page (`/reviews/stuck`) lists
+any Supervision request waiting at a Chair stage whose department has no
+Chair.

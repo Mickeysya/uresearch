@@ -7,11 +7,9 @@
     <x-core::page-header
         title="GA/GRA Certification Letter Request" />
 
-    @unless ($hasSupervisor)
-        <div class="card card-wide" style="border-color: var(--danger-border);">
-            <p style="color: var(--danger-fg); margin: 0;">
-                No supervisor is assigned to your account. Please contact CGS before requesting a certification letter.
-            </p>
+    @if ($supervisorProblem)
+        <div class="card card-wide" role="alert" style="border-color: var(--danger-border);">
+            <p style="color: var(--danger-fg); margin: 0;">{{ $supervisorProblem }}</p>
         </div>
     @else
     @if ($otherDrafts->isNotEmpty())
@@ -228,7 +226,7 @@
                     formaction="{{ $draft ? route('ga-certification.draft.update', $draft) : route('ga-certification.draft.save') }}">Save draft</button>
         </form>
     </div>
-    @endunless
+    @endif
 </div>
 @include('core::partials.form-stepper')
 

@@ -30,4 +30,9 @@ trait DescribesApplicationDetailsDefaults
     {
         return null;
     }
+
+    public function waitingFor(Application $application): ?string
+    {
+        return null;
+    }
 }

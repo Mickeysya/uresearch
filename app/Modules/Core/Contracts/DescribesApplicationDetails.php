@@ -51,4 +51,12 @@ interface DescribesApplicationDetails
 
     /** The working days a stage is promised (a service charter), or null when none. */
     public function stageTargetDays(Application $application, string $stageKey): ?int;
+
+    /**
+     * Who the pending application is waiting for, in words the student
+     * recognises -- "Dr. Aisyah Rahman, your supervisor" -- or null to fall
+     * back to the stage's role ("with CGS Staff"). Name a person only when
+     * exactly one person can act.
+     */
+    public function waitingFor(Application $application): ?string;
 }

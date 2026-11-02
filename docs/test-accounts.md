@@ -86,7 +86,7 @@ person who can clear it.
 
 | Email | Role | Name | Department |
 |---|---|---|---|
-| `chair-electrical-electronics-engineering@utp.edu.my` | Chair | Chair, Electrical & Electronics Engineering | Electrical & Electronics Engineering |
+| `chair-electrical-electronics-engineering@utp.edu.my` ² | Chair | Chair, Electrical & Electronics Engineering | Electrical & Electronics Engineering |
 | `meiling.tan@utp.edu.my` | Chair | Dr. Mei Ling Tan | Chemical Engineering |
 | `farid.kamal@utp.edu.my` | Supervisor | Dr. Farid Kamal | Chemical Engineering |
 | `siti.nurhaliza@utp.edu.my` | Supervisor | Dr. Siti Nurhaliza | Electrical & Electronics Engineering |
@@ -112,7 +112,7 @@ disposable.
 | `tan.wei.jian@utp.edu.my` | 22001012 | Tan Wei Jian | PhD Full-Time | Electrical & Electronics Engineering | Dr. Siti Nurhaliza |
 | `divya.sri.kumar@utp.edu.my` | 22001013 | Divya Sri Kumar | PhD Part-Time | Computing | Prof. Dr. Kumaran Vellu |
 | `muhammad.amirul.aiman@utp.edu.my` | 22001014 | Muhammad Amirul Aiman | MSc Full-Time | Chemical Engineering | Dr. Aisyah Rahman |
-| `lee.xin.yi@utp.edu.my` | 22001015 | Lee Xin Yi | MSc Part-Time | Electrical & Electronics Engineering | Dr. Farid Kamal |
+| `lee.xin.yi@utp.edu.my` | 22001015 | Lee Xin Yi | MSc Part-Time | Electrical & Electronics Engineering | Dr. Aisyah Rahman ¹ |
 | `nurul.iman.shafiqah@utp.edu.my` | 22001016 | Nurul Iman Shafiqah | PhD Full-Time | Computing | Dr. Siti Nurhaliza |
 | `balamurugan.raj@utp.edu.my` | 22001017 | Balamurugan Raj | PhD Part-Time | Chemical Engineering | Prof. Dr. Kumaran Vellu |
 | `siti.khadijah.yusof@utp.edu.my` | 22001018 | Siti Khadijah Yusof | MSc Full-Time | Electrical & Electronics Engineering | Dr. Aisyah Rahman |
@@ -129,6 +129,60 @@ disposable.
 | `tan.22003314@utp.edu.my` | 22003314 | Tan Wei Ming | MSc Full-Time | Computing | Dr. Aisyah Rahman |
 | `arvind.22003315@utp.edu.my` | 22003315 | Arvind Rajendran | PhD Full-Time | Computing | Dr. Aisyah Rahman |
 | `farah.22003316@utp.edu.my` | 22003316 | Farah Nabila Binti Kamal | MSc Part-Time | Computing | Dr. Aisyah Rahman |
+
+¹ Lee Xin Yi was Dr. Farid Kamal's student until **1 Nov 2026**, when her
+Supervision request #26 (Main Supervisor: Dr. Aisyah Rahman) was approved
+during letter testing. Approving a Main Supervisor appointment moves the
+student to the new supervisor, so her GA Extension and Certification
+requests now go to `supervisor@utp.edu.my`. It was left that way on purpose:
+it matches her approved appointment letter CGS/SVAPPT/2026/0003.
+
+² **Not created by any seeder.** This account, and the six `2200331x`
+students above, were made by hand through Users and Roles on the machine the
+snapshot came from. A freshly seeded database does **not** have them, so
+there is no Electrical & Electronics Chair (see below).
+
+---
+
+## Who covers whom
+
+Taken from the seeded database on 3 Nov 2026. A GA Extension or Certification
+goes to the student's own supervisor (the one on their profile when they
+submit). A Supervision request goes to the supervisor they name, then to the
+Chair **of the student's department**: a Chair sees only their own
+department's queue.
+
+### Supervisors and their students
+
+| Supervisor account | Department | Students they supervise |
+|---|---|---|
+| `supervisor@utp.edu.my`, Dr. Aisyah Rahman | Computing | Ahmad Danial (22001001), Nur Farah Adilah (22001002), Nur Aina Batrisyia (22001010), Muhammad Amirul Aiman (22001014), **Lee Xin Yi (22001015)**, Siti Khadijah Yusof (22001018), Farhana Izzati (22001022), and every student created by Nureen's demo seeders: 22090001–22090005 (`NureenRealignedWorkflowDemoSeeder`), 22091001–22091024 (`NureenClientCharterDemoSeeder`) |
+| `farid.kamal@utp.edu.my`, Dr. Farid Kamal | Chemical Engineering | Muhammad Haziq Irfan (22001011), Ong Chee Kiat (22001019), Chong Mei Xuan (22001023) |
+| `siti.nurhaliza@utp.edu.my`, Dr. Siti Nurhaliza | Electrical & Electronics Engineering | Tan Wei Jian (22001012), Nurul Iman Shafiqah (22001016), Aishah Humaira (22001020), Ahmad Zaki Hilmi (22001024) |
+| `kumaran.vellu@utp.edu.my`, Prof. Dr. Kumaran Vellu | Computing | Divya Sri Kumar (22001013), Balamurugan Raj (22001017), Ravindran Subramaniam (22001021), Priya Dharshini (22001025) |
+| `co-supervisor-demo@utp.edu.my`, Dr. Faizal Hakimi | Computing | None as main supervisor. The co-supervisor named in `NureenRealignedWorkflowDemoSeeder`'s Co-Supervisor request |
+
+Nureen's demo seeders only ever assign `supervisor@utp.edu.my`, so every
+student they create has a documented supervisor. The `letters-*`,
+`upload-*` and `hafiz-*` students in some local databases were created by
+verification runs, not seeders. One of them, `upload-22092202`, has no
+supervisor at all.
+
+### Chairs and the departments they cover
+
+| Chair account | Department | Students in that department |
+|---|---|---|
+| `chair@utp.edu.my`, Dr. Lim Wei Chun | Computing | every Computing student on the roster, plus all of Nureen's demo students |
+| `meiling.tan@utp.edu.my`, Dr. Mei Ling Tan | Chemical Engineering | Muhammad Haziq Irfan, Muhammad Amirul Aiman, Balamurugan Raj, Aishah Humaira, Chong Mei Xuan |
+| **none** in a seeded database | **Electrical & Electronics Engineering** | Tan Wei Jian, **Lee Xin Yi**, Siti Khadijah Yusof, Ravindran Subramaniam, Ahmad Zaki Hilmi |
+
+**Gap: no Electrical & Electronics Chair.** A Supervision request from any
+of those five students would stop at the Chair stage with nobody able to
+act. Tan Wei Jian's #88 will, once his supervisor endorses it. Lee Xin Yi's
+#87 is already past that stage, because old seeded data skipped it. CGS's
+**Stuck Reviews** page lists such requests. The fix is a Chair account for
+Electrical & Electronics Engineering in a seeder (Core's `DemoDataSeeder`
+is the team's, so this is listed in `app/Modules/Nureen/SHARED_CHANGES.md`).
 
 ---
 

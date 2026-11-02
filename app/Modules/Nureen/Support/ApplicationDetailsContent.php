@@ -3,6 +3,8 @@
 namespace App\Modules\Nureen\Support;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Role;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Nureen\Models\ApplicationReminder;
 use App\Modules\Nureen\Models\AttendanceAppealDetail;
@@ -195,6 +197,43 @@ class ApplicationDetailsContent
 
         return $this->letter($application, 'GA/GRA certification letter', LetterRenderer::CERTIFICATION_DOC_TYPE,
             $d?->reference_number, 'certificate.verify', null, $d?->revoked_at, $d?->revoked_reason);
+    }
+
+    /**
+     * Who a pending application is waiting for, by name, where exactly one
+     * person can act: the supervisor named on the request, or the one Chair
+     * of the student's department. Null otherwise (the page then names the
+     * role).
+     */
+    public function waitingFor(Application $application): ?string
+    {
+        $stage = app(WorkflowEngine::class)->currentStage($application);
+
+        if ($stage?->key === 'supervisor') {
+            $id = match ($application->module_type) {
+                'ga_extension' => GaExtensionDetail::where('application_id', $application->id)->value('supervisor_id'),
+                'ga_certification' => GaCertificationDetail::where('application_id', $application->id)->value('supervisor_id'),
+                'supervision' => SupervisionDetail::where('application_id', $application->id)->value('requested_supervisor_id'),
+                default => null,
+            };
+            $person = $id ? User::find($id) : null;
+
+            if (! $person) {
+                return null;
+            }
+
+            return $application->module_type === 'supervision'
+                ? "{$person->name}, the supervisor you requested"
+                : "{$person->name}, your supervisor";
+        }
+
+        if ($stage?->key === 'chair' && ($department = $application->student?->department)) {
+            $chairs = User::where('role', Role::CHAIR)->where('department', $department)->get();
+
+            return $chairs->count() === 1 ? "{$chairs->first()->name}, Chair of {$department}" : null;
+        }
+
+        return null;
     }
 
     /** The charter's working days for a stage, or null when CGS gives none. */

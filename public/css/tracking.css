@@ -496,6 +496,7 @@
 .trk-detail .trk-detail-header .trk-module { margin-right: 0; font-size: 12px; }
 
 .trk-detail .trk-detail-status { margin-top: -4px; }
+.trk-detail .trk-waiting { margin: 8px 0 0; font-size: 14px; color: var(--text-dark); }
 .trk-detail .trk-detail-status .trk-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
 
 .trk-detail .trk-detail-reason {

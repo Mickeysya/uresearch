@@ -54,6 +54,11 @@ class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime, 
         return app(ApplicationDetailsContent::class)->target($application, $stageKey);
     }
 
+    public function waitingFor(Application $application): ?string
+    {
+        return app(ApplicationDetailsContent::class)->waitingFor($application);
+    }
+
     public function issuedDocument(Application $application): ?array
     {
         return app(ApplicationDetailsContent::class)->certificationLetter($application);
