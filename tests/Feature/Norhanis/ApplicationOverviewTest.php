@@ -8,18 +8,18 @@ use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Console\Commands\SeedDemoApplications;
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\ClaimsDetail;
-use App\Modules\Norhanis\Models\TravelDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
- * The one list of Travel, Claims and Publication applications that approvers
- * read, and the demo data it is shown with.
+ * The one list of Travel, Claims and Publication applications that CGS
+ * reads, and the demo data it is shown with.
  *
- * The rule under test is visibility: a supervisor sees their own students'
- * applications and nobody else's, a student sees none of it, and a draft is
- * not on the list for anyone.
+ * The rule under test is visibility: CGS sees every submitted application,
+ * nobody else opens the list at all -- the other approvers act from their own
+ * queue -- and a draft is not on it for anyone.
  */
 class ApplicationOverviewTest extends TestCase
 {
@@ -46,21 +46,24 @@ class ApplicationOverviewTest extends TestCase
         $this->assertSame('supervisor', $mine->current_stage);
     }
 
-    public function test_a_supervisor_sees_only_their_own_students(): void
+    public function test_only_cgs_has_the_lists_the_other_approvers_work_from_their_queue(): void
     {
         $supervisor = $this->supervisor();
-        $other = $this->supervisor('other.sup@test.my');
+        $student = $this->student('22001001', 'aina@test.my', ['name' => 'Aina Zulkifli', 'supervisor_id' => $supervisor->id]);
+        $this->claim($student);
 
-        $this->claim($this->student('22001001', 'aina@test.my', ['name' => 'Aina Zulkifli', 'supervisor_id' => $supervisor->id]));
-        $this->claim($this->student('22001002', 'hakim@test.my', ['name' => 'Hakim Osman', 'supervisor_id' => $other->id]));
+        $chair = $this->user(Role::CHAIR, ['email' => 'chair@test.my', 'department' => 'Computer & Information Sciences']);
 
-        $this->actingAs($supervisor)
-            ->get(route('norhanis.overview'))
-            ->assertOk()
-            ->assertSee('Aina Zulkifli')
-            ->assertDontSee('Hakim Osman')
-            // It is on the supervisor's own stage, so it links to their queue.
-            ->assertSee('Review');
+        // The list shows every approver's stage, so only CGS opens it...
+        foreach ([$supervisor, $chair, $this->dean()] as $reader) {
+            foreach ([null, 'travel', 'claims', 'publication'] as $module) {
+                $this->actingAs($reader)->get(route('norhanis.overview', ['module' => $module]))->assertForbidden();
+            }
+        }
+
+        // ...while the supervisor's queue still has the application, on
+        // their stage alone.
+        $this->actingAs($supervisor)->get(route('claims.queue'))->assertOk()->assertSee('Aina Zulkifli');
     }
 
     public function test_the_list_filters_by_student_module_and_status(): void
@@ -90,30 +93,26 @@ class ApplicationOverviewTest extends TestCase
         $this->actingAs($cgs)->get('/applications-overview?module=hardbound')->assertSessionHasErrors('module');
     }
 
-    public function test_each_role_gets_a_separate_link_and_list_for_the_modules_it_approves(): void
+    public function test_cgs_gets_a_separate_link_and_list_for_each_module_it_approves(): void
     {
         $registry = app(\App\Modules\Core\Services\ModuleRegistry::class);
         $labels = fn ($user) => collect($registry->linksFor($user))->pluck('label')->all();
+        $all = ['Travel Applications', 'Claims Applications', 'Publication Applications'];
 
-        $dean = $this->dean();
-        $cgs = $this->cgs();
+        // Non-Executive CGS reviews all three; Manager CGS only approves claims.
+        $this->assertSame($all, array_values(array_intersect($all, $labels($this->cgs()))));
 
-        // CGS reviews all three; the Dean only has a part in travel.
-        foreach (['Travel Applications', 'Claims Applications', 'Publication Applications'] as $label) {
-            $this->assertContains($label, $labels($cgs));
+        $manager = $this->user(Role::MANAGER_CGS, ['email' => 'manager@test.my']);
+        $this->assertSame(['Claims Applications'], array_values(array_intersect($all, $labels($manager))));
+        $this->actingAs($manager)->get(route('norhanis.overview', ['module' => 'claims']))->assertOk();
+        $this->actingAs($manager)->get(route('norhanis.overview', ['module' => 'travel']))->assertForbidden();
+
+        // Nobody else has any of them in the sidebar, though each approves one.
+        $chair = $this->user(Role::CHAIR, ['email' => 'chair@test.my', 'department' => 'Computer & Information Sciences']);
+
+        foreach ([$this->supervisor(), $chair, $this->dean(), $this->student()] as $reader) {
+            $this->assertSame([], array_values(array_intersect($all, $labels($reader))));
         }
-
-        $this->assertContains('Travel Applications', $labels($dean));
-        $this->assertNotContains('Claims Applications', $labels($dean));
-        $this->assertNotContains('Publication Applications', $labels($dean));
-        $this->assertNotContains('Travel Applications', $labels($this->student()));
-
-        $this->actingAs($dean)->get(route('norhanis.overview', ['module' => 'travel']))->assertOk();
-        $this->actingAs($dean)->get(route('norhanis.overview', ['module' => 'claims']))->assertForbidden();
-
-        // And the combined list shows the Dean nothing from the other two.
-        $this->claim($this->student('22001005', 'aina@test.my', ['name' => 'Aina Zulkifli']));
-        $this->actingAs($dean)->get(route('norhanis.overview'))->assertOk()->assertDontSee('Aina Zulkifli');
     }
 
     public function test_the_list_filters_by_whose_stage_an_application_is_waiting_on(): void
@@ -135,7 +134,7 @@ class ApplicationOverviewTest extends TestCase
         $list(['stage' => 'non_exec_cgs'])->assertSee('No applications match');
 
         // The reader's own stage is pointed out, and each stage has a count.
-        $list([])->assertSee('Non-Executive CGS (my stage)')->assertSee('Pending, waiting for');
+        $list([])->assertSee('Non-Executive CGS (my stage)');
 
         // The Dean has no stage in the claims chain, so it is not a choice.
         $this->actingAs($cgs)
@@ -150,8 +149,13 @@ class ApplicationOverviewTest extends TestCase
         $cgs = $this->cgs();
         $engine = app(WorkflowEngine::class);
 
-        // Aina: submitted 10 days ago, endorsed by the supervisor 6 days ago,
-        // so 4 days on the supervisor's stage and now waiting on the Chair.
+        // Stage time is counted in working days, so the clock is fixed:
+        // Friday 6 Nov 2026, noon.
+        $this->travelTo(Carbon::parse('2026-11-06 12:00'));
+
+        // Aina: submitted 10 days ago (Tue noon), endorsed by the supervisor
+        // 6 days ago (Sat noon), so 3.5 working days on the supervisor's stage
+        // and now waiting on the Chair.
         $aina = $this->claim($this->student('22001001', 'aina@test.my', ['name' => 'Aina Zulkifli']));
         $aina->forceFill(['submitted_at' => now()->subDays(10)])->save();
         $engine->decide($aina, $supervisor, 'approve');
@@ -166,9 +170,12 @@ class ApplicationOverviewTest extends TestCase
         $this->assertSame(['pending' => 2, 'approved' => 0, 'rejected' => 1], $view->viewData('totals')['claims']);
         $this->assertSame(1, $view->viewData('waiting')['claims']['supervisor']);
         $this->assertSame(1, $view->viewData('waiting')['claims']['chair']);
-        // Two decisions on the supervisor's stage: 4 days and none at all.
-        $this->assertSame(2.0, $view->viewData('average')['claims']['supervisor']);
-        $this->assertNull($view->viewData('average')['claims']['chair']);
+        // Two decisions on the supervisor's stage, 3.5 working days and none
+        // at all: a median of 1.75, shown to one place.
+        $this->assertSame(1.8, $view->viewData('median')['claims']['supervisor']);
+        $this->assertNull($view->viewData('median')['claims']['chair']);
+        // The client charter sits beside it.
+        $this->assertSame(2, $view->viewData('charter')['claims']['supervisor']);
         $this->assertSame(3, array_sum($view->viewData('months')['series']['claims']));
 
         // Aina has waited longest on her current stage, and is named.
@@ -196,8 +203,7 @@ class ApplicationOverviewTest extends TestCase
         $this->assertStringContainsString('Aina Zulkifli', $all);
         $this->assertStringContainsString("'=HYPERLINK", $all);
 
-        // Every other approver's dashboard is their own decisions, on the
-        // list -- no report, no export, and no button pointing at either.
+        // No other approver gets the report or the export.
         $chair = $this->user(Role::CHAIR, ['email' => 'chair@test.my', 'department' => 'Computer & Information Sciences']);
 
         foreach ([$supervisor, $chair, $this->dean()] as $reader) {
@@ -207,12 +213,10 @@ class ApplicationOverviewTest extends TestCase
 
         // One escape, not two: the header's & and ' reach the browser as
         // characters, not as a visible "&amp;" or "&#039;".
-        $this->actingAs($chair)->get(route('norhanis.overview'))->assertOk()
+        $this->actingAs($cgs)->get(route('norhanis.overview'))->assertOk()
             ->assertSee('<h2>Travel, Claims &amp; Publication Applications</h2>', false)
             ->assertDontSee('&amp;amp;', false)
-            ->assertSee('<p>Dashboard of your actions and your department&#039;s applications.</p>', false)
-            ->assertDontSee('Reports &amp; analytics', false);
-        $this->actingAs($cgs)->get(route('norhanis.overview'))->assertSee('Reports &amp; analytics', false);
+            ->assertSee('Reports &amp; analytics', false);
         $this->actingAs($this->student('22001009', 's9@test.my'))->get(route('norhanis.report'))->assertForbidden();
     }
 
@@ -252,7 +256,8 @@ class ApplicationOverviewTest extends TestCase
         $demo = User::where('email', 'like', '%'.SeedDemoApplications::DEMO_DOMAIN)->pluck('id');
 
         $this->assertCount(4, $demo);
-        $this->assertSame(12, Application::whereIn('student_id', $demo)->count());
+        // One application each, the three modules in turn.
+        $this->assertSame(4, Application::whereIn('student_id', $demo)->count());
         $this->assertSame(0, Application::whereIn('student_id', $demo)->where('status', Application::STATUS_DRAFT)->count());
         $this->assertEqualsCanonicalizing(
             ['claims_student', 'publication', 'travel'],
@@ -261,7 +266,7 @@ class ApplicationOverviewTest extends TestCase
 
         // Running it again adds nothing.
         $this->artisan('norhanis:demo-applications', ['--count' => 4])->assertSuccessful();
-        $this->assertSame(12, Application::whereIn('student_id', $demo)->count());
+        $this->assertSame(4, Application::whereIn('student_id', $demo)->count());
 
         $this->artisan('norhanis:demo-applications', ['--clear' => true])->assertSuccessful();
 
@@ -269,118 +274,6 @@ class ApplicationOverviewTest extends TestCase
         $this->assertSame(0, Application::whereIn('student_id', $demo)->count());
         $this->assertTrue($real->fresh()->exists);
         $this->assertTrue($kept->fresh()->exists);
-    }
-
-    public function test_a_chair_sees_only_their_departments_applications_that_reached_the_chair(): void
-    {
-        $supervisor = $this->supervisor();
-        $chair = $this->user(Role::CHAIR, ['email' => 'chair@test.my', 'department' => 'Computer & Information Sciences']);
-        $cgs = $this->cgs();
-        $engine = app(WorkflowEngine::class);
-        $cis = ['department' => 'Computer & Information Sciences', 'supervisor_id' => $supervisor->id];
-
-        // Waiting on the Chair now: seen.
-        $engine->decide($this->claim($this->student('22001001', 'aina@test.my', ['name' => 'Aina Zulkifli'] + $cis)), $supervisor, 'approve');
-
-        // Already past the Chair, now with CGS: seen, through the history.
-        $past = $this->claim($this->student('22001002', 'hakim@test.my', ['name' => 'Hakim Osman'] + $cis));
-        $engine->decide($past, $supervisor, 'approve');
-        $engine->decide($past->fresh(), $chair, 'approve');
-
-        // Still with the supervisor, and rejected before the Chair: not yet
-        // the Chair's business, and never will be.
-        $this->claim($this->student('22001003', 'farah@test.my', ['name' => 'Farah Lee'] + $cis));
-        $engine->decide($this->claim($this->student('22001004', 'imran@test.my', ['name' => 'Imran Yusof'] + $cis)), $supervisor, 'reject');
-
-        // Waiting on the Chair, but another department's.
-        $engine->decide($this->claim($this->student('22001005', 'mei@test.my', [
-            'name' => 'Tan Mei Ling', 'department' => 'Chemical Engineering', 'supervisor_id' => $supervisor->id,
-        ])), $supervisor, 'approve');
-
-        $view = $this->actingAs($chair)->get(route('norhanis.overview', ['module' => 'claims']))->assertOk();
-
-        $view->assertSee('Aina Zulkifli')->assertSee('Hakim Osman')
-            ->assertDontSee('Farah Lee')->assertDontSee('Imran Yusof')->assertDontSee('Tan Mei Ling')
-            ->assertSee("Dashboard of your actions and your department's applications.");
-
-        // The dashboard counts the same two rows, one of them waiting on the
-        // Chair, and no stage before the Chair's is offered.
-        $this->assertSame(['pending' => 2, 'approved' => 0, 'rejected' => 0], $view->viewData('totals'));
-        $this->assertSame(1, $view->viewData('waiting')['chair']);
-        $this->assertArrayNotHasKey('supervisor', $view->viewData('stages'));
-        $view->assertSee('Waiting on You');
-
-        // A Chair's chart is their own decisions, not the whole chain's
-        // stages: one waiting on them, one they passed on, none rejected.
-        $this->assertSame(['Waiting on me', 'Endorsed by me', 'Rejected by me'], $view->viewData('mine')['labels']);
-        $this->assertSame([1, 1, 0], $view->viewData('mine')['counts']);
-        // The Outcomes line names whose applications these are, and who
-        // else on the claims chain a pending one may be with.
-        $view->assertSee('Applications from your department that reached you as Chair of Department. A pending one is waiting on you, Non-Executive CGS or Manager CGS.');
-
-        $view->assertSee('My decisions')->assertSee('overview-mine')->assertDontSee('Pending, waiting for');
-
-        // Each bar is a filter on the list.
-        $this->actingAs($chair)->get(route('norhanis.overview', ['module' => 'claims', 'decided' => 'passed']))
-            ->assertSee('Hakim Osman')->assertDontSee('Aina Zulkifli');
-        $this->actingAs($chair)->get(route('norhanis.overview', ['module' => 'claims', 'decided' => 'rejected']))
-            ->assertSee('No applications match');
-
-        // CGS still sees all five.
-        $this->actingAs($cgs)->get(route('norhanis.overview', ['module' => 'claims']))
-            ->assertSee('Showing 1 to 5 of 5');
-    }
-
-    public function test_a_chair_with_no_department_on_record_sees_nothing(): void
-    {
-        $supervisor = $this->supervisor();
-        $chair = $this->chair();
-
-        // A student with no department either: where('department', null)
-        // must not be what lets them through.
-        app(WorkflowEngine::class)->decide($this->claim($this->student('22001001', 'aina@test.my', ['name' => 'Aina Zulkifli'])), $supervisor, 'approve');
-
-        $this->actingAs($chair)->get(route('norhanis.overview', ['module' => 'claims']))
-            ->assertOk()
-            ->assertDontSee('Aina Zulkifli')
-            ->assertSee('No applications match');
-    }
-
-    public function test_the_dean_sees_international_travel_that_reached_the_dean_and_no_local_travel(): void
-    {
-        $supervisor = $this->supervisor();
-        $chair = $this->user(Role::CHAIR, ['email' => 'chair@test.my', 'department' => 'Computer & Information Sciences']);
-        $cgs = $this->cgs();
-        $dean = $this->dean();
-        $engine = app(WorkflowEngine::class);
-        $cis = ['department' => 'Computer & Information Sciences'];
-
-        // International, through the supervisor, Chair and CGS: on the Dean.
-        $abroad = $this->travelFor($this->student('22001001', 'aina@test.my', ['name' => 'Aina Zulkifli'] + $cis), international: true);
-        $engine->decide($abroad, $supervisor, 'approve');
-        $engine->decide($abroad->fresh(), $chair, 'approve');
-        $engine->decide($abroad->fresh(), $cgs, 'approve');
-
-        // International but still with the supervisor: not the Dean's yet.
-        $this->travelFor($this->student('22001002', 'hakim@test.my', ['name' => 'Hakim Osman'] + $cis), international: true);
-
-        // Local, approved all the way to the Senior Director: finished without
-        // ever reaching the Dean.
-        $local = $this->travelFor($this->student('22001003', 'farah@test.my', ['name' => 'Farah Lee'] + $cis), international: false);
-        $engine->decide($local, $supervisor, 'approve');
-        $engine->decide($local->fresh(), $chair, 'approve');
-        $engine->decide($local->fresh(), $cgs, 'approve');
-        $engine->decide($local->fresh(), $this->seniorDirector(), 'approve');
-        $this->assertSame(Application::STATUS_APPROVED, $local->fresh()->status);
-
-        $view = $this->actingAs($dean)->get(route('norhanis.overview', ['module' => 'travel']))->assertOk();
-
-        $view->assertSee('Aina Zulkifli')->assertDontSee('Hakim Osman')->assertDontSee('Farah Lee');
-        $this->assertSame(1, $view->viewData('waiting')['dean_pgr']);
-        $this->assertSame(['dean_pgr'], array_keys($view->viewData('stages')));
-        $this->assertSame(['Waiting on me', 'Approved by me', 'Rejected by me'], $view->viewData('mine')['labels']);
-        $this->assertSame([1, 0, 0], $view->viewData('mine')['counts']);
-        $view->assertSee('Applications that reached you as Dean of PGR. You are the last approver, so a pending one is waiting on you.');
     }
 
     public function test_the_dashboard_summarises_what_the_reader_may_see(): void
@@ -395,41 +288,10 @@ class ApplicationOverviewTest extends TestCase
 
         $this->assertSame(['pending' => 1, 'approved' => 0, 'rejected' => 1], $view->viewData('totals'));
 
-        $chart = $view->viewData('chart');
-        $this->assertSame([1, 0, 1], $chart['statusTotals']);
-        $this->assertSame(1, $chart['waiting']['claims'][0]);
-        $this->assertContains('Non-Executive CGS (you)', $chart['stages']);
-
-        // CGS keeps the stage chart: where the whole process is backing up.
-        $this->assertNull($view->viewData('mine'));
-        $view->assertSee('Every submitted application, at every stage: Lecturer/Supervisor, Chair of Department, Non-Executive CGS');
-        $view->assertSee('Total Applications')->assertSee('Waiting on You')->assertSee('Outcomes')
-            ->assertSee('overview-waiting')->assertSee('overview-status')->assertDontSee('My decisions');
-    }
-
-    /** A travel application for $student, submitted to its first stage. */
-    protected function travelFor(User $student, bool $international): Application
-    {
-        $application = Application::create([
-            'student_id' => $student->id,
-            'module_type' => 'travel',
-            'status' => Application::STATUS_DRAFT,
-        ]);
-
-        TravelDetail::create([
-            'application_id' => $application->id,
-            'type_of_request' => 'data_collection',
-            'travel_start_date' => now()->addDays(10),
-            'travel_end_date' => now()->addDays(12),
-            'duration_days' => 3,
-            'reason_for_travel' => 'Fieldwork',
-            'destination_address' => $international ? 'Singapore' : 'Kuala Lumpur',
-            'is_international' => $international,
-            'contact_person_email' => 'contact@test.my',
-            'is_ga_gra' => false,
-        ]);
-
-        return app(WorkflowEngine::class)->submit($application);
+        // The stat cards but no charts: Reports & analytics has them.
+        $view->assertSee('Total Applications')->assertSee('Waiting on You')
+            ->assertDontSee('<canvas id="overview-status"', false)
+            ->assertDontSee('Outcomes')->assertDontSee('My decisions');
     }
 
     /** A claims application for $student, submitted to its first stage. */

@@ -6,6 +6,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Support\Role;
+use App\Modules\Norhanis\Support\StageDurations;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -68,7 +69,7 @@ class ApplicationReportController extends ApplicationOverviewController
         foreach ($shown as $slug => $key) {
             $totals[$slug] = ['pending' => 0, 'approved' => 0, 'rejected' => 0];
             $waiting[$slug] = array_fill_keys(array_keys($stages), 0);
-            $spent[$slug] = array_fill_keys(array_keys($stages), ['days' => 0.0, 'decisions' => 0]);
+            $spent[$slug] = array_fill_keys(array_keys($stages), []);
         }
 
         foreach ($applications as $application) {
@@ -76,15 +77,15 @@ class ApplicationReportController extends ApplicationOverviewController
             $totals[$slug][$application->status]++;
 
             // Time on a stage runs from the decision before it (or from
-            // submission, for the first stage) to the decision that closed it.
+            // submission, for the first stage) to the decision that closed it,
+            // in working days -- the unit the client charter is written in.
             $since = $application->submitted_at;
 
             foreach ($history->get($application->id, []) as $entry) {
                 $role = $roleOf($application->module_type, $entry->stage_key);
 
                 if ($role !== null && $since !== null && isset($spent[$slug][$role])) {
-                    $spent[$slug][$role]['days'] += $since->diffInMinutes($entry->created_at) / 1440;
-                    $spent[$slug][$role]['decisions']++;
+                    $spent[$slug][$role][] = StageDurations::workingDaysBetween($since, $entry->created_at);
                 }
 
                 $since = $entry->created_at;
@@ -104,10 +105,13 @@ class ApplicationReportController extends ApplicationOverviewController
         arsort($longest);
         $longest = array_slice($longest, 0, self::LONGEST, true);
 
-        $average = array_map(fn (array $byRole) => array_map(
-            fn (array $sum) => $sum['decisions'] > 0 ? round($sum['days'] / $sum['decisions'], 1) : null,
+        // The median, not the average: one application forgotten on a desk
+        // would otherwise set a stage's figure for months.
+        $median = array_map(fn (array $byRole) => array_map(
+            fn (array $days) => $days ? round(StageDurations::median($days), 1) : null,
             $byRole,
         ), $spent);
+        $charter = $this->charterOf($registry, $shown);
         $months = $this->intakeByMonth($applications, $slugs);
         $labels = array_map(fn (string $key) => $registry->get($key)->label(), $shown);
 
@@ -121,14 +125,15 @@ class ApplicationReportController extends ApplicationOverviewController
                 'modules' => $labels,
                 'stages' => array_values($stages),
                 'waiting' => array_map('array_values', $waiting),
-                'days' => array_map('array_values', $average),
+                'days' => array_map('array_values', $median),
                 'months' => $months,
             ],
             'choices' => array_map(fn (string $key) => $registry->get($key)->label(), $this->allowedModules($request, $registry, null)),
             'stages' => $stages,
             'totals' => $totals,
             'waiting' => $waiting,
-            'average' => $average,
+            'median' => $median,
+            'charter' => $charter,
             'months' => $months,
             'longest' => Application::with('student')->findMany(array_keys($longest))
                 ->sortByDesc(fn (Application $application) => $longest[$application->id])
@@ -202,6 +207,22 @@ class ApplicationReportController extends ApplicationOverviewController
             ->when($period > 0, fn (Builder $query) => $query->where('submitted_at', '>=', now()->subDays($period)));
 
         return [$shown, $period, $query];
+    }
+
+    /**
+     * The client charter's working days for each module's stages, keyed the
+     * way the report's tables are: by the role that holds the stage.
+     *
+     * @param  array<string, string>  $shown  slug => module_type
+     * @return array<string, array<string, int|null>>
+     */
+    protected function charterOf(ModuleRegistry $registry, array $shown): array
+    {
+        $durations = app(StageDurations::class);
+
+        return array_map(fn (string $key) => collect($registry->get($key)->stages())
+            ->mapWithKeys(fn ($stage) => [$stage->role => $durations->charterDays($key, $stage->key)])
+            ->all(), $shown);
     }
 
     /**

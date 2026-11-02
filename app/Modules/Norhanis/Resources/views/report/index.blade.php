@@ -104,11 +104,11 @@
 
     {{-- ---- Time per stage ---------------------------------------------- --}}
     <div class="app-item">
-        <h4>Average days spent on each stage</h4>
-        <p class="queue-meta">From an application reaching a stage to that stage's decision, averaged over every decision made. A stage with no decisions yet has no figure.</p>
+        <h4>Typical working days spent on each stage</h4>
+        <p class="queue-meta">From an application reaching a stage to that stage's decision, in working days (Monday to Friday). The figure is the median of every decision made, so one forgotten application does not skew it; the CGS client charter for the stage is shown beside it. A stage with no decisions yet has no figure.</p>
 
         <div class="chart-bars-wrap">
-            <canvas id="report-days" role="img" aria-label="Average days an application spends on each approval stage, by module. The same figures are in the table below."></canvas>
+            <canvas id="report-days" role="img" aria-label="Median working days an application spends on each approval stage, by module. The same figures are in the table below."></canvas>
         </div>
 
         <table class="recent-activity-table" style="margin-top: 12px;">
@@ -122,7 +122,12 @@
                 <tr>
                     <td>{{ $label }}</td>
                     @foreach ($stages as $stageRole => $stageLabel)
-                        <td>{{ $average[$slug][$stageRole] === null ? 'No decisions' : $average[$slug][$stageRole].' days' }}</td>
+                        <td>
+                            {{ $median[$slug][$stageRole] === null ? 'No decisions' : $median[$slug][$stageRole].' days' }}
+                            @if (($charter[$slug][$stageRole] ?? null) !== null)
+                                <span class="queue-meta">&middot; charter {{ $charter[$slug][$stageRole] }}</span>
+                            @endif
+                        </td>
                     @endforeach
                 </tr>
             @endforeach

@@ -1,0 +1,38 @@
+{{--
+    The application's documents inside its queue card, like a course page on
+    ULearn: one row per file. Its name opens the PDF or image in a new tab,
+    so the queue stays where it was; Download saves it. Drawn at the end of
+    each module's _detail partial, and replaces Core's plain list of the
+    same files on that card (see pack/_styles).
+
+    For readers ApplicationPackController::canDownload() allows; anyone else
+    keeps Core's list. Expects: $application
+--}}
+@php($pack = app(\App\Modules\Norhanis\Http\Controllers\ApplicationPackController::class))
+@if ($pack->canDownload(request(), $application))
+    @php($documents = $pack->openableDocuments(request(), $application))
+
+    @if ($documents->isNotEmpty())
+        @include('norhanis::pack._styles')
+
+        <div class="pv-inline">
+            <h4>Documents ({{ $documents->count() }})</h4>
+            <div class="pv-box">
+                <ul class="pv-rows">
+                    @foreach ($documents as $document)
+                        <li class="pv-row">
+                            @include('norhanis::pack._file_icon', ['label' => $pack::fileLabel($document)])
+                            <span class="pv-title">
+                                {{-- A file the browser cannot show is downloaded instead. --}}
+                                <a href="{{ $pack::previewType($document) ? route('norhanis.pack.preview', $document) : $document->url() }}"
+                                   target="_blank" rel="noopener">{{ $document->doc_type }}</a>
+                                <span>{{ $document->original_name }}</span>
+                            </span>
+                            <a class="btn-secondary" href="{{ $document->url() }}">Download</a>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        </div>
+    @endif
+@endif

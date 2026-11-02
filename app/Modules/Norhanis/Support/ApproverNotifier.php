@@ -19,10 +19,8 @@ use Illuminate\Support\Facades\Log;
  * gaps from inside this module, by calling it beside submit() and decide(),
  * rather than changing Core for all six modules.
  *
- * Who is told matches who may see it on the applications list
- * (ApplicationOverviewController::visibleTo): the student's own supervisor,
- * the Chair of the student's department, and everyone holding the role for
- * the other stages. Best effort, as Core's own email is: the decision is the
+ * Who is told: the student's own supervisor, the Chair of the student's
+ * department, and everyone holding the role for the other stages. Best effort, as Core's own email is: the decision is the
  * durable thing, and a mail outage must not undo or hide it.
  */
 class ApproverNotifier

@@ -3,10 +3,13 @@
 namespace App\Modules\Norhanis;
 
 use App\Modules\Core\Services\ModuleRegistry;
+use App\Modules\Norhanis\Console\Commands\RemindStalledApplications;
 use App\Modules\Norhanis\Console\Commands\SeedDemoApplications;
+use App\Modules\Norhanis\Support\StageDurations;
 use App\Modules\Norhanis\Workflows\ClaimsWorkflow;
 use App\Modules\Norhanis\Workflows\PublicationWorkflow;
 use App\Modules\Norhanis\Workflows\TravelWorkflow;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -17,6 +20,16 @@ use Illuminate\Support\ServiceProvider;
  */
 class ModuleProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        // config('norhanis.charter.<module>.<stage>'): CGS's client charter days.
+        $this->mergeConfigFrom(__DIR__.'/Config/charter.php', 'norhanis.charter');
+
+        // One per request, so the stage history is read once however many
+        // applications a page estimates.
+        $this->app->singleton(StageDurations::class);
+    }
+
     public function boot(ModuleRegistry $registry): void
     {
         $registry->register(new TravelWorkflow());
@@ -29,7 +42,14 @@ class ModuleProvider extends ServiceProvider
             $this->commands([
                 // Example students and applications, for development only.
                 SeedDemoApplications::class,
+                RemindStalledApplications::class,
             ]);
         }
+
+        // Every weekday morning, from here rather than routes/console.php so
+        // nothing outside this folder changes -- the same scheduler reads it.
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command('norhanis:remind-stalled')->weekdays()->dailyAt('08:00');
+        });
     }
 }

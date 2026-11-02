@@ -14,6 +14,7 @@
     @if ($detail->cost_centre === 'split_memo')
         <p style="color: var(--text-grey);">CGS will email the split memo template; the supervisor completes it outside UResearch.</p>
     @endif
+    @include('norhanis::partials.stage-estimate', ['application' => $application])
     @include('norhanis::pack._buttons', ['application' => $application])
 
     <table class="recent-activity-table" style="margin-top: 12px;">
@@ -62,6 +63,8 @@
             @endforeach
         </table>
     @endif
+
+    @include('norhanis::pack._inline_documents', ['application' => $application])
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif

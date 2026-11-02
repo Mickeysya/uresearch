@@ -4,6 +4,7 @@ namespace App\Modules\Norhanis\Http\Controllers;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApplicationDocument;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\ClaimsDetail;
@@ -25,20 +26,25 @@ use ZipArchive;
  *          approval history, and the list of attachments.
  *   zip()  that summary plus every attached file, in one download.
  *
- * Who gets what, as agreed with CGS:
+ *   documents()  every attached file as a list, or one on its own page.
+ *   preview()  one attached file, opened in the browser instead of saved.
  *
- *   CGS (Non-Exec, Manager, Senior Director)  the summary and the ZIP.
- *   Supervisor                                the ZIP of their own student's
- *                                             files, with no summary in it.
- *   Chair, Dean                               nothing to download.
+ * Every approver in the application's chain gets the summary and the ZIP
+ * (Norhanis, Nov 2026; this replaced an earlier CGS-only split):
  *
- * Who may download WHICH application is the
- * applications list's own rule (visibleTo), and nothing wider: a pack never
- * shows more than the list does. In particular it does NOT also allow
- * "whatever is on the reader's stage now" -- Core's queues are scoped by role
- * alone, so that would hand every supervisor every student's pack (the open
+ *   CGS (Non-Exec, Manager, Senior Director)  any submitted application,
+ *                                             as on the applications list.
+ *   Supervisor                                their own students' only.
+ *   Chair                                     their own department's only,
+ *   Dean                                      and only once it has reached
+ *                                             them: on their stage now, or
+ *                                             decided by them before.
+ *
+ * Supervisor and Chair are scoped to their own students and department on
+ * purpose: Core's queues are scoped by role alone, so "on the reader's stage"
+ * by itself would hand every supervisor every student's pack (the open
  * "Scope approver queues" item in TODO.md). The buttons are shown only where
- * canDownload() says yes, so a queue row the list would hide has none.
+ * canDownload() says yes, so a queue row outside that scope has none.
  *
  * The files inside the ZIP are filtered again through Core's per-document
  * rule, ApplicationDocument::visibleTo(). That rule is stricter for CGS: CGS
@@ -48,16 +54,12 @@ use ZipArchive;
  */
 class ApplicationPackController extends ApplicationOverviewController
 {
-    /** May read the whole application: its summary and every file. */
-    public const SUMMARY_ROLES = ApplicationReportController::REPORT_ROLES;
-
-    /** May download the files the student uploaded, without the summary. */
-    public const FILE_ROLES = [...self::SUMMARY_ROLES, Role::SUPERVISOR];
+    /** Opened in the browser by preview(); anything else is downloaded instead. */
+    public const PREVIEWABLE = ['pdf' => 'application/pdf', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg'];
 
     public function pdf(Request $request, ModuleRegistry $registry, Application $application): Response
     {
         $this->authorizePack($request, $registry, $application);
-        abort_unless($this->canDownloadSummary($request, $application), 403);
 
         $this->log($request, $application, 'downloaded the application summary');
 
@@ -77,11 +79,7 @@ class ApplicationPackController extends ApplicationOverviewController
         $zip = new ZipArchive;
         abort_unless($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true, 500, 'Could not build the ZIP file.');
 
-        $withSummary = $this->canDownloadSummary($request, $application);
-
-        if ($withSummary) {
-            $zip->addFromString('00-Application-Summary.pdf', $this->summaryPdf($request, $application, $files));
-        }
+        $zip->addFromString('00-Application-Summary.pdf', $this->summaryPdf($request, $application, $files));
 
         $used = [];
 
@@ -95,18 +93,77 @@ class ApplicationPackController extends ApplicationOverviewController
             $zip->addFile(Storage::disk('local')->path($document->path), $name);
         }
 
-        // ZipArchive writes no file at all for an archive with no entries.
-        if ($files->isEmpty() && ! $withSummary) {
-            $zip->addFromString('No-files.txt', 'There are no files on this application for you to open yet.');
-        }
-
         $zip->close();
 
         $this->log($request, $application, 'downloaded all documents', ['files' => $files->count()]);
 
         return response()
-            ->download($path, $this->baseName($application).($withSummary ? '-documents.zip' : '-files.zip'), ['Content-Type' => 'application/zip'])
+            ->download($path, $this->baseName($application).'-documents.zip', ['Content-Type' => 'application/zip'])
             ->deleteFileAfterSend();
+    }
+
+    /** Every document this reader may open, as a list, or one of them on its own. */
+    public function documents(Request $request, ModuleRegistry $registry, Application $application)
+    {
+        $this->authorizePack($request, $registry, $application);
+
+        $chosen = $request->validate(['document' => ['nullable', 'integer']])['document'] ?? null;
+        $documents = $this->openableDocuments($request, $application);
+
+        return view('norhanis::pack.documents', [
+            'application' => $application,
+            'documents' => $documents,
+            // No document chosen, or one this reader may not open: the list.
+            'selected' => $chosen ? $documents->firstWhere('id', $chosen) : null,
+            'pack' => $this,
+        ]);
+    }
+
+    /**
+     * One attached file, shown in the browser. Only PDFs and images, typed
+     * from the stored file's extension rather than from what the upload
+     * claimed, with nosniff so the browser cannot treat it as anything else.
+     * Anything else is downloaded through Core's own link instead. (No CSP
+     * sandbox: Chrome refuses to open a PDF under one.)
+     */
+    public function preview(Request $request, ApplicationDocument $document): Response
+    {
+        $application = $document->application;
+
+        abort_unless($application && in_array($application->module_type, self::MODULES, true), 404);
+        abort_unless($this->canDownload($request, $application) && $document->visibleTo($request->user()), 403);
+        abort_unless($document->exists(), 404);
+        abort_unless($type = self::previewType($document), 415);
+
+        activity('document')
+            ->causedBy($request->user())
+            ->performedOn($document)
+            ->withProperties([
+                'action' => 'previewed',
+                'doc_type' => $document->doc_type,
+                'application_id' => $application->id,
+                'student' => $application->student?->name,
+            ])
+            ->log('Previewed document');
+
+        return Storage::disk('local')->response($document->path, $this->safeName($document->original_name), [
+            'Content-Type' => $type,
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline');
+    }
+
+    /** What a document's icon says it is: "PDF", "JPG", "DOC". */
+    public static function fileLabel(ApplicationDocument $document): string
+    {
+        $extension = Str::upper(pathinfo($document->path, PATHINFO_EXTENSION));
+
+        return ['JPEG' => 'JPG', 'DOCX' => 'DOC', 'XLSX' => 'XLS'][$extension] ?? $extension;
+    }
+
+    /** The type a document is previewed as, or null if it is not previewed. */
+    public static function previewType(ApplicationDocument $document): ?string
+    {
+        return self::PREVIEWABLE[Str::lower(pathinfo($document->path, PATHINFO_EXTENSION))] ?? null;
     }
 
     protected function authorizePack(Request $request, ModuleRegistry $registry, Application $application): void
@@ -115,36 +172,46 @@ class ApplicationPackController extends ApplicationOverviewController
         abort_unless($this->canDownload($request, $application), 403);
     }
 
-    /** CGS only: the summary is the whole application, for the office that runs it. */
-    public function canDownloadSummary(Request $request, Application $application): bool
-    {
-        return $request->user()->hasRole(...self::SUMMARY_ROLES) && $this->canDownload($request, $application);
-    }
-
     /**
-     * A CGS role or the supervisor, for one of the three modules, in a module
-     * this reader approves, and on their applications list -- which also
-     * rules out drafts, and limits a supervisor to their own students.
+     * An approver in this application's chain, for a submitted Travel, Claims
+     * or Publication application -- see the rule at the top of this class.
      */
     public function canDownload(Request $request, Application $application): bool
     {
-        if (! $request->user()->hasRole(...self::FILE_ROLES)) {
+        $user = $request->user();
+
+        if (! $user->hasRole(...self::ROLES)
+            || $application->status === Application::STATUS_DRAFT
+            || ! in_array($application->module_type, self::MODULES, true)
+            || ! self::approves($application->module(), $user)) {
             return false;
         }
 
-        $slug = array_search($application->module_type, self::MODULES, true);
-
-        if ($slug === false || ! self::approves(app(ModuleRegistry::class)->get($application->module_type), $request->user())) {
-            return false;
+        if (Role::isCgs($user->role)) {
+            return true;
         }
 
-        return $this->visibleTo($request, [$slug => $application->module_type])
-            ->whereKey($application->id)
-            ->exists();
+        $student = $application->student;
+
+        $own = match ($user->role) {
+            Role::SUPERVISOR => $student?->supervisor_id === $user->id,
+            // A student or Chair with no department on record matches nobody.
+            Role::CHAIR => $student?->department !== null && $student->department === $user->department,
+            default => true,
+        };
+
+        return $own && $this->reached($application, $user);
+    }
+
+    /** On this reader's stage now, or decided by them before. */
+    protected function reached(Application $application, User $user): bool
+    {
+        return ($application->isOpen() && $application->currentStage()?->role === $user->role)
+            || $application->history()->where('approver_id', $user->id)->exists();
     }
 
     /** The attachments this reader may open, by Core's per-document rule. */
-    protected function openableDocuments(Request $request, Application $application)
+    public function openableDocuments(Request $request, Application $application)
     {
         return $application->documents()->orderBy('id')->get()
             ->filter(fn (ApplicationDocument $document) => $document->visibleTo($request->user()) && $document->exists())

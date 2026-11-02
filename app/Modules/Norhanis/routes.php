@@ -19,12 +19,13 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth')->group(function () {
 
     // ---- Travel, Claims and Publication: who has applied -----------------
-    // Read-only, for the roles that approve them: has this student applied,
-    // and where has it reached? One list per module (/travel, /claims,
-    // /publication), or all together without one. Which of them a role may
-    // open is decided in the controller, from each module's own chain.
     Route::middleware('role:'.implode(',', ApplicationOverviewController::ROLES))->group(function () {
+        // Read-only: has this student applied, and where has it reached? One
+        // list per module (/travel, /claims, /publication), or all together
+        // without one. CGS only, since it shows every approver's stage: the
+        // others act from their own queue, which shows theirs alone.
         Route::get('/applications-overview/{module?}', [ApplicationOverviewController::class, 'index'])
+            ->middleware('role:'.implode(',', ApplicationOverviewController::LIST_ROLES))
             ->whereIn('module', array_keys(ApplicationOverviewController::MODULES))
             ->name('norhanis.overview');
 
@@ -36,6 +37,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/applications-pack/{application}/documents.zip', [ApplicationPackController::class, 'zip'])
             ->middleware('throttle:20,1')
             ->name('norhanis.pack.zip');
+        // Every document on one application, to read in the browser, and the
+        // single PDF or image that page shows.
+        Route::get('/applications-pack/{application}/documents', [ApplicationPackController::class, 'documents'])
+            ->name('norhanis.pack.documents');
+        Route::get('/applications-pack/document/{document}/preview', [ApplicationPackController::class, 'preview'])
+            ->name('norhanis.pack.preview');
 
         // The same applications, counted: totals, where they are waiting and
         // how long each stage takes, with a CSV of the rows behind it. CGS

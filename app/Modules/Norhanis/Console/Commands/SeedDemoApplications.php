@@ -15,9 +15,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 /**
- * Fills a development database with example students who have each applied
- * for Travel, Claims and Publication, so the overview list and the queues can
- * be looked at with a realistic number of rows instead of two.
+ * Fills a development database with example students who have each made one
+ * application -- Travel, Claims or Publication in turn -- so the overview list
+ * and the queues can be looked at with a realistic number of rows instead of
+ * two, without one row per module for every student.
+ *
+ * The students differ the way real ones do: MSc or PhD, full- or part-time,
+ * some on a GA/GRA post, some travelling abroad, some publishing at a
+ * conference and some in a journal.
  *
  * Every demo student has an address at DEMO_DOMAIN, which is how --clear
  * finds them again and why it can never touch a real account.
@@ -31,10 +36,10 @@ use Illuminate\Support\Facades\Notification;
 class SeedDemoApplications extends Command
 {
     protected $signature = 'norhanis:demo-applications
-        {--count=100 : How many demo students to create}
+        {--count=100 : How many demo students to create, one application each}
         {--clear : Remove every demo student and their applications instead}';
 
-    protected $description = 'Create (or remove) demo students with Travel, Claims and Publication applications';
+    protected $description = 'Create (or remove) demo students, each with one Travel, Claims or Publication application';
 
     public const DEMO_DOMAIN = '@demo.utp.edu.my';
 
@@ -47,6 +52,11 @@ class SeedDemoApplications extends Command
         'Abdullah', 'Ahmad', 'Chong', 'Hassan', 'Ibrahim', 'Ismail', 'Kumar', 'Lee', 'Mohamad', 'Ng',
         'Osman', 'Rahman', 'Raj', 'Salleh', 'Tan', 'Wong', 'Yusof', 'Zainal', 'Zakaria', 'Zulkifli',
     ];
+
+    protected const PROGRAMMES = ['MSc Full-Time', 'MSc Part-Time', 'PhD Full-Time', 'PhD Part-Time'];
+
+    /** Each student files one of these, in turn, so the three lists come out even. */
+    protected const MODULES = ['travel', 'claims', 'publication'];
 
     protected const DEPARTMENTS = [
         'Computer & Information Sciences', 'Electrical & Electronic Engineering', 'Chemical Engineering',
@@ -105,20 +115,22 @@ class SeedDemoApplications extends Command
                     'password' => 'password',
                     'role' => Role::STUDENT,
                     'matric_no' => sprintf('D26%05d', $n),
-                    'programme' => mt_rand(0, 1) ? 'PhD' : 'MSc by Research',
+                    'programme' => self::PROGRAMMES[mt_rand(0, 3)],
                     'department' => self::DEPARTMENTS[mt_rand(0, 5)],
                     'supervisor_id' => $supervisor->id,
                 ]);
 
-                $this->progress($engine, $this->travel($student));
-                $this->progress($engine, $this->claims($student));
-                $this->progress($engine, $this->publication($student));
+                $this->progress($engine, match (self::MODULES[($n - 1) % count(self::MODULES)]) {
+                    'travel' => $this->travel($student),
+                    'claims' => $this->claims($student),
+                    'publication' => $this->publication($student),
+                });
             });
 
             $created++;
         }
 
-        $this->info("Created {$created} demo students, each with a Travel, Claims and Publication application.");
+        $this->info("Created {$created} demo students, each with one Travel, Claims or Publication application.");
         $this->line('Remove them again with: php artisan norhanis:demo-applications --clear');
 
         return self::SUCCESS;
@@ -154,7 +166,8 @@ class SeedDemoApplications extends Command
             'destination_address' => ['Kuala Lumpur', 'Penang', 'Johor Bahru', 'Singapore', 'Bandung', 'Tokyo'][mt_rand(0, 5)],
             'is_international' => mt_rand(1, 10) <= 3,
             'contact_person_email' => 'contact'.self::DEMO_DOMAIN,
-            'is_ga_gra' => false,
+            // About one in three holds a GA or GRA post.
+            'is_ga_gra' => mt_rand(1, 3) === 1,
         ]);
 
         return $application;

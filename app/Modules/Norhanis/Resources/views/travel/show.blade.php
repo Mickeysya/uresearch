@@ -18,6 +18,7 @@
         <p>{{ $detail->reason_for_travel }}, {{ $detail->destination_address }}</p>
 
         <x-core::stepper :application="$application" />
+        @include('norhanis::partials.stage-estimate')
 
         @if ($rejection = $application->rejection())
             <div class="rejection-note">

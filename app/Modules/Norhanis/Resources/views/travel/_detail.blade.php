@@ -32,7 +32,9 @@
     @endif
 
     <p><a href="{{ route('travel.show', $application) }}">View full application</a></p>
+    @include('norhanis::partials.stage-estimate', ['application' => $application])
     @include('norhanis::pack._buttons', ['application' => $application])
+    @include('norhanis::pack._inline_documents', ['application' => $application])
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif
