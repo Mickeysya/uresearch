@@ -199,10 +199,17 @@ class ApplicationDetails
         }
 
         foreach ($about?->timelineEvents($application) ?? [] as $event) {
-            $events[] = ['detail' => null, 'quote' => null, 'tone' => 'info'] + $event;
+            // The module's own keys win; the defaults only fill gaps.
+            $events[] = $event + ['detail' => null, 'quote' => null, 'tone' => 'info'];
         }
 
-        usort($events, fn ($a, $b) => $b['date'] <=> $a['date']);
+        // Newest first; on the same timestamp the later-recorded event
+        // first, so "Submitted" never sits above a decision made with it.
+        foreach ($events as $i => &$event) {
+            $event['order'] = $i;
+        }
+        unset($event);
+        usort($events, fn ($a, $b) => [$b['date'], $b['order']] <=> [$a['date'], $a['order']]);
 
         return $events;
     }
