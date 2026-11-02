@@ -62,6 +62,53 @@
   `DocumentStore::storeGenerated()` attaches it, so the existing download
   route and permission check apply with no extra code.
 
+## The GA/GRA Certification form (CGS's online form)
+
+The form follows CGS's official online form, section by section:
+
+1. **Student details:** Matric ID, Name, Department and Programme come from
+   the profile and are shown read-only. They are never read from the
+   request, so they can't be overridden. Level (Coursework/Research), Level
+   of Study (Master/PhD) and Mode of Study (Full-time/Full-time ODL/
+   Part-time) are selects; the lists live in
+   `config('nureen.ga_certification.options')`.
+2. **Application type:** Reason/Purpose (optional) and GA/GRA. The
+   appointment period is asked only while
+   `config('nureen.ga_certification.ask_period')` is true
+   (`NUREEN_GA_CERTIFICATION_ASK_PERIOD`, default true). When false, the
+   dates are hidden, not validated, not stored, and not printed on the
+   letter, which says "during the {semester} semester" instead.
+3. **GA/GRA details:** one step holding both types' fields, showing the
+   chosen type's. (One fieldset per type gave a GA applicant an empty "GRA
+   details" step, because `form-stepper` shows every `.fstep` in turn.)
+4. **Supporting details:**
+   - **MyKad/Passport number:** stored with Laravel's `encrypted` cast.
+     `GaCertificationDetail::identityFor($viewer)` shows it in full to CGS
+     staff (`User::isCgs()`) and as `•••• 1234` to everyone else. The form
+     never shows it back: "On file: •••• 1234. Leave blank to keep it."
+   - **Supporting documents:** PDF only
+     (`ga_certification.supporting_document_types`).
+   - **Download pre-filled attachment:** recreates CGS's course-owner
+     attachment (`letters/certification_attachment`, rendered by
+     `LetterRenderer::certificationAttachment()`). It is pre-filled with the
+     name, matric, programme, today's date and the first course row (for a
+     GRA, the grant code, project and leader); signature and stamp stay
+     blank. The button saves the draft first, so the PDF carries what is on
+     screen, and the page it returns to starts the download. The route
+     `ga-certification.attachment` serves the owning student only (403
+     otherwise), from a draft or a submitted request.
+5. **Approval & notification:** personal email, and the supervisor's email
+   from `users.supervisor_id`, read-only.
+6. **Agreement:** the declaration (`ga_certification.declaration`). It is
+   required to submit but not to save a draft; `declaration_accepted_at`
+   records when it was ticked.
+
+Approvers' queue rows show the department and programme, the study
+summary, the identity number (masked unless CGS), the personal email, the
+supervisor's email and when the declaration was accepted. The letter adds a
+"Level of Study" row ("PhD, Research, Full-time ODL"). The identity number
+and personal email are for CGS's records and are not printed.
+
 ## Saved drafts (GA Extension, GA/GRA Certification)
 
 **Save draft** sits beside Submit on both forms. Some documents take days to
@@ -246,6 +293,7 @@ role-scoped pending that decision.
 | `AttendanceAppealTest` | the single stage being final, and that a student cannot attach another student's flagged record to their own appeal (403) |
 | `SupervisionTest` | the required document, that it lands on the private disk under a random name, and that a supervisor sees only the requests naming them |
 | `CertificationTest` | the letter being generated, attached as an `ApplicationDocument`, and actually dispatched |
+| `CertificationOnlineFormTest` | GA and GRA submissions storing every online-form field; an option outside config's list rejected; profile fields (name, matric, department, programme, supervisor) not overridable through the request; the profile shown read-only; non-PDF rejected and several PDFs accepted; the declaration required to submit but not to save a draft; the identity number encrypted at rest, masked for the supervisor, full for CGS, never echoed on the form and kept when left blank; `ask_period` on (required, printed) and off (hidden, ignored, not printed, queue still renders); the attachment as a PDF for the owner only, and from a draft with the auto-download |
 | `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday |
 | `DraftsTest` | empty draft saves (both modules); saving again updates the same draft and keeps files; light validation only; Remove deletes the file; the 5-file limit counts attached files; an incomplete draft fails submit with the normal messages; a complete one goes to pending at the first stage as the same application, files intact; a Certification switching GA→GRA relabels its files; another student (or staff) can't open, change, submit or delete it; delete removes everything; no queue, reminder or analytics sees a draft |
 | `ClientCharterTest` | each chain's expected date (GA Extension both modes, Supervision `'automatic'`, Certification), a `null` stage never inventing a date, overdue never giving a past date, a returned application timed from its actual stage, decided/draft returning nothing |

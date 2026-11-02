@@ -79,6 +79,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/ga-certification/draft/{application}', [CertificationController::class, 'editDraft'])->name('ga-certification.draft.edit');
         Route::post('/ga-certification/draft/{application}', [CertificationController::class, 'saveDraft'])->name('ga-certification.draft.update');
         Route::delete('/ga-certification/draft/{application}', [CertificationController::class, 'destroyDraft'])->name('ga-certification.draft.destroy');
+        // The pre-filled course-owner attachment (owner only).
+        Route::get('/ga-certification/{application}/attachment', [CertificationController::class, 'attachment'])->name('ga-certification.attachment');
     });
 
     Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS]))->group(function () {

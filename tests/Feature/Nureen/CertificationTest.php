@@ -35,6 +35,13 @@ class CertificationTest extends TestCase
     {
         return $overrides + [
             'appointment_type' => 'GA',
+            // CGS's online form, sections 1-5.
+            'study_level' => 'research',
+            'level_of_study' => 'phd',
+            'mode_of_study' => 'full_time',
+            'identity_number' => '900101-08-1234',
+            'personal_email' => 'student.personal@gmail.test',
+            'declaration' => '1',
             'period_start' => now()->subYear()->toDateString(),
             'period_end' => now()->toDateString(),
             'course_code' => 'CCB2012',
@@ -50,6 +57,13 @@ class CertificationTest extends TestCase
     {
         return $overrides + [
             'appointment_type' => 'GRA',
+            // CGS's online form, sections 1-5.
+            'study_level' => 'research',
+            'level_of_study' => 'phd',
+            'mode_of_study' => 'full_time',
+            'identity_number' => '900101-08-1234',
+            'personal_email' => 'student.personal@gmail.test',
+            'declaration' => '1',
             'period_start' => now()->subYear()->toDateString(),
             'period_end' => now()->toDateString(),
             'project_title' => 'Reservoir Simulation under Uncertainty',

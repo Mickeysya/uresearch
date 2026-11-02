@@ -32,6 +32,9 @@
     // ticked to remove on the next Save draft or Submit
     // (remove_documents[] -- Support\Drafts::removeDocuments()).
     'existing' => collect(),
+    // Narrower than DocumentStore's list for a form that needs it (the
+    // certification takes PDF only); the server enforces the same list.
+    'allowed' => null,
 ])
 @php
     use App\Modules\Core\Services\DocumentStore;
@@ -39,7 +42,7 @@
     $maxFiles = DocumentStore::MULTI_MAX_FILES;
     $maxFileKb = DocumentStore::MULTI_MAX_FILE_KB;
     $maxTotalKb = DocumentStore::MULTI_MAX_TOTAL_KB;
-    $allowed = DocumentStore::MULTI_ALLOWED;
+    $allowed = $allowed ?? DocumentStore::MULTI_ALLOWED;
     $accept = implode(',', array_map(fn ($ext) => ".{$ext}", $allowed));
     $inputId = $name.'-input-'.uniqid();
     $existing = collect($existing);
@@ -106,7 +109,7 @@
         <p class="queue-meta" style="margin-top: -8px;">{{ $hint }}</p>
     @endif
     <p class="queue-meta" style="margin-top: -8px;">
-        PDF, JPG, PNG or DOCX. Up to {{ $maxFiles }} files, {{ $maxFileKb / 1024 }}&nbsp;MB
+        {{ count($allowed) === 1 ? strtoupper($allowed[0]).' only' : strtoupper(implode(', ', array_slice($allowed, 0, -1))).' or '.strtoupper(last($allowed)) }}. Up to {{ $maxFiles }} files, {{ $maxFileKb / 1024 }}&nbsp;MB
         each, {{ $maxTotalKb / 1024 }}&nbsp;MB total.
     </p>
 </div>
@@ -290,7 +293,7 @@
                         }
 
                         if (allowed.indexOf(extOf(file.name)) === -1) {
-                            errors.push('"' + file.name + '" is not an allowed file type. Use PDF, JPG, PNG or DOCX.');
+                            errors.push('"' + file.name + '" is not an allowed file type. Use ' + allowed.join(', ').toUpperCase() + '.');
                             continue;
                         }
 
