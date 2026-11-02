@@ -12,9 +12,6 @@
             $cardLink = fn (?string $group) => route('candidacy.cgs.operations', array_filter(array_diff_key($query, ['group' => 1, 'page' => 1]) + ['group' => $group]));
         @endphp
         <x-core::page-header title="Candidacy Management">
-            @if ($mode === 'results')
-                <a href="{{ route('candidacy.cgs.operations') }}"><button type="button">Home</button></a>
-            @endif
             <a href="{{ route('candidacy.cgs.insights') }}"><button type="button" class="btn-secondary">Insights</button></a>
             <a href="{{ route('candidacy.cgs.dismissals') }}"><button type="button">Dismissal List</button></a>
         </x-core::page-header>

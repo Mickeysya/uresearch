@@ -32,7 +32,7 @@
      to min-height rather than a hard height because this card also carries
      the occupant's name/ID and key badges, which the student's never did. --}}
 <style>
-    {{-- 390 px: the three header buttons of the results page (Home, Insights, Manage the seat catalogue) wrap instead of pushing the page sideways. --}}
+    {{-- 390 px: the two header buttons (Insights, Manage the seat catalogue) wrap instead of pushing the page sideways. --}}
     @media (max-width: 480px) { .page-header-actions { flex-wrap: wrap; max-width: 100%; } .page-header-actions button { white-space: normal; } }
     .cgs-top-card { display: flex; flex-direction: column; gap: 16px; }
 
@@ -67,10 +67,6 @@
     .cgs-filters-row select { margin: 0; min-width: 160px; }
     .cgs-filters-row button, .cgs-filters-row a.clear-link { margin: 0; }
     .cgs-filters-row a.clear-link { align-self: center; font-size: 13px; color: var(--text-grey); }
-
-    .cgs-quick-row { display: flex; gap: 8px; flex-wrap: wrap; }
-    .cgs-quick-row a button { margin: 0; }
-    .cgs-quick-row a.is-active button { background-color: var(--navy-dark); box-shadow: inset 0 0 0 2px var(--gold); }
 
     .cgs-stats-row { display: flex; gap: 14px; flex-wrap: wrap; }
     .cgs-stats-row a { text-decoration: none; color: inherit; flex: 1; min-width: 130px; }
@@ -132,9 +128,6 @@
          active) is one step down from that, so it gets one: back to the
          unfiltered landing page, clearing the search and every filter. --}}
     <x-core::page-header title="Workstation Management" :back="$mode === 'results' ? route('workstation.cgs.operations') : null">
-        @if ($mode === 'results')
-            <a href="{{ route('workstation.cgs.operations') }}"><button type="button">Home</button></a>
-        @endif
         <a href="{{ route('workstation.cgs.insights') }}"><button type="button" class="btn-secondary">Insights</button></a>
         <a href="{{ route('workstation.cgs.catalog') }}"><button type="button">Manage the seat catalogue</button></a>
     </x-core::page-header>
@@ -213,15 +206,6 @@
             </div>
         </form>
 
-        <div class="cgs-quick-row">
-            <a href="{{ $toggle('key_status', 'requested') }}" class="@if($filters['key_status'] === 'requested') is-active @endif">
-                <button type="button">Key Pending Collection</button>
-            </a>
-            <a href="{{ $toggle('key_status', 'return_pending') }}" class="@if($filters['key_status'] === 'return_pending') is-active @endif">
-                <button type="button">Key Pending Return</button>
-            </a>
-        </div>
-
         <div class="cgs-stats-row">
             <a href="{{ route('workstation.cgs.operations') }}">
                 <div class="stat-card accent-blue"><div class="stat-number" data-live-stat="total">{{ $stats['total'] }}</div><div class="stat-label">Total</div></div>
@@ -235,10 +219,7 @@
             <a href="{{ $toggle('seat_status', 'disabled') }}" class="@if($filters['seat_status'] === 'disabled') is-active @endif">
                 <div class="stat-card accent-red"><div class="stat-number" data-live-stat="maintenance">{{ $stats['maintenance'] }}</div><div class="stat-label">Maintenance</div></div>
             </a>
-            {{-- PART 1 #9: same seat set as the "Key Pending Return" quick
-                 filter below -- every Return Pending key's seat is Awaiting
-                 Key Return by construction, so filtering either way shows
-                 the same seats. --}}
+            {{-- PART 1 #9: every Return Pending key's seat is Awaiting Key Return by construction, so this card and the Locker Key Status filter's "Return Pending" show the same seats. --}}
             <a href="{{ $toggle('seat_status', 'awaiting_key_return') }}" class="@if($filters['seat_status'] === 'awaiting_key_return') is-active @endif">
                 <div class="stat-card accent-gold"><div class="stat-number" data-live-stat="awaiting_key_return">{{ $stats['awaiting_key_return'] }}</div><div class="stat-label">Awaiting Key Return</div></div>
             </a>

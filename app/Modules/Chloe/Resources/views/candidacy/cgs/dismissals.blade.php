@@ -10,7 +10,6 @@
             $mode = collect(['q', 'department', 'level', 'outcome', 'exported', 'group'])->contains(fn ($k) => ($f[$k] ?? '') !== '') ? 'results' : 'browse';
         @endphp
         <x-core::page-header title="Dismissal List" :back="route('candidacy.cgs.operations')" :back-history="false">
-            <a href="{{ route('candidacy.cgs.operations') }}"><button type="button">Home</button></a>
             <a href="{{ route('candidacy.cgs.dismissal-upload') }}"><button type="button">Dismissal Upload</button></a>
         </x-core::page-header>
 

@@ -173,7 +173,6 @@ class WorkstationHeaderPatternTest extends TestCase
             'cgs room' => [$cgs, route('workstation.cgs.room', $room)],
             'cgs seat details' => [$cgs, route('workstation.cgs.seat', $seat)],
             'cgs insights' => [$cgs, route('workstation.cgs.insights')],
-            'cgs search results' => [$cgs, route('workstation.cgs.operations', ['q' => 'x'])],
             'cgs catalogue' => [$cgs, route('workstation.cgs.catalog')],
         ];
         foreach ($both as $page => [$user, $url]) {
@@ -181,6 +180,11 @@ class WorkstationHeaderPatternTest extends TestCase
             $this->assertNotNull($this->backHref($html), "{$page} has no Back");
             $this->assertNotNull($this->homeHref($html), "{$page} has no Home");
         }
+
+        // The CGS results page (a search or filter is active) keeps its Back link but has no Home button.
+        $results = $this->actingAs($cgs)->get(route('workstation.cgs.operations', ['q' => 'x']))->assertOk()->getContent();
+        $this->assertNotNull($this->backHref($results), 'cgs search results has no Back');
+        $this->assertNull($this->homeHref($results), 'cgs search results must not have Home');
 
         // First pages of their flows: neither Back nor the page-header Home.
         foreach (['student home' => [$student, route('workstation.select')], 'cgs landing' => [$cgs, route('workstation.cgs.operations')]] as $page => [$user, $url]) {

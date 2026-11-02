@@ -5,11 +5,10 @@
 .wca-page {
     --wca-blue: #004B85; --wca-blue-2: #0066B3; --wca-gold: #C88A12; --wca-orange: #F68B33;
     --wca-red: #C62828; --wca-green: #2E8B57; --wca-slate: #606C73;
-    --wca-ink: #1B232B; --wca-grey: #4A555D; --wca-line: #D9E0E7; --wca-hover: #F2F6FA; --wca-soft: #F7F9FB;
+    --wca-ink: var(--text-dark); --wca-grey: var(--text-grey); --wca-line: var(--border-grey); --wca-hover: var(--surface-hover); --wca-soft: var(--surface-sunken); /* the shared tokens, so dark mode follows */
     font-family: inherit; position: relative; width: 100%; /* colour, size and line height are inherited from the shared stylesheet, exactly as on the Workstation pages */
 }
 .wca-page *, .wca-page *::before, .wca-page *::after { box-sizing: border-box; }
-.wca-page :focus, .wca-page :focus-visible, .wca-page :active { outline: none; box-shadow: none; }
 .wca-page :where(a:not(.page-header-back)) { color: var(--wca-ink); text-decoration: underline; }
 .wca-page :where(a:not(.page-header-back)):hover { background: var(--wca-hover); }
 .wca-page h3, .wca-page h4 { margin: 0 0 12px; padding: 0; font: inherit; font-size: 16px; font-weight: 700; line-height: 1.3; color: var(--wca-ink); }
@@ -30,7 +29,7 @@
 .wca-kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; margin: 0; padding: 0; }
 .wca-kv dt { margin: 0; padding: 0; color: var(--wca-grey); font-weight: 400; }
 .wca-kv dd { margin: 0; padding: 0; color: var(--wca-ink); font-weight: 600; text-align: right; }
-.wca-banner { background: #fff; border: 1px solid var(--wca-line); border-left: 4px solid var(--wca-green); border-radius: 8px; padding: 12px 16px; margin: 0 0 20px; color: var(--wca-ink); }
+.wca-banner { background: var(--surface); border: 1px solid var(--wca-line); border-left: 4px solid var(--wca-green); border-radius: 8px; padding: 12px 16px; margin: 0 0 20px; color: var(--wca-ink); }
 .wca-banner.is-error { border-left-color: var(--wca-red); }
 .wca-banner.is-note { border-left-color: var(--wca-gold); }
 .wca-banner ul { margin: 0; padding: 0 0 0 18px; }
@@ -45,7 +44,7 @@
 
 /* tooltip: white with black text */
 .wca-tip { position: relative; }
-.wca-tip[data-tip]:hover::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); width: max-content; max-width: 240px; padding: 6px 10px; background: #fff; color: #000; border: 1px solid var(--wca-line); border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); font-size: 12px; font-weight: 400; line-height: 1.4; text-align: left; z-index: 50; white-space: normal; }
+.wca-tip[data-tip]:hover::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); width: max-content; max-width: 240px; padding: 6px 10px; background: var(--surface); color: #000; border: 1px solid var(--wca-line); border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); font-size: 12px; font-weight: 400; line-height: 1.4; text-align: left; z-index: 50; white-space: normal; }
 
 /* buttons */
 .wca-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 0; padding: 0; }
@@ -61,7 +60,7 @@
 /* tables */
 .wca-table-wrap { width: 100%; overflow-x: auto; margin: 0; padding: 0; }
 .wca-table { width: 100%; border-collapse: collapse; margin: 0; font-size: 13.5px; }
-.wca-table th { text-align: left; padding: 10px 12px; margin: 0; color: var(--wca-grey); font-weight: 600; border-bottom: 1px solid var(--wca-line); white-space: nowrap; background: #fff; line-height: 1.3; }
+.wca-table th { text-align: left; padding: 10px 12px; margin: 0; color: var(--wca-grey); font-weight: 600; border-bottom: 1px solid var(--wca-line); white-space: nowrap; background: var(--surface); line-height: 1.3; }
 .wca-table td { padding: 10px 12px; margin: 0; border-bottom: 1px solid #EDF1F4; vertical-align: middle; line-height: 1.4; }
 .wca-table tbody tr:hover td { background: var(--wca-hover); }
 .wca-table .wca-num { text-align: right; white-space: nowrap; }
@@ -69,12 +68,10 @@
 
 /* forms */
 .wca-field { margin: 0 0 16px; padding: 0; min-width: 0; }
-.wca-page .wca-field > label:not(.wca-choice), .wca-page .wca-label { display: block; margin: 0 0 6px; padding: 0; font-weight: 600; font-size: 14px; color: var(--wca-ink); line-height: 1.4; }
-.wca-page .wca-input, .wca-page .wca-select, .wca-page .wca-textarea { display: block; width: 100%; margin: 0; padding: 0 12px; min-height: 40px; line-height: 1.4; font: inherit; font-size: 14px; color: var(--wca-ink); background: #fff; border: 1px solid #B8C3CE; border-radius: 8px; position: static; transform: none; box-shadow: none; }
-.wca-page .wca-textarea { padding: 10px 12px; min-height: 120px; resize: vertical; }
-.wca-page .wca-input:hover, .wca-page .wca-select:hover, .wca-page .wca-textarea:hover { background: var(--wca-soft); }
-.wca-page .wca-input:focus, .wca-page .wca-select:focus, .wca-page .wca-textarea:focus { border-color: var(--wca-blue); background: #fff; }
-.wca-page .wca-input[readonly], .wca-page .wca-input:disabled { background: #EEF1F4; color: var(--wca-grey); }
+/* labels, inputs, selects and textareas use the shared stylesheet (layout.css / uresearch.css), exactly as the Workstation forms do; only layout helpers are here.
+   (The old rules here set `background:` shorthand on :hover and :focus, which reset the select chevron: it vanished on hover and repeated on focus.) */
+.wca-page .wca-textarea { min-height: 120px; resize: vertical; }
+.wca-page .wca-input[readonly], .wca-page .wca-input:disabled { background-color: #EEF1F4; color: var(--wca-grey); }
 .wca-error { margin: 6px 0 0; padding: 0; color: var(--wca-ink); font-size: 13px; line-height: 1.4; border-left: 3px solid var(--wca-red); padding-left: 8px; }
 .wca-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; margin: 0; padding: 0; }
 .wca-row.is-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -87,7 +84,7 @@
 /* form stepper (four steps; numbers sit outside the marks) */
 .wca-stepper { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; padding: 0; list-style: none; }
 .wca-stepper li { margin: 0; padding: 0; min-width: 0; }
-.wca-stepper a { display: block; margin: 0; padding: 10px 12px; text-decoration: none; background: #fff; border: 1px solid var(--wca-line); border-radius: 10px; color: var(--wca-ink); line-height: 1.3; }
+.wca-stepper a { display: block; margin: 0; padding: 10px 12px; text-decoration: none; background: var(--surface); border: 1px solid var(--wca-line); border-radius: 10px; color: var(--wca-ink); line-height: 1.3; }
 .wca-stepper a:hover { background: var(--wca-hover); text-decoration: none; }
 .wca-stepper .wca-step-bar { display: block; height: 6px; margin: 0 0 8px; padding: 0; border-radius: 3px; background: #E1E7ED; }
 .wca-stepper .is-done .wca-step-bar { background: var(--wca-green); }
@@ -98,7 +95,7 @@
 
 /* appeal step bar (the approval chain on the detail page) */
 .wca-chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
-.wca-chain li { margin: 0; padding: 12px 14px; min-width: 0; background: #fff; border: 1px solid var(--wca-line); border-radius: 10px; border-top: 5px solid #C9D1D8; overflow-wrap: anywhere; }
+.wca-chain li { margin: 0; padding: 12px 14px; min-width: 0; background: var(--surface); border: 1px solid var(--wca-line); border-radius: 10px; border-top: 5px solid #C9D1D8; overflow-wrap: anywhere; }
 .wca-chain li.is-done { border-top-color: var(--wca-green); } .wca-chain li.is-current { border-top-color: var(--wca-gold); background: #FFFCF4; }
 .wca-chain li.is-returned { border-top-color: var(--wca-orange); background: #FFF8F1; } .wca-chain li.is-rejected { border-top-color: var(--wca-red); }
 .wca-chain .wca-chain-name { display: block; margin: 0 0 4px; font-weight: 700; line-height: 1.3; }
@@ -131,7 +128,7 @@
 .wca-head-row h3 { margin: 0; }
 .wca-legend-top { margin: 12px 0 0; }
 .wca-link { color: #1B232B; text-decoration: underline; margin: 0; padding: 0; font: inherit; }
-.wca-link:hover { background: #F2F6FA; color: #1B232B; }
+.wca-link:hover { background: var(--surface-hover); color: var(--text-dark); }
 .wca-nowrap { white-space: nowrap; }
 
 /* The shared page header stacks below 720px and gives its text block a 24rem flex-basis (a 384px-tall gap in a column).
@@ -177,12 +174,12 @@
 .wca-page .wca-tab { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 -1px; padding: 0 16px; min-height: 42px; line-height: 1.2; color: var(--wca-ink); text-decoration: none; font-weight: 600; border-bottom: 3px solid transparent; }
 .wca-page .wca-tab:hover { background: var(--wca-hover); text-decoration: none; }
 .wca-page .wca-tab.is-active { border-bottom-color: var(--wca-blue); }
-.wca-count { display: inline-block; margin: 0; padding: 1px 8px; min-width: 24px; text-align: center; color: var(--wca-ink); background: #EDF1F4; border-radius: 10px; font-size: 12.5px; font-weight: 600; line-height: 1.5; }
-.wca-tag { display: inline-block; margin: 4px 0 0; padding: 1px 8px; border: 1px solid var(--wca-line); border-left: 4px solid var(--wca-gold); border-radius: 4px; color: var(--wca-ink); font-size: 12px; line-height: 1.5; background: #fff; }
+.wca-count { display: inline-block; margin: 0; padding: 1px 8px; min-width: 24px; text-align: center; color: var(--wca-ink); background: var(--surface-sunken); border-radius: 10px; font-size: 12.5px; font-weight: 600; line-height: 1.5; }
+.wca-tag { display: inline-block; margin: 4px 0 0; padding: 1px 8px; border: 1px solid var(--wca-line); border-left: 4px solid var(--wca-gold); border-radius: 4px; color: var(--wca-ink); font-size: 12px; line-height: 1.5; background: var(--surface); }
 .wca-modal { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; margin: 0; padding: 16px; background: rgba(20, 25, 40, 0.45); } /* = .reason-modal::backdrop */
 .wca-modal[hidden] { display: none; }
 .wca-modal-box { width: 92vw; max-width: 460px; max-height: 82vh; overflow-y: auto; margin: 0; padding: var(--space-8); background: var(--surface); border-radius: 14px; box-shadow: none; color: inherit; } /* = .reason-modal .card */
-.wca-sig-preview { margin: 8px 0 12px; padding: 12px; background: #fff; border: 1px dashed #B8C3CE; border-radius: 8px; display: inline-block; max-width: 100%; }
+.wca-sig-preview { margin: 8px 0 12px; padding: 12px; background: var(--surface); border: 1px dashed #B8C3CE; border-radius: 8px; display: inline-block; max-width: 100%; }
 .wca-sig-img { display: block; max-width: 100%; height: auto; max-height: 200px; margin: 0; padding: 0; }
 @media (max-width: 1100px) { .wca-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .wca-filter-grid { grid-template-columns: minmax(0, 1fr); } }
@@ -196,7 +193,7 @@
 
 /* Operations: summary cards (click = filter, click again = clear) */
 .wca-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; margin: 0 0 20px; padding: 0; }
-.wca-page .wca-statcard { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; margin: 0; padding: 16px 20px; min-height: 96px; background: #fff; border: 1px solid var(--wca-line); border-radius: 12px; color: var(--wca-ink); text-decoration: none; position: relative; cursor: pointer; }
+.wca-page .wca-statcard { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; margin: 0; padding: 16px 20px; min-height: 96px; background: var(--surface); border: 1px solid var(--wca-line); border-radius: 12px; color: var(--wca-ink); text-decoration: none; position: relative; cursor: pointer; }
 .wca-page .wca-statcard:hover { background: var(--wca-hover); text-decoration: none; }
 .wca-page .wca-statcard.is-active { border: 2px solid var(--wca-blue); padding: 15px 19px; background: #F5F9FD; }
 .wca-statcard-label { display: inline-flex; align-items: center; margin: 0; padding: 0; font-weight: 600; line-height: 1.3; color: var(--wca-grey); }
@@ -266,9 +263,6 @@
 .cgs-filters-row select { margin: 0; min-width: 160px; }
 .cgs-filters-row button, .cgs-filters-row a.clear-link { margin: 0; }
 .cgs-filters-row a.clear-link { align-self: center; font-size: 13px; color: var(--text-grey); }
-.cgs-quick-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.cgs-quick-row a button { margin: 0; }
-.cgs-quick-row a.is-active button { background-color: var(--navy-dark); box-shadow: inset 0 0 0 2px var(--gold); }
 .cgs-stats-row { display: flex; gap: 14px; flex-wrap: wrap; }
 .cgs-stats-row a { text-decoration: none; color: inherit; flex: 1; min-width: 130px; }
 .cgs-stats-row a:hover { background: none; }
@@ -294,3 +288,17 @@
 .wca-btn.is-danger:hover { background: var(--danger-bg); color: var(--danger-fg); }
 .wca-btn.is-danger:disabled { background: var(--border-grey); color: var(--text-grey); border-color: transparent; }
 .cgs-search-row + .cgs-filters-row { margin-top: 12px; }
+
+
+/* ===== ONE select rule for every candidacy page and modal: Workstation's chevron (layout.css), in every state, drawn once on the right =====
+   The image itself comes from layout.css (grey; navy on focus; light in dark mode); this only pins repeat, position, size and padding so no later rule can undo them. */
+select:not([multiple]):not([size]),
+select:not([multiple]):not([size]):hover,
+select:not([multiple]):not([size]):focus,
+select:not([multiple]):not([size]):active,
+select:not([multiple]):not([size]):disabled {
+    background-repeat: no-repeat;
+    background-position: right var(--space-3) center;
+    background-size: 16px 16px;
+    padding-right: var(--space-10);
+}
