@@ -15,5 +15,7 @@ trait MakesFakeAssistant
     protected function setUpFakeAssistant(): void
     {
         FakeModel::reset();
+        // the routing cache (array store in tests) must not carry a route from one test to the next
+        \Illuminate\Support\Facades\Cache::flush();
     }
 }

@@ -233,8 +233,6 @@ class CandidacyAssistantRolesTest extends TestCase
 
     public function test_data_answers_never_contain_another_users_data(): void
     {
-        $result = $this->pipeline()->ask($this->student, 'when does my candidacy expire', []);
-        FakeModel::reset();
         FakeModel::queueRoute(['id' => 'cand_my_expiry']);
         $answer = $this->pipeline()->ask($this->student, 'when does my candidacy expire', [])['answer'];
 
