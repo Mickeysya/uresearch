@@ -75,6 +75,30 @@ final class Pipeline
     /** Set while fallbackAsk() runs, so every row it writes says rule_fallback -- with the router's own model/error code. */
     protected ?string $answeredByOverride = null;
 
+    /** How this question was routed, for the log: static | refused | cache | model | fallback_error | fallback_budget. Null = derived in finish(). */
+    protected ?string $routeType = null;
+
+    /** Calls per day kept for people: a pipeline run for a scheduled or manual evaluation sets it (holdReserve) and stops at cap - reserve. */
+    protected int $reserve = 0;
+
+    protected bool $routeCacheEnabled = true;
+
+    public const FALLBACK_NOTICE = 'Smart understanding is temporarily unavailable, so I used simple matching. Try rephrasing if this is not what you meant.';
+
+    public function holdReserve(?int $calls = null): static
+    {
+        $this->reserve = max(0, $calls ?? (int) config('assistant.reserve_per_day', 60));
+
+        return $this;
+    }
+
+    public function useRouteCache(bool $enabled): static
+    {
+        $this->routeCacheEnabled = $enabled;
+
+        return $this;
+    }
+
     protected ?string $fallbackModelUsed = null;
 
     protected ?string $fallbackErrorCode = null;
@@ -129,6 +153,7 @@ final class Pipeline
     public function ask(User $user, string $message, array $recentUserQuestions, bool $bypassKeywordRules = false, bool $allowFallback = true): array
     {
         $this->answeredByOverride = null;
+        $this->routeType = null;
         $role = AssistantDomains::effectiveRole($user, $this->domain);
 
         if ($role === null) {
@@ -177,6 +202,8 @@ final class Pipeline
         if ($this->domain === 'candidacy' && ($candidacyChip = CandidacyAssistant::findIdByExactText($message, $role)) !== null) {
             $this->traceLine("decision: exact candidacy suggested question {$candidacyChip} (no model call)");
 
+            $this->routeType = 'static';
+
             return $this->askCatalogueChip($user, $role, $candidacyChip, []);
         }
 
@@ -210,6 +237,17 @@ final class Pipeline
             $this->traceLine('recent (masked): '.implode(' | ', $recentMasked));
         }
 
+        // the routing result (id, params, confidence) of the same masked question is reused for a day; the answer is still built fresh from templates and live data
+        $cacheKey = $this->routeCacheEnabled && $recentMasked === [] ? $this->routeCacheKey($role, $maskedQuestion) : null;
+        $cachedRoute = $cacheKey !== null ? Cache::get($cacheKey) : null;
+
+        if (is_array($cachedRoute) && isset($cachedRoute['id'])) {
+            $this->traceLine('router: cache hit (no model call)');
+            $this->routeType = 'cache';
+
+            return $this->dispatchRouterResult($user, $role, $cachedRoute + ['outcome' => 'ok'], $maskedQuestion, $idMap, $recentMasked, $allowFallback, $bypassKeywordRules);
+        }
+
         if (! $this->anyModelBudgetAvailable($allowFallback)) {
             $this->traceLine('router: skipped, no model budget left');
 
@@ -233,7 +271,17 @@ final class Pipeline
                 : $this->fallbackAsk($user, $role, $maskedQuestion, $idMap, $recentMasked, $routed['error_code'] !== 'invalid_response', $routed['model_used'] ?? null, $routed['error_code'] ?? null);
         }
 
+        if ($cacheKey !== null) {
+            Cache::put($cacheKey, ['id' => $routed['id'], 'params' => $routed['params'] ?? [], 'confidence' => $routed['confidence'] ?? null, 'alternatives' => $routed['alternatives'] ?? [], 'clarify' => $routed['clarify'] ?? null, 'model_used' => $routed['model_used'] ?? null], (int) config('assistant.route_cache_ttl', 86400));
+        }
+
         return $this->dispatchRouterResult($user, $role, $routed, $maskedQuestion, $idMap, $recentMasked, $allowFallback, $bypassKeywordRules);
+    }
+
+    /** domain + role + a hash of the NORMALISED, already MASKED question: no name, ID, e-mail or appeal number can be in it. */
+    protected function routeCacheKey(string $role, string $maskedQuestion): string
+    {
+        return "assistant:route:{$this->domain}:{$role}:".sha1(QuestionNormaliser::normalise($maskedQuestion));
     }
 
     /**
@@ -501,6 +549,7 @@ final class Pipeline
      */
     protected function fallbackAsk(User $user, string $role, string $maskedQuestion, array $idMap, array $recentMasked, bool $providerDown, ?string $modelUsed, ?string $errorCode): array
     {
+        $this->routeType = null;
         $this->answeredByOverride = AssistantLog::ANSWERED_BY_RULE_FALLBACK;
         $this->fallbackModelUsed = $modelUsed;
         $this->fallbackErrorCode = $errorCode;
@@ -510,7 +559,9 @@ final class Pipeline
         $result = $this->fallbackDecide($user, $role, $normalised, $maskedQuestion, $idMap, $recentMasked, $providerDown, $modelUsed, $errorCode);
         $this->answeredByOverride = $this->fallbackModelUsed = $this->fallbackErrorCode = null;
 
-        return [...$result, 'meta' => ($result['meta'] ?? []) + ['answered_by' => AssistantLog::ANSWERED_BY_RULE_FALLBACK, 'model_used' => $modelUsed, 'error_code' => $errorCode]];
+        $this->routeType = null;
+
+        return [...$result, 'notice' => self::FALLBACK_NOTICE, 'meta' => ($result['meta'] ?? []) + ['answered_by' => AssistantLog::ANSWERED_BY_RULE_FALLBACK, 'model_used' => $modelUsed, 'error_code' => $errorCode]];
     }
 
     protected function fallbackDecide(User $user, string $role, string $normalised, string $maskedQuestion, array $idMap, array $recentMasked, bool $providerDown, ?string $modelUsed, ?string $errorCode): array
@@ -845,6 +896,7 @@ final class Pipeline
     public function askSuggestion(User $user, string $suggestionId, array $params = []): array
     {
         $this->answeredByOverride = null;
+        $this->routeType = 'static';
         $role = AssistantDomains::effectiveRole($user, $this->domain);
 
         if ($role === null) {
@@ -961,14 +1013,14 @@ final class Pipeline
                 $this->recordModelOutcome($primaryModel, false);
                 $lastErrorCode = $result['error_code'] ?? null;
 
-                // PART A.1: a 429 is never retried on the SAME model.
-                if ($lastErrorCode === '429') {
+                // one retry on the same model, only for a 429, a 5xx or a timeout
+                if (! self::isRetriable($lastErrorCode)) {
                     break;
                 }
 
                 if ($attempt < count($waits) && $this->attemptTimeout($deadline, $waits[$attempt]) !== null) {
                     // Sleep::sleep(), not a raw sleep() call -- Sleep::fake() (every test's own setUp(), see tests/TestCase.php) makes this instant without changing the retry logic itself.
-                    Sleep::sleep($waits[$attempt]);
+                    Sleep::sleep($this->backoffSeconds((float) $waits[$attempt]));
                 } else {
                     break;
                 }
@@ -1051,12 +1103,12 @@ final class Pipeline
                 $this->recordModelOutcome($primaryModel, false);
                 $lastErrorCode = $result['error_code'] ?? null;
 
-                if ($lastErrorCode === '429') {
+                if (! self::isRetriable($lastErrorCode)) {
                     break;
                 }
 
                 if ($attempt < count($waits) && $this->attemptTimeout($deadline, $waits[$attempt]) !== null) {
-                    Sleep::sleep($waits[$attempt]);
+                    Sleep::sleep($this->backoffSeconds((float) $waits[$attempt]));
                 } else {
                     break;
                 }
@@ -1145,7 +1197,7 @@ final class Pipeline
         $perMinute = (int) Cache::get($minuteKey, 0);
         $perDay = (int) Cache::get($dayKey, 0);
 
-        if ($perMinute >= (int) ($limits['requests_per_minute'] ?? 5) || $perDay >= (int) ($limits['requests_per_day'] ?? 100)) {
+        if ($perMinute >= (int) ($limits['requests_per_minute'] ?? 5) || $perDay >= max(0, (int) ($limits['requests_per_day'] ?? 100) - $this->reserve)) {
             return false;
         }
 
@@ -1181,10 +1233,23 @@ final class Pipeline
         }
     }
 
+    protected static function isRetriable(?string $errorCode): bool
+    {
+        return $errorCode === '429' || $errorCode === 'timeout' || ($errorCode !== null && ctype_digit($errorCode) && (int) $errorCode >= 500);
+    }
+
+    /** The configured short backoff, or the Retry-After the provider sent, never below 1 s and never above 3 s. */
+    protected function backoffSeconds(float $configured): float
+    {
+        $retryAfter = method_exists($this->model, 'lastRetryAfter') ? $this->model->lastRetryAfter() : null;
+
+        return max(1.0, min(3.0, $retryAfter !== null ? (float) $retryAfter : $configured));
+    }
+
     /** The counter counts HTTP requests really sent to Gemini: a call that never left (no key configured) is taken back, so it cannot burn the daily budget. */
     protected function refundUnsentCall(array $result, string $model, int $estimatedTokens = 0): void
     {
-        if (($result['error_code'] ?? null) !== 'no_credentials') {
+        if (! in_array($result['error_code'] ?? null, ['no_credentials', 'no_connection'], true)) {
             return;
         }
 
@@ -1269,6 +1334,26 @@ final class Pipeline
         }
     }
 
+    /** The route written to the log (never any text): a chip is static, a refusal before the model is refused, a cached routing is cache, the router's answer is model, and a keyword answer is fallback_error (the model failed) or fallback_budget (the app budget was used up). */
+    protected function resolveRoute(string $source, string $outcome, string $answeredBy, ?string $errorCode): string
+    {
+        if ($this->routeType !== null) {
+            return $this->routeType;
+        }
+
+        $code = $errorCode ?? $this->fallbackErrorCode;
+
+        if ($answeredBy === AssistantLog::ANSWERED_BY_RULE_FALLBACK || $outcome === AssistantLog::OUTCOME_UNAVAILABLE) {
+            return $code === 'budget' ? 'fallback_budget' : 'fallback_error';
+        }
+
+        if ($answeredBy === AssistantLog::ANSWERED_BY_MODEL_ROUTER) {
+            return 'model';
+        }
+
+        return $source === AssistantLog::SOURCE_SUGGESTION ? 'static' : 'refused';
+    }
+
     protected function finish(
         User $user,
         string $role,
@@ -1285,10 +1370,12 @@ final class Pipeline
         ?string $modelUsed = null,
         ?string $errorCode = null,
     ): array {
+        $route = $this->resolveRoute($source, $outcome, $answeredBy, $errorCode);
+
         // Metadata only: the catalogue id (in lookup) and its kind, the
         // outcome, who decided, the model and the error code -- never
         // any question or answer text.
-        AssistantLog::record($user->id, $role, $source, $lookup, $outcome, $refusalReason, $resultCount, $this->answeredByOverride ?? $answeredBy, $modelUsed ?? $this->fallbackModelUsed, $errorCode ?? $this->fallbackErrorCode, Catalogue::kindForLogLookup($lookup), $this->domain);
+        AssistantLog::record($user->id, $role, $source, $lookup, $outcome, $refusalReason, $resultCount, $this->answeredByOverride ?? $answeredBy, $modelUsed ?? $this->fallbackModelUsed, $errorCode ?? $this->fallbackErrorCode, Catalogue::kindForLogLookup($lookup), $this->domain, $route);
 
         return [
             'answer' => $text,

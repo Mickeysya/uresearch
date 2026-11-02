@@ -24,8 +24,8 @@
 
         if ($wsaDomain === 'candidacy') {
             [$wsaFirstMessage, $wsaHint, $wsaGreeting] = match (true) {
-                $wsaIsCgs => ["Hi! I can answer questions about appeals, expiring candidacies, reminders and the dismissal list. I can't make changes, but I can link you to the right page.", "Ask about counts and steps. Names aren't supported, and I can't approve, export or dismiss.", 'Hi! Ask me about appeals, expiries or dismissals.'],
-                $wsaRole === 'approver' => ["Hi! I can tell you how many appeals wait for you, explain your step and the rules. I can't approve or return an appeal for you.", "Guidance only. I can't make changes.", 'Hi! Questions about your appeals?'],
+                $wsaIsCgs => ["Hi! I can answer questions about appeals, expiring candidacies, reminders and the dismissal list. I can't make changes, but I can link you to the right page.", "Ask about counts and steps. Names aren't supported, and I can't approve, export or dismiss.", 'Hi! Ask me about appeals, reminders or the rules.'],
+                $wsaRole === 'approver' => ["Hi! I can tell you how many appeals wait for you, explain your step and the rules. I can't approve or return an appeal for you.", "Guidance only. I can't make changes.", 'Hi! Ask me about appeals, reminders or the rules.'],
                 default => ["Hi! I can tell you when your candidacy expires, how many extension months you have left, where your appeal is and how appeals work. Choose a question or type your own.", "Guidance only. I can't make changes or predict a decision.", 'Hi! Questions about your candidacy or appeal?'],
             };
         } else {
@@ -626,7 +626,7 @@
             }
 
             /** outcome: answered|asked_back|refused|unavailable|error. links: [{label,url}]. interpretedAs: string|null. */
-            function addAssistantMessage(text, outcome, links, interpretedAs) {
+            function addAssistantMessage(text, outcome, links, interpretedAs, notice) {
                 var row = createMessageRow('assistant');
                 row.className += ' wsa-avatar';
                 var isProblem = outcome === 'error' || outcome === 'unavailable';
@@ -665,6 +665,14 @@
                     note.className = 'wsa-interpreted';
                     note.textContent = 'Interpreted as: ' + interpretedAs;
                     bubble.appendChild(note);
+                }
+
+                // the keyword fallback answered because the model was unavailable: a small grey line, never for model, cache or chip answers
+                if (typeof notice === 'string' && notice !== '') {
+                    var fallbackNote = document.createElement('div');
+                    fallbackNote.className = 'wsa-interpreted wsa-fallback-notice';
+                    fallbackNote.textContent = notice;
+                    bubble.appendChild(fallbackNote);
                 }
 
                 messages.appendChild(row);
@@ -841,7 +849,7 @@
                         clearTimeout(timer);
                         hideTyping();
                         setBusy(false);
-                        addAssistantMessage(data.answer, data.outcome, data.links, data.interpreted_as);
+                        addAssistantMessage(data.answer, data.outcome, data.links, data.interpreted_as, data.notice);
 
                         if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
                             addChips(data.suggestions, pickSuggestion);

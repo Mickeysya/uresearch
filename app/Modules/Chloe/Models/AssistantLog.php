@@ -60,7 +60,7 @@ class AssistantLog extends Model
         'domain',
         'user_id', 'role', 'occurred_at', 'source', 'lookup',
         'outcome', 'refusal_reason', 'result_count', 'answered_by',
-        'model_used', 'error_code', 'catalogue_kind',
+        'model_used', 'error_code', 'catalogue_kind', 'route',
     ];
 
     protected function casts(): array
@@ -94,6 +94,7 @@ class AssistantLog extends Model
         ?string $errorCode = null,
         ?string $catalogueKind = null,
         string $domain = 'workstation',
+        ?string $route = null,
     ): self {
         return self::create([
             'user_id' => $userId,
@@ -108,6 +109,7 @@ class AssistantLog extends Model
             'error_code' => $errorCode,
             'catalogue_kind' => $catalogueKind,
             'domain' => $domain,
+            'route' => $route,
         ]);
     }
 }

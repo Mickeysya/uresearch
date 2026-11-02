@@ -42,8 +42,14 @@ return [
      */
     'total_deadline_seconds' => (int) env('ASSISTANT_TOTAL_DEADLINE_SECONDS', 22),
 
-    /** Backoff between the primary model's own retry attempts (1st and 2nd retry) -- never used after a 429, which is retried on the fallback instead, never the same model. */
-    'retry_waits_seconds' => [2, 5],
+    /** One retry on the same model after a short backoff (a Retry-After header is honoured, capped at 3 s), then the secondary model, then the keyword fallback. */
+    'retry_waits_seconds' => [1.5],
+
+    /** Calls per day kept for people: scheduled or manual assistant:evaluate runs stop at (daily cap - reserve). Interactive questions may use the whole cap. */
+    'reserve_per_day' => (int) env('ASSISTANT_DAILY_RESERVE', 60),
+
+    /** How long the model's ROUTING result (id, params, confidence) is kept for the same masked question. Answers are always built fresh. */
+    'route_cache_ttl' => (int) env('ASSISTANT_ROUTE_CACHE_SECONDS', 86400),
 
     /**
      * Round 3 PART A.3: three consecutive PRIMARY failures (any model

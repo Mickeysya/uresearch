@@ -68,10 +68,15 @@ class AssistantBudget extends Command
                 $warn = true;
             }
 
-            $rows[] = [$role, $model, "{$counter} / {$cap}", $logged, ($limits['requests_per_minute'] ?? '?').' / min', $google['rpm'].' / min, '.$google['rpd'].' / day', trim($note) ?: 'ok'];
+            $reserve = (int) config('assistant.reserve_per_day', 60);
+            $rows[] = [$role, $model, "{$counter} / {$cap}", $reserve, max(0, $cap - $counter), max(0, $cap - $reserve - $counter), $logged, ($limits['requests_per_minute'] ?? '?').' / min', $google['rpm'].' / min, '.$google['rpd'].' / day', trim($note) ?: 'ok'];
         }
 
-        $this->table(['Role', 'Model', 'Counter today / our cap', 'Logged today', 'Our per-minute cap', 'Google free tier', 'Check'], $rows);
+        $this->table(['Role', 'Model', 'Used today / cap', 'Reserve', 'Left for people', 'Left for evaluation', 'Logged today', 'Per-minute cap', 'Google free tier', 'Check'], $rows);
+
+        $routes = AssistantLog::query()->where('occurred_at', '>=', $dayStart->copy()->setTimezone(config('app.timezone')))->whereNotNull('route')->selectRaw('route, count(*) c')->groupBy('route')->pluck('c', 'route');
+        $this->line('Routes logged today (Pacific-time day): '.collect(['static', 'refused', 'cache', 'model', 'fallback_error', 'fallback_budget'])->map(fn ($r) => $r.' '.($routes[$r] ?? 0))->implode(', '));
+        $this->line('Per-user limit: '.(int) config('assistant.rate_limits.user_requests_per_minute', 10).' questions per minute; routing cache '.(int) config('assistant.route_cache_ttl', 86400).' s; next reset '.$reset->format('H:i').' '.config('app.timezone').'.');
 
         if ($this->option('reset')) {
             $this->info('Counters set to the number of real calls logged today.');

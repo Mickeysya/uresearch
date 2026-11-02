@@ -125,6 +125,8 @@ class AssistantEvaluate extends Command
 
         $pipeline = new Pipeline($stub !== null ? new FakeModel : new GeminiModel);
         $pipeline->disableCompose();
+        // an evaluation measures the model: no routing cache, and it leaves the daily reserve to people
+        $pipeline->useRouteCache(false)->holdReserve();
         $allowFallback = (bool) $this->option('allow-fallback');
         $primaryModel = (string) config('assistant.gemini.model');
         $perMinute = max(1, (int) (config('assistant.rate_limits', [])[$primaryModel]['requests_per_minute'] ?? 12));

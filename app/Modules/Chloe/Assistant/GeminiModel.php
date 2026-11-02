@@ -36,6 +36,14 @@ class GeminiModel implements AssistantModel
     /** The last HTTP status this instance saw -- for `assistant:check` to report; never anything more sensitive than a number. */
     protected ?int $lastHttpStatus = null;
 
+    protected ?int $lastRetryAfter = null;
+
+    /** Seconds the provider asked us to wait (Retry-After) after the last failed request, or null. */
+    public function lastRetryAfter(): ?int
+    {
+        return $this->lastRetryAfter;
+    }
+
     public function lastHttpStatus(): ?int
     {
         return $this->lastHttpStatus;
@@ -435,12 +443,15 @@ WS;
             $response = Http::withHeaders(['x-goog-api-key' => $apiKey])
                 ->timeout(max(1, $timeoutSeconds))
                 ->post(self::ENDPOINT, $body);
-        } catch (Throwable) {
-            // Never read ->getMessage(), it can legally contain the request (headers included).
-            return [null, 'timeout'];
+        } catch (Throwable $e) {
+            // The message is only tested for the cURL error number, never stored or shown (it can legally contain the request, headers included).
+            // 6 (cannot resolve) and 7 (cannot connect): the request never reached Gemini, so it is not counted.
+            return [null, preg_match('/cURL error (6|7)\b/', $e->getMessage()) === 1 ? 'no_connection' : 'timeout'];
         }
 
         $this->lastHttpStatus = $response->status();
+        $retryAfter = $response->header('Retry-After');
+        $this->lastRetryAfter = $retryAfter !== '' && ctype_digit($retryAfter) ? (int) $retryAfter : null;
 
         if ($response->successful()) {
             $text = $this->extractText($response->json());

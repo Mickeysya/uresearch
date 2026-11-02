@@ -95,12 +95,11 @@ class WorkstationAssistantReliabilityTest extends TestCase
         $this->assertNull($log->error_code);
     }
 
-    /** config('assistant.retry_waits_seconds') is [2, 5] -- 1 initial + 2 retries = 3 PRIMARY attempts before the fallback model is ever tried. */
-    public function test_three_503s_on_the_primary_then_the_fallback_succeeds(): void
+    /** config('assistant.retry_waits_seconds') is [1.5] -- 1 initial + 1 retry = 2 PRIMARY attempts before the fallback model is ever tried. */
+    public function test_two_503s_on_the_primary_then_the_fallback_succeeds(): void
     {
         $cgs = $this->cgs();
 
-        FakeModel::queueRouteFailure('503');
         FakeModel::queueRouteFailure('503');
         FakeModel::queueRouteFailure('503');
         FakeModel::queueRoute(['id' => 'out_of_scope']);
@@ -108,7 +107,7 @@ class WorkstationAssistantReliabilityTest extends TestCase
         $result = $this->pipeline()->ask($cgs, 'a totally unrelated question zzz', []);
 
         $this->assertSame('refused', $result['outcome']);
-        $this->assertSame(['gemini-3.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'], $this->routeModels());
+        $this->assertSame(['gemini-3.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'], $this->routeModels());
         $this->assertSame('gemini-3.1-flash-lite', AssistantLog::latest('id')->first()->model_used);
     }
 
@@ -133,18 +132,19 @@ class WorkstationAssistantReliabilityTest extends TestCase
         $this->assertSame(AssistantLog::ANSWERED_BY_RULE_FALLBACK, $log->answered_by);
     }
 
-    /** PART A.1: a 429 is never retried on the SAME model -- straight to the fallback model. */
-    public function test_a_429_skips_the_retry_and_goes_straight_to_the_fallback(): void
+    /** A 429 is retried once on the same model after a short backoff, then the fallback model. */
+    public function test_a_429_is_retried_once_then_goes_to_the_fallback(): void
     {
         $cgs = $this->cgs();
 
+        FakeModel::queueRouteFailure('429');
         FakeModel::queueRouteFailure('429');
         FakeModel::queueRoute(['id' => 'out_of_scope']);
 
         $result = $this->pipeline()->ask($cgs, 'a totally unrelated question zzz', []);
 
         $this->assertSame('refused', $result['outcome']);
-        $this->assertSame(['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'], $this->routeModels(), 'A 429 must not be retried on the primary model.');
+        $this->assertSame(['gemini-3.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'], $this->routeModels(), 'A 429 is retried once on the primary, then the fallback.');
     }
 
     /** assistant:evaluate/assistant:check pass $allowFallback=false -- the primary's failure is never covered by a silent switch. */
@@ -152,7 +152,7 @@ class WorkstationAssistantReliabilityTest extends TestCase
     {
         $cgs = $this->cgs();
 
-        foreach (range(1, 3) as $i) {
+        foreach (range(1, 2) as $i) {
             FakeModel::queueRouteFailure('503');
         }
 
@@ -168,10 +168,11 @@ class WorkstationAssistantReliabilityTest extends TestCase
     {
         $cgs = $this->cgs();
 
-        foreach (range(1, 4) as $i) {
+        foreach (range(1, 8) as $i) {
             FakeModel::queueRouteFailure('503');
         }
         $this->pipeline()->ask($cgs, 'a totally unrelated question zzz', []);
+        $this->pipeline()->ask($cgs, 'another unrelated question zzz', []);
 
         FakeModel::queueRoute(['id' => 'out_of_scope']);
         $before = FakeModel::routeCallCount();
@@ -185,7 +186,6 @@ class WorkstationAssistantReliabilityTest extends TestCase
     {
         $cgs = $this->cgs();
 
-        FakeModel::queueRouteFailure('503');
         FakeModel::queueRouteFailure('503');
         FakeModel::queueRoute(['id' => 'out_of_scope']);
         $this->pipeline()->ask($cgs, 'a totally unrelated question zzz', []);
