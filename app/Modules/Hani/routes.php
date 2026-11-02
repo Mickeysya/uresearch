@@ -6,6 +6,7 @@ use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\VivaController;
+use App\Modules\Hani\Http\Controllers\VivaScheduleController;
 use App\Modules\Hani\Http\Controllers\VivaSoftboundController;
 use Illuminate\Support\Facades\Route;
 
@@ -38,6 +39,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/viva/softbound/queue', [VivaSoftboundController::class, 'queue'])->name('viva.softbound.queue');
         Route::post('/viva/softbound/{application}/decide', [VivaSoftboundController::class, 'decide'])
             ->name('viva.softbound.decide');
+
+        // Setting the date (step 8). Off-chain: it changes no status.
+        Route::get('/viva/scheduling', [VivaScheduleController::class, 'index'])->name('viva.schedule.index');
+        Route::get('/viva/{application}/schedule', [VivaScheduleController::class, 'edit'])->name('viva.schedule.edit');
+        Route::post('/viva/{application}/schedule', [VivaScheduleController::class, 'update'])->name('viva.schedule.update');
+    });
+
+    // Supervisor: their own candidates' vivas, read only.
+    Route::middleware('role:'.Role::SUPERVISOR)->group(function () {
+        Route::get('/viva/my-students', [VivaController::class, 'supervisees'])->name('viva.supervisees');
     });
 
     // ---- Examiner Nomination ------------------------------------------

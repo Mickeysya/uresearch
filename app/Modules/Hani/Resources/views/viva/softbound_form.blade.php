@@ -1,66 +1,147 @@
 @extends('core::layouts.app')
 
-@section('title', 'Softbound Thesis Submission')
+@section('title', 'Soft Bound Thesis Submission')
 
 @section('content')
+@php($isPhd = $level === \App\Modules\Hani\Support\VivaChecklist::PHD)
 <div class="card-container-inline">
     <x-core::page-header
-        title="Softbound Thesis Submission"
-        subtitle="CGS Online Form #019. Get your thesis signed by yourself, your supervisor, co-supervisor and chair before submitting. Your Academic Executive checks it against the details below." />
+        title="Soft Bound Thesis Submission"
+        subtitle="CGS Online Form #019 (UTP/CGS/V3/VV/019). Get your thesis signed by yourself, your supervisor, co-supervisor and chair before submitting." />
 
     <div class="card card-wide">
         @if ($returnReason)
             <p class="message-warning">Your last submission was returned: {{ $returnReason }}</p>
         @endif
 
-        <form method="POST" action="{{ route('viva.softbound.store') }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ route('viva.softbound.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
 
-            <label for="similarity_percent">Similarity Index (%)</label>
-            <input type="number" name="similarity_percent" id="similarity_percent" required
-                   min="0" max="{{ $similarityMax }}" step="0.01"
-                   value="{{ old('similarity_percent') }}"
-                   class="@error('similarity_percent') is-invalid @enderror">
-            <p class="fstep-hint">From your similarity report. {{ $similarityMax }}% or below.</p>
-            @error('similarity_percent') <p class="field-error">{{ $message }}</p> @enderror
+            {{-- Section 1. Matric, name, department and programme are already on
+                 the student's record, so they are shown, not asked for again. --}}
+            <fieldset class="fstep" data-label="Student details">
+                <p class="fstep-hint">From your UResearch profile. Ask CGS if any of this is wrong.</p>
 
-            <label for="similarity_report">Similarity Report</label>
-            <input type="file" name="similarity_report" id="similarity_report" required
-                   accept="application/pdf,.pdf"
-                   class="@error('similarity_report') is-invalid @enderror">
-            <p class="fstep-hint">PDF, up to 5 MB.</p>
-            @error('similarity_report') <p class="field-error">{{ $message }}</p> @enderror
+                <p>Student Matric ID: <b>{{ $student->matric_no ?? 'Not recorded' }}</b></p>
+                <p>Student Name: <b>{{ $student->name }}</b></p>
+                <p>Department: <b>{{ $student->department ?? 'Not recorded' }}</b></p>
+                <p>Programme: <b>{{ $student->programme ?? 'Not recorded' }}</b></p>
 
-            <label for="word_count">Word Count</label>
-            <input type="number" name="word_count" id="word_count" required
-                   min="1" max="{{ $wordLimit }}" step="1"
-                   value="{{ old('word_count') }}"
-                   class="@error('word_count') is-invalid @enderror">
-            <p class="fstep-hint">{{ number_format($wordLimit) }} words or fewer for your programme.</p>
-            @error('word_count') <p class="field-error">{{ $message }}</p> @enderror
+                <label for="field_of_study">Field of Study</label>
+                <textarea name="field_of_study" id="field_of_study" rows="2" required maxlength="255"
+                          class="@error('field_of_study') is-invalid @enderror">{{ old('field_of_study') }}</textarea>
+                @error('field_of_study') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="thesis">Softbound Thesis</label>
-            <input type="file" name="thesis" id="thesis" required
-                   accept="application/pdf,.pdf"
-                   class="@error('thesis') is-invalid @enderror">
-            <p class="fstep-hint">PDF, up to 20 MB.</p>
-            @error('thesis') <p class="field-error">{{ $message }}</p> @enderror
+                <label for="contact_number">Contact Number</label>
+                <input type="tel" name="contact_number" id="contact_number" required maxlength="30"
+                       value="{{ old('contact_number', $student->contact_no) }}"
+                       class="@error('contact_number') is-invalid @enderror">
+                @error('contact_number') <p class="field-error">{{ $message }}</p> @enderror
 
-            @foreach ([
-                'abstract_bilingual' => 'The abstract is in both English and Bahasa Melayu',
-                'copies_certified' => 'Two copies are certified by my supervisor',
-                'before_candidacy_end' => 'I am submitting before my candidacy ends',
-            ] as $field => $text)
+                <label for="personal_email">Personal Email Address</label>
+                <input type="email" name="personal_email" id="personal_email" required maxlength="150"
+                       value="{{ old('personal_email') }}"
+                       class="@error('personal_email') is-invalid @enderror">
+                @error('personal_email') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
+
+            {{-- Section 2. Similarity % and word count are not on the paper form;
+                 they are what lets UResearch enforce the Handbook's limits. --}}
+            <fieldset class="fstep" data-label="Submission details">
+                <label for="session">Session</label>
+                <select name="session" id="session" required class="@error('session') is-invalid @enderror">
+                    <option value="">Select</option>
+                    @foreach (\App\Modules\Hani\Models\VivaSoftboundDetail::SESSIONS as $session)
+                        <option value="{{ $session }}" @selected(old('session') === $session)>{{ $session }}</option>
+                    @endforeach
+                </select>
+                @error('session') <p class="field-error">{{ $message }}</p> @enderror
+
+                <label for="year">Year</label>
+                <select name="year" id="year" required class="@error('year') is-invalid @enderror">
+                    <option value="">Select</option>
+                    @foreach (\App\Modules\Hani\Models\VivaSoftboundDetail::years() as $year)
+                        <option value="{{ $year }}" @selected((int) old('year') === $year)>{{ $year }}</option>
+                    @endforeach
+                </select>
+                @error('year') <p class="field-error">{{ $message }}</p> @enderror
+
+                <label for="thesis_title">Thesis Title</label>
+                <textarea name="thesis_title" id="thesis_title" rows="2" required maxlength="255"
+                          class="@error('thesis_title') is-invalid @enderror">{{ old('thesis_title', $noticeTitle) }}</textarea>
+                <p class="fstep-hint">From your notice. Update it if the title has changed.</p>
+                @error('thesis_title') <p class="field-error">{{ $message }}</p> @enderror
+
+                <label for="similarity_percent">Turnitin Similarity Index (%)</label>
+                <input type="number" name="similarity_percent" id="similarity_percent" required
+                       min="0" max="{{ $similarityMax }}" step="0.01"
+                       value="{{ old('similarity_percent') }}"
+                       class="@error('similarity_percent') is-invalid @enderror">
+                <p class="fstep-hint">From your Turnitin report. {{ $similarityMax }}% or below.</p>
+                @error('similarity_percent') <p class="field-error">{{ $message }}</p> @enderror
+
+                <label for="word_count">Word Count</label>
+                <input type="number" name="word_count" id="word_count" required
+                       min="1" max="{{ $wordLimit }}" step="1"
+                       value="{{ old('word_count') }}"
+                       class="@error('word_count') is-invalid @enderror">
+                <p class="fstep-hint">{{ number_format($wordLimit) }} words or fewer for your programme.</p>
+                @error('word_count') <p class="field-error">{{ $message }}</p> @enderror
+
+                @foreach ($uploads as $field => [$label, $maxKb])
+                    <label for="{{ $field }}">{{ $label }}</label>
+                    <input type="file" name="{{ $field }}" id="{{ $field }}" required
+                           accept="application/pdf,.pdf"
+                           class="@error($field) is-invalid @enderror">
+                    <p class="fstep-hint">PDF, up to {{ $maxKb / 1024 }} MB.</p>
+                    @error($field) <p class="field-error">{{ $message }}</p> @enderror
+                @endforeach
+
+                @unless ($isPhd)
+                    <p class="fstep-hint">The two RCS correction forms are for PhD candidates only, so they are not asked for here.</p>
+                @endunless
+            </fieldset>
+
+            {{-- Section 3. Supervisor and AE come from the student's record and
+                 department; only the co-supervisor is stored nowhere else. --}}
+            <fieldset class="fstep" data-label="Approval &amp; notifications">
+                <p class="fstep-hint">These people are notified about your submission.</p>
+
+                <p>Supervisor: <b>{{ $student->supervisor?->name ?? 'Not recorded' }}</b>
+                   @if ($student->supervisor) ({{ $student->supervisor->email }}) @endif</p>
+                <p>Academic Executive:
+                    <b>{{ $academicExecs->pluck('name')->implode(', ') ?: 'Not recorded' }}</b>
+                    @if ($academicExecs->isNotEmpty()) ({{ $academicExecs->pluck('email')->implode(', ') }}) @endif
+                </p>
+
+                <label for="co_supervisor_email">Co-Supervisor Email Address <span style="color: var(--text-grey)">(if you have one)</span></label>
+                <input type="email" name="co_supervisor_email" id="co_supervisor_email" maxlength="150"
+                       placeholder="name@utp.edu.my"
+                       value="{{ old('co_supervisor_email') }}"
+                       class="@error('co_supervisor_email') is-invalid @enderror">
+                <p class="fstep-hint">Their UTP email address, ending in @utp.edu.my. One address only.</p>
+                @error('co_supervisor_email') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
+
+            <fieldset class="fstep" data-label="Agreement">
                 <div class="checkbox-row">
-                    <input type="checkbox" name="{{ $field }}" id="{{ $field }}" value="1" required
-                           @checked(old($field))>
-                    <label for="{{ $field }}">{{ $text }}</label>
+                    <input type="checkbox" name="declaration" id="declaration" value="1" required
+                           @checked(old('declaration'))>
+                    <label for="declaration">
+                        I hereby acknowledge that I have completely read, fully understand and agree with the
+                        instructions or terms and conditions provided in the form. I also affirm that the
+                        information provided on this form is true and correct to the best of my knowledge at
+                        the time of application. I also understand that the University reserves the right to
+                        reject my application if I provided false information or submit an incomplete application.
+                    </label>
                 </div>
-                @error($field) <p class="field-error">{{ $message }}</p> @enderror
-            @endforeach
+                @error('declaration') <p class="field-error">{{ $message }}</p> @enderror
+            </fieldset>
 
-            <button type="submit">Submit Softbound Thesis</button>
+            <button type="submit">Submit Soft Bound Thesis</button>
         </form>
     </div>
 </div>
+
+@include('core::partials.form-stepper')
 @endsection

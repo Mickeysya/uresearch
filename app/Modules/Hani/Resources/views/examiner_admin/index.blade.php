@@ -434,32 +434,52 @@
     </div>
 </dialog>
 
+@include('core::partials.region-swap')
+
 {{-- Bound here with addEventListener, not with handler attributes. script-src is
      'self' plus this request's nonce with no unsafe-inline, and a nonce cannot
      cover an inline handler attribute -- the browser refuses to run it. As
      written before, the two filters did not auto-submit and the modal never
-     opened. --}}
+     opened.
+
+     Tabs, the stat cards' "View list", the filter form and pagination are all
+     plain GET links/forms to this same route -- they work with JS off. With it
+     on, RegionSwap (public/js/region-swap.js) fetches and swaps in the six
+     regions below instead, so switching tabs no longer reloads the sidebar,
+     the stylesheet and the rest of the document just to change a table. --}}
 <script @cspNonce>
     (function () {
         var modal = document.getElementById('unavailable-modal');
-        var form = document.getElementById('unavailable-form');
+        var unavailableForm = document.getElementById('unavailable-form');
 
-        document.querySelectorAll('[data-autosubmit]').forEach(function (field) {
-            field.addEventListener('change', function () { field.form.submit(); });
-        });
-
-        document.querySelectorAll('[data-unavailable]').forEach(function (button) {
-            button.addEventListener('click', function () {
-                form.action = '/examiners/' + button.dataset.unavailable + '/toggle-active';
-                document.getElementById('unavailable-modal-name').textContent =
-                    'Examiner: ' + button.dataset.examinerName;
-                document.getElementById('unavailable_reason').value = '';
-                modal.showModal();
-            });
-        });
-
+        // Outside every swapped region, so bound once and never touched again.
         document.querySelectorAll('[data-close-modal]').forEach(function (button) {
             button.addEventListener('click', function () { modal.close(); });
+        });
+
+        RegionSwap({
+            selectors: [
+                '.page-header p',
+                '.exam-tabs',
+                '.exam-tab-note',
+                '.examiner-stats',
+                '.examiner-filters',
+                '.exam-table-wrap',
+            ],
+            // "Mark Unavailable" opens the modal above -- a button that only
+            // exists inside a region RegionSwap just replaced, so it has to be
+            // rebound after every swap, not just once at page load.
+            afterSwap: function () {
+                document.querySelectorAll('[data-unavailable]').forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        unavailableForm.action = '/examiners/' + button.dataset.unavailable + '/toggle-active';
+                        document.getElementById('unavailable-modal-name').textContent =
+                            'Examiner: ' + button.dataset.examinerName;
+                        document.getElementById('unavailable_reason').value = '';
+                        modal.showModal();
+                    });
+                });
+            },
         });
     })();
 </script>

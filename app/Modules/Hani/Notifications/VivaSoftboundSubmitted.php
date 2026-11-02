@@ -30,6 +30,7 @@ class VivaSoftboundSubmitted extends Notification implements ShouldQueue
             ->subject('Softbound thesis received: '.$this->application->reference())
             ->greeting('Hi '.$notifiable->name.',')
             ->line('Your softbound thesis (Form #019) has been received.')
+            ->line('Thesis: '.$this->detail->thesis_title)
             ->line('Similarity index: '.$this->detail->similarity_percent.'%')
             ->line('Word count: '.number_format($this->detail->word_count))
             ->line('Your Academic Executive will check it. If anything needs fixing, it will be returned to you with a reason.')

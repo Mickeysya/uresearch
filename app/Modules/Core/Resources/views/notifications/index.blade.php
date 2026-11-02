@@ -72,6 +72,7 @@
         </a>
     </nav>
 
+    <div class="notif-results">
     @forelse ($groups as $heading => $rows)
         <section class="notif-group">
             <h3 class="notif-group-heading">{{ $heading }}</h3>
@@ -153,6 +154,14 @@
             @endif
         </nav>
     @endif
+    </div>
 
 </div>
+
+@include('core::partials.region-swap')
+<script @cspNonce>
+    RegionSwap({
+        selectors: ['.page-header p', '.notif-filters', '.notif-results'],
+    });
+</script>
 @endsection

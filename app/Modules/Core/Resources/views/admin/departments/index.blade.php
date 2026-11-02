@@ -99,7 +99,9 @@
                     <tr>
                         <th>Department</th>
                         <th>Academic Executive</th>
-                        <th>Accounts</th>
+                        @if (auth()->user()->isAdmin())
+                            <th>Accounts</th>
+                        @endif
                         <th>Status</th>
                         <th></th>
                     </tr>
@@ -108,7 +110,7 @@
                 @foreach ($groups as $group)
                     <tbody>
                         <tr class="dept-faculty">
-                            <td colspan="5">
+                            <td colspan="{{ auth()->user()->isAdmin() ? 5 : 4 }}">
                                 <div class="dept-faculty-head">
                                     <h2>{{ $group['label'] }}</h2>
                                     @if ($group['code'])
@@ -138,7 +140,9 @@
                                         <span class="dept-exec-empty">&mdash;</span>
                                     @endif
                                 </td>
-                                <td><span class="dept-count">{{ $counts[$department->name] ?? 0 }}</span></td>
+                                @if (auth()->user()->isAdmin())
+                                    <td><span class="dept-count">{{ $counts[$department->name] ?? 0 }}</span></td>
+                                @endif
                                 <td>
                                     <span class="status-badge {{ $department->is_active ? 'approved' : 'draft' }}">
                                         {{ $department->is_active ? 'Active' : 'Retired' }}

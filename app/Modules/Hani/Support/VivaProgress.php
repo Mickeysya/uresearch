@@ -4,6 +4,8 @@ namespace App\Modules\Hani\Support;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Hani\Models\ExaminerNomination;
+use App\Modules\Hani\Models\VivaDetail;
 use Illuminate\Support\Collection;
 
 /**
@@ -24,6 +26,7 @@ final class VivaProgress
         public readonly ?Application $notice,
         public readonly ?Application $softbound,
         public readonly ?Application $nomination,
+        public readonly ?VivaDetail $detail = null,
     ) {}
 
     public static function for(User $student): self
@@ -34,7 +37,37 @@ final class VivaProgress
             ->latest('id')
             ->first();
 
-        return new self(VivaChecklist::openNotice($student), $latest(self::SOFTBOUND), $latest(self::NOMINATION));
+        $notice = VivaChecklist::openNotice($student);
+
+        return new self(
+            $notice,
+            $latest(self::SOFTBOUND),
+            $latest(self::NOMINATION),
+            $notice ? VivaDetail::where('application_id', $notice->id)->first() : null,
+        );
+    }
+
+    /**
+     * Progress for many notices at once, in four queries however many there
+     * are, for the AE's and the supervisor's lists.
+     *
+     * @param  Collection<int, Application>  $notices
+     * @return Collection<int, self> keyed by notice id
+     */
+    public static function forNotices(Collection $notices): Collection
+    {
+        $studentIds = $notices->pluck('student_id')->unique();
+
+        $softbounds = self::latestPerStudent(self::SOFTBOUND, $studentIds);
+        $nominations = self::latestPerStudent(self::NOMINATION, $studentIds);
+        $details = VivaDetail::whereIn('application_id', $notices->pluck('id'))->get()->keyBy('application_id');
+
+        return $notices->mapWithKeys(fn (Application $notice) => [$notice->id => new self(
+            $notice,
+            $softbounds->get($notice->student_id),
+            $nominations->get($notice->student_id),
+            $details->get($notice->id),
+        )]);
     }
 
     /**
@@ -58,6 +91,49 @@ final class VivaProgress
         return $this->softbound?->status === Application::STATUS_REJECTED
             ? ($this->softbound->rejection()?->remarks ?: 'No reason was recorded.')
             : null;
+    }
+
+    /**
+     * What still stands between this viva and a date. Empty means the AE may
+     * schedule it: the guideline needs BOTH the nomination approved and the
+     * softbound submitted, and the softbound verified is the AE's own check.
+     *
+     * @return array<int, string>
+     */
+    public function waitingFor(): array
+    {
+        return array_values(array_filter([
+            $this->notice?->status !== Application::STATUS_APPROVED ? 'Notice not acknowledged yet' : null,
+            $this->softbound?->status !== Application::STATUS_APPROVED ? 'Softbound thesis not verified' : null,
+            $this->nomination?->status !== Application::STATUS_APPROVED ? 'Examiner nomination '.lcfirst($this->nominationLabel()) : null,
+        ]));
+    }
+
+    public function isReadyToSchedule(): bool
+    {
+        return $this->waitingFor() === [];
+    }
+
+    /** The main internal and external examiners, once the nomination is approved. */
+    public function panel(): ?ExaminerNomination
+    {
+        if ($this->nomination?->status !== Application::STATUS_APPROVED) {
+            return null;
+        }
+
+        return ExaminerNomination::with('internalMain', 'externalMain')
+            ->where('application_id', $this->nomination->id)
+            ->first();
+    }
+
+    public function softboundLabel(): string
+    {
+        return match ($this->softbound?->status) {
+            null => 'Not submitted yet',
+            Application::STATUS_PENDING => 'With the Academic Executive for checking',
+            Application::STATUS_APPROVED => 'Verified',
+            default => 'Returned for corrections',
+        };
     }
 
     public function nominationLabel(): string
@@ -84,9 +160,15 @@ final class VivaProgress
      */
     public static function nominationsFor(iterable $studentIds): Collection
     {
+        return self::latestPerStudent(self::NOMINATION, $studentIds);
+    }
+
+    /** @return Collection<int, Application> keyed by student_id */
+    protected static function latestPerStudent(string $module, iterable $studentIds): Collection
+    {
         // Ascending, so keyBy() keeps the highest id per student.
         return Application::query()
-            ->where('module_type', self::NOMINATION)
+            ->where('module_type', $module)
             ->whereIn('student_id', collect($studentIds)->all())
             ->orderBy('id')
             ->get()

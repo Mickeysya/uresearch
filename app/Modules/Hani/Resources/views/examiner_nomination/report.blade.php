@@ -51,11 +51,10 @@
         :subtitle="$scopedToDepartment
             ? $scopedToDepartment.': every panel your department has filed, at whatever stage it has reached.'
             : 'Every department\'s panels merged into one list: the compiled report the chain signs off.'">
-        <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx']) }}" class="btn">Download Excel</a>
     </x-core::page-header>
 
     <div class="rep-actions">
-        <a href="{{ route('examiner-nomination.export', ['format' => 'csv']) }}" class="btn-secondary">Download CSV</a>
+        <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx']) }}" class="btn-secondary">Download Excel</a>
         @if (in_array(auth()->user()->role, [\App\Modules\Core\Support\Role::ACADEMIC_EXEC, \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS], true))
             <a href="{{ route('conflict-detection.index') }}" class="btn-secondary">Conflict detection</a>
         @endif

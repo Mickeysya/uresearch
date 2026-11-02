@@ -2,11 +2,15 @@
 
 namespace App\Modules\Hani\Workflows;
 
+use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Hani\Models\VivaDetail;
+use Carbon\CarbonInterface;
 
 /**
  * Viva Voce Assessment, opened by the student's Notice of Thesis Submission.
@@ -26,8 +30,11 @@ use App\Modules\Hani\Models\VivaDetail;
  *     are that chain, not something recorded twice
  *   - Re-viva stays CGS-logged
  * See VivaProgress for how the three are read together.
+ *
+ * The viva date itself is set off-chain by the AE (VivaScheduleController):
+ * it changes no status and can be moved.
  */
-class VivaVoceWorkflow implements WorkflowModule
+class VivaVoceWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
 {
     public function key(): string
     {
@@ -69,5 +76,56 @@ class VivaVoceWorkflow implements WorkflowModule
     public function queueRoute(): string
     {
         return 'viva.queue';
+    }
+
+    /**
+     * Two screens no stage produces: the AE's scheduling list sits after the
+     * notice chain has finished, and the supervisor owns no stage at all.
+     */
+    public function links(User $user): array
+    {
+        return match ($user->role) {
+            Role::ACADEMIC_EXEC => [
+                ['label' => 'Viva Scheduling', 'route' => 'viva.schedule.index'],
+            ],
+            Role::SUPERVISOR => [
+                ['label' => "Students' Viva Progress", 'route' => 'viva.supervisees'],
+            ],
+            default => [],
+        };
+    }
+
+    /**
+     * Viva dates: the student's own, a supervisor's candidates', and an AE's
+     * department's. Scoped here, since Core cannot know who may see what.
+     */
+    public function calendarEvents(User $user, CarbonInterface $from, CarbonInterface $to): array
+    {
+        if (! in_array($user->role, [Role::STUDENT, Role::SUPERVISOR, Role::ACADEMIC_EXEC], true)) {
+            return [];
+        }
+
+        $notices = Application::query()
+            ->where('module_type', $this->key())
+            ->where('status', Application::STATUS_APPROVED);
+
+        match ($user->role) {
+            Role::STUDENT => $notices->where('student_id', $user->id),
+            Role::SUPERVISOR => $notices->whereIn('student_id', $user->supervisees()->select('id')),
+            Role::ACADEMIC_EXEC => $notices->whereHas('student', fn ($q) => $q->where('department', $user->department)),
+        };
+
+        $details = VivaDetail::with('application.student')
+            ->whereIn('application_id', $notices->select('id'))
+            ->whereBetween('viva_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
+            ->get();
+
+        return $details->map(fn (VivaDetail $detail) => [
+            'date' => $detail->viva_at,
+            'title' => $user->role === Role::STUDENT ? 'Your viva voce' : 'Viva: '.$detail->application->student?->name,
+            'tone' => 'critical',
+            'meta' => $detail->viva_at->format('g:i a').', '.$detail->venue,
+            'url' => route('applications.show', $detail->application_id),
+        ])->all();
     }
 }

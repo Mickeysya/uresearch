@@ -5,30 +5,27 @@ namespace App\Modules\Hani\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
-use App\Modules\Hani\Models\VivaDetail;
+use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\VivaSoftboundDetail;
 use App\Modules\Hani\Notifications\VivaSoftboundReturned;
 use App\Modules\Hani\Notifications\VivaSoftboundSubmitted;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\UnauthorizedException;
 
 /**
- * Softbound thesis (CGS Online Form #019): the student files it once their
+ * Softbound thesis (CGS Online Form #019, UTP/CGS/V3/VV/019): the student files it once their
  * notice is acknowledged; the Academic Executive verifies it or returns it.
  */
 class VivaSoftboundController extends Controller
 {
     use ApprovesApplications;
-
-    /** Thesis PDF. Larger than DocumentStore's 10 MB: a full thesis with figures. */
-    protected const THESIS_MAX_KB = 20480;
-
-    protected const REPORT_MAX_KB = 5120;
 
     protected function moduleKey(): string
     {
@@ -37,15 +34,22 @@ class VivaSoftboundController extends Controller
 
     public function create(Request $request)
     {
-        $progress = VivaProgress::for($request->user());
+        $student = $request->user();
+        $progress = VivaProgress::for($student);
 
         if ($reason = $progress->softboundBlockReason()) {
             return redirect()->route('viva.eligibility')->with('error', $reason);
         }
 
-        $level = VivaDetail::where('application_id', $progress->notice->id)->value('programme_level');
+        $level = $progress->detail?->programme_level;
 
         return view('hani::viva.softbound_form', [
+            'student' => $student,
+            'level' => $level,
+            'noticeTitle' => $progress->detail?->thesis_title,
+            'academicExecs' => User::where('role', Role::ACADEMIC_EXEC)
+                ->where('department', $student->department)->orderBy('name')->get(),
+            'uploads' => VivaSoftboundDetail::uploadsFor($level),
             'wordLimit' => VivaSoftboundDetail::wordLimitFor($level),
             'similarityMax' => VivaSoftboundDetail::SIMILARITY_MAX,
             'returnReason' => $progress->softboundReturnReason(),
@@ -62,31 +66,48 @@ class VivaSoftboundController extends Controller
         }
 
         $notice = $progress->notice;
-        $wordLimit = VivaSoftboundDetail::wordLimitFor(
-            VivaDetail::where('application_id', $notice->id)->value('programme_level')
-        );
+        $level = $progress->detail?->programme_level;
+        $wordLimit = VivaSoftboundDetail::wordLimitFor($level);
+        $uploads = VivaSoftboundDetail::uploadsFor($level);
 
-        $data = $request->validate([
+        $rules = [
+            // Section 1: Student Details (the rest is read from the student's record)
+            'field_of_study' => ['required', 'string', 'max:255'],
+            'contact_number' => ['required', 'string', 'max:30', 'regex:/^[0-9+\-\s]{7,30}$/'],
+            'personal_email' => ['required', 'email', 'max:150'],
+            // Section 2: Submission Details
+            'session' => ['required', 'in:'.implode(',', VivaSoftboundDetail::SESSIONS)],
+            'year' => ['required', 'integer', 'in:'.implode(',', VivaSoftboundDetail::years())],
+            'thesis_title' => ['required', 'string', 'max:255'],
             'similarity_percent' => ['required', 'numeric', 'min:0', 'max:'.VivaSoftboundDetail::SIMILARITY_MAX],
             'word_count' => ['required', 'integer', 'min:1', 'max:'.$wordLimit],
-            'abstract_bilingual' => ['accepted'],
-            'copies_certified' => ['accepted'],
-            'before_candidacy_end' => ['accepted'],
-            'similarity_report' => ['required', 'file', 'mimes:pdf', 'max:'.self::REPORT_MAX_KB],
-            'thesis' => ['required', 'file', 'mimes:pdf', 'max:'.self::THESIS_MAX_KB],
-        ], [
-            'similarity_percent.max' => 'Form #019 needs a similarity index of '.VivaSoftboundDetail::SIMILARITY_MAX.'% or below.',
-            'word_count.max' => 'Your thesis must be '.number_format($wordLimit).' words or fewer.',
-            'abstract_bilingual.accepted' => 'The thesis needs an abstract in both English and Bahasa Melayu.',
-            'copies_certified.accepted' => 'Two copies must be certified by your supervisor.',
-            'before_candidacy_end.accepted' => 'The softbound must be submitted before your candidacy ends.',
-            'similarity_report.mimes' => 'The similarity report must be a PDF.',
-            'similarity_report.max' => 'The similarity report must be 5 MB or smaller.',
-            'thesis.mimes' => 'The thesis must be a PDF.',
-            'thesis.max' => 'The thesis must be 20 MB or smaller.',
-        ]);
+            // Section 3: Approval & Notifications
+            'co_supervisor_email' => ['nullable', 'email', 'max:150', 'ends_with:@utp.edu.my'],
+            // Section 4: Agreement
+            'declaration' => ['accepted'],
+        ];
 
-        [$application, $detail] = DB::transaction(function () use ($request, $student, $notice, $data, $engine, $documents) {
+        foreach ($uploads as $field => [, $maxKb]) {
+            $rules[$field] = ['required', 'file', 'mimes:pdf', 'max:'.$maxKb];
+        }
+
+        $messages = [
+            'contact_number.regex' => 'Enter a phone number using digits, spaces, + or - only.',
+            'similarity_percent.max' => 'The similarity index must be '.VivaSoftboundDetail::SIMILARITY_MAX.'% or below.',
+            'word_count.max' => 'Your thesis must be '.number_format($wordLimit).' words or fewer.',
+            'co_supervisor_email.ends_with' => 'Use your co-supervisor\'s UTP email address (ending in @utp.edu.my).',
+            'declaration.accepted' => 'You must accept the declaration to submit.',
+        ];
+
+        foreach ($uploads as $field => [$label, $maxKb]) {
+            $messages[$field.'.required'] = "Upload the {$label}.";
+            $messages[$field.'.mimes'] = "The {$label} must be a PDF.";
+            $messages[$field.'.max'] = "The {$label} must be ".($maxKb / 1024).' MB or smaller.';
+        }
+
+        $data = $request->validate($rules, $messages);
+
+        [$application, $detail] = DB::transaction(function () use ($request, $student, $notice, $data, $uploads, $engine, $documents) {
             $application = Application::create([
                 'student_id' => $student->id,
                 'module_type' => $this->moduleKey(),
@@ -96,15 +117,16 @@ class VivaSoftboundController extends Controller
             $detail = VivaSoftboundDetail::create([
                 'application_id' => $application->id,
                 'viva_application_id' => $notice->id,
-                'similarity_percent' => $data['similarity_percent'],
-                'word_count' => $data['word_count'],
-                'abstract_bilingual' => true,
-                'copies_certified' => true,
-                'before_candidacy_end' => true,
-            ]);
+                'declaration_accepted' => true,
+                'co_supervisor_email' => $data['co_supervisor_email'] ?? null,
+            ] + Arr::only($data, [
+                'field_of_study', 'contact_number', 'personal_email', 'session', 'year',
+                'thesis_title', 'similarity_percent', 'word_count',
+            ]));
 
-            $documents->attach($application, $request->file('thesis'), 'Softbound Thesis');
-            $documents->attach($application, $request->file('similarity_report'), 'Similarity Report');
+            foreach ($uploads as $field => [$label]) {
+                $documents->attach($application, $request->file($field), $label);
+            }
 
             return [$engine->submit($application), $detail];
         });

@@ -172,6 +172,27 @@ class VivaController extends Controller
         return now()->startOfDay()->addMonthsNoOverflow(3);
     }
 
+    // ---- Supervisor (view only) ---------------------------------------------
+
+    /**
+     * The supervisor's own candidates' vivas. Read only: their action is
+     * proposing examiners, which stays in Examiner Nomination.
+     */
+    public function supervisees(Request $request)
+    {
+        $notices = Application::query()
+            ->where('module_type', $this->moduleKey())
+            ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED])
+            ->whereIn('student_id', $request->user()->supervisees()->select('id'))
+            ->with('student')
+            ->orderBy('submitted_at')
+            ->get();
+
+        return view('hani::viva.supervisees', [
+            'progress' => VivaProgress::forNotices($notices),
+        ]);
+    }
+
     // ---- Academic Executive queue -----------------------------------------
 
     public function queue(Request $request, WorkflowEngine $engine)

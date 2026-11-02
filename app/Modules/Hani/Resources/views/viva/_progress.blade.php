@@ -5,6 +5,7 @@
 
     $notice = $progress->notice;
     $softbound = $progress->softbound;
+    $detail = $progress->detail;
     $returnReason = $progress->softboundReturnReason();
     $canFileSoftbound = $progress->softboundBlockReason() === null;
 @endphp
@@ -27,17 +28,20 @@
         <tr>
             <th scope="row">Softbound Thesis (Form #019)</th>
             <td>
-                @if ($softbound === null)
-                    Not submitted yet
-                @elseif ($softbound->status === Application::STATUS_PENDING)
-                    With your Academic Executive for checking
-                @elseif ($softbound->status === Application::STATUS_APPROVED)
-                    Verified
-                @else
-                    Returned for corrections
-                @endif
+                {{ $progress->softboundLabel() }}
                 @if ($softbound)
                     &middot; <a href="{{ route('applications.show', $softbound) }}">View</a>
+                @endif
+            </td>
+        </tr>
+        <tr>
+            <th scope="row">Viva Voce</th>
+            <td>
+                @if ($detail?->isScheduled())
+                    <b>{{ $detail->viva_at->format('l, j M Y, g:i a') }}</b> &middot; {{ $detail->venue }}
+                    <br><span class="fstep-hint">Chairman: {{ $detail->chair_name }}</span>
+                @else
+                    Not scheduled yet. Your Academic Executive sets the date once your examiners are approved and your softbound thesis is verified.
                 @endif
             </td>
         </tr>

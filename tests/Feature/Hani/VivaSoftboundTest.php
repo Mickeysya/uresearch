@@ -64,14 +64,24 @@ class VivaSoftboundTest extends TestCase
 
     protected function softbound(array $overrides = []): array
     {
+        $pdf = fn (string $name, int $kb = 100) => UploadedFile::fake()->create($name, $kb, 'application/pdf');
+
         return $overrides + [
+            'field_of_study' => 'Data analytics',
+            'contact_number' => '013-337 2001',
+            'personal_email' => 'ahmad@gmail.com',
+            'session' => 'September',
+            'year' => now()->year,
+            'thesis_title' => 'Constraint-based examiner matching',
             'similarity_percent' => 18.5,
             'word_count' => 42000,
-            'abstract_bilingual' => 1,
-            'copies_certified' => 1,
-            'before_candidacy_end' => 1,
-            'similarity_report' => UploadedFile::fake()->create('turnitin.pdf', 300, 'application/pdf'),
-            'thesis' => UploadedFile::fake()->create('thesis.pdf', 4000, 'application/pdf'),
+            'co_supervisor_email' => 'co.sv@utp.edu.my',
+            'declaration' => 1,
+            'format_confirmation' => $pdf('format.pdf'),
+            'thesis' => $pdf('thesis.pdf', 4000),
+            'turnitin_report' => $pdf('turnitin.pdf', 300),
+            'rcs_correction_confirmation' => $pdf('rcs-confirmation.pdf'),
+            'rcs_correction_summary' => $pdf('rcs-summary.pdf'),
         ];
     }
 
@@ -91,7 +101,9 @@ class VivaSoftboundTest extends TestCase
 
         $this->actingAs($this->student)->get(route('viva.softbound.create'))
             ->assertOk()
-            ->assertSee('50,000 words or fewer');
+            ->assertSee('50,000 words or fewer')
+            ->assertSee('Thesis Format Confirmation Form')
+            ->assertDontSee('RCS Correction Summary</label>', false);
     }
 
     public function test_form_019_limits_are_enforced(): void
@@ -101,7 +113,10 @@ class VivaSoftboundTest extends TestCase
         foreach ([
             'similarity_percent' => ['similarity_percent' => 25.01],
             'word_count' => ['word_count' => 50001],
-            'copies_certified' => ['copies_certified' => null],
+            'declaration' => ['declaration' => null],
+            'session' => ['session' => 'Semester 1'],
+            'co_supervisor_email' => ['co_supervisor_email' => 'co.sv@gmail.com'],
+            'format_confirmation' => ['format_confirmation' => null],
             'thesis' => ['thesis' => UploadedFile::fake()->create('thesis.docx', 100)],
         ] as $field => $override) {
             $this->actingAs($this->student)->post(route('viva.softbound.store'), $this->softbound($override))
@@ -122,7 +137,9 @@ class VivaSoftboundTest extends TestCase
         $first = Application::where('module_type', 'viva_softbound')->sole();
         $this->assertSame('softbound_check', $first->current_stage);
         $this->assertSame($notice->id, VivaSoftboundDetail::sole()->viva_application_id);
-        $this->assertSame(2, $first->documents()->count());
+        // MSc: three uploads; the two RCS forms are PhD only and are ignored.
+        $this->assertSame(3, $first->documents()->count());
+        $this->assertSame('September', VivaSoftboundDetail::sole()->session);
         Notification::assertSentTo($this->student, VivaSoftboundSubmitted::class);
 
         // One attempt at a time.
@@ -133,6 +150,7 @@ class VivaSoftboundTest extends TestCase
         $this->actingAs($this->ae)->get(route('viva.softbound.queue'))
             ->assertOk()
             ->assertSee('18.50%')
+            ->assertSee('September '.now()->year)
             ->assertSee('The guideline asks for at least')
             ->assertSee('Not started');
 
@@ -172,7 +190,14 @@ class VivaSoftboundTest extends TestCase
         VivaEligibility::create(['student_id' => $this->student->id, 'rcs_passed' => true]);
         $this->acknowledge($this->fileNotice());
 
+        // The RCS forms are required at PhD level.
+        $this->actingAs($this->student)->post(route('viva.softbound.store'),
+            $this->softbound(['word_count' => 100000, 'rcs_correction_summary' => null]))
+            ->assertSessionHasErrors('rcs_correction_summary');
+
         $this->actingAs($this->student)->post(route('viva.softbound.store'), $this->softbound(['word_count' => 100000]))
             ->assertSessionHasNoErrors();
+
+        $this->assertSame(5, Application::where('module_type', 'viva_softbound')->sole()->documents()->count());
     }
 }

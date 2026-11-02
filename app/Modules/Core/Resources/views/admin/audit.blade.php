@@ -50,6 +50,7 @@
         </nav>
     @endif
 
+    <div class="notif-results">
     <div class="notif-list">
         @forelse ($activities as $a)
             @php $tone = $toneFor($a); @endphp
@@ -99,5 +100,13 @@
             @endif
         </nav>
     @endif
+    </div>
 </div>
+
+@include('core::partials.region-swap')
+<script @cspNonce>
+    RegionSwap({
+        selectors: ['.page-header p', '.notif-filters', '.notif-results'],
+    });
+</script>
 @endsection

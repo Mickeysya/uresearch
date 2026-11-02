@@ -28,15 +28,15 @@
     --banner-text: #FFFFFF;
     --banner-subtle: rgba(255, 255, 255, 0.82);
     --banner-radius: 14px;
-    --banner-min-height: 144px;
-    --banner-pad-y: 26px;
-    --banner-pad-x: 34px;
-    --banner-art-height: 122px;
+    --banner-min-height: 100px;
+    --banner-pad-y: 16px;
+    --banner-pad-x: 28px;
+    --banner-art-height: 92px;
     /* Horizontal space the artwork occupies: its rendered width
-       (122px tall x 240/140 aspect = 209px) plus its 26px right offset,
+       (92px tall x 240/140 aspect = 158px) plus its 26px right offset,
        rounded up for breathing room. The text block reserves this so a
        single-line subtitle never runs underneath the art. */
-    --banner-art-reserve: 250px;
+    --banner-art-reserve: 190px;
 
     position: relative;
     overflow: hidden;
@@ -44,7 +44,7 @@
     align-items: center;
     gap: 20px;
     min-height: var(--banner-min-height);
-    margin-bottom: 24px;
+    margin-bottom: 18px;
     padding: var(--banner-pad-y) var(--banner-pad-x);
     border-radius: var(--banner-radius);
     background: linear-gradient(105deg, var(--banner-from) 0%, var(--banner-to) 100%);
@@ -60,8 +60,8 @@
 }
 
 .dash-welcome-title {
-    margin: 0 0 6px 0;
-    font-size: 27px;
+    margin: 0 0 4px 0;
+    font-size: 21px;
     font-weight: 700;
     line-height: 1.2;
     color: var(--banner-text);
@@ -83,7 +83,7 @@
    rather than wrapping or pushing the banner sideways. */
 .dash-welcome-sub {
     margin: 0;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.5;
     color: var(--banner-subtle);
     white-space: nowrap;
@@ -127,7 +127,7 @@
 
 @media (max-width: 560px) {
     .dash-welcome-title {
-        font-size: 22px;
+        font-size: 18px;
     }
 }
 

@@ -36,6 +36,7 @@
         </nav>
     @endif
 
+    <div class="doc-results">
     @if ($documents->isEmpty())
         <div class="empty-state">
             @if ($search !== '' || $module !== 'all')
@@ -63,11 +64,14 @@
                             </span>
 
                             <div class="doc-main">
-                                <a href="{{ $doc->url() }}" class="doc-name">{{ $doc->original_name }}</a>
+                                {{-- Not a same-page filter -- a download and a link to a
+                                     different page's detail view, so RegionSwap must leave
+                                     both as real navigations. --}}
+                                <a href="{{ $doc->url() }}" class="doc-name" data-region-swap-ignore>{{ $doc->original_name }}</a>
                                 <p class="doc-meta">
                                     {{ $doc->doc_type }}
                                     &middot; {{ $moduleLabels[$doc->application->module_type] ?? $doc->application->module_type }}
-                                    &middot; <a href="{{ route('applications.show', $doc->application) }}">{{ $doc->application->reference() }}</a>
+                                    &middot; <a href="{{ route('applications.show', $doc->application) }}" data-region-swap-ignore>{{ $doc->application->reference() }}</a>
                                     @unless ($isOwnList)
                                         &middot; {{ $doc->application->student?->name }}
                                     @endunless
@@ -94,5 +98,16 @@
             </section>
         @endforeach
     @endif
+    </div>
 </div>
+
+@include('core::partials.region-swap')
+<script @cspNonce>
+    RegionSwap({
+        selectors: ['.page-header p', '.notif-filters', '.doc-results'],
+        // Outside every selector above (it lives in the page-header's own
+        // actions slot), so it navigates without ever being replaced itself.
+        extraForms: ['.doc-search'],
+    });
+</script>
 @endsection
