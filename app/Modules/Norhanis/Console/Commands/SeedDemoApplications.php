@@ -20,12 +20,15 @@ use Illuminate\Support\Facades\Notification;
  * and the queues can be looked at with a realistic number of rows instead of
  * two, without one row per module for every student.
  *
- * The students differ the way real ones do: MSc or PhD, full- or part-time,
- * some on a GA/GRA post, some travelling abroad, some publishing at a
- * conference and some in a journal.
+ * The students differ the way real ones do: UTP's own PhD and Master's
+ * programmes across its nine departments, full- or part-time, some on a
+ * GA/GRA post, some travelling abroad, some publishing at a conference and
+ * some in a journal.
  *
- * Every demo student has an address at DEMO_DOMAIN, which is how --clear
- * finds them again and why it can never touch a real account.
+ * Each has a UTP-style address, name_studentid@utp.edu.my, and a student ID
+ * from a block real IDs do not use: a third digit of 9 (24900001). That is
+ * how --clear finds them again -- the ID in the block AND the address built
+ * from it, so a real account is never matched by either alone.
  *
  * Applications are moved along their chains by WorkflowEngine, the same as
  * real ones, so their status, stage and approval history are genuine. Two
@@ -41,7 +44,10 @@ class SeedDemoApplications extends Command
 
     protected $description = 'Create (or remove) demo students, each with one Travel, Claims or Publication application';
 
-    public const DEMO_DOMAIN = '@demo.utp.edu.my';
+    public const DOMAIN = '@utp.edu.my';
+
+    /** Where the demo students used to live, so --clear still removes them. */
+    protected const OLD_DEMO_DOMAIN = '@demo.utp.edu.my';
 
     protected const FIRST_NAMES = [
         'Aina', 'Aiman', 'Amirul', 'Aisyah', 'Daniel', 'Farah', 'Hakim', 'Hui Min', 'Irfan', 'Jia Hui',
@@ -53,15 +59,42 @@ class SeedDemoApplications extends Command
         'Osman', 'Rahman', 'Raj', 'Salleh', 'Tan', 'Wong', 'Yusof', 'Zainal', 'Zakaria', 'Zulkifli',
     ];
 
-    protected const PROGRAMMES = ['MSc Full-Time', 'MSc Part-Time', 'PhD Full-Time', 'PhD Part-Time'];
+    /**
+     * UTP's departments, each with programmes it runs: PhD by research,
+     * and Master's by coursework or research.
+     */
+    protected const DEPARTMENTS = [
+        'Chemical Engineering Department' => [
+            'PhD in Chemical Engineering', 'Master of Science in Process Safety', 'Master of Science in Process Integration',
+        ],
+        'Civil & Environmental Engineering Department' => [
+            'PhD in Civil Engineering', 'Master of Science in Industrial Environmental Engineering', 'Master of Science in Offshore Engineering',
+        ],
+        'Electrical & Electronic Engineering Department' => [
+            'PhD in Electrical and Electronics Engineering', 'Master of Science in Electronic Systems Engineering',
+        ],
+        'Mechanical Engineering Department' => [
+            'PhD in Mechanical Engineering', 'Master of Science in Asset Management & Maintenance', 'Master of Science in Corrosion Engineering',
+        ],
+        'Petroleum Engineering Department' => [
+            'PhD in Petroleum Engineering', 'Master of Science in Petroleum Engineering', 'Master of Science in Drilling Engineering',
+        ],
+        'Computing' => [
+            'PhD in Information Technology', 'PhD in Information Systems', 'Master of Science in Data Science', 'Master of Science in Applied Computing',
+        ],
+        'Geosciences Department' => [
+            'PhD in Petroleum Geoscience', 'Master of Science in Petroleum Geoscience',
+        ],
+        'Management & Humanities Department' => [
+            'PhD in Management', 'PhD in Social Science & Humanities', 'MBA in Energy Management',
+        ],
+        'Fundamental & Applied Sciences Department' => [
+            'PhD in Applied Science', 'Master of Science in Predictive Analytics',
+        ],
+    ];
 
     /** Each student files one of these, in turn, so the three lists come out even. */
     protected const MODULES = ['travel', 'claims', 'publication'];
-
-    protected const DEPARTMENTS = [
-        'Computer & Information Sciences', 'Electrical & Electronic Engineering', 'Chemical Engineering',
-        'Mechanical Engineering', 'Petroleum Engineering', 'Civil & Environmental Engineering',
-    ];
 
     protected const PAPER_TOPICS = [
         'Graph Networks for Reservoir Simulation', 'Corrosion Forecasting in Subsea Pipelines',
@@ -102,21 +135,28 @@ class SeedDemoApplications extends Command
         $created = 0;
 
         for ($n = 1; $n <= $count; $n++) {
-            $email = sprintf('demo%03d%s', $n, self::DEMO_DOMAIN);
+            // Drawn every time, skipped or not, so student N is always the
+            // same person however many already exist.
+            $first = self::FIRST_NAMES[mt_rand(0, 19)];
+            $last = self::LAST_NAMES[mt_rand(0, 19)];
+            $department = array_keys(self::DEPARTMENTS)[mt_rand(0, count(self::DEPARTMENTS) - 1)];
+            $programmes = self::DEPARTMENTS[$department];
+            $programme = $programmes[mt_rand(0, count($programmes) - 1)].(mt_rand(0, 2) === 0 ? ' (Part-Time)' : ' (Full-Time)');
+            $matric = self::matric($n, intake: 24 + mt_rand(0, 2));
 
-            if (User::where('email', $email)->exists()) {
+            if (User::where('matric_no', $matric)->exists()) {
                 continue;
             }
 
-            DB::transaction(function () use ($n, $email, $supervisor, $engine) {
+            DB::transaction(function () use ($n, $first, $last, $department, $programme, $matric, $supervisor, $engine) {
                 $student = User::create([
-                    'name' => self::FIRST_NAMES[mt_rand(0, 19)].' '.self::LAST_NAMES[mt_rand(0, 19)],
-                    'email' => $email,
+                    'name' => $first.' '.$last,
+                    'email' => self::email($first, $matric),
                     'password' => 'password',
                     'role' => Role::STUDENT,
-                    'matric_no' => sprintf('D26%05d', $n),
-                    'programme' => self::PROGRAMMES[mt_rand(0, 3)],
-                    'department' => self::DEPARTMENTS[mt_rand(0, 5)],
+                    'matric_no' => $matric,
+                    'programme' => $programme,
+                    'department' => $department,
                     'supervisor_id' => $supervisor->id,
                 ]);
 
@@ -136,9 +176,37 @@ class SeedDemoApplications extends Command
         return self::SUCCESS;
     }
 
+    /** Student N's ID: the intake year, then 9, then N (24900001). */
+    public static function matric(int $n, int $intake): string
+    {
+        return sprintf('%02d9%05d', $intake, $n);
+    }
+
+    /** name_studentid@utp.edu.my, the name as one lowercase word. */
+    public static function email(string $firstName, string $matric): string
+    {
+        return strtolower(preg_replace('/[^A-Za-z]/', '', $firstName)).'_'.$matric.self::DOMAIN;
+    }
+
+    /** Is this a student the command made? See the class comment. */
+    public static function isDemo(User $user): bool
+    {
+        if (str_ends_with($user->email, self::OLD_DEMO_DOMAIN)) {
+            return true;
+        }
+
+        return $user->role === Role::STUDENT
+            && preg_match('/^\d{2}9\d{5}$/', (string) $user->matric_no)
+            && str_ends_with($user->email, '_'.$user->matric_no.self::DOMAIN);
+    }
+
     protected function clear(): int
     {
-        $ids = User::where('email', 'like', '%'.self::DEMO_DOMAIN)->pluck('id');
+        $ids = User::where('role', Role::STUDENT)
+            ->where(fn ($q) => $q->where('matric_no', 'like', '__9_____')->orWhere('email', 'like', '%'.self::OLD_DEMO_DOMAIN))
+            ->get()
+            ->filter(fn (User $user) => self::isDemo($user))
+            ->pluck('id');
 
         DB::transaction(function () use ($ids) {
             Application::whereIn('student_id', $ids)->get()->each->delete();
@@ -165,7 +233,7 @@ class SeedDemoApplications extends Command
             'reason_for_travel' => 'Demo: '.['Conference presentation', 'Data collection', 'Research attachment', 'Workshop'][mt_rand(0, 3)],
             'destination_address' => ['Kuala Lumpur', 'Penang', 'Johor Bahru', 'Singapore', 'Bandung', 'Tokyo'][mt_rand(0, 5)],
             'is_international' => mt_rand(1, 10) <= 3,
-            'contact_person_email' => 'contact'.self::DEMO_DOMAIN,
+            'contact_person_email' => 'host.contact'.self::DOMAIN,
             // About one in three holds a GA or GRA post.
             'is_ga_gra' => mt_rand(1, 3) === 1,
         ]);

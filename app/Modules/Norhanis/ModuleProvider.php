@@ -25,6 +25,9 @@ class ModuleProvider extends ServiceProvider
         // config('norhanis.charter.<module>.<stage>'): CGS's client charter days.
         $this->mergeConfigFrom(__DIR__.'/Config/charter.php', 'norhanis.charter');
 
+        // config('norhanis.cgs.officer'): the CGS officer for these modules.
+        $this->mergeConfigFrom(__DIR__.'/Config/cgs.php', 'norhanis.cgs');
+
         // One per request, so the stage history is read once however many
         // applications a page estimates.
         $this->app->singleton(StageDurations::class);

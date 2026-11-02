@@ -20,7 +20,8 @@ use Illuminate\Support\Facades\Log;
  * rather than changing Core for all six modules.
  *
  * Who is told: the student's own supervisor, the Chair of the student's
- * department, and everyone holding the role for the other stages. Best effort, as Core's own email is: the decision is the
+ * department, this module's own CGS officer (CgsOfficer), and everyone
+ * holding the role for the other stages. Best effort, as Core's own email is: the decision is the
  * durable thing, and a mail outage must not undo or hide it.
  */
 class ApproverNotifier
@@ -59,6 +60,9 @@ class ApproverNotifier
             Role::CHAIR => $student?->department === null
                 ? collect()
                 : User::where('role', Role::CHAIR)->where('department', $student->department)->get(),
+            Role::NON_EXEC_CGS => ($officer = app(CgsOfficer::class)->user())
+                ? collect([$officer])
+                : User::where('role', $role)->get(),
             default => User::where('role', $role)->get(),
         };
     }

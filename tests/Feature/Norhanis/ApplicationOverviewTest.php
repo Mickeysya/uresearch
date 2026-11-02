@@ -243,6 +243,10 @@ class ApplicationOverviewTest extends TestCase
     public function test_the_demo_command_creates_and_removes_its_own_students_only(): void
     {
         $real = $this->student();
+        // A real student whose ID happens to fall in the demo block, and one
+        // whose address happens to look like a demo one: neither is touched.
+        $lookalikeId = $this->student('25900050', 'aina.zulkifli@utp.edu.my');
+        $lookalikeEmail = $this->student('22001009', 'aina_25900077@utp.edu.my');
         $this->supervisor();
         $this->chair();
         $this->cgs();
@@ -253,9 +257,17 @@ class ApplicationOverviewTest extends TestCase
 
         $this->artisan('norhanis:demo-applications', ['--count' => 4])->assertSuccessful();
 
-        $demo = User::where('email', 'like', '%'.SeedDemoApplications::DEMO_DOMAIN)->pluck('id');
+        $demo = User::all()->filter(fn (User $user) => SeedDemoApplications::isDemo($user))->pluck('id');
 
         $this->assertCount(4, $demo);
+        // UTP-style: name_studentid@utp.edu.my, with a real programme and department.
+        foreach (User::whereIn('id', $demo)->get() as $student) {
+            $this->assertMatchesRegularExpression('/^[a-z]+_\d{2}9\d{5}@utp\.edu\.my$/', $student->email);
+            $this->assertStringEndsWith('_'.$student->matric_no.'@utp.edu.my', $student->email);
+            $this->assertMatchesRegularExpression('/^(PhD|Master|MBA) .+ \((Full|Part)-Time\)$/', $student->programme);
+            $this->assertNotSame('Computer & Information Sciences', $student->department);
+        }
+
         // One application each, the three modules in turn.
         $this->assertSame(4, Application::whereIn('student_id', $demo)->count());
         $this->assertSame(0, Application::whereIn('student_id', $demo)->where('status', Application::STATUS_DRAFT)->count());
@@ -270,10 +282,12 @@ class ApplicationOverviewTest extends TestCase
 
         $this->artisan('norhanis:demo-applications', ['--clear' => true])->assertSuccessful();
 
-        $this->assertSame(0, User::where('email', 'like', '%'.SeedDemoApplications::DEMO_DOMAIN)->count());
+        $this->assertSame(0, User::whereIn('id', $demo)->count());
         $this->assertSame(0, Application::whereIn('student_id', $demo)->count());
         $this->assertTrue($real->fresh()->exists);
         $this->assertTrue($kept->fresh()->exists);
+        $this->assertNotNull($lookalikeId->fresh());
+        $this->assertNotNull($lookalikeEmail->fresh());
     }
 
     public function test_the_dashboard_summarises_what_the_reader_may_see(): void
