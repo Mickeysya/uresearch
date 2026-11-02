@@ -4,8 +4,8 @@ Each `## cand_...` section is what CGS staff are told. A CGS user can read every
 
 ## cand_see_all_appeals
 
-Open Candidacy Management > Operations. It lists every appeal, with the cards (In progress, Returned, Approved, Rejected), the tabs, and the filters Search, Department,
-Status, Current step, Months requested, Waiting at least and Round; each row opens the appeal read-only. The Approval Portal also has a "View all appeals" link to
+Open Candidacy Management > Operations. It lists every appeal, with the cards (In Progress, Returned, Approved, Rejected), the tabs, and the filters Search, Department,
+Status, Current Step, Months Requested, Waiting At Least and Round; each row opens the appeal read-only. The Approval Portal also has a "View all appeals" link to
 the same list. The Approval Portal itself shows only the appeals waiting at your CGS Verification step (Pending my action) and the ones you decided (Decided by me).
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -115,21 +115,21 @@ Source: UResearch Study Candidacy design (confirmed with CGS); Postgraduate Stud
 
 ## cand_waiting_colours
 
-The dot on a waiting appeal is grey under 5 days, amber 5 to 9 days and red 10 days or more at the current step. Use Waiting at least on Operations to filter.
+The dot on a waiting appeal is grey under 5 days, amber 5 to 9 days and red 10 days or more at the current step. Use Waiting At Least on Operations to filter.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_portal_guide
 
 Approval Portal for CGS: Pending my action (appeals at CGS Verification), Decided by me, and the "View all appeals" link to Operations. Filters: Search, Department,
-Months requested, Waiting at least, Round.
+Months Requested, Waiting At Least, Round.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_cgs_operations_guide
 
-Candidacy Management > Operations: the cards (In progress, Returned, Approved, Rejected) filter the list when clicked, and the tabs split it the same way. Narrow it with
-Search (appeal number, student name or ID), Department, Status, Current step, Months requested, Waiting at least and Round. Each row opens the appeal read-only. The
+Candidacy Management > Operations: the cards (In Progress, Returned, Approved, Rejected) filter the list when clicked, and the tabs split it the same way. Narrow it with
+Search (appeal number, student name or ID), Department, Status, Current Step, Months Requested, Waiting At Least and Round. Each row opens the appeal read-only. The
 page refreshes by itself every 15 seconds (Pause updates stops it). Not available yet: Excel export of the Operations list.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).

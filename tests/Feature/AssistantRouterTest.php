@@ -546,7 +546,7 @@ class AssistantRouterTest extends TestCase
             $this->assertStringNotContainsString($needle, json_encode($row));
         }
         $this->assertEqualsCanonicalizing(
-            ['id', 'user_id', 'role', 'domain', 'occurred_at', 'source', 'lookup', 'catalogue_kind', 'outcome', 'refusal_reason', 'result_count', 'answered_by', 'model_used', 'error_code', 'route'],
+            ['id', 'user_id', 'role', 'domain', 'occurred_at', 'source', 'lookup', 'catalogue_kind', 'outcome', 'refusal_reason', 'result_count', 'answered_by', 'model_used', 'error_code', 'route', 'calls_primary', 'calls_fallback'],
             Schema::getColumnListing('assistant_logs')
         );
     }

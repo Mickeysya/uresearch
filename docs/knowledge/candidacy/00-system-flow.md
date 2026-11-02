@@ -24,7 +24,7 @@ that stays returned past the expiry date is closed as expired (daily 07:30).
 ## Approval Portal
 
 Tabs Pending my action, Ongoing, History (CGS: Pending my action and Decided by me, plus a "View all appeals" link to Operations). Filters: Search, Department,
-Months requested, Waiting at least, Round. Waiting-days dot: grey under 5 days, amber 5 to 9, red 10 or more. Supervisor, Department Chair and Dean must have a
+Months Requested, Waiting At Least, Round. Waiting-days dot: grey under 5 days, amber 5 to 9, red 10 or more. Supervisor, Department Chair and Dean must have a
 signature (My Signature) before approving; signatures are stamped on decisions and the memo.
 
 ## Memo

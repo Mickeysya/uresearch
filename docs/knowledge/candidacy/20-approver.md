@@ -81,7 +81,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_portal_guide
 
-Approval Portal tabs: Pending my action, Ongoing, History. Filters: Search, Department, Months requested, Waiting at least and Round. Press Review to open an appeal.
+Approval Portal tabs: Pending my action, Ongoing, History. Filters: Search, Department, Months Requested, Waiting At Least and Round. Press Review to open an appeal.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 

@@ -81,6 +81,9 @@ final class Pipeline
     /** Calls per day kept for people: a pipeline run for a scheduled or manual evaluation sets it (holdReserve) and stops at cap - reserve. */
     protected int $reserve = 0;
 
+    /** HTTP requests really sent for THIS question, by model name (retries and failed attempts included; a request that never left is not). Written to the log row. */
+    protected array $sent = [];
+
     protected bool $routeCacheEnabled = true;
 
     public const FALLBACK_NOTICE = 'Smart understanding is temporarily unavailable, so I used simple matching. Try rephrasing if this is not what you meant.';
@@ -154,6 +157,7 @@ final class Pipeline
     {
         $this->answeredByOverride = null;
         $this->routeType = null;
+        $this->sent = [];
         $role = AssistantDomains::effectiveRole($user, $this->domain);
 
         if ($role === null) {
@@ -203,6 +207,7 @@ final class Pipeline
             $this->traceLine("decision: exact candidacy suggested question {$candidacyChip} (no model call)");
 
             $this->routeType = 'static';
+        $this->sent = [];
 
             return $this->askCatalogueChip($user, $role, $candidacyChip, []);
         }
@@ -1250,6 +1255,8 @@ final class Pipeline
     protected function refundUnsentCall(array $result, string $model, int $estimatedTokens = 0): void
     {
         if (! in_array($result['error_code'] ?? null, ['no_credentials', 'no_connection'], true)) {
+            $this->sent[$model] = ($this->sent[$model] ?? 0) + 1;
+
             return;
         }
 
@@ -1375,7 +1382,7 @@ final class Pipeline
         // Metadata only: the catalogue id (in lookup) and its kind, the
         // outcome, who decided, the model and the error code -- never
         // any question or answer text.
-        AssistantLog::record($user->id, $role, $source, $lookup, $outcome, $refusalReason, $resultCount, $this->answeredByOverride ?? $answeredBy, $modelUsed ?? $this->fallbackModelUsed, $errorCode ?? $this->fallbackErrorCode, Catalogue::kindForLogLookup($lookup), $this->domain, $route);
+        AssistantLog::record($user->id, $role, $source, $lookup, $outcome, $refusalReason, $resultCount, $this->answeredByOverride ?? $answeredBy, $modelUsed ?? $this->fallbackModelUsed, $errorCode ?? $this->fallbackErrorCode, Catalogue::kindForLogLookup($lookup), $this->domain, $route, (int) ($this->sent[(string) config('assistant.gemini.model')] ?? 0), (int) ($this->sent[(string) config('assistant.fallback_model')] ?? 0));
 
         return [
             'answer' => $text,

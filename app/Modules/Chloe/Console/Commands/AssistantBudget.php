@@ -38,7 +38,11 @@ class AssistantBudget extends Command
             $limits = (array) (config('assistant.rate_limits', [])[$model] ?? []);
             $google = self::GOOGLE[$model] ?? ['rpm' => '?', 'rpd' => '?'];
             $counter = (int) Cache::get("assistant:calls:day:{$model}:{$date}", 0);
-            $logged = AssistantLog::query()->where('model_used', $model)->where('occurred_at', '>=', $dayStart->copy()->setTimezone(config('app.timezone')))->count();
+            // requests sent: the per-question call counts (every attempt, failed ones too) plus the older rows that only recorded the answering model
+            $since = $dayStart->copy()->setTimezone(config('app.timezone'));
+            $column = $role === 'primary' ? 'calls_primary' : 'calls_fallback';
+            $logged = (int) AssistantLog::query()->where('occurred_at', '>=', $since)->sum($column)
+                + AssistantLog::query()->where('occurred_at', '>=', $since)->where('model_used', $model)->where('calls_primary', 0)->where('calls_fallback', 0)->count();
             $cap = (int) ($limits['requests_per_day'] ?? 0);
 
             if ($this->option('reset')) {
@@ -54,7 +58,7 @@ class AssistantBudget extends Command
 
             $note = '';
 
-            // the log holds one row per answered question; retries and failed attempts are counted by the counter only, so the counter may be higher, never much lower
+            // the log now records every request sent per question (calls_primary / calls_fallback); rows from before that only knew the answering model, so a few failed attempts can still be missing there
             if ($counter < $logged) {
                 $note = 'counter BELOW logged calls';
                 $warn = true;

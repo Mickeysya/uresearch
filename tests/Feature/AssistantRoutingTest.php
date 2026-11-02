@@ -197,4 +197,31 @@ class AssistantRoutingTest extends TestCase
         $this->assertSame(Pipeline::FALLBACK_NOTICE, $r['notice']);
         $this->assertStringContainsString('Smart understanding is temporarily unavailable', $r['notice']);
     }
+
+    public function test_the_log_records_every_request_really_sent_per_model_and_the_budget_view_adds_them_up(): void
+    {
+        // a request that never left is not a call
+        FakeModel::queueRouteFailure('no_connection');
+        FakeModel::queueRouteFailure('no_connection');
+        FakeModel::queueRouteFailure('no_connection');
+        $this->pipeline()->ask($this->student, 'when does my candidacy end', []);
+        $row = AssistantLog::latest('id')->first();
+        $this->assertSame([0, 0], [(int) $row->calls_primary, (int) $row->calls_fallback]);
+
+        // a failed attempt and its retry are two requests on the primary; the success on the fallback is a third request
+        FakeModel::reset();
+        Cache::flush();
+        FakeModel::queueRouteFailure('429');
+        FakeModel::queueRouteFailure('429');
+        FakeModel::queueRoute(['id' => 'cand_my_expiry']);
+        $this->pipeline()->ask($this->student, 'when does my candidacy finish', []);
+        $row = AssistantLog::latest('id')->first();
+        $this->assertSame([2, 1], [(int) $row->calls_primary, (int) $row->calls_fallback]);
+        $this->assertSame(2, (int) Cache::get($this->dayKey('test-primary')));
+        $this->assertSame(1, (int) Cache::get($this->dayKey('test-fallback')), 'the day counter and the log agree');
+
+        // a chip and a cache hit send nothing
+        $this->pipeline()->ask($this->student, 'When does my candidacy expire?', []);
+        $this->assertSame([0, 0], [(int) AssistantLog::latest('id')->first()->calls_primary, (int) AssistantLog::latest('id')->first()->calls_fallback]);
+    }
 }
