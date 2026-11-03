@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\FilesVivaNotices;
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Notifications\ApplicationDecided;
@@ -22,6 +23,7 @@ use Tests\TestCase;
  */
 class VivaEligibilityTest extends TestCase
 {
+    use FilesVivaNotices;
     use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
@@ -33,51 +35,133 @@ class VivaEligibilityTest extends TestCase
 
     protected function notice(array $overrides = []): array
     {
-        return $overrides + [
-            'thesis_title' => 'Constraint-based examiner matching',
-            'expected_softbound_date' => now()->addMonths(4)->toDateString(),
-            'publication_proof' => UploadedFile::fake()->create('accepted.pdf', 200, 'application/pdf'),
-        ];
+        return $this->noticeFields($overrides);
     }
 
-    public function test_notice_redirects_to_the_checklist_until_every_check_is_ticked(): void
+    public function test_one_page_holds_the_checklist_and_the_notice_and_one_submit_files_it(): void
     {
+        Storage::fake('local');
+        Notification::fake();
         $student = $this->student(attributes: ['programme' => 'MSc Full-Time']);
 
         $this->actingAs($student)->get(route('viva.eligibility'))
             ->assertOk()
             ->assertSee('Research Methodology')
-            ->assertDontSee('Research Completion Seminar');
+            ->assertDontSee('Research Completion Seminar')
+            ->assertSee('Notice of Thesis Submission')
+            ->assertSee('name="abstract"', false)
+            ->assertSee('name="keywords"', false)
+            ->assertSee('Publication Proof');
 
+        // The old notice URL lands on the same page.
         $this->actingAs($student)->get(route('viva.notice'))
+            ->assertRedirect(route('viva.eligibility').'#notice');
+
+        // Four of five is not enough: the ticks are kept, nothing is filed.
+        $this->actingAs($student)->post(route('viva.notice.store'),
+            array_slice(self::MSC_CHECKS, 0, 4) + $this->notice())
+            ->assertRedirect(route('viva.eligibility'))
+            ->assertSessionHas('error');
+        $this->assertSame(0, Application::count());
+        $this->assertTrue(VivaEligibility::where('student_id', $student->id)->sole()->publication_accepted);
+
+        // Every tick and every field, one submit.
+        $this->actingAs($student)->post(route('viva.notice.store'), self::MSC_CHECKS + $this->notice())
+            ->assertSessionHasNoErrors()
             ->assertRedirect(route('viva.eligibility'));
 
-        // Four of five is not enough.
-        $this->actingAs($student)->post(route('viva.eligibility.save'),
-            array_slice(self::MSC_CHECKS, 0, 4) + ['continue' => 1])
-            ->assertRedirect(route('viva.eligibility'));
+        $detail = VivaDetail::sole();
+        $this->assertSame(['examiner matching', 'constraint satisfaction', 'expertise ranking'], $detail->keywords);
+        $this->assertSame(150, VivaDetail::wordCount($detail->abstract));
 
-        $this->actingAs($student)->post(route('viva.notice.store'), $this->notice())
-            ->assertRedirect(route('viva.eligibility'));
+        $this->actingAs($student)->get(route('viva.eligibility'))
+            ->assertOk()
+            ->assertSee('Your Viva Progress')
+            ->assertSee('Locked, because your notice was filed on it.');
+    }
+
+    public function test_save_progress_keeps_the_ticks_without_any_notice_field(): void
+    {
+        $student = $this->student(attributes: ['programme' => 'MSc Full-Time']);
+
+        $this->actingAs($student)->post(route('viva.eligibility.save'), array_slice(self::MSC_CHECKS, 0, 2))
+            ->assertRedirect(route('viva.eligibility'))
+            ->assertSessionHas('status', 'Checklist saved.');
+
+        $this->assertTrue(VivaEligibility::sole()->research_methodology_passed);
+        $this->assertFalse(VivaEligibility::sole()->no_outstanding_fees);
+    }
+
+    public function test_abstract_and_keywords_are_bounded(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+        $student = $this->student(attributes: ['programme' => 'MSc Full-Time']);
+
+        $this->actingAs($student)->post(route('viva.notice.store'), self::MSC_CHECKS + $this->notice(['abstract' => $this->abstractOf(99)]))
+            ->assertSessionHasErrors(['abstract' => 'The abstract must be between 100 and 500 words; it has 99.']);
+        $this->actingAs($student)->post(route('viva.notice.store'), self::MSC_CHECKS + $this->notice(['abstract' => $this->abstractOf(501)]))
+            ->assertSessionHasErrors('abstract');
+        $this->actingAs($student)->post(route('viva.notice.store'), self::MSC_CHECKS + $this->notice(['keywords' => 'one; two']))
+            ->assertSessionHasErrors('keywords');
+        $this->actingAs($student)->post(route('viva.notice.store'), self::MSC_CHECKS + $this->notice(['keywords' => 'a, b, c, d, e, f, g, h, i']))
+            ->assertSessionHasErrors('keywords');
         $this->assertSame(0, Application::count());
 
-        $this->actingAs($student)->post(route('viva.eligibility.save'), self::MSC_CHECKS + ['continue' => 1])
-            ->assertRedirect(route('viva.notice'));
+        $this->actingAs($student)->post(route('viva.notice.store'), self::MSC_CHECKS + $this->notice([
+            'abstract' => $this->abstractOf(100), 'keywords' => "Deep learning, anomaly detection;\nTime series; anomaly detection",
+        ]))->assertSessionHasNoErrors();
 
-        $this->actingAs($student)->get(route('viva.notice'))
+        $this->assertSame(['deep learning', 'anomaly detection', 'time series'], VivaDetail::sole()->keywords);
+    }
+
+    public function test_coursework_students_cannot_file_a_notice_through_the_merged_page(): void
+    {
+        Storage::fake('local');
+        $student = $this->student(attributes: ['programme' => 'MSc by Coursework']);
+
+        $this->actingAs($student)->get(route('viva.eligibility'))
             ->assertOk()
-            ->assertSee('Publication Proof');
+            ->assertSee('does not apply')
+            ->assertDontSee('name="abstract"', false);
+
+        $this->actingAs($student)->post(route('viva.notice.store'), self::MSC_CHECKS + $this->notice())
+            ->assertRedirect(route('viva.eligibility'));
+        $this->assertSame(0, Application::count());
+    }
+
+    public function test_the_abstract_and_keywords_drive_the_examiner_suggestions(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+        $student = $this->student(attributes: ['programme' => 'MSc Full-Time']);
+
+        $this->actingAs($student)->post(route('viva.notice.store'), self::MSC_CHECKS + $this->notice([
+            'abstract' => $this->abstractOf(120).' pipeline leak detection with sensors',
+            'keywords' => 'anomaly detection; time series; sensor data',
+        ]))->assertSessionHasNoErrors();
+
+        $query = app(\App\Modules\Hani\Support\Matching\ExaminerSuggestions::class)->queryFor($student);
+
+        $this->assertSame('the Notice of Thesis Submission', $query['source']);
+        $this->assertSame(['anomaly detection', 'time series', 'sensor data'], $query['keywords']);
+        $this->assertStringContainsString('pipeline leak detection', $query['text']);
     }
 
     public function test_phd_needs_rcs_and_msc_cannot_store_it(): void
     {
         $phd = $this->student('22001002', 'phd@test.my', ['programme' => 'PhD Part-Time']);
 
-        $this->actingAs($phd)->post(route('viva.eligibility.save'), self::MSC_CHECKS + ['continue' => 1])
-            ->assertRedirect(route('viva.eligibility'));
+        Storage::fake('local');
+        Notification::fake();
 
-        $this->actingAs($phd)->post(route('viva.eligibility.save'), self::MSC_CHECKS + ['rcs_passed' => 1, 'continue' => 1])
-            ->assertRedirect(route('viva.notice'));
+        $this->actingAs($phd)->post(route('viva.notice.store'), self::MSC_CHECKS + $this->notice())
+            ->assertSessionHas('error');
+        $this->assertSame(0, Application::count());
+
+        $this->actingAs($phd)->post(route('viva.notice.store'), self::MSC_CHECKS + ['rcs_passed' => 1] + $this->notice())
+            ->assertSessionHasNoErrors();
+        $this->assertSame('PHD', VivaDetail::sole()->programme_level);
 
         $msc = $this->student(attributes: ['programme' => 'MSc Full-Time']);
         $this->actingAs($msc)->post(route('viva.eligibility.save'), self::MSC_CHECKS + ['rcs_passed' => 1]);
@@ -131,8 +215,9 @@ class VivaEligibilityTest extends TestCase
         Notification::assertSentTo($student, ApplicationDecided::class);
 
         // A second notice, and further checklist edits, are refused.
-        $this->actingAs($student)->get(route('viva.notice'))
+        $this->actingAs($student)->post(route('viva.notice.store'), $this->notice())
             ->assertRedirect(route('applications.show', $application));
+        $this->assertSame(1, Application::count());
         $this->actingAs($student)->post(route('viva.eligibility.save'), [])
             ->assertSessionHas('error');
         $this->assertTrue(VivaEligibility::sole()->no_outstanding_fees);

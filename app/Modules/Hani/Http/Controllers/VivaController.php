@@ -33,8 +33,13 @@ class VivaController extends Controller
         return 'viva_voce';
     }
 
-    // ---- Eligibility checklist ---------------------------------------------
+    // ---- Eligibility checklist + Notice of Thesis Submission (one page) -----
 
+    /**
+     * The student's viva home: the checklist on top and the notice below it,
+     * sent together. Once a notice is filed, the same page shows the
+     * progress panel and the checklist locked.
+     */
     public function eligibility(Request $request)
     {
         $student = $request->user();
@@ -50,70 +55,86 @@ class VivaController extends Controller
             'openNotice' => VivaChecklist::openNotice($student),
             'progress' => $progress,
             'tracker' => ModuleTracker::viva($progress, $eligible),
+            'earliestSoftbound' => $this->earliestSoftbound(),
+            'proofMaxMb' => self::PROOF_MAX_KB / 1024,
+            'limits' => config('hani.notice'),
         ]);
     }
 
+    /** "Save progress": the ticks only, so a student can come back to it. */
     public function saveEligibility(Request $request): RedirectResponse
     {
         $student = $request->user();
-        $items = VivaChecklist::itemsFor($student);
 
-        abort_if($items === [], 403, 'Your programme does not go through a viva voce.');
+        abort_if(VivaChecklist::itemsFor($student) === [], 403, 'Your programme does not go through a viva voce.');
 
-        // Once the notice is filed the checklist is what it was filed on.
         if (VivaChecklist::openNotice($student)) {
             return redirect()->route('viva.eligibility')
                 ->with('error', 'Your notice has already been submitted, so the checklist is locked.');
         }
 
-        // Only the checks for this student's level are accepted; an MSc
-        // student cannot post rcs_passed and have it stored.
-        $rules = array_fill_keys(array_keys($items), ['nullable', 'boolean']);
-        $request->validate($rules + ['continue' => ['nullable', 'boolean']]);
-
-        $values = [];
-        foreach (array_keys($items) as $column) {
-            $values[$column] = $request->boolean($column);
-        }
-
-        $record = VivaEligibility::updateOrCreate(['student_id' => $student->id], $values);
-
-        if ($request->boolean('continue')) {
-            return VivaChecklist::isEligible($student, $record)
-                ? redirect()->route('viva.notice')
-                : redirect()->route('viva.eligibility')
-                    ->with('error', 'Tick every requirement before submitting the notice.');
-        }
+        $this->saveTicks($request, $student);
 
         return redirect()->route('viva.eligibility')->with('status', 'Checklist saved.');
     }
 
-    // ---- Notice of Thesis Submission ---------------------------------------
-
-    public function notice(Request $request)
+    /** The notice now lives on the eligibility page; the old URL still lands there. */
+    public function notice(): RedirectResponse
     {
-        if ($redirect = $this->noticeGuard($request->user())) {
-            return $redirect;
-        }
-
-        return view('hani::viva.notice', [
-            'tracker' => ModuleTracker::viva(VivaProgress::for($request->user()), true),
-            'level' => VivaChecklist::levelFor($request->user()),
-            'earliestSoftbound' => $this->earliestSoftbound(),
-            'proofMaxMb' => self::PROOF_MAX_KB / 1024,
-        ]);
+        return redirect()->to(route('viva.eligibility').'#notice');
     }
 
+    /**
+     * One submit for the whole page: the ticks are saved first (so they are
+     * kept even if a notice field needs fixing), then every requirement must
+     * hold, then the notice is filed. Also the target of the old
+     * POST /viva/notice, which posts no ticks and relies on the saved ones.
+     */
     public function storeNotice(Request $request, WorkflowEngine $engine, DocumentStore $documents): RedirectResponse
     {
         $student = $request->user();
 
-        if ($redirect = $this->noticeGuard($student)) {
-            return $redirect;
+        if ($open = VivaChecklist::openNotice($student)) {
+            return redirect()->route('applications.show', $open)
+                ->with('warning', 'You have already submitted a Notice of Thesis Submission.');
         }
+
+        if (VivaChecklist::itemsFor($student) === []) {
+            return redirect()->route('viva.eligibility')
+                ->with('error', 'Your programme does not go through a viva voce, so no notice can be filed.');
+        }
+
+        if ($request->hasAny(array_keys(VivaChecklist::itemsFor($student)))) {
+            $this->saveTicks($request, $student);
+        }
+
+        if (! VivaChecklist::isEligible($student)) {
+            return redirect()->route('viva.eligibility')->withInput()
+                ->with('error', 'Confirm every requirement on the checklist before submitting the notice.');
+        }
+
+        $limits = config('hani.notice');
+        $minWords = (int) $limits['abstract_min_words'];
+        $maxWords = (int) $limits['abstract_max_words'];
+        $minKeywords = (int) $limits['keywords_min'];
+        $maxKeywords = (int) $limits['keywords_max'];
 
         $data = $request->validate([
             'thesis_title' => ['required', 'string', 'max:255'],
+            'abstract' => ['required', 'string', 'max:6000', function ($attribute, $value, $fail) use ($minWords, $maxWords) {
+                $words = VivaDetail::wordCount($value);
+                if ($words < $minWords || $words > $maxWords) {
+                    $fail("The abstract must be between {$minWords} and {$maxWords} words; it has {$words}.");
+                }
+            }],
+            'keywords' => ['required', 'string', 'max:1000', function ($attribute, $value, $fail) use ($minKeywords, $maxKeywords) {
+                $terms = VivaDetail::parseKeywords($value);
+                if (count($terms) < $minKeywords || count($terms) > $maxKeywords) {
+                    $fail("Give between {$minKeywords} and {$maxKeywords} keywords, separated by semicolons; you gave ".count($terms).'.');
+                } elseif (collect($terms)->contains(fn ($t) => mb_strlen($t) > 80)) {
+                    $fail('Each keyword must be 80 characters or fewer. Separate keywords with semicolons.');
+                }
+            }],
             'expected_softbound_date' => ['required', 'date', 'after_or_equal:'.$this->earliestSoftbound()->toDateString()],
             'publication_proof' => ['required', 'file', 'mimes:pdf', 'max:'.self::PROOF_MAX_KB],
         ], [
@@ -134,6 +155,8 @@ class VivaController extends Controller
                 'application_id' => $application->id,
                 'programme_level' => VivaChecklist::levelFor($student),
                 'thesis_title' => $data['thesis_title'],
+                'abstract' => trim($data['abstract']),
+                'keywords' => VivaDetail::parseKeywords($data['keywords']),
                 'expected_softbound_date' => $data['expected_softbound_date'],
             ]);
 
@@ -155,27 +178,25 @@ class VivaController extends Controller
             new VivaAwaitingAcademicExec($application, 'Notice of Thesis Submission', 'viva.queue'));
 
         return redirect()
-            ->route('applications.index')
+            ->route('viva.eligibility')
             ->with('status', "Notice of Thesis Submission #{$application->id} submitted. Your Academic Executive has been notified, and a confirmation has been sent to your email.");
     }
 
     /**
-     * The server-side gate on both notice routes. The disabled buttons on the
-     * checklist and the form are a convenience; this is the rule.
+     * Store the ticks for this student's level. Only that level's checks are
+     * accepted; an MSc student cannot post rcs_passed and have it stored.
      */
-    protected function noticeGuard(User $student): ?RedirectResponse
+    protected function saveTicks(Request $request, User $student): VivaEligibility
     {
-        if ($open = VivaChecklist::openNotice($student)) {
-            return redirect()->route('applications.show', $open)
-                ->with('warning', 'You have already submitted a Notice of Thesis Submission.');
+        $items = VivaChecklist::itemsFor($student);
+        $request->validate(array_fill_keys(array_keys($items), ['nullable', 'boolean']));
+
+        $values = [];
+        foreach (array_keys($items) as $column) {
+            $values[$column] = $request->boolean($column);
         }
 
-        if (! VivaChecklist::isEligible($student)) {
-            return redirect()->route('viva.eligibility')
-                ->with('error', 'Complete the eligibility checklist before submitting the notice.');
-        }
-
-        return null;
+        return VivaEligibility::updateOrCreate(['student_id' => $student->id], $values);
     }
 
     protected function earliestSoftbound(): \Carbon\CarbonInterface

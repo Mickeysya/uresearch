@@ -110,6 +110,16 @@ return [
         ],
     ],
 
+    'notice' => [
+        // The abstract and keywords on the Notice of Thesis Submission, which
+        // feed the examiner suggestions. Provisional: our own bounds, not a
+        // Handbook figure.
+        'abstract_min_words' => 100,
+        'abstract_max_words' => 500,
+        'keywords_min' => 3,
+        'keywords_max' => 8,
+    ],
+
     'sweep' => [
         // When `examiners:sweep` runs each day. Provisional.
         'daily_at' => '07:30',

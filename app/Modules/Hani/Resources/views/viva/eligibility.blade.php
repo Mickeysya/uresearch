@@ -1,12 +1,16 @@
 @extends('core::layouts.app')
 
-@section('title', 'Viva Eligibility Checklist')
+@section('title', 'Viva: Eligibility and Notice of Thesis Submission')
+
+@php
+    use App\Modules\Hani\Support\VivaChecklist;
+@endphp
 
 @section('content')
 <div class="card-container-inline">
     <x-core::page-header
-        title="Viva Eligibility Checklist"
-        subtitle="Confirm each requirement from the Postgraduate Handbook before you submit your Notice of Thesis Submission. Your progress is saved, so you can come back to it." />
+        title="Viva: Eligibility and Notice of Thesis Submission"
+        subtitle="Confirm each requirement from the Postgraduate Handbook, then give your Notice of Thesis Submission below, at least 3 months before your softbound thesis. Your Academic Executive will then contact your supervisor about appointing examiners." />
 
     @if ($level !== null)
         @include('hani::partials.module_stepper', ['tracker' => $tracker])
@@ -22,20 +26,35 @@
         @else
             <p>
                 Programme: <b>{{ auth()->user()->programme }}</b>
-                ({{ $level === \App\Modules\Hani\Support\VivaChecklist::PHD ? 'PhD' : 'MSc by Research' }} requirements)
+                ({{ $level === VivaChecklist::PHD ? 'PhD' : 'MSc by Research' }} requirements)
             </p>
 
             @if ($openNotice)
                 @include('hani::viva._progress', ['progress' => $progress])
 
+                <h3>Your Notice of Thesis Submission</h3>
+                <table class="data-table">
+                    <tbody>
+                        <tr><th scope="row">Thesis title</th><td>{{ $progress->detail?->thesis_title }}</td></tr>
+                        @if ($progress->detail?->keywords)
+                            <tr><th scope="row">Keywords</th><td>{{ implode('; ', $progress->detail->keywords) }}</td></tr>
+                        @endif
+                        <tr><th scope="row">Expected softbound date</th><td>{{ $progress->detail?->expected_softbound_date?->format('j M Y') }}</td></tr>
+                    </tbody>
+                </table>
+
                 <h3>Eligibility Checklist</h3>
                 <p class="fstep-hint">Locked, because your notice was filed on it.</p>
             @endif
 
-            <form method="POST" action="{{ route('viva.eligibility.save') }}" id="viva-checklist">
+            <form method="POST" action="{{ route('viva.notice.store') }}" enctype="multipart/form-data" id="viva-checklist">
                 @csrf
 
                 <fieldset @disabled($openNotice)>
+                    @if (! $openNotice)
+                        <h3>1. Eligibility Checklist</h3>
+                    @endif
+
                     @foreach ($items as $column => $item)
                         <div class="checkbox-row">
                             <input type="checkbox" name="{{ $column }}" id="{{ $column }}" value="1"
@@ -53,10 +72,65 @@
                         CGS may ask for evidence.
                     </p>
 
-                    <button type="submit" class="btn-secondary">Save Progress</button>
-                    <button type="submit" name="continue" value="1" data-continue>
-                        Submit Notice of Thesis Submission
-                    </button>
+                    @if (! $openNotice)
+                        {{-- formaction + formnovalidate: saving the ticks needs none of the notice fields. --}}
+                        <button type="submit" class="btn-secondary" formaction="{{ route('viva.eligibility.save') }}" formnovalidate>
+                            Save Progress
+                        </button>
+
+                        <h3 id="notice">2. Notice of Thesis Submission</h3>
+
+                        <label for="thesis_title">Thesis Title</label>
+                        <input type="text" name="thesis_title" id="thesis_title" required maxlength="255"
+                               value="{{ old('thesis_title') }}"
+                               class="@error('thesis_title') is-invalid @enderror">
+                        @error('thesis_title') <p class="field-error">{{ $message }}</p> @enderror
+
+                        <label for="abstract">Abstract</label>
+                        <textarea name="abstract" id="abstract" rows="8" required maxlength="6000"
+                                  data-words data-min="{{ $limits['abstract_min_words'] }}" data-max="{{ $limits['abstract_max_words'] }}"
+                                  class="@error('abstract') is-invalid @enderror">{{ old('abstract') }}</textarea>
+                        <p class="fstep-hint">
+                            {{ $limits['abstract_min_words'] }} to {{ $limits['abstract_max_words'] }} words.
+                            <span data-word-count>0</span> words so far. It is used to suggest examiners whose expertise matches your thesis.
+                        </p>
+                        @error('abstract') <p class="field-error">{{ $message }}</p> @enderror
+
+                        <label for="keywords">Keywords</label>
+                        <input type="text" name="keywords" id="keywords" required maxlength="1000"
+                               value="{{ old('keywords') }}" placeholder="e.g. anomaly detection; time series; sensor data"
+                               class="@error('keywords') is-invalid @enderror">
+                        <p class="fstep-hint">{{ $limits['keywords_min'] }} to {{ $limits['keywords_max'] }} keywords, separated by semicolons.</p>
+                        @error('keywords') <p class="field-error">{{ $message }}</p> @enderror
+
+                        <label for="expected_softbound_date">Expected Softbound Submission Date</label>
+                        {{-- min mirrors the controller's 3-month rule so the browser
+                             catches it before the server does. --}}
+                        <input type="date" name="expected_softbound_date" id="expected_softbound_date" required
+                               min="{{ $earliestSoftbound->toDateString() }}"
+                               value="{{ old('expected_softbound_date') }}"
+                               class="@error('expected_softbound_date') is-invalid @enderror">
+                        <p class="fstep-hint">Earliest allowed: {{ $earliestSoftbound->format('j M Y') }}.</p>
+                        @error('expected_softbound_date') <p class="field-error">{{ $message }}</p> @enderror
+
+                        <label for="publication_proof">Publication Proof</label>
+                        <input type="file" name="publication_proof" id="publication_proof" required
+                               accept="application/pdf,.pdf"
+                               class="@error('publication_proof') is-invalid @enderror">
+                        <p class="fstep-hint">
+                            PDF, up to {{ $proofMaxMb }} MB. The acceptance letter or the published article.
+                            @if ($level === VivaChecklist::PHD)
+                                If you are using two articles, combine them into one PDF.
+                            @endif
+                            @if ($errors->any())
+                                Choose the file again: browsers do not keep a chosen file after an error.
+                            @endif
+                        </p>
+                        @error('publication_proof') <p class="field-error">{{ $message }}</p> @enderror
+
+                        <button type="submit" data-continue>Submit Notice of Thesis Submission</button>
+                        <p class="fstep-hint" data-continue-hint>Confirm every requirement and choose your publication proof to submit.</p>
+                    @endif
                 </fieldset>
             </form>
         @endif
@@ -65,24 +139,54 @@
 
 @push('scripts')
     <script @cspNonce>
-        // Unlocks "Submit Notice" once every box is ticked. A convenience
-        // only: VivaController::noticeGuard() is the actual rule.
+        // Unlocks "Submit" once every box is ticked and a PDF under the limit
+        // is chosen, and counts the abstract's words. A convenience only:
+        // VivaController::storeNotice() is the actual rule.
         (function () {
             var form = document.getElementById('viva-checklist');
             if (!form) return;
 
             var boxes = form.querySelectorAll('[data-check]');
             var button = form.querySelector('[data-continue]');
+            var hint = form.querySelector('[data-continue-hint]');
             var count = form.querySelector('[data-count]');
+            var proof = document.getElementById('publication_proof');
+            var abstract = form.querySelector('[data-words]');
+            var wordCount = form.querySelector('[data-word-count]');
+            var maxBytes = {{ (int) $proofMaxMb }} * 1024 * 1024;
+
+            function words(text) {
+                var m = text.match(/[\p{L}\p{N}]+(?:['\-’][\p{L}\p{N}]+)*/gu);
+                return m ? m.length : 0;
+            }
 
             function sync() {
                 var ticked = Array.prototype.filter.call(boxes, function (b) { return b.checked; }).length;
                 count.textContent = ticked;
-                button.disabled = ticked !== boxes.length;
+                if (!button) return;
+
+                var file = proof && proof.files[0];
+                var fileOk = !!file && /\.pdf$/i.test(file.name) && file.size <= maxBytes;
+                if (proof) proof.setCustomValidity(file && !fileOk ? 'Choose a PDF of {{ (int) $proofMaxMb }} MB or smaller.' : '');
+
+                var ready = ticked === boxes.length && fileOk;
+                button.disabled = !ready;
+                if (hint) hint.hidden = ready;
+            }
+
+            function syncWords() {
+                if (!abstract) return;
+                var n = words(abstract.value);
+                wordCount.textContent = n;
+                var min = +abstract.dataset.min, max = +abstract.dataset.max;
+                abstract.setCustomValidity(abstract.value && (n < min || n > max) ? 'The abstract must be between ' + min + ' and ' + max + ' words.' : '');
             }
 
             boxes.forEach(function (b) { b.addEventListener('change', sync); });
+            if (proof) proof.addEventListener('change', function () { sync(); proof.reportValidity(); });
+            if (abstract) abstract.addEventListener('input', syncWords);
             sync();
+            syncWords();
         })();
     </script>
 @endpush
