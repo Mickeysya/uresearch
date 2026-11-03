@@ -3,11 +3,13 @@
 namespace App\Modules\Norhanis\Workflows;
 
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
+use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\PublicationDetail;
 use Carbon\CarbonInterface;
 
@@ -17,7 +19,7 @@ use Carbon\CarbonInterface;
  * One fixed chain, no conditional routing: Supervisor -> Chair -> Non-Exec
  * CGS -> Senior Director CGS. Senior Director CGS has the final say.
  */
-class PublicationWorkflow implements WorkflowModule, SuppliesCalendarEvents
+class PublicationWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
 {
     public function key(): string
     {
@@ -48,6 +50,12 @@ class PublicationWorkflow implements WorkflowModule, SuppliesCalendarEvents
         }
 
         return $detail->title_of_paper.', '.$detail->title_of_conference_journal;
+    }
+
+    /** "Publication Applications": everyone who has applied, for those who approve publications. */
+    public function links(User $user): array
+    {
+        return ApplicationOverviewController::link($this, $user);
     }
 
     public function createRoute(): ?string

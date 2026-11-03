@@ -6,11 +6,6 @@ use Illuminate\Support\Facades\Schedule;
 // on one stage. See App\Modules\Nureen\Console\Commands\RemindStalledSupervisionRequests.
 Schedule::command('supervision:remind-stalled')->dailyAt('08:00');
 
-// RPD reminders at 3/2/1 months before the deadline (norhanis.md Module 4).
-// Early, so the mail is waiting when the student opens their inbox. The
-// command is idempotent per milestone -- see SendRpdReminders for how.
-Schedule::command('rpd:remind')->dailyAt('07:00');
-
 // Chloe — locker key reminder (day 3) and auto-cancellation (day 7) sweep.
 // See App\Modules\Chloe\Console\Commands\RemindOverdueLockerKeys.
 Schedule::command('workstation:remind-locker-keys')->dailyAt('08:00');

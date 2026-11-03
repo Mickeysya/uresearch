@@ -11,9 +11,9 @@ Norhanis’s scope is the "conveyor belt" of the system. She is responsible for 
 #### Module 1: Travel Module
 * **Function:** Routes local and international travel requests through varying approval chains.
 * **Routing Logic:** 
-  * Student submits $\rightarrow$ Supervisor endorses $\rightarrow$ Chair of Department endorses.
-  * **If Local Travel:** Stops at the Chair for final approval.
-  * **If International Travel:** Automatically routes further to Non-Executive CGS (Review) $\rightarrow$ Dean of PGR (Final Approval).
+  * Student submits $\rightarrow$ Supervisor endorses $\rightarrow$ Chair of Department endorses $\rightarrow$ Non-Executive CGS (Review).
+  * **If Local Travel:** Senior Director CGS (Final Approval).
+  * **If International Travel:** Dean of PGR (Final Approval).
 * **Feature:** Automated email notifications update the student at every decision point.
 
 #### Module 2: Publication Module
@@ -23,24 +23,22 @@ Norhanis’s scope is the "conveyor belt" of the system. She is responsible for 
   2. Chair of Department (Endorsement)
   3. Non-Executive CGS (Review)
   4. Senior Director CGS (Final Approval)
+* **Cost (amended with CGS, 2026-10-30):** the student picks the *Cost Centre to be Utilized* from a list: CGS – Pay and Claims, CGS – Letter of Undertaking, Split Memo, or Others (specify). There is no fee-in-ringgit field and no separate LOU tick box. A split memo is not handled in UResearch: CGS emails the template and the supervisor completes it outside the system.
+* **Documents:** every document is required. The Authorship Contribution Form was removed at CGS's request.
 
 #### Module 3: Claims Module
 * **Function:** Handles **Student Claims** (reimbursements) only. 
 * **Scope Constraint:** *External Claims were explicitly excluded* after confirming with the Academic Executive that they are handled outside the student portal.
 * **Routing Logic:** Routes student reimbursement receipts through: Supervisor $\rightarrow$ Chair $\rightarrow$ Non-Executive CGS $\rightarrow$ Manager CGS $\rightarrow$ Project Director (Payment Processing).
 
-#### Module 4: RPD (Research Proposal Defence) Candidacy Module
-* **Function:** A complex module handling three distinct operational paths based on time and status:
-  1. **RPD Reminders:** The system automatically checks dates and triggers emails to students at **3, 2, and 1 months** prior to their strict deadlines (8 months for FT Masters/PhD, 12 months for PT Masters/PhD).
-  2. **RPD Appeals (Extensions):** If a student needs more time, they submit an appeal. It routes through a multi-tier chain (Supervisor $\rightarrow$ Chair $\rightarrow$ Non-Exec CGS $\rightarrow$ Dean). Upon Dean's approval, the **system automatically recalculates the new deadline** and updates the masterlist.
-  3. **Dismissals for Exceeded Candidacy:** If a student fails to appeal and passes the deadline, Non-Exec CGS initiates dismissal. Routes to Dean (Endorsement) $\rightarrow$ Faculty (Final Approval) $\rightarrow$ Registry (Sends termination email).
+> **RPD Candidacy** (reminders, appeals, dismissals) was originally Module 4 here. It was removed from Norhanis' scope on 2026-10-30 and its code taken out of `app/Modules/Norhanis`.
 
 ### 3. Key Technical Contributions
 * **Workflow Routing Engine:** Developing the PHP logic that dynamically checks the application type (e.g., Local vs. International) and routes it to the correct sequence of approvers.
-* **Automated Cron Jobs / Scheduled Tasks:** Implementing the logic for the RPD Reminder module to scan the database daily and trigger PHPMailer emails at the 3, 2, and 1-month marks.
 * **CGS Dashboard (Chart.js):** Building the bird's-eye view dashboard for administrative staff, showing exactly how many applications are stuck at the "Chair" stage vs. the "Dean" stage, highlighting bottlenecks.
 * **UI/UX Design:** Designed the initial wireframes for the Login Page, Admin Dashboard, and the specific multi-step application tracking interfaces.
 
 ### 4. Scope Evolution (Crucial Pivot)
 * **Separated Travel & Publication:** In the proposal, Travel and Publication were grouped. Deep-dive meetings with CGS (Norshahirah) revealed they have distinct approval chains and documentation (like LOUs), so she separated them into dedicated modules.
-* **Excluded AE Processes:** After meeting with the Academic Executive (24 July), she confirmed that department-level RPD assessment scheduling and examiner coordination are handled manually by the AE. She explicitly excluded these from her RPD module to avoid overlapping with Nur Hani's scope.
+* **RPD removed from scope (30 Oct 2026):** RPD Candidacy is no longer part of Norhanis' modules.
+* **Travel routing agreed with CGS (Oct 2026):** local travel no longer stops at the Chair; it continues to Non-Executive CGS and the Senior Director CGS.

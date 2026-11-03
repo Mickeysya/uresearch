@@ -15,10 +15,10 @@ as the work it describes.
 | Core (auth, RBAC, workflow engine, uploads, UI) | done |
 | Student dashboard (5 stat cards + 4 live panels) | done |
 | Database notifications (in-app feed + unread count) | done |
-| Norhanis — Travel | done · reference implementation |
-| Norhanis — Claims | done |
-| Norhanis — Publication | done |
-| Norhanis — RPD (reminders · appeals · dismissals) | done |
+| Norhanis — Travel | done · reference implementation · 2026-10-30: local travel now Supervisor → Chair → Non-Exec CGS → Senior Director CGS; Local/International chosen on the form; supporting document required; optional cost centre |
+| Norhanis — Claims | done · 2026-10-30: Travel, Claims and Publication now also email each approver when an application reaches their stage, and the student when Travel or Claims is submitted (`ApproverNotifier`; Core still emails the student after each decision) |
+| Norhanis — Publication | done · 2026-10-30: cost centre chosen from a list (CGS – Pay and Claims / CGS – Letter of Undertaking / Split Memo / Others); fee in MYR, LOU tick box and the digital split memo removed (`publication_memos` dropped); every document required; Authorship Contribution Form removed |
+| Norhanis — RPD (reminders · appeals · dismissals) | **removed 2026-10-30** · out of Norhanis' scope; code and tables taken out (`remove_rpd_candidacy` migration); `rpd_appeal` / `rpd_dismissal` keys retired · Haziq's Stage Gate planned to read `candidacies.rpd_completed_at`, so that dependency needs a new owner |
 | Nureen — GA Extension · Attendance · Supervision · Certification | done · matches `docs/scope/nureen.md` |
 | Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done · four-seat panel and the six-stage chain landed 2026-09-22 |
 | CGS dashboard (5 stat cards + 5 live panels) | done |

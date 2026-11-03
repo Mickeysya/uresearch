@@ -62,8 +62,6 @@ class DatabaseSeeder extends Seeder
             'department' => 'Computing',
             'faculty' => 'FSMC',
         ]);
-        // Faculty signs off an RPD dismissal between the Dean's endorsement
-        // and the Registry's termination email -- see RpdDismissalWorkflow.
         $this->user('Faculty Office', 'faculty@utp.edu.my', Role::FACULTY, [
             'department' => 'Faculty of Engineering', 'faculty' => 'FOE',
         ]);
@@ -72,7 +70,7 @@ class DatabaseSeeder extends Seeder
 
         // Students, all attached to the supervisor above so the supervisee
         // relationship can actually be exercised.
-        $this->user('Ahmad Danial', 'student@utp.edu.my', Role::STUDENT, [
+        $student = $this->user('Ahmad Danial', 'student@utp.edu.my', Role::STUDENT, [
             'matric_no' => '22001001',
             'programme' => 'MSc Full-Time',
             'department' => 'Computing',
@@ -80,7 +78,7 @@ class DatabaseSeeder extends Seeder
             'supervisor_id' => $supervisor->id,
         ]);
 
-        $this->user('Nur Farah Adilah', 'student2@utp.edu.my', Role::STUDENT, [
+        $student2 = $this->user('Nur Farah Adilah', 'student2@utp.edu.my', Role::STUDENT, [
             'matric_no' => '22001002',
             'programme' => 'PhD Part-Time',
             'department' => 'Computing',

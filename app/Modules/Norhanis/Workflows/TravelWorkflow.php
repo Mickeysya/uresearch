@@ -2,27 +2,30 @@
 
 namespace App\Modules\Norhanis\Workflows;
 
+use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\TravelDetail;
 use Carbon\CarbonInterface;
 
 /**
  * Travel requests.
  *
- * Local travel stops at the Chair. International travel continues to CGS for
- * review and the Dean of PGR for final approval.
+ * Both routes run Supervisor -> Chair -> Non-Executive CGS; what differs is
+ * who has the final say: the Senior Director CGS for local travel, the Dean
+ * of PGR for international (as agreed with CGS).
  *
  * In the legacy app that branch lived inside travel_chair_approval.php, which
  * queried is_international and picked the next stage by hand. Expressing it as
  * a chain instead means the student's stepper shows the correct number of
  * steps from the moment they submit, and nothing has to be kept in sync.
  */
-class TravelWorkflow implements WorkflowModule, SuppliesCalendarEvents
+class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
 {
     /** @var array<int, bool> memoised per application, keyed by id */
     protected array $internationalCache = [];
@@ -39,7 +42,31 @@ class TravelWorkflow implements WorkflowModule, SuppliesCalendarEvents
 
     public function stages(?Application $application = null): array
     {
-        $chain = [
+        // null means "every stage this module can use": both final stages,
+        // so the Dean and the Senior Director each get a travel queue.
+        if ($application === null) {
+            return [...$this->route(international: true), $this->seniorDirector()];
+        }
+
+        return $this->route(international: $this->isInternational($application));
+    }
+
+    /**
+     * The two routes on their own, for a reader that needs to know which
+     * stages follow which: in stages(null) the Senior Director comes after
+     * the Dean, yet no application passes through both.
+     *
+     * @return array<string, array<int, Stage>>
+     */
+    public function routes(): array
+    {
+        return ['local' => $this->route(international: false), 'international' => $this->route(international: true)];
+    }
+
+    /** @return array<int, Stage> */
+    protected function route(bool $international): array
+    {
+        return [
             new Stage(
                 key: 'supervisor',
                 label: 'Lecturer/Supervisor',
@@ -47,20 +74,17 @@ class TravelWorkflow implements WorkflowModule, SuppliesCalendarEvents
                 decision: 'endorsed',
                 queueTitle: 'Pending My Endorsement',
             ),
+            new Stage('chair', 'Chair of Department', Role::CHAIR, 'endorsed'),
+            new Stage('cgs_review', 'Non-Executive CGS', Role::NON_EXEC_CGS, 'reviewed'),
+            $international
+                ? new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'approved')
+                : $this->seniorDirector(),
         ];
+    }
 
-        // null means "every stage this module can use" -- that is the
-        // international chain, which is a superset of the local one.
-        if ($application === null || $this->isInternational($application)) {
-            $chain[] = new Stage('chair', 'Chair of Department', Role::CHAIR, 'endorsed');
-            $chain[] = new Stage('cgs_review', 'Non-Executive CGS', Role::NON_EXEC_CGS, 'reviewed');
-            $chain[] = new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'approved');
-        } else {
-            // Local travel: the Chair has the final say.
-            $chain[] = new Stage('chair', 'Chair of Department', Role::CHAIR, 'approved');
-        }
-
-        return $chain;
+    protected function seniorDirector(): Stage
+    {
+        return new Stage('senior_director', 'Senior Director CGS', Role::SENIOR_DIRECTOR_CGS, 'approved');
     }
 
     public function summary(Application $application): string
@@ -82,6 +106,12 @@ class TravelWorkflow implements WorkflowModule, SuppliesCalendarEvents
     public function queueRoute(): string
     {
         return 'travel.queue';
+    }
+
+    /** "Travel Applications": everyone who has applied, for those who approve travel. */
+    public function links(User $user): array
+    {
+        return ApplicationOverviewController::link($this, $user);
     }
 
     protected function isInternational(Application $application): bool

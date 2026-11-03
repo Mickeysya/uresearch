@@ -2,25 +2,32 @@
 
 namespace App\Modules\Norhanis\Workflows;
 
+use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 
 /**
- * Student Claims (reimbursements).
+ * Student Claims — journal publication claims only.
  *
- * External Claims were explicitly excluded from scope after confirming with
- * the Academic Executive that they are handled outside the student portal —
- * this module only ever produces `claims_student` applications.
+ * Confirmed with CGS: no expense-item breakdown and no cash advance, which
+ * both belonged to travel reimbursement and are out of scope here. The
+ * student enters total_claims directly; approvers check it against the
+ * attached proof of payment. External Claims were also explicitly excluded
+ * from scope after confirming with the Academic Executive that they are
+ * handled outside the student portal — this module only ever produces
+ * `claims_student` applications.
  *
  * One fixed chain, no conditional routing: Supervisor -> Chair -> Non-Exec
  * CGS -> Manager CGS. Manager CGS has the final say; payment processing by
  * the Project Director happens after approval and outside this app, so it
  * is not modelled as a Stage.
  */
-class ClaimsWorkflow implements WorkflowModule
+class ClaimsWorkflow implements WorkflowModule, ProvidesLinks
 {
     public function key(): string
     {
@@ -50,7 +57,13 @@ class ClaimsWorkflow implements WorkflowModule
             return 'Student Claims application';
         }
 
-        return $detail->purpose_of_claim.', RM '.number_format($detail->total_claim_amount, 2);
+        return 'Journal claim · RM '.number_format($detail->total_claims, 2).' · '.$detail->bank_name;
+    }
+
+    /** "Claims Applications": everyone who has applied, for those who approve claims. */
+    public function links(User $user): array
+    {
+        return ApplicationOverviewController::link($this, $user);
     }
 
     public function createRoute(): ?string
