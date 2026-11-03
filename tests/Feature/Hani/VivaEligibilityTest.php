@@ -143,4 +143,38 @@ class VivaEligibilityTest extends TestCase
         $this->actingAs($student)->post(route('viva.eligibility.save'), self::MSC_CHECKS)
             ->assertForbidden();
     }
+
+    public function test_the_student_sidebar_has_one_viva_entry_for_every_viva_page(): void
+    {
+        $student = $this->student(attributes: ['programme' => 'MSc Full-Time']);
+
+        $html = $this->actingAs($student)->get(route('viva.eligibility'))->assertOk()->getContent();
+
+        // Core's sidebar reads the optional navLabel()/navPattern() only once
+        // the change in app/Modules/Hani/SHARED_CHANGES.md (item 1) is applied.
+        // Without it the one entry falls back to label(), highlighted here only.
+        $coreReadsNavLabel = str_contains($html, '>Viva</a>');
+        $entry = $coreReadsNavLabel ? 'Viva' : 'Notice of Thesis Submission';
+        $active = '/class="nav-subitem\s+active\s*"\s*>'.preg_quote($entry, '/').'<\/a>/';
+
+        // One viva entry under My Application, active here; no separate softbound entry.
+        $this->assertSame(1, substr_count($html, 'title="'.$entry.'"'));
+        $this->assertMatchesRegularExpression($active, $html);
+        $this->assertStringNotContainsString('title="Softbound Thesis"', $html);
+        if ($coreReadsNavLabel) {
+            $this->assertStringNotContainsString('title="Notice of Thesis Submission"', $html);
+        }
+
+        // Teammates' entries are untouched.
+        $this->assertStringContainsString('title="Travel"', $html);
+
+        // The old URLs still answer, and the entry is still there on another
+        // viva page (highlighted there too once Core reads navPattern()).
+        $this->actingAs($student)->get(route('viva.softbound.create'))->assertRedirect(route('viva.eligibility'));
+        $notice = $this->actingAs($student)->followingRedirects()->get(route('viva.notice'))->assertOk()->getContent();
+        $this->assertSame(1, substr_count($notice, 'title="'.$entry.'"'));
+        if ($coreReadsNavLabel) {
+            $this->assertMatchesRegularExpression($active, $notice);
+        }
+    }
 }

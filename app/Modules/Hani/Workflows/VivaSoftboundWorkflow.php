@@ -59,7 +59,10 @@ class VivaSoftboundWorkflow implements WorkflowModule
 
     public function createRoute(): ?string
     {
-        return 'viva.softbound.create';
+        // Not its own sidebar entry: students reach the form from the viva
+        // home's tracker and button, under the single "Viva" item
+        // (VivaVoceWorkflow::navLabel()). The route itself is unchanged.
+        return null;
     }
 
     public function queueRoute(): string

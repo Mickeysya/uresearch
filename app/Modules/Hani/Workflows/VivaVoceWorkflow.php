@@ -69,8 +69,25 @@ class VivaVoceWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalenda
     public function createRoute(): ?string
     {
         // The checklist, not the notice: the notice route sends anyone who
-        // has not finished the checklist back to it anyway.
+        // has not finished the checklist back to it anyway. It is also the
+        // student's viva home, with the step tracker.
         return 'viva.eligibility';
+    }
+
+    /**
+     * The student sidebar's one entry for the whole viva. Optional, read by
+     * Core's sidebar-student-nav if present: label() stays "Notice of Thesis
+     * Submission" for emails and the tracking page.
+     */
+    public function navLabel(): string
+    {
+        return 'Viva';
+    }
+
+    /** Highlight that entry on every viva page (checklist, notice, softbound). */
+    public function navPattern(): string
+    {
+        return 'viva.*';
     }
 
     public function queueRoute(): string
