@@ -10,6 +10,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Exports\ExaminerListExport;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
+use App\Modules\Hani\Models\ExaminerReminderLog;
 use App\Modules\Hani\Models\ExaminerSeatHistory;
 use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Notifications\ExaminersReleased;
@@ -43,6 +44,9 @@ class ExaminerNominationController extends Controller
 
     /** The stage whose Approve also releases the list -- see finaliseAndRelease(). */
     public const FINALISE_STAGE = 'cgs_final';
+
+    /** examiner_reminder_logs.kind for the compile-review notification. */
+    public const COMPILE_REVIEW = 'compile_review';
 
     /** Who may read the compiled list, and whether they see every department or one. */
     protected const REPORT_ROLES = [
@@ -283,8 +287,8 @@ class ExaminerNominationController extends Controller
 
     /**
      * A list arriving at cgs_compile with a cross-department clash or a likely
-     * duplicate record: tell the Senior Executive, with the reasons and a
-     * link to Conflict Detection. Best effort and after commit -- a mail
+     * duplicate record: tell the Senior Executive, once per arrival, with the
+     * reasons and a link to Conflict Detection. Best effort and after commit -- a mail
      * failure must never undo the decision that has just been recorded.
      */
     protected function notifyCompileFindings(Application $application): void
@@ -309,6 +313,27 @@ class ExaminerNominationController extends Controller
                 ->all();
 
             if ($findings === []) {
+                return;
+            }
+
+            // ONCE PER ARRIVAL at cgs_compile. An arrival is identified by
+            // how many times the list has been sent back so far: the first
+            // arrival is 0, the replay after one return is 1. A second
+            // trigger for the same arrival (a double submit both requests got
+            // through, a retry) hits the unique key and sends nothing --
+            // the log row goes in first, as in examiners:sweep.
+            $arrival = \App\Modules\Core\Models\ApprovalHistory::where('application_id', $application->id)
+                ->where('decision', 'returned')
+                ->count();
+
+            try {
+                ExaminerReminderLog::create([
+                    'nomination_id' => $nomination->id,
+                    'kind' => self::COMPILE_REVIEW,
+                    'sequence' => $arrival,
+                    'sent_at' => now(),
+                ]);
+            } catch (\Illuminate\Database\QueryException) {
                 return;
             }
 

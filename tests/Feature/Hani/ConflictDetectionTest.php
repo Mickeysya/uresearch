@@ -174,4 +174,46 @@ class ConflictDetectionTest extends TestCase
             ->assertOk()
             ->assertDontSee('named by more than one department');
     }
+
+    public function test_the_compile_review_is_sent_once_per_arrival_even_if_triggered_twice(): void
+    {
+        Notification::fake();
+        $senior = $this->seniorExec();
+
+        $this->nominate('Computing');
+        $this->nominate('Petroleum Engineering');
+        $application = $this->applicationFor('Computing');
+
+        $this->actingAs($this->departments['Computing']['ae'])
+            ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+
+        // The same arrival triggered again (a double submit both requests got
+        // through, a retry): no second notification.
+        $notify = new \ReflectionMethod(\App\Modules\Hani\Http\Controllers\ExaminerNominationController::class, 'notifyCompileFindings');
+        $notify->invoke(app(\App\Modules\Hani\Http\Controllers\ExaminerNominationController::class), $application->fresh());
+        $notify->invoke(app(\App\Modules\Hani\Http\Controllers\ExaminerNominationController::class), $application->fresh());
+
+        Notification::assertSentToTimes($senior, NominationsNeedCompileReview::class, 1);
+        $this->assertDatabaseCount('examiner_reminder_logs', 1);
+    }
+
+    public function test_a_list_returned_and_recompiled_is_a_new_arrival_and_notifies_again(): void
+    {
+        Notification::fake();
+        $senior = $this->seniorExec();
+        $director = $this->seniorDirector();
+        $ae = $this->departments['Computing']['ae'];
+
+        $this->nominate('Computing');
+        $this->nominate('Petroleum Engineering');
+        $application = $this->applicationFor('Computing');
+
+        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->actingAs($senior)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->actingAs($director)->post(route('examiner-nomination.return', $application), ['remarks' => 'Choose again.']);
+        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+
+        $this->assertSame('cgs_compile', $application->fresh()->current_stage);
+        Notification::assertSentToTimes($senior, NominationsNeedCompileReview::class, 2);
+    }
 }
