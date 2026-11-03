@@ -164,6 +164,7 @@ class VivaResultTest extends TestCase
         $this->actingAs($senior)->post(route('reviva.store'), [
             'student_id' => $logged['student']->id,
             'thesis' => UploadedFile::fake()->create('thesis.pdf', 100, 'application/pdf'),
+            'summary_of_corrections' => UploadedFile::fake()->create('summary.pdf', 20, 'application/pdf'),
         ])->assertSessionHasNoErrors();
         $this->assertSame('2029-02-01', Examiner::find($logged['panel']->internal_main_id)->assigned_until->toDateString());
 

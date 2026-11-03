@@ -123,4 +123,24 @@ class ReVivaHandoffTest extends TestCase
         $this->assertSame('2027-12-10', $round->resubmission_opens_at->toDateString());
         $this->assertSame('2028-06-10', $round->resubmission_closes_at->toDateString());
     }
+
+    public function test_the_senior_executive_logs_with_both_uploads(): void
+    {
+        $viva = $this->categoryFourViva();
+        Carbon::setTestNow('2027-10-01 09:00');
+
+        $this->logReViva($viva['student'], ['summary_of_corrections' => null])->assertSessionHasErrors('summary_of_corrections');
+        $this->logReViva($viva['student'], ['thesis' => \Illuminate\Http\UploadedFile::fake()->create('thesis.docx', 50)])->assertSessionHasErrors('thesis');
+        $this->assertSame(0, ReVivaDetail::count());
+
+        $this->logReViva($viva['student'])->assertSessionHasNoErrors();
+
+        $docs = $this->latestRound($viva['student'])->application->documents;
+        $this->assertEqualsCanonicalizing(['Re-corrected Thesis', 'Summary of Corrections'], $docs->pluck('doc_type')->all());
+
+        // The student's own documents: they may open both.
+        foreach ($docs as $doc) {
+            $this->actingAs($viva['student'])->get(route('documents.show', $doc))->assertOk();
+        }
+    }
 }

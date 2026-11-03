@@ -73,10 +73,16 @@
             </select>
             @error('student_id') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="thesis">Re-corrected Thesis</label>
-            <input type="file" name="thesis" id="thesis" required
+            <label for="thesis">Corrected thesis (PDF)</label>
+            <input type="file" name="thesis" id="thesis" accept="application/pdf,.pdf" required
                    class="@error('thesis') is-invalid @enderror">
             @error('thesis') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="summary_of_corrections">Summary of Corrections (PDF, endorsed by the supervisor)</label>
+            <input type="file" name="summary_of_corrections" id="summary_of_corrections" accept="application/pdf,.pdf" required
+                   class="@error('summary_of_corrections') is-invalid @enderror">
+            <p class="fstep-hint">The student's table of each examiner's comments, the action taken and the updated pages. Both files are sent to the examiners with their correction letters.</p>
+            @error('summary_of_corrections') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="viva_result_date">Viva result date <span style="color: var(--text-grey)">(only if the result is not in UResearch)</span></label>
             <input type="date" name="viva_result_date" id="viva_result_date" value="{{ old('viva_result_date') }}" max="{{ today()->toDateString() }}"

@@ -24,6 +24,11 @@ class ReVivaController extends Controller
 {
     use ApprovesApplications;
 
+    /** doc_type of the two uploads at logging. Stored in rows: do not rename. */
+    public const DOC_THESIS = 'Re-corrected Thesis';
+
+    public const DOC_SUMMARY = 'Summary of Corrections';
+
     protected function moduleKey(): string
     {
         return 're_viva';
@@ -95,7 +100,9 @@ class ReVivaController extends Controller
     {
         $data = $request->validate([
             'student_id' => ['required', Rule::exists('users', 'id')->where('role', Role::STUDENT)],
-            'thesis' => DocumentStore::rules(required: true),
+            // PDF only: examiners open both from their letter's link.
+            'thesis' => [...DocumentStore::rules(required: true), 'mimes:pdf'],
+            'summary_of_corrections' => [...DocumentStore::rules(required: true), 'mimes:pdf'],
             'viva_result_date' => ['nullable', 'date', 'before_or_equal:today'],
         ]);
 
@@ -148,7 +155,10 @@ class ReVivaController extends Controller
                 'logged_outside_window' => $warning !== null,
             ]);
 
-            $documents->attach($application, $request->file('thesis'), 'Re-corrected Thesis');
+            // Both are the student's own documents, so DocumentStore is right
+            // here: the student may see them. Nothing examiner-side is.
+            $documents->attach($application, $request->file('thesis'), self::DOC_THESIS);
+            $documents->attach($application, $request->file('summary_of_corrections'), self::DOC_SUMMARY);
 
             $this->holdReexaminers($window->viva, $resubmittedAt->copy()->addMonthsNoOverflow((int) config('hani.reviva.hold_months', 12)), $request->user());
 
