@@ -1,7 +1,13 @@
 # Hani's Modules: Current Behaviour
 
 **Owner:** Nur Hani Sofia (22001418) · **Folder:** `app/Modules/Hani/`
-**Snapshot taken:** 3 November 2026, branch `feature/viva-voce`
+**Snapshot taken:** 3 November 2026, branch `feature/viva-voce`.
+**Updated:** 3 November 2026, after Prompt 2 on `feature/hani-automation`. See
+`CHANGELOG.md` for the viva automation: one-page eligibility and notice,
+system-checked candidacy, softbound System checks, examiner progress,
+scheduling help, reminders, and step 5 (result and corrections), which is now
+built. Sections 4.2 to 4.7 and 6 below describe the state BEFORE Prompt 2
+where they disagree with the changelog.
 **Purpose of this file:** an accurate description of how the features behave *right now*, taken from the code, to be turned into proper documentation. It describes what is built, not what is planned, except where marked **Not built**.
 
 ---
@@ -225,7 +231,7 @@ All notifications are queued and sent **after** the database commit; a mail fail
 
 ---
 
-## 6. Not built yet (planned "step 5" of the viva)
+## 6. Step 5 of the viva (built in Prompt 2; this was the plan)
 - AE uploads the **viva report** received from the chairman and shares it with the student (~1 week after the viva).
 - AE records the **viva result category** (1 = final thesis within 1 month; 2 = up to 3 months; 3 = 3–6 months; 4 = 6–12 months and re-submit for viva, i.e. hand-off to Re-viva; 5 = dismissed).
 - Corrections upload after the viva.
@@ -287,7 +293,8 @@ The single "Viva" entry relies on a small, backward-compatible Core change: Core
 
 ## 10. Known limitations
 
-1. **Bulk actions skip module checks.** The shared queue's "Approve / Reject selected" calls the engine directly. For Hani's modules this means a bulk **reject** of softbound theses skips the mandatory reason and the "returned" email, and a bulk **acknowledge** of notices skips the supervisor email. One-at-a-time decisions work fully. The fix needs a Core hook (the same gap affects Jason's signature gate).
+1. ~~**Bulk actions skip module checks.**~~ Fixed in Prompt 2: both viva
+   workflows implement `DecidesOneAtATime`. Previously: The shared queue's "Approve / Reject selected" calls the engine directly. For Hani's modules this means a bulk **reject** of softbound theses skips the mandatory reason and the "returned" email, and a bulk **acknowledge** of notices skips the supervisor email. One-at-a-time decisions work fully. The fix needs a Core hook (the same gap affects Jason's signature gate).
 2. **No live pop-up** for new work. The AE gets an email and the red unread count, which updates on the next page load.
 3. **Search box width** in every queue is narrower than intended (a one-line Core CSS bug, `:first-child` vs `:first-of-type`); not fixed, pending the team.
 4. **Candidacy end and fees are self-declared**; there is no data source for them in UResearch.

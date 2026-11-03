@@ -281,7 +281,22 @@ Hani's `examiner_nomination/queue.blade.php` would then pass
   - the `examiners:sweep` daily command
   - the examiner availability dashboard
   - `HaniDemoSeeder` (on demand)
-- **Test count:** Hani's own folder is now 126 tests
+- **Viva automation (Prompt 2):**
+  - one-page eligibility and notice, with abstract and keywords
+  - candidacy period checked by the system
+  - softbound System checks, with the Turnitin report read by a built-in
+    PDF reader
+  - examiner progress, with rejection promoting the backup, and the
+    divergence alert
+  - scheduling clash, weekend and holiday warnings, with suggested slots
+  - `viva:reminders` (daily, scheduled from the module)
+  - step 5: result and corrections, Viva Results page
+  - the Senior Executive can log re-vivas
+  - both viva workflows decide one at a time
+
+  The module's "Not built: step 5" line and known limitation 1 (bulk
+  actions) can be removed.
+- **Test count:** Hani's own folder is now 163 tests
   (`php artisan test tests/Feature/Hani`).
 
 ---

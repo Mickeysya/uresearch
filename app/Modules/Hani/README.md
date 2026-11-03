@@ -155,6 +155,42 @@ Bind it in `ModuleProvider::register()` instead of `TfIdfMatcher`. Keep the
 explanation: report the expertise keywords closest to the thesis, so a score
 is never shown without its reason.
 
+## Viva Voce: what the system checks and chases
+
+All settings are in `config/hani.php`. Values CGS has not confirmed are marked
+"Provisional" there.
+
+- **One page:** the eligibility checklist and the Notice of Thesis
+  Submission are on `/viva/eligibility`. The abstract and keywords are the
+  examiner suggestions' query document.
+- **Candidacy period:** checked by the system from the candidature start
+  date (`Support/Eligibility/CandidacyPeriodSource`, read-only). The other
+  items are self-declared because no data source exists for them.
+- **Softbound System checks:**
+  - `Support/SimilaritySource` reads the ULearn Turnitin report.
+  - `Support/Pdf/PdfReader` is the built-in reader; smalot is used if
+    installed.
+  - `Jobs/RunSoftboundChecks` checks both PDFs. The AE sees Pass /
+    Warning / Not checked, each with its evidence.
+- **Examiner progress:** `/viva/{notice}/examiners` (AE, Senior Exec).
+  - A rejection promotes the backup.
+  - Reports are stored privately, never in `DocumentStore`.
+  - Diverging categories are flagged before the viva.
+- **Scheduling:** clash, weekend and public-holiday warnings
+  (`Support/VivaSlotFinder`), with the next free weekday slots.
+- **Step 5:** `/viva/results` (AE) records the chairman's report and the
+  category, sets the deadline, and closes the examiners' evaluation (or
+  holds them for a re-viva). Students upload corrections at
+  `/viva/corrections`.
+- **`viva:reminders`:** runs daily from the module, sends each reminder
+  once, and has `--dry-run`. It covers:
+  - examiners who have not replied
+  - overdue reports
+  - the 7-day and 1-day panel reminders, with the calendar file
+  - the softbound deadline
+  - the corrections deadlines
+  - the category 4 window closing
+
 ## Examiner Report export layout (for Jason's appointment letters)
 
 `/examiner-nomination/report/export?format=xlsx|csv`. There is one row per
@@ -236,7 +272,11 @@ only Hani's own tables are written directly.
 
 ## Tests
 
-`tests/Feature/Hani/` — 24 cases.
+`tests/Feature/Hani/`: 163 tests. The viva files added in Prompt 2:
+`VivaBulkSafetyTest`, `VivaEligibilityVerificationTest`,
+`VivaSoftboundChecksTest`, `VivaExaminerProgressTest`,
+`VivaSchedulingAssistTest`, `VivaResultTest`; fixtures are in
+`tests/Feature/Hani/Concerns/` (`BuildsVivas`, `FilesVivaNotices`).
 
 | File | Guards |
 |---|---|
@@ -244,7 +284,8 @@ only Hani's own tables are written directly.
 | `ExaminerPoolTest` | the internal/external split: which columns each list shows, tab-scoped counts, the derived student column, the external-field strip on an internal save, `institution` being required for an external examiner, and the add form's stepper contract (two steps, external block disabled for an internal examiner) |
 | `ReVivaTest` | the four-stage stepper and the level-based outcome |
 
-Run them with `./vendor/bin/sail artisan test --filter=Hani`.
+Run them with `docker exec uresearch-app php artisan test tests/Feature/Hani`
+(the path, not `--filter=Hani`, which also matches Norhanis's tests).
 
 ## Layout
 
