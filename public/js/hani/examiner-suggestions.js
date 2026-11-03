@@ -81,7 +81,8 @@
                 li.appendChild(el('div', 'suggest-reasons', item.reasons.join(' · ')));
             }
             (item.flags || []).forEach(function (flag) {
-                li.appendChild(el('div', 'suggest-flag is-' + flag.level, flag.message));
+                li.appendChild(el('div', 'suggest-flag is-' + flag.level,
+                    (flag.level === 'block' ? 'Conflict: ' : 'Check: ') + flag.message));
             });
             if (item.needs_email) li.appendChild(el('div', 'suggest-flag is-warning', 'Email needed before letters can be sent.'));
 
