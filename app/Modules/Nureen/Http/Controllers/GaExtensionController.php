@@ -51,7 +51,7 @@ class GaExtensionController extends Controller
 
         return view('nureen::ga_extension.form', [
             'student' => $student,
-            'supervisorProblem' => SupervisorCheck::problemFor($request->user()),
+            'supervisorProblem' => SupervisorCheck::problemFor($student),
             'requiredDocuments' => config('nureen.ga_extension.required_documents'),
             'stageGateDocuments' => config('nureen.ga_extension.stage_gate_documents'),
             'applicantFields' => $this->applicantFields(),

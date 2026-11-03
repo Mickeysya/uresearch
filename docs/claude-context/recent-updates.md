@@ -103,7 +103,7 @@ Run with `db:seed --class=...`; none are wired into Core's seeder:
 - **Lee Xin Yi's GA Extension (#183):** resolved with no data change.
   Endorsed by `supervisor@` and approved by `cgs@` on 3 Nov.
 - **No Electrical & Electronics Chair** in the seeded data: SHARED_CHANGES
-  §15.
+  §13.
 - **Six real letter emails** (4 `AppointmentLetterIssued`, 2
   `CertificationIssued`, all from 29 Oct–1 Nov) sit in `failed_jobs`. They
   failed on a since-fixed bug and are kept for Nureen to decide whether to
@@ -115,7 +115,7 @@ Run with `db:seed --class=...`; none are wired into Core's seeder:
   - the holiday list;
   - signatory titles;
   - whether a certification revocation should also tell the supervisor
-    (SHARED_CHANGES §14).
+    (SHARED_CHANGES §12).
 - **Waiting on the team:**
   - SHARED_CHANGES §9b–d: Core's semester-vs-latest attendance figure,
     CGS dashboard counts, and `DemoDataSeeder`'s monthly attendance;
@@ -440,7 +440,7 @@ approver's System checks; every number and switch goes in config.
 ## 2026-11-06 — GA Extension Form generated instead of uploaded (UTP/CGS/001-A2)
 
 **Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only. There was no
-Core edit; one Core proposal is in SHARED_CHANGES.md §12.
+Core edit; one Core proposal is in SHARED_CHANGES.md §15.
 
 ### The ask
 
@@ -540,7 +540,7 @@ Also:
   For the student, the link is on the draft form ("Download the form
   (PDF)" saves first, then auto-downloads) and in a list of their
   applications on `/ga-extension/new`. Core's application page has no slot
-  for it; SHARED §12 proposes one.
+  for it; SHARED §15 proposes one.
 
 ### What changed
 
@@ -581,7 +581,7 @@ Also:
   document types. Their fixed dates became relative where a fixed date
   would one day be backdated.
 - **Docs:** README ("The GA Extension Form, generated" and test rows) and
-  SHARED_CHANGES §12.
+  SHARED_CHANGES §15.
 
 ### Bugs caught
 
@@ -792,7 +792,7 @@ Also:
 ## 2026-11-04 — Save draft for GA Extension and GA/GRA Certification
 
 **Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit;
-Core follow-ups are in SHARED_CHANGES.md §11.
+Core follow-ups are in SHARED_CHANGES.md §14.
 
 ### The ask
 
@@ -813,7 +813,7 @@ half-finished GA Extension or Certification request and come back later.
   submitted it within one transaction. Making drafts persist exposes them
   to Core: Track My Applications lists every application (a draft would
   show the first stage as "current"), and the student dashboard panel
-  labels it "Pending Approval". Core is out of bounds, so SHARED §11 a–c.
+  labels it "Pending Approval". Core is out of bounds, so SHARED §14 a–c.
 - **Approver queues already exclude drafts:** they use
   `WorkflowEngine::queue()`, which reads pending rows only.
   `StalledApplicationReminder`, the supervision reminder, the Client
@@ -822,8 +822,8 @@ half-finished GA Extension or Certification request and come back later.
   every application; it now excludes drafts by name.
 - **`summary()` would crash on a draft:** both workflows assumed the dates
   were set, and Core's tracking page calls it.
-- **`DocumentStore` can't remove a file** (SHARED §11e).
-- **`form-stepper` can't open on a given step** (SHARED §11d). It also
+- **`DocumentStore` can't remove a file** (SHARED §14e).
+- **`form-stepper` can't open on a given step** (SHARED §14d). It also
   treats the FIRST submit button in the form as "Submit" and moves it, so
   Save draft must come after Submit, and per-file "Remove" has to be a
   checkbox, not a submit button inside a step.
@@ -896,7 +896,7 @@ half-finished GA Extension or Certification request and come back later.
   - `GaExtensionDetail` and `GaCertificationDetail` fillable;
   - both workflows' `summary()`; `GaExtensionWorkflow::links()`;
   - `ProcessingTimeAnalytics`;
-  - README and SHARED_CHANGES §11.
+  - README and SHARED_CHANGES §14.
 
 ### Bugs caught
 
@@ -1045,7 +1045,7 @@ half-finished GA Extension or Certification request and come back later.
 
 - **Chair coverage:** a seeded database has Chairs for Computing and
   Chemical Engineering only. All five Electrical & Electronics students
-  (including Lee and Tan Wei Jian) have none; SHARED §15.
+  (including Lee and Tan Wei Jian) have none; SHARED §13.
   `chair-electrical-electronics-engineering@utp.edu.my` and six `2200331x`
   students in test-accounts.md are hand-made accounts no seeder creates;
   they are now marked as such.
@@ -1161,13 +1161,13 @@ half-finished GA Extension or Certification request and come back later.
 - **Revocation hint:** both revoke forms now show "This reason is shown to
   the student and their supervisor. It is not shown on the public
   verification page." under the reason box (`aria-describedby`), and the
-  validation messages say the same. Caveat for certifications: SHARED §14.
+  validation messages say the same. Caveat for certifications: SHARED §12.
 - **`phpunit.xml`:** every setting is forced as both `<env>` and `<server>`.
   Forced `<env>` alone was tried and still leaked: 121 failed jobs from one
   run, because Laravel reads `$_SERVER`, where PHP copies the container's
   `QUEUE_CONNECTION=redis`. A probe test proved `config('queue.default')`
   was `redis` inside tests. Now a clean full run sends **0** jobs to the
-  worker, and `failed_jobs` stays unchanged. SHARED §13.
+  worker, and `failed_jobs` stays unchanged. SHARED §11.
 - **The new rule** is saved as a standing instruction (Claude memory). The
   8,098 old `failed_jobs` rows were left untouched.
 

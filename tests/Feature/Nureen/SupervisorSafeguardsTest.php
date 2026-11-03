@@ -54,27 +54,33 @@ class SupervisorSafeguardsTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-11-02 10:00'));
     }
 
+    /** The generated form's fields and the required documents -- Concerns\FilesGaExtensions. */
     protected function gaExtensionPayload(): array
     {
-        return $this->gaExtensionFields() + $this->gaExtensionDocuments();
+        return $this->gaExtensionFields([
+            'current_end_date' => '2026-12-01',
+            'requested_new_end_date' => '2027-06-01',
+            'reason_for_extension' => 'Fieldwork slipped two semesters and the analysis needs the assistantship to continue.',
+        ]) + $this->gaExtensionDocuments();
     }
 
     protected function certificationPayload(): array
     {
         return [
             'appointment_type' => 'GA',
+            'period_start' => '2026-01-01',
+            'period_end' => '2026-06-30',
             'course_code' => 'CCB2012',
             'course_name' => 'Process Control',
             'course_owner_name' => 'Dr. Lim',
-            'study_level' => 'coursework',
-            'level_of_study' => 'master',
-            'mode_of_study' => 'full_time_odl',
-            'identity_number' => '900101-08-1234',
-            'personal_email' => 'danial.personal@gmail.test',
-            'declaration' => '1',
-            'period_start' => '2026-01-01',
-            'period_end' => '2026-06-30',
             'semester' => 'Jan 2026',
+            // CGS's online form (CertificationController::onlineFormRules()).
+            'study_level' => 'research',
+            'level_of_study' => 'phd',
+            'mode_of_study' => 'full_time',
+            'identity_number' => '900101-08-1234',
+            'personal_email' => 'student.personal@gmail.test',
+            'declaration' => '1',
             'supporting_documents' => [UploadedFile::fake()->create('evidence.pdf', 80, 'application/pdf')],
         ];
     }

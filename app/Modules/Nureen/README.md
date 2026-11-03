@@ -353,7 +353,7 @@ collect, so a student can leave and resume.
 - **Never part of the workflow:** drafts are in no queue, reminder or
   analytics.
 - **Core caveats:** Core's Track My Applications and dashboard panel still
-  list drafts on this branch; see `SHARED_CHANGES.md` §11.
+  list drafts on this branch; see `SHARED_CHANGES.md` §14.
 
 ## The Client Charter
 
