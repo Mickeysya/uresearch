@@ -43,6 +43,7 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
         Route::get('/workstation/live/version', [WorkstationLiveController::class, 'studentVersion'])->middleware('throttle:workstation-live')->name('workstation.live.student-version');
         Route::get('/workstation/blocks/{block}', [WorkstationController::class, 'rooms'])->name('workstation.rooms');
         Route::get('/workstation/rooms/{workstationLocation}', [WorkstationController::class, 'seats'])->name('workstation.seats');
+        Route::get('/workstation/rooms/{workstationLocation}/layout', [WorkstationController::class, 'layout'])->name('workstation.room-layout');
         // Static single-segment routes MUST be registered before
         // POST /workstation/{workstation} below — otherwise that dynamic
         // route matches first and tries (and fails) to bind a Workstation
@@ -51,7 +52,7 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
         Route::post('/workstation/locker-key', [LockerKeyController::class, 'store'])->name('workstation.locker-key.request');
         Route::post('/workstation/locker-key/cancel', [LockerKeyController::class, 'cancel'])->name('workstation.locker-key.cancel');
         Route::post('/workstation/return', [WorkstationController::class, 'returnWorkstation'])->name('workstation.return');
-        Route::post('/workstation/{workstation}', [WorkstationController::class, 'store'])->name('workstation.register');
+        Route::post('/workstation/{workstation}', [WorkstationController::class, 'store'])->withTrashed()->name('workstation.register');
     });
 
     // CGS staff run the seat catalogue and the day-to-day allocation
@@ -104,6 +105,9 @@ Route::middleware(['auth', NoStoreResponse::class])->group(function () {
         Route::post('/cgs/workstation/catalog/seats', [WorkstationCatalogController::class, 'storeSeat'])->name('workstation.cgs.catalog.seats.store');
         Route::put('/cgs/workstation/catalog/seats/{workstation}', [WorkstationCatalogController::class, 'updateSeat'])->name('workstation.cgs.catalog.seats.update');
         Route::delete('/cgs/workstation/catalog/seats/{workstation}', [WorkstationCatalogController::class, 'destroySeat'])->name('workstation.cgs.catalog.seats.destroy');
+        Route::get('/cgs/workstation/catalog/rooms/{workstationLocation}/layout', [WorkstationCatalogController::class, 'layout'])->name('workstation.cgs.catalog.layout');
+        Route::post('/cgs/workstation/catalog/rooms/{workstationLocation}/layout', [WorkstationCatalogController::class, 'storeLayout'])->name('workstation.cgs.catalog.layout.store');
+        Route::delete('/cgs/workstation/catalog/rooms/{workstationLocation}/layout', [WorkstationCatalogController::class, 'destroyLayout'])->name('workstation.cgs.catalog.layout.destroy');
     });
 
     /*

@@ -57,8 +57,12 @@ class WorkstationAssistantWidgetTest extends TestCase
         $this->actingAs($student)->get(route('workstation.rooms', 'N2'))->assertOk()->assertSee('id="wsa-root"', false);
         $this->actingAs($student)->get(route('workstation.seats', $room))->assertOk()->assertSee('id="wsa-root"', false);
 
-        $result = app(WorkstationAllocator::class)->beginPendingSelection($student, $seat);
-        $this->actingAs($student)->get(route('workstation.confirm', $result['selection']->token))
+        $seat->update(['status' => Workstation::STATUS_PENDING]);
+        $selection = \App\Modules\Chloe\Models\WorkstationPendingSelection::create([
+            'workstation_id' => $seat->id, 'student_id' => $student->id, 'token' => str_repeat('a', 64),
+            'status' => 'pending', 'expires_at' => now()->addMinutes(5),
+        ]);
+        $this->actingAs($student)->get(route('workstation.confirm', $selection->token))
             ->assertOk()->assertSee('id="wsa-root"', false);
 
         $this->actingAs($student)->get(route('workstation.terms'))->assertOk()->assertSee('id="wsa-root"', false);

@@ -158,7 +158,7 @@ class WorkstationTermOfUseTest extends TestCase
 
         $response = $this->actingAs($student)->post(route('workstation.register', $seat));
         $response->assertSessionHas('status');
-        $this->assertSame(Workstation::STATUS_PENDING, $seat->fresh()->status);
+        $this->assertSame(Workstation::STATUS_OCCUPIED, $seat->fresh()->status);
     }
 
     /**
@@ -352,10 +352,8 @@ class WorkstationTermOfUseTest extends TestCase
         $room = $this->room('male');
         $seat = $this->seat($room, '1');
 
+        // pressing Confirm in the dialog is the acceptance (no e-mail link any more)
         $this->actingAs($student)->post(route('workstation.register', $seat));
-
-        $selection = WorkstationPendingSelection::first();
-        $this->get(route('workstation.confirm', $selection->token))->assertOk();
 
         $request = WorkstationRequest::where('workstation_id', $seat->id)->first();
         $this->assertNotNull($request->terms_accepted_at);

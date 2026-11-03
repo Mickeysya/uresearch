@@ -4,6 +4,7 @@ namespace App\Modules\Chloe\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class WorkstationLocation extends Model
 {
@@ -11,11 +12,28 @@ class WorkstationLocation extends Model
 
     public const GENDER_FEMALE = 'female';
 
-    protected $fillable = ['block', 'room_code', 'gender', 'name', 'description', 'photo_path'];
+    protected $fillable = ['block', 'room_code', 'gender', 'name', 'description', 'photo_path', 'layout_image_path', 'layout_image_mime'];
 
     public function workstations(): HasMany
     {
         return $this->hasMany(Workstation::class);
+    }
+
+    public function hasLayoutImage(): bool
+    {
+        return (bool) $this->layout_image_path && Storage::disk('local')->exists($this->layout_image_path);
+    }
+
+    /** The layout image from the private disk. Only reached through an authorised route, never a public URL. */
+    public function layoutResponse()
+    {
+        abort_unless($this->hasLayoutImage(), 404);
+
+        return Storage::disk('local')->response($this->layout_image_path, 'room-layout-'.$this->id.'.'.pathinfo($this->layout_image_path, PATHINFO_EXTENSION), [
+            'Content-Type' => $this->layout_image_mime ?: 'image/png',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, max-age=300',
+        ], 'inline');
     }
 
     public function genderLabel(): string

@@ -176,22 +176,33 @@ class WorkstationController extends Controller
 
         if ($this->hasAnActiveSelection($student->id)) {
             return redirect()->route('workstation.seats', $workstation->workstation_location_id)
-                ->with('error', 'You already have a workstation, or a selection awaiting confirmation. Release it, or confirm it from your email, before selecting another.');
+                ->with('error', 'You already have a workstation. Return it before selecting another.');
         }
 
-        $result = $allocator->beginPendingSelection($student, $workstation);
+        $result = $allocator->selectSeat($student, $workstation);
 
-        if (! $result['started']) {
-            return redirect()->route('workstation.seats', $workstation->workstation_location_id)
-                ->with('error', 'This seat is no longer available. Please select another seat.');
+        if (! $result['selected']) {
+            $message = $result['reason'] === 'has_seat'
+                ? 'You already have a workstation. Return it before selecting another.'
+                : 'This seat is no longer available. No change was made.';
+
+            return redirect()->route('workstation.seats', $workstation->workstation_location_id)->with('error', $message);
         }
 
-        return redirect()->route('workstation.seats', $workstation->workstation_location_id)
-            ->with('status', 'A confirmation email has been sent to your email. Please confirm within 5 minutes to secure your seat.');
+        return redirect()->route('workstation.select')
+            ->with('status', 'Seat '.$workstation->seat_code.' is now yours. Your workstation is confirmed.');
+    }
+
+    /** The room layout image, for a student whose gender matches the room. */
+    public function layout(Request $request, WorkstationLocation $workstationLocation)
+    {
+        abort_if($workstationLocation->gender !== $this->genderFor($request), 403);
+
+        return $workstationLocation->layoutResponse();
     }
 
     /**
-     * The link in Email 1. Deliberately reachable without being logged in
+     * The link in the old confirmation e-mail (seat holds made before round 4). Deliberately reachable without being logged in
      * as the selecting student — the token itself, not the session, is the
      * proof of authorisation (the same shape as a password-reset link), so
      * the seat goes to the token's own student_id regardless of who is

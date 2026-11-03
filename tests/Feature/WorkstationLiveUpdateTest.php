@@ -340,14 +340,9 @@ class WorkstationLiveUpdateTest extends TestCase
         $student = $this->eligibleStudent('22009001', 'newbie@test.my', ['name' => 'New Student']);
         StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
 
-        $selection = null;
-        $this->step('seat select', function () use ($student, $w, &$selection) {
-            $result = $this->allocator()->beginPendingSelection($student, $w['avail1']);
-            $this->assertTrue($result['started']);
-            $selection = $result['selection'];
-        }, ['available' => -1]);
-
-        $this->step('seat confirm', fn () => $this->allocator()->confirmPendingSelection(WorkstationPendingSelection::find($selection->id)), ['occupied' => 1]);
+        $this->step('seat select and confirm', function () use ($student, $w) {
+            $this->assertTrue($this->allocator()->selectSeat($student, $w['avail1'])['selected']);
+        }, ['available' => -1, 'occupied' => 1]);
     }
 
     public function test_student_return_workstation(): void

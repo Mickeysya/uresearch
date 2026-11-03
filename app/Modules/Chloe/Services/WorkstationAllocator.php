@@ -9,13 +9,13 @@ use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationPendingSelection;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Models\WorkstationTerminationNotice;
-use App\Modules\Chloe\Notifications\WorkstationSelectionConfirmed;
-use App\Modules\Chloe\Notifications\WorkstationSelectionPendingConfirmation;
+use App\Modules\Chloe\Notifications\WorkstationSeatSelected;
 use App\Modules\Chloe\Notifications\WorkstationStatusNotice;
 use App\Modules\Chloe\Support\ScheduledDelivery;
 use App\Modules\Chloe\Support\WorkingDays;
 use App\Modules\Core\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -115,47 +115,63 @@ class WorkstationAllocator
     public const REASON_RELEASE_NO_EMAIL = 'Student has vacated';
 
     /**
-     * Step 1 of the student flow: Select doesn't hand over the seat, it
-     * starts a 5-minute hold and emails a confirm link (Email 1). The seat
-     * goes to Pending, not Occupied, so it disappears from every other
-     * student's list immediately without anyone actually owning it yet.
+     * The student flow (round 4): the student picks a seat, confirms it in the page's own dialog, and the seat is theirs at
+     * once. No e-mail goes out (a bell notification does); the Term of Use is accepted by pressing Confirm. The seat can never
+     * be double-booked: the row is locked FOR UPDATE and re-read inside one transaction, and the database itself refuses a
+     * second confirmed request for the same seat (workstation_id_if_confirmed) or for the same student (student_id_if_confirmed).
      *
-     * @return array{started: bool, selection: ?WorkstationPendingSelection}
+     * @return array{selected: bool, reason: ?string, workstation: ?Workstation} reason: 'unavailable' | 'has_seat' when not selected
      */
-    public function beginPendingSelection(User $student, Workstation $seat): array
+    public function selectSeat(User $student, Workstation $seat): array
     {
-        $result = DB::transaction(function () use ($student, $seat) {
-            $locked = Workstation::whereKey($seat->id)->lockForUpdate()->first();
+        try {
+            $result = DB::transaction(function () use ($student, $seat) {
+                $locked = Workstation::whereKey($seat->id)->lockForUpdate()->first();
 
-            if (! $locked || $locked->status !== Workstation::STATUS_AVAILABLE) {
-                return ['started' => false, 'selection' => null];
-            }
+                // A retired seat (soft deleted) is not found here either.
+                if (! $locked || $locked->status !== Workstation::STATUS_AVAILABLE) {
+                    return ['selected' => false, 'reason' => 'unavailable', 'workstation' => null];
+                }
 
-            $locked->update(['status' => Workstation::STATUS_PENDING]);
+                $hasSeat = WorkstationRequest::where('student_id', $student->id)->where('status', WorkstationRequest::STATUS_CONFIRMED)->exists();
+                $holdsPending = WorkstationPendingSelection::where('student_id', $student->id)
+                    ->where('status', WorkstationPendingSelection::STATUS_PENDING)->where('expires_at', '>', now())->exists();
 
-            $selection = WorkstationPendingSelection::create([
-                'workstation_id' => $seat->id,
-                'student_id' => $student->id,
-                'token' => Str::random(64),
-                'status' => WorkstationPendingSelection::STATUS_PENDING,
-                'expires_at' => now()->addMinutes(self::PENDING_SELECTION_MINUTES),
-            ]);
+                if ($hasSeat || $holdsPending) {
+                    return ['selected' => false, 'reason' => 'has_seat', 'workstation' => null];
+                }
 
-            WorkstationHistory::record(
-                seat: $locked,
-                actorType: WorkstationHistory::ACTOR_STUDENT,
-                actorName: $student->name,
-                action: WorkstationHistory::ACTION_SEAT_SELECTED,
-                beforeState: Workstation::STATUS_AVAILABLE,
-                afterState: Workstation::STATUS_PENDING,
-                student: $student,
-            );
+                $locked->update(['status' => Workstation::STATUS_OCCUPIED]);
 
-            return ['started' => true, 'selection' => $selection];
-        });
+                WorkstationRequest::create([
+                    'workstation_id' => $locked->id,
+                    'student_id' => $student->id,
+                    'status' => WorkstationRequest::STATUS_CONFIRMED,
+                    'requested_at' => now(),
+                    // Pressing Confirm in the dialog is the acceptance of the Term of Use.
+                    'terms_accepted_at' => now(),
+                    'terms_edition' => 'First Edition',
+                ]);
 
-        if ($result['started']) {
-            $student->notify(new WorkstationSelectionPendingConfirmation($result['selection']));
+                WorkstationHistory::record(
+                    seat: $locked,
+                    actorType: WorkstationHistory::ACTOR_STUDENT,
+                    actorName: $student->name,
+                    action: WorkstationHistory::ACTION_SEAT_CONFIRMED_TERMS,
+                    beforeState: Workstation::STATUS_AVAILABLE,
+                    afterState: Workstation::STATUS_OCCUPIED,
+                    student: $student,
+                );
+
+                return ['selected' => true, 'reason' => null, 'workstation' => $locked];
+            });
+        } catch (QueryException $e) {
+            // The unique constraint caught a race the lock did not (or the student's own double click): nothing was written.
+            return ['selected' => false, 'reason' => 'unavailable', 'workstation' => null];
+        }
+
+        if ($result['selected']) {
+            $student->notify(new WorkstationSeatSelected($result['workstation']));
         }
 
         return $result;
@@ -230,7 +246,7 @@ class WorkstationAllocator
         });
 
         if ($result['confirmed']) {
-            $result['student']->notify(new WorkstationSelectionConfirmed($result['workstation']));
+            $result['student']->notify(new WorkstationSeatSelected($result['workstation']));
         }
 
         return $result;

@@ -19,7 +19,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Workstation::where('status', Workstation::STATUS_AVAILABLE)
+        Workstation::withoutGlobalScopes()->where('status', Workstation::STATUS_AVAILABLE)
             ->get()
             ->each(function (Workstation $seat) {
                 $latestKey = $seat->lockerKeysHistory()->latest('requested_at')->first();
@@ -32,7 +32,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Workstation::where('status', Workstation::STATUS_AWAITING_KEY_RETURN)
+        Workstation::withoutGlobalScopes()->where('status', Workstation::STATUS_AWAITING_KEY_RETURN)
             ->update(['status' => Workstation::STATUS_AVAILABLE]);
     }
 };

@@ -1,6 +1,6 @@
 Seat statuses you may see on your own workstation:
 • Available -- nobody holds it; you can select it.
-• Pending -- someone has selected it and is within their confirmation window; it returns to Available automatically if they do not confirm in time.
+• Pending -- a seat held by an older selection that has not been confirmed; it returns to Available automatically. New selections are confirmed at once, so you will rarely see this.
 • Occupied -- you (or another student) hold it and have confirmed it.
 • Maintenance -- out of use for repair, cleaning or an equipment fault; cannot be selected or assigned.
 • Awaiting Key Return -- the previous occupant's locker key is still outstanding; the seat only becomes Available again once CGS marks that key as returned.

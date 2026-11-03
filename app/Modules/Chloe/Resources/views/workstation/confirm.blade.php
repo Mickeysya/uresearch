@@ -29,8 +29,7 @@
                 (Block {{ $workstation->location->block }}) is now yours.
             </p>
             <p style="color: var(--text-grey); font-size: 13px;">
-                A confirmation email with these details has also been sent to you. Please refer to the seat
-                layout displayed in the room to locate your seat.
+                Please refer to the seat layout displayed in the room to locate your seat.
             </p>
             <p style="color: var(--text-grey); font-size: 13px;">
                 By using this workstation you agree to the

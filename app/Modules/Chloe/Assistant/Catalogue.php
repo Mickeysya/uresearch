@@ -590,7 +590,7 @@ final class Catalogue
         $questions = [
             'select_seat' => 'How do I browse and select a workstation seat?',
             'visibility_rules' => 'Why can\'t I see some rooms or seats?',
-            'confirmation' => 'What happens if I don\'t confirm my seat selection in time?',
+            'confirmation' => 'What happens when I confirm my seat selection?',
             'change_or_return' => 'How do I change or return my workstation?',
             'locker_key_request' => 'How do I request a locker key?',
             'locker_key_collect_return' => 'How do I collect or return my locker key?',
@@ -624,7 +624,7 @@ final class Catalogue
         $examples = [
             'select_seat' => ['how to pick a seat', 'how do i choose my workstation', 'steps to select a seat', 'where do i browse seats', 'how to get a workstation'],
             'visibility_rules' => ['why cant i see some rooms', 'some seats missing why', 'why is j2 not showing for me', 'hidden seats reason', 'why limited room choices'],
-            'confirmation' => ['what if i dont confirm in time', 'confirmation window how long', 'missed confirm what happens', 'seat selection expired meaning', 'do i lose the seat if i dont click confirm'],
+            'confirmation' => ['what happens when i press confirm', 'is there a confirmation email', 'do i get an email when i pick a seat', 'is the seat mine straight away', 'what if someone took the seat first'],
             'change_or_return' => ['can i move to diff seat', 'how to change my workstation', 'how do i give back my seat', 'return workstation steps', 'can i move to another room'],
             'locker_key_request' => ['how to request key', 'how do i apply for locker key', 'how do i get a locker key', 'key request steps', 'how to ask for my key'],
             'locker_key_collect_return' => ['how do i collect my key', 'how to return the key', 'key collection process', 'where to return locker key', 'collect key steps'],

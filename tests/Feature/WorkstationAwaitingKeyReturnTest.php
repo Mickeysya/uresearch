@@ -124,7 +124,7 @@ class WorkstationAwaitingKeyReturnTest extends TestCase
         $csrf = csrf_token();
         $select = $this->actingAs($otherStudent)->post(route('workstation.register', $seat), ['_token' => $csrf]);
         $select->assertRedirect();
-        $select->assertSessionHas('error', 'This seat is no longer available. Please select another seat.');
+        $select->assertSessionHas('error', 'This seat is no longer available. No change was made.');
     }
 
     public function test_an_awaiting_key_return_seat_is_excluded_from_assign_and_reassign_lists(): void
@@ -404,7 +404,7 @@ class WorkstationAwaitingKeyReturnTest extends TestCase
         $response = $this->actingAs($student)->post(route('workstation.register', $newSeat));
 
         $response->assertRedirect();
-        $this->assertSame(Workstation::STATUS_PENDING, $newSeat->fresh()->status);
+        $this->assertSame(Workstation::STATUS_OCCUPIED, $newSeat->fresh()->status); // confirmed at once, no e-mail hold
     }
 
     public function test_a_normal_student_without_an_unreturned_key_is_unaffected(): void

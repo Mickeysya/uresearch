@@ -481,7 +481,7 @@ class WorkstationAssistantTest extends TestCase
 
         $this->assertSame('answered', $result['outcome']);
         $this->assertStringNotContainsString('999', $result['answer']);
-        $this->assertStringContainsString('5 minutes', $result['answer']);
+        $this->assertStringContainsString('yours at once', $result['answer']);
     }
 
     public function test_an_empty_compose_answer_falls_back_to_the_topic_text(): void
@@ -494,7 +494,7 @@ class WorkstationAssistantTest extends TestCase
         $result = $this->pipeline()->ask($student, 'how do i select a workstation', []);
 
         $this->assertSame('answered', $result['outcome']);
-        $this->assertStringContainsString('5 minutes', $result['answer']);
+        $this->assertStringContainsString('yours at once', $result['answer']);
     }
 
     /** A student routed to a CGS-only topic is invalid output -- the CGS text is never shown. */
@@ -519,7 +519,7 @@ class WorkstationAssistantTest extends TestCase
         $result = $this->pipeline()->ask($student, 'how do i select a workstation', []);
 
         $this->assertSame('answered', $result['outcome']);
-        $this->assertStringContainsString('5 minutes', $result['answer']);
+        $this->assertStringContainsString('yours at once', $result['answer']);
     }
 
     public function test_provider_unavailable_returns_the_fixed_message_for_a_data_question(): void
@@ -609,7 +609,7 @@ class WorkstationAssistantTest extends TestCase
 
         $this->assertSame('answered', $result['outcome']);
         $this->assertEmpty(FakeModel::answerCalls());
-        $this->assertStringContainsString('5 minutes', $result['answer']);
+        $this->assertStringContainsString('yours at once', $result['answer']);
     }
 
     /** An email placeholder handed to student_lookup (only possible from a recent question) is asked back by the lookup's own validator. */

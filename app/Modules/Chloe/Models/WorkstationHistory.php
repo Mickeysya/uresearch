@@ -37,6 +37,9 @@ class WorkstationHistory extends Model
 
     public const ACTION_RESTORED = 'Restored';
 
+    /** Round 4: CGS deleted (retired) a free or maintenance seat from the catalogue. */
+    public const ACTION_SEAT_RETIRED = 'Seat retired';
+
     public const ACTION_KEY_REQUESTED = 'Key requested';
 
     public const ACTION_KEY_CANCELLED = 'Key cancelled';

@@ -222,7 +222,7 @@
 
         {{-- PART 4 #2. --}}
         <p style="color: var(--text-grey); font-size: 13px; margin-top: 8px;">
-            By selecting a seat and confirming it by email, you agree to the
+            By selecting a seat and pressing Confirm, you agree to the
             <a href="{{ route('workstation.terms') }}">Postgraduate Workstation Term of Use</a>.
         </p>
 

@@ -10,7 +10,7 @@ Under the Postgraduate Workstation Term of Use:
 • Your loan can be terminated (for example deferment, change to coursework or part-time, graduation, withdrawal, dismissal, de-registration, disciplinary action, or absence without approval). You must then vacate within {{vacate_working_days}} working days of the notice.
 
 ### s4_change_workstation
-Yes. Use "Return Workstation" on your Workstation page and choose a reason (for example "Changing to another workstation"), then select another available seat in your rooms and confirm it by email within {{confirmation_minutes}} minutes. A seat you release can be taken by someone else, so choose carefully. If you collected a locker key, return it to CGS within {{return_period_days}} days; until you return it you cannot request a new key.
+Yes. Use "Return Workstation" on your Workstation page and choose a reason (for example "Changing to another workstation"), then select another available seat in your rooms and press Confirm in the box that opens. A seat you release can be taken by someone else, so choose carefully. If you collected a locker key, return it to CGS within {{return_period_days}} days; until you return it you cannot request a new key.
 
 ### s5_lost_key
 Report it to CGS immediately (Term of Use, clause 6). CGS is open Monday to Friday, 8:00 AM - 5:00 PM (GMT +8.00). You may be held responsible for losses caused by negligence. CGS will advise you on the next steps.

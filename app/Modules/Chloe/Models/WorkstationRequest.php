@@ -53,7 +53,7 @@ class WorkstationRequest extends Model
 
     public function workstation(): BelongsTo
     {
-        return $this->belongsTo(Workstation::class);
+        return $this->belongsTo(Workstation::class)->withTrashed();
     }
 
     public function student(): BelongsTo

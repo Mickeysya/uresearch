@@ -18,7 +18,7 @@ chain — no `WorkflowEngine`/`Stage` gating, unlike every other module.
 | `GET /workstation/blocks/{block}` | `WorkstationController::rooms` |
 | `GET /workstation/rooms/{workstationLocation}` | `WorkstationController::seats` |
 | `POST /workstation/{workstation}` | `WorkstationController::store` — select a seat |
-| `GET /workstation/confirm/{token}` | `WorkstationController::confirm` — email-link confirmation; outside `auth`, token is the authorisation |
+| `GET /workstation/confirm/{token}` | `WorkstationController::confirm` — legacy e-mail link for holds made before round 4; outside `auth`, token is the authorisation. New selections are confirmed in the page's dialog (`POST /workstation/{workstation}` → `WorkstationAllocator::selectSeat`) |
 | `POST /workstation/return` | `WorkstationController::returnWorkstation` |
 | `POST /workstation/locker-key` | `LockerKeyController::store` |
 | `POST /workstation/locker-key/cancel` | `LockerKeyController::cancel` |
@@ -116,7 +116,7 @@ The standard header is `x-core::page-header` (`layout.css` `.page-header*`): a p
 
 | Parameter | Value | Config key / constant | File |
 |---|---|---|---|
-| Seat-selection confirmation window | 5 minutes | `WorkstationAllocator::PENDING_SELECTION_MINUTES` | `Services/WorkstationAllocator.php` |
+| Seat-selection confirmation window (legacy e-mail holds only; new selections are confirmed at once in the dialog) | 5 minutes | `WorkstationAllocator::PENDING_SELECTION_MINUTES` | `Services/WorkstationAllocator.php` |
 | Locker key collect-by window | 7 days | `LockerKey::COLLECTION_PERIOD_DAYS` | `Models/LockerKey.php` |
 | Locker key collection reminder | day 3 (uncollected) | `LockerKey::GRACE_DAYS` | `Models/LockerKey.php` |
 | Locker key return period | 7 days from release (or vacate-by date for automatic release) | `WorkstationAllocator::RETURN_PERIOD_DAYS` | `Services/WorkstationAllocator.php` |
@@ -488,3 +488,11 @@ Changes that touch Workstation: the topic files moved, unchanged, from `docs/kno
 `assistant_logs` has a `domain` column; the assistant commands take `--domain` (default `workstation`). Nothing in the Workstation catalogue was candidacy content (a scan for appeals, approvers, dismissal, reminders, Softbound and signature found them only as
 context in topic texts, such as "an appeal extends the candidacy"), so nothing was moved out.
 
+
+## Round 4: seat catalogue and seat selection
+
+- **Selecting a seat.** `Select Seat` opens an in-page dialog (seat, block, room, Confirm / Cancel; Escape and a backdrop click cancel). Confirm posts to `POST /workstation/{workstation}` → `WorkstationAllocator::selectSeat()`: one transaction, the seat row locked `FOR UPDATE` and re-read, the student's own request checked, then the seat goes straight to Occupied. The database also refuses a second confirmed request for one seat (`workstation_requests.workstation_id_if_confirmed`, unique) or one student (`student_id_if_confirmed`, unique). A lost race, a stale page or a retired seat all give the banner "This seat is no longer available. No change was made." No e-mail is sent (the confirmation e-mail was removed; there never was a separate rejection e-mail, the error is on the page); the student gets a bell notice (`WorkstationSeatSelected`). CGS reassignment and release notifications are unchanged. The old e-mail link (`/workstation/confirm/{token}`) and the expiry cleanup stay only for holds made before this change.
+- **Seat numbers.** One persistent counter (`workstation_seat_counter`, row 1) hands out numbers; it is only ever incremented, inside the transaction that creates the seats. Deleting a seat never lowers it, so a number is not reused or backfilled. It was initialised to 315 (the highest number then in use). Numbers continue past 999; `seat_code` is an unpadded string and every sort casts it to a number.
+- **Add Location.** Block, Room, gender and *Number of seats* create the room and its seats in one transaction (chunks of 500 rows, no upper limit); the result message is "Added n seats: Seat a to Seat b". "Add seats" on a room adds more with the same counter. The "cluster" field is no longer shown (the column stays, existing data keeps working).
+- **Delete.** A free (Available) or Under Maintenance seat is retired: soft deleted (`workstations.deleted_at`), so it leaves every list, count and student view while history keeps its seat snapshot. An Occupied, Awaiting Key Return or Pending seat, or one with a confirmed request, a pending selection or an active termination notice, cannot be deleted: "This seat is in use. Ask CGS to contact the student and reassign the seat first." A Reserved seat is told to be made Available or Under Maintenance first.
+- **Room layout image.** Per room, CGS can Upload, Replace and Remove a PNG, JPG or WebP (max 5 MB, validated by content). The file lives on the private disk (`workstation/layouts/`) and is served only through `GET /workstation/rooms/{room}/layout` (a student of that room's gender) and `GET /cgs/workstation/catalog/rooms/{room}/layout` (CGS). On the student seat page a "View room layout" link opens it in a centred dialog (click to zoom, scroll to move); the link is hidden when the room has no image.

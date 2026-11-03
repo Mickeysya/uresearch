@@ -4,9 +4,9 @@ The whole student journey, in order. See student_status_glossary for every statu
 
 **2. Browsing rooms and seats.** Only rooms matching your own recorded gender are shown; a seat is only listed if it is currently Available (see visibility_rules for the full list of reasons a seat might be hidden).
 
-**3. Selecting a seat.** Selecting does not give it to you yet: the seat becomes Pending and you get {{confirmation_minutes}} minutes to confirm by email. You can only hold or confirm one seat at a time.
+**3. Selecting a seat.** Press Select Seat and a confirmation box opens showing the seat, block and room. You can only hold one seat at a time.
 
-**4. Confirming.** Clicking the email link within the window moves the seat to Occupied and creates your workstation record, accepting the Term of Use. Miss the window and the seat returns to Available; you select again from the start.
+**4. Confirming.** Pressing Confirm moves the seat to Occupied at once and creates your workstation record, accepting the Term of Use. Cancel, Escape or a click outside the box changes nothing. If someone else took the seat first you see "This seat is no longer available. No change was made." and can choose another. No e-mail is sent; you get a success message and a bell notice.
 
 **5. Loan valid until.** Shown on your Workstation page -- your candidacy expiry date, including any approved extension. This is when your loan ends unless terminated earlier for another reason.
 
@@ -18,4 +18,4 @@ The whole student journey, in order. See student_status_glossary for every statu
 
 **9. Automatic release.** Once the vacate-by date passes, the seat is released by the system, not a person -- no email for this specific step, since you were already told about the deadline when the notice was issued. A Collected key becomes Return Pending; a Pending Collection key is cancelled.
 
-**10. Notifications you receive.** By email: a seat held (pending confirmation), a seat confirmed, a locker key requested/reminder/cancelled/collected, a key return reminder, a termination notice, and a termination withdrawn. No email is sent for the automatic release itself, or for a release where you have already left (so a message is not sent to someone who is gone).
+**10. Notifications you receive.** By email: a locker key requested/reminder/cancelled/collected, a key return reminder, a termination notice, and a termination withdrawn. A seat selection sends no e-mail (a bell notice only). No email is sent for the automatic release itself, or for a release where you have already left (so a message is not sent to someone who is gone).
