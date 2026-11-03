@@ -167,6 +167,7 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
         // department -- what each of them may do with it is decided by their
         // stage, not by a separate page each.
         $report = ['label' => 'Examiner Report', 'route' => 'examiner-nomination.report'];
+        $dashboard = ['label' => 'Examiner Dashboard', 'route' => 'examiner-dashboard'];
 
         return match ($user->role) {
             Role::SUPERVISOR => [
@@ -182,14 +183,17 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
                 ['label' => 'Examiner Pool', 'route' => 'examiner-admin.index'],
                 ['label' => 'Conflict Detection', 'route' => 'conflict-detection.index'],
                 $report,
+                $dashboard,
             ],
             Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR => [
                 $report,
+                $dashboard,
             ],
             Role::ACADEMIC_EXEC => [
                 ['label' => 'Pending Evaluation', 'route' => 'examiner-nomination.pending-evaluation'],
                 ['label' => 'Conflict Detection', 'route' => 'conflict-detection.index'],
                 $report,
+                $dashboard,
             ],
             default => [],
         };

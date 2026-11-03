@@ -2,6 +2,7 @@
 
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Http\Controllers\ConflictDetectionController;
+use App\Modules\Hani\Http\Controllers\ExaminerDashboardController;
 use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
 use App\Modules\Hani\Http\Controllers\ExaminerImportController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
@@ -128,6 +129,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/examiner-nomination/conflicts', [ConflictDetectionController::class, 'index'])
             ->name('conflict-detection.index');
     });
+
+    // ---- Examiner availability dashboard --------------------------------
+    // The AE sees their own department (the dashboard scopes itself).
+    Route::middleware('role:'.implode(',', [
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR,
+    ]))->get('/examiner-dashboard', ExaminerDashboardController::class)->name('examiner-dashboard');
 
     // ---- Examiner pool admin -------------------------------------------
     // Senior Executive CGS (Puan Waheeda) since 2026-11-03. Non-Executive CGS

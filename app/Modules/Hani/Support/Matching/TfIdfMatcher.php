@@ -118,6 +118,17 @@ class TfIdfMatcher implements ExaminerMatcher
         return ['idf' => $idf, 'docs' => $docs, 'surfaces' => $this->tokeniser->surfaces()];
     }
 
+    /**
+     * The terms an examiner's document is made of -- what the dashboard's
+     * expertise-gap panel counts as "covers this topic".
+     *
+     * @return array<int, string>
+     */
+    public function termsFor(Examiner $examiner): array
+    {
+        return $this->documentTerms($examiner);
+    }
+
     /** @return array<int, string> */
     protected function documentTerms(Examiner $examiner): array
     {

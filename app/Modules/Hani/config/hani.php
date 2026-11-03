@@ -120,6 +120,16 @@ return [
         'remind_every_days' => 7,
     ],
 
+    'dashboard' => [
+        // "Returning to Available" looks this many days ahead.
+        'returning_days' => 30,
+
+        // Expertise gaps: how many thesis topics to show, and fewer than how
+        // many examiners covering a topic counts as a gap. Provisional.
+        'gap_topics' => 8,
+        'gap_threshold' => 2,
+    ],
+
     'import' => [
         // Largest pool file accepted, in KB. Provisional.
         'max_kb' => 5120,
