@@ -8,6 +8,10 @@
         title="Viva Eligibility Checklist"
         subtitle="Confirm each requirement from the Postgraduate Handbook before you submit your Notice of Thesis Submission. Your progress is saved, so you can come back to it." />
 
+    @if ($level !== null)
+        @include('hani::partials.module_stepper', ['tracker' => $tracker])
+    @endif
+
     <div class="card card-wide">
         @if ($level === null)
             <p class="empty-state">

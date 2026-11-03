@@ -100,6 +100,10 @@ class VivaSoftboundTest extends TestCase
 
         $this->acknowledge($notice);
 
+        // The tracker follows stored status: the notice is done, the softbound is next.
+        $this->actingAs($this->student)->get(route('viva.eligibility'))
+            ->assertSee('Upload your softbound thesis (Form #019, PDF) to continue.');
+
         $this->actingAs($this->student)->get(route('viva.softbound.create'))
             ->assertOk()
             ->assertSee('50,000 words or fewer')

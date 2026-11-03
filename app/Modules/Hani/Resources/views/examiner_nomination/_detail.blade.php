@@ -1,6 +1,8 @@
 @php($nomination = $nominations[$application->id] ?? null)
 
 @if ($nomination)
+    @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::nomination($application)])
+
     <p>Filed by: {{ $application->submittedBy?->name ?? 'Unknown' }}</p>
     <p>Thesis: {{ $nomination->thesis_title }}</p>
 

@@ -14,6 +14,8 @@
                 <div class="app-item-header">
                     <p><b>Application #{{ $detail->application_id }}</b>: Cycle {{ $detail->cycle_number }}</p>
                 </div>
+                @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::reviva($detail)])
+
                 <p>Student: {{ $detail->application->student->name }}</p>
                 <p>Resubmitted: {{ $detail->resubmission_at->format('j M Y') }}</p>
 

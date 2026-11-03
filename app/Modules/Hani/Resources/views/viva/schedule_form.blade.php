@@ -9,6 +9,8 @@
         :title="($detail->isScheduled() ? 'Reschedule Viva: ' : 'Set Viva Date: ').$student->name"
         :subtitle="$detail->thesis_title" />
 
+    @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::viva($progress), 'compact' => true])
+
     <div class="card card-wide">
         <h3>Panel</h3>
         <p>Internal examiner: <b>{{ $panel?->internalMain?->name ?? 'Not recorded' }}</b>

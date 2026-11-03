@@ -13,6 +13,7 @@ use App\Modules\Hani\Models\VivaEligibility;
 use App\Modules\Hani\Notifications\VivaAwaitingAcademicExec;
 use App\Modules\Hani\Notifications\VivaNominateExaminers;
 use App\Modules\Hani\Notifications\VivaNoticeSubmitted;
+use App\Modules\Hani\Support\ModuleTracker;
 use App\Modules\Hani\Support\VivaChecklist;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Http\RedirectResponse;
@@ -38,14 +39,17 @@ class VivaController extends Controller
     {
         $student = $request->user();
         $record = VivaChecklist::recordFor($student);
+        $eligible = VivaChecklist::isEligible($student, $record);
+        $progress = VivaProgress::for($student);
 
         return view('hani::viva.eligibility', [
             'level' => VivaChecklist::levelFor($student),
             'items' => VivaChecklist::itemsFor($student),
             'record' => $record,
-            'eligible' => VivaChecklist::isEligible($student, $record),
+            'eligible' => $eligible,
             'openNotice' => VivaChecklist::openNotice($student),
-            'progress' => VivaProgress::for($student),
+            'progress' => $progress,
+            'tracker' => ModuleTracker::viva($progress, $eligible),
         ]);
     }
 
@@ -93,6 +97,7 @@ class VivaController extends Controller
         }
 
         return view('hani::viva.notice', [
+            'tracker' => ModuleTracker::viva(VivaProgress::for($request->user()), true),
             'level' => VivaChecklist::levelFor($request->user()),
             'earliestSoftbound' => $this->earliestSoftbound(),
             'proofMaxMb' => self::PROOF_MAX_KB / 1024,

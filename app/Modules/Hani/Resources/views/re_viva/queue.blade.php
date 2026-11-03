@@ -29,6 +29,8 @@
                 <p>Student: {{ $application->student->name }}@if ($application->student->matric_no) ({{ $application->student->matric_no }})@endif</p>
 
                 @if ($detail)
+                    @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::reviva($detail->setRelation('application', $application))])
+
                     <p>Resubmitted: {{ $detail->resubmission_at->format('j M Y') }}</p>
                     <p>Correction deadline: {{ $detail->correction_deadline->format('j M Y') }}
                         Hardbound deadline: {{ $detail->hardbound_deadline->format('j M Y') }}</p>

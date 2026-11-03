@@ -8,6 +8,8 @@
         title="Notice of Thesis Submission"
         subtitle="Submit this at least 3 months before your softbound thesis. Your Academic Executive will then contact your supervisor about appointing examiners." />
 
+    @include('hani::partials.module_stepper', ['tracker' => $tracker])
+
     <div class="card card-wide">
         <p class="message-success">
             Eligibility checklist complete.

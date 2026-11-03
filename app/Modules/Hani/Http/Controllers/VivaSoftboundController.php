@@ -11,6 +11,7 @@ use App\Modules\Hani\Models\VivaSoftboundDetail;
 use App\Modules\Hani\Notifications\VivaAwaitingAcademicExec;
 use App\Modules\Hani\Notifications\VivaSoftboundReturned;
 use App\Modules\Hani\Notifications\VivaSoftboundSubmitted;
+use App\Modules\Hani\Support\ModuleTracker;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,6 +44,7 @@ class VivaSoftboundController extends Controller
         $level = $progress->detail?->programme_level;
 
         return view('hani::viva.softbound_form', [
+            'tracker' => ModuleTracker::viva($progress, true),
             'student' => $student,
             'level' => $level,
             'noticeTitle' => $progress->detail?->thesis_title,
