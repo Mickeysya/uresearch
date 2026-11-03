@@ -10,7 +10,9 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Exports\ExaminerListExport;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
+use App\Modules\Hani\Notifications\NominationsNeedCompileReview;
 use App\Modules\Hani\Support\ConflictOfInterest;
+use App\Modules\Hani\Support\CrossDepartmentClashes;
 use App\Modules\Hani\Support\Departments;
 use App\Modules\Hani\Support\DuplicateDetector;
 use Illuminate\Http\RedirectResponse;
@@ -176,9 +178,18 @@ class ExaminerNominationController extends Controller
             return $engine->submit($application);
         });
 
+        // Touchpoint 2, early: another department already has one of these
+        // examiners on its list. A warning, not a refusal -- the lists are
+        // compiled at CGS and the substitution is decided there.
+        $clashes = collect($picked)
+            ->flatMap(fn ($id) => $this->clashes()->flags((int) $id, $student->department, $application->id))
+            ->pluck('message')
+            ->unique();
+
         return redirect()
             ->route('examiner-nomination.create')
-            ->with('status', "Nomination #{$application->id} submitted to the Academic Executive.");
+            ->with('status', "Nomination #{$application->id} submitted to the Academic Executive.")
+            ->with('warning', $clashes->isEmpty() ? null : 'Please note: '.$clashes->implode(' '));
     }
 
     public function queue(Request $request, WorkflowEngine $engine)
@@ -233,6 +244,8 @@ class ExaminerNominationController extends Controller
             return back()->with('error', 'That application has already been decided.');
         }
 
+        $this->notifyCompileFindings($application);
+
         // Tie the examiners up only when the chain has actually FINISHED, not
         // merely when this approver said yes -- six stages now sit between
         // the supervisor and the final release, and tying a panel up at the
@@ -248,6 +261,51 @@ class ExaminerNominationController extends Controller
 
         return back()->with('status', "Application #{$application->id} {$verb}.");
     }
+
+    /**
+     * A list arriving at cgs_compile with a cross-department clash or a likely
+     * duplicate record: tell the Senior Executive, with the reasons and a
+     * link to Conflict Detection. Best effort and after commit -- a mail
+     * failure must never undo the decision that has just been recorded.
+     */
+    protected function notifyCompileFindings(Application $application): void
+    {
+        $application->refresh();
+
+        if ($application->status !== Application::STATUS_PENDING || $application->current_stage !== 'cgs_compile') {
+            return;
+        }
+
+        try {
+            $nomination = ExaminerNomination::with(ExaminerNomination::slotRelations())
+                ->where('application_id', $application->id)->first();
+            $department = $application->student?->department;
+
+            $findings = collect($nomination?->examiners() ?? [])
+                ->flatMap(fn (Examiner $e) => collect($this->clashes()->flags($e->id, $department, $application->id))
+                    ->map(fn ($flag) => "{$e->name}: {$flag['message']}"))
+                ->merge(app(DuplicateDetector::class)->acrossNominations()[$application->id] ?? [])
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($findings === []) {
+                return;
+            }
+
+            \App\Modules\Core\Models\User::where('role', Role::SENIOR_EXEC_CGS)->get()
+                ->each(fn ($user) => $user->notify(new NominationsNeedCompileReview($application, $findings)));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    protected function clashes(): CrossDepartmentClashes
+    {
+        return $this->clashes ??= app(CrossDepartmentClashes::class);
+    }
+
+    protected ?CrossDepartmentClashes $clashes = null;
 
     /**
      * "Finalise and release": the Senior Executive's one Approve at cgs_final
@@ -342,14 +400,10 @@ class ExaminerNominationController extends Controller
         // Touchpoint 2, inline: the same examiner named by more than one
         // department. Flagged, never auto-rejected -- the substitution is a
         // human call, and ConflictDetectionController is the screen for it.
-        $clashes = $nominations
-            ->flatMap(fn (ExaminerNomination $n) => $n->examiners()->map(fn ($e) => [
-                'examiner_id' => $e->id,
-                'department' => $n->application?->student?->department,
-            ]))
-            ->groupBy('examiner_id')
-            ->map(fn ($rows) => $rows->pluck('department')->filter()->unique()->values())
-            ->filter(fn ($departments) => $departments->count() > 1);
+        // Rejected lists hold nobody, so they cannot clash.
+        $clashes = $this->clashes()->map($nominations->filter(
+            fn (ExaminerNomination $n) => in_array($n->application?->status, [Application::STATUS_PENDING, Application::STATUS_APPROVED], true)
+        ));
 
         return view('hani::examiner_nomination.report', [
             'coiFlags' => $this->coiFlags($nominations),
@@ -422,8 +476,9 @@ class ExaminerNominationController extends Controller
     }
 
     /**
-     * The conflict-of-interest pre-check for every seat shown, by application
-     * then examiner. Staff screens only.
+     * The conflict-of-interest pre-check, and other departments' claims on
+     * the same examiner, for every seat shown, by application then examiner.
+     * Staff screens only.
      *
      * @return array<int, array<int, array>>
      */
@@ -440,7 +495,10 @@ class ExaminerNominationController extends Controller
             }
 
             foreach ($nomination->examiners() as $examiner) {
-                $flags[$nomination->application_id][$examiner->id] = $coi->flagsFor($examiner, $student);
+                $flags[$nomination->application_id][$examiner->id] = array_merge(
+                    $coi->flagsFor($examiner, $student),
+                    $this->clashes()->flags($examiner->id, $student->department, $nomination->application_id),
+                );
             }
         }
 

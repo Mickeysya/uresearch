@@ -6,6 +6,7 @@ use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Support\ConflictOfInterest;
+use App\Modules\Hani\Support\CrossDepartmentClashes;
 use App\Modules\Hani\Support\Matching\ExaminerSuggestions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,7 @@ use Illuminate\Validation\Rule;
  */
 class ExaminerSuggestionController extends Controller
 {
-    public function __invoke(Request $request, ExaminerSuggestions $suggestions, ConflictOfInterest $coi): JsonResponse
+    public function __invoke(Request $request, ExaminerSuggestions $suggestions, ConflictOfInterest $coi, CrossDepartmentClashes $clashes): JsonResponse
     {
         $data = $request->validate([
             'student_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', Role::STUDENT)],
@@ -36,14 +37,18 @@ class ExaminerSuggestionController extends Controller
         $student = User::findOrFail($data['student_id']);
         $this->authoriseFor($request->user(), $student);
 
-        $suggestions->withFlags(fn ($examiner, $s) => $coi->flagsFor($examiner, $s));
+        $flags = fn ($examiner, $s) => array_merge(
+            $coi->flagsFor($examiner, $s),
+            $clashes->flags($examiner->id, $s->department),
+        );
+        $suggestions->withFlags($flags);
 
         // The seats already chosen on the form, checked too, so a flag shows
         // next to a hand-picked examiner and not only on a suggestion.
         $checks = [];
 
         foreach (\App\Modules\Hani\Models\Examiner::whereIn('id', $data['check'] ?? [])->get() as $examiner) {
-            $checks[$examiner->id] = $coi->flagsFor($examiner, $student);
+            $checks[$examiner->id] = $flags($examiner, $student);
         }
 
         return response()->json(
