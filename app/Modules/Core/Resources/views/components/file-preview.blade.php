@@ -1,7 +1,11 @@
 {{--
-    The in-app document viewer. Included once, in layouts/app, so every page
-    has it; any link carrying data-preview-url / -kind / -name / -download
-    opens it (components/doc-link writes those). Moved here from Nureen's
+    The in-app document viewer. components/doc-link pulls it in with the
+    first link on a page (@once, pushed to the layout's 'scripts' stack so
+    the <dialog> never lands inside a <p>), so a page with no documents
+    carries none of it; any link carrying data-preview-url / -kind / -name / -download
+    opens it. Its script moves the dialog to <body>.
+    ponytail: a link that only arrives later through RegionSwap, on a page
+    that had none at load, gets no overlay and opens in a new tab instead. Moved here from Nureen's
     module, where it started. A native <dialog> opened with showModal(),
     so the rest of the page is inert and Esc closes it; Tab is also kept
     inside it, clicking the dimmed area outside closes it, and focus goes
@@ -17,6 +21,8 @@
 
     About 90% of the viewport; full screen at phone width.
 --}}
+@once
+@push('scripts')
 <dialog class="file-preview" id="file-preview" aria-labelledby="file-preview-title">
     <div class="file-preview-box">
         <div class="file-preview-head">
@@ -155,3 +161,5 @@
     });
 })();
 </script>
+@endpush
+@endonce

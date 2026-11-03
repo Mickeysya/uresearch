@@ -55,10 +55,17 @@ class DocumentViewTest extends TestCase
         $this->assertStringStartsWith('attachment', $disposition);
     }
 
-    public function test_every_page_carries_the_viewer(): void
+    public function test_only_a_page_with_a_document_carries_the_viewer(): void
     {
-        $this->actingAs($this->student())->get(route('dashboard'))
+        $doc = $this->document('evidence.pdf', '%PDF-1.4 test');
+
+        $this->actingAs($doc->application->student)->get(route('dashboard'))
             ->assertOk()
+            ->assertDontSee('id="file-preview"', false);
+
+        $this->actingAs($doc->application->student)->get(route('applications.show', $doc->application))
+            ->assertOk()
+            ->assertSee('data-preview-url="'.$doc->viewUrl().'"', false)
             ->assertSee('id="file-preview"', false);
     }
 }

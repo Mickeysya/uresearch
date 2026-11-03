@@ -30,4 +30,4 @@
 <a href="{{ $url }}" target="_blank" rel="noopener"
    data-preview-url="{{ $url }}" data-preview-kind="{{ $kind }}"
    data-preview-name="{{ $name ?? 'Document' }}" data-preview-download="{{ $download }}"
-   {{ $attributes }}>{{ $slot->isEmpty() ? 'View' : $slot }}</a>
+   {{ $attributes }}>{{ $slot->isEmpty() ? 'View' : $slot }}</a><x-core::file-preview />

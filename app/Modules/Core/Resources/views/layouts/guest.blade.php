@@ -18,7 +18,6 @@
     </div>
 
     @yield('content')
-    {{-- The in-app document viewer (components/doc-link). --}}
-    <x-core::file-preview />
+    @stack('scripts')
 </body>
 </html>

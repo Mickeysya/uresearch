@@ -38,6 +38,7 @@
         </ul>
     @endif
 </section>
+<x-core::file-preview />
 
 @once
     <style>

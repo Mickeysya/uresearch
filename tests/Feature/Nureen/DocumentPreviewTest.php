@@ -213,7 +213,7 @@ class DocumentPreviewTest extends TestCase
 
         $this->actingAs($this->supervisor)->get(route('ga-certification.queue'))
             ->assertOk()
-            ->assertSee('data-preview-url="'.route('nureen.documents.view', $document).'"', false)
+            ->assertSee('data-preview-url="'.$document->viewUrl().'"', false)
             ->assertSee('href="'.$document->url().'"', false)
             ->assertSee('data-decision-bar', false)
             ->assertSee('Remarks (optional)')

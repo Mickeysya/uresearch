@@ -223,10 +223,10 @@ class ApplicationPackTest extends TestCase
             ->assertSee($receipt->url());
         $html = $queue->getContent();
 
-        // Each file's name opens it in a new tab, leaving the queue as it was.
-        $this->assertStringContainsString('href="'.route('norhanis.pack.preview', $receipt).'"
-                                   target="_blank"', $html);
-        $this->assertStringNotContainsString('<iframe', $html);
+        // Each file's name opens it in Core's in-app viewer, leaving the
+        // queue as it was -- no file is framed until it is clicked.
+        $this->assertStringContainsString('data-preview-url="'.$receipt->viewUrl().'"', $html);
+        $this->assertStringNotContainsString('class="pv-frame"', $html);
         // Core's plain list of the same files is hidden on this card.
         $this->assertStringContainsString('.queue-row-body:has(.pv-inline) > .doc-list { display: none; }', $html);
         $this->assertSame(1, substr_count($html, '.queue-row-body:has(.pv-inline)'));
@@ -264,7 +264,7 @@ class ApplicationPackTest extends TestCase
             ->assertSee(route('norhanis.pack.documents', [$application, 'document' => $payment->id]))
             ->assertSee($payment->url())
             ->assertSee(route('claims.queue', ['q' => '#'.$application->id]));
-        $this->assertStringNotContainsString('<iframe', $list->getContent());
+        $this->assertStringNotContainsString('class="pv-frame"', $list->getContent());
 
         // One file: framed through the preview route, with Download and a
         // way back to the list.

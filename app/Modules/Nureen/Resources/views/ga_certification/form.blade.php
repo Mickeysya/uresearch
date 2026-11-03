@@ -348,6 +348,7 @@
     })();
 </script>
 @endpush
+<x-core::file-preview />
 @endsection
 
 {{-- Last, after the GA/GRA script above has set which fields are required

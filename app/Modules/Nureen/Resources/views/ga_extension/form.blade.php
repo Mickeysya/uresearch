@@ -418,4 +418,5 @@
 </script>
 @endpush
 @include('nureen::partials.draft-form-script')
+<x-core::file-preview />
 @endsection
