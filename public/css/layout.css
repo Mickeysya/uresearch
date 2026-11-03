@@ -1452,6 +1452,20 @@ button[value="rejected"]:hover {
 .sidebar { view-transition-name: app-sidebar; }
 .main-content-header { view-transition-name: app-header; }
 
+/* uresearch.css sets .sidebar's width and .main-content's flex: 1, but
+   never edited in place -- so the fix for the pair of them lives here.
+   A flex item's default min-width is auto, i.e. "at least as wide as my
+   widest child's content." A page with a wide, horizontally-scrolling
+   table (an external examiner list, a report...) would otherwise push
+   that child's intrinsic width into .main-content's own sizing and,
+   through it, perturb .sidebar's supposedly-fixed width by a few px.
+   .main-content: min-width 0 hands overflow entirely to whichever child
+   opts into it (overflow-x: auto), which is what already scrolls those
+   tables. .sidebar: flex-shrink 0 means the fixed width in uresearch.css
+   is never negotiable in the first place. */
+.sidebar { flex-shrink: 0; }
+.main-content { min-width: 0; }
+
 ::view-transition-group(app-sidebar),
 ::view-transition-group(app-header) {
     animation: none;

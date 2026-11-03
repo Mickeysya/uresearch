@@ -51,11 +51,10 @@
         :subtitle="$scopedToDepartment
             ? $scopedToDepartment.': every panel your department has filed, at whatever stage it has reached.'
             : 'Every department\'s panels merged into one list: the compiled report the chain signs off.'">
-        <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx']) }}" class="btn">Download Excel</a>
     </x-core::page-header>
 
     <div class="rep-actions">
-        <a href="{{ route('examiner-nomination.export', ['format' => 'csv']) }}" class="btn-secondary">Download CSV</a>
+        <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx']) }}" class="btn-secondary">Download Excel</a>
         @if (in_array(auth()->user()->role, [\App\Modules\Core\Support\Role::ACADEMIC_EXEC, \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS], true))
             <a href="{{ route('conflict-detection.index') }}" class="btn-secondary">Conflict detection</a>
         @endif
@@ -69,6 +68,10 @@
             {{ $clashes->count() === 1 ? 'is' : 'are' }} named by more than one department.
             Flagged below, not removed: deciding on a substitution is yours, not the system's.
         </p>
+    @endif
+
+    @if (collect($coiFlags)->flatten(2)->isNotEmpty())
+        <p class="coi-note" style="color: var(--text-grey); font-size: var(--text-xs);">{{ \App\Modules\Hani\Support\ConflictOfInterest::NOTE }}</p>
     @endif
 
     @if ($total === 0)
@@ -110,6 +113,10 @@
                                         <span class="rep-seat">
                                             {{ $application?->student?->matric_no }} · #{{ $application?->id }}
                                         </span>
+                                        {{-- Declines are recorded here, by the department's AE or the Senior Executive. --}}
+                                        @if ($application?->status === 'approved' && (auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS || auth()->user()->role === \App\Modules\Core\Support\Role::ACADEMIC_EXEC))
+                                            <a href="{{ route('examiner-panel.show', $nomination) }}" class="rep-seat">Manage panel</a>
+                                        @endif
                                     </td>
                                     <td>{{ $nomination->thesis_title }}</td>
 
@@ -117,6 +124,7 @@
                                         <td>
                                             @if ($nomination->$main)
                                                 {{ $nomination->$main->name }}
+                                                @include('hani::examiner_nomination._coi', ['flags' => $coiFlags[$application?->id][$nomination->$main->id] ?? []])
                                                 @if ($clashes->has($nomination->$main->id))
                                                     <span class="rep-clash"
                                                           title="Also named by: {{ $clashes[$nomination->$main->id]->join(', ') }}">
@@ -131,6 +139,7 @@
                                                 backup:
                                                 @if ($nomination->$backup)
                                                     {{ $nomination->$backup->name }}
+                                                    @include('hani::examiner_nomination._coi', ['flags' => $coiFlags[$application?->id][$nomination->$backup->id] ?? []])
                                                     @if ($clashes->has($nomination->$backup->id))
                                                         <span class="rep-clash">also elsewhere</span>
                                                     @endif

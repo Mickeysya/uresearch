@@ -129,20 +129,32 @@ class SidebarQueuesTest extends TestCase
     }
 
     /**
-     * Flat-or-collapsed counts MODULES, not stages: the Academic Executive
-     * owns six stages across three modules, which reads as three items.
+     * Flat-or-collapsed counts MODULES, not stages: four or more modules
+     * collapse into the "Pending My Action" tree, three or fewer stay flat.
+     *
+     * Checked against the rule rather than a fixed count per role, because
+     * the count moves whenever a module adds a stage for that role (Viva
+     * Voce took the Academic Executive from three modules to four). One role
+     * on each side keeps both branches covered.
      */
     public function test_the_flat_or_tree_decision_counts_modules(): void
     {
-        $modules = collect(app(ModuleRegistry::class)->queuesForRole(Role::ACADEMIC_EXEC))
-            ->unique(fn ($q) => $q['module']->key());
+        $modulesFor = fn (string $role) => collect(app(ModuleRegistry::class)->queuesForRole($role))
+            ->unique(fn ($q) => $q['module']->key())
+            ->count();
 
-        $this->assertLessThan(4, $modules->count(), 'The AE owns fewer than four modules.');
+        $this->assertGreaterThanOrEqual(4, $modulesFor(Role::ACADEMIC_EXEC), 'The AE owns four or more modules.');
+        $this->assertLessThan(4, $modulesFor(Role::REGISTRY), 'Registry owns fewer than four modules.');
 
         $this->actingAs($this->academicExec())
             ->get(route('dashboard'))
             ->assertOk()
-            // Fewer than four modules, so the flat branch, not the outer tree.
+            ->assertSee('title="Pending My Action"', false)
+            ->assertDontSee('nav-flat-queues', false);
+
+        $this->actingAs($this->registry())
+            ->get(route('dashboard'))
+            ->assertOk()
             ->assertSee('nav-flat-queues', false);
     }
 

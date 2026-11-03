@@ -166,6 +166,24 @@ class DepartmentAdminTest extends TestCase
         $this->assertTrue($department->fresh()->is_active);
     }
 
+    /** How many accounts sit under a department is the administrator's business, not CGS's. */
+    public function test_only_admin_sees_the_account_counts(): void
+    {
+        Department::create(['name' => 'Civil Engineering', 'is_active' => true]);
+        $this->user(Role::CHAIR, ['name' => 'A Chair', 'email' => 'a-chair@test.my', 'department' => 'Civil Engineering']);
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.departments.index'))
+            ->assertOk()
+            ->assertSee('Accounts')
+            ->assertSee('1');
+
+        $this->actingAs($this->cgs())
+            ->get(route('admin.departments.index'))
+            ->assertOk()
+            ->assertDontSee('Accounts');
+    }
+
     /** Retiring is not deleting: the account it was set on keeps the name. */
     public function test_retiring_a_department_does_not_touch_accounts_already_on_it(): void
     {

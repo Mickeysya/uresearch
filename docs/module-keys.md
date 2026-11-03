@@ -19,6 +19,8 @@ Add a row here in the same commit that registers the workflow.
 | `supervision` | Supervisor Appointment | Nureen | built |
 | `ga_certification` | GA/GRA Certification Letter | Nureen | built |
 | `re_viva` | Re-examination Monitoring | Hani | built |
+| `viva_voce` | Viva Voce Assessment (Notice of Thesis Submission) | Hani | in progress |
+| `viva_softbound` | Softbound Thesis (Form #019) | Hani | in progress |
 | `hardbound_submission` | Hardbound Submission | Jason | built |
 | `hardbound_appeal` | Appeal Hardbound Submission | Jason | built |
 | `appointment_letter` | Appointment Letter & Report Management | Jason | built |

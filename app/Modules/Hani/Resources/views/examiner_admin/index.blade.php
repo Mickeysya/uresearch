@@ -88,6 +88,9 @@
     .examiner-state-badge.tone-info     { background: var(--info-bg); color: var(--info-fg); }
     .examiner-state-badge.tone-critical { background: var(--danger-bg); color: var(--danger-fg); }
 
+    .examiner-duplicate { display: block; margin-top: 3px; padding: 2px 8px; border-radius: 8px; font-size: var(--text-2xs); background: var(--warning-bg); color: var(--warning-fg); }
+    .examiner-duplicate form { display: inline; }
+    .examiner-duplicate .btn-link { background: none; border: none; padding: 0; margin: 0 0 0 4px; color: inherit; text-decoration: underline; font-size: inherit; cursor: pointer; }
     .examiner-reason { display: block; font-size: var(--text-2xs); color: var(--text-grey); margin-top: 2px; max-width: 220px; }
 
     .examiner-pagination { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
@@ -177,6 +180,10 @@
         title="Examiner Pool"
         subtitle="{{ $examiners->total() }} {{ Str::plural('examiner', $examiners->total()) }} on record. State is derived, so anyone on gap becomes available again on their own.">
         <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
+        <a href="{{ route('examiner-import.create') }}" class="btn-secondary">Import from Excel</a>
+        @if ($openReviewItems)
+            <a href="{{ route('examiner-import.review') }}" class="btn-secondary">Review list ({{ $openReviewItems }})</a>
+        @endif
     </x-core::page-header>
 
     <nav class="exam-tabs" aria-label="Examiner lists">
@@ -314,7 +321,26 @@
                         <td>
                             <div class="examiner-name-cell">
                                 <span class="examiner-avatar">{{ strtoupper($initials) }}</span>
-                                <span>{{ $examiner->name }}</span>
+                                <span>
+                                    {{ $examiner->name }}
+                                    {{-- CGS's pool file has no email column; nothing that
+                                         writes to an examiner will reach this one yet. --}}
+                                    @if ($examiner->needsEmail())
+                                        <span class="examiner-state-badge tone-warn">Email needed</span>
+                                    @endif
+                                    {{-- Support\DuplicateDetector: flagged, never blocked. --}}
+                                    @foreach ($duplicates[$examiner->id] ?? [] as $dup)
+                                        <span class="examiner-duplicate">
+                                            Possible duplicate of {{ $dup['other']->name }} ({{ $dup['score'] }}% similar)
+                                            <form method="POST" action="{{ route('examiner-admin.dismiss-duplicate') }}">
+                                                @csrf
+                                                <input type="hidden" name="examiner_id" value="{{ $examiner->id }}">
+                                                <input type="hidden" name="other_id" value="{{ $dup['other']->id }}">
+                                                <button type="submit" class="btn-link">Not the same person</button>
+                                            </form>
+                                        </span>
+                                    @endforeach
+                                </span>
                             </div>
                         </td>
                         @if (! $type)
@@ -361,6 +387,7 @@
                             @endif
                         </td>
                         <td>
+                            <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary">Edit</a>
                             @if ($examiner->is_active)
                                 <button type="button" class="btn-reject"
                                         data-unavailable="{{ $examiner->id }}"
@@ -368,7 +395,7 @@
                                     Mark Unavailable
                                 </button>
                             @else
-                                <form method="POST" action="{{ route('examiner-admin.toggle-active', $examiner) }}">
+                                <form method="POST" action="{{ route('examiner-admin.toggle-active', $examiner) }}" style="display: inline;">
                                     @csrf
                                     <button type="submit">Reactivate</button>
                                 </form>
@@ -434,32 +461,52 @@
     </div>
 </dialog>
 
+@include('core::partials.region-swap')
+
 {{-- Bound here with addEventListener, not with handler attributes. script-src is
      'self' plus this request's nonce with no unsafe-inline, and a nonce cannot
      cover an inline handler attribute -- the browser refuses to run it. As
      written before, the two filters did not auto-submit and the modal never
-     opened. --}}
+     opened.
+
+     Tabs, the stat cards' "View list", the filter form and pagination are all
+     plain GET links/forms to this same route -- they work with JS off. With it
+     on, RegionSwap (public/js/region-swap.js) fetches and swaps in the six
+     regions below instead, so switching tabs no longer reloads the sidebar,
+     the stylesheet and the rest of the document just to change a table. --}}
 <script @cspNonce>
     (function () {
         var modal = document.getElementById('unavailable-modal');
-        var form = document.getElementById('unavailable-form');
+        var unavailableForm = document.getElementById('unavailable-form');
 
-        document.querySelectorAll('[data-autosubmit]').forEach(function (field) {
-            field.addEventListener('change', function () { field.form.submit(); });
-        });
-
-        document.querySelectorAll('[data-unavailable]').forEach(function (button) {
-            button.addEventListener('click', function () {
-                form.action = '/examiners/' + button.dataset.unavailable + '/toggle-active';
-                document.getElementById('unavailable-modal-name').textContent =
-                    'Examiner: ' + button.dataset.examinerName;
-                document.getElementById('unavailable_reason').value = '';
-                modal.showModal();
-            });
-        });
-
+        // Outside every swapped region, so bound once and never touched again.
         document.querySelectorAll('[data-close-modal]').forEach(function (button) {
             button.addEventListener('click', function () { modal.close(); });
+        });
+
+        RegionSwap({
+            selectors: [
+                '.page-header p',
+                '.exam-tabs',
+                '.exam-tab-note',
+                '.examiner-stats',
+                '.examiner-filters',
+                '.exam-table-wrap',
+            ],
+            // "Mark Unavailable" opens the modal above -- a button that only
+            // exists inside a region RegionSwap just replaced, so it has to be
+            // rebound after every swap, not just once at page load.
+            afterSwap: function () {
+                document.querySelectorAll('[data-unavailable]').forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        unavailableForm.action = '/examiners/' + button.dataset.unavailable + '/toggle-active';
+                        document.getElementById('unavailable-modal-name').textContent =
+                            'Examiner: ' + button.dataset.examinerName;
+                        document.getElementById('unavailable_reason').value = '';
+                        modal.showModal();
+                    });
+                });
+            },
         });
     })();
 </script>

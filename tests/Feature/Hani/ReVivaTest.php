@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Hani\Models\ReVivaDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -19,6 +20,7 @@ use Tests\TestCase;
  */
 class ReVivaTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 

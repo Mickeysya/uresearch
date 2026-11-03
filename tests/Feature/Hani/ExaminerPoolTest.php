@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Application;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
@@ -21,6 +22,7 @@ use Tests\TestCase;
  */
 class ExaminerPoolTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 
@@ -60,7 +62,7 @@ class ExaminerPoolTest extends TestCase
         $this->internal();
         $this->external();
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.index', ['type' => Examiner::TYPE_EXTERNAL]))
             ->assertOk()
             ->assertSee('Faculty Approval')
@@ -78,7 +80,7 @@ class ExaminerPoolTest extends TestCase
         $this->internal();
         $this->external();
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.index', ['type' => Examiner::TYPE_INTERNAL]))
             ->assertOk()
             ->assertSee('Approved Internal Examiner')
@@ -94,7 +96,7 @@ class ExaminerPoolTest extends TestCase
         $this->internal();
         $this->external();
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.index'))
             ->assertOk()
             ->assertSee('AP Dr Low Tang Jung')
@@ -108,7 +110,7 @@ class ExaminerPoolTest extends TestCase
         $external = $this->external();           // assigned
         $external->update(['assigned_until' => now()->addDays(30)]);
 
-        $cgs = $this->cgs();
+        $cgs = $this->seniorExec();
 
         $internalCounts = $this->actingAs($cgs)
             ->get(route('examiner-admin.index', ['type' => Examiner::TYPE_INTERNAL]))
@@ -144,7 +146,7 @@ class ExaminerPoolTest extends TestCase
             'thesis_title' => 'A Study of Something',
         ]);
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.index', ['type' => Examiner::TYPE_EXTERNAL]))
             ->assertOk()
             ->assertSee($student->name.'_'.$student->matric_no);
@@ -152,7 +154,7 @@ class ExaminerPoolTest extends TestCase
 
     public function test_an_internal_examiner_cannot_be_given_an_external_record(): void
     {
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->post(route('examiner-admin.store'), [
                 'name' => 'Dr Internal',
                 'email' => 'dr.internal@utp.edu.my',
@@ -174,7 +176,7 @@ class ExaminerPoolTest extends TestCase
 
     public function test_an_external_examiner_must_say_where_they_are_from(): void
     {
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->post(route('examiner-admin.store'), [
                 'name' => 'Dr External',
                 'email' => 'dr.external@elsewhere.edu.my',
@@ -188,7 +190,7 @@ class ExaminerPoolTest extends TestCase
 
     public function test_an_external_examiner_keeps_their_record(): void
     {
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->post(route('examiner-admin.store'), [
                 'name' => 'Dr External',
                 'email' => 'dr.external@elsewhere.edu.my',
@@ -226,7 +228,7 @@ class ExaminerPoolTest extends TestCase
      */
     public function test_the_add_examiner_form_is_a_stepper(): void
     {
-        $html = $this->actingAs($this->cgs())
+        $html = $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.create'))
             ->assertOk()
             ->getContent();
@@ -249,11 +251,77 @@ class ExaminerPoolTest extends TestCase
      */
     public function test_the_external_record_is_disabled_for_an_internal_examiner(): void
     {
-        $html = $this->actingAs($this->cgs())
+        $html = $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.create'))
             ->assertOk()
             ->getContent();
 
         $this->assertMatchesRegularExpression('/id="external-fields"[^>]*hidden disabled/s', $html);
+    }
+
+    public function test_only_the_senior_executive_maintains_the_pool(): void
+    {
+        $examiner = $this->internal();
+
+        // Non-Executive CGS reads the released list elsewhere; the pool is not theirs.
+        $nonExec = $this->cgs();
+        $this->actingAs($nonExec)->get(route('examiner-admin.index'))->assertForbidden();
+        $this->actingAs($nonExec)->get(route('examiner-admin.create'))->assertForbidden();
+        $this->actingAs($nonExec)->post(route('examiner-admin.store'), [])->assertForbidden();
+        $this->actingAs($nonExec)->post(route('examiner-admin.toggle-active', $examiner))->assertForbidden();
+
+        $this->actingAs($this->seniorExec())->get(route('examiner-admin.index'))->assertOk();
+    }
+
+    public function test_an_examiner_keeps_expertise_keywords_and_publications(): void
+    {
+        $examiner = $this->external();
+        $examiner->forceFill(['updated_at' => now()->subDay()])->saveQuietly();
+        $before = $examiner->fresh()->updated_at;
+
+        $examiner->expertiseKeywords()->create(['keyword' => 'anomaly detection']);
+        $examiner->publications()->create([
+            'title' => 'Time-series anomaly detection for sensor streams',
+            'year' => 2024,
+            'coauthors' => 'Priya Ramasamy; Nurul Aina Aziz',
+        ]);
+
+        $examiner->refresh();
+        $this->assertSame(['anomaly detection'], $examiner->expertiseKeywords->pluck('keyword')->all());
+        $this->assertSame(['Priya Ramasamy', 'Nurul Aina Aziz'], $examiner->publications->first()->coauthorList());
+
+        // Touching the examiner is what invalidates the matcher's cached statistics.
+        $this->assertTrue($examiner->updated_at->gt($before));
+    }
+
+    public function test_an_examiner_may_be_in_the_pool_without_an_email(): void
+    {
+        $examiner = Examiner::create([
+            'name' => 'Dr No Email',
+            'department' => 'Computing',
+            'type' => Examiner::TYPE_INTERNAL,
+            'is_active' => true,
+        ]);
+
+        $this->assertTrue($examiner->needsEmail());
+        $this->assertFalse($this->internal()->needsEmail());
+    }
+
+    public function test_utp_links_are_part_of_the_external_record_only(): void
+    {
+        $this->actingAs($this->seniorExec())
+            ->post(route('examiner-admin.store'), [
+                'name' => 'Dr Internal',
+                'email' => 'dr.internal2@utp.edu.my',
+                'department' => 'Computing',
+                'type' => Examiner::TYPE_INTERNAL,
+                'current_utp_appointment' => 'Adjunct Professor',
+                'former_utp_until' => '2024-01-01',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $examiner = Examiner::sole();
+        $this->assertNull($examiner->current_utp_appointment);
+        $this->assertNull($examiner->former_utp_until);
     }
 }

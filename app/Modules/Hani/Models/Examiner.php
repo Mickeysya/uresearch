@@ -5,6 +5,7 @@ namespace App\Modules\Hani\Models;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * The examiner pool and its four-state machine.
@@ -44,9 +45,14 @@ class Examiner extends Model
      * half an external record.
      */
     public const EXTERNAL_FIELDS = [
-        'faculty_approval', 'institution', 'sector', 'expertise', 'utp_cluster',
+        'faculty_approval', 'institution', 'sector', 'utp_cluster',
         'years_experience', 'msc_graduated', 'phd_graduated',
+        // 2026-11-03, for the conflict-of-interest pre-check.
+        'current_utp_appointment', 'former_utp_until',
     ];
+    // `expertise` left this list on 2026-11-03: the matcher reads an
+    // internal examiner's area of expertise too, and the UResearch import
+    // template carries one for both types.
 
     protected $fillable = [
         'name', 'email', 'department', 'faculty', 'type',
@@ -54,6 +60,7 @@ class Examiner extends Model
         // External only -- see the 2026_09_17 migration for why each exists.
         'faculty_approval', 'institution', 'sector', 'expertise', 'utp_cluster',
         'years_experience', 'msc_graduated', 'phd_graduated', 'first_examination_date',
+        'current_utp_appointment', 'former_utp_until',
     ];
 
     protected function casts(): array
@@ -63,6 +70,7 @@ class Examiner extends Model
             'last_examination_date' => 'date',
             'first_examination_date' => 'date',
             'assigned_until' => 'date',
+            'former_utp_until' => 'date',
             'years_experience' => 'integer',
             'msc_graduated' => 'integer',
             'phd_graduated' => 'integer',
@@ -79,6 +87,28 @@ class Examiner extends Model
     public function isExternal(): bool
     {
         return $this->type === self::TYPE_EXTERNAL;
+    }
+
+    /** Expertise keywords and phrases, lower case. Feeds the matcher and the dashboard. */
+    public function expertiseKeywords(): HasMany
+    {
+        return $this->hasMany(ExaminerExpertise::class);
+    }
+
+    public function publications(): HasMany
+    {
+        return $this->hasMany(ExaminerPublication::class);
+    }
+
+    /**
+     * True when there is no address to write to. CGS's pool file has no email
+     * column, so an imported examiner can be in the pool without one; the
+     * pool list shows "Email needed" and nothing that emails an examiner
+     * tries to.
+     */
+    public function needsEmail(): bool
+    {
+        return blank($this->email);
     }
 
     public function typeLabel(): string

@@ -1,6 +1,8 @@
 @php($nomination = $nominations[$application->id] ?? null)
 
 @if ($nomination)
+    @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::nomination($application)])
+
     <p>Filed by: {{ $application->submittedBy?->name ?? 'Unknown' }}</p>
     <p>Thesis: {{ $nomination->thesis_title }}</p>
 
@@ -12,7 +14,10 @@
             @foreach ($nomination->panel() as $seat => $examiner)
                 <tr>
                     <td>{{ $seat }}</td>
-                    <td>{{ $examiner?->name ?? '—' }}</td>
+                    <td>
+                        {{ $examiner?->name ?? '—' }}
+                        @include('hani::examiner_nomination._coi', ['flags' => $examiner ? ($coiFlags[$application->id][$examiner->id] ?? []) : []])
+                    </td>
                     <td>{{ $examiner?->institution ?: $examiner?->department ?: '—' }}</td>
                     <td>{{ $examiner?->stateLabel() ?? '—' }}</td>
                 </tr>
@@ -20,8 +25,25 @@
         </tbody>
     </table>
 
+    @if (collect($coiFlags[$application->id] ?? [])->flatten(1)->isNotEmpty())
+        <p class="coi-note" style="color: var(--text-grey); font-size: var(--text-xs);">{{ \App\Modules\Hani\Support\ConflictOfInterest::NOTE }}</p>
+    @endif
+
     @if ($nomination->notes)
         <p>Notes: {{ $nomination->notes }}</p>
+    @endif
+
+    @foreach ($duplicates[$application->id] ?? [] as $flag)
+        <p class="message-warning">Possible duplicate: {{ $flag }}</p>
+    @endforeach
+
+    {{-- Core's decision form always reads "Approve"; until it takes a label
+         (app/Modules/Hani/SHARED_CHANGES.md), this says what Approve does here.
+         See ExaminerNominationController::finaliseAndRelease(). --}}
+    @if ($application->current_stage === \App\Modules\Hani\Http\Controllers\ExaminerNominationController::FINALISE_STAGE)
+        <p class="message-warning">
+            Approving this stage finalises the list AND releases it to CGS operations (two steps recorded).
+        </p>
     @endif
 @else
     <p style="color: var(--text-grey);">Nomination record missing for this application.</p>

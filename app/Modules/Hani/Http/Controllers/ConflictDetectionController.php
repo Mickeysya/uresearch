@@ -3,61 +3,62 @@
 namespace App\Modules\Hani\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
-use App\Modules\Core\Models\Application;
+use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\ExaminerNomination;
+use App\Modules\Hani\Support\CrossDepartmentClashes;
+use App\Modules\Hani\Support\DuplicateDetector;
+use Illuminate\Http\Request;
 
 /**
- * Touchpoint 2: the CGS faculty-list compilation screen.
+ * Touchpoint 2: the faculty compilation screen.
  *
  * Touchpoint 1 (ExaminerNominationController::store()) already stops an
  * individually ineligible examiner at nomination time. This screen catches
- * the conflict that check cannot see: two different departments nominating
- * the same examiner independently, which only becomes visible once their
- * lists are merged into one faculty (FOE/FSMC) view. Per the scope, this
- * never auto-rejects -- it flags the clash and shows current pool
- * availability so the Academic Executive can decide on a substitution.
+ * the conflict that check cannot see: two departments nominating the same
+ * examiner independently, which only shows once their lists are merged.
+ * Per the scope it never auto-rejects -- it flags the clash and shows the
+ * pool state so a person can decide on a substitution.
+ *
+ * Scoped: an Academic Executive sees the examiners on their own department's
+ * nominations (and which other departments also named them); the Senior
+ * Executive, who compiles every department's list, sees all of it, plus the
+ * likely duplicate records (Support\DuplicateDetector).
  */
 class ConflictDetectionController extends Controller
 {
-    public function index()
+    public function index(Request $request, CrossDepartmentClashes $clashes, DuplicateDetector $duplicates)
     {
-        $nominations = ExaminerNomination::with(array_merge(
-            ExaminerNomination::slotRelations(),
-            ['application.student']
-        ))
-            ->whereHas('application', fn ($q) => $q->where('module_type', 'examiner_nomination')
-                ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED]))
-            ->get();
+        $user = $request->user();
+        $scoped = Role::isDepartmentScoped($user->role);
+        $nominations = $clashes->active();
 
-        // Group by the nominated examiner's own faculty -- that is the level
-        // at which department lists get compiled -- then flag any examiner
-        // whose nominations span more than one department within it.
-        $byFaculty = $nominations
+        $rows = $nominations
             ->flatMap(fn (ExaminerNomination $nomination) => $nomination->examiners()
                 ->map(fn ($examiner) => ['examiner' => $examiner, 'nomination' => $nomination]))
-            ->groupBy(fn ($row) => $row['examiner']->faculty ?? 'Unassigned Faculty')
+            ->groupBy(fn ($row) => $row['examiner']->id)
             ->map(function ($rows) {
-                return $rows
-                    ->groupBy(fn ($row) => $row['examiner']->id)
-                    ->map(function ($rows) {
-                        $examiner = $rows->first()['examiner'];
-                        $departments = $rows
-                            ->pluck('nomination.application.student.department')
-                            ->filter()
-                            ->unique()
-                            ->values();
+                $departments = $rows->pluck('nomination.application.student.department')->filter()->unique()->values();
 
-                        return [
-                            'examiner' => $examiner,
-                            'nominations' => $rows->pluck('nomination')->unique('id')->values(),
-                            'departments' => $departments,
-                            'conflicted' => $departments->count() > 1,
-                        ];
-                    })
-                    ->sortByDesc('conflicted')
-                    ->values();
-            });
+                return [
+                    'examiner' => $rows->first()['examiner'],
+                    'nominations' => $rows->pluck('nomination')->unique('id')->values(),
+                    'departments' => $departments,
+                    'conflicted' => $departments->count() > 1,
+                ];
+            })
+            // Your department's examiners only, if you are one department's.
+            ->when($scoped, fn ($c) => $c->filter(fn ($row) => $row['departments']->contains($user->department)));
 
-        return view('hani::conflict_detection.index', ['byFaculty' => $byFaculty]);
+        $byFaculty = $rows
+            ->groupBy(fn ($row) => $row['examiner']->faculty ?? 'Unassigned Faculty')
+            ->map(fn ($group) => $group->sortByDesc('conflicted')->values())
+            ->sortKeys();
+
+        return view('hani::conflict_detection.index', [
+            'byFaculty' => $byFaculty,
+            'conflictCount' => $rows->where('conflicted', true)->count(),
+            'scopedToDepartment' => $scoped ? $user->department : null,
+            'duplicates' => $scoped ? [] : $duplicates->acrossNominations(),
+        ]);
     }
 }
