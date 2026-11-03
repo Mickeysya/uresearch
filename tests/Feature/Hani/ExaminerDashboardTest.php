@@ -80,7 +80,7 @@ class ExaminerDashboardTest extends TestCase
             $this->actingAs($user)->get(route('examiner-dashboard'))->assertForbidden();
         }
 
-        // Non-Executive CGS sees it since 2026-11-05, for the email tiles.
+        // Non-Executive CGS sees it since 2026-11-03, for the email tiles.
         $this->actingAs($this->cgs())->get(route('examiner-dashboard'))->assertOk();
     }
 

@@ -163,7 +163,7 @@ Route::middleware('auth')->group(function () {
     // ---- Examiner pool admin -------------------------------------------
     // Senior Executive CGS (Puan Waheeda) since 2026-11-03. Non-Executive CGS
     // (Encik Syahmi, who sends the letters) reads the pool and may keep an
-    // examiner's EMAIL current, nothing else (2026-11-05).
+    // examiner's EMAIL current, nothing else (2026-11-03).
     Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
         Route::get('/examiners/{examiner}/email', [ExaminerContactController::class, 'editEmail'])->whereNumber('examiner')->name('examiner-admin.email.edit');

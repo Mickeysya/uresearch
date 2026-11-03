@@ -1,5 +1,85 @@
 # Changelog: Hani's modules
 
+## 2026-11-03: Examiner email upkeep (Prompt 1 follow-up)
+
+Branch `feature/hani-automation`. Commits: `3cd8c4b` to `f9d4d18`.
+
+### Problem
+
+Feedback from Encik Syahmi (Non-Executive CGS), who sends the appointment
+letters:
+- **No emails in the pool:** he looked examiners up on university websites
+  by hand.
+- **Stale emails:** external examiners move, and their universities do not
+  update CGS.
+- **Dead addresses found late:** he learnt an email was dead only when an AE
+  reported a bounce, and nothing stopped the next email going to the same
+  address.
+
+Separately, `viva:reminders` sent no panel reminder at all to a viva set
+for later the same day.
+
+### Decisions
+
+- **Non-Exec edits the email only.** The email-only form validates and
+  writes that one field, whatever else is posted. The Senior Executive keeps
+  the full examiner form.
+- **One way in for every email change.** `Support\ExaminerContact` logs
+  each change in `examiner_contact_history`, whatever the source: the form,
+  the email-only edit, an import filling a missing address, or a confirmed
+  proposal.
+- **A reported address is blocked, not deleted.** It stays on record,
+  flagged Invalid. Nothing emails the examiner until a new address is saved,
+  and each skip says why.
+- **Proposals are never applied automatically.** An email a supervisor gives
+  at nomination waits for CGS. A working address is never replaced by a
+  proposal.
+- **The CV stays out of `DocumentStore`.** An `ApplicationDocument` on the
+  nomination would be visible to the candidate, so the CV is kept on the
+  private disk with a CGS-only, logged download. This is the same treatment
+  as the viva examiner reports (SHARED_CHANGES.md item 12).
+- **Existing addresses start as confirmed.** `email_confirmed_at` is
+  backfilled to the migration date, so the pool does not open with every
+  address "not confirmed in 12 months".
+
+### What changed
+
+| Item | What it does |
+|---|---|
+| e. Reminder fix | A viva less than a day away gets `panel_1d`, even later the same day. `panel_7d` goes only 6 to 7 days out and is never sent late to a viva set closer. The subject reads "Viva today" when it is |
+| a. Contact details | Non-Exec reads the pool and has an "Update email" form (a reason is required). New examiner page with the contact history (old, new, who, when, reason). The Senior Exec form takes an optional reason for an email change |
+| b. Email not working | AE (own department, or its students' panels), Non-Exec and Senior Exec can report an email, with a reason, from the examiner page or the viva examiner-progress screen. It becomes Invalid, CGS is notified (`afterCommit`), and an "Email needs updating" badge shows wherever the examiner appears. Viva invitations and panel reminders skip the examiner and say so. `ReleasedExaminerProvider` gives Jason's letters no address, plus `email_problem`. Saving a new email clears the flag |
+| c. Freshness | `email_confirmed_at` is set on add, change, import fill and the new "Confirm email still valid" button, which is logged and also clears a mistaken flag. Pool Email filter and two dashboard tiles: "Missing or invalid emails" and "Emails not confirmed in 12 months" (`hani.examiner_contact.stale_months`, provisional). Non-Exec can open the dashboard |
+| d. Email at nomination | Picking an examiner whose email is missing or invalid opens a "current email" field and an optional CV (PDF, 5 MB). The proposal is stored in `examiner_email_proposals`. "Proposed emails to confirm" in the pool: Confirm (one click, logged) or Dismiss |
+
+New tables:
+- `examiner_contact_history`
+- `examiner_email_proposals`
+
+New columns on Hani's `examiners` table:
+- `email_status`
+- `email_flagged_at`
+- `email_confirmed_at`
+
+No shared table was changed.
+
+### Verification
+
+- `php artisan test tests/Feature/Hani`: 173 passed. Full suite: 609
+  passed.
+- The new `ExaminerContactTest` covers:
+  - the Non-Exec email-only edit
+  - the history, from every source
+  - the report flag: badges, blocked invitations, reminders and letters,
+    and clearing on update
+  - freshness: filters, dashboard counts and the backfill
+  - the propose, confirm and log flow, and that a valid email is never
+    overwritten
+- `VivaSchedulingAssistTest` covers the reminder fix.
+- Not walked through in a browser this time. The nomination form's
+  email-field toggle is a small inline script, covered by the server-side
+  tests only.
+
 ## 2026-11-03: Viva Voce Assessment: automation and intelligence (Prompt 2)
 
 Branch `feature/hani-automation`. Commits: `9da3394` to `59027e7`.

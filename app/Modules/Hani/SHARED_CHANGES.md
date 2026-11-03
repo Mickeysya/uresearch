@@ -134,16 +134,18 @@ namespace App\Modules\Core\Contracts;
  *     'supervisor' => ['name', 'email'],
  *     'thesis_title'   => string,
  *     'examiners' => [
- *       'internal_main'   => ['name', 'email', 'department', 'faculty'],
- *       'internal_backup' => ['name', 'email', 'department', 'faculty'] | null,
- *       'external_main'   => ['name', 'email', 'institution', 'department'],
- *       'external_backup' => ['name', 'email', 'institution', 'department'] | null,
+ *       'internal_main'   => ['name', 'email', 'email_problem', 'department', 'faculty'],
+ *       'internal_backup' => ['name', 'email', 'email_problem', 'department', 'faculty'] | null,
+ *       'external_main'   => ['name', 'email', 'email_problem', 'institution', 'department'],
+ *       'external_backup' => ['name', 'email', 'email_problem', 'institution', 'department'] | null,
  *     ],
  *   ]
  *
  * Always the CURRENT panel: after a decline, the promoted backup is in the
- * main seat. An examiner's email may be null (CGS's pool file has none);
- * skip and flag them rather than send.
+ * main seat. An examiner's email may be null: CGS has none yet, or the one
+ * on record was reported not working. Then 'email_problem' says which, as
+ * a sentence to show; skip and flag them rather than send. (email_problem
+ * added 2026-11-03; null when the email is fine.)
  */
 interface SuppliesReleasedExaminers
 {
@@ -296,7 +298,16 @@ Hani's `examiner_nomination/queue.blade.php` would then pass
 
   The module's "Not built: step 5" line and known limitation 1 (bulk
   actions) can be removed.
-- **Test count:** Hani's own folder is now 163 tests
+- **Examiner email upkeep (Prompt 1 follow-up):**
+  - Non-Executive CGS reads the pool and may edit an examiner's email only
+  - contact history on a new examiner page
+  - "Report email not working", which blocks sends until the email is
+    updated
+  - "Confirm email still valid"
+  - freshness filter and dashboard tiles
+  - emails proposed at nomination and confirmed by CGS
+  - Non-Exec can open the examiner dashboard
+- **Test count:** Hani's own folder is now 173 tests
   (`php artisan test tests/Feature/Hani`).
 
 ---
@@ -478,7 +489,12 @@ them on the private disk under `hani/examiner-reports/`:
 - downloaded through an AE- and Senior-Exec-only route
 - logged with `activity('document')`, the same way `DocumentStore` logs
 
-A flag would let them move into `DocumentStore` and the Documents page.
+Since 2026-11-03 the same applies to the examiner CV a supervisor may attach
+when proposing an examiner's email at nomination (`hani/examiner-cvs/`,
+CGS-only download): on the nomination it would be visible to the
+candidate.
+
+A flag would let both move into `DocumentStore` and the Documents page.
 
 **Impact.** One nullable boolean column on `application_documents`
 (defaults to `false`). That is a shared table, so this needs the team's

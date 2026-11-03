@@ -89,6 +89,26 @@
   opens the door for CGS to log the next cycle, which links back to the
   prior one via `re_viva_details.previous_cycle_id`.
 
+## Examiner emails (who keeps them current)
+
+- **Non-Executive CGS** reads the pool and may change an examiner's email,
+  and nothing else. A reason is required.
+- **The Senior Executive** edits everything on the full form.
+- **Every change is logged** in `examiner_contact_history`, shown on the
+  examiner page (`/examiners/{id}`), whether it came from the form, the
+  email-only edit, an import or a confirmed proposal.
+- **Report email not working:** the AE (own department, or its students'
+  panels), Non-Exec or the Senior Exec. The email is flagged Invalid, CGS is
+  notified, and invitations, panel reminders and the appointment-letter feed
+  skip the examiner until a new email is saved.
+- **Freshness:** `email_confirmed_at` is set on add, change or "Confirm email
+  still valid". The pool's Email filter and the dashboard tiles list missing
+  or invalid emails, and emails not confirmed in
+  `hani.examiner_contact.stale_months` (12, provisional).
+- **At nomination:** a supervisor picking an examiner with no working email
+  can give the current one and a CV. CGS confirms it from "Proposed emails
+  to confirm" in the pool. A working email is never replaced automatically.
+
 ## Examiner suggestions (how the matching works)
 
 The nomination form lists **Suggested examiners** for each seat type, top 5,
@@ -272,7 +292,8 @@ only Hani's own tables are written directly.
 
 ## Tests
 
-`tests/Feature/Hani/`: 163 tests. The viva files added in Prompt 2:
+`tests/Feature/Hani/`: 173 tests. Examiner email upkeep is covered by
+`ExaminerContactTest`. The viva files added in Prompt 2:
 `VivaBulkSafetyTest`, `VivaEligibilityVerificationTest`,
 `VivaSoftboundChecksTest`, `VivaExaminerProgressTest`,
 `VivaSchedulingAssistTest`, `VivaResultTest`; fixtures are in
