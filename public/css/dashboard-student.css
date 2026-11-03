@@ -247,14 +247,31 @@
     overflow: hidden;
 }
 
+/* Grows in from 0 on first paint, same duration/easing as the attendance
+   gauge's animateRotate and the cards' own rise-in -- the width itself is
+   set by --progress (inline per card, from the candidacy card's real
+   percentage) rather than a literal value, so the animation has no fixed
+   figure to drift from what the bar actually ends up showing. */
 .sdash-top-progress-bar {
     height: 100%;
+    width: var(--progress, 0%);
     border-radius: 999px;
     background: var(--navy);
+    animation: sdash-progress-fill 900ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+    animation-delay: 0.15s;
 }
 
 .sdash-top-progress-bar.tone-warn     { background: var(--warning-fg); }
 .sdash-top-progress-bar.tone-critical { background: var(--danger-fg); }
+
+@keyframes sdash-progress-fill {
+    from { width: 0%; }
+    to   { width: var(--progress, 0%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sdash-top-progress-bar { animation: none; }
+}
 
 .sdash-top-progress-labels {
     display: flex;

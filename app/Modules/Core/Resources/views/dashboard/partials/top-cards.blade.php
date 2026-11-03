@@ -74,7 +74,7 @@
             <div class="sdash-top-value">{{ max(0, $days) }} <span class="sdash-top-unit">{{ $days < 0 ? 'days overdue' : 'days remaining' }}</span></div>
 
             <div class="sdash-top-progress">
-                <div class="sdash-top-progress-bar tone-{{ $candidacy['tone'] }}" style="width: {{ $percent }}%"></div>
+                <div class="sdash-top-progress-bar tone-{{ $candidacy['tone'] }}" style="--progress: {{ $percent }}%"></div>
             </div>
             <div class="sdash-top-progress-labels">
                 <span>{{ $candidacy['startedAt']?->format('j M Y') ?? '—' }}</span>
