@@ -57,6 +57,27 @@ services:
       redis:
         condition: service_started
 
+  scheduler:
+    image: sail-8.3/app
+    container_name: uresearch-scheduler
+    restart: unless-stopped
+    command: php artisan schedule:work
+    environment:
+      WWWUSER: '${WWWUSER:-1000}'
+      LARAVEL_SAIL: 1
+      DB_HOST: mysql
+      MAIL_HOST: mailpit
+      REDIS_HOST: redis
+      QUEUE_CONNECTION: redis
+      TZ: Asia/Kuala_Lumpur
+    volumes:
+      - '.:/var/www/html'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   mysql:
     image: mysql:8.4
     container_name: uresearch-mysql
