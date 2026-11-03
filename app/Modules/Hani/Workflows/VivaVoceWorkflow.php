@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hani\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
@@ -33,8 +34,12 @@ use Carbon\CarbonInterface;
  *
  * The viva date itself is set off-chain by the AE (VivaScheduleController):
  * it changes no status and can be moved.
+ *
+ * DecidesOneAtATime: acknowledging does more than move the stage -- it asks
+ * the supervisor to nominate examiners (VivaController::decide()). Core's
+ * bulk decide would skip that.
  */
-class VivaVoceWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
+class VivaVoceWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime
 {
     public function key(): string
     {
