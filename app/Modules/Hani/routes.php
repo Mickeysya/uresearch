@@ -169,6 +169,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/examiners/{examiner}/email', [ExaminerContactController::class, 'editEmail'])->whereNumber('examiner')->name('examiner-admin.email.edit');
         Route::put('/examiners/{examiner}/email', [ExaminerContactController::class, 'updateEmail'])->whereNumber('examiner')->name('examiner-admin.email.update');
         Route::post('/examiners/{examiner}/confirm-email', [ExaminerContactController::class, 'confirmEmail'])->whereNumber('examiner')->name('examiner-admin.email.confirm');
+        Route::post('/examiners/proposed-emails/{proposal}/confirm', [ExaminerContactController::class, 'confirmProposal'])->name('examiner-admin.proposal.confirm');
+        Route::post('/examiners/proposed-emails/{proposal}/dismiss', [ExaminerContactController::class, 'dismissProposal'])->name('examiner-admin.proposal.dismiss');
+        Route::get('/examiners/proposed-emails/{proposal}/cv', [ExaminerContactController::class, 'proposalCv'])->name('examiner-admin.proposal.cv');
     });
 
     // The examiner page and "Email not working". The controller narrows an

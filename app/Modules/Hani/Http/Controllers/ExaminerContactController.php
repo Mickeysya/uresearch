@@ -5,8 +5,10 @@ namespace App\Modules\Hani\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
+use App\Modules\Hani\Models\ExaminerEmailProposal;
 use App\Modules\Hani\Support\ExaminerContact;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
@@ -95,6 +97,41 @@ class ExaminerContactController extends Controller
         $contact->confirm($examiner, $request->user(), $data['note'] ?? null);
 
         return back()->with('status', "{$examiner->name}'s email confirmed as still valid.");
+    }
+
+    /** "Proposed emails to confirm": one click makes it the examiner's email, logged. */
+    public function confirmProposal(Request $request, ExaminerEmailProposal $proposal, ExaminerContact $contact)
+    {
+        abort_unless($this->canEditEmail($request), 403);
+        abort_unless($proposal->status === ExaminerEmailProposal::PENDING, 404);
+
+        $contact->confirmProposal($proposal, $request->user());
+
+        return back()->with('status', "{$proposal->proposed_email} is now {$proposal->examiner->name}'s email.");
+    }
+
+    public function dismissProposal(Request $request, ExaminerEmailProposal $proposal, ExaminerContact $contact)
+    {
+        abort_unless($this->canEditEmail($request), 403);
+        abort_unless($proposal->status === ExaminerEmailProposal::PENDING, 404);
+
+        $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
+        $contact->dismissProposal($proposal, $request->user(), $data['note'] ?? null);
+
+        return back()->with('status', "Proposed email for {$proposal->examiner->name} dismissed.");
+    }
+
+    /** The CV sent with a proposal, from the private disk. CGS only; logged like a document view. */
+    public function proposalCv(Request $request, ExaminerEmailProposal $proposal)
+    {
+        abort_unless($this->canEditEmail($request), 403);
+        abort_unless($proposal->cv_path && Storage::disk('local')->exists($proposal->cv_path), 404);
+
+        activity('document')->causedBy($request->user())->performedOn($proposal)
+            ->withProperties(['action' => 'viewed', 'doc_type' => 'Examiner CV', 'examiner' => $proposal->examiner?->name])
+            ->log('Viewed examiner CV');
+
+        return Storage::disk('local')->download($proposal->cv_path, $proposal->cv_original_name ?: 'examiner-cv.pdf');
     }
 
     protected function canEditEmail(Request $request): bool

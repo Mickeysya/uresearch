@@ -33,7 +33,7 @@
                 CGS assigns supervisees before nominations can be filed.
             </div>
         @else
-            <form method="POST" action="{{ route('examiner-nomination.store') }}" data-stepper
+            <form method="POST" action="{{ route('examiner-nomination.store') }}" data-stepper enctype="multipart/form-data"
                   data-suggest-url="{{ route('examiner-nomination.suggestions') }}">
                 @csrf
 
@@ -83,7 +83,7 @@
                             class="@error($field) is-invalid @enderror">
                         <option value="">{{ $field === 'internal_main_id' ? 'Select' : 'None' }}</option>
                         @foreach ($internals as $examiner)
-                            <option value="{{ $examiner->id }}"
+                            <option value="{{ $examiner->id }}" data-email-state="{{ $examiner->emailStatus() }}"
                                     data-department="{{ $examiner->department }}"
                                     @selected(old($field) == $examiner->id)
                                     @disabled(! $examiner->isEligible())>
@@ -98,6 +98,19 @@
                     @error($field) <p class="field-error">{{ $message }}</p> @enderror
                     {{-- Conflict-of-interest flags for whoever is chosen here. --}}
                     <div data-coi-for="{{ $field }}" aria-live="polite"></div>
+                    {{-- No working email for this examiner: ask the supervisor, who
+                         usually knows. Proposed to CGS, never saved to the pool directly. --}}
+                    <div class="email-ask" data-email-ask="{{ $field }}" @if (! old("proposed_email.$field") && ! $errors->has("proposed_email.$field")) hidden @endif>
+                        <p class="fstep-hint" data-email-ask-why></p>
+                        <label for="proposed_email_{{ $field }}">Examiner's current email <span style="color: var(--text-grey)">(optional, but saves CGS searching for it)</span></label>
+                        <input type="email" name="proposed_email[{{ $field }}]" id="proposed_email_{{ $field }}" maxlength="150"
+                               value="{{ old("proposed_email.$field") }}" class="@error("proposed_email.$field") is-invalid @enderror">
+                        @error("proposed_email.$field") <p class="field-error">{{ $message }}</p> @enderror
+                        <label for="proposed_cv_{{ $field }}">Examiner's CV <span style="color: var(--text-grey)">(optional, PDF up to 5 MB)</span></label>
+                        <input type="file" name="proposed_cv[{{ $field }}]" id="proposed_cv_{{ $field }}" accept="application/pdf,.pdf"
+                               class="@error("proposed_cv.$field") is-invalid @enderror">
+                        @error("proposed_cv.$field") <p class="field-error">{{ $message }}</p> @enderror
+                    </div>
                 @endforeach
 
                 {{-- Filled by public/js/hani/examiner-suggestions.js. --}}
@@ -122,7 +135,7 @@
                             class="@error($field) is-invalid @enderror">
                         <option value="">{{ $field === 'external_main_id' ? 'Select' : 'None' }}</option>
                         @foreach ($externals as $examiner)
-                            <option value="{{ $examiner->id }}"
+                            <option value="{{ $examiner->id }}" data-email-state="{{ $examiner->emailStatus() }}"
                                     @selected(old($field) == $examiner->id)
                                     @disabled(! $examiner->isEligible())>
                                 {{ $examiner->name }}@if ($examiner->institution), {{ $examiner->institution }}@endif
@@ -136,6 +149,19 @@
                     @error($field) <p class="field-error">{{ $message }}</p> @enderror
                     {{-- Conflict-of-interest flags for whoever is chosen here. --}}
                     <div data-coi-for="{{ $field }}" aria-live="polite"></div>
+                    {{-- No working email for this examiner: ask the supervisor, who
+                         usually knows. Proposed to CGS, never saved to the pool directly. --}}
+                    <div class="email-ask" data-email-ask="{{ $field }}" @if (! old("proposed_email.$field") && ! $errors->has("proposed_email.$field")) hidden @endif>
+                        <p class="fstep-hint" data-email-ask-why></p>
+                        <label for="proposed_email_{{ $field }}">Examiner's current email <span style="color: var(--text-grey)">(optional, but saves CGS searching for it)</span></label>
+                        <input type="email" name="proposed_email[{{ $field }}]" id="proposed_email_{{ $field }}" maxlength="150"
+                               value="{{ old("proposed_email.$field") }}" class="@error("proposed_email.$field") is-invalid @enderror">
+                        @error("proposed_email.$field") <p class="field-error">{{ $message }}</p> @enderror
+                        <label for="proposed_cv_{{ $field }}">Examiner's CV <span style="color: var(--text-grey)">(optional, PDF up to 5 MB)</span></label>
+                        <input type="file" name="proposed_cv[{{ $field }}]" id="proposed_cv_{{ $field }}" accept="application/pdf,.pdf"
+                               class="@error("proposed_cv.$field") is-invalid @enderror">
+                        @error("proposed_cv.$field") <p class="field-error">{{ $message }}</p> @enderror
+                    </div>
                 @endforeach
 
                 <div class="suggest-box">
@@ -186,6 +212,33 @@
 
 @include('core::partials.form-stepper')
 <script src="{{ asset('js/hani/examiner-suggestions.js') }}" defer></script>
+
+<script @cspNonce>
+    // Ask for the examiner's email when the one chosen has none on record,
+    // or one reported not working. The server ignores a proposal for an
+    // examiner whose email works, so this only decides what is shown.
+    (function () {
+        document.querySelectorAll('[data-email-ask]').forEach(function (box) {
+            var select = document.getElementById(box.dataset.emailAsk);
+            var why = box.querySelector('[data-email-ask-why]');
+            if (! select) return;
+
+            function apply() {
+                var option = select.selectedOptions[0];
+                var state = option ? option.dataset.emailState : '';
+                var ask = state === 'missing' || state === 'invalid';
+                box.hidden = ! ask;
+                box.querySelectorAll('input').forEach(function (input) { input.disabled = ! ask; });
+                why.textContent = state === 'invalid'
+                    ? 'The email CGS has for this examiner was reported not working. If you know their current email, please give it here.'
+                    : 'CGS has no email for this examiner yet. If you know it, please give it here.';
+            }
+
+            select.addEventListener('change', apply);
+            apply();
+        });
+    })();
+</script>
 
 <script @cspNonce>
     // The department rule, shown rather than only enforced. The server

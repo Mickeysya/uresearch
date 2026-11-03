@@ -191,6 +191,38 @@
         @endif
     </x-core::page-header>
 
+    @if ($proposals->isNotEmpty())
+        <div class="exam-table-wrap" id="proposed-emails" style="margin-bottom: 18px;">
+            <h3 style="margin: 12px 0 4px;">Proposed emails to confirm ({{ $proposals->count() }})</h3>
+            <p class="exam-tab-note" style="margin: 0 0 8px;">Given by supervisors at nomination for examiners whose email was missing or reported not working. Confirming makes it the examiner's email and logs it; nothing changes until then.</p>
+            @error('proposal') <p class="message-error">{{ $message }}</p> @enderror
+            <table class="data-table exam-table">
+                <thead><tr><th>Examiner</th><th>Email now</th><th>Proposed email</th><th>From</th><th>CV</th><th></th></tr></thead>
+                <tbody>
+                    @foreach ($proposals as $proposal)
+                        <tr>
+                            <td><a href="{{ route('examiner-admin.show', $proposal->examiner) }}">{{ $proposal->examiner->name }}</a></td>
+                            <td>{{ $proposal->examiner->email ?? 'None' }} @include('hani::examiner_admin._email_badge', ['examiner' => $proposal->examiner])</td>
+                            <td><b>{{ $proposal->proposed_email }}</b></td>
+                            <td>{{ $proposal->proposedBy?->name ?? 'Unknown' }}@if ($proposal->nomination), nomination #{{ $proposal->nomination->application_id }}@endif<span class="examiner-reason">{{ $proposal->created_at->format('j M Y') }}</span></td>
+                            <td>@if ($proposal->cv_path)<a href="{{ route('examiner-admin.proposal.cv', $proposal) }}">Download CV</a>@else None @endif</td>
+                            <td>
+                                <form method="POST" action="{{ route('examiner-admin.proposal.confirm', $proposal) }}" style="display: inline;">
+                                    @csrf
+                                    <button type="submit" @disabled(! $proposal->examiner->emailNeedsUpdating()) title="{{ $proposal->examiner->emailNeedsUpdating() ? '' : 'The examiner already has a working email' }}">Confirm</button>
+                                </form>
+                                <form method="POST" action="{{ route('examiner-admin.proposal.dismiss', $proposal) }}" style="display: inline;">
+                                    @csrf
+                                    <button type="submit" class="btn-secondary">Dismiss</button>
+                                </form>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     <nav class="exam-tabs" aria-label="Examiner lists">
         @foreach ([
             '' => 'All Examiners',

@@ -4,6 +4,7 @@ namespace App\Modules\Hani\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Hani\Models\Examiner;
+use App\Modules\Hani\Models\ExaminerEmailProposal;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerReviewItem;
 use App\Modules\Hani\Support\Departments;
@@ -100,6 +101,8 @@ class ExaminerAdminController extends Controller
             'studentsByExaminer' => $this->studentsByExaminer($examiners->getCollection()->pluck('id')),
             'filters' => $request->only(['department', 'type', 'status', 'search', 'email']),
             'openReviewItems' => ExaminerReviewItem::open()->count(),
+            // Emails supervisors gave at nomination, for CGS to confirm.
+            'proposals' => ExaminerEmailProposal::pending()->with('examiner', 'proposedBy', 'nomination')->oldest()->get(),
             // Across the whole pool, not just this page: a duplicate is
             // usually on another page or the other tab.
             'duplicates' => app(DuplicateDetector::class)->byExaminer($pool),

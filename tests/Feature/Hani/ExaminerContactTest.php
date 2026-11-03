@@ -4,6 +4,9 @@ namespace Tests\Feature\Hani;
 
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerContactHistory;
+use App\Modules\Hani\Models\ExaminerEmailProposal;
+use App\Modules\Core\Models\ApplicationDocument;
+use Illuminate\Http\UploadedFile;
 use App\Modules\Hani\Notifications\ExaminerEmailReported;
 use App\Modules\Hani\Notifications\VivaReminder;
 use App\Modules\Hani\Notifications\VivaScheduled;
@@ -309,5 +312,98 @@ class ExaminerContactTest extends TestCase
         $this->assertTrue(Examiner::where('name', 'Dr With Email')->value('email_confirmed_at') !== null);
         $this->assertNull(Examiner::where('name', 'Dr Without')->value('email_confirmed_at'));
         $this->assertSame(['ok', 'ok'], Examiner::orderBy('name')->pluck('email_status')->all());
+    }
+
+    /** A supervisor and candidate in Computing, and a legal panel whose external main has $externalEmail. */
+    protected function nominationCast(?string $externalEmail, string $status = Examiner::EMAIL_OK): array
+    {
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id, 'department' => 'Computing']);
+        $make = fn (string $name, string $type, ?string $email) => Examiner::create([
+            'name' => $name, 'email' => $email, 'department' => $type === 'internal' ? 'Computing' : 'External',
+            'type' => $type, 'institution' => $type === 'external' ? 'Example University' : null, 'is_active' => true,
+        ]);
+
+        $external = $make('Prof Nabila External', 'external', $externalEmail);
+        $external->update(['email_status' => $status]);
+
+        return [$supervisor, $student, $external, [
+            'student_id' => $student->id,
+            'thesis_title' => 'Anomaly detection for offshore pipelines',
+            'internal_main_id' => $make('Prof Tan Internal', 'internal', 'tan@example.com')->id,
+            'internal_backup_id' => $make('Dr Kumar Internal', 'internal', 'kumar@example.com')->id,
+            'external_main_id' => $external->id,
+            'external_backup_id' => $make('Dr Chong External', 'external', 'chong@example.com')->id,
+        ]];
+    }
+
+    public function test_a_supervisor_proposes_an_email_and_cv_and_cgs_confirms_it(): void
+    {
+        [$supervisor, $student, $external, $panel] = $this->nominationCast('nabila@dead.example.com', Examiner::EMAIL_INVALID);
+
+        // The form asks when the chosen examiner has no working email.
+        $this->actingAs($supervisor)->get(route('examiner-nomination.create'))
+            ->assertOk()->assertSee('data-email-state="invalid"', false)->assertSee('name="proposed_email[external_main_id]"', false);
+
+        // The dead address is refused as a "new" one.
+        $this->actingAs($supervisor)->post(route('examiner-nomination.store'), $panel + ['proposed_email' => ['external_main_id' => 'NABILA@dead.example.com']])
+            ->assertSessionHasErrors('proposed_email.external_main_id');
+
+        $this->actingAs($supervisor)->post(route('examiner-nomination.store'), $panel + [
+            'proposed_email' => ['external_main_id' => 'Nabila@NEW.example.com', 'internal_main_id' => 'ignored@example.com'],
+            'proposed_cv' => ['external_main_id' => UploadedFile::fake()->create('cv.pdf', 200, 'application/pdf')],
+        ])->assertSessionHasNoErrors();
+
+        // Proposed, not applied. The internal main's email works, so nothing was proposed for them.
+        $proposal = ExaminerEmailProposal::sole();
+        $this->assertSame([$external->id, 'nabila@new.example.com', $supervisor->id, 'pending'], [$proposal->examiner_id, $proposal->proposed_email, $proposal->proposed_by_id, $proposal->status]);
+        $this->assertSame('nabila@dead.example.com', $external->fresh()->email);
+        Storage::disk('local')->assertExists($proposal->cv_path);
+
+        // The CV is not an application document, so the candidate never sees it.
+        $this->assertSame(0, ApplicationDocument::count());
+        $this->actingAs($student)->get(route('examiner-admin.proposal.cv', $proposal))->assertForbidden();
+        $this->actingAs($supervisor)->get(route('examiner-admin.proposal.cv', $proposal))->assertForbidden();
+
+        // CGS sees it in the pool, downloads the CV, and confirms with one click.
+        $nonExec = $this->cgs();
+        $this->actingAs($nonExec)->get(route('examiner-admin.index'))->assertSee('Proposed emails to confirm (1)')->assertSee('nabila@new.example.com');
+        $this->actingAs($nonExec)->get(route('examiner-admin.proposal.cv', $proposal))->assertOk();
+        $this->actingAs($nonExec)->post(route('examiner-admin.proposal.confirm', $proposal))->assertSessionHasNoErrors();
+
+        $external->refresh();
+        $this->assertSame('nabila@new.example.com', $external->email);
+        $this->assertSame(Examiner::EMAIL_OK, $external->emailStatus());
+        $this->assertTrue($external->email_confirmed_at->isToday());
+        $this->assertSame('confirmed', $proposal->fresh()->status);
+        $line = ExaminerContactHistory::where('examiner_id', $external->id)->where('source', 'proposal')->sole();
+        $this->assertSame(['nabila@dead.example.com', 'nabila@new.example.com', $nonExec->id], [$line->old_email, $line->new_email, $line->changed_by_id]);
+        $this->assertStringContainsString($supervisor->name, $line->reason);
+        $this->actingAs($nonExec)->get(route('examiner-admin.index'))->assertDontSee('Proposed emails to confirm');
+    }
+
+    public function test_a_valid_email_is_never_overwritten_by_a_proposal(): void
+    {
+        [$supervisor, , $external, $panel] = $this->nominationCast(null);
+
+        $this->actingAs($supervisor)->post(route('examiner-nomination.store'), $panel + ['proposed_email' => ['external_main_id' => 'first@example.com']]);
+        $proposal = ExaminerEmailProposal::sole();
+
+        // Meanwhile CGS found an address on their own.
+        $nonExec = $this->cgs();
+        $this->actingAs($nonExec)->put(route('examiner-admin.email.update', $external), ['email' => 'found@example.com', 'reason' => 'University directory']);
+
+        $this->actingAs($nonExec)->post(route('examiner-admin.proposal.confirm', $proposal))->assertSessionHasErrors('proposal');
+        $this->assertSame('found@example.com', $external->fresh()->email);
+        $this->assertSame('pending', $proposal->fresh()->status);
+
+        $this->actingAs($nonExec)->post(route('examiner-admin.proposal.dismiss', $proposal))->assertSessionHasNoErrors();
+        $this->assertSame('dismissed', $proposal->fresh()->status);
+
+        // And the helper itself refuses to propose for a working email.
+        $this->assertNull(app(\App\Modules\Hani\Support\ExaminerContact::class)->propose($external->fresh(), 'x@example.com', $supervisor));
+
+        // Only CGS confirms.
+        $this->actingAs($this->academicExec())->post(route('examiner-admin.proposal.dismiss', $proposal))->assertForbidden();
     }
 }

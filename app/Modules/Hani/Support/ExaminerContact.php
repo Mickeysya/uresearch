@@ -7,10 +7,13 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerContactHistory;
+use App\Modules\Hani\Models\ExaminerEmailProposal;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Notifications\ExaminerEmailReported;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The one place an examiner's email is changed, reported or confirmed.
@@ -81,6 +84,69 @@ class ExaminerContact
         } catch (\Throwable $e) {
             report($e);
         }
+    }
+
+    /**
+     * An email proposed at nomination, for an examiner whose email is
+     * missing or invalid. Stored for CGS to confirm; examiners.email is not
+     * touched. Null when the examiner's email is fine (nothing to propose).
+     */
+    public function propose(Examiner $examiner, string $email, User $by, ?ExaminerNomination $nomination = null, ?UploadedFile $cv = null): ?ExaminerEmailProposal
+    {
+        if (! $examiner->emailNeedsUpdating()) {
+            return null;
+        }
+
+        return ExaminerEmailProposal::create([
+            'examiner_id' => $examiner->id,
+            'nomination_id' => $nomination?->id,
+            'proposed_email' => mb_strtolower(trim($email)),
+            'proposed_by_id' => $by->id,
+            // Private disk, random name, OUTSIDE DocumentStore: see the migration.
+            'cv_path' => $cv?->store('hani/examiner-cvs', 'local'),
+            'cv_original_name' => $cv?->getClientOriginalName(),
+        ]);
+    }
+
+    /**
+     * CGS confirms a proposed email: it becomes the examiner's, through
+     * changeEmail() and the history. Refused when the examiner has a valid
+     * email by now (someone updated it meanwhile): a working address is
+     * never replaced by a proposal. Other pending proposals for the same
+     * examiner are superseded.
+     *
+     * @throws ValidationException
+     */
+    public function confirmProposal(ExaminerEmailProposal $proposal, User $by): void
+    {
+        $examiner = $proposal->examiner;
+
+        if (! $examiner->emailNeedsUpdating()) {
+            throw ValidationException::withMessages(['proposal' => "{$examiner->name} already has a working email ({$examiner->email}). Dismiss the proposal, or use Update email if it really should change."]);
+        }
+
+        if (Examiner::where('email', $proposal->proposed_email)->where('id', '!=', $examiner->id)->exists()) {
+            throw ValidationException::withMessages(['proposal' => "Another examiner in the pool already has {$proposal->proposed_email}."]);
+        }
+
+        DB::transaction(function () use ($proposal, $examiner, $by) {
+            $proposer = $proposal->proposedBy?->name ?? 'the supervisor';
+            $this->changeEmail($examiner, $proposal->proposed_email, $by, 'proposal',
+                "Proposed by {$proposer}".($proposal->nomination ? " on nomination #{$proposal->nomination->application_id}" : '').'.');
+
+            $proposal->update(['status' => ExaminerEmailProposal::CONFIRMED, 'decided_by_id' => $by->id, 'decided_at' => now()]);
+
+            ExaminerEmailProposal::pending()->where('examiner_id', $examiner->id)->where('id', '!=', $proposal->id)
+                ->update(['status' => ExaminerEmailProposal::SUPERSEDED, 'decided_by_id' => $by->id, 'decided_at' => now()]);
+        });
+    }
+
+    public function dismissProposal(ExaminerEmailProposal $proposal, User $by, ?string $note = null): void
+    {
+        $proposal->update([
+            'status' => ExaminerEmailProposal::DISMISSED, 'decided_by_id' => $by->id,
+            'decided_at' => now(), 'decision_note' => $note,
+        ]);
     }
 
     /**
