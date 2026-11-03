@@ -21,7 +21,10 @@ final class VivaInvite
      * Users (student, supervisor) are notified as users, so it also lands in
      * their in-app feed. Everyone else is only an email address.
      *
-     * @return array{users: array<int, User>, emails: array<string, string>} emails: address => name
+     * An examiner with no email, or one reported not working, is left out
+     * and listed under 'skipped' with the reason, so the caller can say so.
+     *
+     * @return array{users: array<int, User>, emails: array<string, string>, skipped: array<int, string>} emails: address => name
      */
     public static function recipients(Application $notice, VivaDetail $detail, ?ExaminerNomination $panel): array
     {
@@ -29,9 +32,16 @@ final class VivaInvite
         $users = array_values(array_filter([$student, $student?->supervisor]));
 
         $emails = [];
+        $skipped = [];
+        foreach ([$panel?->internalMain, $panel?->externalMain] as $examiner) {
+            if ($examiner?->emailNeedsUpdating()) {
+                $skipped[] = $examiner->emailProblem();
+            }
+        }
+
         foreach ([
-            [$panel?->internalMain?->email, $panel?->internalMain?->name],
-            [$panel?->externalMain?->email, $panel?->externalMain?->name],
+            [$panel?->internalMain?->usableEmail(), $panel?->internalMain?->name],
+            [$panel?->externalMain?->usableEmail(), $panel?->externalMain?->name],
             [$detail->chair_email, $detail->chair_name],
             [$detail->co_supervisor_email, $detail->co_supervisor_name],
         ] as [$email, $name]) {
@@ -45,7 +55,7 @@ final class VivaInvite
             unset($emails[strtolower($user->email)]);
         }
 
-        return ['users' => $users, 'emails' => $emails];
+        return ['users' => $users, 'emails' => $emails, 'skipped' => $skipped];
     }
 
     /**

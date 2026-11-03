@@ -133,15 +133,24 @@ class VivaScheduleController extends Controller
                 + ($warnings ? ['overridden_warnings' => $warnings] : []))
             ->log($rescheduled ? 'Viva rescheduled' : 'Viva scheduled');
 
-        $sent = $this->sendInvites($application, $detail, $progress, $rescheduled);
+        [$sent, $skipped] = $this->sendInvites($application, $detail, $progress, $rescheduled);
 
-        return redirect()->route('viva.schedule.index')->with('status',
+        $redirect = redirect()->route('viva.schedule.index')->with('status',
             ($rescheduled ? 'Viva rescheduled' : 'Viva scheduled').' for '.$application->student->name
             .' on '.$detail->viva_at->format('j M Y, g:i a').'. Invitation sent to '.$sent.' '.str('recipient')->plural($sent).'.');
+
+        // Said plainly, so the AE knows to send it by hand once CGS has the address.
+        return $skipped
+            ? $redirect->with('warning', 'Invitation not emailed to an examiner: '.implode(' ', $skipped).' CGS has the examiner pool; send the calendar file once the email is updated.')
+            : $redirect;
     }
 
-    /** Best effort, after the save: the date stands even if the mail server is down. */
-    protected function sendInvites(Application $notice, VivaDetail $detail, VivaProgress $progress, bool $rescheduled): int
+    /**
+     * Best effort, after the save: the date stands even if the mail server is down.
+     *
+     * @return array{0: int, 1: array<int, string>} sent count, and why any examiner was skipped
+     */
+    protected function sendInvites(Application $notice, VivaDetail $detail, VivaProgress $progress, bool $rescheduled): array
     {
         $recipients = VivaInvite::recipients($notice, $detail, $progress->panel());
         $discuss = isset(ExaminerDivergence::forNotices([$notice->id])[$notice->id]);
@@ -157,7 +166,7 @@ class VivaScheduleController extends Controller
             report($e);
         }
 
-        return count($recipients['users']) + count($recipients['emails']);
+        return [count($recipients['users']) + count($recipients['emails']), $recipients['skipped']];
     }
 
     /** The viva record behind a notice, scoped to the AE's own department. */

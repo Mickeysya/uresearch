@@ -36,6 +36,7 @@
             <h3>{{ $row->sideLabel() }} examiner: {{ $row->examiner->name }}</h3>
             <p class="fstep-hint">
                 {{ $row->examiner->email ?? 'No email on record' }}
+                @include('hani::examiner_admin._email_badge', ['examiner' => $row->examiner])
                 &middot; Now: <b>{{ $row->stage() }}</b>
                 @if ($due && ! $row->report_received_at)
                     &middot; Report due {{ $due->format('j M Y') }}
@@ -45,6 +46,7 @@
                     <span class="status-badge pending">No reply after {{ $chaseDays }} days</span>
                 @endif
             </p>
+            @include('hani::examiner_admin._report_email', ['examiner' => $row->examiner])
 
             <form method="POST" action="{{ route('viva.examiners.update', [$progress->notice, $row]) }}" enctype="multipart/form-data">
                 @csrf

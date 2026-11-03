@@ -35,6 +35,10 @@ class Examiner extends Model
     public const STATE_AVAILABLE = 'available';
     public const STATE_UNAVAILABLE = 'unavailable';
 
+    public const EMAIL_OK = 'ok';
+    public const EMAIL_INVALID = 'invalid';
+    public const EMAIL_MISSING = 'missing';
+
     public const TYPE_INTERNAL = 'internal';
     public const TYPE_EXTERNAL = 'external';
 
@@ -55,7 +59,7 @@ class Examiner extends Model
     // template carries one for both types.
 
     protected $fillable = [
-        'name', 'email', 'department', 'faculty', 'type',
+        'name', 'email', 'email_status', 'email_flagged_at', 'email_confirmed_at', 'department', 'faculty', 'type',
         'is_active', 'unavailable_reason', 'last_examination_date', 'assigned_until',
         // External only -- see the 2026_09_17 migration for why each exists.
         'faculty_approval', 'institution', 'sector', 'expertise', 'utp_cluster',
@@ -67,6 +71,8 @@ class Examiner extends Model
     {
         return [
             'is_active' => 'boolean',
+            'email_flagged_at' => 'datetime',
+            'email_confirmed_at' => 'datetime',
             'last_examination_date' => 'date',
             'first_examination_date' => 'date',
             'assigned_until' => 'date',
@@ -115,6 +121,45 @@ class Examiner extends Model
     public function needsEmail(): bool
     {
         return blank($this->email);
+    }
+
+    /** ok | invalid | missing. Missing is derived, so it cannot go stale. */
+    public function emailStatus(): string
+    {
+        if ($this->needsEmail()) {
+            return self::EMAIL_MISSING;
+        }
+
+        return $this->email_status === self::EMAIL_INVALID ? self::EMAIL_INVALID : self::EMAIL_OK;
+    }
+
+    /** Reported not working and not yet updated. */
+    public function emailInvalid(): bool
+    {
+        return $this->emailStatus() === self::EMAIL_INVALID;
+    }
+
+    /** Missing or invalid: anything that emails this examiner skips them. */
+    public function emailNeedsUpdating(): bool
+    {
+        return $this->emailStatus() !== self::EMAIL_OK;
+    }
+
+    /** An address it is worth writing to, or null. */
+    public function usableEmail(): ?string
+    {
+        return $this->emailNeedsUpdating() ? null : $this->email;
+    }
+
+    /** Why nothing is sent to this examiner, as a sentence; null when something is. */
+    public function emailProblem(): ?string
+    {
+        return match ($this->emailStatus()) {
+            self::EMAIL_MISSING => "No email is on record for {$this->name}.",
+            self::EMAIL_INVALID => "{$this->name}'s email was reported not working"
+                .($this->email_flagged_at ? ' on '.$this->email_flagged_at->format('j M Y') : '').' and has not been updated yet.',
+            default => null,
+        };
     }
 
     public function typeLabel(): string

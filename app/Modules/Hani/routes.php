@@ -170,9 +170,12 @@ Route::middleware('auth')->group(function () {
         Route::put('/examiners/{examiner}/email', [ExaminerContactController::class, 'updateEmail'])->whereNumber('examiner')->name('examiner-admin.email.update');
     });
 
-    // The examiner page. The controller decides who may open it.
-    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)
-        ->get('/examiners/{examiner}', [ExaminerContactController::class, 'show'])->whereNumber('examiner')->name('examiner-admin.show');
+    // The examiner page and "Email not working". The controller narrows an
+    // AE to examiners in their own department or on its students' panels.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS.','.Role::ACADEMIC_EXEC)->group(function () {
+        Route::get('/examiners/{examiner}', [ExaminerContactController::class, 'show'])->whereNumber('examiner')->name('examiner-admin.show');
+        Route::post('/examiners/{examiner}/report-email', [ExaminerContactController::class, 'reportEmail'])->whereNumber('examiner')->name('examiner-admin.report-email');
+    });
 
     Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
         Route::get('/examiners/new', [ExaminerAdminController::class, 'create'])->name('examiner-admin.create');

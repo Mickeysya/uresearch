@@ -23,16 +23,24 @@
                     <th scope="row">Email</th>
                     <td>
                         {{ $examiner->email ?? 'No email on record' }}
-                        @if ($examiner->needsEmail())
-                            <span class="status-badge pending">Email needed</span>
-                        @endif
+                        @include('hani::examiner_admin._email_badge')
                     </td>
                 </tr>
+                @if ($examiner->emailInvalid())
+                    <tr>
+                        <th scope="row">Problem</th>
+                        <td>{{ $examiner->emailProblem() }} Invitations, letters and reminders skip this examiner until a new email is saved.</td>
+                    </tr>
+                @endif
             </tbody>
         </table>
 
+        @if ($canReport)
+            @include('hani::examiner_admin._report_email')
+        @endif
+
         @if ($canEditEmail)
-            <p><a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn">Update email</a></p>
+            <p><a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn">{{ $examiner->emailNeedsUpdating() ? 'Add the current email' : 'Update email' }}</a></p>
         @endif
     </div>
 

@@ -88,6 +88,7 @@
                                     @selected(old($field) == $examiner->id)
                                     @disabled(! $examiner->isEligible())>
                                 {{ $examiner->name }}, {{ $examiner->department }}
+                                @if ($examiner->emailInvalid()) [Email needs updating] @elseif ($examiner->needsEmail()) [Email needed] @endif
                                 @unless ($examiner->isEligible())
                                     ({{ $examiner->stateLabel() }})
                                 @endunless
@@ -125,6 +126,7 @@
                                     @selected(old($field) == $examiner->id)
                                     @disabled(! $examiner->isEligible())>
                                 {{ $examiner->name }}@if ($examiner->institution), {{ $examiner->institution }}@endif
+                                @if ($examiner->emailInvalid()) [Email needs updating] @elseif ($examiner->needsEmail()) [Email needed] @endif
                                 @unless ($examiner->isEligible())
                                     ({{ $examiner->stateLabel() }})
                                 @endunless

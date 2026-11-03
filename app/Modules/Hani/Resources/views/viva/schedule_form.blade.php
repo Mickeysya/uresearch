@@ -14,9 +14,12 @@
     <div class="card card-wide">
         <h3>Panel</h3>
         <p>Internal examiner: <b>{{ $panel?->internalMain?->name ?? 'Not recorded' }}</b>
-           @if ($panel?->internalMain) ({{ $panel->internalMain->email }}) @endif</p>
+           @if ($panel?->internalMain) ({{ $panel->internalMain->email ?? 'no email' }}) @include('hani::examiner_admin._email_badge', ['examiner' => $panel->internalMain]) @endif</p>
         <p>External examiner: <b>{{ $panel?->externalMain?->name ?? 'Not recorded' }}</b>
-           @if ($panel?->externalMain) ({{ $panel->externalMain->email }}) @endif</p>
+           @if ($panel?->externalMain) ({{ $panel->externalMain->email ?? 'no email' }}) @include('hani::examiner_admin._email_badge', ['examiner' => $panel->externalMain]) @endif</p>
+        @foreach ($recipients['skipped'] as $why)
+            <p class="message-warning">{{ $why }} The invitation will not be emailed to them; send the calendar file once CGS has updated the address.</p>
+        @endforeach
         <p>Supervisor: <b>{{ $student->supervisor?->name ?? 'Not recorded' }}</b></p>
         <p><a href="{{ route('viva.examiners.show', $progress->notice) }}">Examiner progress</a>: letters, acceptance, thesis and reports.</p>
 

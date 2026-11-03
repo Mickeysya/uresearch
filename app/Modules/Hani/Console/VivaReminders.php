@@ -253,6 +253,10 @@ class VivaReminders extends Command
 
                 $panel = VivaProgress::forNotices(collect([$notice]))->first()->panel();
                 $recipients = VivaInvite::recipients($notice, $detail, $panel);
+
+                foreach ($recipients['skipped'] as $why) {
+                    $this->warn("  panel_{$days}d for viva #{$notice->id}: examiner skipped. {$why}");
+                }
                 $when = $detail->viva_at->format('l, j F Y, g:i a');
 
                 yield [$notice, "panel_{$days}d", 'seq:'.$detail->schedule_sequence, $recipients['users'], $recipients['emails'], new VivaReminder(

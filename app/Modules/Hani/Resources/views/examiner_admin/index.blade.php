@@ -330,7 +330,9 @@
                                     <a href="{{ route('examiner-admin.show', $examiner) }}">{{ $examiner->name }}</a>
                                     {{-- CGS's pool file has no email column; nothing that
                                          writes to an examiner will reach this one yet. --}}
-                                    @if ($examiner->needsEmail())
+                                    @if ($examiner->emailInvalid())
+                                        <span class="examiner-state-badge tone-critical">Email needs updating</span>
+                                    @elseif ($examiner->needsEmail())
                                         <span class="examiner-state-badge tone-warn">Email needed</span>
                                     @endif
                                     {{-- Support\DuplicateDetector: flagged, never blocked. --}}

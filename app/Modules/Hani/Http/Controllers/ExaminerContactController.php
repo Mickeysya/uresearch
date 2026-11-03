@@ -28,6 +28,7 @@ class ExaminerContactController extends Controller
             'examiner' => $examiner->load('expertiseKeywords', 'contactHistory.changedBy'),
             'canEditAll' => $request->user()->role === Role::SENIOR_EXEC_CGS,
             'canEditEmail' => $this->canEditEmail($request),
+            'canReport' => app(ExaminerContact::class)->canReport($request->user(), $examiner),
         ]);
     }
 
@@ -57,13 +58,42 @@ class ExaminerContactController extends Controller
             ->with('status', $changed ? "Email for {$examiner->name} updated." : 'That is already the email on record. Nothing was changed.');
     }
 
+    /**
+     * "Email not working", from the examiner page or the viva examiner
+     * progress screen. A reason is required; it goes to CGS and into the
+     * contact history.
+     */
+    public function reportEmail(Request $request, Examiner $examiner, ExaminerContact $contact)
+    {
+        abort_unless($contact->canReport($request->user(), $examiner), 403);
+
+        if ($examiner->needsEmail()) {
+            return back()->with('error', "No email is on record for {$examiner->name}, so there is nothing to report.");
+        }
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+        ], [
+            'reason.required' => 'Say what happened, e.g. the invitation bounced.',
+        ]);
+
+        $contact->report($examiner, $request->user(), $data['reason']);
+
+        return back()->with('status', "{$examiner->name}'s email has been marked as not working. CGS has been asked to update it; nothing is sent to this examiner until then.");
+    }
+
     protected function canEditEmail(Request $request): bool
     {
         return in_array($request->user()->role, [Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS], true);
     }
 
+    /** CGS, or an Academic Executive who could report this examiner's email. */
     protected function authoriseView(Request $request, Examiner $examiner): void
     {
-        abort_unless(in_array($request->user()->role, [Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS], true), 403);
+        abort_unless(
+            in_array($request->user()->role, [Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS], true)
+                || app(ExaminerContact::class)->canReport($request->user(), $examiner),
+            403,
+        );
     }
 }

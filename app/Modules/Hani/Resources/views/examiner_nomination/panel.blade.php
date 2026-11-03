@@ -25,8 +25,8 @@
                         <td>{{ $label }}</td>
                         <td>
                             {{ $examiner?->name ?? 'Empty' }}
-                            @if ($examiner?->needsEmail())
-                                <span class="coi-flag" style="display: block; font-size: var(--text-2xs); color: var(--warning-fg);">Email needed before a letter can be sent.</span>
+                            @if ($examiner?->emailNeedsUpdating())
+                                <span class="coi-flag" style="display: block; font-size: var(--text-2xs); color: var(--warning-fg);">{{ $examiner->emailInvalid() ? 'Email needs updating' : 'Email needed' }} before a letter can be sent.</span>
                             @endif
                         </td>
                         <td>

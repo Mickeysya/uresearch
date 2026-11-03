@@ -77,8 +77,8 @@ class ReleasedExaminerProviderTest extends TestCase
         $this->assertSame('PhD', $panel['student']['degree']);
         $this->assertSame(['name' => 'Dr. Aisyah Rahman', 'email' => 'sup@test.my'], $panel['supervisor']);
         $this->assertSame('Thesis 22000001', $panel['thesis_title']);
-        $this->assertSame(['name', 'email', 'department', 'faculty'], array_keys($panel['examiners']['internal_main']));
-        $this->assertSame(['name', 'email', 'institution', 'department'], array_keys($panel['examiners']['external_main']));
+        $this->assertSame(['name', 'email', 'email_problem', 'department', 'faculty'], array_keys($panel['examiners']['internal_main']));
+        $this->assertSame(['name', 'email', 'email_problem', 'institution', 'department'], array_keys($panel['examiners']['external_main']));
         $this->assertNull($panel['examiners']['external_backup'], 'An empty backup seat is null.');
 
         $this->assertNull(app(ReleasedExaminerProvider::class)->panelForStudent(
