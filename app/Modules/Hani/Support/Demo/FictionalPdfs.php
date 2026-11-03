@@ -119,6 +119,17 @@ final class FictionalPdfs
         </body></html>');
     }
 
+    /** A plain one-page fictional document: a form, a letter, a viva report. */
+    public static function document(string $heading, array $lines = []): string
+    {
+        $e = fn ($v) => htmlspecialchars((string) $v, ENT_QUOTES);
+
+        return self::render('<html><head><style>body { font-family: "Helvetica"; font-size: 11pt; } h1 { font-size: 15pt; }</style></head><body>'
+            .'<h1>'.$e($heading).'</h1>'
+            .implode('', array_map(fn ($l) => '<p>'.$e($l).'</p>', $lines))
+            .'<p style="margin-top: 30pt; font-size: 8pt;">Fictional document generated for the UResearch demo.</p></body></html>');
+    }
+
     private static function render(string $html): string
     {
         $options = new Options();

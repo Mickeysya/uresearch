@@ -191,6 +191,49 @@ follow-up, not currently tracked as required:
 - Automated reminders as correction/hardbound deadlines approach — `TODO.md`'s
   cross-cutting section notes scheduled commands are still a gap generally.
 
+## Demo data (`HaniDemoSeeder`)
+
+Fictional, on demand only, never called from `DatabaseSeeder`:
+
+```bash
+docker exec uresearch-app php artisan db:seed --class="App\Modules\Hani\Database\Seeders\HaniDemoSeeder"
+```
+
+Run it after `migrate`, and again whenever the demo should look fresh.
+**Every date is relative to the day it runs:**
+- The dataset's dates (`Database/demo/hani_demo_dataset.json`) are written
+  as of `dates_relative_to` and moved to today, so the On Gap examiners stay
+  On Gap.
+- Each run rebuilds the demo students' viva, softbound and nomination
+  records from scratch, so S07's viva is always 7 days away.
+- Running it twice gives the same picture.
+- It never changes the shared test accounts or any other module's records.
+
+**Accounts.** The demo students and supervisors are `@example.com`, with
+password `password`, like the test accounts. Their approvers are the shared
+test accounts:
+- the candidate's department AE, for example `ae@utp.edu.my` for Computing
+  and `ae.petroleum@utp.edu.my` for Petroleum Engineering
+- `seniorexec@`, `director@` and `dean@`
+
+| Student | Email | Programme / department | Stage |
+|---|---|---|---|
+| S01 Aiman Hakim | `aiman.roslan@example.com` | MSc FT, Computing | Not started: the full live walkthrough (MSc) |
+| S02 Nurin Batrisyia | `nurin.azlan@example.com` | PhD FT, Petroleum Eng. | Notice waiting for the AE: the live walkthrough (PhD) |
+| S03 Harith Iskandar | `harith.z@example.com` | MSc PT, Chemical Eng. | Nomination at CGS compile; clash on Firdaus Kamarudin with S04 |
+| S04 Siti Khadijah | `khadijah.mazlan@example.com` | PhD FT, Civil & Env. Eng. | Nomination at the Senior Director; "Hassan bin Omar" vs S10's "Hassan Omar, PhD" duplicate |
+| S05 Amirah Sofea | `amirah.kamal@example.com` | MSc FT, Management | Released; softbound returned (Turnitin receipt 45 days old: System checks warn) |
+| S06 Lee Jia Hui | `lee.jiahui@example.com` | PhD PT, Mechanical Eng. | Ready to schedule; examiner reports diverge (Internal 2, External 4: major) |
+| S07 Muhammad Danish | `danish.faisal@example.com` | MSc FT, Electrical & Electronics Eng. | Viva in 7 days: `php artisan viva:reminders` sends the 7-day reminder |
+| S08 Tan Yi Xuan | `tan.yixuan@example.com` | MSc FT, Computing | Viva 14 days ago, result category 2; uploads corrections, then the AE accepts |
+| S09 Nur Aleesya | `aleesya.hisham@example.com` | PhD FT, Applied Sciences | Viva 14 days ago, result category 4; examiners held, Senior Exec asked to log a re-viva |
+| S10 Kavitha Selvaraj | `kavitha.selvaraj@example.com` | MSc PT, Chemical Eng. | Released nomination (the duplicate partner); its re-viva rounds come in Prompt 3 |
+
+The dataset says S03's clash partner is S10. Both are in Chemical
+Engineering, though, and a clash is by definition across departments, so
+the clash is with S04 instead. Every chain runs through `WorkflowEngine`;
+only Hani's own tables are written directly.
+
 ## Tests
 
 `tests/Feature/Hani/` — 24 cases.
