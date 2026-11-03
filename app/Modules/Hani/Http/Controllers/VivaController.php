@@ -13,6 +13,7 @@ use App\Modules\Hani\Models\VivaEligibility;
 use App\Modules\Hani\Notifications\VivaAwaitingAcademicExec;
 use App\Modules\Hani\Notifications\VivaNominateExaminers;
 use App\Modules\Hani\Notifications\VivaNoticeSubmitted;
+use App\Modules\Hani\Support\Eligibility\EligibilityResult;
 use App\Modules\Hani\Support\ModuleTracker;
 use App\Modules\Hani\Support\VivaChecklist;
 use App\Modules\Hani\Support\VivaProgress;
@@ -44,7 +45,13 @@ class VivaController extends Controller
     {
         $student = $request->user();
         $record = VivaChecklist::recordFor($student);
-        $eligible = VivaChecklist::isEligible($student, $record);
+        $openNotice = VivaChecklist::openNotice($student);
+
+        // Once filed, show what the notice was filed on; before, check live.
+        $checks = $openNotice && $record?->system_checks
+            ? $record->systemResults()
+            : VivaChecklist::systemChecks($student);
+        $eligible = VivaChecklist::isEligible($student, $record, $checks);
         $progress = VivaProgress::for($student);
 
         return view('hani::viva.eligibility', [
@@ -52,7 +59,8 @@ class VivaController extends Controller
             'items' => VivaChecklist::itemsFor($student),
             'record' => $record,
             'eligible' => $eligible,
-            'openNotice' => VivaChecklist::openNotice($student),
+            'checks' => $checks,
+            'openNotice' => $openNotice,
             'progress' => $progress,
             'tracker' => ModuleTracker::viva($progress, $eligible),
             'earliestSoftbound' => $this->earliestSoftbound(),
@@ -108,9 +116,10 @@ class VivaController extends Controller
             $this->saveTicks($request, $student);
         }
 
-        if (! VivaChecklist::isEligible($student)) {
-            return redirect()->route('viva.eligibility')->withInput()
-                ->with('error', 'Confirm every requirement on the checklist before submitting the notice.');
+        $checks = VivaChecklist::systemChecks($student);
+
+        if ($reason = VivaChecklist::blockReason($student, null, $checks)) {
+            return redirect()->route('viva.eligibility')->withInput()->with('error', $reason);
         }
 
         $limits = config('hani.notice');
@@ -144,7 +153,18 @@ class VivaController extends Controller
             'publication_proof.max' => 'Publication proof must be 5 MB or smaller.',
         ]);
 
-        $application = DB::transaction(function () use ($request, $student, $data, $engine, $documents) {
+        $application = DB::transaction(function () use ($request, $student, $data, $engine, $documents, $checks) {
+            // What the notice was filed on: the system's results, and a
+            // verified item recorded as met.
+            $verified = collect($checks)->filter(fn (EligibilityResult $r) => $r->status === EligibilityResult::VERIFIED)
+                ->map(fn () => true)->all();
+            VivaEligibility::updateOrCreate(['student_id' => $student->id], $verified + [
+                'system_checks' => array_map(fn (EligibilityResult $r) => $r->toArray(), $checks),
+                'system_checked_at' => now(),
+                'verified_by_id' => null,
+                'verified_at' => null,
+            ]);
+
             $application = Application::create([
                 'student_id' => $student->id,
                 'module_type' => $this->moduleKey(),
@@ -230,6 +250,8 @@ class VivaController extends Controller
     /**
      * The shared decide, plus the guideline's next step: once the AE has
      * acknowledged the notice, the supervisor is asked to nominate examiners.
+     * Acknowledging also confirms the eligibility summary on the card
+     * (verified_by_id / verified_at); that is not a stage of its own.
      * Authorisation and the stage move stay the engine's.
      */
     public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
@@ -242,7 +264,15 @@ class VivaController extends Controller
         ]);
 
         try {
-            $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
+            DB::transaction(function () use ($application, $request, $engine, $data) {
+                $eligibility = VivaEligibility::where('student_id', $application->student_id)->lockForUpdate()->first();
+
+                $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
+
+                if ($application->status === Application::STATUS_APPROVED && $eligibility) {
+                    $eligibility->forceFill(['verified_by_id' => $request->user()->id, 'verified_at' => now()])->save();
+                }
+            });
         } catch (UnauthorizedException $e) {
             return back()->with('error', $e->getMessage());
         } catch (\LogicException $e) {
@@ -267,7 +297,7 @@ class VivaController extends Controller
             }
         }
 
-        return back()->with('status', "Notice #{$application->id} acknowledged."
+        return back()->with('status', "Notice #{$application->id} acknowledged and eligibility confirmed."
             .($supervisor ? " {$supervisor->name} has been asked to nominate examiners." : ' No supervisor is recorded for this student, so nobody was asked to nominate examiners.'));
     }
 
@@ -279,6 +309,10 @@ class VivaController extends Controller
             ->get()
             ->keyBy('application_id');
 
-        return view('hani::viva.queue', $queue + ['details' => $details]);
+        $eligibility = VivaEligibility::whereIn('student_id', $queue['applications']->pluck('student_id'))
+            ->get()
+            ->keyBy('student_id');
+
+        return view('hani::viva.queue', $queue + ['details' => $details, 'eligibility' => $eligibility]);
     }
 }

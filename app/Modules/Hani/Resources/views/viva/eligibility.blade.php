@@ -56,20 +56,31 @@
                     @endif
 
                     @foreach ($items as $column => $item)
+                        @php
+                            $check = $checks[$column] ?? \App\Modules\Hani\Support\Eligibility\EligibilityResult::selfDeclared();
+                            $bySystem = $check->status !== \App\Modules\Hani\Support\Eligibility\EligibilityResult::SELF_DECLARED;
+                            $met = $bySystem ? ! $check->blocks() : (bool) old($column, $record?->$column);
+                        @endphp
                         <div class="checkbox-row">
-                            <input type="checkbox" name="{{ $column }}" id="{{ $column }}" value="1"
+                            {{-- An item the system checked cannot be ticked or unticked by hand. --}}
+                            <input type="checkbox" @unless ($bySystem) name="{{ $column }}" @endunless id="{{ $column }}" value="1"
                                    data-check
-                                   @checked(old($column, $record?->$column))>
+                                   @checked($met) @disabled($bySystem)>
                             <label for="{{ $column }}">{{ $item['label'] }}</label>
+                            @include('hani::viva._eligibility_badge', ['check' => $check])
                         </div>
-                        <p class="fstep-hint">{{ $item['hint'] }}</p>
+                        <p class="fstep-hint">{{ $check->message && $bySystem ? $check->message : $item['hint'] }}</p>
+                        @if ($check->blocks())
+                            <p class="field-error">{{ $check->message }}</p>
+                        @endif
                         @error($column) <p class="field-error">{{ $message }}</p> @enderror
                     @endforeach
 
                     <p class="fstep-hint">
-                        <span data-count>{{ collect($items)->keys()->filter(fn ($c) => $record?->$c)->count() }}</span>
-                        of {{ count($items) }} requirements confirmed. These are self-declared;
-                        CGS may ask for evidence.
+                        <span data-count>{{ collect($items)->keys()->filter(fn ($c) => ($checks[$c] ?? null)?->status === 'verified' || (($checks[$c] ?? null)?->status === 'self_declared' && $record?->$c))->count() }}</span>
+                        of {{ count($items) }} requirements confirmed. Items marked "Verified by system"
+                        were checked against your candidature record; the others are self-declared,
+                        and CGS may ask for evidence.
                     </p>
 
                     @if (! $openNotice)

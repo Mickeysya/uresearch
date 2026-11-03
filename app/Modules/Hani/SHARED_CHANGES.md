@@ -318,3 +318,49 @@ again, as phpunit.xml already intends. Hani's and Nureen's per-folder traits
 ```xml
 <env name="QUEUE_CONNECTION" value="sync" force="true"/>
 ```
+
+---
+
+## 8. New Core contract: `SuppliesCandidature`
+
+**Status:** proposed, not applied.
+
+**Reason.** "Within candidacy period" is now checked by the system before
+a student files the Notice of Thesis Submission. The candidature start date
+and programme type live in Norhanis's RPD masterlist (`candidacies`). With no
+contract, Hani's `Support/Eligibility/CandidacyPeriodSource` reads that table
+directly:
+- read-only
+- guarded with `Schema::hasTable()` / `hasColumns()`
+- never importing her classes
+
+If she renames a column, the check quietly falls back to "Self-declared"
+instead of breaking. A contract makes the dependency explicit.
+
+**Impact.** Additive.
+- **Norhanis:** implements and binds it, from `candidacies`.
+- **Hani:** prefers it when bound and keeps the guarded lookup as the
+  fallback. No change for anyone else.
+
+### File: `app/Modules/Core/Contracts/SuppliesCandidature.php` (new)
+
+```php
+<?php
+
+namespace App\Modules\Core\Contracts;
+
+/**
+ * A student's candidature, for modules that need the clock without owning
+ * it. Implemented by the module that keeps the RPD masterlist (Norhanis).
+ */
+interface SuppliesCandidature
+{
+    /**
+     * Null when the student has no candidacy record.
+     *
+     * @return array{start_date: \DateTimeInterface, programme_type: string, status: string}|null
+     *         programme_type: msc_ft | msc_pt | phd_ft | phd_pt
+     */
+    public function candidatureFor(int $studentId): ?array;
+}
+```
