@@ -110,6 +110,16 @@ return [
         ],
     ],
 
+    'sweep' => [
+        // When `examiners:sweep` runs each day. Provisional.
+        'daily_at' => '07:30',
+
+        // After the viva, remind the Academic Executive to mark the
+        // evaluation complete, then again every this many days while it stays
+        // open. Provisional.
+        'remind_every_days' => 7,
+    ],
+
     'import' => [
         // Largest pool file accepted, in KB. Provisional.
         'max_kb' => 5120,

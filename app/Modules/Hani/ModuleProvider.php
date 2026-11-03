@@ -3,12 +3,14 @@
 namespace App\Modules\Hani;
 
 use App\Modules\Core\Services\ModuleRegistry;
+use App\Modules\Hani\Console\ExaminersSweep;
 use App\Modules\Hani\Support\Matching\ExaminerMatcher;
 use App\Modules\Hani\Support\Matching\TfIdfMatcher;
 use App\Modules\Hani\Workflows\ExaminerNominationWorkflow;
 use App\Modules\Hani\Workflows\ReVivaWorkflow;
 use App\Modules\Hani\Workflows\VivaSoftboundWorkflow;
 use App\Modules\Hani\Workflows\VivaVoceWorkflow;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -29,6 +31,21 @@ class ModuleProvider extends ServiceProvider
 
     public function boot(ModuleRegistry $registry): void
     {
+        if ($this->app->runningInConsole()) {
+            $this->commands([ExaminersSweep::class]);
+        }
+
+        // Scheduled from here, not routes/console.php (a shared file): the
+        // scheduler is resolved only when `schedule:run`/`schedule:work` asks
+        // for it, and this adds the job then. SHARED_CHANGES.md has the
+        // one-line routes/console.php equivalent if the team prefers it there
+        // -- add one or the other, not both.
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command('examiners:sweep')
+                ->dailyAt((string) config('hani.sweep.daily_at', '07:30'))
+                ->withoutOverlapping();
+        });
+
         $registry->register(new ExaminerNominationWorkflow());
         $registry->register(new ReVivaWorkflow());
         $registry->register(new VivaVoceWorkflow());

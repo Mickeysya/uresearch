@@ -24,7 +24,9 @@
                         @continue
                     @endif
                     <p>{{ $seat }}: <b>{{ $examiner->name }}</b>
-                        @if ($examiner->assigned_until)
+                        @if ($examiner->assigned_until?->isPast())
+                            <span class="message-warning" style="display: block;">Tie-up ended on {{ $examiner->assigned_until->format('j M Y') }} without the evaluation being marked complete. The examiner shows as available again but their cooling-off period has not started.</span>
+                        @elseif ($examiner->assigned_until)
                             tied up until {{ $examiner->assigned_until->format('j M Y') }}
                         @elseif (str_contains($seat, 'backup'))
                             (standby)

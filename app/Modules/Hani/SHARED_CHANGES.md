@@ -59,3 +59,30 @@ if (request()->routeIs(method_exists($module, 'navPattern') ? $module->navPatter
 ```
 
 so that "My Application" stays expanded on every viva page.
+
+---
+
+## 2. `examiners:sweep` in `routes/console.php` (optional alternative)
+
+**Status:** not needed. The command already schedules itself from
+`Hani\ModuleProvider::boot()` through the scheduler hook
+(`callAfterResolving(Schedule::class, …)`), and it appears in
+`php artisan schedule:list`. This entry is for the team in case they would
+rather keep every schedule visible in one file.
+
+**Reason.** Daily housekeeping: it reminds the Academic Executive when the
+viva date has passed but the evaluation has not been marked complete, and it
+purges stale pool-import previews. It is idempotent, using a log table with a
+unique key, and has `--dry-run`.
+
+**Impact.** None on other modules. If this line is added, **remove the
+`callAfterResolving` block from `Hani\ModuleProvider`**. Otherwise the job is
+scheduled twice. It would still send only once, because of the log table.
+
+### File: `routes/console.php`
+
+```php
+// Hani — examiner housekeeping: evaluation-overdue reminders after the viva,
+// stale import previews purged. See App\Modules\Hani\Console\ExaminersSweep.
+Schedule::command('examiners:sweep')->dailyAt('07:30')->withoutOverlapping();
+```
