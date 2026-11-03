@@ -27,7 +27,7 @@
                                 <x-core::doc-link :document="$document">{{ $document->doc_type }}</x-core::doc-link>
                                 <span>{{ $document->original_name }}</span>
                             </span>
-                            <a class="btn-secondary" href="{{ $document->url() }}">Download</a>
+                            <x-core::doc-link :document="$document" action="download" class="btn-secondary">Download</x-core::doc-link>
                         </li>
                     @endforeach
                 </ul>

@@ -70,7 +70,7 @@
                                 <x-core::doc-link :document="$doc" class="doc-name" data-region-swap-ignore>{{ $doc->original_name }}</x-core::doc-link>
                                 <p class="doc-meta">
                                     {{ $doc->doc_type }}
-                                    &middot; <a href="{{ $doc->url() }}" data-region-swap-ignore>Download</a>
+                                    &middot; <x-core::doc-link :document="$doc" action="download" data-region-swap-ignore>Download</x-core::doc-link>
                                     &middot; {{ $moduleLabels[$doc->application->module_type] ?? $doc->application->module_type }}
                                     &middot; <a href="{{ route('applications.show', $doc->application) }}" data-region-swap-ignore>{{ $doc->application->reference() }}</a>
                                     @unless ($isOwnList)

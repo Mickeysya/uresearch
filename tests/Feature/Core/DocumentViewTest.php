@@ -68,4 +68,17 @@ class DocumentViewTest extends TestCase
             ->assertSee('data-preview-url="'.$doc->viewUrl().'"', false)
             ->assertSee('id="file-preview"', false);
     }
+
+    public function test_a_missing_file_shows_greyed_out_buttons_that_link_nowhere(): void
+    {
+        $doc = $this->document('evidence.pdf', '%PDF-1.4 test');
+        Storage::disk('local')->delete($doc->path);
+
+        $html = $this->actingAs($doc->application->student)->get(route('applications.show', $doc->application))
+            ->assertOk()->getContent();
+
+        $this->assertStringContainsString('class="doc-link-disabled"', $html);
+        $this->assertStringNotContainsString($doc->viewUrl(), $html);
+        $this->assertStringNotContainsString('href="'.$doc->url().'"', $html);
+    }
 }

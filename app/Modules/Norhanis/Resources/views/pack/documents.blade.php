@@ -33,7 +33,7 @@
                     <b>{{ $selected->doc_type }}</b>
                     <span>{{ $selected->original_name }} &middot; {{ $application->module()->label() }} Application #{{ $application->id }}</span>
                 </div>
-                <a class="btn-secondary" href="{{ $selected->url() }}">Download</a>
+                <x-core::doc-link :document="$selected" action="download" class="btn-secondary">Download</x-core::doc-link>
             </div>
 
             @php($type = $pack::previewType($selected))
@@ -46,7 +46,7 @@
             @else
                 <div class="pv-none">
                     <span>{{ $selected->original_name }} cannot be shown in the browser.</span>
-                    <a class="btn-secondary" href="{{ $selected->url() }}">Download it</a>
+                    <x-core::doc-link :document="$selected" action="download" class="btn-secondary">Download it</x-core::doc-link>
                 </div>
             @endif
         </div>
@@ -77,7 +77,7 @@
                                 <a href="{{ route('norhanis.pack.documents', [$application, 'document' => $document->id]) }}">{{ $document->doc_type }}</a>
                                 <span>{{ $document->original_name }}</span>
                             </div>
-                            <a class="btn-secondary" href="{{ $document->url() }}">Download</a>
+                            <x-core::doc-link :document="$document" action="download" class="btn-secondary">Download</x-core::doc-link>
                         </li>
                     @endforeach
                 </ul>

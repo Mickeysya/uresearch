@@ -14,7 +14,7 @@
 
         @if ($currentDocument)
             <p>Current file: <x-core::doc-link :document="$currentDocument">{{ $currentDocument->original_name }}</x-core::doc-link>
-               · <a href="{{ $currentDocument->url() }}">Download</a></p>
+               · <x-core::doc-link :document="$currentDocument" action="download">Download</x-core::doc-link></p>
         @else
             <p style="color: var(--text-grey);">No supporting document uploaded yet.</p>
         @endif

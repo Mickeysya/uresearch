@@ -101,7 +101,7 @@
                             <span class="trk-file-text">
                                 @if ($doc->visibleTo($viewer))
                                     <x-core::doc-link :document="$doc">{{ $doc->original_name }}</x-core::doc-link>
-                                    · <a href="{{ $doc->url() }}">Download</a>
+                                    · <x-core::doc-link :document="$doc" action="download">Download</x-core::doc-link>
                                 @else
                                     <span>{{ $doc->original_name }}</span>
                                 @endif

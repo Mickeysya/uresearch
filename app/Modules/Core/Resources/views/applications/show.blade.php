@@ -189,13 +189,17 @@
                             @endif
                             <div class="trk-actions">
                                 <x-core::doc-link :document="$issued['document']" class="{{ empty($issued['revoked_at']) ? 'btn' : 'btn-secondary' }}">View letter</x-core::doc-link>
-                                <a href="{{ $issued['document']->url() }}" class="btn-secondary">Download (PDF)</a>
+                                <x-core::doc-link :document="$issued['document']" action="download" class="btn-secondary">Download (PDF)</x-core::doc-link>
                                 @if (! empty($issued['verify_url']) && empty($issued['revoked_at']))
                                     <a href="{{ $issued['verify_url'] }}" class="btn-secondary">Verification page</a>
                                 @endif
                             </div>
                         @else
                             <p class="trk-muted">Your letter will appear here once it is issued.</p>
+                            <div class="trk-actions">
+                                <x-core::doc-link class="btn-secondary">View letter</x-core::doc-link>
+                                <x-core::doc-link action="download" class="btn-secondary">Download (PDF)</x-core::doc-link>
+                            </div>
                         @endif
                     </div>
                 @endif
@@ -207,7 +211,7 @@
                                 <span class="trk-file-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'doc'])</span>
                                 <span class="trk-file-text">
                                     <x-core::doc-link :document="$doc">{{ $doc->original_name }}</x-core::doc-link>
-                                    <span class="trk-muted">{{ $doc->doc_type }}@if ($size($doc->size_bytes)) · {{ $size($doc->size_bytes) }}@endif · <a href="{{ $doc->url() }}">Download</a></span>
+                                    <span class="trk-muted">{{ $doc->doc_type }}@if ($size($doc->size_bytes)) · {{ $size($doc->size_bytes) }}@endif · <x-core::doc-link :document="$doc" action="download">Download</x-core::doc-link></span>
                                 </span>
                             </li>
                         @endforeach

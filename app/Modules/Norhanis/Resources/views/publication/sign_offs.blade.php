@@ -35,10 +35,10 @@
     <div class="app-item">
         <h4>Authorship Certification</h4>
 
-        @if ($form = $generated->get('Authorship Certification Form'))
-            <p><x-core::doc-link :document="$form" class="btn-secondary">View the signed form</x-core::doc-link>
-               <a href="{{ route('documents.show', $form) }}" class="btn-secondary">Download (PDF)</a></p>
-        @endif
+        {{-- Greyed out until the form has been generated. --}}
+        @php($form = $generated->get('Authorship Certification Form'))
+        <p><x-core::doc-link :document="$form" class="btn-secondary">View the signed form</x-core::doc-link>
+           <x-core::doc-link :document="$form" action="download" class="btn-secondary">Download (PDF)</x-core::doc-link></p>
 
         <table class="recent-activity-table" style="margin-top: 12px;">
             <tr>
@@ -102,10 +102,10 @@
                     <p><b>Additional comments:</b> {{ $evaluation->additional_comments }}</p>
                 @endif
 
-                @if ($sheet = $generated->get($evaluation->sheetLabel()))
-                    <p><x-core::doc-link :document="$sheet" class="btn-secondary">View the signed sheet</x-core::doc-link>
-                       <a href="{{ route('documents.show', $sheet) }}" class="btn-secondary">Download (PDF)</a></p>
-                @endif
+                {{-- Greyed out until the sheet has been generated. --}}
+                @php($sheet = $generated->get($evaluation->sheetLabel()))
+                <p><x-core::doc-link :document="$sheet" class="btn-secondary">View the signed sheet</x-core::doc-link>
+                   <x-core::doc-link :document="$sheet" action="download" class="btn-secondary">Download (PDF)</x-core::doc-link></p>
 
                 @if ($evaluation->responded_at)
                     <p><b>Your response</b> ({{ $evaluation->responded_at->format('j M Y, g:ia') }}): {{ $evaluation->response }}</p>
