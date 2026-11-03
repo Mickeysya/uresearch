@@ -181,6 +181,42 @@ return [
         'title_pages' => 2,
     ],
 
+    'examiner_progress' => [
+        // Chase the AE when a letter went out this many days ago and the
+        // examiner has neither accepted nor rejected. Provisional.
+        'ack_chase_days' => 14,
+
+        // The examiner's report is due this many weeks after they
+        // acknowledge receipt of the THESIS. CONFIRMED (4 Master / 6 PhD).
+        'report_weeks' => ['MSC' => 4, 'PHD' => 6],
+
+        // Optional 1-5 ratings on the examiner's report form. Provisional
+        // wording: CGS's form has 8 general criteria and 12 thesis sections;
+        // these names are our paraphrase until we have the form itself.
+        'criteria' => [
+            'originality' => 'Originality',
+            'contribution' => 'Contribution to knowledge',
+            'literature' => 'Grasp of the literature',
+            'methodology' => 'Soundness of the methodology',
+            'analysis' => 'Analysis and interpretation',
+            'presentation' => 'Organisation and presentation',
+            'language' => 'Language and style',
+            'publication' => 'Publication potential',
+        ],
+        'sections' => [
+            'title' => 'Title', 'abstract' => 'Abstract', 'introduction' => 'Introduction',
+            'literature_review' => 'Literature review', 'methodology' => 'Methodology',
+            'results' => 'Results', 'discussion' => 'Discussion', 'conclusion' => 'Conclusion',
+            'recommendations' => 'Recommendations', 'references' => 'References',
+            'appendices' => 'Appendices', 'overall' => 'Overall presentation',
+        ],
+    ],
+
+    'reminders' => [
+        // When `viva:reminders` runs each day. Provisional.
+        'daily_at' => '07:45',
+    ],
+
     'sweep' => [
         // When `examiners:sweep` runs each day. Provisional.
         'daily_at' => '07:30',

@@ -7,6 +7,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaSoftboundDetail;
 use App\Modules\Hani\Notifications\VivaScheduled;
+use App\Modules\Hani\Support\ExaminerDivergence;
 use App\Modules\Hani\Support\VivaInvite;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Http\RedirectResponse;
@@ -44,6 +45,7 @@ class VivaScheduleController extends Controller
             'ready' => $groups->get('ready', collect()),
             'scheduled' => $groups->get('scheduled', collect())->sortBy(fn ($p) => $p->detail->viva_at),
             'waiting' => $groups->get('waiting', collect()),
+            'divergence' => ExaminerDivergence::forNotices($notices->pluck('id')),
         ]);
     }
 
@@ -65,6 +67,7 @@ class VivaScheduleController extends Controller
             'panel' => $progress->panel(),
             'detail' => $progress->detail,
             'recipients' => VivaInvite::recipients($application, $progress->detail, $progress->panel()),
+            'divergence' => ExaminerDivergence::forNotices([$application->id])[$application->id] ?? null,
         ]);
     }
 
@@ -124,7 +127,8 @@ class VivaScheduleController extends Controller
     protected function sendInvites(Application $notice, VivaDetail $detail, VivaProgress $progress, bool $rescheduled): int
     {
         $recipients = VivaInvite::recipients($notice, $detail, $progress->panel());
-        $notification = new VivaScheduled($notice, $detail, $rescheduled);
+        $discuss = isset(ExaminerDivergence::forNotices([$notice->id])[$notice->id]);
+        $notification = new VivaScheduled($notice, $detail, $rescheduled, $discuss);
 
         try {
             Notification::send($recipients['users'], $notification);

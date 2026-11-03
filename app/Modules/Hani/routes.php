@@ -10,6 +10,7 @@ use App\Modules\Hani\Http\Controllers\ExaminerSuggestionController;
 use App\Modules\Hani\Http\Controllers\PanelController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\VivaController;
+use App\Modules\Hani\Http\Controllers\VivaExaminerController;
 use App\Modules\Hani\Http\Controllers\VivaScheduleController;
 use App\Modules\Hani\Http\Controllers\VivaSoftboundController;
 use Illuminate\Support\Facades\Route;
@@ -52,6 +53,14 @@ Route::middleware('auth')->group(function () {
         Route::get('/viva/scheduling', [VivaScheduleController::class, 'index'])->name('viva.schedule.index');
         Route::get('/viva/{application}/schedule', [VivaScheduleController::class, 'edit'])->name('viva.schedule.edit');
         Route::post('/viva/{application}/schedule', [VivaScheduleController::class, 'update'])->name('viva.schedule.update');
+    });
+
+    // Examiner progress per viva: letter, acceptance, thesis, report. The
+    // candidate's own AE or the Senior Executive (the controller checks).
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS)->group(function () {
+        Route::get('/viva/{application}/examiners', [VivaExaminerController::class, 'show'])->name('viva.examiners.show');
+        Route::post('/viva/{application}/examiners/{row}', [VivaExaminerController::class, 'update'])->name('viva.examiners.update');
+        Route::get('/viva/{application}/examiners/{row}/report', [VivaExaminerController::class, 'report'])->name('viva.examiners.report');
     });
 
     // Supervisor: their own candidates' vivas, read only.

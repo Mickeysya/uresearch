@@ -18,6 +18,14 @@
         <p>External examiner: <b>{{ $panel?->externalMain?->name ?? 'Not recorded' }}</b>
            @if ($panel?->externalMain) ({{ $panel->externalMain->email }}) @endif</p>
         <p>Supervisor: <b>{{ $student->supervisor?->name ?? 'Not recorded' }}</b></p>
+        <p><a href="{{ route('viva.examiners.show', $progress->notice) }}">Examiner progress</a>: letters, acceptance, thesis and reports.</p>
+
+        @if ($divergence)
+            <p class="{{ $divergence['level'] === 'major' ? 'message-error' : 'message-warning' }}">
+                <b>Examiner reports {{ $divergence['level'] === 'major' ? 'diverge sharply' : 'differ' }}:</b> {{ $divergence['text'] }}.
+                The chairman's invitation will ask the panel to discuss the reports at the pre-viva meeting.
+            </p>
+        @endif
 
         @if ($detail->isScheduled())
             <p class="message-warning">

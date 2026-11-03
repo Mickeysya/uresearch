@@ -27,7 +27,10 @@ class VivaScheduled extends Notification implements ShouldQueue
         protected Application $notice,
         protected VivaDetail $detail,
         protected bool $rescheduled,
-    ) {}
+        protected bool $discussReports = false,
+    ) {
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {
@@ -52,6 +55,13 @@ class VivaScheduled extends Notification implements ShouldQueue
             ->line('Venue: '.$this->detail->venue)
             ->line('Chairman: '.$this->detail->chair_name);
 
+        // The examiners' reports disagree: the chairman alone is asked to
+        // raise it at the pre-viva meeting. Neutral on purpose -- no
+        // categories, and nobody else sees the line.
+        if ($this->discussReports && $this->isChairman($notifiable)) {
+            $mail->line('The examiners\' preliminary reports differ in their recommendations. Please discuss them with the panel at the pre-viva meeting.');
+        }
+
         if ($notifiable instanceof User) {
             $mail->action('View in UResearch', route($notifiable->is($student) ? 'viva.eligibility' : 'viva.supervisees'));
         }
@@ -61,6 +71,19 @@ class VivaScheduled extends Notification implements ShouldQueue
             ->attachData(VivaInvite::ics($this->notice, $this->detail), 'viva-voce.ics', [
                 'mime' => 'text/calendar; charset=UTF-8; method=PUBLISH',
             ]);
+    }
+
+    /** Is this the chairman's copy? They are sent on demand, as [email => name]. */
+    protected function isChairman(object $notifiable): bool
+    {
+        if ($notifiable instanceof User || blank($this->detail->chair_email)) {
+            return false;
+        }
+
+        $route = (array) $notifiable->routeNotificationFor('mail', $this);
+        $emails = array_map(fn ($key, $value) => is_string($key) ? $key : $value, array_keys($route), $route);
+
+        return in_array(strtolower($this->detail->chair_email), array_map('strtolower', $emails), true);
     }
 
     /** @return array<string, mixed> */

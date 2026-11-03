@@ -24,7 +24,9 @@ class VivaSoftboundReturned extends Notification implements ShouldQueue
         protected Application $application,
         protected string $returnedBy,
         protected string $reason,
-    ) {}
+    ) {
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {

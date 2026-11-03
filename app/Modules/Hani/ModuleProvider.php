@@ -4,6 +4,7 @@ namespace App\Modules\Hani;
 
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Hani\Console\ExaminersSweep;
+use App\Modules\Hani\Console\VivaReminders;
 use App\Modules\Hani\Support\Matching\ExaminerMatcher;
 use App\Modules\Hani\Support\Matching\TfIdfMatcher;
 use App\Modules\Hani\Support\Similarity\SimilaritySource;
@@ -62,7 +63,7 @@ class ModuleProvider extends ServiceProvider
     public function boot(ModuleRegistry $registry): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([ExaminersSweep::class]);
+            $this->commands([ExaminersSweep::class, VivaReminders::class]);
         }
 
         // Scheduled from here, not routes/console.php (a shared file): the
@@ -73,6 +74,10 @@ class ModuleProvider extends ServiceProvider
         $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
             $schedule->command('examiners:sweep')
                 ->dailyAt((string) config('hani.sweep.daily_at', '07:30'))
+                ->withoutOverlapping();
+
+            $schedule->command('viva:reminders')
+                ->dailyAt((string) config('hani.reminders.daily_at', '07:45'))
                 ->withoutOverlapping();
         });
 

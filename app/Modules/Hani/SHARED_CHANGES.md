@@ -416,3 +416,71 @@ that source is selected.
 TURNITIN_API_KEY=
 TURNITIN_API_URL=
 ```
+
+---
+
+## 11. `viva:reminders` in `routes/console.php` (optional alternative)
+
+**Status:** not needed. Like `examiners:sweep` (item 2), the command
+schedules itself from `Hani\ModuleProvider::boot()` through the scheduler
+hook. This entry is for the team in case they would rather keep every
+schedule visible in one file.
+
+**Reason.** It sends the viva's daily reminders:
+- examiners who have not replied to the appointment letter
+- examiner reports that are overdue
+- the 7-day and 1-day panel reminders
+- softbound and corrections deadlines
+
+Each reminder is sent once (log table with a unique key, written before
+sending), and the command has `--dry-run`.
+
+**Impact.** None on other modules. If this line is added, **remove the
+`viva:reminders` entry from the `callAfterResolving` block in
+`Hani\ModuleProvider`**.
+
+### File: `routes/console.php`
+
+```php
+// Hani: viva reminders (examiner replies and reports, panel reminders,
+// softbound and corrections deadlines). See App\Modules\Hani\Console\VivaReminders.
+Schedule::command('viva:reminders')->dailyAt('07:45')->withoutOverlapping();
+```
+
+---
+
+## 12. A staff-only flag for `DocumentStore` documents
+
+**Status:** proposed, not applied.
+
+**Reason.** `ApplicationDocument::visibleTo()` shows a student every
+document on an application they own, so anything stored through
+`DocumentStore` on a student's application is visible to that student.
+Examiner reports must never be shown to the candidate. For now, Hani stores
+them on the private disk under `hani/examiner-reports/`:
+- with random names
+- outside `DocumentStore`
+- downloaded through an AE- and Senior-Exec-only route
+- logged with `activity('document')`, the same way `DocumentStore` logs
+
+A flag would let them move into `DocumentStore` and the Documents page.
+
+**Impact.** One nullable boolean column on `application_documents`
+(defaults to `false`). That is a shared table, so this needs the team's
+agreement. A small change to `visibleTo()` / `scopeVisibleTo()`.
+Backward compatible: every existing document stays visible exactly as
+today.
+
+### Sketch
+
+```php
+// migration (Core)
+$table->boolean('staff_only')->default(false)->after('doc_type');
+
+// ApplicationDocument::visibleTo()
+if ($this->staff_only && $application->student_id === $user->id) {
+    return false;
+}
+
+// DocumentStore::attach(..., bool $staffOnly = false)
+```
