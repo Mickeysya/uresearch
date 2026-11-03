@@ -116,12 +116,18 @@ class PagesTest extends TestCase
             ->assertOk()
             ->assertSee('title="Pending My Action"', false);
 
-        // The Dean owns fewer than four, so it keeps the plain list.
-        $this->actingAs($this->dean())->get(route('dashboard'))
-            ->assertOk()
-            ->assertSee('nav-section-label', false)
-            ->assertSee('Pending My Action')
-            ->assertDontSee('title="Pending My Action"', false);
+        // Fewer than four keeps the plain list. No approver role on this
+        // nav has fewer today (Travel's longer chain took the Dean to four;
+        // the CGS roles have their own nav), so the partial is rendered
+        // with one module's queues directly.
+        $this->actingAs($this->seniorExec());
+        $html = view('core::partials.sidebar-approver-nav', [
+            'queues' => app(\App\Modules\Core\Services\ModuleRegistry::class)->queuesForRole(\App\Modules\Core\Support\Role::SENIOR_EXEC_CGS),
+        ])->render();
+
+        $this->assertStringContainsString('nav-section-label', $html);
+        $this->assertStringContainsString('Pending My Action', $html);
+        $this->assertStringNotContainsString('title="Pending My Action"', $html);
     }
 
     /**

@@ -313,11 +313,17 @@ class SeedDemoApplications extends Command
         $rejects = $roll > 25 && $roll <= 35;
 
         for ($i = 0; $i < $approvals; $i++) {
-            $engine->decide($application, $this->approver($application), 'approve');
+            if (! $approver = $this->approver($application)) {
+                // Nobody can act on this stage (no Chair in the student's
+                // department, say): the application waits there, as it would.
+                $rejects = false;
+                break;
+            }
+            $engine->decide($application, $approver, 'approve');
         }
 
-        if ($rejects) {
-            $engine->decide($application, $this->approver($application), 'reject', 'Demo: incomplete supporting documents.');
+        if ($rejects && $approver = $this->approver($application)) {
+            $engine->decide($application, $approver, 'reject', 'Demo: incomplete supporting documents.');
         }
 
         $this->spreadDecisions($application);
@@ -344,12 +350,23 @@ class SeedDemoApplications extends Command
     }
 
     /** Whoever holds the stage the application is on now. */
-    protected function approver(Application $application): User
+    /** Whoever may decide the current stage, or null when nobody can. */
+    protected function approver(Application $application): ?User
     {
         $role = $application->refresh()->currentStage()->role;
 
-        return $this->approvers[$role] ??= $role === Role::SUPERVISOR
-            ? $application->student->supervisor
-            : User::where('role', $role)->orderBy('id')->firstOrFail();
+        if ($role === Role::SUPERVISOR) {
+            return $application->student->supervisor;
+        }
+
+        // A Chair or AE may only act on their own department's students
+        // (WorkflowEngine refuses anyone else), so they are looked up per
+        // department.
+        $department = Role::isDepartmentScoped($role) ? $application->student->department : null;
+
+        return $this->approvers[$role.'|'.$department] ??= User::where('role', $role)
+            ->when($department !== null, fn ($q) => $q->where('department', $department))
+            ->orderBy('id')
+            ->first();
     }
 }

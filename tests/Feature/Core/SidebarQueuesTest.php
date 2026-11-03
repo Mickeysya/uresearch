@@ -144,7 +144,8 @@ class SidebarQueuesTest extends TestCase
             ->count();
 
         $this->assertGreaterThanOrEqual(4, $modulesFor(Role::ACADEMIC_EXEC), 'The AE owns four or more modules.');
-        $this->assertLessThan(4, $modulesFor(Role::REGISTRY), 'Registry owns fewer than four modules.');
+        // Not Registry: it lost its only queue when RPD was retired.
+        $this->assertLessThan(4, $modulesFor(Role::SENIOR_EXEC_CGS), 'The Senior Executive owns fewer than four modules.');
 
         $this->actingAs($this->academicExec())
             ->get(route('dashboard'))
@@ -152,15 +153,17 @@ class SidebarQueuesTest extends TestCase
             ->assertSee('title="Pending My Action"', false)
             ->assertDontSee('nav-flat-queues', false);
 
-        $this->actingAs($this->registry())
-            ->get(route('dashboard'))
-            ->assertOk()
-            ->assertSee('nav-flat-queues', false);
+        // The CGS roles have their own nav, so the flat branch is checked on
+        // the approver partial itself.
+        $this->actingAs($this->seniorExec());
+        $this->assertStringContainsString('nav-flat-queues', view('core::partials.sidebar-approver-nav', [
+            'queues' => app(ModuleRegistry::class)->queuesForRole(Role::SENIOR_EXEC_CGS),
+        ])->render());
     }
 
     public function test_a_students_module_links_reach_the_sidebar(): void
     {
-        // RpdAppealWorkflow::links() gives students "RPD Candidacy". Until
+        // GaExtensionWorkflow::links() gives students "My Drafts". Until
         // 2026-10-06 the student sidebar never rendered $extraLinks, so no
         // module's student link appeared at all.
         $html = $this->actingAs($this->student())
@@ -170,8 +173,8 @@ class SidebarQueuesTest extends TestCase
 
         $sidebar = substr($html, strpos($html, 'id="app-sidebar"'));
 
-        $this->assertStringContainsString('>RPD Candidacy<', $sidebar);
-        $this->assertStringContainsString(route('candidacies.mine'), $sidebar);
+        $this->assertStringContainsString('>My Drafts<', $sidebar);
+        $this->assertStringContainsString(route('nureen.drafts'), $sidebar);
         // Chloe's study-candidacy link keeps its own name, once.
         $this->assertSame(1, substr_count($sidebar, '>My Candidacy<'));
     }
