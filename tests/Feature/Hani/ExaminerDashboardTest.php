@@ -65,7 +65,10 @@ class ExaminerDashboardTest extends TestCase
         foreach ([$this->seniorExec(), $this->seniorDirector(), $this->dean()] as $user) {
             $response = $this->actingAs($user)->get(route('examiner-dashboard'))->assertOk();
             $this->assertSame(4, $response->viewData('total'));
-            $response->assertSee('Dr Petroleum');
+            $response->assertSee('Dr Petroleum')
+                // Escaped once, not twice.
+                ->assertSee('every department&#039;s nominations', false)
+                ->assertDontSee('&amp;#039;', false);
         }
     }
 

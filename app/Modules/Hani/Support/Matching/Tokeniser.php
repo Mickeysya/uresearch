@@ -94,6 +94,12 @@ class Tokeniser
             if (count($words) >= 2) {
                 $terms[] = $this->phrase($words);
             }
+
+            // A longer entry ("mixed matrix membranes") also gives its word
+            // pairs, so a title saying "mixed matrix" still meets it.
+            for ($i = 0; count($words) > 2 && $i < count($words) - 1; $i++) {
+                $terms[] = $this->phrase([$words[$i], $words[$i + 1]]);
+            }
         }
 
         return $terms;
