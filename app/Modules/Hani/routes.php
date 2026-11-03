@@ -129,6 +129,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/examiners', [ExaminerAdminController::class, 'store'])->name('examiner-admin.store');
         Route::post('/examiners/{examiner}/toggle-active', [ExaminerAdminController::class, 'toggleActive'])
             ->name('examiner-admin.toggle-active');
+        Route::post('/examiners/duplicates/dismiss', [ExaminerAdminController::class, 'dismissDuplicate'])
+            ->name('examiner-admin.dismiss-duplicate');
         Route::get('/examiners/{examiner}/edit', [ExaminerAdminController::class, 'edit'])->name('examiner-admin.edit');
         Route::put('/examiners/{examiner}', [ExaminerAdminController::class, 'update'])->name('examiner-admin.update');
 

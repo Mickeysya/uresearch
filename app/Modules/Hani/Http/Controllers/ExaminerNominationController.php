@@ -11,6 +11,7 @@ use App\Modules\Hani\Exports\ExaminerListExport;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Support\Departments;
+use App\Modules\Hani\Support\DuplicateDetector;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -173,6 +174,12 @@ class ExaminerNominationController extends Controller
 
         return view('hani::examiner_nomination.queue', $queue + [
             'nominations' => $nominations,
+            // Compilation is where department lists meet, so it is where two
+            // records of one person on different departments' lists can
+            // first be seen (Support\DuplicateDetector).
+            'duplicates' => $queue['stage']->key === 'cgs_compile'
+                ? app(DuplicateDetector::class)->acrossNominations()
+                : [],
             // Only the two stages above the compilation may send a list back
             // to the department; everyone else gets the plain two buttons.
             'canReturn' => in_array($queue['stage']->key, self::RETURNING_STAGES, true),

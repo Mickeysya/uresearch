@@ -88,6 +88,9 @@
     .examiner-state-badge.tone-info     { background: var(--info-bg); color: var(--info-fg); }
     .examiner-state-badge.tone-critical { background: var(--danger-bg); color: var(--danger-fg); }
 
+    .examiner-duplicate { display: block; margin-top: 3px; padding: 2px 8px; border-radius: 8px; font-size: var(--text-2xs); background: var(--warning-bg); color: var(--warning-fg); }
+    .examiner-duplicate form { display: inline; }
+    .examiner-duplicate .btn-link { background: none; border: none; padding: 0; margin: 0 0 0 4px; color: inherit; text-decoration: underline; font-size: inherit; cursor: pointer; }
     .examiner-reason { display: block; font-size: var(--text-2xs); color: var(--text-grey); margin-top: 2px; max-width: 220px; }
 
     .examiner-pagination { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
@@ -325,6 +328,18 @@
                                     @if ($examiner->needsEmail())
                                         <span class="examiner-state-badge tone-warn">Email needed</span>
                                     @endif
+                                    {{-- Support\DuplicateDetector: flagged, never blocked. --}}
+                                    @foreach ($duplicates[$examiner->id] ?? [] as $dup)
+                                        <span class="examiner-duplicate">
+                                            Possible duplicate of {{ $dup['other']->name }} ({{ $dup['score'] }}% similar)
+                                            <form method="POST" action="{{ route('examiner-admin.dismiss-duplicate') }}">
+                                                @csrf
+                                                <input type="hidden" name="examiner_id" value="{{ $examiner->id }}">
+                                                <input type="hidden" name="other_id" value="{{ $dup['other']->id }}">
+                                                <button type="submit" class="btn-link">Not the same person</button>
+                                            </form>
+                                        </span>
+                                    @endforeach
                                 </span>
                             </div>
                         </td>

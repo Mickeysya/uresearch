@@ -7,6 +7,8 @@ use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerReviewItem;
 use App\Modules\Hani\Support\Departments;
+use App\Modules\Hani\Support\DuplicateDetector;
+use App\Modules\Hani\Models\ExaminerDuplicateDismissal;
 use App\Modules\Hani\Support\Import\Cells;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -93,6 +95,9 @@ class ExaminerAdminController extends Controller
             'studentsByExaminer' => $this->studentsByExaminer($examiners->getCollection()->pluck('id')),
             'filters' => $request->only(['department', 'type', 'status', 'search']),
             'openReviewItems' => ExaminerReviewItem::open()->count(),
+            // Across the whole pool, not just this page: a duplicate is
+            // usually on another page or the other tab.
+            'duplicates' => app(DuplicateDetector::class)->byExaminer($pool),
         ]);
     }
 
@@ -247,6 +252,22 @@ class ExaminerAdminController extends Controller
         }
 
         $examiner->expertiseKeywords()->whereNotIn('keyword', $keywords ?: [''])->get()->each->delete();
+    }
+
+    /**
+     * "Not the same person": the Senior Executive has checked a flagged pair
+     * and they are two people. Stored, so the pair is never flagged again.
+     */
+    public function dismissDuplicate(Request $request)
+    {
+        $data = $request->validate([
+            'examiner_id' => ['required', 'integer', 'exists:examiners,id'],
+            'other_id' => ['required', 'integer', 'exists:examiners,id', 'different:examiner_id'],
+        ]);
+
+        ExaminerDuplicateDismissal::dismiss($data['examiner_id'], $data['other_id'], $request->user()->id);
+
+        return back()->with('status', 'Marked as two different people. They will not be flagged again.');
     }
 
     /**

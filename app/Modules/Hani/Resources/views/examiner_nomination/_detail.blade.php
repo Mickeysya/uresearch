@@ -26,6 +26,10 @@
         <p>Notes: {{ $nomination->notes }}</p>
     @endif
 
+    @foreach ($duplicates[$application->id] ?? [] as $flag)
+        <p class="message-warning">Possible duplicate: {{ $flag }}</p>
+    @endforeach
+
     {{-- Core's decision form always reads "Approve"; until it takes a label
          (app/Modules/Hani/SHARED_CHANGES.md), this says what Approve does here.
          See ExaminerNominationController::finaliseAndRelease(). --}}
