@@ -364,3 +364,55 @@ interface SuppliesCandidature
     public function candidatureFor(int $studentId): ?array;
 }
 ```
+
+---
+
+## 9. `smalot/pdfparser` in `composer.json` (optional)
+
+**Status:** optional, not needed. The team has decided not to add it for
+now.
+
+**Reason.** The softbound checks read the student's Turnitin report and
+thesis PDFs. Hani's module has its own small reader
+(`Support/Pdf/BasicPdfText`), which handles:
+- Flate-compressed streams and object streams
+- standard fonts
+- ToUnicode maps
+
+It reads the fictional fixtures reliably. Some real PDFs it cannot read, for
+example CID fonts with no ToUnicode map, unusual filters or scanned pages.
+For those the panel shows "Not checked automatically", and the student's
+declared figure is used. `smalot/pdfparser` handles more of these edge cases.
+
+**Impact.** One dependency, pure PHP, no extension. `Support/Pdf/PdfReader`
+detects it with `class_exists()` and uses it automatically. No code change
+is needed in any module.
+
+### File: `composer.json`
+
+```json
+"require": {
+    "smalot/pdfparser": "^2.11"
+}
+```
+
+---
+
+## 10. Turnitin API keys in `.env.example` (for later)
+
+**Status:** proposed, not needed until UTP licenses API access.
+
+**Reason.** `Support/Similarity/TurnitinApiSource` is a documented stub. It
+reads these two keys through `config('hani.similarity.turnitin_api.*')`, and
+switching to it is `hani.similarity.source = 'turnitin_api'`.
+
+**Impact.** None. They are empty placeholders, and nothing reads them unless
+that source is selected.
+
+### File: `.env.example`
+
+```dotenv
+# Hani, viva softbound checks: Turnitin Core API, only with a UTP licence.
+TURNITIN_API_KEY=
+TURNITIN_API_URL=
+```

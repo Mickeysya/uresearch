@@ -34,6 +34,10 @@ Route::middleware('auth')->group(function () {
         // VivaProgress::softboundBlockReason() says why not otherwise.
         Route::get('/viva/softbound', [VivaSoftboundController::class, 'create'])->name('viva.softbound.create');
         Route::post('/viva/softbound', [VivaSoftboundController::class, 'store'])->name('viva.softbound.store');
+        // Reads the chosen Turnitin report to pre-fill the similarity index. Stores nothing.
+        Route::post('/viva/softbound/similarity-preview', [VivaSoftboundController::class, 'similarityPreview'])
+            ->middleware('throttle:20,1')
+            ->name('viva.softbound.similarity-preview');
     });
 
     Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {

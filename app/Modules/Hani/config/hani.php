@@ -138,6 +138,49 @@ return [
         'keywords_max' => 8,
     ],
 
+    'similarity' => [
+        // Where the similarity figures come from (Support\Similarity):
+        // uploaded (read the student's Turnitin report PDF) | turnitin_api
+        // (stub, needs a UTP licence) | simulated (demo figures, labelled).
+        'source' => 'uploaded',
+
+        // Where students get the report. CONFIRMED: students download it
+        // from ULearn. The address itself is provisional.
+        'ulearn_url' => 'https://ulearn.utp.edu.my',
+
+        // Flag any single primary source above this percentage. Provisional.
+        'single_source_warn' => 5,
+
+        // Flag a declared figure this many percentage points away from the
+        // one read from the report. Provisional.
+        'mismatch_points' => 1.0,
+
+        // Flag a report older than this, when a Digital Receipt gives its
+        // date. Provisional.
+        'max_report_age_days' => 30,
+
+        // TurnitinApiSource, once UTP licenses it. Keys proposed for
+        // .env.example in SHARED_CHANGES.md.
+        'turnitin_api' => [
+            'key' => env('TURNITIN_API_KEY'),
+            'url' => env('TURNITIN_API_URL'),
+        ],
+    ],
+
+    'softbound_checks' => [
+        // The PDF's word count is approximate (front matter, references and
+        // tables count too), so only a gap bigger than this share of the
+        // declared count is flagged. Provisional.
+        'word_tolerance' => 0.15,
+
+        // How much of the notice title's words must appear on the thesis's
+        // first pages (or in the report title). Provisional.
+        'title_overlap' => 0.8,
+
+        // How many opening pages are searched for the title.
+        'title_pages' => 2,
+    ],
+
     'sweep' => [
         // When `examiners:sweep` runs each day. Provisional.
         'daily_at' => '07:30',
