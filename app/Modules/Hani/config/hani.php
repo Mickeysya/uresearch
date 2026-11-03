@@ -65,6 +65,31 @@ return [
         'threshold' => 85,
     ],
 
+    'matcher' => [
+
+        // How many "Suggested examiners" per seat type.
+        'suggestions' => 5,
+
+        // How many matched terms each suggestion names.
+        'explain_terms' => 4,
+
+        // A two-word phrase ("anomaly detection") counts this much more than
+        // a single word. Provisional.
+        'phrase_boost' => 1.5,
+
+        // Ordering. Expertise similarity (0-100) dominates; the rest break
+        // near-ties towards spreading the load across the pool. Provisional:
+        // CGS has not said how they weigh these today.
+        'weights' => [
+            'similarity' => 1.0,
+            'recent_examination' => 3.0,     // points off per main-seat examination in the last 12 months
+            'per_year_since_last' => 1.5,    // points per year since the last examination...
+            'gap_years_cap' => 3,            // ...up to this many years
+            'per_year_experience' => 0.2,    // external only: points per year of experience...
+            'experience_cap' => 25,          // ...up to this many years
+        ],
+    ],
+
     'import' => [
         // Largest pool file accepted, in KB. Provisional.
         'max_kb' => 5120,

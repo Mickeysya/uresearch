@@ -5,6 +5,7 @@ use App\Modules\Hani\Http\Controllers\ConflictDetectionController;
 use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
 use App\Modules\Hani\Http\Controllers\ExaminerImportController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
+use App\Modules\Hani\Http\Controllers\ExaminerSuggestionController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\VivaController;
 use App\Modules\Hani\Http\Controllers\VivaScheduleController;
@@ -59,6 +60,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/examiner-nomination', [ExaminerNominationController::class, 'store'])
             ->name('examiner-nomination.store');
     });
+
+    // Suggested examiners (JSON). Staff only -- the controller narrows a
+    // supervisor to their own candidates and an AE to their department.
+    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS]))
+        ->get('/examiner-nomination/suggestions', ExaminerSuggestionController::class)
+        ->name('examiner-nomination.suggestions');
 
     // The chain above the department. Every stage from the Academic Executive
     // up reads the same queue screen and posts to the same decide route --

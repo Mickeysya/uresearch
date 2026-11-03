@@ -3,6 +3,24 @@
 @section('title', 'Nominate Examiners')
 
 @section('content')
+{{-- Page-scoped, tokens only, so it follows the dark theme. --}}
+<style>
+    .suggest-box { margin: 18px 0 6px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-sunken); }
+    .suggest-box h4 { margin: 0 0 4px; color: var(--navy); font-size: var(--text-sm); }
+    .suggest-note, .suggest-empty { margin: 0 0 8px; color: var(--text-grey); font-size: var(--text-xs); }
+    .suggest-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 10px; }
+    .suggest-item { font-size: var(--text-sm); }
+    .suggest-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    .suggest-score { padding: 1px 8px; border-radius: 999px; background: var(--info-bg); color: var(--info-fg); font-size: var(--text-2xs); font-weight: 700; }
+    .suggest-where, .suggest-reasons { color: var(--text-grey); font-size: var(--text-xs); }
+    .suggest-matched { font-size: var(--text-xs); }
+    .suggest-flag { margin-top: 3px; padding: 3px 8px; border-radius: 8px; font-size: var(--text-xs); }
+    .suggest-flag.is-warning { background: var(--warning-bg); color: var(--warning-fg); }
+    .suggest-flag.is-block { background: var(--danger-bg); color: var(--danger-fg); }
+    .suggest-actions { display: flex; gap: 6px; margin-top: 4px; }
+    .suggest-actions button { margin: 0; padding: 4px 10px; font-size: var(--text-xs); }
+</style>
+
 <div class="card-container-inline">
     <x-core::page-header
         title="Examiner Nomination"
@@ -15,7 +33,8 @@
                 CGS assigns supervisees before nominations can be filed.
             </div>
         @else
-            <form method="POST" action="{{ route('examiner-nomination.store') }}" data-stepper>
+            <form method="POST" action="{{ route('examiner-nomination.store') }}" data-stepper
+                  data-suggest-url="{{ route('examiner-nomination.suggestions') }}">
                 @csrf
 
                 <fieldset class="fstep" data-label="Candidate">
@@ -77,6 +96,13 @@
                     </select>
                     @error($field) <p class="field-error">{{ $message }}</p> @enderror
                 @endforeach
+
+                {{-- Filled by public/js/hani/examiner-suggestions.js. --}}
+                <div class="suggest-box">
+                    <h4>Suggested internal examiners</h4>
+                    <p class="suggest-note">Ranked by how well their expertise fits the thesis, from those you can nominate now. A suggestion is a starting point, not a decision.</p>
+                    <div data-suggestions="internal" aria-live="polite"></div>
+                </div>
                 </fieldset>
 
                 <fieldset class="fstep" data-label="External panel">
@@ -105,6 +131,12 @@
                     </select>
                     @error($field) <p class="field-error">{{ $message }}</p> @enderror
                 @endforeach
+
+                <div class="suggest-box">
+                    <h4>Suggested external examiners</h4>
+                    <p class="suggest-note">Ranked the same way. Conflict-of-interest flags are a pre-check; the examiner's own declaration (UTP/CGS/026) is still collected with the appointment letter.</p>
+                    <div data-suggestions="external" aria-live="polite"></div>
+                </div>
                 </fieldset>
 
                 <fieldset class="fstep" data-label="Notes">
@@ -147,6 +179,7 @@
 </table>
 
 @include('core::partials.form-stepper')
+<script src="{{ asset('js/hani/examiner-suggestions.js') }}" defer></script>
 
 <script @cspNonce>
     // The department rule, shown rather than only enforced. The server

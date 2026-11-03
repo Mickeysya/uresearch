@@ -89,6 +89,72 @@
   opens the door for CGS to log the next cycle, which links back to the
   prior one via `re_viva_details.previous_cycle_id`.
 
+## Examiner suggestions (how the matching works)
+
+The nomination form lists **Suggested examiners** for each seat type, top 5,
+each with its score, the terms it matched on ("matched on: anomaly detection,
+time series"), how long since the examiner last examined, and any
+conflict-of-interest flag. One click fills a seat; the dropdowns stay free.
+
+**Method: TF-IDF with cosine similarity, in plain PHP** (`Support/Matching/`).
+No external AI service, and nothing leaves the server.
+
+1. **Documents.**
+   - *Examiner:* area of expertise, expertise keywords and publication titles.
+   - *Thesis:* the title, plus the abstract and keywords once the Notice of
+     Thesis Submission carries them. Until then it falls back to the
+     nomination's title.
+2. **Terms** (`Tokeniser`, `Stemmer`): lower case, stop words removed
+   (including words every thesis title has, such as "study" and "approach"),
+   and a light suffix-stripper so "detection" meets "detecting".
+   - A multi-word keyword ("anomaly detection") is also kept whole as a
+     phrase term.
+   - A title's adjacent word pairs count as phrases only where some examiner
+     has that phrase.
+3. **Weights.**
+   - Term frequency is log-scaled (1 + ln tf).
+   - Inverse document frequency, ln((N+1)/(df+1)) + 1, is taken over the
+     **eligible** pool, so a word everyone shares counts for little and a rare
+     one counts for a lot.
+   - Phrases are boosted by `hani.matcher.phrase_boost`.
+4. **Score:** the cosine of the two vectors, shown as 0–100.
+5. **Explanation:** the overlapping terms, ordered by their share of the score.
+   A matched phrase stands in for its own words.
+6. **Who is ranked:** only examiners who could be nominated now. That means
+   Available, and for the internal seats from the candidate's own department
+   (`Support/Departments`). A suggestion is therefore never something the form
+   would refuse.
+7. **Tie-breakers** (`hani.matcher.weights`, provisional): fewer main-seat
+   examinations in the last 12 months, longer since the last examination, and
+   for external examiners years of experience. These spread the load without
+   overriding expertise.
+8. **Cache:** the term statistics are cached under a key built from the pool
+   itself, plus today's date because gaps run out:
+   - examiners
+   - expertise keywords (which touch their examiner)
+   - publications (which also touch their examiner)
+
+   Any change produces a new key, and the table is rebuilt on next use.
+
+**Who sees it:**
+- supervisors, for their own candidates
+- Academic Executives, for their own department
+- the Senior Executive CGS, for anyone
+
+Never students (`ExaminerSuggestionController`).
+
+**Where an embeddings model would plug in.** `ExaminerMatcher` is the seam.
+A sentence-embedding model run locally (for example a small multilingual
+MiniLM served over HTTP on the same host) would implement
+`rank($query, $candidates)`:
+- embed the thesis and each examiner document
+- cache the examiner vectors under the same pool-version key
+- score by cosine similarity
+
+Bind it in `ModuleProvider::register()` instead of `TfIdfMatcher`. Keep the
+explanation: report the expertise keywords closest to the thesis, so a score
+is never shown without its reason.
+
 ## Still to build
 
 Nothing from the original TODO list remains unscoped. Candidates for

@@ -10,6 +10,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Exports\ExaminerListExport;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
+use App\Modules\Hani\Support\Departments;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +58,7 @@ class ExaminerNominationController extends Controller
         ]);
     }
 
-    public function store(Request $request, WorkflowEngine $engine)
+    public function store(Request $request, WorkflowEngine $engine, Departments $departments)
     {
         $slots = array_keys(ExaminerNomination::SLOTS);
 
@@ -118,7 +119,7 @@ class ExaminerNominationController extends Controller
             // student on the application this row belongs to", and because
             // this is the one place where the supervisor can still be told
             // which department was expected.
-            if ($expected === Examiner::TYPE_INTERNAL && $examiner->department !== $student->department) {
+            if ($expected === Examiner::TYPE_INTERNAL && ! $departments->same($examiner->department, $student->department)) {
                 throw ValidationException::withMessages([
                     $slot => "{$which} must come from {$student->name}'s own department ("
                         .($student->department ?: 'none recorded').'). '

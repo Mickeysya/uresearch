@@ -3,6 +3,8 @@
 namespace App\Modules\Hani;
 
 use App\Modules\Core\Services\ModuleRegistry;
+use App\Modules\Hani\Support\Matching\ExaminerMatcher;
+use App\Modules\Hani\Support\Matching\TfIdfMatcher;
 use App\Modules\Hani\Workflows\ExaminerNominationWorkflow;
 use App\Modules\Hani\Workflows\ReVivaWorkflow;
 use App\Modules\Hani\Workflows\VivaSoftboundWorkflow;
@@ -18,6 +20,11 @@ class ModuleProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/config/hani.php', 'hani');
+
+        // The examiner suggestions' ranking method. TF-IDF in plain PHP by
+        // default; anything implementing the contract (an embeddings model,
+        // say) can be bound here instead -- see README.md.
+        $this->app->bind(ExaminerMatcher::class, TfIdfMatcher::class);
     }
 
     public function boot(ModuleRegistry $registry): void
