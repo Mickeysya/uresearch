@@ -23,14 +23,12 @@
                             @endif
                             <br>
                             <a href="{{ route('hardbound.resubmit.form', $app) }}"><b>Resubmit it</b></a>
-                            &nbsp;·&nbsp;
-                            <a href="{{ route('hardbound-appeal.create') }}">Appeal the decision</a>
                         </li>
                     @endforeach
                 </ul>
                 <p class="queue-meta" style="margin: 6px 0 0;">
-                    Correct what was asked and resubmit, or appeal if you disagree; you can do one or
-                    the other, not both. The form below starts a brand-new submission instead.
+                    Correct what was asked and resubmit. The form below starts a brand-new
+                    submission instead.
                 </p>
             </div>
         @endif
@@ -51,29 +49,75 @@
             @endif
         @endif
 
+        @if (($filed ?? collect())->isNotEmpty())
+            <div class="app-item" style="margin-bottom: 18px;">
+                <p><b>Submissions you have filed</b></p>
+                <ul class="doc-list">
+                    @foreach ($filed as $app)
+                        <li>
+                            <b>#{{ $app->id }}</b>
+                            {{ $filedDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
+                            <span style="color: var(--text-grey);">&middot; {{ ucfirst($app->status) }}</span>
+                            <br>
+                            <a href="{{ route('hardbound.forms', $app) }}">Read the forms the portal wrote &rarr;</a>
+                        </li>
+                    @endforeach
+                </ul>
+                <p class="field-hint">
+                    UTP/CGS/021 is written from what you entered and signed with the signature on
+                    your account. It opens on a page, so there is nothing to download to check it.
+                </p>
+            </div>
+        @endif
+
         <form method="POST"
               action="{{ $returned ? route('hardbound.resubmit', $returned) : route('hardbound.store') }}"
-              enctype="multipart/form-data" class="app-form" data-stepper>
+              class="app-form" data-stepper>
             @csrf
 
-            <fieldset class="fstep" data-label="Get the form">
+            <fieldset class="fstep" data-label="About you">
             <p class="fstep-hint">
-                Start here. The Hardbound Thesis Submission form (UTP/CGS/021) comes
-                pre-filled with your name, matric number and programme. Complete the
-                rest, sign and date it, and upload it on the last step.
+                These fill the Hardbound Thesis Submission form (UTP/CGS/021), which the
+                portal writes for you. Nothing to download, print or scan: your name,
+                matric number and programme come from your student record, and these are
+                the boxes the form asks you for.
             </p>
 
-            <p>
-                <a href="{{ route('hardbound.template', 'submission') }}" class="btn-secondary">
-                    Download the submission form (UTP/CGS/021)
-                </a>
+            <label for="country">Country</label>
+            <input type="text" name="country" id="country" maxlength="6"
+                   placeholder="e.g. MYS"
+                   value="{{ old('country', $detail?->country) }}"
+                   class="@error('country') is-invalid @enderror">
+            @error('country') <p class="field-error">{{ $message }}</p> @enderror
+            <p class="field-hint">
+                Six boxes on UTP/CGS/021, so a short code rather than the full name.
             </p>
+
+            <label for="intake">Intake</label>
+            <input type="text" name="intake" id="intake" maxlength="6"
+                   placeholder="e.g. SEP23"
+                   value="{{ old('intake', $detail?->intake) }}"
+                   class="@error('intake') is-invalid @enderror">
+            @error('intake') <p class="field-error">{{ $message }}</p> @enderror
+            <p class="field-hint">Six boxes on the form, like the country.</p>
+
+            <label for="passport_no">Passport / IC Number</label>
+            <input type="text" name="passport_no" id="passport_no" maxlength="40"
+                   value="{{ old('passport_no', $detail?->passport_no) }}"
+                   class="@error('passport_no') is-invalid @enderror">
+            @error('passport_no') <p class="field-error">{{ $message }}</p> @enderror
+            <p class="field-hint">Printed on your own copy of UTP/CGS/021 and nowhere else.</p>
+
+            <label for="date_of_birth">Date of Birth</label>
+            <input type="date" name="date_of_birth" id="date_of_birth" max="{{ now()->toDateString() }}"
+                   value="{{ old('date_of_birth', $detail?->date_of_birth?->toDateString()) }}"
+                   class="@error('date_of_birth') is-invalid @enderror">
+            @error('date_of_birth') <p class="field-error">{{ $message }}</p> @enderror
 
             <p class="field-hint">
-                There is a second CGS form, the Confirmation of Correction to Thesis
-                (UTP/CGS/017A). You do not download that one: the portal generates it
-                from what you enter next, and your supervisor and the viva chairman
-                sign it electronically as they approve.
+                The second CGS form, the Confirmation of Correction to Thesis
+                (UTP/CGS/017A), is written for you too. Your supervisor and the viva
+                chairman sign that one electronically as they approve.
             </p>
             </fieldset>
 
@@ -88,7 +132,7 @@
 
             <label for="matric_no_display">Matric Number</label>
             <input type="text" id="matric_no_display" value="{{ $student->matric_no }}" disabled>
-            <p class="queue-meta" style="margin-top: -8px;">Taken from your student record.</p>
+            <p class="field-hint">Taken from your student record.</p>
 
             <label for="programme">Programme</label>
             <input type="text" name="programme" id="programme" required
@@ -127,20 +171,6 @@
                    class="@error('co_supervisor_name') is-invalid @enderror">
             @error('co_supervisor_name') <p class="field-error">{{ $message }}</p> @enderror
 
-            </fieldset>
-
-            <fieldset class="fstep" data-label="Signed UTP/CGS/021">
-            <p class="fstep-hint">The form you downloaded above, completed, signed
-               and dated.</p>
-
-            <label for="submission_form">
-                Signed Hardbound Thesis Submission form
-                @if ($returned) <span style="color: var(--text-grey);">(re-upload only if it changed)</span> @endif
-            </label>
-            <input type="file" name="submission_form" id="submission_form" @unless ($returned) required @endunless
-                   class="@error('submission_form') is-invalid @enderror">
-            @error('submission_form') <p class="field-error">{{ $message }}</p> @enderror
-            <p class="queue-meta" style="margin-top: -8px;">PDF, Word, Excel or an image, up to 10 MB.</p>
             </fieldset>
 
             <button type="submit">{{ $returned ? 'Resubmit for Confirmation' : 'Submit for Confirmation' }}</button>

@@ -200,7 +200,7 @@ class ModuleContractsTest extends TestCase
         $dashboard = new StudentDashboard($student);
 
         $this->assertNull($dashboard->attendance());
-        $this->assertNull($dashboard->predictedAttendance());
+        $this->assertNull($dashboard->attendanceAction());
         $this->assertArrayHasKey('attendance', $dashboard->unavailable());
     }
 }

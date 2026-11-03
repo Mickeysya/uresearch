@@ -40,3 +40,11 @@
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif
+
+@if ($application->documents->isNotEmpty())
+    <p class="queue-meta" style="margin-top: 10px;">
+        <a href="{{ route('appointment-letter.pack', $application) }}"><b>Read the pack &rarr;</b></a>
+        &nbsp;All {{ $application->documents->count() }} prepared documents on one page,
+        read in place rather than downloaded one at a time.
+    </p>
+@endif

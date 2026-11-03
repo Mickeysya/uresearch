@@ -116,6 +116,23 @@ doing anything clever: that keeps the engine the only writer, re-checks the
 actor against each row's own stage, and means a row someone else already
 decided cannot roll back the rest of the batch.
 
+Because bulk goes straight to the engine, it skips anything a module's own
+`decide()` does on top: checking that the row names *this* supervisor,
+moving a deadline, generating a letter. A module like that implements the
+marker interface `Core\Contracts\DecidesOneAtATime` (no methods).
+`QueueController` then answers 403 for that module, so a hand-built POST
+cannot get round its rules, and `core::partials.queue` hides the checkboxes
+for it. Nine workflows implement it today (Supervision, Certification, RPD
+Appeal, RPD Dismissal, Examiner Nomination, Hardbound, Hardbound Appeal,
+Appointment Letter, Candidacy Appeal); the other six keep bulk.
+
+There are two ways to send work back, and the queue offers each separately.
+`$returnRoute` posts to `WorkflowEngine::returnTo()`: back to an earlier
+*approver* stage, still pending. `'allowReturn' => true` adds a Return button
+that calls `decide('return')`: back to the *student*, `status = returned`,
+and `WorkflowEngine::resubmit()` puts it back on the same stage. Chloe's
+candidacy appeal uses the second.
+
 ### Conditional routing
 
 `stages()` receives the application, so the chain can depend on its data:
@@ -232,14 +249,17 @@ with no edit.
 
 Four tests in `tests/Feature/Core/` scan every Blade view in the repo rather
 than only the screens a test happens to render, because the failures they
-catch all render perfectly:
+catch all render perfectly. The view scans go through
+`Tests\Support\FindsViews`, which walks every module's `views` folder at any
+depth. (They used `glob('views/**/*.blade.php')` until 2026-10-05, and PHP's
+`glob()` has no `**`: 46 nested views were never checked.)
 
 | Test | Catches |
 |---|---|
 | `ContentSecurityPolicyTest` | an inline `<script>` without `@cspNonce`, or a CDN tag — the browser refuses it and the page still returns 200 |
 | `PageShellTest` | a screen with its own heading, its own page width, or markup above a queue's page header; a dashboard panel that declares neither `approver-scroll` nor `approver-fit`; a single-class `.sdash-*` override in `layout.css`; a dashboard that has lost its `.sdash` root |
 | `ProseTest` | an em dash used as a sentence connector |
-| `QueueTest` | the queue paging, searching, sorting and bulk-deciding, including rows that are not yours |
+| `QueueTest` | the queue paging, searching, sorting and bulk-deciding, including rows that are not yours and modules that implement `DecidesOneAtATime` |
 
 ## Stylesheets
 

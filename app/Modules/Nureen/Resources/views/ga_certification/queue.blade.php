@@ -7,5 +7,6 @@
         'moduleLabel' => 'GA/GRA Certification Letter',
         'decideRoute' => 'ga-certification.decide',
         'detailView' => 'nureen::ga_certification._detail',
+        'tools' => 'nureen::ga_certification._tools',
     ])
 @endsection

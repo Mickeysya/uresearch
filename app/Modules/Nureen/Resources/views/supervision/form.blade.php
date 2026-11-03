@@ -12,7 +12,30 @@
             @csrf
 
             <fieldset class="fstep" data-label="Supervisor">
-            <p class="fstep-hint">Who you are asking for, and why them.</p>
+            <p class="fstep-hint">Who you are asking for, in what capacity, and why them.</p>
+
+            <label for="appointment_role">Appointment Role</label>
+            <select name="appointment_role" id="appointment_role" required
+                    class="@error('appointment_role') is-invalid @enderror">
+                <option value="">Select&hellip;</option>
+                <option value="main_supervisor" @selected(old('appointment_role') == 'main_supervisor')>Main Supervisor</option>
+                <option value="co_supervisor" @selected(old('appointment_role') == 'co_supervisor')>Co-Supervisor</option>
+            </select>
+            @if ($currentSupervisorId)
+                <p class="queue-meta" style="margin-top: -8px;">
+                    A Main Supervisor appointment replaces your current supervisor once approved.
+                </p>
+            @endif
+            @error('appointment_role') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="appointment_type">Appointment Type</label>
+            <select name="appointment_type" id="appointment_type" required
+                    class="@error('appointment_type') is-invalid @enderror">
+                <option value="">Select&hellip;</option>
+                <option value="new" @selected(old('appointment_type') == 'new')>New</option>
+                <option value="existing" @selected(old('appointment_type') == 'existing')>Existing</option>
+            </select>
+            @error('appointment_type') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="requested_supervisor_id">Requested Supervisor</label>
             <select name="requested_supervisor_id" id="requested_supervisor_id" required
@@ -37,19 +60,14 @@
 
             </fieldset>
 
-            <fieldset class="fstep" data-label="Supporting document">
+            <fieldset class="fstep" data-label="Supporting documents">
             <p class="fstep-hint">Required. Checked for completeness here rather than after it reaches your prospective supervisor.</p>
 
-            <label for="supporting_document"> <span style="color: var(--text-grey)">(required)</span></label>
-            <input type="file" name="supporting_document" id="supporting_document" required
-                   class="@error('supporting_document') is-invalid @enderror">
-            @error('supporting_document') <p class="field-error">{{ $message }}</p> @enderror
-            <p class="queue-meta" style="margin-top: -8px;">
-                Your research proposal, or whatever your department asks for with a
-                supervision request. PDF, image or Office document, up to 10&nbsp;MB.
-                The request is checked for completeness here rather than after it
-                reaches your prospective supervisor.
-            </p>
+            <x-nureen::multi-file-upload
+                name="supporting_documents"
+                label="Supporting Documents"
+                :required="true"
+                hint="Your research proposal, or whatever your department asks for with a supervision request." />
             </fieldset>
 
             <button type="submit">Submit Request</button>

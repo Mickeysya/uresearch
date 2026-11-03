@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Http\Controllers;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\WorkflowEngine;
@@ -44,6 +45,11 @@ class QueueController extends Controller
         // An unknown module key is a 404, not a validation error: the route
         // is wrong, not the input.
         abort_unless($registry->has($module), 404);
+
+        // The module's own decide() enforces rules the engine does not know
+        // about. Hiding the checkboxes is not enough: this route is reachable
+        // by a hand-built POST, so refuse here. See DecidesOneAtATime.
+        abort_if($registry->get($module) instanceof DecidesOneAtATime, 403);
 
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1', 'max:'.self::MAX_BATCH],

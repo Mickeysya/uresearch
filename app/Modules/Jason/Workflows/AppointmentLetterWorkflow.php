@@ -2,6 +2,7 @@
 
 namespace App\Modules\Jason\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
@@ -13,24 +14,30 @@ use App\Modules\Jason\Models\AppointmentExaminer;
 /**
  * Examiner appointment letters.
  *
- * Nomination -- the Chair filing an examiner panel, at least one internal and
- * one external, for one of the department's candidates -- has been removed;
- * nothing currently creates a new application here. What remains is the
- * chain that still processes whatever already exists: the Academic Executive
- * endorses (or rejects with comments), then the Non-Executive CGS prepares
- * the pack -- the candidate's degree, programme, supervisor and thesis
- * title, auto-filled from the candidate's own record wherever one exists,
- * plus each examiner's address and reference number. Preparing generates two
- * documents per examiner -- the appointment letter and the thesis evaluation
- * report form -- and archives them, so the Dean of PGR approves documents
- * that already exist. On the Dean's approval each examiner is emailed their
- * own two documents. Examiners have no account in this system, so that
- * dispatch happens outside the WorkflowEngine/ApplicationDecided path.
+ * Examiner SELECTION happens before this module: the supervisor chooses the
+ * panel, the Academic Executive compiles it, and CGS, the Senior Director,
+ * the Chair and the Dean settle the list between them. That is Hani's
+ * Examiner Nomination chain. What arrives here is the finalised list, as a
+ * spreadsheet, and this module starts by importing it -- one appointment per
+ * candidate on it, each carrying its own panel.
+ *
+ * The Non-Executive CGS then prepares the pack: the candidate's degree,
+ * programme, supervisor and thesis title, auto-filled from the candidate's
+ * own record wherever one exists, plus each examiner's address and reference
+ * number. Preparing generates two documents per examiner -- the appointment
+ * letter and the thesis evaluation report form -- and archives them, so the
+ * Dean of PGR approves documents that already exist. On the Dean's approval
+ * each examiner is emailed their own two documents. Examiners have no
+ * account in this system, so that dispatch happens outside the
+ * WorkflowEngine/ApplicationDecided path.
  * See AppointmentLetterController::generatePack() and dispatchPacks().
  *
- * A straight linear chain, no conditional routing.
+ * Two stages, no conditional routing. It was three until 2026-09-30: the
+ * Chair filed a nomination and the Academic Executive endorsed it, which is
+ * the work that now happens upstream in Hani's chain. Keeping it here would
+ * have meant the same panel being chosen twice.
  */
-class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
+class AppointmentLetterWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLinks
 {
     public function key(): string
     {
@@ -46,18 +53,11 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
     {
         return [
             new Stage(
-                key: 'academic_exec',
-                label: 'Academic Executive',
-                role: Role::ACADEMIC_EXEC,
-                decision: 'endorsed',
-                queueTitle: 'Pending My Endorsement',
-            ),
-            new Stage(
                 key: 'cgs_prep',
                 label: 'Non-Executive CGS',
                 role: Role::NON_EXEC_CGS,
                 decision: 'prepared',
-                queueTitle: 'Letters to Prepare',
+                queueTitle: 'Packs to Prepare',
             ),
             new Stage(
                 key: 'dean',
@@ -86,8 +86,9 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
 
     public function createRoute(): ?string
     {
-        // Filed by the Chair of Department, not by students, so it never
-        // appears under a student's "New Application" list.
+        // Opened by CGS importing the finalised list, not by anybody filling
+        // in a form, so it never appears under a student's "New
+        // Application" list.
         return null;
     }
 
@@ -97,15 +98,15 @@ class AppointmentLetterWorkflow implements WorkflowModule, ProvidesLinks
     }
 
     /**
-     * The Chair no longer files nominations, so they get nothing from this
-     * chain -- see the class doc comment. CGS keeps the examiner list, so a
-     * new examiner can still be registered by whoever hears of them first.
+     * Importing the list is stage zero -- it happens before the chain
+     * starts, so no stage owns it and it would otherwise appear in nobody's
+     * sidebar.
      */
     public function links(User $user): array
     {
         return match ($user->role) {
             Role::NON_EXEC_CGS => [
-                ['label' => 'Examiner List', 'route' => 'appointment-letter.examiners'],
+                ['label' => 'Import Examiner List', 'route' => 'appointment-letter.import'],
                 ['label' => 'Issued Appointments', 'route' => 'appointment-letter.issued'],
             ],
             default => [],

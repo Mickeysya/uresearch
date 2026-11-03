@@ -2,7 +2,9 @@
 
 namespace App\Modules\Nureen\Support;
 
+use App\Modules\Nureen\Imports\AttendanceSheetImport;
 use Carbon\CarbonImmutable;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * The shape of a UTrace attendance export, in one place.
@@ -91,5 +93,59 @@ final class AttendanceSheet
         }
 
         return null;
+    }
+
+    /**
+     * Parse a UTrace-shaped CSV/.xlsx file -- a path string or an
+     * UploadedFile -- into normalised rows, after checking the header
+     * matches COLUMNS exactly.
+     *
+     * Shared by the manual upload and InboxFolderSource so the two can
+     * never drift on what counts as a valid file: a header row that passes
+     * one is guaranteed to pass the other, because it is the same check.
+     *
+     * @return array{rows: array<int, array{matric_no: mixed, period_end: mixed, sessions_attended: mixed, sessions_total: mixed, line: int}>, error: ?string}
+     */
+    public static function readFile(mixed $file): array
+    {
+        try {
+            $sheets = Excel::toArray(new AttendanceSheetImport(), $file);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [
+                'rows' => [],
+                'error' => 'That file could not be read. Use a .csv or .xlsx export from UTrace, '
+                    .'or start from the template on the upload page.',
+            ];
+        }
+
+        $rows = $sheets[0] ?? [];
+        $header = array_map(fn ($h) => strtolower(trim((string) $h)), array_shift($rows) ?? []);
+
+        if (array_slice($header, 0, 4) !== self::COLUMNS) {
+            return [
+                'rows' => [],
+                'error' => 'The first row must be exactly: '.implode(', ', self::COLUMNS)
+                    .'. Download the template on the upload page to start from a correct file.',
+            ];
+        }
+
+        $normalised = [];
+
+        foreach ($rows as $i => $row) {
+            [$matricNo, $periodEnd, $attended, $total] = array_pad(array_values($row), 4, null);
+
+            $normalised[] = [
+                'matric_no' => $matricNo,
+                'period_end' => $periodEnd,
+                'sessions_attended' => $attended,
+                'sessions_total' => $total,
+                // +2: the sheet's own numbering, counting the header as row 1.
+                'line' => $i + 2,
+            ];
+        }
+
+        return ['rows' => $normalised, 'error' => null];
     }
 }

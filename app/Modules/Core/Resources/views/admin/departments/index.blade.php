@@ -137,7 +137,7 @@
                                     @elseif (($counts[$department->name] ?? 0) > 0)
                                         <span class="dept-exec-none">Nobody assigned</span>
                                     @else
-                                        <span class="dept-exec-empty">&mdash;</span>
+                                        <span class="dept-exec-empty">—</span>
                                     @endif
                                 </td>
                                 @if (auth()->user()->isAdmin())

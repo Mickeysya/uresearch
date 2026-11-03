@@ -37,11 +37,15 @@ interface SuppliesAttendance
     public function latestFor(User $student): ?AttendanceReading;
 
     /**
-     * Where this student's attendance is heading, as a percentage, or null
-     * when there is too little history to have a trend at all. The rule is
-     * the supplying module's business -- Core only renders the number.
+     * The student dashboard's "Attendance Action" card: what this student
+     * should do next about attendance, already worded, or null to leave the
+     * card out. The rule and the wording are the supplying module's
+     * business -- Core only renders it. (This replaced projectionFor(): a
+     * projected percentage is a CGS figure and never reaches a student.)
+     *
+     * @return array{label: string, value: string, note: string, pill: string, pillTone: string, url: string}|null
      */
-    public function projectionFor(User $student): ?float;
+    public function actionFor(User $student): ?array;
 
     /**
      * The most recent reading for every student, one each -- the portal-wide

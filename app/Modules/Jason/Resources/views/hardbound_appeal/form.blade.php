@@ -1,68 +1,96 @@
 @extends('core::layouts.app')
 
-@section('title', 'Appeal a Hardbound Submission')
+@section('title', 'Appeal for an Extension')
 
 @section('content')
 <div class="card-container-inline">
     <x-core::page-header
-        title="Appeal Hardbound Submission" />
+        title="Appeal Hardbound Submission"
+        subtitle="Appeal for an extension of your hardbound thesis submission deadline." />
 
     <div class="card card-wide">
-        @if ($submissions->isEmpty())
+        @if (($filed ?? collect())->isNotEmpty())
+            <div class="app-item" style="margin-bottom: 18px;">
+                <p><b>Appeals you have filed</b></p>
+                <ul class="doc-list">
+                    @foreach ($filed as $appeal)
+                        <li>
+                            <b>#{{ $appeal->id }}</b>
+                            <span style="color: var(--text-grey);">{{ ucfirst($appeal->status) }}</span>
+                            &nbsp;<a href="{{ route('hardbound-appeal.read', $appeal) }}">Read the memo &rarr;</a>
+                        </li>
+                    @endforeach
+                </ul>
+                <p class="field-hint">
+                    The memo is written from what you entered and signed with the signature on your
+                    account. It opens on a page, so there is nothing to download to check it.
+                </p>
+            </div>
+        @endif
+
+        @if ($open)
             <div class="empty-state">
-                You have no hardbound submission to appeal.<br>
-                An appeal can only be filed against a submission CGS has rejected, and only
-                once. If CGS returned yours for correction, resubmit it instead.
+                <p>Appeal <b>#{{ $open->id }}</b> is still being processed.</p>
+                <p class="queue-meta">
+                    One appeal at a time: a second memo would reach CGS as two appeals for the
+                    same deadline. Track this one from your applications page.
+                </p>
+                <a href="{{ route('applications.index') }}" class="btn">Track appeal #{{ $open->id }}</a>
             </div>
         @else
             <p class="queue-meta">
-                CGS compiles your memo and the original submission into a Dean PFR report,
-                and the Senior Executive rules on it. If the appeal is upheld you will be
-                able to resubmit the thesis.
+                Fill this in and the portal writes the CGS memo, <b>Appeal for Extension of
+                Hardbound Thesis Submission</b>, for you: addressed to the Dean of Postgraduate
+                and Research, through your supervisor and your HOD/Chair, and carrying your
+                name, student ID ({{ $student->matric_no ?: 'not on your record' }}) and
+                department ({{ $student->department ?: 'not on your record' }}). Nothing to
+                download, print or scan.
             </p>
 
+            @unless ($signature)
+                <div class="message-error">
+                    <b>You need a signature on file before you can file an appeal.</b> The memo is
+                    signed with the image you upload at
+                    <a href="{{ route('hardbound.signature') }}"><b>My Signature</b></a>, under your
+                    name and student ID, the same way your supervisor signs theirs. It goes to the
+                    Dean, so it cannot leave over a blank signature line.
+                </div>
+            @endunless
+
             <form method="POST" action="{{ route('hardbound-appeal.store') }}"
-                  enctype="multipart/form-data" class="app-form" data-stepper>
+                  class="app-form" data-stepper>
                 @csrf
 
-                <fieldset class="fstep" data-label="Which submission">
-                <p class="fstep-hint">An appeal is filed against one rejected
-                   submission, and only once.</p>
+                <fieldset class="fstep" data-label="Dates">
+                <p class="fstep-hint">The deadline you are working to, and the one you
+                   are asking for.</p>
 
-                <label for="hardbound_application_id">Submission Being Appealed</label>
-                <select name="hardbound_application_id" id="hardbound_application_id" required
-                        class="@error('hardbound_application_id') is-invalid @enderror">
-                    <option value="">Select the rejected submission</option>
-                    @foreach ($submissions as $submission)
-                        <option value="{{ $submission->id }}"
-                                @selected(old('hardbound_application_id') == $submission->id)>
-                            #{{ $submission->id }}, {{ $submission->module()->summary($submission) }}
-                        </option>
-                    @endforeach
-                </select>
-                @error('hardbound_application_id') <p class="field-error">{{ $message }}</p> @enderror
+                <label for="original_deadline">Current Submission Deadline
+                    <span style="color: var(--text-grey);">(optional)</span></label>
+                <input type="date" name="original_deadline" id="original_deadline"
+                       value="{{ old('original_deadline') }}"
+                       class="@error('original_deadline') is-invalid @enderror">
+                @error('original_deadline') <p class="field-error">{{ $message }}</p> @enderror
+
+                <label for="requested_until">Extension Requested Until</label>
+                <input type="date" name="requested_until" id="requested_until" required
+                       value="{{ old('requested_until') }}"
+                       class="@error('requested_until') is-invalid @enderror">
+                @error('requested_until') <p class="field-error">{{ $message }}</p> @enderror
                 </fieldset>
 
-                <fieldset class="fstep" data-label="Grounds">
-                <p class="fstep-hint">What CGS got wrong, in your own words. This is
-                   quoted in the Dean PFR report the Senior Executive rules on.</p>
+                <fieldset class="fstep" data-label="Your appeal">
+                <p class="fstep-hint">In your own words. This is printed as the body of
+                   the memo, exactly as you write it, and is what the Dean reads.</p>
 
-                <label for="justification">Grounds for the Appeal</label>
-                <textarea name="justification" id="justification" rows="6" required
-                          class="@error('justification') is-invalid @enderror">{{ old('justification') }}</textarea>
-                @error('justification') <p class="field-error">{{ $message }}</p> @enderror
-                </fieldset>
-
-                <fieldset class="fstep" data-label="Appeal memo">
-                <p class="fstep-hint">Your formal memo. CGS compiles it with the
-                   original submission into the report.</p>
-
-                <label for="appeal_memo">Appeal Memo</label>
-                <input type="file" name="appeal_memo" id="appeal_memo" required
-                       class="@error('appeal_memo') is-invalid @enderror">
-                @error('appeal_memo') <p class="field-error">{{ $message }}</p> @enderror
-                <p class="queue-meta" style="margin-top: -8px;">
-                    PDF, Word, Excel or an image, up to 10 MB.
+                <label for="reason">Reason for the Appeal</label>
+                <textarea name="reason" id="reason" rows="10" required
+                          placeholder="Explain why you cannot submit your hardbound thesis by the deadline, and what remains to be done."
+                          class="@error('reason') is-invalid @enderror">{{ old('reason') }}</textarea>
+                @error('reason') <p class="field-error">{{ $message }}</p> @enderror
+                <p class="field-hint">
+                    Leave a blank line between paragraphs. The closing sentence naming the date
+                    you are asking for is added for you.
                 </p>
                 </fieldset>
 
@@ -73,5 +101,4 @@
         @endif
     </div>
 </div>
-
 @endsection

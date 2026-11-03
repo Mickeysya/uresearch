@@ -2,6 +2,7 @@
 
 namespace App\Modules\Jason\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesDashboardAlerts;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
@@ -36,7 +37,7 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
  * to an engine change. There is no separate "rejected outright" ending: the
  * student may either resubmit or take it to Appeal Hardbound Submission.
  */
-class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks, ProvidesDashboardAlerts
+class HardboundSubmissionWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLinks, ProvidesDashboardAlerts
 {
     public function key(): string
     {
@@ -98,8 +99,8 @@ class HardboundSubmissionWorkflow implements WorkflowModule, ProvidesLinks, Prov
             $replaced = HardboundSubmissionDetail::where('resubmission_of_id', $application->id)->exists();
 
             $summary .= $replaced
-                ? ' — replaced by a resubmission'
-                : ' — returned for correction; resubmit or appeal from the Hardbound Submission page';
+                ? ' (replaced by a resubmission)'
+                : ' (returned for correction). Resubmit from the Hardbound Submission page.';
         }
 
         return $summary;

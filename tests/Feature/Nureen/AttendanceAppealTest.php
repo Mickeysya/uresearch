@@ -9,6 +9,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Nureen\Concerns\FilesAttendanceAppeals;
+use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\TestCase;
 
 /**
@@ -22,6 +24,8 @@ use Tests\TestCase;
  */
 class AttendanceAppealTest extends TestCase
 {
+    use FilesAttendanceAppeals;
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 
@@ -36,8 +40,10 @@ class AttendanceAppealTest extends TestCase
         $record = $this->record($student->id);
 
         $this->actingAs($student)
-            ->post(route('attendance-appeal.store'), [
+            ->post(route('attendance-appeal.store'), $this->appealDocuments() + [
                 'attendance_record_id' => $record->id,
+                // Naming a period now means saying how many of its missed sessions it covers.
+                'sessions_requested' => 4,
                 'reason' => 'I was on approved medical leave for four of the sessions marked absent.',
             ])
             ->assertRedirect(route('applications.index'));
@@ -60,8 +66,9 @@ class AttendanceAppealTest extends TestCase
         $record = $this->record($theirs->id);
 
         $this->actingAs($mine)
-            ->post(route('attendance-appeal.store'), [
+            ->post(route('attendance-appeal.store'), $this->appealDocuments() + [
                 'attendance_record_id' => $record->id,
+                'sessions_requested' => 4,
                 'reason' => 'This period was recorded against me in error and should be reviewed.',
             ])
             ->assertForbidden();
@@ -70,29 +77,32 @@ class AttendanceAppealTest extends TestCase
         $this->assertSame(0, AttendanceAppealDetail::count());
     }
 
-    /** Unlike GA Extension and Supervision, the evidence here is welcome but not demanded. */
-    public function test_the_supporting_document_is_optional_but_stored_privately_when_given(): void
+    /**
+     * The justification letter and monthly activity breakdown are required
+     * (see test_both_required_documents_are_enforced); any OTHER supporting
+     * document is still optional, and stored privately when given.
+     */
+    public function test_an_extra_supporting_document_is_optional_but_stored_privately_when_given(): void
     {
-        Storage::fake('local');
-
         $student = $this->student();
 
         $this->actingAs($student)
-            ->post(route('attendance-appeal.store'), [
+            ->post(route('attendance-appeal.store'), $this->appealDocuments() + [
                 'reason' => 'The uploaded sheet double-counted the week I was away on fieldwork.',
             ])
             ->assertRedirect(route('applications.index'));
 
-        $this->assertSame(0, Application::sole()->documents()->count());
+        $this->assertSame(0, Application::sole()->documents()->where('doc_type', 'Supporting Document')->count());
+        $this->assertSame(2, Application::sole()->documents()->count());
 
         $this->actingAs($student)
-            ->post(route('attendance-appeal.store'), [
+            ->post(route('attendance-appeal.store'), $this->appealDocuments() + [
                 'reason' => 'Attaching the medical certificate for the sessions in question.',
                 'supporting_document' => UploadedFile::fake()->create('mc.pdf', 40, 'application/pdf'),
             ]);
 
         $withDocument = Application::where('module_type', 'attendance_appeal')->latest('id')->first();
-        $document = $withDocument->documents()->sole();
+        $document = $withDocument->documents()->where('doc_type', 'Supporting Document')->sole();
 
         $this->assertSame('mc.pdf', $document->original_name);
         $this->assertStringStartsWith("applications/{$withDocument->id}/", $document->path);
@@ -102,7 +112,7 @@ class AttendanceAppealTest extends TestCase
     public function test_an_appeal_needs_a_stated_reason(): void
     {
         $this->actingAs($this->student())
-            ->post(route('attendance-appeal.store'), ['reason' => 'Wrong.'])
+            ->post(route('attendance-appeal.store'), $this->appealDocuments() + ['reason' => 'Wrong.'])
             ->assertSessionHasErrors('reason');
 
         $this->assertSame(0, Application::where('module_type', 'attendance_appeal')->count());
@@ -112,7 +122,7 @@ class AttendanceAppealTest extends TestCase
     public function test_an_appeal_can_be_filed_without_naming_a_record(): void
     {
         $this->actingAs($this->student())
-            ->post(route('attendance-appeal.store'), [
+            ->post(route('attendance-appeal.store'), $this->appealDocuments() + [
                 'reason' => 'The UTrace export for this semester does not match my own timetable at all.',
             ])
             ->assertRedirect(route('applications.index'));

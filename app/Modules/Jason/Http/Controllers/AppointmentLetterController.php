@@ -3,6 +3,7 @@
 namespace App\Modules\Jason\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
+use App\Modules\Jason\Http\Controllers\Concerns\PreviewsDocuments;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApplicationDocument;
@@ -11,16 +12,22 @@ use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
+use App\Modules\Jason\Exports\AppointmentTemplateExport;
+use App\Modules\Jason\Imports\AppointmentSheetImport;
 use App\Modules\Jason\Mail\AppointmentLetterMail;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
+use App\Modules\Jason\Models\HardboundSignature;
 use App\Modules\Jason\Notifications\ExaminersAppointed;
+use App\Modules\Jason\Support\AppointmentSheet;
+use App\Modules\Jason\Support\ExaminerDirectory;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -29,6 +36,7 @@ use Illuminate\Validation\UnauthorizedException;
 class AppointmentLetterController extends Controller
 {
     use ApprovesApplications;
+    use PreviewsDocuments;
 
     public const DOC_LETTER = 'Appointment Letter';
 
@@ -37,6 +45,305 @@ class AppointmentLetterController extends Controller
     protected function moduleKey(): string
     {
         return 'appointment_letter';
+    }
+
+    /**
+     * Where CGS starts: the finalised examiner list arrives as a
+     * spreadsheet, and this is the screen that takes it.
+     */
+    public function importForm(Request $request)
+    {
+        return view('jason::appointment_letter.import', [
+            'columns' => AppointmentSheet::TEMPLATE_HEADINGS,
+            'poolAvailable' => ExaminerDirectory::available(),
+        ]);
+    }
+
+    /**
+     * The blank list, for when CGS has no file from the faculty side.
+     */
+    public function template(Request $request)
+    {
+        $stamp = now()->format('Y-m-d');
+
+        if ($request->query('format') === 'csv') {
+            return response()->streamDownload(function () {
+                $out = fopen('php://output', 'w');
+                fputcsv($out, AppointmentSheet::TEMPLATE_HEADINGS);
+                foreach (AppointmentSheet::sampleRows() as $row) {
+                    fputcsv($out, $row);
+                }
+                fclose($out);
+            }, "examiner-list-template-{$stamp}.csv", ['Content-Type' => 'text/csv']);
+        }
+
+        return Excel::download(new AppointmentTemplateExport(), "examiner-list-template-{$stamp}.xlsx");
+    }
+
+    /**
+     * Reads the finalised examiner list and opens one appointment per
+     * candidate on it, each carrying its own panel.
+     *
+     * One row per examiner, grouped on matric_no -- see AppointmentSheet.
+     * Nothing is written unless every row is good: a list is approved as a
+     * whole upstream, and importing half of it would leave CGS to work out
+     * which candidates made it.
+     *
+     * Not routed through DocumentStore: the sheet is not one candidate's
+     * document, it is parsed into applications and discarded, the same way
+     * the attendance import treats a UTrace export.
+     */
+    public function import(Request $request, WorkflowEngine $engine)
+    {
+        $request->validate([
+            'sheet' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:5120'],
+        ], [
+            'sheet.required' => 'Choose the examiner list to import.',
+        ]);
+
+        try {
+            $sheets = Excel::toArray(new AppointmentSheetImport(), $request->file('sheet'));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'That file could not be read. Upload a .csv or .xlsx, '
+                .'or start from the template on this page.');
+        }
+
+        $rows = $sheets[0] ?? [];
+        $columns = AppointmentSheet::mapHeader(array_shift($rows) ?? []);
+
+        if (! isset($columns['matric_no'])) {
+            return back()->with('error', 'That sheet has no "Matric No" column, so its rows cannot be '
+                .'matched to candidates. Columns are read by name in any order; download the template '
+                .'on this page to see the headings this expects.');
+        }
+
+        [$candidates, $problems] = $this->readSheet($rows, $columns);
+
+        if ($problems !== []) {
+            return back()->with('error', 'Nothing was imported. '.implode(' ', array_slice($problems, 0, 6))
+                .(count($problems) > 6 ? ' (+'.(count($problems) - 6).' more)' : ''));
+        }
+
+        $opened = [];
+
+        DB::transaction(function () use ($candidates, $request, $engine, &$opened) {
+            foreach ($candidates as $candidate) {
+                $application = Application::create([
+                    'student_id' => $candidate['student']->id,
+                    // The CGS officer who imported the list. Nobody files
+                    // this on a form any more -- the decision that produced
+                    // it was taken before the list arrived.
+                    'submitted_by_id' => $request->user()->id,
+                    'module_type' => $this->moduleKey(),
+                    'status' => Application::STATUS_DRAFT,
+                ]);
+
+                AppointmentDetail::create([
+                    'application_id' => $application->id,
+                    'candidate_degree' => $candidate['degree'],
+                    'candidate_programme' => $candidate['programme'],
+                    'supervisor_name' => $candidate['supervisor_name'],
+                    'thesis_title' => $candidate['thesis_title'],
+                ]);
+
+                foreach ($candidate['examiners'] as $examiner) {
+                    AppointmentExaminer::create(['application_id' => $application->id] + $examiner);
+                }
+
+                $opened[] = $engine->submit($application);
+            }
+        });
+
+        $count = count($opened);
+        $packs = collect($candidates)->sum(fn ($c) => count($c['examiners']));
+
+        return redirect()
+            ->route('appointment-letter.queue')
+            ->with('status', "{$count} ".Str::plural('candidate', $count).' imported, '
+                ."{$packs} ".Str::plural('examiner', $packs).' in all. '
+                .'Prepare each pack, then send it to the Dean.');
+    }
+
+    /**
+     * Turns the sheet's rows into one entry per candidate, or into a list of
+     * what is wrong with them.
+     *
+     * One row IS one candidate: the panel arrives in four named slots rather
+     * than on four rows. Each slot carries a name, and the rest of what a
+     * letter needs -- an email to send it to, an institution for the address
+     * block -- is read from the examiner records the nomination chain keeps.
+     * Where the row carries the nomination's application number that lookup
+     * is exact; otherwise the names are matched.
+     *
+     * Every problem is reported with its row number, because the person
+     * repairing the file is looking at row numbers.
+     *
+     * @param  array<int, array<int, mixed>>  $rows
+     * @param  array<string, int>  $columns
+     * @return array{0: array<string, array<string, mixed>>, 1: array<int, string>}
+     */
+    protected function readSheet(array $rows, array $columns): array
+    {
+        $candidates = [];
+        $problems = [];
+
+        foreach ($rows as $i => $row) {
+            // +2: the header is row 1 and spreadsheets count from 1.
+            $line = $i + 2;
+            $cell = fn (string $key) => isset($columns[$key])
+                ? trim((string) ($row[$columns[$key]] ?? ''))
+                : '';
+
+            if (trim(implode('', array_map('strval', $row))) === '') {
+                continue;
+            }
+
+            $matric = $cell('matric_no');
+            $student = $matric === '' ? null : User::where('role', Role::STUDENT)->where('matric_no', $matric)->first();
+
+            if (! $student) {
+                $problems[] = "Row {$line}: no candidate with matric number \"{$matric}\".";
+
+                continue;
+            }
+
+            if (isset($candidates[$matric])) {
+                $problems[] = "Row {$line}: {$matric} is on this sheet twice.";
+
+                continue;
+            }
+
+            $examiners = $this->readPanel($cell, $line, $problems);
+
+            if ($examiners === []) {
+                continue;
+            }
+
+            $kinds = array_unique(array_column($examiners, 'examiner_type'));
+
+            if (count($kinds) < 2) {
+                $problems[] = "Row {$line}: a panel needs at least one internal and one external examiner.";
+
+                continue;
+            }
+
+            $candidates[$matric] = [
+                'student' => $student,
+                // The export calls the study mode "Programme" (MSc
+                // Full-Time) and the field "Department" (Computing). The
+                // letter wants them the other way round: "MSc in Computing"
+                // as the degree, "Computing" as the programme. CGS still
+                // confirms both when preparing.
+                'degree' => $this->degreeFrom($cell('programme'), $cell('department')),
+                'programme' => $cell('department') ?: $cell('programme') ?: null,
+                'supervisor_name' => $cell('supervisor_name') ?: $student->supervisor?->name,
+                'thesis_title' => $cell('thesis_title') ?: null,
+                'examiners' => $examiners,
+            ];
+        }
+
+        return [$candidates, $problems];
+    }
+
+    /**
+     * "MSc Full-Time" + "Computing" becomes "MSc in Computing".
+     *
+     * The letter names a degree, not a mode of study. Anything the mode is
+     * not recognised as leaves this null, and CGS writes it on the
+     * preparation screen rather than the letter carrying a guess.
+     */
+    protected function degreeFrom(string $mode, string $field): ?string
+    {
+        $level = match (true) {
+            str_contains(strtolower($mode), 'phd') => 'PhD',
+            str_contains(strtolower($mode), 'msc'),
+            str_contains(strtolower($mode), 'master') => 'MSc',
+            default => null,
+        };
+
+        if (! $level) {
+            return null;
+        }
+
+        return $field !== '' ? "{$level} in {$field}" : $level;
+    }
+
+    /**
+     * The four panel slots on one row.
+     *
+     * A slot left blank is simply not on the panel -- a list that names only
+     * a main examiner each side is a complete list. A slot that names
+     * somebody the portal cannot find is a problem, because an appointment
+     * letter with no address to go to is worse than no appointment.
+     *
+     * @param  array<int, string>  $problems
+     * @return array<int, array<string, string>>
+     */
+    protected function readPanel(callable $cell, int $line, array &$problems): array
+    {
+        // The exact path first: the nomination's own row names its four
+        // examiners by id, so two people with the same name cannot be
+        // confused for one another.
+        if ($panel = ExaminerDirectory::panelForNomination($cell('nomination_id'))) {
+            return array_map(fn (array $e) => $this->examinerRow($e), $panel);
+        }
+
+        $examiners = [];
+
+        foreach (AppointmentSheet::SLOTS as [$nameKey, $detailKey, $type, $role]) {
+            $name = $cell($nameKey);
+
+            if ($name === '') {
+                continue;
+            }
+
+            $known = ExaminerDirectory::byName($name);
+
+            if (! $known) {
+                $problems[] = "Row {$line}: \"{$name}\" is not in the examiner records, so there is no "
+                    .'address to send their appointment to.';
+
+                continue;
+            }
+
+            $examiners[] = $this->examinerRow($known + [
+                'examiner_type' => $type,
+                'examiner_role' => $role,
+                // What the sheet says about them wins over the record: the
+                // list is the document the Dean approved.
+                'examiner_department' => $cell($detailKey) ?: ($known['examiner_department'] ?? ''),
+            ]);
+        }
+
+        return $examiners;
+    }
+
+    /**
+     * One `appointment_examiners` row, as the letters need it.
+     *
+     * @param  array<string, string>  $examiner
+     * @return array<string, string>
+     */
+    protected function examinerRow(array $examiner): array
+    {
+        $institution = $examiner['examiner_institution'] ?? '';
+        $department = $examiner['examiner_department'] ?? '';
+
+        return [
+            'examiner_type' => $examiner['examiner_type'],
+            'examiner_role' => $examiner['examiner_role'],
+            'examiner_name' => $examiner['examiner_name'],
+            'examiner_institution' => $department !== '' && $examiner['examiner_type'] === AppointmentExaminer::TYPE_INTERNAL
+                ? $department.', UTP'
+                : ($institution ?: $department),
+            'examiner_email' => $examiner['examiner_email'],
+            // The address block on the letter. CGS can still adjust it when
+            // preparing, which is where a postal address gets added for an
+            // external examiner the records hold only an institution for.
+            'examiner_address' => trim(implode("\n", array_filter([$department, $institution]))),
+        ];
     }
 
     public function queue(Request $request, WorkflowEngine $engine, ModuleRegistry $registry)
@@ -256,6 +563,16 @@ class AppointmentLetterController extends Controller
         // which stage this decision was actually made at.
         $stage = $engine->currentStage($application);
 
+        // The Dean signs every letter in the pack, so there has to be a
+        // signature to stamp. Same gate the Supervisor and the Chairman
+        // carry on the Confirmation of Correction; rejecting signs nothing.
+        if ($data['decision'] === 'approve' && $stage?->key === 'dean'
+            && ! HardboundSignature::forUser($request->user()->id)) {
+            return redirect()->route('hardbound.signature')
+                ->with('error', 'Upload your signature first. Approving stamps it onto every '
+                    .'appointment letter in the pack before they go out.');
+        }
+
         // Approving out of the preparation stage has to go through the prepare
         // form, which is what actually writes the letters. Waving it through
         // from the queue's generic Approve button would hand the Dean nothing
@@ -276,6 +593,16 @@ class AppointmentLetterController extends Controller
         $approved = $data['decision'] === 'approve';
 
         if ($approved && $stage?->key === 'dean') {
+            // The letters go out over the Dean's signature, so it is stamped
+            // into them now and the archived copies replaced -- the pack was
+            // prepared before this decision existed. Done before dispatch,
+            // because what an examiner receives is read back off the disk.
+            $this->generatePack(
+                $application,
+                AppointmentDetail::where('application_id', $application->id)->firstOrFail(),
+                $request->user(),
+            );
+
             // The appointment is real from this moment: it starts each
             // examiner's cooldown, whether or not the mail gets through.
             AppointmentExaminer::where('application_id', $application->id)
@@ -284,15 +611,60 @@ class AppointmentLetterController extends Controller
 
             $this->dispatchPacks($application);
 
-            $application->student?->notify(new ExaminersAppointed(
-                $application,
-                $this->examinerLines(AppointmentExaminer::where('application_id', $application->id)->get()),
-            ));
+            $this->announceAppointment($application);
         }
 
         $verb = $approved ? 'approved' : 'rejected';
 
         return back()->with('status', "Application #{$application->id} {$verb}.");
+    }
+
+    /**
+     * The pack on a page: every document the Dean is being asked to approve,
+     * with one of them framed.
+     *
+     * A panel of four is eight documents, and the Dean's decision rests on
+     * reading them. Downloading eight files to check a nomination, and
+     * another eight for the next one, is the thing this replaces -- they are
+     * listed here and read in place, one at a time.
+     */
+    public function pack(Request $request, Application $application)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $documents = ApplicationDocument::where('application_id', $application->id)
+            ->whereIn('doc_type', [self::DOC_LETTER, self::DOC_REPORT])
+            ->orderBy('doc_type')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn ($document) => $document->visibleTo($request->user()))
+            ->values();
+
+        abort_if($documents->isEmpty(), 404, 'Nothing has been prepared for this nomination yet.');
+
+        // ?doc= picks which one is framed; the first otherwise.
+        $showing = $documents->firstWhere('id', (int) $request->query('doc')) ?? $documents->first();
+
+        return view('jason::appointment_letter.pack', [
+            'application' => $application,
+            // Where the reader came from. Only CGS and the Dean can open
+            // this, and both arrive from the queue.
+            'backTo' => route('appointment-letter.queue'),
+            'backLabel' => 'Back to the queue',
+            'detail' => AppointmentDetail::where('application_id', $application->id)->first(),
+            'student' => $application->student,
+            'documents' => $documents,
+            'showing' => $showing,
+        ]);
+    }
+
+    /** One pack document, inline so the page above can frame it. */
+    public function document(Request $request, Application $application, ApplicationDocument $document)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($document->application_id === $application->id, 404);
+
+        return $this->serveArchived($document, $request);
     }
 
     /**
@@ -346,6 +718,35 @@ class AppointmentLetterController extends Controller
     }
 
     /**
+     * Tells everyone the appointment concerns: the candidate, their
+     * supervisor, the Academic Executive and CGS.
+     *
+     * The engine notifies the candidate on every decision and nobody else,
+     * which is right for a chain a student files. This one is filed by CGS
+     * off the back of a decision taken upstream, so the people who chose the
+     * panel and who will run the viva have to hear that it is now real. One
+     * notification class, worded from the recipient's side.
+     */
+    protected function announceAppointment(Application $application): void
+    {
+        $lines = $this->examinerLines(AppointmentExaminer::where('application_id', $application->id)->get());
+        $student = $application->student;
+
+        $recipients = collect([$student, $student?->supervisor])
+            ->merge(User::whereIn('role', [Role::ACADEMIC_EXEC, Role::NON_EXEC_CGS])
+                ->when($student?->department, fn ($q, $department) => $q->where(
+                    fn ($inner) => $inner->where('department', $department)->orWhere('role', Role::NON_EXEC_CGS)
+                ))
+                ->get())
+            ->filter()
+            ->unique('id');
+
+        foreach ($recipients as $recipient) {
+            $recipient->notify(new ExaminersAppointed($application, $lines));
+        }
+    }
+
+    /**
      * "Name (internal)" per examiner, internal first, for the candidate's notices.
      *
      * @param  \Illuminate\Support\Collection<int, AppointmentExaminer>  $examiners
@@ -367,10 +768,11 @@ class AppointmentLetterController extends Controller
      * rather than ones that will be produced afterwards. They land as
      * ApplicationDocuments, which is what the Dean's queue lists.
      */
-    protected function generatePack(Application $application, AppointmentDetail $detail): void
+    protected function generatePack(Application $application, AppointmentDetail $detail, ?User $signedBy = null): void
     {
         $store = app(DocumentStore::class);
-        $dean = User::where('role', Role::DEAN_PGR)->orderBy('name')->first();
+        $dean = $signedBy ?: User::where('role', Role::DEAN_PGR)->orderBy('name')->first();
+        $deanSignature = $signedBy ? HardboundSignature::forUser($signedBy->id)?->dataUri() : null;
 
         foreach ($detail->examiners as $examiner) {
             $slug = Str::slug($examiner->examiner_name);
@@ -383,10 +785,29 @@ class AppointmentLetterController extends Controller
                 'student' => $application->student,
                 'issuedAt' => $detail->letter_prepared_at,
                 'dean' => $dean,
+                'deanSignature' => $deanSignature,
             ])->output();
+
+            // Replace rather than add: an application carries exactly one
+            // current letter per examiner, and after the Dean signs it is
+            // the signed one.
+            ApplicationDocument::where('application_id', $application->id)
+                ->where('doc_type', self::DOC_LETTER)
+                ->where('original_name', "Appointment-Letter-{$type}-{$slug}.pdf")
+                ->get()
+                ->each(function ($previous) {
+                    Storage::disk('local')->delete($previous->path);
+                    $previous->delete();
+                });
 
             $store->storeGenerated($application, $letter,
                 "Appointment-Letter-{$type}-{$slug}.pdf", self::DOC_LETTER);
+
+            // The evaluation report carries no Dean block, so there is
+            // nothing to re-stamp; it is written once, at preparation.
+            if ($signedBy) {
+                continue;
+            }
 
             $report = Pdf::loadView('jason::appointment_letter.report', [
                 'application' => $application,

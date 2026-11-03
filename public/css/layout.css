@@ -616,6 +616,13 @@ button[value="rejected"]:hover {
     border-color: var(--border-grey);
 }
 
+/* Returned for revision — action is on the student, same tone as pending. */
+.status-badge.returned {
+    background: var(--warning-bg);
+    color: var(--warning-fg);
+    border-color: var(--warning-border);
+}
+
 /* ============================================================
    7 · Flash messages
 

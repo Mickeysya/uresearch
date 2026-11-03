@@ -63,15 +63,19 @@
 
             @else
                 @include('core::partials.sidebar-approver-nav', ['queues' => $queues])
+            @endif
 
-                @if (! empty($extraLinks))
-                    <div class="nav-section-label"><span class="nav-label">Actions</span></div>
-                    @foreach ($extraLinks as $link)
-                        <a href="{{ route($link['route'], $link['params'] ?? []) }}" class="nav-item nav-item-flat" title="{{ $link['label'] }}">
-                            <span class="nav-label">{{ $link['label'] }}</span>
-                        </a>
-                    @endforeach
-                @endif
+            {{-- Module-declared links (ProvidesLinks) for students and
+                 approvers alike. Students were left out until 2026-10-06, so
+                 a module's student links never rendered. CGS places its own
+                 inside its trees, above; the administrator has none. --}}
+            @if (! empty($extraLinks) && ! $user->isAdmin() && ! $user->isCgs())
+                <div class="nav-section-label"><span class="nav-label">Actions</span></div>
+                @foreach ($extraLinks as $link)
+                    <a href="{{ route($link['route'], $link['params'] ?? []) }}" class="nav-item nav-item-flat @if(request()->routeIs($link['route'])) active @endif" title="{{ $link['label'] }}">
+                        <span class="nav-label">{{ $link['label'] }}</span>
+                    </a>
+                @endforeach
             @endif
         @endauth
 

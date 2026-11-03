@@ -113,7 +113,7 @@ Nothing here is decorative. Every dependency closes a specific gap the legacy ap
 
 | Technology | Version | Purpose |
 |---|---|---|
-| **PHPUnit** | `^11.0` | 18 test classes, **88 tests** (as of 2026-09-17), laid out one folder per owner under `tests/Feature/` plus `tests/Unit/`. They cover the workflow engine's two authorisation locks, the CSP header, module-contract conformance, the attendance import and its risk rule, and the approval chains of Norhanis', Nureen's and Hani's modules end to end. SQLite in memory, so the suite needs no Docker and cannot touch a developer's database. The legacy app had none. |
+| **PHPUnit** | `^11.0` | 40 test classes, **240 tests** (as of 2026-10-06), laid out one folder per owner under `tests/Feature/` plus `tests/Unit/`. They cover the workflow engine's authorisation locks and both return paths, the CSP header, module-contract conformance, the attendance import and its risk rule, every teammate's approval chain end to end, Chloe's seat booking (including the one-seat-per-student lock) and dismissal list, and four repo-wide guards that scan every Blade view. SQLite in memory, so the suite needs no Docker and cannot touch a developer's database. The legacy app had none. |
 
 ---
 

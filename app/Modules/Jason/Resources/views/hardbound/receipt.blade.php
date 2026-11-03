@@ -19,7 +19,7 @@
 </head>
 <body>
     <div class="logo">
-        <img src="{{ public_path('images/UTP_logo.png') }}" alt="Universiti Teknologi PETRONAS">
+        <img src="{{ base_path('app/Modules/Jason/Resources/images/utp-logo-print.png') }}" alt="Universiti Teknologi PETRONAS">
     </div>
 
     <h1>Hardbound Thesis Submission: Acknowledgement Receipt</h1>

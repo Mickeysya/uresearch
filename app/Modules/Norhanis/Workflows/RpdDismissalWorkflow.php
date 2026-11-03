@@ -2,6 +2,7 @@
 
 namespace App\Modules\Norhanis\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
@@ -23,7 +24,7 @@ use App\Modules\Norhanis\Models\RpdDismissalDetail;
  * createRoute() returns null because no student can file this. That keeps it
  * out of the student sidebar; the CGS entry point is the masterlist.
  */
-class RpdDismissalWorkflow implements WorkflowModule
+class RpdDismissalWorkflow implements WorkflowModule, DecidesOneAtATime
 {
     public function key(): string
     {

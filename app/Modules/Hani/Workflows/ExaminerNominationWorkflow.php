@@ -3,6 +3,7 @@
 namespace App\Modules\Hani\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -43,7 +44,7 @@ use App\Modules\Hani\Models\ExaminerNomination;
  * cgs_final). That is fine and deliberate -- ModuleRegistry::queuesForRole()
  * returns both, and the queue screen picks between them with ?stage=.
  */
-class ExaminerNominationWorkflow implements WorkflowModule, ProvidesLinks
+class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLinks
 {
     public function key(): string
     {

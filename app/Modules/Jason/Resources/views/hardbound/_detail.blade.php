@@ -6,6 +6,13 @@
     <p>Supervisor: {{ $detail->supervisor_name }}@if ($detail->co_supervisor_name) &middot; Co-supervisor: {{ $detail->co_supervisor_name }}@endif</p>
     <p>Viva: {{ $detail->viva_date?->format('j M Y') ?? '—' }}</p>
 
+    <p class="queue-meta" style="margin-top: 10px;">
+        <a href="{{ route('hardbound.forms', $application) }}"><b>Read the submission forms &rarr;</b></a>
+        &nbsp;UTP/CGS/021 is written by the portal from what the candidate entered and
+        signed with the signature on their account, so it is not in the documents list.
+        It opens on a page rather than downloading.
+    </p>
+
     @if ($detail->isResubmission())
         <p style="margin-top: 10px;">
             <b>Resubmission of #{{ $detail->resubmission_of_id }}</b>

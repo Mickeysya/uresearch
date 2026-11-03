@@ -9,24 +9,28 @@ use App\Modules\Jason\Listeners\RecordExaminerPackDelivery;
 use App\Modules\Jason\Mail\AppointmentLetterMail;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
-use App\Modules\Jason\Models\PoolExaminer;
+use App\Modules\Jason\Support\AppointmentSheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Mail\Events\MessageSent;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
- * Appointment Letter — the two rules that live outside the workflow engine,
- * and so have nothing else watching them.
+ * Appointment Letter: what the module enforces now that examiner selection
+ * happens before it.
  *
- * 1. An examiner the Dean has appointed is unavailable for three months.
- *    Nomination no longer has a form of its own -- see AppointmentLetterWorkflow's
- *    class doc comment -- so these build the panel straight into the
- *    database via nomination() below and check the rule holds regardless.
- * 2. A pack counts as delivered only when the mail transport accepts it.
- *    Dispatch happens after the engine has committed the Dean's approval, so
- *    a failure there leaves an approved nomination whose examiner received
- *    nothing — which is exactly what the Issued Appointments page is for.
+ * The chain begins with CGS importing the finalised list, so the import is
+ * where a bad list has to be caught — a half-imported sheet leaves CGS
+ * working out which candidates made it — and ends with the Dean, where the
+ * packs go out and four different people have to be told.
+ *
+ * A pack counts as delivered only when the mail transport accepts it.
+ * Dispatch happens after the engine has committed the Dean's approval and
+ * cannot be rolled back into it, so nothing else would notice a pack that
+ * never went.
  */
 class JasonAppointmentLetterTest extends TestCase
 {
@@ -39,91 +43,312 @@ class JasonAppointmentLetterTest extends TestCase
         // phpunit.xml asks for the sync queue, but an env var already set in
         // the container wins over it, so QUEUE_CONNECTION stays on redis and
         // a queued mailable would be handed to the dev worker instead of
-        // being sent here. AppointmentLetterMail is ShouldQueue, and these
-        // tests are about what happens once it is actually sent.
+        // being sent here. AppointmentLetterMail is ShouldQueue.
         config(['queue.default' => 'sync']);
     }
 
-    protected function chair(): User
+    protected function cgs(): User
     {
-        return User::firstOrCreate(['email' => 'chair@test.my'], [
-            'name' => 'Dr Chair',
+        return User::firstOrCreate(['email' => 'cgs@test.my'], [
+            'name' => 'Puan Waheeda',
             'password' => 'password',
-            'role' => Role::CHAIR,
-            'department' => 'Civil Engineering',
+            'role' => Role::NON_EXEC_CGS,
+            'department' => 'CGS',
         ]);
     }
 
-    protected function candidate(string $email = 'cand@test.my'): User
+    protected function candidate(string $matric = '22001001', string $email = 'cand@test.my'): User
     {
         return User::firstOrCreate(['email' => $email], [
             'name' => 'Ahmad Danial',
             'password' => 'password',
             'role' => Role::STUDENT,
-            // Unique per candidate: the column is unique, and some of these
-            // tests build more than one.
-            'matric_no' => '2200'.substr(md5($email), 0, 4),
-            'department' => 'Civil Engineering',
+            'matric_no' => $matric,
+            'department' => 'Computer & Information Sciences',
         ]);
     }
 
-    protected function poolExaminer(string $type, string $email): PoolExaminer
+    /** A sheet with the export's header row and whatever rows are given. */
+    protected function sheet(array $rows, string $name = 'examiner-list.csv'): UploadedFile
     {
-        return PoolExaminer::create([
-            'name' => 'Prof '.ucfirst($type),
-            'examiner_type' => $type,
-            'institution' => $type === AppointmentExaminer::TYPE_INTERNAL ? 'UTP' : 'UM',
+        $csv = implode(',', AppointmentSheet::TEMPLATE_HEADINGS)."\n";
+
+        foreach ($rows as $row) {
+            $csv .= implode(',', array_map(fn ($c) => '"'.str_replace('"', '""', (string) $c).'"', $row))."\n";
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'exam').'.csv';
+        file_put_contents($path, $csv);
+
+        return new UploadedFile($path, $name, 'text/csv', null, true);
+    }
+
+    /** An examiner in the records the nomination chain keeps. */
+    protected function knownExaminer(string $name, string $type, string $email, ?string $institution = null): void
+    {
+        DB::table('examiners')->insert([
+            'name' => $name,
             'email' => $email,
-            'expertise' => 'Structural Engineering',
+            'department' => 'Computing',
+            'faculty' => 'FSMC',
+            'institution' => $institution,
+            'type' => $type,
             'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
+    }
+
+    /** The four examiners the sample rows name. */
+    protected function knownPanel(): void
+    {
+        $this->knownExaminer('Dr. Chandra Segaran', 'internal', 'chandra@utp.edu.my');
+        $this->knownExaminer('Prof. Dr. Rosli Hamid', 'internal', 'rosli@utp.edu.my');
+        $this->knownExaminer('Assoc Prof Dr Azimah Binti Hussin', 'external', 'azimah@ukm.edu.my', 'Universiti Kebangsaan Malaysia');
+        $this->knownExaminer('Professor Ir Ts Dr Muzamir Bin Isa', 'external', 'muzamir@unimap.edu.my', 'Universiti Malaysia Perlis');
+    }
+
+    /**
+     * One candidate's row, in the export's column order.
+     *
+     * @param  array<int, string>  $overrides  by column index
+     */
+    protected function row(string $matric, array $overrides = []): array
+    {
+        return array_replace([
+            '2', 'FSMC', 'Computing', 'Ahmad Danial', $matric, 'MSc Full-Time',
+            'Introduction to IoT', 'Dr. Aisyah Rahman',
+            'Dr. Chandra Segaran', 'Civil & Environmental Engineering',
+            'Prof. Dr. Rosli Hamid',
+            'Assoc Prof Dr Azimah Binti Hussin', 'Universiti Kebangsaan Malaysia',
+            'Professor Ir Ts Dr Muzamir Bin Isa',
+            '—', 'Approved', '2026-09-14',
+        ], $overrides);
     }
 
     /* -----------------------------------------------------------------
-     | The three-month cooldown
+     | The import
      |------------------------------------------------------------------*/
 
-    public function test_an_examiner_is_available_until_an_appointment_is_made(): void
+    public function test_a_row_opens_one_appointment_carrying_the_whole_panel(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
+        $this->candidate('22001001', 'a@test.my');
+        $this->candidate('22001002', 'b@test.my');
+        $this->knownPanel();
 
-        $this->assertTrue($examiner->isAvailable());
-        $this->assertNull($examiner->unavailableLabel());
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([$this->row('22001001'), $this->row('22001002')]),
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('appointment-letter.queue'));
+
+        $applications = Application::where('module_type', 'appointment_letter')->get();
+
+        $this->assertCount(2, $applications, 'One appointment per candidate, one row per candidate.');
+
+        foreach ($applications as $application) {
+            // Straight onto the CGS preparation stage: the decision that
+            // produced this list was taken before it arrived.
+            $this->assertSame('cgs_prep', $application->current_stage);
+
+            $panel = AppointmentExaminer::where('application_id', $application->id)->get();
+
+            // Main and backup, both sides, all appointed.
+            $this->assertSame(4, $panel->count());
+            $this->assertEqualsCanonicalizing(
+                ['internal main', 'internal backup', 'external main', 'external backup'],
+                $panel->map(fn ($e) => $e->examiner_type.' '.$e->examiner_role)->all(),
+            );
+        }
     }
 
-    public function test_an_appointment_makes_an_examiner_unavailable_for_three_months(): void
+    /**
+     * The sheet names its examiners and nothing else about them. An
+     * appointment letter with no address to go to is worse than none, so
+     * the email and institution come from the records the nomination chain
+     * keeps.
+     */
+    public function test_each_examiner_is_filled_in_from_the_examiner_records(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $application = $this->nomination($examiner);
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
 
-        AppointmentExaminer::where('application_id', $application->id)
-            ->update(['appointed_at' => now()]);
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), ['sheet' => $this->sheet([$this->row('22001001')])])
+            ->assertSessionHasNoErrors();
 
-        $this->assertFalse($examiner->fresh()->isAvailable());
-        $this->assertStringContainsString('on an appointment until', $examiner->fresh()->unavailableLabel());
+        $application = Application::where('module_type', 'appointment_letter')->firstOrFail();
+
+        $azimah = AppointmentExaminer::where('application_id', $application->id)
+            ->where('examiner_name', 'Assoc Prof Dr Azimah Binti Hussin')
+            ->firstOrFail();
+
+        $this->assertSame('azimah@ukm.edu.my', $azimah->examiner_email);
+        $this->assertSame('external', $azimah->examiner_type);
+        $this->assertSame('main', $azimah->examiner_role);
     }
 
-    public function test_the_cooldown_lapses_on_its_own(): void
+    public function test_an_examiner_the_records_do_not_know_stops_the_import(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $application = $this->nomination($examiner);
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
 
-        // One day past the cooldown: nobody has to reinstate them.
-        AppointmentExaminer::where('application_id', $application->id)->update([
-            'appointed_at' => now()->subMonths(PoolExaminer::COOLDOWN_MONTHS)->subDay(),
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([$this->row('22001001', [8 => 'Dr Nobody At All'])]),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+        $this->assertStringContainsString('Dr Nobody At All', session('error'));
+    }
+
+    /**
+     * A list is approved as a whole upstream, so importing half of it would
+     * leave CGS working out which candidates made it.
+     */
+    public function test_a_bad_row_imports_nothing_and_says_which_row(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([$this->row('22001001'), $this->row('99999999')]),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+        $this->assertStringContainsString('Row 3', session('error'));
+    }
+
+    public function test_a_panel_needs_an_internal_and_an_external_examiner(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
+
+        // Both external slots cleared.
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([$this->row('22001001', [11 => '', 13 => ''])]),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+        $this->assertStringContainsString('internal and one external', session('error'));
+    }
+
+    /** A main examiner with no backup beside them is a complete panel. */
+    public function test_an_empty_backup_slot_is_not_a_problem(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([$this->row('22001001', [10 => '', 13 => ''])]),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $application = Application::where('module_type', 'appointment_letter')->firstOrFail();
+
+        $this->assertSame(2, AppointmentExaminer::where('application_id', $application->id)->count());
+    }
+
+    public function test_the_same_candidate_cannot_appear_twice_on_one_sheet(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => $this->sheet([$this->row('22001001'), $this->row('22001001')]),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+    }
+
+    /**
+     * An export gains and loses trailing columns as the nomination screen
+     * changes, and a list that is right in every way except column order is
+     * still the right list.
+     */
+    public function test_columns_are_read_by_name_in_any_order(): void
+    {
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
+
+        $csv = "Thesis Title,Matric No,External Main,Internal Main,Supervisor,Something We Do Not Know\n"
+            .'"Introduction to IoT",22001001,"Assoc Prof Dr Azimah Binti Hussin",'
+            .'"Dr. Chandra Segaran","Dr. Aisyah Rahman","ignored"'."\n";
+
+        $path = tempnam(sys_get_temp_dir(), 'exam').'.csv';
+        file_put_contents($path, $csv);
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => new UploadedFile($path, 'reordered.csv', 'text/csv', null, true),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $application = Application::where('module_type', 'appointment_letter')->firstOrFail();
+
+        $this->assertSame(2, AppointmentExaminer::where('application_id', $application->id)->count());
+        $this->assertSame(
+            'Introduction to IoT',
+            AppointmentDetail::where('application_id', $application->id)->value('thesis_title'),
+        );
+    }
+
+    /** Matric No is the one column that ties a row to a candidate. */
+    public function test_a_sheet_without_a_matric_column_is_refused(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'exam').'.csv';
+        file_put_contents($path, "Candidate,Internal Main\nAhmad Danial,Dr. Chandra Segaran\n");
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), [
+                'sheet' => new UploadedFile($path, 'no-matric.csv', 'text/csv', null, true),
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, Application::where('module_type', 'appointment_letter')->count());
+        $this->assertStringContainsString('Matric No', session('error'));
+    }
+
+    public function test_only_cgs_may_import_a_list(): void
+    {
+        $chair = User::create([
+            'name' => 'Dr Chair', 'email' => 'chair@test.my', 'password' => 'password',
+            'role' => Role::CHAIR, 'department' => 'Computer & Information Sciences',
         ]);
 
-        $this->assertTrue($examiner->fresh()->isAvailable());
+        $this->actingAs($chair)->get(route('appointment-letter.import'))->assertForbidden();
+        $this->actingAs($chair)->get(route('appointment-letter.issued'))->assertForbidden();
     }
 
-    public function test_a_nomination_only_counts_once_the_dean_has_appointed(): void
+    public function test_the_template_is_downloadable_and_matches_the_importer(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_INTERNAL, 'int@test.my');
-        $this->nomination($examiner);
+        $response = $this->actingAs($this->cgs())
+            ->get(route('appointment-letter.template', ['format' => 'csv']))
+            ->assertOk();
 
-        // Nominated but not yet approved -- appointed_at is still null, so
-        // the cooldown has not started.
-        $this->assertTrue($examiner->fresh()->isAvailable());
+        // A streamed download is not in the response body until it is read.
+        $csv = $response->streamedContent();
+
+        // fputcsv quotes any heading with a space in it, so each is checked
+        // on its own rather than as one joined line.
+        foreach (AppointmentSheet::TEMPLATE_HEADINGS as $heading) {
+            $this->assertStringContainsString($heading, $csv);
+        }
+
+        // The headings the template ships with are ones the importer knows.
+        $mapped = AppointmentSheet::mapHeader(AppointmentSheet::TEMPLATE_HEADINGS);
+        $this->assertArrayHasKey('matric_no', $mapped);
+        $this->assertArrayHasKey('internal_main', $mapped);
+        $this->assertArrayHasKey('external_backup', $mapped);
     }
 
     /* -----------------------------------------------------------------
@@ -132,8 +357,7 @@ class JasonAppointmentLetterTest extends TestCase
 
     public function test_a_pack_is_marked_delivered_only_when_the_transport_accepts_it(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-        $application = $this->nomination($examiner);
+        $application = $this->imported();
         $row = AppointmentExaminer::where('application_id', $application->id)->firstOrFail();
 
         $this->assertFalse($row->packSent());
@@ -147,8 +371,7 @@ class JasonAppointmentLetterTest extends TestCase
 
     public function test_mail_from_other_modules_is_left_alone(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-        $application = $this->nomination($examiner);
+        $application = $this->imported();
         $row = AppointmentExaminer::where('application_id', $application->id)->firstOrFail();
 
         // Any other message in the portal reaches the same listener; it must
@@ -158,25 +381,17 @@ class JasonAppointmentLetterTest extends TestCase
         $this->assertFalse($row->fresh()->packSent());
     }
 
-    /* -----------------------------------------------------------------
-     | The two screens
-     |------------------------------------------------------------------*/
-
     public function test_cgs_sees_an_undelivered_pack_and_can_resend_it(): void
     {
-        $examiner = $this->poolExaminer(AppointmentExaminer::TYPE_EXTERNAL, 'ext@test.my');
-        $application = $this->nomination($examiner);
+        Storage::fake('local');
+
+        $application = $this->imported();
         $application->update(['status' => Application::STATUS_APPROVED]);
 
         $row = AppointmentExaminer::where('application_id', $application->id)->firstOrFail();
         $row->update(['appointed_at' => now()]);
 
-        $cgs = User::create([
-            'name' => 'Puan Waheeda',
-            'email' => 'cgs@test.my',
-            'password' => 'password',
-            'role' => Role::NON_EXEC_CGS,
-        ]);
+        $cgs = $this->cgs();
 
         $this->actingAs($cgs)
             ->get(route('appointment-letter.issued'))
@@ -185,36 +400,141 @@ class JasonAppointmentLetterTest extends TestCase
             ->assertSee('Resend');
 
         // Nothing was ever prepared for this nomination, so there is nothing
-        // to resend -- and CGS is told that rather than shown a false success.
+        // to resend — and CGS is told that rather than shown a false success.
         $this->actingAs($cgs)
             ->post(route('appointment-letter.resend', [$application, $row]))
             ->assertSessionHas('error');
     }
 
-    public function test_a_chair_cannot_reach_the_issued_page(): void
+    /**
+     * A panel of four is eight documents, and the Dean's decision rests on
+     * reading them. They are listed on one page and read in place, rather
+     * than downloaded a set at a time.
+     */
+    public function test_the_pack_is_read_on_a_page_rather_than_downloaded(): void
     {
-        $this->actingAs($this->chair())
-            ->get(route('appointment-letter.issued'))
-            ->assertForbidden();
+        Storage::fake('local');
+
+        $application = $this->imported();
+        $cgs = $this->cgs();
+
+        // Stand in for a prepared pack.
+        $document = \App\Modules\Core\Models\ApplicationDocument::create([
+            'application_id' => $application->id,
+            'uploaded_by_id' => $cgs->id,
+            'doc_type' => 'Appointment Letter',
+            'original_name' => 'Appointment-Letter-Internal-someone.pdf',
+            'path' => 'applications/'.$application->id.'/letter.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+        ]);
+
+        Storage::disk('local')->put($document->path, '%PDF-1.4 letter');
+
+        $this->actingAs($cgs)
+            ->get(route('appointment-letter.pack', $application))
+            ->assertOk()
+            ->assertSee($document->original_name)
+            ->assertSee(route('appointment-letter.document', [$application, $document]), false);
+
+        $this->actingAs($cgs)
+            ->get(route('appointment-letter.document', [$application, $document]))
+            ->assertOk()
+            ->assertHeader('content-disposition', 'inline; filename="'.$document->original_name.'"');
+
+        $this->actingAs($cgs)
+            ->get(route('appointment-letter.document', [$application, $document, 'download' => 1]))
+            ->assertHeader('content-disposition', 'attachment; filename="'.$document->original_name.'"');
     }
 
     /**
-     * A nomination for one examiner, straight into the database -- these
-     * tests are about what happens to it afterwards, not about the form.
+     * The letters go out over the Dean's signature, so approving stamps it
+     * into them. The pack is prepared before that decision exists, so the
+     * letters are re-issued and the archived copies replaced -- and it has
+     * to happen before dispatch, because what an examiner receives is read
+     * back off the disk.
      */
-    protected function nomination(PoolExaminer $examiner): Application
+    public function test_approving_stamps_the_deans_signature_into_every_letter(): void
     {
-        $application = Application::create([
-            'student_id' => $this->candidate('cand-'.$examiner->id.'@test.my')->id,
-            'submitted_by_id' => $this->chair()->id,
-            'module_type' => 'appointment_letter',
-            'status' => Application::STATUS_DRAFT,
+        Storage::fake('local');
+
+        $application = $this->imported();
+        $dean = User::create([
+            'name' => 'Prof. Dr. Hafiz Osman', 'email' => 'dean@test.my',
+            'password' => 'password', 'role' => Role::DEAN_PGR, 'department' => 'PGR',
         ]);
 
-        AppointmentDetail::create(['application_id' => $application->id]);
-        AppointmentExaminer::create(['application_id' => $application->id] + $examiner->toSnapshot());
+        // Prepared, so there are letters to re-issue.
+        $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
+        $detail->update(['letter_prepared_at' => now(), 'thesis_title' => 'A Study of Something']);
 
-        return $application;
+        $controller = app(\App\Modules\Jason\Http\Controllers\AppointmentLetterController::class);
+        $generate = new \ReflectionMethod($controller, 'generatePack');
+        $generate->setAccessible(true);
+        $generate->invoke($controller, $application, $detail);
+
+        $before = $application->documents()->where('doc_type', 'Appointment Letter')->pluck('id');
+        $reports = $application->documents()->where('doc_type', 'Thesis Evaluation Report')->pluck('id');
+
+        $this->assertTrue($before->isNotEmpty(), 'The preparation step should write letters.');
+
+        // Re-issued with a signature on file.
+        $this->signatureFor($dean);
+        $generate->invoke($controller, $application->fresh(), $detail->fresh(), $dean);
+
+        $after = $application->fresh()->documents()->where('doc_type', 'Appointment Letter')->pluck('id');
+
+        // Replaced, not added: one current letter per examiner.
+        $this->assertSame($before->count(), $after->count());
+        $this->assertEmpty($after->intersect($before), 'The letters should be the re-issued ones.');
+
+        // The evaluation report has no Dean block, so it is left alone.
+        $this->assertEqualsCanonicalizing(
+            $reports->all(),
+            $application->fresh()->documents()->where('doc_type', 'Thesis Evaluation Report')->pluck('id')->all(),
+        );
     }
 
+    /** Approving without a signature stamps nothing, so it is refused. */
+    public function test_the_dean_cannot_approve_without_a_signature(): void
+    {
+        Storage::fake('local');
+
+        $application = $this->imported();
+        $dean = User::create([
+            'name' => 'Prof. Dr. Hafiz Osman', 'email' => 'dean@test.my',
+            'password' => 'password', 'role' => Role::DEAN_PGR, 'department' => 'PGR',
+        ]);
+
+        $application->update(['current_stage' => 'dean']);
+
+        $this->actingAs($dean)
+            ->post(route('appointment-letter.decide', $application), ['decision' => 'approve'])
+            ->assertRedirect(route('hardbound.signature'));
+
+        $this->assertSame(Application::STATUS_PENDING, $application->fresh()->status);
+    }
+
+    /** Puts a signature on file for whoever is about to sign. */
+    protected function signatureFor(User $user): void
+    {
+        $this->actingAs($user)
+            ->post(route('hardbound.signature.store'), [
+                'signature' => UploadedFile::fake()->image('signature.png', 300, 100),
+            ])
+            ->assertSessionHasNoErrors();
+    }
+
+    /** An imported appointment, sitting on the CGS preparation stage. */
+    protected function imported(): Application
+    {
+        $this->candidate('22001001', 'a@test.my');
+        $this->knownPanel();
+
+        $this->actingAs($this->cgs())
+            ->post(route('appointment-letter.import.store'), ['sheet' => $this->sheet([$this->row('22001001')])])
+            ->assertSessionHasNoErrors();
+
+        return Application::where('module_type', 'appointment_letter')->firstOrFail();
+    }
 }

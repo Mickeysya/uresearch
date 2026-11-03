@@ -64,6 +64,21 @@
 ---
 
 ## 3. Module B: Appeal Hardbound Submission
+
+> **Superseded by CGS, 23 September 2026.** An "appeal" here is a request to
+> **extend the hardbound thesis submission deadline**, filed by a candidate
+> who cannot submit on time — not an appeal against a rejected submission.
+> The candidate downloads CGS's *Appeal for Extension of Hardbound Thesis
+> Submission* memo, pre-filled from the portal's records but blank where the
+> appeal itself goes, writes and signs it, and uploads it back. It is then
+> routed Through the Supervisor and the HOD/Chair, who each endorse it — on
+> an accompanying endorsement slip carrying their signatures — to the
+> Non-Executive CGS, who acknowledges receipt. The Dean of Postgraduate and
+> Research signs the memo off-portal and CGS emails the candidate the
+> outcome, so there is no Dean PFR report and no Senior Executive ruling.
+> What is built follows this note; the rest of §3 is the earlier reading and
+> is kept for the record.
+
 *Workflow: Student Appeal Filing -> CGS Non-Exec (Dean PFR) -> CGS Senior Exec (Deliberation & Ruling) -> Auto-Email Outcome.*
 
 ### 3.1 Student Features
@@ -82,6 +97,17 @@
 *   **Auto-Dispatch:** System automatically emails the final ruling to the student and updates the central tracking status.
 
 ---
+
+> **Rescoped with Hani, 30 September 2026.** Examiner *selection* is not this
+> module's. The supervisor chooses the panel, the Academic Executive compiles
+> it, and the list is settled between CGS, the Senior Director, the Chair and
+> the Dean — Hani's Examiner Nomination chain. This module starts from that
+> finished list: CGS imports the spreadsheet, one appointment opens per
+> candidate, CGS prepares each candidate's four-document pack, the Dean
+> approves, and the candidate, their supervisor, the Academic Executive and
+> CGS are notified. The Chair's nomination form, this module's own examiner
+> list and the Academic Executive stage were retired with the old boundary.
+> What is built follows this note; the rest of §4 is the earlier reading.
 
 ## 4. Module C: Appointment Letter & Report Management
 *Workflow: Faculty Dept Nomination -> Faculty Academic Endorsement -> Dean Approval -> Auto-Dispatch Letter -> Archiving.*

@@ -3,22 +3,59 @@
 namespace App\Modules\Jason\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
+use App\Modules\Jason\Http\Controllers\Concerns\PreviewsDocuments;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\ApplicationDocument;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Models\HardboundAppealDetail;
-use App\Modules\Jason\Models\HardboundSubmissionDetail;
+use App\Modules\Jason\Models\HardboundSignature;
+use App\Modules\Jason\Notifications\ExtensionMemoReceived;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\UnauthorizedException;
 
+/**
+ * Appeal Hardbound Submission: an appeal for an extension of the hardbound
+ * thesis submission deadline.
+ *
+ * The candidate fills in a form and the portal writes CGS's memo from it:
+ * the reason in their own words, the date they are asking for, and the rest
+ * from records the portal already holds. Nothing is downloaded, filled in by
+ * hand and uploaded back (which is how this worked between 2026-09-24 and
+ * 2026-10-14), and nothing is archived either -- the memo is rendered on
+ * demand, every time somebody opens it, from the appeal's own row and the
+ * signatures on file. An appeal therefore costs no document storage at all.
+ *
+ * It is routed the way the paper memo is: through the Supervisor, then the
+ * HOD/Chair, then to CGS, and because the portal writes the document their
+ * signatures are stamped straight into it under the Through lines. The
+ * candidate's own signature comes from the same "My Signature" upload the
+ * endorsers use -- `hardbound_signatures` is keyed on the user account, so
+ * one row per person covers every form they sign.
+ *
+ * The Dean's "Approved / Not Approved" block stays blank. CGS takes the pack
+ * to the Dean off-portal and emails the candidate the outcome, so the portal
+ * never claims to know whether the extension was granted.
+ */
 class HardboundAppealController extends Controller
 {
     use ApprovesApplications;
+    use PreviewsDocuments;
+
+    /**
+     * Appeals filed before 2026-10-14 carry the candidate's uploaded memo as
+     * a document; nothing new writes one. `memo()` still serves those.
+     */
+    public const DOC_MEMO = 'Appeal Memo';
+
+    /** The stages whose endorsement is stamped into the memo. */
+    public const SIGNING_STAGES = ['supervisor', 'chair'];
 
     protected function moduleKey(): string
     {
@@ -28,24 +65,50 @@ class HardboundAppealController extends Controller
     public function create(Request $request)
     {
         return view('jason::hardbound_appeal.form', [
-            'submissions' => $this->appealable($request->user()->id),
+            'student' => $request->user(),
+            'open' => $this->openRequest($request->user()->id),
+            // Nothing else shows these: the memo is not an archived document,
+            // so it appears in no documents list.
+            'filed' => Application::where('module_type', $this->moduleKey())
+                ->where('student_id', $request->user()->id)
+                ->orderByDesc('id')
+                ->get(),
+            // The memo is signed with whatever they uploaded at "My
+            // Signature"; without one it would go out over a blank rule.
+            'signature' => HardboundSignature::forUser($request->user()->id),
         ]);
     }
 
-    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
+    public function store(Request $request, WorkflowEngine $engine)
     {
-        $appealable = $this->appealable($request->user()->id);
+        // One at a time. A second memo while the first is still moving would
+        // reach CGS as two appeals for the same deadline.
+        if ($open = $this->openRequest($request->user()->id)) {
+            return back()->with('error',
+                "Appeal #{$open->id} is still being processed. Wait for its outcome before filing another.");
+        }
+
+        // The memo is addressed to the Dean and carries the candidate's own
+        // "Yours sincerely" block. Letting it go out over a blank rule was
+        // the one thing this design could get wrong, so it is gated the same
+        // way an endorser's approval is: upload the signature, then file.
+        if (! HardboundSignature::forUser($request->user()->id)) {
+            return redirect()->route('hardbound.signature')
+                ->with('error', 'Upload your signature first. It is stamped onto the memo that goes to the '
+                    .'Dean, under your name and student ID.');
+        }
 
         $data = $request->validate([
-            'hardbound_application_id' => ['required', Rule::in($appealable->pluck('id'))],
-            'justification' => ['required', 'string', 'max:2000'],
-            'appeal_memo' => DocumentStore::rules(required: true),
+            'reason' => ['required', 'string', 'max:4000'],
+            'original_deadline' => ['nullable', 'date'],
+            'requested_until' => ['required', 'date', 'after:today'],
         ], [
-            'hardbound_application_id.in' => 'You may only appeal your own rejected hardbound submission.',
-            'appeal_memo.required' => 'Attach your appeal memo.',
+            'reason.required' => 'Say why you cannot submit by the deadline. This is the body of the memo.',
+            'requested_until.required' => 'Give the date you are asking to submit by.',
+            'requested_until.after' => 'The extension date has to be in the future.',
         ]);
 
-        $application = DB::transaction(function () use ($request, $data, $engine, $documents) {
+        $application = DB::transaction(function () use ($request, $data, $engine) {
             $application = Application::create([
                 'student_id' => $request->user()->id,
                 'module_type' => $this->moduleKey(),
@@ -54,69 +117,65 @@ class HardboundAppealController extends Controller
 
             HardboundAppealDetail::create([
                 'application_id' => $application->id,
-                'hardbound_application_id' => $data['hardbound_application_id'],
-                'justification' => $data['justification'],
+                'reason' => $data['reason'],
+                'original_deadline' => $data['original_deadline'] ?? null,
+                'requested_until' => $data['requested_until'],
             ]);
 
-            $documents->attach($application, $request->file('appeal_memo'), 'Appeal Memo');
-
+            // Nothing is archived: the memo is these three fields plus the
+            // signatures on file, and is drawn from them whenever it is read.
             return $engine->submit($application);
         });
 
         return redirect()
             ->route('applications.index')
-            ->with('status', "Appeal #{$application->id} filed and sent to CGS.");
+            ->with('status', "Appeal #{$application->id} filed. Your memo has gone to your supervisor for endorsement.");
     }
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
         $queue = $this->queueFor($request, $engine, ['documents', 'student']);
 
-        $details = HardboundAppealDetail::whereIn('application_id', $queue['applications']->pluck('id'))
-            ->get()
-            ->keyBy('application_id');
-
-        // The submission each appeal is against, so the reviewer can read
-        // both sides on one screen.
-        $originals = HardboundSubmissionDetail::whereIn('application_id', $details->pluck('hardbound_application_id'))
-            ->get()
-            ->keyBy('application_id');
-
         return view('jason::hardbound_appeal.queue', $queue + [
-            'details' => $details,
-            'originals' => $originals,
+            'details' => HardboundAppealDetail::whereIn('application_id', $queue['applications']->pluck('id'))
+                ->get()
+                ->keyBy('application_id'),
         ]);
     }
 
     /**
-     * Overrides the trait's decide() so the Non-Executive's recommendation is
-     * captured and compiled into the Dean PFR report before the Senior
-     * Executive rules on it.
+     * Overrides the trait's decide() for the two things this chain does that
+     * the generic one cannot: an endorsement stamps a signature into the
+     * memo, and CGS receiving the memo has to be announced as a receipt
+     * rather than as the approval the engine would otherwise imply.
      */
     public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
 
         $stage = $engine->currentStage($application);
-        $compiling = $request->input('decision') === 'approve' && $stage?->key === 'cgs_review';
+        $refusing = $request->input('decision') === 'reject';
 
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],
             'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        // The recommendation is what the Dean PFR report is built around, so
-        // it cannot be blank. Checked here rather than as a validation rule
-        // because the shared decision form labels remarks "(optional)" and
-        // nothing renders the validation error bag -- a failed rule would just
-        // bounce the reviewer back to an unchanged page with no explanation.
-        // A flashed error is rendered by the layout.
-        if ($compiling && blank($data['remarks'] ?? null)) {
+        // Refusing to endorse ends the appeal, so the candidate has to be
+        // told why. Checked here rather than as a validation rule because
+        // the shared decision form labels remarks "(optional)" and nothing
+        // renders the error bag; a flashed error the layout does render.
+        if ($refusing && blank($data['remarks'] ?? null)) {
             return back()->with('error',
-                'Forwarding an appeal needs a recommendation — it is printed in the Dean PFR report. Write it in Remarks, then press Approve again.');
+                'Refusing an appeal needs remarks — tell the candidate why, then press Reject again.');
         }
 
-        $detail = HardboundAppealDetail::where('application_id', $application->id)->firstOrFail();
+        // Endorsing stamps a signature into the memo, so there has to be one.
+        if (! $refusing && in_array($stage?->key, self::SIGNING_STAGES, true)
+            && ! HardboundSignature::forUser($request->user()->id)) {
+            return redirect()->route('hardbound.signature')
+                ->with('error', 'Upload your signature first. Endorsing an appeal stamps it onto the memo.');
+        }
 
         try {
             $application = $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
@@ -126,63 +185,171 @@ class HardboundAppealController extends Controller
             return back()->with('error', 'That appeal has already been decided.');
         }
 
-        if ($compiling) {
-            $detail->update(['pfr_recommendation' => $data['remarks']]);
-            $this->compileDeanPfrReport($application, $detail->fresh());
+        if (! $refusing && $stage?->key === 'cgs_review') {
+            $application->student?->notify(new ExtensionMemoReceived($application));
         }
 
         return back()->with('status', match (true) {
-            $compiling => "Dean PFR report compiled for appeal #{$application->id} and sent for ruling.",
-            // Not "may now resubmit" -- they always could. What the ruling
-            // produces is the ruling, emailed by the engine.
-            $data['decision'] === 'approve' => "Appeal #{$application->id} upheld. The ruling has been emailed to the student.",
-            default => "Appeal #{$application->id} dismissed.",
+            $refusing => "Appeal #{$application->id} was not endorsed, and the candidate has been told why.",
+            $stage?->key === 'cgs_review' => "Memo received for appeal #{$application->id}. "
+                .'The candidate has been told to allow around 7 to 14 days for the outcome.',
+            default => "Appeal #{$application->id} endorsed, and your signature is on the memo.",
         });
     }
 
     /**
-     * The Dean PFR report: the appeal, the submission it is against and the
-     * Non-Executive's recommendation on one document, archived against the
-     * appeal so the Senior Executive rules on a fixed record.
+     * The memo, drawn on demand.
+     *
+     * Nothing is archived: everything the document says lives in the
+     * appeal's own row and in the signatures on file, so it is rendered
+     * fresh each time rather than stored. An appeal filed before
+     * 2026-10-14 carries the candidate's uploaded file instead, and that is
+     * served as it always was.
+     *
+     * Readable by the candidate and by the three roles that hold a stage in
+     * this chain -- with nothing in the documents list, this is the only way
+     * an endorser reads what they are endorsing.
      */
-    protected function compileDeanPfrReport(Application $application, HardboundAppealDetail $detail): void
+    public function memo(Request $request, Application $application)
     {
-        $original = $detail->hardboundApplication;
+        abort_unless($application->module_type === $this->moduleKey(), 404);
 
-        $pdf = Pdf::loadView('jason::hardbound_appeal.pfr_report', [
-            'application' => $application,
-            'detail' => $detail,
-            'student' => $application->student,
-            'original' => $original,
-            'originalDetail' => $detail->hardboundDetail(),
-            'originalHistory' => $original?->history()->with('approver')->get() ?? collect(),
-            'issuedAt' => now(),
-        ]);
+        $user = $request->user();
+        $stageRoles = array_map(fn ($stage) => $stage->role, app(WorkflowEngine::class)->stagesFor($application));
 
-        app(DocumentStore::class)->storeGenerated(
-            $application,
-            $pdf->output(),
-            "Dean-PFR-Report-{$application->id}.pdf",
-            'Dean PFR Report',
+        abort_unless(
+            $application->student_id === $user->id || in_array($user->role, $stageRoles, true),
+            403
         );
+
+        // Filed under the upload version: their own file is the memo.
+        if ($uploaded = ApplicationDocument::where('application_id', $application->id)
+            ->where('doc_type', self::DOC_MEMO)
+            ->latest('id')
+            ->first()) {
+            return $this->serveArchived($uploaded, $request);
+        }
+
+        $pdf = Pdf::loadView('jason::hardbound_appeal.memo', $this->memoData($application));
+
+        return $this->servePdf($pdf, "Appeal-for-Extension-{$application->id}.pdf", $request);
     }
 
     /**
-     * A student's rejected hardbound submissions that have neither been
-     * appealed already nor already replaced by a resubmission.
+     * A page to read the memo on, rather than a file to open.
+     *
+     * The same shape as the hardbound forms page: the memo is framed from
+     * the route that serves it, so checking an appeal costs nobody a
+     * download.
      */
-    protected function appealable(int $studentId)
+    public function memoPage(Request $request, Application $application)
     {
-        $alreadyAppealed = HardboundAppealDetail::query()->pluck('hardbound_application_id');
-        $alreadyReplaced = HardboundSubmissionDetail::whereNotNull('resubmission_of_id')->pluck('resubmission_of_id');
+        abort_unless($application->module_type === $this->moduleKey(), 404);
 
-        return Application::query()
-            ->where('module_type', 'hardbound_submission')
+        $user = $request->user();
+        $stageRoles = array_map(fn ($stage) => $stage->role, app(WorkflowEngine::class)->stagesFor($application));
+
+        abort_unless(
+            $application->student_id === $user->id || in_array($user->role, $stageRoles, true),
+            403
+        );
+
+        $isCandidate = $application->student_id === $user->id;
+
+        return view('jason::hardbound_appeal.memo_page', [
+            'application' => $application,
+            'backTo' => $isCandidate ? route('hardbound-appeal.create') : route('hardbound-appeal.queue'),
+            'backLabel' => $isCandidate ? 'Back to Appeal Hardbound Submission' : 'Back to the queue',
+            'detail' => HardboundAppealDetail::where('application_id', $application->id)->first(),
+            'student' => $application->student,
+        ]);
+    }
+
+    /**
+     * Everything the memo prints.
+     *
+     * The endorsements come from the `approval_history` rows the engine
+     * wrote and each endorser's own uploaded signature, so the stamped memo
+     * and the audit trail cannot disagree about who signed or when. The
+     * candidate's signature comes from the same place as theirs.
+     *
+     * The Dean's "Approved / Not Approved" block stays blank: the Dean signs
+     * the memo itself, off-portal, and CGS emails the candidate the outcome.
+     *
+     * @return array<string, mixed>
+     */
+    protected function memoData(Application $application): array
+    {
+        $detail = HardboundAppealDetail::where('application_id', $application->id)->firstOrFail();
+        $student = $application->student;
+
+        $signatures = [];
+
+        foreach ($application->history()->with('approver')->get() as $entry) {
+            if (! in_array($entry->stage_key, self::SIGNING_STAGES, true) || $entry->decision === 'rejected') {
+                continue;
+            }
+
+            $signature = $entry->approver_id ? HardboundSignature::forUser($entry->approver_id) : null;
+
+            $signatures[$entry->stage_key] = [
+                'name' => $entry->approver?->name ?? '',
+                'date' => $entry->created_at?->format('j F Y') ?? '',
+                'image' => $signature?->dataUri(),
+            ];
+        }
+
+        return [
+            'application' => $application,
+            'detail' => $detail,
+            'student' => $student,
+            'dean' => User::where('role', Role::DEAN_PGR)->orderBy('name')->first(),
+            'supervisorName' => $this->nameOfRole($student, Role::SUPERVISOR),
+            'chairName' => $this->nameOfRole($student, Role::CHAIR),
+            'signatures' => $signatures,
+            'studentSignature' => $student ? HardboundSignature::forUser($student->id)?->dataUri() : null,
+            'issuedAt' => $application->created_at ?? now(),
+        ];
+    }
+
+    /**
+     * The name that goes on a "Through:" line. The memo names the people who
+     * route it, and the portal knows them only by role and department.
+     */
+    protected function nameOfRole(?User $student, string $role): string
+    {
+        if ($role === Role::SUPERVISOR && $student?->supervisor_id) {
+            return User::find($student->supervisor_id)?->name ?? '';
+        }
+
+        return User::where('role', $role)
+            ->where('department', $student?->department)
+            ->orderBy('name')
+            ->value('name') ?? '';
+    }
+
+    /**
+     * The candidate's appeal that is still moving, if any.
+     *
+     * "Still moving" means a stage actually owns it. An application left on
+     * a stage key this module no longer declares -- as every appeal filed
+     * under the old meaning of this module was, and as anything would be
+     * after a future stage rename -- resolves to no stage, so no queue can
+     * ever reach it and no decision can ever close it. Counting one of those
+     * as open would lock the candidate out of the module permanently, which
+     * is worse than letting them file again.
+     */
+    protected function openRequest(int $studentId): ?Application
+    {
+        $stages = array_map(fn ($stage) => $stage->key, app(WorkflowEngine::class)->stagesFor(
+            Application::make(['module_type' => $this->moduleKey()])
+        ));
+
+        return Application::where('module_type', $this->moduleKey())
             ->where('student_id', $studentId)
-            ->where('status', Application::STATUS_REJECTED)
-            ->whereNotIn('id', $alreadyAppealed)
-            ->whereNotIn('id', $alreadyReplaced)
-            ->orderByDesc('id')
-            ->get();
+            ->where('status', Application::STATUS_PENDING)
+            ->whereIn('current_stage', $stages)
+            ->latest('id')
+            ->first();
     }
 }

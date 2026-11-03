@@ -34,12 +34,16 @@ class DashboardController extends Controller
 
             return view('core::dashboard.student', [
                 'attendance' => $dash->attendance(),
-                'predicted' => $dash->predictedAttendance(),
+                'attendanceAction' => $dash->attendanceAction(),
                 'activeCount' => $dash->activeApplications(),
+                'nextDecision' => $dash->nextDecisionDate(),
                 'unreadCount' => $dash->unreadNotifications(),
                 'taskCount' => $dash->upcomingTaskCount(),
-                'applications' => $dash->applications(),
-                'notifications' => $dash->notifications(),
+                // My Application Status and Recent Notifications are
+                // capped panels, not full lists -- "View All" is the way
+                // out, not a scrollbar.
+                'applications' => $dash->applications(3),
+                'notifications' => $dash->notifications(5),
                 'tasks' => $dash->tasks(),
                 // Panels whose data could not be read; the view holds a
                 // skeleton for these instead of showing a false empty state.

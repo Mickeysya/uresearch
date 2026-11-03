@@ -231,4 +231,26 @@ class QueueTest extends TestCase
 
         $this->assertSame('supervisor', $travel->fresh()->current_stage);
     }
+
+    public function test_bulk_deciding_a_module_that_decides_one_at_a_time_is_refused(): void
+    {
+        // Supervision's decide() checks the row names THIS supervisor; the
+        // engine does not. A hand-built bulk POST must not get around it.
+        $student = $this->student();
+        $application = Application::create([
+            'student_id' => $student->id,
+            'submitted_by_id' => $student->id,
+            'module_type' => 'supervision',
+            'status' => Application::STATUS_PENDING,
+            'current_stage' => 'supervisor',
+            'submitted_at' => now(),
+        ]);
+
+        $this->actingAs($this->supervisor())
+            ->post(route('queue.decide-bulk', 'supervision'), ['ids' => [$application->id], 'decision' => 'approve'])
+            ->assertForbidden();
+
+        $this->assertSame('supervisor', $application->fresh()->current_stage);
+        $this->assertSame(Application::STATUS_PENDING, $application->fresh()->status);
+    }
 }

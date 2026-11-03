@@ -1,9 +1,15 @@
-@props(['application', 'route', 'returnAction' => null])
+@props(['application', 'route', 'allowReturn' => false, 'returnAction' => null])
 
 {{--
     The approve/reject form. Both buttons post to the same route with a
     `decision` field; WorkflowEngine decides what that means for this stage,
     so no module ever hardcodes "next stage is the Chair".
+
+    $allowReturn is opt-in and defaults to false, so every existing caller
+    renders exactly as before. A module whose controller also accepts the
+    engine's 'return' outcome (WorkflowEngine::decide()'s third decision,
+    alongside approve/reject) passes true to get a Return button that sends
+    it back to the STUDENT for revision (see WorkflowEngine::resubmit()).
 
     $returnAction is optional and opt-in: pass ['route' => ..., 'label' => ...]
     and a third button appears that posts to WorkflowEngine::returnTo()
@@ -24,6 +30,9 @@
 
     <div class="decision-row">
         <button type="submit" name="decision" value="approve">Approve</button>
+        @if ($allowReturn)
+            <button type="submit" name="decision" value="return" class="btn-reject">Return</button>
+        @endif
         <button type="submit" name="decision" value="reject" class="btn-reject">Reject</button>
     </div>
 </form>

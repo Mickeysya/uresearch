@@ -62,6 +62,11 @@ earlier stage with a mandatory reason instead of ending it — the Senior
 Director and the Dean use it on examiner lists.) This is the rule that keeps
 the modules from drifting apart the way the legacy app's did.
 
+If a module's own `decide()` does more than call the engine (checks which
+supervisor a row names, moves a deadline, sends a letter), its workflow must
+implement `Core\Contracts\DecidesOneAtATime`. Core's bulk decide goes straight
+to the engine; the marker makes it refuse that module.
+
 ## Publishing — the human's call
 
 **Never push, and never publish anything to GitHub.** Not `git push`, not

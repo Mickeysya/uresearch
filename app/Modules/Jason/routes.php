@@ -2,7 +2,6 @@
 
 use App\Modules\Core\Support\Role;
 use App\Modules\Jason\Http\Controllers\AppointmentLetterController;
-use App\Modules\Jason\Http\Controllers\ExaminerPoolController;
 use App\Modules\Jason\Http\Controllers\HardboundAppealController;
 use App\Modules\Jason\Http\Controllers\HardboundSubmissionController;
 use Illuminate\Support\Facades\Route;
@@ -12,43 +11,45 @@ use Illuminate\Support\Facades\Route;
 | Hardbound Submission · Appeal Hardbound Submission · Appointment Letter
 */
 
+// An appointed examiner signs the Confirmation of Correction through an
+// emailed link, outside `auth`: they have no account and are not going to be
+// given one for a single signature. The `signed` middleware is the
+// credential -- Laravel rejects a tampered or expired URL before the
+// controller runs, and the controller re-checks that the link belongs to
+// this submission and to a stage still waiting for it.
+Route::middleware('signed')->group(function () {
+    Route::get('/hardbound/{application}/examiner-signature/{examiner}',
+        [HardboundSubmissionController::class, 'examinerSignForm'])
+        ->name('hardbound.examiner.sign');
+    Route::post('/hardbound/{application}/examiner-signature/{examiner}',
+        [HardboundSubmissionController::class, 'storeExaminerSignature'])
+        ->name('hardbound.examiner.sign.store');
+});
+
 Route::middleware('auth')->group(function () {
 
     // ---- Appointment Letter --------------------------------------------
 
-    // The examiner list. CGS keeps it -- the Chair no longer nominates, so
-    // they no longer need it either. The list and the add form are two
-    // pages, not one: adding is an action, not a second view of the list,
-    // and the wizard wants a card of its own (core::partials.form-stepper
-    // re-casts whatever .card it finds the form in). Same shape as Hani's
-    // examiner pool, /examiners and /examiners/new.
+    // Examiner selection is settled before this module: the finalised list
+    // arrives as a spreadsheet and CGS imports it. There is no nomination
+    // form here any more, and no examiner list of our own -- both were
+    // retired on 2026-09-30 when the boundary with Hani's chain was agreed,
+    // and develop has since taken the Chair's nomination panel out of the
+    // dashboard, so nothing links to the retired route any more either.
     Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
-        Route::get('/appointment-letter/examiners', [ExaminerPoolController::class, 'index'])
-            ->name('appointment-letter.examiners');
-        Route::get('/appointment-letter/examiners/new', [ExaminerPoolController::class, 'create'])
-            ->name('appointment-letter.examiners.create');
-        Route::post('/appointment-letter/examiners', [ExaminerPoolController::class, 'store'])
-            ->name('appointment-letter.examiners.store');
-        Route::post('/appointment-letter/examiners/{examiner}/toggle', [ExaminerPoolController::class, 'toggle'])
-            ->name('appointment-letter.examiners.toggle');
-    });
+        Route::get('/appointment-letter/import', [AppointmentLetterController::class, 'importForm'])
+            ->name('appointment-letter.import');
+        Route::post('/appointment-letter/import', [AppointmentLetterController::class, 'import'])
+            ->name('appointment-letter.import.store');
+        Route::get('/appointment-letter/template', [AppointmentLetterController::class, 'template'])
+            ->name('appointment-letter.template');
 
-    // All three stages of the chain share one queue screen; ?stage= selects
-    // which. The engine re-checks the role against the application's actual
-    // stage before allowing any decision, same as every other module.
-    Route::middleware('role:'.implode(',', [Role::ACADEMIC_EXEC, Role::NON_EXEC_CGS, Role::DEAN_PGR]))->group(function () {
-        Route::get('/appointment-letter/queue', [AppointmentLetterController::class, 'queue'])
-            ->name('appointment-letter.queue');
-        Route::post('/appointment-letter/{application}/decide', [AppointmentLetterController::class, 'decide'])
-            ->name('appointment-letter.decide');
-    });
-
-    // Pack preparation, the Non-Executive CGS's stage. Approving out of that
-    // stage happens here rather than through the generic decide() button,
-    // because this is what writes and generates the documents the Dean then
-    // approves. The Dean reads them through the queue's document list --
-    // they are ordinary ApplicationDocuments, served by Core's download route.
-    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+        // Pack preparation, the Non-Executive CGS's stage. Approving out of
+        // that stage happens here rather than through the generic decide()
+        // button, because this is what writes and generates the documents
+        // the Dean then approves. The Dean reads them through the queue's
+        // document list -- they are ordinary ApplicationDocuments, served by
+        // Core's download route.
         Route::get('/appointment-letter/{application}/prepare', [AppointmentLetterController::class, 'prepare'])
             ->name('appointment-letter.prepare');
         Route::post('/appointment-letter/{application}/prepare', [AppointmentLetterController::class, 'savePreparation'])
@@ -63,13 +64,25 @@ Route::middleware('auth')->group(function () {
             ->name('appointment-letter.resend');
     });
 
+    // Both stages share one queue screen; ?stage= selects which. The engine
+    // re-checks the role against the application's actual stage before
+    // allowing any decision, same as every other module.
+    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::DEAN_PGR]))->group(function () {
+        // The prepared pack, read in place rather than downloaded.
+        Route::get('/appointment-letter/{application}/pack', [AppointmentLetterController::class, 'pack'])
+            ->name('appointment-letter.pack');
+        Route::get('/appointment-letter/{application}/document/{document}',
+            [AppointmentLetterController::class, 'document'])
+            ->name('appointment-letter.document');
+
+        Route::get('/appointment-letter/queue', [AppointmentLetterController::class, 'queue'])
+            ->name('appointment-letter.queue');
+        Route::post('/appointment-letter/{application}/decide', [AppointmentLetterController::class, 'decide'])
+            ->name('appointment-letter.decide');
+    });
+
     // ---- Hardbound Submission ------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
-        // The blank CGS forms the student downloads, completes and uploads back.
-        Route::get('/hardbound/templates/{form}', [HardboundSubmissionController::class, 'template'])
-            ->where('form', 'submission')
-            ->name('hardbound.template');
-
         Route::get('/hardbound/new', [HardboundSubmissionController::class, 'create'])
             ->name('hardbound.create');
         Route::post('/hardbound', [HardboundSubmissionController::class, 'store'])
@@ -92,7 +105,38 @@ Route::middleware('auth')->group(function () {
         Route::post('/hardbound/{application}/decide', [HardboundSubmissionController::class, 'decide'])
             ->name('hardbound.decide');
 
-        // The signature each of them stamps onto the Confirmation on approval.
+    });
+
+    // The Hardbound Thesis Submission form (UTP/CGS/021), drawn on demand
+    // from what the candidate entered. Open to the candidate and to the
+    // three roles holding a stage: nothing is archived, so this is how an
+    // approver reads what was submitted.
+    Route::middleware('role:'.implode(',', [
+        Role::STUDENT, Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS,
+    ]))->group(function () {
+        Route::get('/hardbound/{application}/submission-form',
+            [HardboundSubmissionController::class, 'submissionForm'])
+            ->name('hardbound.submission-form');
+
+        // A page to read the forms on. The PDF above is served inline, so it
+        // can be framed here rather than downloaded to be checked.
+        Route::get('/hardbound/{application}/forms',
+            [HardboundSubmissionController::class, 'forms'])
+            ->name('hardbound.forms');
+        Route::get('/hardbound/{application}/document/{document}',
+            [HardboundSubmissionController::class, 'document'])
+            ->name('hardbound.document');
+    });
+
+    // "My Signature": uploaded once, stamped wherever that person signs.
+    // Open to candidates as well as approvers since 2026-10-14 -- the
+    // extension memo is written by the portal and signed by the candidate,
+    // so they need a signature on file the same way an endorser does.
+    // `hardbound_signatures` is keyed on the user account, so one row per
+    // person covers every form they will ever sign.
+    Route::middleware('role:'.implode(',', [
+        Role::STUDENT, Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS, Role::DEAN_PGR,
+    ]))->group(function () {
         Route::get('/hardbound/signature', [HardboundSubmissionController::class, 'signature'])
             ->name('hardbound.signature');
         Route::post('/hardbound/signature', [HardboundSubmissionController::class, 'storeSignature'])
@@ -107,9 +151,25 @@ Route::middleware('auth')->group(function () {
             ->name('hardbound-appeal.create');
         Route::post('/hardbound-appeal', [HardboundAppealController::class, 'store'])
             ->name('hardbound-appeal.store');
+
     });
 
-    Route::middleware('role:'.implode(',', [Role::NON_EXEC_CGS, Role::SENIOR_EXEC_CGS]))->group(function () {
+    // The memo itself, built on demand from what the candidate wrote and
+    // the signatures collected so far. Open to the candidate and to the
+    // three roles that hold a stage in this chain: nothing is archived, so
+    // this is the only way any of them reads it.
+    Route::middleware('role:'.implode(',', [
+        Role::STUDENT, Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS,
+    ]))->group(function () {
+        Route::get('/hardbound-appeal/{application}/memo', [HardboundAppealController::class, 'memo'])
+            ->name('hardbound-appeal.memo');
+        Route::get('/hardbound-appeal/{application}/read', [HardboundAppealController::class, 'memoPage'])
+            ->name('hardbound-appeal.read');
+    });
+
+    // The memo is routed "Through" the Supervisor and the HOD/Chair, exactly
+    // as the paper template is, before it reaches CGS.
+    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS]))->group(function () {
         Route::get('/hardbound-appeal/queue', [HardboundAppealController::class, 'queue'])
             ->name('hardbound-appeal.queue');
         Route::post('/hardbound-appeal/{application}/decide', [HardboundAppealController::class, 'decide'])
