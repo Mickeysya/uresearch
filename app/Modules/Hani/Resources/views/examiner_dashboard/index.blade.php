@@ -31,8 +31,8 @@
         title="Examiner Dashboard"
         subtitle="{{ $department ? 'Examiners in '.$department.' and its nominations.' : 'The whole examiner pool and every department\'s nominations.' }} {{ $total }} {{ Str::plural('examiner', $total) }} on record." />
 
-    {{-- Read by public/js/hani/examiner-dashboard.js. A data block, never executed. --}}
-    <script type="application/json" id="examiner-dashboard-data">@json($chartData)</script>
+    {{-- Read by public/js/hani/examiner-dashboard.js. A data block, never executed; it carries the nonce anyway, as the CSP test asks of every inline script tag. --}}
+    <script type="application/json" id="examiner-dashboard-data" @cspNonce>@json($chartData)</script>
 
     <div class="exd-grid">
         <section class="exd-card">
