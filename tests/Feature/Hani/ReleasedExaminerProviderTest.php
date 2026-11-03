@@ -77,8 +77,14 @@ class ReleasedExaminerProviderTest extends TestCase
         $this->assertSame('PhD', $panel['student']['degree']);
         $this->assertSame(['name' => 'Dr. Aisyah Rahman', 'email' => 'sup@test.my'], $panel['supervisor']);
         $this->assertSame('Thesis 22000001', $panel['thesis_title']);
-        $this->assertSame(['name', 'email', 'email_problem', 'department', 'faculty'], array_keys($panel['examiners']['internal_main']));
-        $this->assertSame(['name', 'email', 'email_problem', 'institution', 'department'], array_keys($panel['examiners']['external_main']));
+        $this->assertSame(['id', 'name', 'email', 'email_problem', 'department', 'faculty'], array_keys($panel['examiners']['internal_main']));
+        $this->assertSame(['id', 'name', 'email', 'email_problem', 'institution', 'department'], array_keys($panel['examiners']['external_main']));
+
+        // The id is examiners.id: the key packSentAt() is asked with.
+        $released->refresh();
+        foreach (['internal_main', 'internal_backup', 'external_main'] as $seat) {
+            $this->assertSame($released->{$seat.'_id'}, $panel['examiners'][$seat]['id']);
+        }
         $this->assertNull($panel['examiners']['external_backup'], 'An empty backup seat is null.');
 
         $this->assertNull(app(ReleasedExaminerProvider::class)->panelForStudent(
@@ -99,6 +105,9 @@ class ReleasedExaminerProviderTest extends TestCase
         $panel = app(ReleasedExaminerProvider::class)->panelForStudent($nomination->application->student_id);
 
         $this->assertSame('InBackup 22000001', $panel['examiners']['internal_main']['name']);
+        // The promoted backup's own id travels with them into the main seat.
+        $this->assertSame($nomination->fresh()->internal_main_id, $panel['examiners']['internal_main']['id']);
+        $this->assertSame(Examiner::where('name', 'InBackup 22000001')->value('id'), $panel['examiners']['internal_main']['id']);
         $this->assertNull($panel['examiners']['internal_backup']);
     }
 

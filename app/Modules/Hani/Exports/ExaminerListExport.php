@@ -29,8 +29,10 @@ class ExaminerListExport implements FromArray, WithHeadings
     public function headings(): array
     {
         return [
-            // "Application No." is the key Jason's appointment-letter import
-            // matches on to read the seat ids from examiner_nominations.
+            // "Application No." is examiner_nominations.application_id, the
+            // key for reading the seat ids exactly. Jason's import does not
+            // match this heading yet (no alias with the full stop); he is
+            // adding one on his side, so the heading stays as it is.
             // Columns are only ever ADDED at the end; see README.md,
             // "Examiner Report export layout".
             'Application No.', 'Faculty', 'Department', 'Candidate', 'Matric No', 'Programme',

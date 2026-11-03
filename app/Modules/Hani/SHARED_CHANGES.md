@@ -111,7 +111,20 @@ until someone binds or reads it.
 Until it exists, Jason's module can keep importing the Examiner Report export.
 That export's **"Application No."** column is the key to
 `examiner_nominations.application_id` (see Hani's README, "Examiner Report
-export layout").
+export layout"). Jason's importer does not recognise that heading yet: it
+normalises headings without stripping the trailing full stop, and its
+aliases are `application`, `application no`, `application id` and
+`nomination`. Until he adds `application no.` as an alias (on his side), a
+real export falls back to matching examiners by name. The heading here
+stays as it is.
+
+**Flagged emails in the raw column.** When an email is reported as not
+working, the old address stays in `examiners.email` and `email_status`
+becomes `'invalid'` (with `email_flagged_at`). This contract already hands
+over `email = null` plus `email_problem` for those. Anything that reads the
+`examiners` table directly instead (such as Jason's `ExaminerDirectory`)
+must check `email_status` and must not send to an address marked
+`'invalid'`. A null `email` means CGS has no address yet.
 
 ### File: `app/Modules/Core/Contracts/SuppliesReleasedExaminers.php` (new)
 
@@ -134,12 +147,17 @@ namespace App\Modules\Core\Contracts;
  *     'supervisor' => ['name', 'email'],
  *     'thesis_title'   => string,
  *     'examiners' => [
- *       'internal_main'   => ['name', 'email', 'email_problem', 'department', 'faculty'],
- *       'internal_backup' => ['name', 'email', 'email_problem', 'department', 'faculty'] | null,
- *       'external_main'   => ['name', 'email', 'email_problem', 'institution', 'department'],
- *       'external_backup' => ['name', 'email', 'email_problem', 'institution', 'department'] | null,
+ *       'internal_main'   => ['id', 'name', 'email', 'email_problem', 'department', 'faculty'],
+ *       'internal_backup' => ['id', 'name', 'email', 'email_problem', 'department', 'faculty'] | null,
+ *       'external_main'   => ['id', 'name', 'email', 'email_problem', 'institution', 'department'],
+ *       'external_backup' => ['id', 'name', 'email', 'email_problem', 'institution', 'department'] | null,
  *     ],
  *   ]
+ *
+ * Each seat's 'id' is the examiner's examiners.id (added 2026-11-04). Keep
+ * it with the letter you send: together with 'application_id' it is the key
+ * SuppliesAppointmentDispatch::packSentAt() is asked with, and it is how a
+ * promoted backup is told apart from an examiner who already has a letter.
  *
  * Always the CURRENT panel: after a decline, the promoted backup is in the
  * main seat. An examiner's email may be null: CGS has none yet, or the one
@@ -168,6 +186,23 @@ panel page is where a decline is recorded. It is far easier to act on when
 it shows whether each main examiner's appointment pack has actually gone out.
 Jason's module already records that in `appointment_examiners.pack_sent_at`.
 
+**The key is Hani's ids, not Jason's.** Hani calls
+`packSentAt($nomination->application_id, $nomination->internal_main_id)`
+(`PanelController::lettersSent()`, `Support\ExaminerProgress`):
+- `$applicationId` is the **examiner nomination's** `applications.id`, the
+  same value as the export's "Application No." and the panel's
+  `'application_id'`. It is not the id of Jason's own `appointment_letter`
+  application.
+- `$examinerId` is **`examiners.id`**, the seat's `'id'` in item 3. It is not
+  `appointment_examiners.id` or `pool_examiner_id`.
+
+Jason's rows do not store either id today, so his implementation has to keep
+them in his own tables when a panel is imported or read. It returns the
+**latest non-null `pack_sent_at`** across every appointment-letter row for
+that examiner and nomination (there can be more than one, e.g. a resend or a
+letter issued later for a promoted backup), and null when none was accepted
+by the mail transport.
+
 **Impact.** Additive.
 - **Jason:** implements and binds it in his own `ModuleProvider`.
 - **Hani:** reads it only if it is bound
@@ -188,7 +223,11 @@ namespace App\Modules\Core\Contracts;
  */
 interface SuppliesAppointmentDispatch
 {
-    /** Null when nothing has been sent to this examiner for this application. */
+    /**
+     * Keyed by the NOMINATION's applications.id and the examiner's
+     * examiners.id. The latest non-null pack_sent_at for that pair; null
+     * when nothing has been sent.
+     */
     public function packSentAt(int $applicationId, int $examinerId): ?\DateTimeInterface;
 }
 ```

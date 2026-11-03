@@ -101,12 +101,12 @@ class ReleasedExaminerProvider
 
     protected function internal(?Examiner $e): ?array
     {
-        return $e ? ['name' => $e->name, 'email' => $e->usableEmail(), 'email_problem' => $e->emailProblem(), 'department' => $e->department, 'faculty' => $e->faculty] : null;
+        return $e ? ['id' => $e->id, 'name' => $e->name, 'email' => $e->usableEmail(), 'email_problem' => $e->emailProblem(), 'department' => $e->department, 'faculty' => $e->faculty] : null;
     }
 
     protected function external(?Examiner $e): ?array
     {
-        return $e ? ['name' => $e->name, 'email' => $e->usableEmail(), 'email_problem' => $e->emailProblem(), 'institution' => $e->institution, 'department' => $e->department] : null;
+        return $e ? ['id' => $e->id, 'name' => $e->name, 'email' => $e->usableEmail(), 'email_problem' => $e->emailProblem(), 'institution' => $e->institution, 'department' => $e->department] : null;
     }
 
     /** "MSc Full-Time" -> "MSc". */

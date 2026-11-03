@@ -219,7 +219,7 @@ candidate, one sheet, and the same columns in both formats
 
 | # | Column | Notes |
 |---|---|---|
-| 1 | **Application No.** | `applications.id` = `examiner_nominations.application_id`. Jason's import matches on this to read the seat ids exactly. |
+| 1 | **Application No.** | `applications.id` = `examiner_nominations.application_id`. The key for reading the seat ids exactly. Jason's import does not recognise this heading yet (its aliases lack the full stop); he is adding an `application no.` alias on his side. Until then it falls back to matching by name. |
 | 2–6 | Faculty, Department, Candidate, Matric No, Programme | the candidate |
 | 7–8 | Thesis Title, Supervisor | |
 | 9–11 | Internal Main, Internal Main Dept, Internal Backup | the **current** panel, after any decline |
