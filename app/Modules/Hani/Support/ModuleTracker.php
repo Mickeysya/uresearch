@@ -35,9 +35,10 @@ final class ModuleTracker
             'softbound' => $p->softbound?->status === Application::STATUS_APPROVED,
             'examiners' => $p->nomination?->status === Application::STATUS_APPROVED,
             'session' => $vivaAt !== null && $vivaAt->isPast(),
-            // Step 5 (report and result) is not built yet, so it never completes.
-            'result' => false,
+            // Complete once the AE accepts the corrected thesis (categories 1-3).
+            'result' => $p->detail?->corrections_accepted_at !== null,
         ];
+        $d = $p->detail;
 
         $now = [
             'notice' => match (true) {
@@ -54,7 +55,14 @@ final class ModuleTracker
             'session' => $vivaAt
                 ? 'Attend your viva on '.$vivaAt->format('l, j M Y, g:i a').' at '.$p->detail->venue.'.'
                 : 'Your Academic Executive will set your viva date and email you a calendar invitation.',
-            'result' => 'Your Academic Executive will share the viva report about a week after the viva, once the chairman sends it.',
+            'result' => match (true) {
+                ! $d?->hasResult() => 'Your Academic Executive will share the viva report about a week after the viva, once the chairman sends it.',
+                $d->needsCorrections() && $d->corrections_submitted_at !== null => 'Your Academic Executive is checking your corrected thesis. Nothing to do until they accept it.',
+                $d->needsCorrections() => 'Result '.$d->resultLabel().': upload your corrected final thesis by '.$d->corrections_due_at->format('j M Y').'.',
+                $d->result_category === \App\Modules\Hani\Models\VivaDetail::REEXAMINATION => 'Result '.$d->resultLabel().': revise your thesis and resubmit it to CGS between '
+                    .$d->resubmission_opens_at->format('j M Y').' and '.$d->resubmission_closes_at->format('j M Y').'. CGS will then log your re-viva.',
+                default => 'Result '.$d->resultLabel().': this is the final outcome. Contact your Academic Executive if you have questions.',
+            },
         ];
 
         $urls = [
@@ -62,13 +70,21 @@ final class ModuleTracker
             'softbound' => $p->softbound ? route('applications.show', $p->softbound) : null,
         ];
 
-        return self::linear([
+        $tracker = self::linear([
             'notice' => 'Notice of Thesis Submission',
             'softbound' => 'Softbound Thesis',
             'examiners' => 'Examiner Appointment',
             'session' => 'Viva Session',
             'result' => 'Result & Corrections',
         ], $done, $now, $urls);
+
+        // A fail is final: a cross, with its own line, whatever came before.
+        if ($d?->result_category === \App\Modules\Hani\Models\VivaDetail::FAIL) {
+            $tracker['steps'][4]['state'] = 'rejected';
+            $tracker['now'] = $now['result'];
+        }
+
+        return $tracker;
     }
 
     /**

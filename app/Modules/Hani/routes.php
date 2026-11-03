@@ -11,6 +11,7 @@ use App\Modules\Hani\Http\Controllers\PanelController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\VivaController;
 use App\Modules\Hani\Http\Controllers\VivaExaminerController;
+use App\Modules\Hani\Http\Controllers\VivaResultController;
 use App\Modules\Hani\Http\Controllers\VivaScheduleController;
 use App\Modules\Hani\Http\Controllers\VivaSoftboundController;
 use Illuminate\Support\Facades\Route;
@@ -36,6 +37,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/viva/softbound', [VivaSoftboundController::class, 'create'])->name('viva.softbound.create');
         Route::post('/viva/softbound', [VivaSoftboundController::class, 'store'])->name('viva.softbound.store');
         // Reads the chosen Turnitin report to pre-fill the similarity index. Stores nothing.
+        // Step 5: the corrected final thesis (result categories 1-3).
+        Route::get('/viva/corrections', [VivaResultController::class, 'corrections'])->name('viva.corrections.create');
+        Route::post('/viva/corrections', [VivaResultController::class, 'submitCorrections'])->name('viva.corrections.store');
+
         Route::post('/viva/softbound/similarity-preview', [VivaSoftboundController::class, 'similarityPreview'])
             ->middleware('throttle:20,1')
             ->name('viva.softbound.similarity-preview');
@@ -53,6 +58,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/viva/scheduling', [VivaScheduleController::class, 'index'])->name('viva.schedule.index');
         Route::get('/viva/{application}/schedule', [VivaScheduleController::class, 'edit'])->name('viva.schedule.edit');
         Route::post('/viva/{application}/schedule', [VivaScheduleController::class, 'update'])->name('viva.schedule.update');
+
+        // Step 5: result and corrections. Module-side state, not a stage.
+        Route::get('/viva/results', [VivaResultController::class, 'index'])->name('viva.results.index');
+        Route::post('/viva/{application}/result', [VivaResultController::class, 'record'])->name('viva.results.record');
+        Route::post('/viva/{application}/corrections/accept', [VivaResultController::class, 'accept'])->name('viva.results.accept');
     });
 
     // Examiner progress per viva: letter, acceptance, thesis, report. The
@@ -178,7 +188,9 @@ Route::middleware('auth')->group(function () {
     // through the same channel the rest of the re-viva process is informally
     // run through today, so CGS is the one who records the formal
     // resubmission timestamp -- not a self-service student upload.
-    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+    // Senior Executive CGS logs re-vivas (CGS practice); Non-Executive keeps
+    // access until Prompt 3 makes them read-only.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/re-viva/new', [ReVivaController::class, 'create'])->name('reviva.create');
         Route::post('/re-viva', [ReVivaController::class, 'store'])->name('reviva.store');
     });

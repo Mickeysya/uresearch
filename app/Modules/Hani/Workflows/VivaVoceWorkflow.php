@@ -109,6 +109,7 @@ class VivaVoceWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalenda
         return match ($user->role) {
             Role::ACADEMIC_EXEC => [
                 ['label' => 'Viva Scheduling', 'route' => 'viva.schedule.index'],
+                ['label' => 'Viva Results', 'route' => 'viva.results.index'],
             ],
             Role::SUPERVISOR => [
                 ['label' => "Students' Viva Progress", 'route' => 'viva.supervisees'],

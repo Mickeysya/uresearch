@@ -18,7 +18,7 @@
                 <option value="">Select</option>
                 @foreach ($students as $student)
                     <option value="{{ $student->id }}"
-                            @selected(old('student_id') == $student->id)
+                            @selected(old('student_id', $preselected ?? null) == $student->id)
                             @disabled($blockedReasons[$student->id] !== null)>
                         {{ $student->name }} @if ($student->matric_no)({{ $student->matric_no }})@endif
                         @if ($blockedReasons[$student->id])

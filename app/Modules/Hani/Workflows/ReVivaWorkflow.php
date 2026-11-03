@@ -91,7 +91,7 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
     public function links(User $user): array
     {
         return match ($user->role) {
-            Role::NON_EXEC_CGS => [
+            Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS => [
                 ['label' => 'Log Re-viva Submission', 'route' => 'reviva.create'],
             ],
             Role::ACADEMIC_EXEC => [

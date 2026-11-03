@@ -23,6 +23,10 @@ use Illuminate\Validation\ValidationException;
  *   replace()   put an eligible examiner into an empty or declined seat
  *   complete()  the evaluation happened: whoever examined starts the 90-day
  *               gap; anyone tied up who did not examine is freed without one
+ *   holdForReexamination()  viva result category 4: the same mains will
+ *               re-examine, so they stay Assigned (until the re-viva outcome)
+ *   freeWithoutGap()  category 4 and the window closed with no re-viva
+ *               logged: the mains never examined again, so no gap
  *
  * The seat columns on examiner_nominations are updated in place so they
  * always show the CURRENT panel -- Jason's appointment-letter module reads
@@ -172,6 +176,45 @@ class PanelSeats
                 } elseif ($examiner->assigned_until !== null) {
                     $examiner->update(['assigned_until' => null]);
                     $this->log($nomination, $seat, $examiner->id, 'freed', 'Backup not used.', $actor);
+                }
+            }
+        });
+    }
+
+    /**
+     * Viva result category 4: the mains will re-examine the resubmitted
+     * thesis, so they stay Assigned at least until $until. The re-viva
+     * outcome (Prompt 3) is what finally releases them.
+     */
+    public function holdForReexamination(ExaminerNomination $nomination, \DateTimeInterface $until, ?User $actor = null): void
+    {
+        DB::transaction(function () use ($nomination, $until, $actor) {
+            foreach (array_keys(self::MAINS) as $seat) {
+                $examiner = $nomination->{$seat} ? Examiner::whereKey($nomination->{$seat})->lockForUpdate()->first() : null;
+
+                if (! $examiner) {
+                    continue;
+                }
+
+                if ($examiner->assigned_until === null || $examiner->assigned_until->lt($until)) {
+                    $examiner->update(['assigned_until' => $until]);
+                }
+
+                $this->log($nomination, $seat, $examiner->id, 'held', 'Re-examination: held until the re-viva outcome.', $actor);
+            }
+        });
+    }
+
+    /** Free the mains with NO gap: they did not examine again. */
+    public function freeWithoutGap(ExaminerNomination $nomination, string $reason, ?User $actor = null): void
+    {
+        DB::transaction(function () use ($nomination, $reason, $actor) {
+            foreach (array_keys(self::MAINS) as $seat) {
+                $examiner = $nomination->{$seat} ? Examiner::whereKey($nomination->{$seat})->lockForUpdate()->first() : null;
+
+                if ($examiner && $examiner->assigned_until !== null) {
+                    $examiner->update(['assigned_until' => null]);
+                    $this->log($nomination, $seat, $examiner->id, 'freed', $reason, $actor);
                 }
             }
         });

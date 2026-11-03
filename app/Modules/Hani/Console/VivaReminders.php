@@ -9,6 +9,7 @@ use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaExaminerProgress;
 use App\Modules\Hani\Models\VivaReminderLog;
 use App\Modules\Hani\Notifications\VivaReminder;
+use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Support\VivaChecklist;
 use App\Modules\Hani\Support\VivaInvite;
 use App\Modules\Hani\Support\VivaProgress;
@@ -34,6 +35,14 @@ use Illuminate\Support\Facades\Notification;
  *                         nothing is filed -> the student
  *   softbound_overdue     that date has passed and nothing is filed -> the AE
  *
+ * Result & corrections:
+ *   corrections_30d / corrections_7d   before the corrected thesis is due,
+ *                         nothing submitted -> the student
+ *   corrections_overdue   due date passed, nothing submitted -> the AE
+ *   reexam_window_closed  category 4, the resubmission window has closed
+ *                         and no re-viva was logged: the mains are freed
+ *                         (no gap) and the AE is told
+ *
  * Each reminder is sent ONCE. As with `rpd:remind` and `examiners:sweep`,
  * the log row is written BEFORE sending, and the unique key on (viva, kind,
  * reference) makes the database decide that a second run skips it.
@@ -55,6 +64,7 @@ class VivaReminders extends Command
 
         foreach ($this->due() as $reminder) {
             [$notice, $kind, $reference, $users, $emails, $notification] = $reminder;
+            $then = $reminder[6] ?? null;
             $who = count($users) + count($emails);
 
             if ($dryRun) {
@@ -75,6 +85,12 @@ class VivaReminders extends Command
                 $skipped++;
 
                 continue;
+            }
+
+            // Anything the reminder does besides telling someone, done once,
+            // after the log row has claimed it.
+            if ($then) {
+                $then();
             }
 
             try {
@@ -108,6 +124,100 @@ class VivaReminders extends Command
         yield from $this->overdueReports();
         yield from $this->panelReminders();
         yield from $this->softboundDeadlines();
+        yield from $this->correctionDeadlines();
+        yield from $this->closedReexaminationWindows();
+    }
+
+    protected function correctionDeadlines(): iterable
+    {
+        $thresholds = collect((array) config('hani.result.reminder_days', [30, 7]))->map(fn ($d) => (int) $d)->sortDesc()->values();
+
+        $details = VivaDetail::with('application.student')
+            ->whereNotNull('corrections_due_at')
+            ->whereNull('corrections_submitted_at')
+            ->whereNull('corrections_accepted_at')
+            ->where('corrections_due_at', '<=', now()->addDays($thresholds->first() ?? 30)->toDateString())
+            ->get();
+
+        foreach ($details as $detail) {
+            $notice = $detail->application;
+            $student = $notice->student;
+            $due = $detail->corrections_due_at;
+            $daysLeft = (int) now()->startOfDay()->diffInDays($due, false);
+
+            if ($daysLeft < 0) {
+                yield [$notice, 'corrections_overdue', '', $this->academicExecs($notice), [], new VivaReminder(
+                    'corrections_overdue', $notice,
+                    'Corrections overdue: '.$student?->name,
+                    [
+                        "{$student?->name}'s corrected final thesis (result {$detail->resultLabel()}) was due on {$due->format('j M Y')} and has not been submitted.",
+                        'You may want to contact the student and their supervisor.',
+                    ],
+                    'Open Viva Results', route('viva.results.index'),
+                )];
+
+                continue;
+            }
+
+            // The largest threshold the deadline is within, so a short
+            // deadline does not get two reminders on the same day.
+            foreach ($thresholds as $i => $days) {
+                $next = $thresholds[$i + 1] ?? -1;
+
+                if ($daysLeft <= $days && $daysLeft > $next) {
+                    yield [$notice, "corrections_{$days}d", '', [$student], [], new VivaReminder(
+                        "corrections_{$days}d", $notice,
+                        'Corrected thesis due by '.$due->format('j M Y'),
+                        [
+                            "Your corrected final thesis is due by {$due->format('j M Y')} ({$daysLeft} days from today).",
+                            'Upload it on your viva page in UResearch when it is ready.',
+                        ],
+                        'Open your viva page', route('viva.eligibility'),
+                    )];
+                }
+            }
+        }
+    }
+
+    protected function closedReexaminationWindows(): iterable
+    {
+        $details = VivaDetail::with('application.student')
+            ->where('result_category', VivaDetail::REEXAMINATION)
+            ->whereNull('examiners_freed_at')
+            ->whereNotNull('resubmission_closes_at')
+            ->where('resubmission_closes_at', '<', today()->toDateString())
+            ->get();
+
+        foreach ($details as $detail) {
+            $notice = $detail->application;
+
+            // A re-viva logged since the result: the examiners stay held for it.
+            $logged = Application::where('module_type', 're_viva')
+                ->where('student_id', $notice->student_id)
+                ->where('created_at', '>=', $detail->result_recorded_at ?? $detail->viva_at)
+                ->exists();
+
+            if ($logged) {
+                continue;
+            }
+
+            $panel = VivaProgress::forNotices(collect([$notice]))->first()->panel();
+
+            yield [$notice, 'reexam_window_closed', '', $this->academicExecs($notice), [], new VivaReminder(
+                'reexam_window_closed', $notice,
+                'Re-examination window closed: '.$notice->student?->name,
+                [
+                    "The window for {$notice->student?->name} to resubmit for re-examination closed on {$detail->resubmission_closes_at->format('j M Y')}, and no re-viva was logged.",
+                    'The two main examiners have been freed, without a gap, since they did not examine again.',
+                ],
+                'Open Viva Results', route('viva.results.index'),
+            ), function () use ($detail, $panel) {
+                if ($panel) {
+                    app(PanelSeats::class)->freeWithoutGap($panel, 'Re-examination window closed with no re-viva logged.');
+                }
+                $detail->update(['examiners_freed_at' => now()]);
+            }];
+        }
     }
 
     protected function panelReminders(): iterable

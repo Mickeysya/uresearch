@@ -24,7 +24,7 @@ class ReVivaController extends Controller
         return 're_viva';
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $students = User::where('role', Role::STUDENT)->orderBy('name')->get();
 
@@ -46,7 +46,11 @@ class ReVivaController extends Controller
             fn (User $student) => [$student->id => $this->blockReason($latestCycles->get($student->id))]
         );
 
-        return view('hani::re_viva.form', compact('students', 'blockedReasons'));
+        // ?student= pre-selects the candidate, from the "re-viva to log"
+        // notification sent when a viva result is category 4.
+        $preselected = $request->integer('student') ?: null;
+
+        return view('hani::re_viva.form', compact('students', 'blockedReasons', 'preselected'));
     }
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
@@ -83,6 +87,8 @@ class ReVivaController extends Controller
             ]);
 
             $documents->attach($application, $request->file('thesis'), 'Re-corrected Thesis');
+
+            $this->holdReexaminers($data['student_id'], $resubmittedAt->copy()->addMonths(12), $request->user());
 
             return $engine->submit($application);
         });
@@ -130,6 +136,27 @@ class ReVivaController extends Controller
         return redirect()
             ->route('reviva.outcomes.index')
             ->with('status', "Outcome recorded for re-viva #{$detail->application_id}.");
+    }
+
+    /**
+     * A viva result of category 4 holds the same main examiners for the
+     * re-examination. Once the re-viva is logged, keep them Assigned for its
+     * whole cycle (to the hardbound deadline); recording the re-viva outcome
+     * releases them (Prompt 3). Nothing to do for a student with no such viva.
+     */
+    protected function holdReexaminers(int $studentId, \DateTimeInterface $until, User $actor): void
+    {
+        $viva = \App\Modules\Hani\Models\VivaDetail::whereHas('application', fn ($q) => $q->where('module_type', 'viva_voce')->where('student_id', $studentId))
+            ->where('result_category', \App\Modules\Hani\Models\VivaDetail::REEXAMINATION)
+            ->whereNull('examiners_freed_at')
+            ->latest('id')
+            ->first();
+
+        $panel = $viva ? \App\Modules\Hani\Support\VivaProgress::forNotices(collect([$viva->application]))->first()->panel() : null;
+
+        if ($panel) {
+            app(\App\Modules\Hani\Support\PanelSeats::class)->holdForReexamination($panel, $until, $actor);
+        }
     }
 
     /**

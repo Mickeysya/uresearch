@@ -268,6 +268,21 @@ return [
         ],
     ],
 
+    'result' => [
+        // Months from the viva date to the corrected final thesis, by
+        // result category. Provisional (from the AE's guideline as described).
+        'correction_months' => [1 => 1, 2 => 3, 3 => 6],
+
+        // Category 4: the re-examination window, in months from the viva.
+        // Provisional.
+        'resubmission_opens_months' => 6,
+        'resubmission_closes_months' => 12,
+
+        // Remind the student this many days before the corrections are due.
+        // Provisional.
+        'reminder_days' => [30, 7],
+    ],
+
     'reminders' => [
         // When `viva:reminders` runs each day. Provisional.
         'daily_at' => '07:45',
