@@ -3,6 +3,50 @@
 @section('title', $returned ? 'Resubmit Hardbound Thesis' : 'Hardbound Submission')
 
 @section('content')
+@push('head')
+    <style>
+        /* Two lists of submissions. Both are rows, not runs of text: a
+           reference, a title, a state and one action, in the same place on
+           every row so the eye can run down a column. */
+        .sub-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+        .sub-list > li { border-top: 1px solid var(--border-subtle); }
+        .sub-list > li:first-child { border-top: 0; }
+
+        .sub-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: var(--space-2) var(--space-4);
+            padding: var(--space-3) 0;
+        }
+
+        .sub-ref {
+            font-variant-numeric: tabular-nums;
+            font-weight: var(--weight-semi);
+            flex: 0 0 auto;
+        }
+
+        /* Takes the slack, and wraps rather than pushing the row wider. */
+        .sub-title { flex: 1 1 14rem; min-width: 0; }
+
+        .sub-state { flex: 0 0 auto; }
+        .sub-action { flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
+
+        /* The reviewer's own words, set apart from the candidate's title. */
+        .sub-remark {
+            flex: 1 1 100%;
+            min-width: 0;
+            margin: 0;
+            padding-left: var(--space-3);
+            border-left: 2px solid var(--border-subtle);
+            color: var(--text-grey);
+            font-size: var(--text-sm);
+        }
+
+        .sub-remark .who { color: var(--text-dark); font-weight: var(--weight-semi); }
+    </style>
+@endpush
+
 <div class="card-container-inline">
     <x-core::page-header
         title="{{ $returned ? 'Resubmit Hardbound Thesis' : 'Hardbound Thesis Submission' }}" />
@@ -10,23 +54,35 @@
     <div class="card card-wide">
         @if ($awaiting->isNotEmpty())
             <div class="app-item" style="margin-bottom: 18px; border-left: 4px solid #A86A12;">
-                <p><b>{{ $awaiting->count() === 1 ? 'A submission was' : $awaiting->count().' submissions were' }} returned to you for correction</b></p>
-                <ul class="doc-list">
+                <p style="margin-top: 0;"><b>{{ $awaiting->count() === 1 ? 'A submission was' : $awaiting->count().' submissions were' }} returned to you for correction</b></p>
+
+                <ul class="sub-list">
                     @foreach ($awaiting as $app)
                         @php($last = $app->history->last())
                         <li>
-                            <b>#{{ $app->id }}</b>: {{ $awaitingDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
-                            @if ($last)
-                                <br><span style="color: var(--text-grey);">
-                                    {{ $last->stage_label }}@if ($last->remarks): “{{ $last->remarks }}”@endif
+                            <div class="sub-row">
+                                <span class="sub-ref">#{{ $app->id }}</span>
+                                <span class="sub-title">{{ $awaitingDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}</span>
+                                <span class="sub-action">
+                                    <a href="{{ route('hardbound.resubmit.form', $app) }}"><b>Resubmit &rarr;</b></a>
                                 </span>
-                            @endif
-                            <br>
-                            <a href="{{ route('hardbound.resubmit.form', $app) }}"><b>Resubmit it</b></a>
+
+                                @if ($last?->remarks)
+                                    <p class="sub-remark">
+                                        <span class="who">{{ $last->stage_label }}:</span>
+                                        &ldquo;{{ $last->remarks }}&rdquo;
+                                    </p>
+                                @elseif ($last)
+                                    <p class="sub-remark">
+                                        <span class="who">{{ $last->stage_label }}</span> gave no comments.
+                                    </p>
+                                @endif
+                            </div>
                         </li>
                     @endforeach
                 </ul>
-                <p class="queue-meta" style="margin: 6px 0 0;">
+
+                <p class="field-hint">
                     Correct what was asked and resubmit. The form below starts a brand-new
                     submission instead.
                 </p>
@@ -51,21 +107,42 @@
 
         @if (($filed ?? collect())->isNotEmpty())
             <div class="app-item" style="margin-bottom: 18px;">
-                <p><b>Submissions you have filed</b></p>
-                <ul class="doc-list">
+                <p style="margin-top: 0;"><b>Submissions you have filed</b></p>
+
+                <ul class="sub-list">
                     @foreach ($filed as $app)
+                        {{-- Every rejection in this chain is a return, so that is what
+                             the badge says: "rejected" reads as a dead end the candidate
+                             does not actually have.
+
+                             Assigned inline, one per line, rather than in a raw PHP
+                             block. Blade lifts raw blocks out of the template before it
+                             compiles anything else, pairing each opener with the next
+                             closer non-greedily -- and this file already opens one
+                             inline further up. A block here would pair with that opener
+                             and swallow everything between, leaving the loops and
+                             conditionals inside it on the page as literal text. --}}
+                        @php($returnedHere = $app->status === \App\Modules\Core\Models\Application::STATUS_REJECTED)
+                        @php($tone = $returnedHere ? 'returned' : $app->status)
+                        @php($label = $returnedHere ? 'Returned' : ucfirst($app->status))
                         <li>
-                            <b>#{{ $app->id }}</b>
-                            {{ $filedDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}
-                            <span style="color: var(--text-grey);">&middot; {{ ucfirst($app->status) }}</span>
-                            <br>
-                            <a href="{{ route('hardbound.forms', $app) }}">Read the forms the portal wrote &rarr;</a>
+                            <div class="sub-row">
+                                <span class="sub-ref">#{{ $app->id }}</span>
+                                <span class="sub-title">{{ $filedDetails[$app->id]->thesis_title ?? 'Hardbound submission' }}</span>
+                                <span class="sub-state">
+                                    <span class="status-badge {{ $tone }}">{{ $label }}</span>
+                                </span>
+                                <span class="sub-action">
+                                    <a href="{{ route('hardbound.forms', $app) }}">Forms &rarr;</a>
+                                </span>
+                            </div>
                         </li>
                     @endforeach
                 </ul>
+
                 <p class="field-hint">
-                    UTP/CGS/021 is written from what you entered and signed with the signature on
-                    your account. It opens on a page, so there is nothing to download to check it.
+                    Both CGS forms are written from what you entered and signed with the signature
+                    on your account, so there is nothing to download to check them.
                 </p>
             </div>
         @endif
