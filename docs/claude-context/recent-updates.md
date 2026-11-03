@@ -8,6 +8,1436 @@ diff alone.
 
 ---
 
+## Where Nureen's modules stand (snapshot, 3 Nov 2026)
+
+A summary of everything below, module by module, for anyone starting fresh.
+`app/Modules/Nureen/README.md` has the detail, and `SHARED_CHANGES.md` covers
+every Core change and open team decision.
+
+### GA Extension (`ga_extension`)
+- **Chain:**
+  - Default mode `cgs`: Supervisor endorses (3 working days), then
+    Non-Executive CGS decides (2), and the Senior Director is emailed every
+    outcome for information only.
+  - Mode `senior_director`: Supervisor, then CGS review, then the Senior
+    Director approves.
+  - Each application keeps the chain it was submitted under
+    (`final_approver_snapshot`).
+- **Submission:** four required document types, multi-file. The supervisor
+  stage is scoped to the student's own supervisor, recorded on the detail
+  row. CGS can return an application to the supervisor (with a reason)
+  instead of rejecting it.
+- **Timing:** Client Charter due dates, expected decision dates and
+  reminders (`ga-extension:remind-stalled`, daily 08:00). Shown on the
+  calendar.
+
+### Supervision (`supervision`)
+- **Chain:** the requested supervisor, then the Chair of Department, then
+  CGS.
+- **Modes:**
+  - `endorse` (default): CGS previews and endorses the appointment letter.
+  - `automatic`: the Chair's approval is final, and the letter names no CGS
+    endorser.
+  - `manual`: CGS makes an eligibility decision.
+- **On approval:** a Main Supervisor appointment updates the student's
+  `supervisor_id` (and records the previous one).
+- **The letter:** issued as `CGS/SVAPPT/<year>/<seq>` on the shared formal
+  Dompdf layout, one A4 page, with a QR code to `/verify/appointment/{ref}`.
+  CGS can revoke it, which emails the student and the supervisor with the
+  reason.
+
+### GA/GRA Certification Letter (`ga_certification`)
+- **Chain:** Supervisor (3) → CGS Staff (2), who checks the appointment
+  record ("Verified / Mismatch / Not found", CGS-only) → Senior Director
+  (2), who can preview and then approves.
+- **The letter:** `CGS/GACERT/<year>/<seq>`, with GA course or GRA project
+  fields from one config list. Max field lengths keep it on one page. It is
+  verifiable at `/verify/certificate/{ref}` and can be revoked.
+
+### Attendance and Attendance Appeal (`attendance_appeal`)
+- **Data in:**
+  - CSV upload, an inbox folder, a push API, or a simulated source;
+  - `attendance:sync` runs nightly at 02:00;
+  - no period may end in the future, and mixed period lengths are refused.
+- **Risk check:**
+  - **The original rule:** below 80%, or three declining periods ending at
+    or below 85%.
+  - **A least-squares end-of-semester projection,** which may flag only
+    from period 4 up to 60% of the semester. That window was tuned on the
+    backtest.
+  - **Automatic early-warning emails,** with a supervisor copy, that never
+    show the projection.
+  - **CGS's At-Risk list** shows current %, projected %, trend and reason.
+- **Students** see their own figures and the dashboard's Attendance Action
+  card ("Attend N of the next M sessions", "Justification needed", "On
+  track", "Keep checking in"). Never the projection.
+- **Appeals:**
+  - require a Justification Letter and a Monthly Activity Breakdown;
+  - CGS may approve fewer sessions than requested;
+  - excused sessions count as attended or are left out of the total
+    (`attendance.excused_sessions`, pending CGS's answer).
+- **Evidence:** `attendance:backtest` (synthetic data or a real export,
+  `--runs`, `--compare`) reports MAE, RMSE, precision, recall, F1 and
+  earliness.
+
+### Shared pieces built or extended along the way (in Core, recorded in SHARED_CHANGES.md)
+- **Track My Applications** (`/applications`): tabs by each module's
+  `CATEGORY`, status filters, and cards with per-application steppers.
+- **Application details page:** progress against charter targets,
+  timeline, "Your application", documents, help.
+- **Optional contracts:** `SuppliesDecisionDates`, `SuppliesOverdueStatus`,
+  `DescribesApplicationProgress` and `DescribesApplicationDetails`.
+- **The shared `WorkingDayCalendar`** (`config/calendar.php`).
+- **`WorkflowEngine::progress()`** never marks an undecided stage as done.
+- **`phpunit.xml`** forces the test environment (no more leaked jobs).
+
+### Demo data
+Run with `db:seed --class=...`; none are wired into Core's seeder:
+- `AttendanceRiskDemoSeeder`: the three viva cases.
+- `NureenAttendanceDemoSeeder`: a weekly semester starting 5 Oct 2026.
+- `NureenClientCharterDemoSeeder`.
+- `NureenRealignedWorkflowDemoSeeder`.
+- `GaAppointmentRecordSeeder`.
+
+### Open items and decisions waiting on someone
+- **Lee Xin Yi's GA Extension (#183):** resolved with no data change.
+  Endorsed by `supervisor@` and approved by `cgs@` on 3 Nov.
+- **No Electrical & Electronics Chair** in the seeded data: SHARED_CHANGES
+  §15.
+- **Six real letter emails** (4 `AppointmentLetterIssued`, 2
+  `CertificationIssued`, all from 29 Oct–1 Nov) sit in `failed_jobs`. They
+  failed on a since-fixed bug and are kept for Nureen to decide whether to
+  retry.
+- **Waiting on CGS:**
+  - the excused-sessions rule;
+  - the tab category names;
+  - the help contact details;
+  - the holiday list;
+  - signatory titles;
+  - whether a certification revocation should also tell the supervisor
+    (SHARED_CHANGES §14).
+- **Waiting on the team:**
+  - SHARED_CHANGES §9b–d: Core's semester-vs-latest attendance figure,
+    CGS dashboard counts, and `DemoDataSeeder`'s monthly attendance;
+  - the `layout.css` phone gap above page-header actions;
+  - each teammate's one-line `CATEGORY`.
+- **`docs/design/application-details.png`** was never added, so the details
+  page follows the written spec.
+
+---
+
+## 2026-11-08 — Approver rows: one decision bar, and a preview overlay for every document
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit.
+SHARED_CHANGES §17 has the Core proposal with exact diffs.
+
+### The ask
+
+Two problems on the approver queues, first seen on Supervision as
+Non-Executive CGS:
+1. **The decision controls were split.** Preview and Endorse sat in their own
+   box, "Remarks (optional)" came below it, and Reject was alone at the
+   bottom. The fix: one reusable bar (System checks → Documents → Remarks →
+   one action row), with a reason required for Reject and Return.
+2. **Approvers had to download every file.** The fix: a preview overlay
+   (PDF iframe, image, or "Preview not available" for Word), inline routes
+   under the same authorisation as the downloads, and a Documents section
+   with View and Download.
+
+### Key findings before writing any code
+
+- **Core's `partials/queue.blade.php` has no opt-out.** It always prints a
+  download-only `doc-list` and `<x-core::decision-form>` after the module's
+  detail view.
+- **Only Supervision required a reason to reject;** Certification, GA
+  Extension and the appeal accepted an empty one. Every existing test that
+  rejects there already sends remarks.
+- **Core's CSP needs no change for previews.** `ContentSecurityPolicy` only
+  adds its header and `X-Frame-Options: DENY` to HTML responses, so inline
+  PDFs and images aren't affected, and the page allows same-origin frames
+  through `default-src 'self'`. HTML can never be framed
+  (`frame-ancestors 'none'`), so the "not available" state is drawn by the
+  overlay, not loaded in the iframe.
+- **Both draft-letter previews were already inline;** the GA Extension Form
+  and the certification attachment were download-only.
+
+### The design
+
+- **`components/decision-bar`:** one form, using `formaction` for Return
+  (it posts the same `remarks` to `ga-extension.return`).
+  - A hidden `_row` field brings a server-side refusal back to its own row,
+    opened.
+  - The script stops a reasonless Reject or Return, relabels the field
+    "Reason (required)", fills a reserved one-line message and focuses the
+    box.
+- **`components/documents` and `components/file-preview`:**
+  - View is a real link to the inline route; the overlay intercepts it, so
+    without JavaScript the file opens in a new tab.
+  - The `<dialog>` uses `showModal()`, plus a Tab trap, close on backdrop
+    click, and focus returned to the View link.
+- **`Support\ApproverPanel`:** per module, the documents, the primary label
+  and hint, and the return action.
+  - Supervision: "Endorse & issue letter" at `cgs_review` in `endorse` mode;
+    "Approve & issue letter" in `manual` mode, or at the Chair or Dean in
+    `automatic` mode.
+  - Certification: "Approve & issue letter" for the Senior Director.
+  - Appeal: "Approve appeal".
+- **`Support\DocumentPreviews`:** file kind and inline MIME by extension
+  (pdf, jpg/jpeg, png; everything else is not previewable).
+- **Routes:**
+  - `nureen.documents.view` (`DocumentPreviewController`): `visibleTo()`,
+    Nureen's modules only, activity-logged "previewed";
+  - `ga-extension.form-pdf.view` and `ga-certification.attachment.view`
+    (same checks as their downloads);
+  - `?download=1` on both draft-letter previews.
+- **Core's duplicate blocks:** each Nureen `_detail` view is wrapped in
+  `.nureen-row`, and one `:has()` rule hides Core's list and form in those
+  rows only. §17 proposes `$ownsDecision` to replace it.
+
+### What changed
+
+- **New:**
+  - `Http/Controllers/DocumentPreviewController.php`;
+  - `Support/DocumentPreviews.php` and `Support/ApproverPanel.php`;
+  - components `decision-bar`, `documents` and `file-preview`;
+  - view `documents/preview_unavailable`;
+  - `tests/Feature/Nureen/DocumentPreviewTest.php` (14 tests).
+- **Detail views:** `supervision/_detail` (the "Preview letter" box is gone),
+  `ga_certification/_detail` (the same), `ga_extension/_detail` (the
+  download button is now a Documents row) and `attendance_appeal/_detail`
+  (its own Approve form and CSS hack are gone; the sessions field moved into
+  the bar).
+- **Controllers:**
+  - `GaExtensionController::formPdfView()`;
+  - `CertificationController::attachmentView()` and `?download=1`;
+  - `SupervisionController::previewLetter()` with `?download=1`;
+  - remarks required on reject in `CertificationController`,
+    `GaExtensionController` and `AttendanceAppealController`.
+- **Student forms:** View links on the GA Extension form (own applications,
+  draft as last saved) and the certification form (attachment as last saved).
+- **Existing tests:** four assertions follow the new wording (`LettersTest`
+  ×2, `GaExtensionFormTest`, `AttendanceDataRulesTest`).
+
+### Bugs caught
+
+- **The overlay opened invisibly** (a 0×0 box). `@once` had rendered it
+  inside the first queue row's closed `<details>`, and a modal dialog can't
+  show inside a hidden ancestor. The script now moves the dialog to `<body>`.
+- **Esc stopped working once focus entered the PDF.** Chrome's viewer keeps
+  key presses. The iframe is now out of the Tab order (`tabindex="-1"`) and
+  the trap cycles only the overlay's own controls. One limit remains: after
+  someone clicks into a PDF, they close with Close or a click outside.
+- **Two new test assertions matched the component's own script text**
+  (`data-decision-error`). They now count the rendered attribute.
+
+### Verification
+
+- **Full suite:** 652 passed. `failed_jobs` and `jobs` were 0 before and
+  after.
+- **Headless browser:** full Chromium (new headless). The default headless
+  shell has no PDF viewer and turns a framed PDF into a download, which is a
+  test-browser limitation, not the app.
+  - **As `cgs@`, in light, dark and at 400px:**
+    - Supervision #199, Certification #198 and GA Extension #197: the order
+      was System checks → Documents → Remarks → actions;
+    - Core's duplicate form and list are hidden;
+    - Endorse/Approve and Reject (and Return on GA Extension) are 44px tall,
+      side by side, and full width at 400px;
+    - no horizontal scroll.
+  - **The overlay:**
+    - the draft appointment letter, a PDF attachment and the generated GA
+      Extension Form each opened in it (1296×810 at 1440×900; full screen
+      at 400px);
+    - focus started on Close and Tab stayed inside;
+    - Esc closed it and returned focus to the View link, and a click outside
+      closed it at desktop width.
+  - **Empty Reject:** stayed on the page, read "Reason (required)", showed
+    "Give a reason before rejecting: the student is told why." and focused
+    the box.
+  - **Real rejections:**
+    - #200 (GA Extension, past candidacy) rejected by `cgs@` with a reason;
+    - #201, a fresh certification from `student2@` for this check, viewed by
+      `supervisor@` in light and dark, then rejected with a reason.
+  - No console errors.
+- **Dev data:** #200 is now rejected and #201 is new and rejected. #197, #198
+  and #199 stay pending.
+
+---
+
+## 2026-11-07 — Postgraduate Handbook 2025 rules across all four modules
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit.
+SHARED_CHANGES §16 has the proposals.
+
+### The ask
+
+Cross-checked against the Postgraduate Handbook 2025, the GA Terms &
+Conditions and the CGS onboarding briefing. New rules warn in the
+approver's System checks; every number and switch goes in config.
+- **Attendance:**
+  - only full-time research students are monitored, behind a switch if no
+    reliable source exists;
+  - approved annual leave (14 days: Jan 5, May 4, Sept 5, no carry-over)
+    isn't absence: CGS records it per student or through an optional sheet
+    column, and is warned over the allowance;
+  - the alert states the real consequences.
+- **GA Extension:**
+  - eligibility (full-time research);
+  - `allowed_levels` (MSc + PhD by default; PhD-only blocks MSc);
+  - the candidacy limit;
+  - PhD Stage Gate Level 3's two options.
+- **Supervision:**
+  - the PGFAC memo for a GA changing supervisor;
+  - a configurable Co-Supervisor approver (Chair by default, or Dean of PGR).
+- **Certification:** a non-blocking full-time-research note and warning.
+
+### Key findings before writing any code
+
+- **Nothing reliable knows study mode or type.** `users` has no such column.
+  `programme` is free text: "PhD Part-Time" on some students, "Master of
+  Science (…)" on others (never research vs coursework), and NULL on 19.
+  No teammate's module stores it. The only declarations are this module's
+  own GA/GRA Certification (type, mode, level) and GA Extension (mode,
+  level). So: `attendance.scope` defaults to `'all'`, plus SHARED §16a.
+- **The GA Extension Form never asks research vs coursework,** so eligibility
+  had nothing to check. A "Programme type" field was added (the PDF prints
+  it beside the mode).
+- **Section C couldn't tell an accepted article from a published one,**
+  which PhD Level 3 option 2 needs. Each row now has a status.
+- **Core already has a Dean of PGR role** (`Role::DEAN_PGR`, `dean@utp.edu.my`,
+  used by Norhanis's Travel chain), so `'dean_pgr'` was built rather than
+  only documented.
+- **Core's dashboards read attendance only through Nureen's
+  `AttendanceProvider`,** so applying the scope there keeps Core consistent
+  without touching it.
+- **Leave units:** one leave day is one UTrace session by default
+  (`leave.sessions_per_day`). Leave can only cover sessions actually missed
+  and not already excused.
+- **Core's CGS sidebar lists attendance links by hand,** so a new page's link
+  from `links()` doesn't show there (SHARED §16b).
+
+### The design
+
+- **`Support\StudyProfile`:** mode, type and level from the latest submitted
+  Certification, then GA Extension, then the programme text. Drafts never
+  count.
+- **`Support\AttendanceScope::monitors()`:**
+  - `'all'` → yes;
+  - `'full_time_research'` → `StudyProfile`'s answer, with unknown students
+    following `scope_unknown` (default `'include'`, so nobody drops out of
+    the early warning just because nothing is on record).
+
+  It is asked by `AttendanceRiskEvaluator::isAtRisk()`/`assess()`,
+  `AttendanceEarlyWarning::check()` (which also clears a stale state and
+  flags when someone falls out of scope) and `AttendanceProvider`.
+- **Leave:**
+  - `attendance_records.leave_days` is folded into
+    `countedAttended()`/`countedTotal()`/`sessionsMissed()` beside
+    `sessions_excused`, so both `excused_sessions` rules apply.
+  - It is written by `recordPeriod(..., ?int $leaveDays)` (null keeps the
+    value) and `recordLeave()`.
+  - The sheet's fifth column `leave_days` is read only when the header says
+    so, and the push API accepts it.
+  - `Support\AttendanceLeave` works out usage per semester (by period-end
+    month) and per year, plus the warnings.
+- **GA Extension:** `GaExtensionRules` gains `eligibility()`, `candidacy()`
+  and `phdLevelThree()`. `allowed_levels` is a submit-only validation rule,
+  so drafts still save.
+- **Supervision:**
+  - Snapshotted at submission: `is_change_of_supervisor` (a Main request
+    while another supervisor is on record), `is_ga` with `ga_status_source`
+    (`Support\GaStatus` from an active `GaAppointmentRecord` of `ga_types`,
+    else the student's declaration), and `co_supervisor_approver_snapshot`.
+  - `SupervisionWorkflow::approverStage()` gives `chair` or `dean_pgr`.
+  - The superset lists the Dean's stage only while the switch is on or
+    something waits there.
+- **Certification:** `GaCertificationDetail::eligibilityCheck()`, plus a
+  form note shown by script and rendered visible for a draft that needs it.
+
+### What changed
+
+- **New:**
+  - migrations `2026_11_07_000100` (`leave_days`) and `2026_11_07_000200`
+    (`study_type` and the four supervision columns);
+  - `Support/StudyProfile`, `AttendanceScope`, `AttendanceLeave`, `GaStatus`;
+  - views `attendance/leave` and `attendance/_leave_warnings`;
+  - routes `attendance.leave` and `attendance.leave.store`;
+  - four test files (59 tests).
+- **Config:**
+  - `attendance.scope`, `scope_unknown`, `leave`;
+  - `ga_extension.allowed_levels`, `eligible`, `applicant_fields.study_type`,
+    `publications.statuses`, `rules.max_candidacy_years`, `rules.phd_level3`;
+  - `ga_certification.eligible`;
+  - `supervision.co_supervisor_approver`, `pgfac_memo`;
+  - `charter_days.supervision.dean_pgr`.
+- **Changed:**
+  - **Attendance:** `AttendanceRecord`, `AttendanceIngestor`, `IngestSummary`,
+    `AttendanceSheet`, `AttendanceIngestController`, `AttendanceController`
+    (leave actions, upload warnings, at-risk banner),
+    `AttendanceRiskEvaluator`, `AttendanceEarlyWarning`,
+    `AttendanceProvider`, and the `AttendanceAtRisk` email;
+  - **GA Extension:** `GaExtensionRules`, `GaExtensionController`,
+    `GaExtensionDetail`, and the GA Extension form and PDF;
+  - **Supervision:** `SupervisionWorkflow`, `SupervisionController`,
+    `SupervisionDetail`, the Supervision form and `_detail` (a new System
+    checks panel), `LetterRenderer` (the Dean in automatic-mode wording),
+    `RemindStalledSupervisionRequests`, `ApplicationDetailsContent` (who it
+    waits for), and the routes (DEAN_PGR on the Supervision queue);
+  - **Certification:** `GaCertificationDetail`, the certification form and
+    `_detail`;
+  - the history, upload, at-risk and appeal-form attendance views.
+- **Existing tests:**
+  - the shared GA Extension payload gained `study_type`;
+  - publication fixtures gained a status;
+  - one `SupervisionTest` change-of-supervisor case now declares "not a GA".
+
+### Bugs caught
+
+- **A one-line `@php(...)` placed before a `@php … @endphp` block** in
+  `ga_certification/_detail` (the same Blade trap as on 5 Nov). Changed to
+  block form before it shipped.
+- **Two test assertions were trivially true:** `assertSee('data-level-blocked')`
+  matched the script's own query selector. They now assert on the element's
+  markup.
+
+### Verification
+
+- **Full suite:** 638 passed. `failed_jobs` and `jobs` were 0 before and
+  after.
+- **Headless browser.** Applications went in through the real form
+  endpoints (with their CSRF tokens) as the students, were approved by the
+  real supervisors and Chair, then checked as `cgs@` in light and dark mode:
+  - **#197** (`student2@`, PhD part-time): ✗ Full-time research student; ✓
+    Stage gate "Level 3, option 2 … accepted and … published, with both
+    proofs attached".
+  - **#200** (`divya.sri.kumar@`, PhD admitted Feb 2019): ✗ "Candidacy ends
+    31 Jan 2027 … No allowance is paid beyond candidacy" (and the existing
+    42-month check also fails).
+  - **#198** (`student2@`, certification, part-time): ✗ with the "former GA"
+    note. The form note appeared on picking Part-time.
+  - **#199** (`divya.sri.kumar@` changing to Dr Farid Kamal, no GA record,
+    declared GA):
+    - without the memo, refused with "As a GA changing supervisor, attach the
+      PGFAC Approval Memo …";
+    - with it, CGS sees "Change of Main Supervisor · Graduate Assistant
+      (declared by the student) · ✓ PGFAC Approval Memo (1 file)".
+  - **`student2@`** has an expired GRA on record, so she isn't asked and no
+    memo is needed.
+  - **Leave:** 4 + 3 days recorded for 22001011 in the September semester
+    showed "7 days recorded, allowance 5" on the leave page, the warning and
+    the At-Risk banner. Both were then reset to 0, and his at-risk flag
+    came back.
+  - No console errors.
+- **Dev data left:** #197–#200 (pending at the CGS stage, reasons starting
+  "Handbook check") as demo records of the warnings. #199 is NOT endorsed:
+  endorsing would change Divya's main supervisor.
+- **Not checked in the browser:** `scope = full_time_research` and
+  `co_supervisor_approver = dean_pgr` (both config switches; the dev `.env`
+  is on the defaults). Both are covered by tests.
+
+---
+
+## 2026-11-06 — GA Extension Form generated instead of uploaded (UTP/CGS/001-A2)
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only. There was no
+Core edit; one Core proposal is in SHARED_CHANGES.md §12.
+
+### The ask
+
+Stop students uploading a filled-in GA Extension Form. Collect its data and
+generate the official form as a PDF:
+- **Section A:** checklist ticks computed from what is attached; the CGS
+  column ticked once CGS passes the application.
+- **Section B:** the profile fields read-only, plus fields the student
+  enters. Account no. and IC/passport no. are encrypted and masked except at
+  the CGS stage. Bank details sit behind a config flag.
+- **Section C:** publications as add/remove rows, stored as JSON.
+- **Section D:** the declaration, with a timestamp.
+- **Section E:** names, roles and dates from `approval_history`, respecting
+  the application's own chain.
+- **Section J:** remarks filled by CGS staff.
+
+Also:
+- The PDF is downloadable by the owner at any time and by every approver.
+- The Terms and Conditions become warning-level checks on the System
+  checks panel, with all numbers in config.
+- `ga_extension_form_documents` is removed from `required_documents`, while
+  older applications keep their upload.
+
+### Key findings before writing any code
+
+- **The PDF was not on this branch.** It is only on
+  `feature/track-applications-redesign`, so I read it from there (pages 1–4)
+  with `git show`, without adding it here. That file was not modified,
+  as asked earlier.
+- **The form has a Section D that isn't labelled "D".** It is the
+  certification sentence with Signature / Name / Date lines. After Section E
+  comes J; there are no F–I.
+- **Section A item 4 differs by stage gate level:** acceptance for Level 2,
+  published article for Level 3, soft bound for PhD Level 4. The only upload
+  was one combined "Acceptance Letter or Published Paper", which was
+  required, so a Level 1 student couldn't submit, and a check couldn't tell
+  which proof was given.
+- **Item 2 (Admission & Offer letter) was never collected.**
+- **`encrypted` works on a column, not on one key inside the
+  `additional_info` JSON.** So Section B is real columns.
+- **A boundary month in the stage gate tables sits in two rows.** MSc Level
+  2 is "Month 12 to Month 18" and Level 3 is "Month 18 to Month 24".
+- **Dompdf has no `counter(pages)`;** the first render said "Page 1 of 0".
+- **Script order:** an inline script calling `location.assign()` before
+  `form-stepper`'s pushed script left the page without its steps. The
+  browser check caught it.
+
+### The design
+
+- **Migration `2026_11_06_000100`:** adds to `ga_extension_details`:
+  - `mode_of_study`, `admission_date`, `candidature_period`,
+    `level_of_study`, `contact_no`, `contact_email`;
+  - `bank_name`, `bank_account_no` (encrypted), `identity_number`
+    (encrypted);
+  - `holds_visa`, `visa_expiry_date`;
+  - `publications` (JSON), `declaration_accepted_at`;
+  - `cgs_remarks` (JSON), `cgs_remarks_by_id`, `cgs_remarks_at`.
+
+  All nullable, for drafts and older rows.
+- **Config, `nureen.ga_extension`:**
+  - `applicant_fields`: label, type, required, options, max, step, and the
+    `bank`, `sensitive` and `required_if` flags. The form, validation and
+    storage are all built from it.
+  - `collect_bank_details`, `publications` (types, databases, quartiles,
+    max rows), `declaration`, `cgs_remarks_fields`;
+  - `rules`: max months per level, extension min/max, start and end days,
+    notice months, and the stage gate tables;
+  - `stage_gate_documents` and `legacy_documents`;
+  - `additional_fields` stays for anything without a column.
+- **Required documents:**
+  - IC/passport/visa, **Admission & Offer letter (new; item 2 of the
+    official checklist)**, and the supervisor's letter;
+  - **the combined proof is replaced by three optional stage gate proofs.**
+    The rule check says which one the level needs.
+- **Masking:** `GaExtensionDetail::revealsSensitiveTo()` is true only for
+  the role of the `cgs_verify` stage, read from the workflow. The student,
+  the supervisor and the Senior Director all see `•••• 1234`, on screen and
+  in the PDF.
+- **`Support\GaExtensionRules`:** six checks, each pass, fail or unknown
+  with a reason.
+  - **The stage gate level** is the highest level whose `from` is at or
+    below the whole months completed since admission at the extension's
+    start. 18 months completed is month 19, so MSc Level 3.
+  - **The old combined proof** passes Levels 2–3 with "check it is the
+    right one".
+- **Only one hard rule:** a backdated start is refused at submission,
+  because the terms say "Backdated appointment … is not allowed".
+- **Section E:** for each of `supervisor`, `cgs_verify` and
+  `senior_director`, the latest decision after the latest `returned` row,
+  and only for stages on `stagesFor($application)`. A Senior Director
+  column on the `cgs` chain stays blank.
+- **Downloads:**
+  - the owner (drafts included);
+  - the named supervisor (or whoever endorsed);
+  - anyone holding another stage's role on that chain.
+
+  For the student, the link is on the draft form ("Download the form
+  (PDF)" saves first, then auto-downloads) and in a list of their
+  applications on `/ga-extension/new`. Core's application page has no slot
+  for it; SHARED §12 proposes one.
+
+### What changed
+
+- **New:**
+  - the migration;
+  - `Support/GaExtensionRules.php`;
+  - views `letters/ga_extension_form`, `ga_extension/_field` and
+    `ga_extension/_publication_row`;
+  - tests `GaExtensionFormTest` (26) and `GaExtensionRulesTest` (13), and
+    the `Concerns/FilesGaExtensions` payload.
+- **`GaExtensionController`:**
+  - `form()` passes the fields, options, rules and submitted list;
+  - `saveDraft()` and `store()` are built from `applicantRules()`,
+    `applicantValues()`, `normalisePublications()` and
+    `publicationRules()`;
+  - the backdated block;
+  - new `formPdf()`, `canViewForm()` and `saveCgsRemarks()`;
+  - the queue eager-loads `cgsRemarksBy`.
+- **Routes:** `ga-extension.form-pdf` (auth, checked in the controller) and
+  `ga-extension.cgs-remarks` (Non-Executive CGS).
+- **`GaExtensionDetail`:** casts, `revealsSensitiveTo()`,
+  `sensitiveFor()`, `mask()`, `extensionStart()`, `extensionMonths()`,
+  `extensionSummary()`, `publicationRows()`, `citation()`,
+  `databaseAndQuartile()`.
+- **`LetterRenderer`:** `gaExtensionForm()`, which stamps "Page X of Y" on
+  the canvas, and `gaExtensionFormData()`.
+- **`ga_extension/form.blade.php`:** rewritten into Your details →
+  Identity & bank → Extension details → Publications → Supporting documents
+  → Declaration (then Review). It has the visa toggle, add/remove rows, a
+  live stage gate hint, the download button and the auto-download.
+- **`ga_extension/_detail.blade.php`:**
+  - the PDF link and the Section B summary (masked);
+  - publications;
+  - System checks: documents, including legacy ones, plus the rules;
+  - Section J: a form for CGS at their stage, read-only otherwise.
+- **Existing tests:** `GaExtensionTest`, `DraftsTest` and
+  `SnapshotChainReachabilityTest` use the shared payload and the new
+  document types. Their fixed dates became relative where a fixed date
+  would one day be backdated.
+- **Docs:** README ("The GA Extension Form, generated" and test rows) and
+  SHARED_CHANGES §12.
+
+### Bugs caught
+
+- **The empty stepper after the auto-download:** an inline script
+  navigated before `form-stepper` had run. It is now in the `scripts`
+  stack, after the stepper, and waits for `load`.
+- **"Page 1 of 0":** fixed by `page_text()` on the Dompdf canvas.
+- **A–E spilled onto a second page;** tightened to one, as on the paper
+  form.
+- **Fixed test dates** (`2026-12-31`) in `SnapshotChainReachabilityTest`
+  would have become backdated, and so refused, after December; they are
+  now relative.
+
+### Verification
+
+- **Full suite:** 527 passed (`QUEUE_CONNECTION=sync`, `MAIL_MAILER=array`).
+  `failed_jobs` and `jobs` were 0 before and after.
+- **Headless browser on the dev app** (`cgs` chain, the configured
+  default): student 22001001 → `supervisor@` → `cgs@` (final).
+  - **Student:** every step was filled.
+    - The visa date shows only on "Yes".
+    - Two publication rows were added and one removed.
+    - The stage gate hint read "16 months … Level 2 … Attach Proof of
+      Journal Article Acceptance".
+    - "Download the form (PDF)" saved draft #194, returned to the
+      Declaration step and downloaded a 2-page PDF: student ticks only,
+      blank D/E, masked numbers.
+    - The On file hints showed `•••• 5566` and `•••• 1234`.
+    - Submitted from Review.
+  - **Supervisor:** the queue showed the numbers masked and all six checks
+    passing. The PDF had the endorsement blank, and the supervisor
+    approved.
+  - **CGS** (dark mode): filled and saved Section J ("Last saved … by M
+    Syahmi Ifwat M Jafri") and saw the numbers in full. The PDF showed the
+    supervisor's endorsement and full numbers, and CGS approved.
+  - **Student again:** #194 listed as Approved. The final PDF has the CGS
+    ticks, Section E with the supervisor and CGS ("Approved
+    electronically"), the Senior Director column blank, and Section J
+    filled on page 2. No console errors.
+- **Dark mode:** checked on the student form (Your details,
+  Identity & bank, Publications) and the CGS queue.
+- **Not checked in the browser:** the `senior_director` chain (the dev
+  `.env` is on `cgs`; the tests cover it, including Section E's three
+  names) and the no-JavaScript fallbacks.
+- **Dev data:**
+  - #194 (approved) is left as the demo record;
+  - drafts #191 and #192 and pending #193, all created by my two failed
+    runs minutes earlier, were deleted with `Drafts::delete()`;
+  - #184 and #187 (earlier sessions) were left alone.
+
+---
+
+## 2026-11-05 — GA/GRA Certification form aligned with CGS's online form
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core
+edit was needed, so there is no new SHARED_CHANGES section.
+
+### The ask
+
+Make the GA/GRA Certification Letter form match CGS's official online form:
+- **Student details:** profile fields shown read-only; Level, Level of Study
+  and Mode of Study as selects.
+- **Application type:** Reason/Purpose and GA/GRA.
+- **Supporting details:** MyKad/Passport number, and PDF-only supporting
+  documents.
+- **Approval & notification:** personal email, and the supervisor's email
+  from the profile.
+- **Agreement:** a declaration.
+
+Also:
+- Keep the GA/GRA type fields, and put the period behind a config switch.
+- Add a "Download pre-filled attachment" that recreates CGS's course-owner
+  attachment and works from a draft.
+- Mask the identity number for everyone but CGS staff, and keep drafts
+  working.
+
+### Key findings before writing any code
+
+- **The stepper showed an empty step:** `form-stepper` shows every `.fstep`
+  in turn and sets `hidden` itself. The committed form had one fieldset per
+  type (`data-type-fields`), so a GA applicant was walked through an empty
+  "GRA details" step of disabled fields. The browser check caught it, and it
+  was already in HEAD.
+- **The stepper's "first submit button" rule** (see the drafts entry) means
+  the attachment download can't be a submit button inside a step. It is a
+  `type="button"` that saves the draft with a flag, plus a `<noscript>`
+  submit fallback.
+- **Dompdf ignores `<colgroup>` widths,** so the attachment's columns are
+  sized on the `th` cells.
+- **`AppointmentVerifier::verify()` required both period dates.** With
+  `ask_period` off and the (also optional) appointment check on, the queue
+  would have thrown a TypeError.
+
+### The design
+
+- **Migration `2026_11_05_000100`:** six nullable columns on
+  `ga_certification_details`: `study_level`, `level_of_study`,
+  `mode_of_study`, `identity_number` (text, `encrypted` cast),
+  `personal_email` and `declaration_accepted_at`. They are nullable because
+  drafts must save half-filled. "Required" lives in `store()`'s validation,
+  as with the drafts work.
+- **Config, `nureen.ga_certification`:**
+  - `options`: the three option lists, which feed both the `in:` rules and
+    the selects;
+  - `ask_period` (env `NUREEN_GA_CERTIFICATION_ASK_PERIOD`, default true);
+  - `declaration`: its text;
+  - `supporting_document_types`: `['pdf']`.
+- **Profile fields** are rendered from `auth()->user()` and never read from
+  the request, so there is nothing to override.
+- **Identity number:**
+  - `GaCertificationDetail::identityFor($viewer)` gives the full number for
+    `isCgs()` and `•••• 1234` otherwise;
+  - the form never redisplays it ("On file: … Leave blank to keep it."), and
+    a blank submit keeps the stored value.
+- **Attachment:**
+  - `LetterRenderer::certificationAttachment()` renders the new
+    `letters/certification_attachment` view: name and matric, programme,
+    today, and the first of five course rows (for a GRA, grant code /
+    project / leader). Signature and stamp are blank.
+  - Route `ga-certification.attachment`: owner only.
+  - The button sets `download_attachment=1` and clicks Save draft. The draft
+    page it returns to carries a `data-auto-download` link, which the
+    script follows.
+- **Period:** when `ask_period` is false it is hidden, has no rules, isn't
+  stored, and the letter drops the Period row. The letter's first paragraph
+  then says "during the {semester} semester". When no period is given, the
+  appointment check uses today.
+- **Letter:** adds a "Level of Study" row. The identity number and personal
+  email are not printed.
+
+### What changed
+
+- **New:**
+  - the migration above;
+  - `letters/certification_attachment.blade.php`;
+  - `tests/Feature/Nureen/CertificationOnlineFormTest.php` (17 tests).
+- **`CertificationController`:**
+  - `form()` passes the profile, options, `askPeriod`, the declaration text,
+    the allowed types and the pending download;
+  - `saveDraft()` and `store()` take the new fields, through
+    `onlineFormRules()`, `periodRules()`, a PDF-only
+    `supportingDocumentRules()` and a declaration `accepted` rule (submit
+    only);
+  - new `attachment()`;
+  - the queue eager-loads the supervisor.
+- **`ga_certification/form.blade.php`:**
+  - laid out as Student details → Application type → GA/GRA details →
+    Supporting details → Approval & notification → Agreement (then the
+    stepper's Review);
+  - the GA and GRA fields are now one step;
+  - the attachment block and the auto-download.
+- **`ga_certification/_detail.blade.php`:**
+  - adds department/programme, the study summary, the masked identity, the
+    personal email, the supervisor's email and the declaration time;
+  - the period is now null-safe.
+- **`components/multi-file-upload`:** a new `allowed` prop, so the help
+  text and client-side check say "PDF only".
+- **`GaCertificationDetail`:** fillable, casts, `identityFor()`, `mask()`,
+  `studySummary()`.
+- **`LetterRenderer`:** the attachment, plus the period and Level of Study
+  in the letter. **`AppointmentVerifier`:** nullable period.
+- **Existing tests:** the `CertificationTest`, `DraftsTest` and
+  `LetterWorstCaseTest` payloads gained the new required fields.
+- **README:** a new "GA/GRA Certification form" section and a test-table
+  row.
+
+### Bugs caught
+
+- **The empty "GRA details" step** for GA applicants. It was already in
+  HEAD; the fix merges both types into one step.
+- **A Blade parse error:** `@php($x = …)` in `_detail` broke compilation,
+  because the same file has a `@php … @endphp` block. It is now one block.
+- **The queue crash,** found while reading the code: `AppointmentVerifier`
+  would have thrown on a null period with `ask_period` off.
+
+### Verification
+
+- **Full suite:** 488 passed (run with `QUEUE_CONNECTION=sync` and
+  `MAIL_MAILER=array`). `failed_jobs` and `jobs` were 0 before and after;
+  nothing was deleted.
+- **Headless browser,** as `student@utp.edu.my` (22001001):
+  - filled every step and went to "Download pre-filled attachment" on
+    Supporting details;
+  - the draft was saved (#190), the page returned to the same step, and the
+    PDF downloaded as `GA_GRA_Certification_Attachment_22001001.pdf`;
+  - the PDF is one page, with the name, matric, programme, date and
+    TDB2073 / Database Systems / Dr. Aisyah Rahman in row 1;
+  - the identity number showed as "On file: •••• 5678";
+  - Continue on Agreement was blocked until the declaration was ticked, and
+    the Review step listed everything;
+  - submitted.
+- **Approvals:**
+  - `supervisor@` saw the identity masked;
+  - `cgs@` (in dark mode) and `director@` saw it in full;
+  - each approved, and #190 ended `approved`.
+- **Final letter,** downloaded as the student through `documents/61`: one
+  page, period printed, a "Level of Study: PhD, Research, Full-time ODL"
+  row, signed by the Senior Director.
+- **The attachment route after submit:** 200 for the student, 403 for the
+  supervisor.
+- **Dark mode:** the form's Student details and Supporting details steps
+  checked. No console errors.
+- **Not done here:** an `ask_period=false` browser run (it is covered by
+  tests), and a no-JavaScript run.
+
+---
+
+## 2026-11-04 — Save draft for GA Extension and GA/GRA Certification
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit;
+Core follow-ups are in SHARED_CHANGES.md §11.
+
+### The ask
+
+Some documents take days to collect, so a student must be able to save a
+half-finished GA Extension or Certification request and come back later.
+- **Storage:** use Core's existing draft support (status `draft`,
+  `current_stage` NULL), with no new table.
+- **Saving:** light validation; files attach immediately.
+- **Submitting:** the full validation, reusing the draft.
+- **Access:** only the owner can see or touch a draft.
+- **My Drafts:** a page listing them.
+- **Continuing:** pre-fill, list attached files, reopen on the last step.
+- **Never part of the workflow:** no queue, reminder or analytics.
+
+### Key findings before writing any code
+
+- **Drafts never persisted before:** both controllers created a draft and
+  submitted it within one transaction. Making drafts persist exposes them
+  to Core: Track My Applications lists every application (a draft would
+  show the first stage as "current"), and the student dashboard panel
+  labels it "Pending Approval". Core is out of bounds, so SHARED §11 a–c.
+- **Approver queues already exclude drafts:** they use
+  `WorkflowEngine::queue()`, which reads pending rows only.
+  `StalledApplicationReminder`, the supervision reminder, the Client
+  Charter, the overdue list and the calendar all read pending (or approved)
+  only. `ProcessingTimeAnalytics::complianceByStageAndModule()` loaded
+  every application; it now excludes drafts by name.
+- **`summary()` would crash on a draft:** both workflows assumed the dates
+  were set, and Core's tracking page calls it.
+- **`DocumentStore` can't remove a file** (SHARED §11e).
+- **`form-stepper` can't open on a given step** (SHARED §11d). It also
+  treats the FIRST submit button in the form as "Submit" and moves it, so
+  Save draft must come after Submit, and per-file "Remove" has to be a
+  checkbox, not a submit button inside a step.
+- **This branch starts at `c18a3e4`,** before the `phpunit.xml` fix on
+  `feature/track-applications-redesign`. So the full suite was run with
+  `QUEUE_CONNECTION=sync` and `MAIL_MAILER=array` set for the test process,
+  and `failed_jobs` stayed at 0.
+
+### The design
+
+- **Migration `2026_11_04_000100`:** makes the fields a half-finished form
+  can't fill nullable:
+  - GA Extension: `current_end_date`, `requested_new_end_date`,
+    `reason_for_extension`;
+  - Certification: `appointment_type`, `period_start`, `period_end`.
+
+  It also adds `draft_step` to both detail tables. `down()` deletes drafts
+  first, then restores NOT NULL.
+- **`Support\Drafts`:**
+  - `ownedBy()`: 404 if not this module or no longer a draft, 403 if not
+    the student's own;
+  - `of()`, `lastSaved()` (the touched `updated_at`), `attached()`;
+  - `removeDocuments()` (stored file and row);
+  - `delete()` (files, documents, detail row, application).
+- **`saveDraft()`** (create, then update):
+  - nullable rules only;
+  - documents through `DocumentStore::manyRules($field, false)` plus a
+    limit counting already-attached files;
+  - ticked `remove_documents[]` applied;
+  - redirects to the draft's Continue URL.
+- **`store()`:**
+  - optional `draft_id`, owner-checked first;
+  - the full existing validation, except that a document type the draft
+    already has (after removals) is no longer required;
+  - in the transaction the draft row is locked and re-checked, so it can't
+    be submitted twice;
+  - the supervisor is snapshotted at submission, and `draft_step` cleared;
+  - a Certification's files are relabelled to the submitted type;
+  - then `$engine->submit()`.
+- **Forms:**
+  - **Pre-fill:** every field via `old(..., $detail->…)`.
+  - **Attached files:** the upload component's new `existing` prop lists
+    them with a link and a **Remove** checkbox. They count towards the
+    limit, the label reads "(1 attached, up to 4 more files)", and the input
+    is no longer required.
+  - **Save draft:** `formnovalidate` + `formaction`, placed after Submit.
+  - **Shared script:** moves Save draft beside Submit on every step,
+    records the current step on save, and on Continue presses the stepper's
+    own Continue up to the saved step (stopping early if a step is
+    invalid; the server's "open on the error" wins). In the Certification
+    form it runs after the GA/GRA script.
+- **My Drafts** (`/my-drafts`, a student sidebar link from
+  `GaExtensionWorkflow::links()`): module, summary, last saved, file count,
+  Continue, and Delete with a confirmation prompt. A fresh form also offers
+  the latest draft of that form.
+
+### What changed
+
+- **New:**
+  - migration `2026_11_04_000100_allow_drafts_in_ga_extension_and_certification_details`;
+  - `Support/Drafts.php`, `Http/Controllers/DraftsController.php`;
+  - `Resources/views/drafts/index.blade.php`,
+    `Resources/views/partials/draft-form-script.blade.php`;
+  - `tests/Feature/Nureen/DraftsTest.php` (12).
+- **Changed:**
+  - `GaExtensionController` and `CertificationController`: `editDraft`,
+    `saveDraft`, `destroyDraft`, draft-aware `store`;
+  - both form views and `components/multi-file-upload`;
+  - `routes.php`: 8 draft routes and `/my-drafts`;
+  - `GaExtensionDetail` and `GaCertificationDetail` fillable;
+  - both workflows' `summary()`; `GaExtensionWorkflow::links()`;
+  - `ProcessingTimeAnalytics`;
+  - README and SHARED_CHANGES §11.
+
+### Bugs caught
+
+- **Additional fields:** marking them nullable for drafts first dropped
+  `nullable` along with `required`; now `required` is swapped for
+  `nullable`.
+- **Certification draft fields:** the first version of the type-field
+  handling was wrong for the shared `semester` key; rewritten as "clear all,
+  then fill the chosen type".
+- **Script order:** the draft script ran before the Certification form's
+  GA/GRA script, so resuming would have judged steps on the wrong
+  required/disabled state. It is now included last.
+- **Two visual issues from the live check:** an attached type was labelled
+  "(optional, …)", and Save draft sat 8px higher than Continue. Both fixed.
+
+### Verification
+
+- **Tests:** full suite, 471 passed. `failed_jobs` was 0 before and after.
+- **Browser, as `student@utp.edu.my`:**
+  - Save draft showed beside Continue on step 1. On the documents step,
+    with `ga-form.pdf` attached, Save draft created #187 ("Draft saved at
+    3:13am…").
+  - After signing out and back in, My Drafts listed it (last saved, 1
+    file, Continue, Delete).
+  - Continue reopened on **Supporting documents**, with all three fields
+    pre-filled and the file listed with Remove.
+  - The other three files were added and the request submitted as the
+    same #187. My Drafts was then empty.
+  - `supervisor@`'s GA Extension queue shows "#187 Ahmad Danial … 4 files,
+    today". No console errors.
+- **Certification draft:** saved and pre-filled correctly, then deleted.
+  Draft #186 (an earlier interrupted run) was also deleted through the
+  Delete button.
+
+---
+
+## 2026-11-03 — Every email link opens for its recipient; a recommended demo student
+
+**Branch:** `feature/track-applications-redesign`, uncommitted. Nureen only
+(no Core change).
+
+### The ask
+
+1. Delete the 6 kept failed letter emails; don't resend them.
+2. Make every email link to a page its recipient can open, with a test per
+   email.
+3. Recommend one Computing demo student for testing and the viva, and
+   confirm a full Supervision chain for them.
+4. Leave `app/Modules/Nureen/docs/forms/GA_Extension_Form.pdf` alone.
+
+### Findings
+
+- **Six emails linked staff to pages they can't open:**
+  - the supervisor's GA Extension and Supervision outcome copies →
+    `applications.index` (students-only, 403);
+  - the appointment-letter revocation, sent to student AND supervisor →
+    `applications.index` (403 for the supervisor);
+  - the Senior Director's GA Extension information email → the GA
+    Extension queue, which in `cgs` mode has nothing for them;
+  - the certification revocation's supervisor copy, which had no button;
+  - the appointment letter itself, which CC'd the supervisor on the
+    student's message, so the supervisor's click went to the student's page
+    (found during the live check, not in the audit).
+- **Core's emails are fine:** ApplicationDecided goes to students only,
+  and ApplicationReturned links staff to the dashboard.
+- **There was no staff page for one application:** `applications.show` is
+  students-only, and queues hold pending rows only.
+
+### What changed
+
+- **A new read-only staff view, `nureen.application`**
+  (`/nureen/applications/{id}`, `StaffApplicationController`): progress,
+  activity, details and documents, built from Core's ApplicationDetails.
+  - **Who may open it** (`Support\StaffApplicationAccess`): the named or
+    requested supervisor; anyone who decided on it; a role owning a stage
+    of its chain (Chair: own department only; a supervisor only as the
+    named one); and for GA Extension the Senior Director.
+  - **Scope:** only Nureen's four modules. A document is a link only when
+    Core's document rule lets that viewer open it.
+- **Email links fixed:**
+  - `GaExtensionFinalDecisionCc`, `GaExtensionFinalDecisionInformational`
+    and `SupervisionFinalDecisionCc` now link to the staff view.
+  - `AppointmentLetterRevoked` and `CertificationRevoked` link the student
+    to their details page and the supervisor to the staff view.
+  - `AppointmentLetterIssued` is now sent to the supervisor as their own
+    message (letter attached, staff-view link) instead of a CC on the
+    student's.
+- **Tests:**
+  - New: `EmailLinksTest` (12): every email this module sends, for each
+    recipient, followed as that person and expected to return 200; plus the
+    staff view's access limits.
+  - Updated: `LettersTest`'s letter-email assertion (no CC; the supervisor's
+    own copy).
+- **Docs:** `docs/test-accounts.md` gains "Recommended student for testing
+  and the viva".
+
+### Recommended demo student
+
+`student@utp.edu.my` (Ahmad Danial, 22001001, Computing). Supervisor
+`supervisor@utp.edu.my`, Chair `chair@utp.edu.my` (Computing), CGS
+`cgs@utp.edu.my`.
+
+### Verification
+
+- **Tests:** full suite, 511 passed.
+- **failed_jobs:** the 6 approved rows deleted (0 left).
+- **Supervision #185, live:**
+  - submitted as `student@` (Co-Supervisor: Prof. Dr. Kumaran Vellu);
+  - endorsed by `kumaran.vellu@`, `chair@` and `cgs@`;
+  - letter CGS/SVAPPT/2026/0009 issued;
+  - the student's details page shows all three people and the letter.
+- **Staff view, live:**
+  - `supervisor@` and `director@` open #183 and are refused #185;
+  - `kumaran.vellu@` opens #185 only;
+  - `farid.kamal@` is refused both.
+- **A failure I caused:** the supervisor's outcome copy for #185 failed
+  once, because the long-running queue worker had loaded the routes before
+  `nureen.application` existed. After `queue:restart` it was retried (by
+  UUID; `queue:retry` takes UUIDs, not row ids) and arrived linking to
+  `/nureen/applications/185`. `failed_jobs` is empty.
+
+---
+
+## 2026-11-03 — Supervisor safeguards, submission emails, certification revocation emails, failed_jobs clean-up
+
+**Branch:** `feature/track-applications-redesign`, uncommitted.
+
+### The ask
+
+1. **Lee's #183:** option A, with no data change (Lee stays with Dr. Aisyah
+   Rahman). Then build the four safeguards:
+   - a. block submission without a supervisor who can act;
+   - b. name who the request is waiting for;
+   - c. a CGS list of stuck requests, with reassignment;
+   - d. demo supervisors documented, with test-accounts.md listing who each
+     supervisor and Chair covers. Check every student with a Supervision
+     request has a Chair for their department.
+2. **Submission emails:** email whoever acts first, with the charter due
+   date and a queue link (named supervisor; Non-Executive CGS for appeals).
+   Keep it in Nureen's code.
+3. **Certification revocation:** email the supervisor too.
+4. **failed_jobs:** list the old rows, delete the leaked test jobs, and keep
+   and show any real ones.
+
+### Findings
+
+- **Chair coverage:** a seeded database has Chairs for Computing and
+  Chemical Engineering only. All five Electrical & Electronics students
+  (including Lee and Tan Wei Jian) have none; SHARED §15.
+  `chair-electrical-electronics-engineering@utp.edu.my` and six `2200331x`
+  students in test-accounts.md are hand-made accounts no seeder creates;
+  they are now marked as such.
+- **Nureen's demo seeders** only assign `supervisor@utp.edu.my`. The
+  `letters-*`, `upload-*` and `hafiz-*` students came from verification runs.
+  `upload-22092202` has no supervisor; left alone and documented.
+- **Certification revocation** emailed nobody, not even the student.
+- **failed_jobs:**
+  - 8,098 rows, of which 8,092 were leaked test jobs (11 Oct – 3 Nov, all
+    failing on the tests' SQLite database), deleted.
+  - 6 are real: 4 `AppointmentLetterIssued` and 2 `CertificationIssued`,
+    29 Oct – 1 Nov. They failed on the since-fixed `attachFromStorageDisk`
+    bug, including the letter email for Lee's #26. Kept, not retried.
+
+### What changed
+
+- **a.** `Support\SupervisorCheck`: a missing supervisor, or one whose
+  account lacks the Supervisor role, blocks GA Extension and Certification,
+  as a warning on the form and again on submit.
+- **b.** `DescribesApplicationDetails::waitingFor()`, in Core with a null
+  default. It names the supervisor on the request, or the one Chair of the
+  student's department. The details page shows "Waiting for Dr. Aisyah
+  Rahman, your supervisor."
+- **c.** `Support\StuckSupervisorStages` and `/reviews/stuck` (Non-Executive
+  CGS, a "Stuck Reviews" sidebar link) list:
+  - requests at a supervisor stage whose named supervisor is missing or not
+    a Supervisor;
+  - Supervision requests at a Chair stage with no Chair for the
+    department.
+
+  Reassigning a GA Extension or Certification changes the detail row's
+  supervisor, writes an approval_history `reassigned` row with CGS's reason
+  (status and current_stage untouched), and emails the new supervisor.
+  `ProcessingTimeAnalytics` treats `reassigned` as a clock restart, not a
+  decision. Supervision requests are listed but not reassignable: the named
+  supervisor is the appointment being requested.
+- **d.** `docs/test-accounts.md` gains "Who covers whom" (every supervisor's
+  students, every Chair's department, the E&E gap), Lee's corrected row
+  with the reason, and markers on the hand-made accounts. A test proves
+  every student Nureen's seeders create has a documented supervisor.
+- **Submission emails:** `Support\SubmissionNotifier` and
+  `Notifications\ApplicationAwaitingYou`, called from the four controllers
+  after submit. They are skipped for a recipient whose role can't act at
+  that stage.
+- **Revocation emails:** `Notifications\CertificationRevoked` goes to the
+  student and the request's supervisor. The hint is now true for both
+  letters.
+- **Tests:** new `SupervisorSafeguardsTest` (11).
+
+### Verification
+
+- **Tests:** full suite, 499 passed.
+- **Browser walkthrough:**
+  - `student@` submitted GA Extension #184, and `supervisor@` received "GA
+    Extension GAEX-2026-00184 is waiting for your endorsement … please
+    decide by Friday, 6 November 2026 (3 working days)" with a queue link.
+  - `supervisor@` endorsed #183, and `cgs@` approved it.
+  - Mailpit received exactly 5 emails: the submission email; Lee's
+    endorsement progress; Lee's final approval; the supervisor's copy of
+    the outcome; and the Senior Director's information email.
+- **Pages:** #184's details page reads "Waiting for Dr. Aisyah Rahman, your
+  supervisor." Stuck Reviews loads for CGS and reports nothing stuck.
+- **failed_jobs:** unchanged at the 6 kept rows.
+
+---
+
+## 2026-11-03 — Lee's GA Extension "missing" from the supervisor queue, revocation hint, and tests leaking onto the real queue
+
+**Branch:** `feature/track-applications-redesign`, uncommitted.
+
+### The ask
+
+1. **Lee's missing GA Extension:** Lee Xin Yi submitted a GA Extension at
+   about 00:01, and "supervisor@utp.edu.my's queue is empty". Diagnose it,
+   propose a data fix and wait; then add safeguards (block submission
+   without a valid supervisor, name who it is waiting for, a CGS warning
+   list with reassignment, and demo supervisors documented).
+2. **Revocation hint:** reword it.
+3. **Leaking test jobs:** stop test runs reaching the real queue.
+4. **A new rule:** never delete failed jobs without listing them and
+   asking.
+
+### Findings (#1, awaiting Nureen's OK before any data change)
+
+- **Lee:** id 23, matric 22001015, Electrical & Electronics Engineering,
+  `supervisor_id` 1, who is Dr. Aisyah Rahman (`supervisor@utp.edu.my`,
+  role supervisor, Computing).
+- **#183 (GAEX-2026-00183):**
+  - pending at `supervisor`, submitted 3 Nov 00:01:50;
+  - mode `cgs`;
+  - the detail row's `supervisor_id` is 1;
+  - no approval_history yet.
+- **The queue rule:** `GaExtensionController::queue()` shows a
+  `supervisor`-stage row only to the user whose id equals
+  `ga_extension_details.supervisor_id`. Supervisors are not
+  department-scoped (`Role::isDepartmentScoped()`: Chair and Academic
+  Executive only). **`supervisor@utp.edu.my` passes it: #183 is in that
+  queue** (checked in a browser).
+- **Why it looked empty:** `docs/test-accounts.md` lists Lee's supervisor
+  as **Dr. Farid Kamal** (`farid.kamal@utp.edu.my`), and his queue is
+  empty. Lee's supervisor changed on **1 Nov 05:41**, when Supervision #26
+  (Main Supervisor: Dr. Aisyah Rahman) was approved by `cgs@`; #58 was
+  approved again at 07:01. Those approvals fall in the letter-verification
+  sessions of that day. The doc was never updated.
+- **The email:** no submission email exists. `WorkflowEngine::submit()`
+  notifies nobody, so a supervisor whose stage comes first is never emailed
+  about a new GA Extension or Certification. Nothing for #183 was lost
+  among the deleted failed jobs: all of those were leaked test jobs
+  failing on the tests' SQLite database. There is nothing to re-send.
+
+### What changed (#2–#4)
+
+- **Revocation hint:** both revoke forms now show "This reason is shown to
+  the student and their supervisor. It is not shown on the public
+  verification page." under the reason box (`aria-describedby`), and the
+  validation messages say the same. Caveat for certifications: SHARED §14.
+- **`phpunit.xml`:** every setting is forced as both `<env>` and `<server>`.
+  Forced `<env>` alone was tried and still leaked: 121 failed jobs from one
+  run, because Laravel reads `$_SERVER`, where PHP copies the container's
+  `QUEUE_CONNECTION=redis`. A probe test proved `config('queue.default')`
+  was `redis` inside tests. Now a clean full run sends **0** jobs to the
+  worker, and `failed_jobs` stays unchanged. SHARED §13.
+- **The new rule** is saved as a standing instruction (Claude memory). The
+  8,098 old `failed_jobs` rows were left untouched.
+
+### Verification
+
+- **Tests:** full suite, 488 passed. The queue worker received 0 jobs during
+  a clean run.
+
+---
+
+## 2026-11-03 — Application details page redesign, and a "done but never decided" stepper bug
+
+**Branch:** `feature/track-applications-redesign`, uncommitted. **Changes Core**
+(SHARED_CHANGES.md §10b).
+
+### The ask
+
+First fix: certification #144 showed its Supervisor stage as done while
+saying "No decisions recorded yet". Then redesign the student's "View
+details" page to `docs/design/application-details.png`, module-neutral:
+- breadcrumb back to the list's tab and filter;
+- a header with the current holder and the expected date (or the student's
+  action);
+- progress with who acted and working days against each stage's charter
+  target, plus "What happens next";
+- an activity timeline;
+- "Your application", the documents with the issued letter, and help.
+
+### Key findings before writing any code
+
+- **The bug's source:** `WorkflowEngine::progress()` marked every stage
+  before the current position as completed by position alone. #144 (Lee
+  Xin Yi, `ga_certification`, at `cgs_verify`, submitted 11 Oct 2026) has
+  no history at all: it was submitted on the old chain, before the
+  Supervisor stage existed.
+- **No design image:** `docs/design/application-details.png` was not in the
+  repo, and no image came with the request; the page follows the written
+  spec and the Track My Applications visual language.
+- **Reminders store only the latest:** one row per application holds the
+  latest reminder (time, count, stage) — `application_reminders` for GA
+  Extension and Certification, columns on `supervision_details` for
+  Supervision. So the timeline shows one reminder event with the count.
+- **Two revocation fields:** a revoked letter has a `revoked_reason`, which
+  CGS is told "is shown nowhere public", and a separate internal
+  `letter_revoke_note`. The page shows the reason to the student whose
+  letter it is, and never the note.
+- **Page shell rule:** `PageShellTest` requires every signed-in screen to
+  open with `<x-core::page-header>`; the header uses it.
+
+### The design
+
+- **The fix:** in `progress()`, a stage before the current position with
+  no `approval_history` row is `'skipped'`. It reads loaded history, so no
+  extra query on a page of cards. Card and page show "Not required for
+  this application" (muted, dashed ring, words).
+- **`Core\Services\ApplicationDetails`:** reuses
+  `ApplicationTracker::summarise()` (now public), so "needs you" is one
+  rule for list and page.
+  - **Steps:** who (approver name), when ("Endorsed 7 Oct 2026"), and
+    working days on the shared calendar. Reading: "2 of 3 working days",
+    "18 working days · target 2" in the overdue colour (with "(over
+    target)" for screen readers), "Waiting since …" for the current stage,
+    "Next · target 2 working days" for later ones.
+  - **"What happens next":** a module's `next`, or a generic line ending
+    with whether the student must act.
+  - **Activity:** submission, every decision (remarks as a quote), and the
+    module's events. Newest first, with the later-recorded event first on
+    equal timestamps.
+- **A new optional `DescribesApplicationDetails` interface** with a
+  defaults trait: `details()`, `timelineEvents()`, `issuedDocument()`,
+  `stageTargetDays()`. It is a separate interface, not a method added to
+  `DescribesApplicationProgress`, so no implementer can break.
+- **Nureen (`Support\ApplicationDetailsContent`):** details per module.
+  - **Certification:** the GA course or GRA project fields from the same
+    config list the form uses; never the appointment check.
+  - **Reminders:** "CGS Staff reminded" (the role, never a person).
+  - **Letters:** issued and revoked events; the issued letter with its real
+    reference and verification URL (the same route the QR code uses).
+  - **Charter targets:** from `ClientCharter::charterDays()`.
+- **Layout:**
+  - header and progress across the page;
+  - two columns below (Activity and Your application; Documents and Need
+    help), stacked under 1000px;
+  - the stepper turns vertical under 720px.
+
+### What changed
+
+- **Core:**
+  - `WorkflowEngine::progress()`;
+  - new `ApplicationDetails` service and new contract plus defaults trait;
+  - the tracker (public `summarise()`, back-link params, skipped steps);
+  - `show()` and its view;
+  - the track card;
+  - `config/tracking.php` `help` (placeholders);
+  - `tracking.css`.
+- **Nureen:** `Support/ApplicationDetailsContent.php` (new); the four
+  workflows implement `DescribesApplicationDetails`; `TrackingDescriptions`
+  adds `next` for letters.
+- **Tests:** new `tests/Feature/Core/ApplicationDetailsTest.php` (15).
+
+### Bugs caught
+
+- **The #144 stepper bug,** above.
+- **Module events losing their text:** a module's timeline events were
+  merged with the defaults on the wrong side of PHP's `+`, so their detail
+  and quote were dropped. The module's keys now win.
+- **Timeline order on equal timestamps:** "Submitted" listed above
+  decisions made in the same second (seen on #154's demo data). Fixed,
+  with a test.
+
+### Verification
+
+- **Tests:** full suite, 488 passed; the details page uses 12 queries.
+- **Browser**, as the owning student, for:
+  - #144 (pending, overdue certification);
+  - #154 (approved certification with an unopened letter);
+  - #78 (rejected Examiner Nomination, a teammate's module);
+  - #9 (pending Travel, a teammate's module).
+
+  Each at 1440 and 390px, light and dark:
+  - all returned 200, with no horizontal scroll and no console errors;
+  - lowest contrast 4.76:1 (light) and 5.74:1 (dark);
+  - `aria-current="step"` on the current stage;
+  - two columns on desktop, one on a phone, and a vertical stepper at
+    390px.
+- **No document URL was requested,** so no letter was marked as opened.
+
+---
+
+## 2026-11-02 — Track My Applications redesign (module-neutral tabs, filters and cards)
+
+**Branch:** `feature/track-applications-redesign`, uncommitted. **Changes Core**
+(every file is listed in `SHARED_CHANGES.md` §10).
+
+### The ask
+
+Redesign the student's Track My Applications page to the design in
+`docs/design/track-my-applications.png`. Requirements:
+- **Tabs:** grouped by a category each module declares about itself.
+- **Status filters:** All, Needs you, In progress, Approved, Rejected.
+- **Cards:** each with a stepper built from the application's own chain,
+  a plain footer sentence and the right buttons.
+- **State:** tab and filter kept in the URL; 20 cards a page.
+- **Module-neutral:** Core names no module.
+- **Shared calendar:** move the working-day calendar into Core with no
+  date changes.
+
+### Key findings before writing any code
+
+- **The old page** listed applications with no grouping and no paging; the
+  shared `<x-core::stepper>` is also used by `applications.show` and
+  Chloe's appeal page, so it is left alone.
+- **No calendar in Core:** the only working-day calendar was Nureen's.
+- **Download tracking exists:** Core's document download logs every
+  "viewed", so "letter not yet opened" needs no new table.
+- **No resubmission flag:** only Chloe's Study Candidacy Appeal can be
+  returned to the student, and no module says a rejection expects
+  resubmission.
+- **Tones by hash collide:** no hash of the five category names gives five
+  different tones (both crc32 and md5 collided), so the tones live in a
+  small config map instead.
+
+### The design
+
+- **Tabs:**
+  - **Declaration:** `public const CATEGORY = '<key>';` on the workflow
+    class, read by `ModuleRegistry::categoryFor()`.
+  - **Labels, tones and icons:** `config/tracking.php` (key → label, fixed
+    tone, default icon). Renaming a tab is a config edit; a key not listed
+    still gets a tab (headline label, neutral tone); no CATEGORY means
+    "Other".
+  - **Display:** only tabs with applications are shown; they wrap, with no
+    scrollbar.
+- **Two passes** (`Core\Services\ApplicationTracker`):
+  - **Light pass, every application:** category, status, needs-you and
+    last activity, for the counts and filters.
+  - **Full build, the page's 20 cards only:** stepper, expected date,
+    overdue flag, sentence and buttons.
+- **The stepper:** "Submitted", then `WorkflowEngine::progress()`, which
+  reads the module's `stages($application)` and therefore its stored
+  snapshot.
+  - **Done steps:** the decision and date from `approval_history`
+    ("Endorsed 13 Oct").
+  - **Current step:** "Waiting N working days" (or "Since <date>" in its
+    first two days) on the shared calendar.
+  - **Rejected step:** a cross, and the chain stops there.
+  - **Approved cards:** the stepper is left off, as in the design.
+  - **Accessibility:** an `<ol>` with screen-reader text such as "Step 3 of
+    4, current: …"; vertical below 720px.
+- **Optional contracts:**
+  - `DescribesApplicationProgress` (sentence, actions, reference,
+    needs_student, resubmission_expected);
+  - `SuppliesOverdueStatus` (kept separate from `SuppliesDecisionDates`);
+  - the existing `SuppliesDecisionDates` (expected date).
+
+  Core adds the calm overdue note itself, so a module's own sentence cannot
+  drop it.
+- **"Needs you":**
+  - status `returned`;
+  - `needs_student` from the module (Nureen: an issued, unrevoked letter the
+    student has not opened);
+  - a rejection only with `resubmission_expected`.
+
+  The card gets a warm border and a "NEEDS YOU" badge in words, and the
+  module's action is the primary button.
+- **Calendar:** `Core\Support\WorkingDayCalendar` with `config/calendar.php`
+  (`holidays => []`). Nureen's class extends it and adds
+  `nureen.charter.holidays`.
+
+### What changed
+
+- **Core and shared** (see SHARED_CHANGES §10):
+  - controller, new service, `ModuleRegistry::categoryFor()`;
+  - 2 new contracts and the shared calendar;
+  - `config/calendar.php` and `config/tracking.php`;
+  - the rewritten index view, the new `track-card` component, the
+    stylesheets list, new `tracking.css`, and 4 new tokens in
+    `tokens.css`.
+- **Nureen:**
+  - `CATEGORY` and `ICON` on all four workflows;
+  - `DescribesApplicationProgress` on Supervision, Certification and GA
+    Extension (new `Support/TrackingDescriptions.php`);
+  - `SuppliesOverdueStatus` through the charter trait;
+  - `WorkingDayCalendar` now extends Core's;
+  - GA Extension and Supervision read their detail row once per
+    application object (`detailFor()`).
+- **Tests:**
+  - New: `tests/Feature/Core/TrackApplicationsTest.php` (12).
+  - Added: 2 tests in `WorkingDayCalendarTest`.
+  - `docs/design/track-my-applications.png` is the design image, copied
+    from your message because it wasn't in the repo.
+
+### Bugs caught
+
+- **Queries:** 131 for 20 cards at first. My GA Extension workflow
+  re-read its snapshot row every time anything asked for the chain. With
+  the detail row cached per application object (never cached before it
+  exists), it is now 31.
+- **Contradictory sentence:** "0 of 4 required documents received… No
+  action needed from you." on older demo rows. The documents sentence now
+  appears only when all of them arrived.
+- **Shared `.btn` offsets:** a 16px top margin, and a taller
+  `.btn-secondary`, misaligned the action row; both are normalised inside
+  the card.
+- **`layout.css` phone gap:** `.page-header-text` (flex-basis 24rem)
+  becomes a 24rem height when the header stacks below 720px, leaving a
+  blank gap on every page with header actions. Fixed for this page only,
+  and reported in SHARED_CHANGES §10.
+- **Verification side effect:** my first browser run fetched Lee's two
+  letters, which logged them as "opened". Those two activity rows were
+  deleted, and the check now never requests `/documents/`.
+
+### Verification
+
+- **Tests:** full suite, 473 passed.
+- **Browser** (Tan Wei Jian: Travel, Examiner Nomination and three of
+  Nureen's modules; Lee Xin Yi: two unopened appointment letters), at
+  1440/820/390px, light and dark, with the All, Needs you and Rejected
+  filters:
+  - no horizontal scroll, and tabs never scroll;
+  - the stepper is vertical and buttons are full width at 390px;
+  - no console errors;
+  - lowest text contrast 4.76:1 in light and 5.74:1 in dark;
+  - a 2px focus outline on the card buttons;
+  - every View details link returns 200.
+- **Teammates' data:** no rows were created; their existing dev rows
+  rendered without errors.
+
+---
+
 ## 2026-11-01 — Attendance backtest: repeated runs, and a tuned projection window
 
 **Branch:** `develop`, uncommitted. Nureen only.

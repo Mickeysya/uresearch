@@ -13,6 +13,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Nureen\Concerns\FilesGaExtensions;
 use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\TestCase;
 
@@ -40,6 +41,7 @@ use Tests\TestCase;
  */
 class GaExtensionTest extends TestCase
 {
+    use FilesGaExtensions;
     use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
@@ -56,15 +58,12 @@ class GaExtensionTest extends TestCase
 
     protected function payload(array $overrides = []): array
     {
-        return $overrides + [
-            'current_end_date' => now()->addMonth()->toDateString(),
-            'requested_new_end_date' => now()->addMonths(7)->toDateString(),
-            'reason_for_extension' => 'Fieldwork at the Gurun plant slipped two semesters '
-                .'and the remaining analysis needs the assistantship to continue.',
-            'ga_extension_form_documents' => [UploadedFile::fake()->create('ga-form.pdf', 50, 'application/pdf')],
+        // The official form's fields (Concerns\FilesGaExtensions) and the
+        // three required document types, under their own file names.
+        return $overrides + $this->gaExtensionFields() + [
             'identity_document_documents' => [UploadedFile::fake()->create('ic.pdf', 40, 'application/pdf')],
+            'admission_letter_documents' => [UploadedFile::fake()->create('admission-letter.pdf', 50, 'application/pdf')],
             'supervisor_letter_documents' => [UploadedFile::fake()->create('supervisor-letter.pdf', 90, 'application/pdf')],
-            'acceptance_or_paper_documents' => [UploadedFile::fake()->create('acceptance.pdf', 60, 'application/pdf')],
         ];
     }
 
@@ -96,8 +95,8 @@ class GaExtensionTest extends TestCase
         );
 
         $this->actingAs($this->supervisedStudent())
-            ->post(route('ga-extension.store'), $this->payload(['ga_extension_form_documents' => $files]))
-            ->assertSessionHasErrors('ga_extension_form_documents');
+            ->post(route('ga-extension.store'), $this->payload(['admission_letter_documents' => $files]))
+            ->assertSessionHasErrors('admission_letter_documents');
 
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
@@ -127,8 +126,8 @@ class GaExtensionTest extends TestCase
         );
 
         $this->actingAs($this->supervisedStudent())
-            ->post(route('ga-extension.store'), $this->payload(['acceptance_or_paper_documents' => $files]))
-            ->assertSessionHasErrors('acceptance_or_paper_documents');
+            ->post(route('ga-extension.store'), $this->payload(['identity_document_documents' => $files]))
+            ->assertSessionHasErrors('identity_document_documents');
 
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
@@ -139,14 +138,14 @@ class GaExtensionTest extends TestCase
 
         $this->actingAs($this->supervisedStudent())
             ->post(route('ga-extension.store'), $this->payload([
-                'ga_extension_form_documents' => [UploadedFile::fake()->create('macro.xlsx', 90, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
+                'admission_letter_documents' => [UploadedFile::fake()->create('macro.xlsx', 90, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')],
             ]))
-            ->assertSessionHasErrors('ga_extension_form_documents.0');
+            ->assertSessionHasErrors('admission_letter_documents.0');
 
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
 
-    public function test_a_complete_request_attaches_all_four_document_types_under_their_own_labels(): void
+    public function test_a_complete_request_attaches_each_document_type_under_its_own_label(): void
     {
         Storage::fake('local');
 
@@ -156,16 +155,17 @@ class GaExtensionTest extends TestCase
 
         $application = Application::where('module_type', 'ga_extension')->sole();
 
-        $this->assertSame(4, $application->documents()->count());
+        // No 'GA Extension Form' any more: the system generates it.
+        $this->assertSame(3, $application->documents()->count());
         $this->assertEqualsCanonicalizing(
-            ['GA Extension Form', 'IC or Passport/Visa Copy', "Supervisor's Supporting Letter", 'Acceptance Letter or Published Paper'],
+            ['IC or Passport/Visa Copy', 'Admission Letter & Offer Letter', "Supervisor's Supporting Letter"],
             $application->documents()->pluck('doc_type')->all(),
         );
 
-        $document = $application->documents()->where('doc_type', 'GA Extension Form')->sole();
-        $this->assertSame('ga-form.pdf', $document->original_name);
+        $document = $application->documents()->where('doc_type', 'Admission Letter & Offer Letter')->sole();
+        $this->assertSame('admission-letter.pdf', $document->original_name);
         $this->assertStringStartsWith("applications/{$application->id}/", $document->path);
-        $this->assertStringNotContainsString('ga-form', $document->path);
+        $this->assertStringNotContainsString('admission-letter', $document->path);
     }
 
     /* -----------------------------------------------------------------
@@ -490,10 +490,9 @@ class GaExtensionTest extends TestCase
             ->get(route('ga-extension.queue'))
             ->assertOk()
             ->assertSee('System checks')
-            ->assertSee('GA Extension Form')
             ->assertSee('IC or Passport/Visa Copy')
-            ->assertSee("Supervisor's Supporting Letter")
-            ->assertSee('Acceptance Letter or Published Paper')
-            ->assertDontSee('— missing');
+            ->assertSee('Admission Letter &amp; Offer Letter', false)
+            ->assertSee("Supervisor&#039;s Supporting Letter", false)
+            ->assertDontSee('(missing)');
     }
 }

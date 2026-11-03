@@ -1,0 +1,674 @@
+/* ============================================================
+   tracking.css — Track My Applications (/applications)
+
+   Everything is scoped under .trk, the page's root, so nothing here
+   reaches another screen. Colours are tokens only (tokens.css), so dark
+   mode follows the theme. Buttons are the shared .btn / .btn-secondary,
+   and the pager reuses the notifications feed's .notif-pager.
+
+   Category tones (config/tracking.php): .trk-tone-{blue|green|amber|
+   purple|teal|neutral}, each a text colour that is at least 4.5:1 on
+   both the card surface and its own tinted background.
+   ============================================================ */
+
+.trk {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.trk .page-header { margin-bottom: 0; }
+
+/* Visually hidden, still read by screen readers. */
+.trk .trk-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---- tones ---- */
+
+.trk .trk-tone-blue    { --trk-fg: var(--info-fg);    --trk-bg: var(--info-bg); }
+.trk .trk-tone-green   { --trk-fg: var(--success-fg); --trk-bg: var(--success-bg); }
+.trk .trk-tone-amber   { --trk-fg: var(--warning-fg); --trk-bg: var(--warning-bg); }
+.trk .trk-tone-purple  { --trk-fg: var(--purple-fg);  --trk-bg: var(--purple-bg); }
+.trk .trk-tone-teal    { --trk-fg: var(--teal-fg);    --trk-bg: var(--teal-bg); }
+.trk .trk-tone-neutral { --trk-fg: var(--text-grey);  --trk-bg: var(--surface-hover); }
+
+/* ---- New application ---- */
+
+.trk .trk-new { position: relative; }
+
+.trk .trk-new > summary {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.trk .trk-new > summary::-webkit-details-marker { display: none; }
+
+.trk .trk-new-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 20;
+    min-width: 240px;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background: var(--surface);
+    border: 1px solid var(--border-grey);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+}
+
+.trk .trk-new-menu a {
+    display: block;
+    padding: 8px 10px;
+    border-radius: 7px;
+    color: var(--text-dark);
+    text-decoration: none;
+    font-size: 13.5px;
+}
+
+.trk .trk-new-menu a:hover { background: var(--surface-hover); }
+
+/* ---- tabs: wrap, never scroll ---- */
+
+.trk .trk-tabs {
+    background: var(--surface);
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+    padding: 6px 10px;
+}
+
+.trk .trk-tabs ul,
+.trk .trk-filters ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.trk .trk-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px 8px;
+    border-bottom: 2px solid transparent;
+    color: var(--text-grey);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.trk .trk-tab:hover { color: var(--text-dark); }
+
+.trk .trk-tab.is-active {
+    color: var(--text-dark);
+    border-bottom-color: var(--navy);
+}
+
+.trk .trk-count {
+    min-width: 22px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--surface-hover);
+    color: var(--text-dark);
+    font-size: 11.5px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.trk .trk-tab.is-active .trk-count {
+    background: var(--accent-solid);
+    color: var(--text-on-accent);
+}
+
+/* ---- status chips ---- */
+
+.trk .trk-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border: 1px solid var(--border-grey);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-dark);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.trk .trk-chip:hover { border-color: var(--navy); }
+
+.trk .trk-chip.is-active {
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--text-on-accent);
+}
+
+.trk .trk-chip-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-grey);
+}
+
+.trk .trk-chip-needs-you .trk-chip-dot   { background: var(--warning-fg); }
+.trk .trk-chip-in-progress .trk-chip-dot { background: var(--navy); }
+.trk .trk-chip-approved .trk-chip-dot    { background: var(--success-fg); }
+.trk .trk-chip-rejected .trk-chip-dot    { background: var(--danger-fg); }
+.trk .trk-chip.is-active .trk-chip-dot   { background: currentColor; }
+
+.trk .trk-chip-count { font-weight: 700; }
+
+.trk .trk-showing {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-grey);
+}
+
+.trk .trk-showing b { color: var(--text-dark); }
+
+/* ---- the card ---- */
+
+.trk .trk-card {
+    display: flex;
+    gap: 16px;
+    padding: 20px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+}
+
+/* The student has something to do here: a warm border, and the
+   "Needs you" badge says it in words. */
+.trk .trk-card-needs { border-color: var(--warning-border); }
+
+.trk .trk-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    background: var(--trk-bg);
+    color: var(--trk-fg);
+}
+
+.trk .trk-icon svg { width: 20px; height: 20px; }
+
+.trk .trk-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.trk .trk-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.trk .trk-head-text { min-width: 0; }
+
+.trk .trk-meta {
+    margin: 0 0 3px;
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.trk .trk-module {
+    margin-right: 6px;
+    color: var(--trk-fg);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.trk .trk-ref { color: var(--text-grey); overflow-wrap: anywhere; }
+
+.trk .trk-title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-dark);
+    overflow-wrap: anywhere;
+}
+
+.trk .trk-sub {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--text-grey);
+}
+
+.trk .trk-expected { color: var(--text-dark); font-weight: 600; }
+
+.trk .trk-badges {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.trk .trk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.trk .trk-badge svg { width: 13px; height: 13px; display: block; }
+
+.trk .trk-badge-pending  { background: var(--warning-bg); color: var(--warning-fg); }
+.trk .trk-badge-approved { background: var(--success-bg); color: var(--success-fg); }
+.trk .trk-badge-rejected { background: var(--danger-bg);  color: var(--danger-fg); }
+.trk .trk-badge-returned { background: var(--info-bg);    color: var(--info-fg); }
+.trk .trk-badge-needs    { background: var(--surface);    color: var(--warning-fg); border: 1px solid var(--warning-border); }
+
+/* ---- the stepper: across on a wide screen, down on a phone ---- */
+
+.trk .trk-steps {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.trk .trk-step {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 12px;
+}
+
+.trk .trk-step:last-child { flex: 0 1 auto; padding-right: 0; }
+
+/* The line to the next step, drawn from this step's dot. */
+.trk .trk-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 30px;
+    right: 8px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--border-grey);
+}
+
+.trk .trk-step.is-completed:not(:last-child)::after { background: var(--success-fg); }
+
+.trk .trk-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    border: 2px solid var(--border-grey);
+    background: var(--surface);
+    color: var(--surface);
+}
+
+.trk .trk-dot svg { width: 13px; height: 13px; stroke-width: 3; }
+
+.trk .is-completed .trk-dot { background: var(--success-fg); border-color: var(--success-fg); }
+.trk .is-rejected .trk-dot  { background: var(--danger-fg);  border-color: var(--danger-fg); }
+
+/* Current: a ring with a filled centre, so it differs from "next" by
+   shape as well as colour. */
+.trk .is-current .trk-dot {
+    border-color: var(--navy);
+    box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 10px var(--navy);
+}
+
+.trk .trk-step-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.trk .trk-step-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.trk .is-rejected .trk-step-label { color: var(--danger-fg); }
+
+/* A stage this application never went through (added to the chain after
+   it had moved on): muted, a dashed ring, and "Not required" in words. */
+.trk .is-skipped .trk-dot { border-style: dashed; }
+.trk .is-skipped .trk-step-label { color: var(--text-grey); font-weight: 600; }
+
+.trk .trk-step-detail {
+    font-size: 12px;
+    color: var(--text-grey);
+}
+
+.trk .trk-late {
+    align-self: flex-start;
+    margin-top: 3px;
+    padding: 1px 8px;
+    border-radius: 6px;
+    background: var(--warning-bg);
+    color: var(--warning-fg);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+/* ---- footer ---- */
+
+.trk .trk-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-grey);
+}
+
+.trk .trk-sentence {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--text-dark);
+    overflow-wrap: anywhere;
+}
+
+.trk .trk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* The two shared button styles arrive with different heights (a 16px
+   top margin on .btn, a taller touch target on .btn-secondary); side by
+   side in one row they must match. */
+.trk .trk-actions {
+    align-items: center;
+}
+
+.trk .trk-actions .btn,
+.trk .trk-actions .btn-secondary {
+    margin: 0;
+    min-height: 40px;
+    padding: 9px 16px;
+    font-size: 13.5px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.trk .trk-empty p { margin: 4px 0; }
+
+/* ---- responsive ---- */
+
+@media (max-width: 900px) {
+    .trk .trk-foot { flex-direction: column; align-items: stretch; }
+    .trk .trk-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 720px) {
+    /* layout.css gives .page-header-text flex: 1 1 24rem, which becomes a
+       24rem HEIGHT once the header stacks into a column here -- a blank gap
+       above the button on every page with header actions (reported in
+       SHARED_CHANGES.md; fixed only for this page). */
+    .trk .page-header-text { flex-basis: auto; }
+
+    .trk .trk-card { padding: 16px; gap: 12px; }
+    .trk .trk-icon { width: 34px; height: 34px; }
+    .trk .trk-head { flex-direction: column; }
+    .trk .trk-badges { flex-direction: row; align-items: center; }
+
+    /* The stepper turns vertical: one step per row, the line down the
+       left between the dots. */
+    .trk .trk-steps { flex-direction: column; }
+
+    .trk .trk-step {
+        flex-direction: row;
+        gap: 12px;
+        padding: 0 0 14px;
+    }
+
+    .trk .trk-step:last-child { padding-bottom: 0; }
+
+    .trk .trk-step:not(:last-child)::after {
+        top: 26px;
+        bottom: 2px;
+        left: 10px;
+        right: auto;
+        width: 2px;
+        height: auto;
+    }
+
+    .trk .trk-actions { flex-direction: column; }
+    .trk .trk-actions .btn,
+    .trk .trk-actions .btn-secondary { width: 100%; justify-content: center; }
+
+    .trk .trk-new > summary { width: 100%; justify-content: center; }
+    .trk .trk-new-menu { left: 0; right: 0; }
+}
+
+/* ============================================================
+   The application details page (.trk-detail, applications/show)
+   ============================================================ */
+
+.trk-detail .trk-crumbs a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--navy);
+    font-size: 13.5px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.trk-detail .trk-crumbs a:hover { text-decoration: underline; }
+.trk-detail .trk-crumbs svg { width: 14px; height: 14px; transform: rotate(180deg); display: block; }
+
+.trk-detail .trk-detail-header .page-header-text p { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.trk-detail .trk-detail-header .trk-module { margin-right: 0; font-size: 12px; }
+
+.trk-detail .trk-detail-status { margin-top: -4px; }
+.trk-detail .trk-waiting { margin: 8px 0 0; font-size: 14px; color: var(--text-dark); }
+.trk-detail .trk-detail-status .trk-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+
+.trk-detail .trk-detail-reason {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--danger-bg);
+    color: var(--danger-fg);
+    font-size: 13.5px;
+}
+
+.trk-detail .trk-expect {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 190px;
+    padding: 12px 16px;
+    border: 1px solid var(--border-grey);
+    border-radius: 10px;
+    background: var(--surface-sunken);
+}
+
+.trk-detail .trk-expect.is-late { border-color: var(--warning-border); }
+.trk-detail .trk-expect-label { font-size: 12px; color: var(--text-grey); }
+.trk-detail .trk-expect-date { font-size: 17px; font-weight: 700; color: var(--text-dark); }
+
+/* A plain panel: the card look without the icon column. */
+.trk-detail .trk-panel {
+    padding: 20px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+}
+
+.trk-detail .trk-panel-title {
+    margin: 0 0 16px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.trk-detail .trk-step-who { font-size: 12.5px; color: var(--text-dark); }
+.trk-detail .trk-step-timing { font-size: 12px; color: var(--text-grey); }
+.trk-detail .trk-step-timing.is-late { color: var(--warning-fg); font-weight: 600; }
+.trk-detail .trk-detail-steps .is-skipped .trk-step-detail { font-style: italic; }
+
+.trk-detail .trk-next {
+    margin-top: 18px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-grey);
+}
+
+.trk-detail .trk-next-title {
+    margin: 0 0 4px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.trk-detail .trk-next p { margin: 0; font-size: 13.5px; color: var(--text-dark); }
+
+.trk-detail .trk-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.trk-detail .trk-detail-main,
+.trk-detail .trk-detail-side {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+/* ---- timeline ---- */
+
+.trk-detail .trk-timeline {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.trk-detail .trk-event {
+    position: relative;
+    display: flex;
+    gap: 12px;
+    padding-bottom: 16px;
+}
+
+.trk-detail .trk-event:last-child { padding-bottom: 0; }
+
+.trk-detail .trk-event:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 16px;
+    bottom: 0;
+    width: 2px;
+    background: var(--border-grey);
+}
+
+.trk-detail .trk-event-dot {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    margin-top: 4px;
+    border-radius: 50%;
+    background: var(--info-fg);
+}
+
+.trk-detail .tone-good .trk-event-dot     { background: var(--success-fg); }
+.trk-detail .tone-warn .trk-event-dot     { background: var(--warning-fg); }
+.trk-detail .tone-critical .trk-event-dot { background: var(--danger-fg); }
+
+.trk-detail .trk-event-body { min-width: 0; }
+.trk-detail .trk-event-title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-dark); overflow-wrap: anywhere; }
+.trk-detail .trk-event-date,
+.trk-detail .trk-event-detail { margin: 1px 0 0; font-size: 12px; color: var(--text-grey); }
+
+.trk-detail .trk-event-quote {
+    margin: 6px 0 0;
+    padding: 6px 10px;
+    border-left: 3px solid var(--border-grey);
+    background: var(--surface-sunken);
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    color: var(--text-dark);
+    overflow-wrap: anywhere;
+}
+
+/* ---- your application ---- */
+
+.trk-detail .trk-dl { margin: 0; display: grid; gap: 12px; }
+.trk-detail .trk-dl dt { font-size: 12px; color: var(--text-grey); }
+.trk-detail .trk-dl dd { margin: 1px 0 0; font-size: 14px; color: var(--text-dark); overflow-wrap: anywhere; white-space: pre-line; }
+
+/* ---- documents ---- */
+
+.trk-detail .trk-letter {
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border-grey);
+    border-radius: 10px;
+}
+
+.trk-detail .trk-letter.is-revoked { border-color: var(--danger-border); }
+.trk-detail .trk-letter-title { margin: 0; font-weight: 700; font-size: 14px; color: var(--text-dark); }
+.trk-detail .trk-letter-ref { margin: 2px 0 10px; font-size: 12.5px; color: var(--text-grey); overflow-wrap: anywhere; }
+.trk-detail .trk-letter-revoked { margin: 0 0 10px; font-size: 13px; color: var(--text-dark); }
+.trk-detail .trk-letter .trk-actions { justify-content: flex-start; }
+
+.trk-detail .trk-files { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.trk-detail .trk-files li { display: flex; gap: 10px; align-items: flex-start; }
+.trk-detail .trk-file-icon { color: var(--text-grey); flex-shrink: 0; }
+.trk-detail .trk-file-icon svg { width: 18px; height: 18px; display: block; }
+.trk-detail .trk-file-text { display: flex; flex-direction: column; min-width: 0; font-size: 13.5px; }
+.trk-detail .trk-file-text a { color: var(--navy); font-weight: 600; overflow-wrap: anywhere; }
+.trk-detail .trk-muted { margin: 0; color: var(--text-grey); font-size: 12.5px; }
+
+.trk-detail .trk-help-text { margin: 0 0 8px; font-size: 13.5px; color: var(--text-dark); }
+.trk-detail .trk-help { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--text-dark); }
+.trk-detail .trk-help a { color: var(--navy); font-weight: 600; overflow-wrap: anywhere; }
+
+@media (max-width: 1000px) {
+    .trk-detail .trk-detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 720px) {
+    .trk-detail .trk-panel { padding: 16px; }
+    .trk-detail .trk-expect { min-width: 0; }
+}

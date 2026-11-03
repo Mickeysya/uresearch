@@ -65,6 +65,35 @@ class ModuleRegistry
             : ucfirst(str_replace('_', ' ', $key));
     }
 
+    /**
+     * The Track My Applications tab a module belongs to: the module's own
+     * `public const CATEGORY = '<key>';` (optional; without it, 'other'),
+     * dressed from config('tracking.categories') -- label, fixed tone and
+     * default icon. A key the config does not list still gets a tab of its
+     * own, labelled from the key, in the neutral tone. The module may also
+     * declare `public const ICON = '<icon>';` to override the category's
+     * icon. Nothing here names a module.
+     *
+     * @return array{key: string, label: string, tone: string, icon: string}
+     */
+    public function categoryFor(string $moduleKey): array
+    {
+        $module = $this->modules[$moduleKey] ?? null;
+        $declared = fn (string $name) => $module && defined($module::class.'::'.$name)
+            ? constant($module::class.'::'.$name)
+            : null;
+
+        $key = \Illuminate\Support\Str::slug((string) ($declared('CATEGORY') ?: 'other'));
+        $config = (array) config("tracking.categories.{$key}", []);
+
+        return [
+            'key' => $key,
+            'label' => $config['label'] ?? \Illuminate\Support\Str::headline($key),
+            'tone' => $config['tone'] ?? 'neutral',
+            'icon' => (string) ($declared('ICON') ?: ($config['icon'] ?? 'doc')),
+        ];
+    }
+
     /** @return array<string, WorkflowModule> */
     public function all(): array
     {

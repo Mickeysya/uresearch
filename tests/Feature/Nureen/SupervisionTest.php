@@ -442,6 +442,9 @@ class SupervisionTest extends TestCase
         $this->actingAs($student)->post(route('supervision.store'), $this->payload([
             'requested_supervisor_id' => $newSupervisor->id,
             'appointment_type' => 'existing',
+            // A change of Main Supervisor with no GA appointment on record:
+            // the form asks (SupervisionController::store()).
+            'declares_ga' => '0',
         ]));
         $application = Application::where('module_type', 'supervision')->sole();
 

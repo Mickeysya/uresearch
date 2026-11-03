@@ -124,7 +124,9 @@ class LettersTest extends TestCase
 
         $this->actingAs($this->cgs)
             ->get(route('supervision.queue', ['stage' => 'cgs_review']))
-            ->assertSee('Preview letter')
+            // The draft letter is a Documents row (View / Download) now.
+            ->assertSee('Appointment letter (draft preview)')
+            ->assertSee(route('supervision.letter.preview', $application), false)
             ->assertSee('Endorse &amp; issue letter', false);
 
         $this->actingAs($this->cgs)->post(route('supervision.decide', $application), ['decision' => 'approve']);
@@ -147,10 +149,15 @@ class LettersTest extends TestCase
         $this->assertStringContainsString('Digitally endorsed via UResearch 2.0 on', $html);
         $this->assertStringContainsString('following the endorsement of the Centre for Graduate Studies, your Main Supervisor has been appointed', $html);
 
-        // Emailed to the student with the supervisor copied in.
+        // Emailed to the student and, as a separate message rather than a
+        // CC (3 Nov 2026), to the appointed supervisor -- the letter
+        // attached to both, each linking to a page that person can open.
         Notification::assertSentTo($application->student, AppointmentLetterIssued::class,
-            fn ($n, $channels, $notifiable) => collect($n->toMail($notifiable)->cc)->flatten()->contains($this->supervisor->email)
+            fn ($n, $channels, $notifiable) => $n->toMail($notifiable)->cc === []
                 && count($n->toMail($notifiable)->rawAttachments) === 1);
+        Notification::assertSentTo($this->supervisor, AppointmentLetterIssued::class,
+            fn ($n, $channels, $notifiable) => count($n->toMail($notifiable)->rawAttachments) === 1
+                && $n->toMail($notifiable)->actionUrl === route('nureen.application', $application));
     }
 
     public function test_rejecting_at_the_cgs_stage_issues_nothing_and_needs_a_reason(): void
@@ -277,7 +284,8 @@ class LettersTest extends TestCase
 
         $this->actingAs($approver)
             ->get(route('ga-certification.queue', ['stage' => 'senior_director']))
-            ->assertSee('Preview letter');
+            ->assertSee('Certification letter (draft preview)')
+            ->assertSee(route('ga-certification.letter.preview', $application), false);
 
         $this->actingAs($approver)->post(route('ga-certification.decide', $application), ['decision' => 'approve']);
 

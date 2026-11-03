@@ -1,59 +1,120 @@
 @extends('core::layouts.app')
 
-@section('title', 'My Applications')
+@section('title', 'Track My Applications')
+
+{{--
+    Track My Applications -- every module's applications, for one student.
+
+    Module-neutral by construction: nothing here names a module. The tabs
+    are the categories modules declare about themselves
+    (ModuleRegistry::categoryFor(), config/tracking.php); each card's
+    stepper is that application's own chain; the footer and any extra
+    button come from the module's optional DescribesApplicationProgress.
+    Everything is assembled in Services\ApplicationTracker.
+
+    The tab, the status filter and the page are in the query string, so a
+    refresh or back/forward lands on the same view. Styles: tracking.css.
+--}}
 
 @section('content')
-    <x-core::page-header title="My Applications"
-                         subtitle="Every application you have filed, and where each one has reached." />
-
-    @forelse ($applications as $application)
-        <div class="app-item">
-            <div class="app-item-header">
-                <p><b>{{ $application->module()->label() }} Application #{{ $application->id }}</b></p>
-                <div style="display:flex; align-items:center; gap:12px;">
-                    <x-core::status-badge :status="$application->status" />
-                    <a href="{{ route('applications.show', $application) }}">View</a>
-                </div>
-            </div>
-
-            @php($module = $application->module())
-            @if ($module instanceof \App\Modules\Core\Contracts\SuppliesApplicationDetail)
-                @include($module->detailView(), ['application' => $application])
-            @else
-                <p>{{ $module->summary($application) }}</p>
-            @endif
-            <p style="color: var(--text-grey); font-size: 12.5px;">
-                Submitted {{ $application->submitted_at?->format('j M Y, g:ia') }}
-            </p>
-
-            <x-core::stepper :application="$application" />
-
-            @if ($rejection = $application->rejection())
-                <div class="rejection-note">
-                    Rejected at {{ $rejection->stage_label }}.
-                    @if ($rejection->remarks)
-                        Remarks: {{ $rejection->remarks }}
-                    @endif
-                </div>
-            @endif
-
-            @if ($application->history->isNotEmpty())
-                <div class="history-trail">
-                    @foreach ($application->history as $entry)
-                        <div class="entry">
-                            <b>{{ $entry->stage_label }}</b>: {{ $entry->decision }}
-                            by {{ $entry->approver->name }}
-                            on {{ $entry->created_at->format('j M Y, g:ia') }}
-                            @if ($entry->remarks) "{{ $entry->remarks }}" @endif
-                        </div>
+@php
+    // A link to this page with the current tab and status, changing only
+    // what $with says (null drops it, so 'all' never clutters the URL).
+    $url = fn (array $with) => route('applications.index', array_filter(array_merge([
+        'tab' => $tab === 'all' ? null : $tab,
+        'status' => $status === 'all' ? null : $status,
+    ], $with), fn ($v) => $v !== null && $v !== 'all'));
+@endphp
+<div class="trk">
+    <x-core::page-header title="Track My Applications"
+                         subtitle="Every application you have filed, grouped by type, and where each one has reached.">
+        @if ($startable)
+            <details class="trk-new">
+                <summary class="btn">
+                    <span aria-hidden="true">+</span> New application
+                </summary>
+                <ul class="trk-new-menu">
+                    @foreach ($startable as $module)
+                        <li><a href="{{ $module['url'] }}">{{ $module['label'] }}</a></li>
                     @endforeach
-                </div>
+                </ul>
+            </details>
+        @endif
+    </x-core::page-header>
+
+    @if ($total === 0)
+        <div class="empty-state trk-empty">
+            <p><b>You haven't filed any applications yet.</b></p>
+            <p>Start one with <b>New application</b> above, or from <b>My Application</b> in the sidebar.</p>
+        </div>
+    @else
+        <nav class="trk-tabs" aria-label="Application types">
+            <ul>
+                @foreach ($tabs as $t)
+                    <li>
+                        <a href="{{ $url(['tab' => $t['key'] === 'all' ? null : $t['key'], 'status' => $status === 'all' ? null : $status]) }}"
+                           class="trk-tab {{ $t['key'] === $tab ? 'is-active' : '' }}"
+                           @if ($t['key'] === $tab) aria-current="page" @endif>
+                            {{ $t['label'] }}
+                            <span class="trk-count" aria-label="{{ $t['count'] }} {{ Str::plural('application', $t['count']) }}">{{ $t['count'] }}</span>
+                        </a>
+                    </li>
+                @endforeach
+            </ul>
+        </nav>
+
+        <nav class="trk-filters" aria-label="Filter by status">
+            <ul>
+                @foreach ($statuses as $s)
+                    <li>
+                        <a href="{{ $url(['status' => $s['key'] === 'all' ? null : $s['key']]) }}"
+                           class="trk-chip trk-chip-{{ $s['key'] }} {{ $s['key'] === $status ? 'is-active' : '' }}"
+                           @if ($s['key'] === $status) aria-current="page" @endif>
+                            <span class="trk-chip-dot" aria-hidden="true"></span>
+                            {{ $s['label'] }}
+                            <span class="trk-chip-count">{{ $s['count'] }}</span>
+                        </a>
+                    </li>
+                @endforeach
+            </ul>
+        </nav>
+
+        <p class="trk-showing" aria-live="polite">
+            @if ($cards->lastPage() > 1)
+                Showing <b>{{ $cards->firstItem() }}–{{ $cards->lastItem() }}</b> of {{ $cards->total() }} {{ Str::plural('application', $cards->total()) }}
+            @else
+                Showing <b>{{ $cards->total() }}</b> of {{ $tabTotal }} {{ Str::plural('application', $tabTotal) }}
             @endif
-        </div>
-    @empty
-        <div class="empty-state">
-            You haven't submitted any applications yet.<br>
-            Pick one from the sidebar to get started.
-        </div>
-    @endforelse
+        </p>
+
+        @forelse ($cards as $card)
+            <x-core::track-card :card="$card" />
+        @empty
+            <div class="empty-state trk-empty">
+                <p><b>No applications match this filter.</b></p>
+                <p><a href="{{ $url(['status' => null]) }}">Show all statuses</a></p>
+            </div>
+        @endforelse
+
+        {{-- Hand-rolled, like the notifications feed: Laravel's default
+             pagination views are Tailwind markup, and this app has none. --}}
+        @if ($cards->hasPages())
+            <nav class="notif-pager" aria-label="Pagination">
+                @if ($cards->onFirstPage())
+                    <span class="notif-page-link is-disabled">Newer</span>
+                @else
+                    <a href="{{ $cards->previousPageUrl() }}" class="notif-page-link" rel="prev">Newer</a>
+                @endif
+
+                <span class="notif-page-count">Page {{ $cards->currentPage() }} of {{ $cards->lastPage() }}</span>
+
+                @if ($cards->hasMorePages())
+                    <a href="{{ $cards->nextPageUrl() }}" class="notif-page-link" rel="next">Older</a>
+                @else
+                    <span class="notif-page-link is-disabled">Older</span>
+                @endif
+            </nav>
+        @endif
+    @endif
+</div>
 @endsection

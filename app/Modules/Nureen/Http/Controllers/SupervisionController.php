@@ -2,6 +2,7 @@
 
 namespace App\Modules\Nureen\Http\Controllers;
 
+use App\Modules\Nureen\Support\SubmissionNotifier;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
@@ -18,6 +19,7 @@ use App\Modules\Nureen\Notifications\AppointmentLetterIssuedToCgs;
 use App\Modules\Nureen\Notifications\AppointmentLetterRevoked;
 use App\Modules\Nureen\Notifications\SupervisionFinalDecisionCc;
 use App\Modules\Nureen\Support\AppointmentReferenceGenerator;
+use App\Modules\Nureen\Support\GaStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,12 +42,29 @@ class SupervisionController extends Controller
         return view('nureen::supervision.form', [
             'supervisors' => $supervisors,
             'currentSupervisorId' => $request->user()->supervisor_id,
+            'currentSupervisor' => $request->user()->supervisor,
+            // GaAppointmentRecord: true/false, or null when nothing is on
+            // record -- the form then asks (declares_ga).
+            'gaFromRecord' => GaStatus::fromRecord($request->user()),
+            'pgfacLabel' => config('nureen.supervision.pgfac_memo.label'),
         ]);
     }
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
         $student = $request->user();
+
+        // Postgraduate Handbook 2025: a GA changing supervisor needs PGFAC
+        // approval first, with the supervisor's memo. A change is a Main
+        // Supervisor request while another supervisor is on record; GA
+        // status comes from GaAppointmentRecord, or -- with no record at
+        // all -- from the student's declaration.
+        $isChange = $request->input('appointment_role') === SupervisionDetail::ROLE_MAIN
+            && $student->supervisor_id
+            && (int) $request->input('requested_supervisor_id') !== (int) $student->supervisor_id;
+        $gaFromRecord = GaStatus::fromRecord($student);
+        $isGa = $gaFromRecord ?? ($request->input('declares_ga') === '1');
+        $memoRequired = $isChange && $isGa;
 
         $data = $request->validate([
             'requested_supervisor_id' => [
@@ -76,7 +95,14 @@ class SupervisionController extends Controller
             // DocumentStore::manyRules() for the shared count/size/type
             // limits.
             ...DocumentStore::manyRules('supporting_documents'),
+            // Asked only when there is no GaAppointmentRecord, and needed
+            // only for a change of Main Supervisor.
+            'declares_ga' => [$isChange && $gaFromRecord === null ? 'required' : 'nullable', 'in:0,1'],
+            ...DocumentStore::manyRules('pgfac_memo_documents', $memoRequired),
         ], [
+            'declares_ga.required' => 'Tell us whether you are currently a Graduate Assistant (GA).',
+            'pgfac_memo_documents.required' => 'As a GA changing supervisor, attach the '.config('nureen.supervision.pgfac_memo.label').' (PGFAC approval, with your supervisor\'s memo).',
+            ...DocumentStore::manyMessages('pgfac_memo_documents'),
             'justification.min' => 'Please give a sentence or two on why you are requesting this supervisor.',
             'supporting_documents.required' => 'Attach your research proposal or supporting document.',
             ...DocumentStore::manyMessages('supporting_documents'),
@@ -88,7 +114,7 @@ class SupervisionController extends Controller
             ->where('role', Role::SUPERVISOR)
             ->firstOrFail();
 
-        $application = DB::transaction(function () use ($request, $supervisor, $data, $engine, $documents) {
+        $application = DB::transaction(function () use ($request, $supervisor, $data, $engine, $documents, $isChange, $isGa, $gaFromRecord, $memoRequired) {
             $application = Application::create([
                 'student_id' => $request->user()->id,
                 'submitted_by_id' => $request->user()->id,
@@ -107,6 +133,12 @@ class SupervisionController extends Controller
                 // config must never alter which chain an already-submitted
                 // application is running.
                 'cgs_stage_snapshot' => config('nureen.supervision.cgs_stage'),
+                // Who approves a Co-Supervisor request, fixed now like
+                // cgs_stage -- see SupervisionWorkflow::approverFor().
+                'co_supervisor_approver_snapshot' => config('nureen.supervision.co_supervisor_approver') === 'dean_pgr' ? 'dean_pgr' : 'chair',
+                'is_change_of_supervisor' => $isChange,
+                'is_ga' => $isChange ? $isGa : $gaFromRecord,
+                'ga_status_source' => $gaFromRecord !== null ? 'record' : ($isChange ? 'declared' : null),
             ]);
 
             // Through DocumentStore, so each file lands on the private disk
@@ -115,8 +147,16 @@ class SupervisionController extends Controller
             // new migration.
             $documents->attachMany($application, $request->file('supporting_documents'), 'Supporting Document');
 
+            if ($memoRequired && ($memo = $request->file('pgfac_memo_documents'))) {
+                $documents->attachMany($application, $memo, config('nureen.supervision.pgfac_memo.label'));
+            }
+
             return $engine->submit($application);
         });
+
+        // Whoever acts first is told now -- Core's engine only notifies a
+        // stage when an earlier one decides. See Support\SubmissionNotifier.
+        app(SubmissionNotifier::class)->notify($application);
 
         return redirect()
             ->route('applications.index')
@@ -257,9 +297,11 @@ class SupervisionController extends Controller
             LetterRenderer::APPOINTMENT_DOC_TYPE,
         );
 
-        // Emailed to the student with the appointed supervisor in CC --
-        // see AppointmentLetterIssued.
+        // Emailed to the student, and separately to the appointed
+        // supervisor, each with a link they can open -- see
+        // AppointmentLetterIssued.
         $application->student?->notify(new AppointmentLetterIssued($application, $detail, $letter, $supervisor));
+        $supervisor?->notify(new AppointmentLetterIssued($application, $detail, $letter, $supervisor));
 
         // "Non-Executive CGS is notified of every issued letter" -- being
         // able to find it on the Issued Appointment Letters list is not
@@ -283,7 +325,8 @@ class SupervisionController extends Controller
 
         return response($letters->appointment($application, draft: true, previewer: $request->user()), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="appointment-'.$application->id.'-draft.pdf"',
+            // ?download=1: the Documents section's Download for the same draft.
+            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline').'; filename="appointment-'.$application->id.'-draft.pdf"',
             'Cache-Control' => 'no-store',
         ]);
     }
@@ -352,7 +395,7 @@ class SupervisionController extends Controller
         $data = $request->validate([
             'revoked_reason' => ['required', 'string', 'max:255'],
         ], [
-            'revoked_reason.required' => 'Say why this letter is being revoked — it is shown nowhere public, but is kept for the record.',
+            'revoked_reason.required' => 'Say why this letter is being revoked. This reason is shown to the student and their supervisor. It is not shown on the public verification page.',
         ]);
 
         $note = null;

@@ -63,6 +63,9 @@ class ProcessingTimeAnalytics
     {
         $applications = Application::query()
             ->whereIn('module_type', self::MODULES)
+            // A saved draft has never been submitted, so it has no stage
+            // time to report -- excluded by name, not by accident.
+            ->where('status', '!=', Application::STATUS_DRAFT)
             ->with('history')
             ->get();
 
@@ -73,6 +76,15 @@ class ProcessingTimeAnalytics
             $previous = $application->submitted_at;
 
             foreach ($application->history->sortBy([['created_at', 'asc'], ['id', 'asc']]) as $entry) {
+                // CGS handing a stuck request to another supervisor is not a
+                // decision: it restarts that stage's clock for the new
+                // reviewer (as ClientCharter does), and is not counted.
+                if ($entry->decision === StuckSupervisorStages::REASSIGNED) {
+                    $previous = $entry->created_at;
+
+                    continue;
+                }
+
                 if ($previous) {
                     $key = $application->module_type.'|'.$entry->stage_key;
                     $byKey[$key]['labels'][] = $entry->stage_label;

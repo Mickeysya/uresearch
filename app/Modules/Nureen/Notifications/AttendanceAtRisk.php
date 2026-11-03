@@ -57,6 +57,8 @@ class AttendanceAtRisk extends Notification implements ShouldQueue
                     ? "Their attendance has been declining over recent periods and may fall below the {$threshold} requirement if the trend continues."
                     : "Their attendance is below, or close to, the {$threshold} requirement.")
                 ->line("Their attendance so far this semester is {$current}.")
+                ->line('If it stays below the requirement, the Postgraduate Handbook allows their GA/GRA allowance to be suspended '
+                    .'and their registration for the next semester to be barred; for an international student, CGS may not support a student visa renewal.')
                 ->line('A short conversation now may help them get back on track. They have been told they can contact CGS or submit an attendance appeal if there are circumstances CGS should know about.')
                 ->salutation("Regards,\nCentre for Graduate Studies");
         }
@@ -74,7 +76,14 @@ class AttendanceAtRisk extends Notification implements ShouldQueue
                 ->line("We are writing because your attendance is below, or close to, the {$threshold} attendance requirement for this semester.")
                 ->line("Your attendance so far this semester is {$current}.");
 
+        // The real consequences, from the Postgraduate Handbook 2025. Wording
+        // only: nothing here acts on them.
         return $mail
+            ->line('**Why this matters**')
+            ->line('Attendance below the requirement has consequences under the Postgraduate Handbook:')
+            ->line('• your GA or GRA allowance may be suspended;')
+            ->line('• you may be barred from registering for the next semester;')
+            ->line('• if you are an international student, CGS may not be able to support your student visa renewal.')
             ->line('We know that research does not always follow a timetable, and that there can be good reasons for missing sessions. If something is affecting your attendance, we would like to help.')
             ->line('**What you can do**')
             ->line('• Talk to us: contact the Centre for Graduate Studies'.($cgsEmail ? " at {$cgsEmail}" : '').'.')

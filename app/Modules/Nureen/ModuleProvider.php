@@ -3,6 +3,7 @@
 namespace App\Modules\Nureen;
 
 use App\Modules\Core\Contracts\SuppliesAttendance;
+use App\Modules\Core\Contracts\SuppliesDraftCount;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Nureen\Console\Commands\BacktestAttendance;
 use App\Modules\Nureen\Console\Commands\CheckAttendanceRisk;
@@ -14,6 +15,7 @@ use App\Modules\Nureen\Support\AttendanceProvider;
 use App\Modules\Nureen\Support\AttendanceSourceFactory;
 use App\Modules\Nureen\Support\Contracts\AttendanceSource;
 use App\Modules\Nureen\Support\Contracts\GeneratesQrCode;
+use App\Modules\Nureen\Support\DraftCountProvider;
 use App\Modules\Nureen\Support\QrCode\UnavailableQrCodeGenerator;
 use App\Modules\Nureen\Workflows\AttendanceAppealWorkflow;
 use App\Modules\Nureen\Workflows\CertificationLetterWorkflow;
@@ -37,6 +39,11 @@ class ModuleProvider extends ServiceProvider
         // This binding is what connects the two, and it is the only place
         // either side knows about the other.
         $this->app->bind(SuppliesAttendance::class, AttendanceProvider::class);
+
+        // Same seam for the dashboard's "My Drafts" badge -- see
+        // Core\Contracts\SuppliesDraftCount. Keeps the count in sync with
+        // Support\Drafts::MODULES without Core naming it directly.
+        $this->app->bind(SuppliesDraftCount::class, DraftCountProvider::class);
 
         // Which AttendanceSource attendance:sync pulls from -- see
         // config/nureen.php and Support\AttendanceSourceFactory.

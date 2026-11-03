@@ -18,6 +18,8 @@ final readonly class IngestSummary
         public int $newlyAtRisk,
         /** @var array<int, string> */
         public array $reasons,
+        /** @var array<int, string> students the sheet's leave_days put over the allowance -- see AttendanceLeave */
+        public array $leaveWarnings = [],
     ) {}
 
     public function processed(): int
@@ -28,6 +30,7 @@ final readonly class IngestSummary
     public function text(): string
     {
         return "Read {$this->read}. Added {$this->added}, updated {$this->updated}, "
-            ."rejected {$this->rejected}. {$this->newlyAtRisk} newly flagged at-risk.";
+            ."rejected {$this->rejected}. {$this->newlyAtRisk} newly flagged at-risk."
+            .($this->leaveWarnings === [] ? '' : ' '.count($this->leaveWarnings).' over the leave allowance.');
     }
 }

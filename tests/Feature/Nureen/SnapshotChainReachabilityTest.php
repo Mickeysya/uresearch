@@ -17,6 +17,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Nureen\Concerns\FilesGaExtensions;
 use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\TestCase;
 
@@ -33,6 +34,7 @@ use Tests\TestCase;
  */
 class SnapshotChainReachabilityTest extends TestCase
 {
+    use FilesGaExtensions;
     use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
@@ -247,16 +249,7 @@ class SnapshotChainReachabilityTest extends TestCase
 
     protected function payload(): array
     {
-        $payload = [
-            'current_end_date' => '2026-12-31',
-            'requested_new_end_date' => '2027-06-30',
-            'reason_for_extension' => 'Fieldwork delayed by flooding; analysis needs one more semester.',
-        ];
-
-        foreach (array_keys(config('nureen.ga_extension.required_documents')) as $field) {
-            $payload[$field] = [UploadedFile::fake()->create('doc.pdf', 100, 'application/pdf')];
-        }
-
-        return $payload;
+        return $this->gaExtensionFields(['reason_for_extension' => 'Fieldwork delayed by flooding; analysis needs one more semester.'])
+            + $this->gaExtensionDocuments();
     }
 }

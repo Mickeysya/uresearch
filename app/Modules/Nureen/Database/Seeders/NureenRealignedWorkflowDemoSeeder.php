@@ -202,6 +202,7 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
         );
 
         $application->student?->notify(new AppointmentLetterIssued($application, $detail, $letter, $supervisor));
+        $supervisor->notify(new AppointmentLetterIssued($application, $detail, $letter, $supervisor));
         $cgs->notify(new AppointmentLetterIssuedToCgs($application, $detail));
     }
 

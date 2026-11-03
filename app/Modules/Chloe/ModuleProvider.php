@@ -32,6 +32,8 @@ use App\Modules\Chloe\Console\Commands\WorkstationDemoClear;
 use App\Modules\Chloe\Console\Commands\WorkstationDemoLogin;
 use App\Modules\Chloe\Console\Commands\VerifyCandidacyMemo;
 use App\Modules\Chloe\Console\Commands\WorkstationDemoSeed;
+use App\Modules\Chloe\Services\CandidacyStatusProvider;
+use App\Modules\Core\Contracts\SuppliesCandidacyStatus;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Chloe\Models\CandidacyAppeal;
 use App\Modules\Chloe\Models\CandidacyStaffProfile;
@@ -70,6 +72,11 @@ class ModuleProvider extends ServiceProvider
         $this->app->bind(AssistantModel::class, function () {
             return config('assistant.provider') === 'fake' ? new FakeModel : new GeminiModel;
         });
+
+        // Core's student dashboard reads candidacy through this contract,
+        // never through App\Modules\Chloe\Models\StudyCandidacy directly --
+        // see Services\CandidacyStatusProvider.
+        $this->app->bind(SuppliesCandidacyStatus::class, CandidacyStatusProvider::class);
     }
 
     public function boot(ModuleRegistry $registry): void
