@@ -46,6 +46,11 @@ class CandidacyAppealService
         protected CandidacyMemoService $memos,
     ) {}
 
+    /** The shortest reason the Dean may give for approving other than the requested months. */
+    public const MIN_ADJUST_REASON = 5;
+
+    public const NO_SUPERVISOR_MESSAGE = 'Your Supervisor / Programme Manager is not recorded yet. Please contact CGS.';
+
     // ------------------------------------------------------------------ eligibility
 
     /** @return list<string> the reasons the student cannot appeal now; empty = may appeal */
@@ -72,6 +77,10 @@ class CandidacyAppealService
 
         if ($candidacy->hasFinalRejection()) {
             $problems[] = 'An earlier appeal was rejected by the Dean. That decision is final.';
+        }
+
+        if (! CandidacyStaffDirectory::supervisorForStudent($candidacy->student_id)) {
+            $problems[] = self::NO_SUPERVISOR_MESSAGE;
         }
 
         $remaining = $candidacy->remainingAppealMonths();
@@ -107,8 +116,9 @@ class CandidacyAppealService
                 ?? new CandidacyAppeal(['student_id' => $student->id, 'study_candidacy_id' => $candidacy->id, 'status' => CandidacyAppeal::STATUS_DRAFT, 'round' => 1]);
 
             $this->fillSections($appeal, $data);
-            // the department is never chosen by the student: it comes from the student's record (or is derived from the programme)
+            // neither the department nor the Supervisor / Programme Manager is chosen by the student: both come from the student's record
             $appeal->department_id = CandidacyDepartmentResolver::forCandidacy($candidacy)?->id;
+            $appeal->supervisor_profile_id = CandidacyStaffDirectory::supervisorForStudent($student->id)?->id ?? $appeal->supervisor_profile_id;
             $appeal->save();
             $this->syncPublications($appeal, $data);
 
@@ -137,13 +147,20 @@ class CandidacyAppealService
             }
 
             $appeal->department_id = $department->id;
-            $supervisor = CandidacyStaffDirectory::lecturers($department)->firstWhere('id', $appeal->supervisor_profile_id);
+            $supervisor = CandidacyStaffDirectory::supervisorForStudent($student->id);
             $chair = CandidacyStaffDirectory::chair($department);
             $dean = CandidacyStaffDirectory::dean();
 
-            if (! $supervisor || ! $chair || ! $dean) {
-                throw ValidationException::withMessages(['supervisor_profile_id' => 'Pick your supervisor from the lecturers of your department. If the list is empty or the department has no Chair, contact the Centre for Graduate Studies.']);
+            if (! $supervisor) {
+                throw ValidationException::withMessages(['supervisor_profile_id' => self::NO_SUPERVISOR_MESSAGE]);
             }
+
+            if (! $chair || ! $dean) {
+                throw ValidationException::withMessages(['supervisor_profile_id' => 'Your department has no Chair or the Dean of PGR is not set. Please contact the Centre for Graduate Studies.']);
+            }
+
+            // the appeal keeps the person it is routed to from now on, even if the student's record changes later
+            $appeal->supervisor_profile_id = $supervisor->id;
 
             $sequence = ((int) CandidacyAppeal::where('student_id', $appeal->student_id)->max('sequence_no')) + 1;
             $identity = StudentDirectory::forUserId($student->id);
@@ -214,9 +231,9 @@ class CandidacyAppealService
      * @param  'approve'|'verify'|'return'|'reject'  $action
      * @param  list<string>  $reasons  reason keys from config('candidacy.reasons.<stage>.<action>')
      */
-    public function decide(User $actor, CandidacyAppeal $locked, string $action, array $reasons = [], ?string $remark = null, ?bool $documentsComplete = null): CandidacyAppeal
+    public function decide(User $actor, CandidacyAppeal $locked, string $action, array $reasons = [], ?string $remark = null, ?bool $documentsComplete = null, ?int $approvedMonths = null, ?string $adjustReason = null): CandidacyAppeal
     {
-        return $this->run(function () use ($actor, $locked, $action, $reasons, $remark, $documentsComplete) {
+        return $this->run(function () use ($actor, $locked, $action, $reasons, $remark, $documentsComplete, $approvedMonths, $adjustReason) {
             $appeal = CandidacyAppeal::whereKey($locked->id)->lockForUpdate()->firstOrFail();
             $this->authorize($actor, 'act', $appeal);
 
@@ -242,6 +259,10 @@ class CandidacyAppealService
                 throw ValidationException::withMessages(['documents_complete' => 'Confirm that the documents are complete to verify, or return the appeal to the student.']);
             }
 
+            // the Dean's duration decision is checked before anything is written
+            $months = $stage === 'dean' && $action === 'approve' ? $this->resolveApprovedMonths($appeal, $approvedMonths, $adjustReason) : null;
+            $adjustReason = $adjustReason !== null ? trim($adjustReason) : null;
+
             $profile = $this->profileFor($actor, $appeal, $stage);
 
             if (in_array($action, ['approve'], true) && in_array($stage, config('candidacy.signature_required_stages'), true) && ! $profile?->hasSignature()) {
@@ -259,7 +280,7 @@ class CandidacyAppealService
             match (true) {
                 $decision === 'returned' => $this->applyReturn($appeal, $stage, $now),
                 $decision === 'rejected' => $this->applyRejection($appeal, $now),
-                $stage === 'dean' => $this->applyFinalApproval($appeal, $approval, $now),
+                $stage === 'dean' => $this->applyFinalApproval($appeal, $approval, $now, $months ?? (int) $appeal->requested_months, $adjustReason, $actor),
                 default => $this->advance($appeal, $stage, $now),
             };
 
@@ -383,13 +404,36 @@ class CandidacyAppealService
         }
     }
 
-    protected function applyFinalApproval(CandidacyAppeal $appeal, CandidacyAppealApproval $dean, \DateTimeInterface $at): void
+    /**
+     * The months the Dean approves: the requested months unless the Dean picked another number, which must be between 1 and the
+     * student's REMAINING allowance (12 minus the months used before this appeal) and needs a short reason. Throws before any write.
+     */
+    protected function resolveApprovedMonths(CandidacyAppeal $appeal, ?int $approvedMonths, ?string $reason): int
     {
         $candidacy = StudyCandidacy::whereKey($appeal->study_candidacy_id)->lockForUpdate()->firstOrFail();
-        $months = (int) $appeal->requested_months;
+        $remaining = $candidacy->remainingAppealMonths();
+        $requested = (int) $appeal->requested_months;
+        $months = $approvedMonths ?? $requested;
+
+        if ($months < 1 || $months > $remaining) {
+            throw ValidationException::withMessages(['approved_months' => $remaining < 1
+                ? 'This student has no extension allowance left.'
+                : "Choose between 1 and {$remaining} month(s): that is what remains of the student's allowance."]);
+        }
+
+        if ($months !== $requested && mb_strlen(trim((string) $reason)) < self::MIN_ADJUST_REASON) {
+            throw ValidationException::withMessages(['adjust_reason' => 'Give a short reason (at least '.self::MIN_ADJUST_REASON.' characters) for approving a different number of months than requested.']);
+        }
+
+        return $months;
+    }
+
+    protected function applyFinalApproval(CandidacyAppeal $appeal, CandidacyAppealApproval $dean, \DateTimeInterface $at, int $months, ?string $adjustReason, User $actor): void
+    {
+        $candidacy = StudyCandidacy::whereKey($appeal->study_candidacy_id)->lockForUpdate()->firstOrFail();
 
         if ($months < 1 || $months > $candidacy->remainingAppealMonths()) {
-            throw ValidationException::withMessages(['appeal' => 'The requested months no longer fit the candidate\'s remaining allowance.']);
+            throw ValidationException::withMessages(['appeal' => 'The approved months no longer fit the candidate\'s remaining allowance.']);
         }
 
         $newExpiry = $candidacy->candidacy_expiry_date->copy()->addMonthsNoOverflow($months);
@@ -400,9 +444,15 @@ class CandidacyAppealService
             'extension_months_used' => $candidacy->allowanceUsed() + $months,
         ])->save();
 
+        $adjusted = $months !== (int) $appeal->requested_months;
+
         $appeal->forceFill([
             'status' => CandidacyAppeal::STATUS_APPROVED, 'current_stage' => null, 'approved_months' => $months, 'new_expiry_date' => $newExpiry,
             'final_outcome' => CandidacyAppeal::OUTCOME_APPROVED, 'closed_at' => $at, 'needs_cgs_recheck' => false,
+            // the requested months stay as the student wrote them; the reason is for approvers and CGS only
+            'dean_adjust_reason' => $adjusted ? $adjustReason : null,
+            'dean_adjusted_by_id' => $adjusted ? $actor->id : null,
+            'dean_adjusted_at' => $adjusted ? $at : null,
         ]);
         $appeal->save();
 
@@ -414,7 +464,7 @@ class CandidacyAppealService
 
     protected function fillSections(CandidacyAppeal $appeal, array $data): void
     {
-        $fields = ['reason', 'phase', 'percent_complete', 'rcs_status', 'rcs_date', 'rcs_expected_date', 'rcs_category', 'requested_months', 'supervisor_profile_id'];
+        $fields = ['reason', 'phase', 'percent_complete', 'rcs_status', 'rcs_date', 'rcs_expected_date', 'rcs_category', 'requested_months'];
 
         foreach ($fields as $field) {
             if (array_key_exists($field, $data)) {
@@ -680,6 +730,13 @@ class CandidacyAppealService
             'remarks' => '—',
             'requested_months' => (string) $appeal->requested_months,
             'approved_months' => (string) $appeal->approved_months,
+            // equal: the wording stays as it was; different: both numbers, and nothing else (the Dean's reason is never mailed)
+            'approved_line' => $appeal->wasAdjustedByDean()
+                ? "Requested: **{$appeal->requested_months} month(s)**. Approved: **{$appeal->approved_months} month(s)**."
+                : "Approved extension: **{$appeal->approved_months} month(s)**",
+            'approved_summary' => $appeal->wasAdjustedByDean()
+                ? "{$appeal->approved_months} month(s) (requested {$appeal->requested_months})"
+                : "{$appeal->approved_months} month(s)",
             'new_expiry_date' => $appeal->new_expiry_date?->format('j M Y') ?? '',
             'expiry_date' => ($appeal->candidacy?->candidacy_expiry_date ?? $appeal->expiry_at_submission)?->format('j M Y') ?? '',
             'link' => $this->linkFor($appeal, $staff),
@@ -693,7 +750,7 @@ class CandidacyAppealService
 
     public function stageLabel(string $stage): string
     {
-        return ['supervisor' => 'Lecturer/Supervisor', 'chair' => 'Department Chair', 'cgs' => 'CGS Verification', 'dean' => 'Dean of PGR'][$stage] ?? ucfirst($stage);
+        return ['supervisor' => 'Supervisor / Programme Manager', 'chair' => 'Department Chair', 'cgs' => 'CGS Verification', 'dean' => 'Dean of PGR'][$stage] ?? ucfirst($stage);
     }
 
     /** @param list<string> $reasons */

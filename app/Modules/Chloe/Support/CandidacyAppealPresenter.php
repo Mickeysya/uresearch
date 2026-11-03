@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 final class CandidacyAppealPresenter
 {
     public const STAGES = [
-        'supervisor' => 'Supervisor',
+        'supervisor' => 'Supervisor / Programme Manager',
         'chair' => 'Department Chair',
         'cgs' => 'CGS Verification',
         'dean' => 'Dean of PGR',
@@ -33,7 +33,7 @@ final class CandidacyAppealPresenter
     {
         return match ($appeal->status) {
             CandidacyAppeal::STATUS_DRAFT => 'Draft',
-            CandidacyAppeal::STATUS_WITH_SUPERVISOR => 'With Supervisor',
+            CandidacyAppeal::STATUS_WITH_SUPERVISOR => 'With Supervisor / Programme Manager',
             CandidacyAppeal::STATUS_WITH_CHAIR => 'With Department Chair',
             CandidacyAppeal::STATUS_WITH_CGS => 'With CGS',
             CandidacyAppeal::STATUS_WITH_DEAN => 'With Dean',

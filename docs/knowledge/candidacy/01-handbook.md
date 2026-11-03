@@ -5,7 +5,7 @@ RCS deadlines, viva, allowances, probation and so on) is outside this assistant.
 
 ## cand_what_is_candidacy
 
-Candidacy is the period in which you are registered to complete your programme. For a research programme it runs from your first registered semester until you
+Study Candidacy is the period in which you are registered to complete your programme. For a research programme it runs from your first registered semester until you
 submit the soft-bound thesis. Maximum and minimum duration:
 • PhD: full-time minimum 36 and maximum 96 months; part-time minimum 48 and maximum 120 months.
 • Master by research: full-time minimum 24 and maximum 48 months; part-time minimum 36 and maximum 72 months.

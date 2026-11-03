@@ -11,7 +11,7 @@
 --}}
 @php($label = 'color: var(--text-dark);')
 
-<p><b style="{{ $label }}">Supervisor selected:</b> {{ $detail->supervisor->name ?? '—' }}</p>
+<p><b style="{{ $label }}">Supervisor / Programme Manager:</b> {{ $detail->supervisor->name ?? '—' }}</p>
 <p><b style="{{ $label }}">Department:</b> {{ $detail->department ?? '—' }}</p>
 <p><b style="{{ $label }}">Current candidacy expiry:</b> {{ $detail->candidacy->candidacy_expiry_date->format('j M Y') }}</p>
 <p><b style="{{ $label }}">Reason for appeal:</b> {{ $detail->reason ?? '—' }}</p>
@@ -30,7 +30,7 @@
     @endif
 </p>
 
-<p><b>Section B: Candidacy Extension Record</b></p>
+<p><b>Section B: Study Candidacy Extension Record</b></p>
 <p><b style="{{ $label }}">Prior extension:</b> Through GSC: {{ $detail->extension_via_gsc ? 'Yes' : 'No' }},
     Through Vice Chancellor: {{ $detail->extension_via_vc ? 'Yes' : 'No' }}</p>
 

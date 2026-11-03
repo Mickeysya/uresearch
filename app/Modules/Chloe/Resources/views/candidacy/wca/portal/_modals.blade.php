@@ -9,7 +9,26 @@
                     <label class="wca-choice"><input type="radio" name="documents_complete" value="yes" checked> Yes, the official form and documents are complete</label>
                     <label class="wca-choice"><input type="radio" name="documents_complete" value="no"> No (then return the appeal to the student instead)</label></div>
             @endif
-            <p>{{ $isDean ? 'The appeal is approved for '.$appeal->requested_months.' month(s) and the memo is issued to the student.' : 'The appeal moves on to the next step.' }}</p>
+            @if ($isDean)
+                @php $remainingMonths = max(1, (int) ($candidacy?->remainingAppealMonths() ?? $appeal->requested_months)); $requestedMonths = min((int) $appeal->requested_months, $remainingMonths); @endphp
+                <p>The student requested <strong>{{ $appeal->requested_months }} month(s)</strong> and has <strong>{{ $candidacy?->remainingAppealMonths() ?? 0 }} month(s)</strong> of allowance left. The memo is issued to the student.</p>
+                <div class="wca-field">
+                    <label for="wca-approved-months">Months to approve</label>
+                    <select id="wca-approved-months" name="approved_months" class="wca-select" data-requested="{{ $appeal->requested_months }}"
+                            data-base-expiry="{{ ($candidacy?->candidacy_expiry_date ?? $appeal->expiry_at_submission)?->format('Y-m-d') }}">
+                        @for ($m = 1; $m <= $remainingMonths; $m++)<option value="{{ $m }}" @selected($m === $requestedMonths)>{{ $m }} month(s){{ $m === (int) $appeal->requested_months ? ' (as requested)' : '' }}</option>@endfor
+                    </select>
+                    @error('approved_months')<p class="wca-error">{{ $message }}</p>@enderror
+                    <p class="wca-muted wca-small">New expiry date: <strong id="wca-approved-expiry">{{ $preview ? $preview['new_expiry']->format('j M Y') : '—' }}</strong></p>
+                </div>
+                <div class="wca-field wca-hidden" id="wca-adjust-field">
+                    <label for="wca-adjust-reason">Reason for approving a different number of months <span class="wca-muted">(required; shown to approvers and CGS, not to the student)</span></label>
+                    <textarea id="wca-adjust-reason" name="adjust_reason" class="wca-textarea" maxlength="2000"></textarea>
+                    @error('adjust_reason')<p class="wca-error">{{ $message }}</p>@enderror
+                </div>
+            @else
+                <p>The appeal moves on to the next step.</p>
+            @endif
             <div class="wca-field"><label for="wca-remark-approve">Remark (optional)</label><textarea id="wca-remark-approve" name="remark" class="wca-textarea" maxlength="2000"></textarea></div>
             <div class="wca-actions"><button type="submit" class="wca-btn is-primary">Confirm {{ $isCgs ? 'verification' : 'approval' }}</button><button type="button" class="wca-btn" data-modal-close>Cancel</button></div>
         </form>
@@ -58,7 +77,7 @@
                 <li>No further appeal can be submitted for this candidacy.</li>
                 <li>The expiry date stays at {{ $expiry }}.</li>
                 <li>The student can still submit the Softbound thesis before {{ $expiry }}. If no Softbound is submitted by then, the student becomes a dismissal candidate for CGS to review.</li>
-                <li>The student, the Supervisor, the Department Chair and CGS are notified by e-mail and bell.</li>
+                <li>The student, the Supervisor / Programme Manager, the Department Chair and CGS are notified by e-mail and bell.</li>
             </ul>
             <p class="wca-label">Reasons</p>
             <ul class="wca-consequences" id="wca-confirm-reasons"></ul>

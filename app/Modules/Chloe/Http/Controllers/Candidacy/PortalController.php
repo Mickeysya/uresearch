@@ -91,11 +91,14 @@ class PortalController extends Controller
             'reasons' => ['nullable', 'array'], 'reasons.*' => ['string', 'max:60'],
             'remark' => ['nullable', 'string', 'max:2000'],
             'documents_complete' => ['nullable', 'in:yes,no'],
+            'approved_months' => ['nullable', 'integer', 'min:1', 'max:12'],
+            'adjust_reason' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $done = $this->service->decide(
             $request->user(), $appeal, $data['action'], $data['reasons'] ?? [], $data['remark'] ?? null,
             isset($data['documents_complete']) ? $data['documents_complete'] === 'yes' : null,
+            isset($data['approved_months']) ? (int) $data['approved_months'] : null, $data['adjust_reason'] ?? null,
         );
 
         $verb = ['approve' => 'approved', 'verify' => 'verified', 'return' => 'returned to the student', 'reject' => 'rejected (final)'][$data['action']];

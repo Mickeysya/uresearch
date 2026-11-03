@@ -274,8 +274,8 @@ class CandidacyAssistantRolesTest extends TestCase
         $views .= file_get_contents(base_path('app/Modules/Core/Resources/views/partials/sidebar-student-nav.blade.php'));
 
         foreach (['Submit an Appeal', 'Edit and resubmit', 'Download memo', 'Return to student', 'Reject (final)', 'Confirm rejection', 'Save signature', 'Remove my signature', 'Pending my action', 'Decided by me', 'View all appeals',
-            'My Appeals', 'Study Candidacy Approval Portal', 'Candidacy Management', 'Candidacy Insights', 'Dismissal List', 'Dismissal Upload', 'Confirm and dismiss', 'Preview', 'Review', 'Approve', 'Verify', 'Track My Applications', 'My Candidacy',
-            'Department and supervisor', 'Research and extension', 'Documents', 'Review and submit', 'Section A: Research progress', 'Section B: Earlier extensions', 'Section C: Publications', 'Section D: Extension requested',
+            'My Appeals', 'Study Candidacy Approval Portal', 'Study Candidacy Management', 'Study Candidacy Insights', 'Dismissal List', 'Dismissal Upload', 'Confirm and dismiss', 'Preview', 'Review', 'Approve', 'Verify', 'Track My Applications', 'My Study Candidacy',
+            'Department and Supervisor / Programme Manager', 'Research and extension', 'Documents', 'Review and submit', 'Section A: Research progress', 'Section B: Earlier extensions', 'Section C: Publications', 'Section D: Extension requested',
             'Pause updates', 'Waiting At Least', 'Months Requested', 'Export filtered list to Excel'] as $label) {
             $this->assertStringContainsString($label, $views, "The answers name \"{$label}\" but no candidacy view has it.");
         }

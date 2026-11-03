@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'Candidacy Management')
+@section('title', 'Study Candidacy Management')
 
 @include('chloe::candidacy.wca._assets')
 
@@ -11,7 +11,7 @@
             $cards = ['in_progress' => ['In Progress', 'blue'], 'returned' => ['Returned', 'gold'], 'approved' => ['Approved', 'green'], 'rejected' => ['Rejected', 'red']];
             $cardLink = fn (?string $group) => route('candidacy.cgs.operations', array_filter(array_diff_key($query, ['group' => 1, 'page' => 1]) + ['group' => $group]));
         @endphp
-        <x-core::page-header title="Candidacy Management">
+        <x-core::page-header title="Study Candidacy Management">
             <a href="{{ route('candidacy.cgs.insights') }}"><button type="button" class="btn-secondary">Insights</button></a>
             <a href="{{ route('candidacy.cgs.dismissals') }}"><button type="button">Dismissal List</button></a>
         </x-core::page-header>
@@ -32,7 +32,7 @@
                     <div class="field"><label for="wca-f-dept">Department</label>
                         <select id="wca-f-dept" name="department"><option value="">All Departments</option>@foreach ($departments->groupBy('faculty') as $faculty => $group)<optgroup label="{{ $faculty }}">@foreach ($group as $d)<option value="{{ $d->id }}" @selected($f['department'] === $d->id)>{{ $d->name }}</option>@endforeach</optgroup>@endforeach</select></div>
                     <div class="field"><label for="wca-f-status">Status</label>
-                        <select id="wca-f-status" name="status"><option value="">Any Status</option>@foreach (['with_supervisor' => 'With Supervisor', 'with_chair' => 'With Department Chair', 'with_cgs' => 'With CGS', 'with_dean' => 'With Dean', 'returned' => 'Returned to student', 'approved' => 'Approved', 'rejected' => 'Rejected (final)', 'closed_expired' => 'Closed expired'] as $k => $label)<option value="{{ $k }}" @selected($f['status'] === $k)>{{ $label }}</option>@endforeach</select></div>
+                        <select id="wca-f-status" name="status"><option value="">Any Status</option>@foreach (['with_supervisor' => 'With Supervisor / Programme Manager', 'with_chair' => 'With Department Chair', 'with_cgs' => 'With CGS', 'with_dean' => 'With Dean', 'returned' => 'Returned to student', 'approved' => 'Approved', 'rejected' => 'Rejected (final)', 'closed_expired' => 'Closed expired'] as $k => $label)<option value="{{ $k }}" @selected($f['status'] === $k)>{{ $label }}</option>@endforeach</select></div>
                     <div class="field"><label for="wca-f-step">Current Step</label>
                         <select id="wca-f-step" name="step"><option value="">Any Step</option>@foreach (\App\Modules\Chloe\Support\CandidacyAppealPresenter::STAGES as $k => $label)<option value="{{ $k }}" @selected($f['step'] === $k)>{{ $label }}</option>@endforeach</select></div>
                     <div class="field"><label for="wca-f-months">Months Requested</label>

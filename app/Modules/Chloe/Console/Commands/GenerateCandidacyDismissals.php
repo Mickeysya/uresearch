@@ -12,11 +12,11 @@ class GenerateCandidacyDismissals extends Command
 {
     protected $signature = 'candidacy:generate-dismissals';
 
-    protected $description = 'DEPRECATED (does nothing): the Dismissal List is now live; see Candidacy Management > Dismissal List';
+    protected $description = 'DEPRECATED (does nothing): the Dismissal List is now live; see Study Candidacy Management > Dismissal List';
 
     public function handle(): int
     {
-        $this->line('candidacy:generate-dismissals is deprecated and does nothing. The Dismissal List is live in Candidacy Management.');
+        $this->line('candidacy:generate-dismissals is deprecated and does nothing. The Dismissal List is live in Study Candidacy Management.');
 
         return self::SUCCESS;
     }

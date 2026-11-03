@@ -5,6 +5,7 @@ namespace App\Modules\Chloe\Support;
 use App\Modules\Chloe\Models\CandidacyDepartment;
 use App\Modules\Chloe\Models\CandidacyStaffAssignment;
 use App\Modules\Chloe\Models\CandidacyStaffProfile;
+use App\Modules\Chloe\Models\CandidacyStudentSupervisor;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Collection;
@@ -15,6 +16,12 @@ final class CandidacyStaffDirectory
     public static function profileForUser(User $user): ?CandidacyStaffProfile
     {
         return CandidacyStaffProfile::where('user_id', $user->id)->first();
+    }
+
+    /** The Supervisor / Programme Manager recorded for a student (a login account), or null when none is on record. */
+    public static function supervisorForStudent(int $studentId): ?CandidacyStaffProfile
+    {
+        return CandidacyStudentSupervisor::where('student_id', $studentId)->first()?->profile;
     }
 
     /** @return Collection<int, CandidacyStaffProfile> */

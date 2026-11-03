@@ -26,7 +26,7 @@
         <div class="wca-table-wrap">
             <table class="wca-table is-stack is-compact">
                 <thead><tr>
-                    <th>Appeal No.</th><th>Student</th><th>Programme</th><th>Department</th><th class="wca-num">Requested</th><th class="wca-num">Round</th>
+                    <th>Appeal No.</th><th>Student</th><th>Programme</th><th>Department</th><th class="wca-num">Requested</th><th class="wca-num">Approved</th><th class="wca-num">Round</th>
                     @if ($tab === 'pending')<th>Arrived at my stage</th><th>Waiting days</th>
                     @elseif ($tab === 'ongoing')<th>Current step</th><th>Last updated</th>
                     @elseif ($tab === 'history')<th>My decision</th><th>Final outcome</th>
@@ -42,6 +42,7 @@
                         <td data-label="Programme">{{ $who?->programme ?? '—' }}</td>
                         <td data-label="Department">{{ $a->department?->name ?? '—' }}</td>
                         <td class="wca-num" data-label="Requested">{{ $a->requested_months }} mo</td>
+                        <td class="wca-num" data-label="Approved">{{ $a->approved_months !== null ? $a->approved_months.' mo' : '—' }}</td>
                         <td class="wca-num" data-label="Round">{{ $a->round }}</td>
                         @if ($tab === 'pending')
                             <td class="wca-nowrap" data-label="Arrived at my stage">{{ P::date($a->stage_entered_at, 'j M Y, H:i') }}</td>

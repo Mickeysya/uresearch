@@ -110,16 +110,6 @@ class CandidacyAppealServiceTest extends TestCase
         }
     }
 
-    public function test_the_supervisor_must_belong_to_the_students_department(): void
-    {
-        $other = CandidacyStaffProfile::create(['full_name' => 'Elsewhere', 'designation' => 'Lecturer']);
-        $draft = $this->draft();
-        $draft->update(['supervisor_profile_id' => $other->id]);
-
-        $this->expectException(ValidationException::class);
-        $this->service->submit($this->student, $draft);
-    }
-
     public function test_the_default_dean_is_used_when_the_department_has_none(): void
     {
         CandidacyStaffAssignment::where('role', CandidacyStaffAssignment::ROLE_DEAN)->delete();

@@ -1,5 +1,5 @@
 {{--
-    Candidacy-appeal-specific content, shared by two screens:
+    Study Candidacy-appeal-specific content, shared by two screens:
 
       - the approver's queue (core::partials.queue passes $details, a
         whole-page map, to avoid an N+1 query per row -- only ever PENDING
@@ -21,7 +21,7 @@
         {{-- Only on the student's own "Track My Application" page: $details
              is the queue's own marker that this include is on someone else's
              screen, where a link back to their own candidacy makes no sense. --}}
-        <p style="margin:0 0 10px;"><a href="{{ route('candidacy.status') }}">&larr; Back to My Candidacy</a></p>
+        <p style="margin:0 0 10px;"><a href="{{ route('candidacy.status') }}">&larr; Back to My Study Candidacy</a></p>
     @endif
 
     @if ($application->status === \App\Modules\Core\Models\Application::STATUS_RETURNED)

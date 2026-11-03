@@ -67,6 +67,9 @@
         <dl class="wca-kv">
             <dt>Months requested</dt><dd>{{ $appeal->requested_months ?? '—' }}</dd>
             <dt>Months approved</dt><dd>{{ $appeal->approved_months ?? '—' }}</dd>
+            @if (($showContext ?? false) && $appeal->wasAdjustedByDean())
+                <dt>Dean's reason for the change</dt><dd>{{ $appeal->dean_adjust_reason ?: '—' }}</dd>
+            @endif
             <dt>Original expiry date</dt><dd>{{ ($candidacy?->original_expiry_date ?? $appeal->expiry_at_submission)?->format('j M Y') ?? '—' }}</dd>
             <dt>{{ $appeal->status === 'approved' ? 'New expiry date' : 'Current expiry date' }}</dt><dd>{{ ($appeal->new_expiry_date ?? $candidacy?->candidacy_expiry_date ?? $appeal->expiry_at_submission)?->format('j M Y') ?? '—' }}</dd>
             <dt>Allowance used</dt><dd>{{ $used }} of {{ $max }} months</dd>
@@ -127,7 +130,8 @@
             @foreach (P::timeline($appeal) as $e)
                 @php $tone = match ($e->action) { 'approved', 'verified' => 'green', 'returned' => 'orange', 'rejected' => 'red', 'submitted', 'resubmitted' => 'blue', default => 'slate' }; @endphp
                 <li class="is-{{ $tone }}"><strong>{{ P::eventLabel($e) }}</strong><br><span class="wca-muted wca-small">{{ $e->actor_name }} &middot; {{ P::date($e->occurred_at, 'j M Y, H:i') }}</span>
-                    @if (in_array($e->action, ['returned', 'rejected'], true))<br><span class="wca-small">Reasons: {{ P::reasonLabels($e->stage, $e->action, $e->reason_codes) ?: 'Not recorded' }}</span>@endif</li>
+                    @if (in_array($e->action, ['returned', 'rejected'], true))<br><span class="wca-small">Reasons: {{ P::reasonLabels($e->stage, $e->action, $e->reason_codes) ?: 'Not recorded' }}</span>@endif
+                    @if (($showContext ?? false) && $e->stage === 'dean' && $e->action === 'approved' && $appeal->wasAdjustedByDean())<br><span class="wca-small">Requested {{ $appeal->requested_months }} month(s), approved {{ $appeal->approved_months }}. Reason: {{ $appeal->dean_adjust_reason ?: '—' }}</span>@endif</li>
             @endforeach
         </ul>
         <ul class="wca-legend" aria-label="History colours"><li><span class="wca-dot is-blue"></span>Submitted</li><li><span class="wca-dot is-green"></span>Approved</li><li><span class="wca-dot is-orange"></span>Returned</li><li><span class="wca-dot is-red"></span>Rejected</li><li><span class="wca-dot is-slate"></span>Other</li></ul>

@@ -78,6 +78,10 @@ $add('approver', 'cand_required_documents', ['what should i check in the documen
 $add('approver', 'cand_portal_guide', ['what are the tabs in the approval portal', 'what filters can i use in the portal', 'ongoing versus history tab, what is the difference']);
 $add('approver', 'cand_waiting_colours', ['what do the coloured dots mean', 'what is the red dot on an appeal', 'amber dot meaning in my queue']);
 $add('approver', 'cand_notifications', ['will i get an email when an appeal needs me', 'who is told when an appeal is rejected', 'does a bell notification come to me']);
+// Round 4: the Dean may approve a different number of months; the Supervisor / Programme Manager is fixed at enrolment
+$add('student', 'cand_after_approval', ['can the dean approve fewer months than i asked for', 'will i always be given the months i requested', 'the dean approved a different number of months than i put in']);
+$add('approver', 'cand_how_decide', ['as dean can i approve a different number of months', 'how many months can the dean approve at most']);
+$add('cgs', 'cand_after_approval', ['why do operations show a different approved months than requested', 'can the dean change the months the student asked for']);
 $add('approver', 'cand_after_approval', ['what happens after the dean approves', 'who gets the memo', 'where does an approved appeal go in my list']);
 $add('approver', 'cand_status_meanings', ['what is meant by the status with cgs', 'explain the appeal statuses', 'what does the closed expired status stand for']);
 $add('approver', 'cand_twelve_month_limit', ['what is the maximum extension in total', 'can a student get more than 12 months', 'how is the 12 month limit counted']);

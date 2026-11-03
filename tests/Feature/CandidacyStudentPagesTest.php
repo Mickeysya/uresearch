@@ -99,16 +99,15 @@ class CandidacyStudentPagesTest extends TestCase
 
     // ---- the form -------------------------------------------------------------------------------------------
 
-    public function test_step_one_shows_the_department_read_only_and_needs_a_supervisor_of_it(): void
+    public function test_step_one_shows_the_department_read_only_with_the_supervisor_programme_manager_on_record(): void
     {
-        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1))->assertOk()->assertSee('Department and supervisor')
-            ->assertSee('Computer & Information Sciences')->assertSee('Taken from your student record.')->assertDontSee('id="wca-department"', false);
+        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1))->assertOk()->assertSee('Department and Supervisor / Programme Manager')
+            ->assertSee('Computer & Information Sciences')->assertSee('These details come from your student record')->assertDontSee('id="wca-department"', false);
 
-        $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'next'])
-            ->assertSessionHasErrors(['supervisor_profile_id']);
+        $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'next'])->assertSessionHasNoErrors();
 
         $other = CandidacyDepartment::create(['code' => 'EEE', 'name' => 'Electrical']);
-        $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'next', 'department_id' => $other->id, 'supervisor_profile_id' => $this->profile($this->lecturer)->id])
+        $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'next', 'department_id' => $other->id])
             ->assertSessionHasErrors('department_id');
     }
 

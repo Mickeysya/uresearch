@@ -46,7 +46,7 @@ class CandidacyDismissal extends Model
     public static function reasonLabel(string $reason): string
     {
         return match ($reason) {
-            self::REASON_EXPIRED_NO_APPEAL => 'Candidacy expired, no appeal filed',
+            self::REASON_EXPIRED_NO_APPEAL => 'Study Candidacy expired, no appeal filed',
             self::REASON_APPEAL_REJECTED => 'Appeal rejected — no further appeals allowed',
             self::REASON_EXTENSION_EXHAUSTED => '12-month appeal allowance exhausted',
             default => ucfirst(str_replace('_', ' ', $reason)),

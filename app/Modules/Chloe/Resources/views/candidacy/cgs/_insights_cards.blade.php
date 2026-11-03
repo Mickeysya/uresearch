@@ -6,7 +6,7 @@
             <div class="wsi-span-12 wsi-card" id="wsi-card-forecast">
                 <div class="wsi-card-head-row">
                     <div>
-                        <h3 class="wsi-card-title">Candidacy expiry forecast</h3>
+                        <h3 class="wsi-card-title">Study Candidacy expiry forecast</h3>
                         <p class="wsi-card-subtitle" id="wci-forecast-subtitle">Month by month.</p>
                     </div>
                     <div class="wsi-segctl" id="wci-grain" role="group" aria-label="Time grain">

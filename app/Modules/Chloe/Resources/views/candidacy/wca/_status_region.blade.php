@@ -13,7 +13,7 @@
 @else
     <div class="wca-grid">
         <section class="wca-card" aria-labelledby="wca-h-cand">
-            <h3 id="wca-h-cand">Candidacy</h3>
+            <h3 id="wca-h-cand">Study Candidacy</h3>
             <p><span class="wca-status"><span class="wca-dot is-{{ $statusTone }}"></span>{{ \App\Modules\Chloe\Models\StudyCandidacy::statuses()[$candidacy->status] ?? ucfirst($candidacy->status) }}</span></p>
             <dl class="wca-kv">
                 <dt>Programme started</dt><dd>{{ $candidacy->programme_start_date?->format('j M Y') ?? '—' }}</dd>

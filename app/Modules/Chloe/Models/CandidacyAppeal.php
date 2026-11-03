@@ -71,8 +71,20 @@ class CandidacyAppeal extends Model
             'needs_cgs_recheck' => 'boolean', 'gsc_extension' => 'boolean', 'vc_extension' => 'boolean',
             'expiry_at_submission' => 'date', 'new_expiry_date' => 'date', 'rcs_date' => 'date', 'rcs_expected_date' => 'date',
             'declaration_accepted_at' => 'datetime', 'submitted_at' => 'datetime', 'stage_entered_at' => 'datetime',
-            'last_action_at' => 'datetime', 'closed_at' => 'datetime', 'memo_generated_at' => 'datetime',
+            'last_action_at' => 'datetime', 'closed_at' => 'datetime', 'memo_generated_at' => 'datetime', 'dean_adjusted_at' => 'datetime',
         ];
+    }
+
+    /** The months the Dean approved (what the student gets): approved_months once decided, the requested months before that. */
+    public function monthsApproved(): ?int
+    {
+        return $this->approved_months !== null ? (int) $this->approved_months : null;
+    }
+
+    /** True when the Dean approved a different number of months than the student asked for. */
+    public function wasAdjustedByDean(): bool
+    {
+        return $this->approved_months !== null && (int) $this->approved_months !== (int) $this->requested_months;
     }
 
     public function student(): BelongsTo

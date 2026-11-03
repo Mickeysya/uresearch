@@ -37,7 +37,7 @@ class CandidacyRejectionConfirmTest extends TestCase
         $this->assertStringContainsString('No further appeal can be submitted for this candidacy.', $text);
         $this->assertStringContainsString('The expiry date stays at 31 Jan 2027.', $text);
         $this->assertStringContainsString('The student can still submit the Softbound thesis before 31 Jan 2027. If no Softbound is submitted by then, the student becomes a dismissal candidate for CGS to review.', $text);
-        $this->assertStringContainsString('The student, the Supervisor, the Department Chair and CGS are notified by e-mail and bell.', $text);
+        $this->assertStringContainsString('The student, the Supervisor / Programme Manager, the Department Chair and CGS are notified by e-mail and bell.', $text);
         $this->assertStringContainsString('data-confirm-close', $dlg[0]);
         $this->assertStringContainsString('is-danger', $dlg[0]);
         $this->assertLessThan(strpos($dlg[0], 'Confirm rejection</button>'), strpos($dlg[0], 'Discard</button>'), 'Discard comes first');

@@ -4,7 +4,7 @@ Each `## cand_...` section is what a student is told. Nothing here mentions page
 
 ## cand_see_all_appeals
 
-Your appeals are on My Candidacy: open Track My Applications > My Candidacy and look at the My Appeals table. It lists every appeal you have made, each with its
+Your appeals are on My Study Candidacy: open Track My Applications > My Study Candidacy and look at the My Appeals table. It lists every appeal you have made, each with its
 number, status and who has it now. You can only see your own appeals.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -12,10 +12,10 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_when_how_appeal
 
 To ask for more time:
-1. Open Track My Applications > My Candidacy and press Submit an Appeal (shown only when you may appeal).
-2. Step 1 Department and supervisor: choose your supervisor. Step 2 Research and extension: Section A Research progress, B Earlier extensions, C Publications, D Extension requested (the months, from 1 up to what you have left).
+1. Open Track My Applications > My Study Candidacy and press Submit an Appeal (shown only when you may appeal).
+2. Step 1 Department and Supervisor / Programme Manager: your department, programme, Supervisor / Programme Manager, Department Chair and Dean of PGR are shown for information. They come from your student record and you cannot change them. If your Supervisor / Programme Manager is not recorded yet, you cannot start an appeal: contact CGS. Step 2 Research and extension: Section A Research progress, B Earlier extensions, C Publications, D Extension requested (the months, from 1 up to what you have left).
 3. Step 3 Documents: upload the official appeal form (.xlsx, required) and any supporting files. Step 4 Review and submit.
-4. It goes to your Supervisor, the Department Chair, CGS Verification and the Dean. You cannot withdraw it after you submit.
+4. It goes to your Supervisor / Programme Manager, the Department Chair, CGS Verification and the Dean. You cannot withdraw it after you submit.
 Do it on or before your expiry date. The Handbook says the application is made to CGS on the recommendation of the supervisor or the Chair of Department (section 2.1.1, p.8).
 
 Source: UResearch Study Candidacy design (confirmed with CGS); Postgraduate Student Handbook 2025, section 2.1.1, p.8.
@@ -31,14 +31,14 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_approval_route
 
-Your appeal goes Supervisor, Department Chair, CGS Verification, Dean. At each step it is approved (moves on) or returned to you with reasons. Only the Dean can
-reject, and that is final. Open the appeal from My Candidacy to see which step it is at. You are told by e-mail and bell at each decision.
+Your appeal goes Supervisor / Programme Manager, Department Chair, CGS Verification, Dean. At each step it is approved (moves on) or returned to you with reasons. Only the Dean can
+reject, and that is final. Open the appeal from My Study Candidacy to see which step it is at. You are told by e-mail and bell at each decision.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_after_return_rejection
 
-If it is returned: open the appeal from My Candidacy, read the reasons, press Edit and resubmit, fix what was asked and resubmit before your expiry date. It goes
+If it is returned: open the appeal from My Study Candidacy, read the reasons, press Edit and resubmit, fix what was asked and resubmit before your expiry date. It goes
 back to the step that returned it (after a Dean return, CGS checks first). If you do not resubmit before the expiry date it is closed as expired.
 If the Dean rejects it: that is final, no further appeal can be submitted and your expiry date stays. You can still submit your Softbound thesis before the expiry date.
 
@@ -47,7 +47,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_return_reasons
 
 An approver returns an appeal with at least one reason. Typical reasons: unclear or insufficient justification, research progress not demonstrated, publication
-list incomplete, RCS status or date missing, requested duration not justified, wrong supervisor or department, supporting documents missing, appeal form missing or
+list incomplete, RCS status or date missing, requested duration not justified, wrong Supervisor / Programme Manager or department, supporting documents missing, appeal form missing or
 wrong version, information inconsistent with records, clarification needed. "Other" comes with a written remark. Your own reasons are on the appeal page (ask
 "Why was my appeal returned?").
 
@@ -62,14 +62,14 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_resubmit
 
-After a return, open the appeal from My Candidacy and press Edit and resubmit. Correct the form or documents, then resubmit before your expiry date. It goes back
+After a return, open the appeal from My Study Candidacy and press Edit and resubmit. Correct the form or documents, then resubmit before your expiry date. It goes back
 to the step that returned it. You can resubmit only while the appeal is returned.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_after_approval
 
-When the Dean approves: your expiry date is recalculated (the approved months are added), your remaining extension months go down, and the memo "Memo - Appeal for
+When the Dean approves: the Dean may approve a different number of months than you asked for (anything from 1 up to the extension months you have left), and the e-mail and the memo then show "Requested: X month(s). Approved: Y month(s)." Your expiry date is recalculated (the approved months are added), your remaining extension months go down, and the memo "Memo - Appeal for
 Extension" is e-mailed to you. You can also press Download memo on the appeal page. Reminders restart for the new expiry date.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).

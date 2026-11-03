@@ -105,6 +105,8 @@ class CandidacyDemoSeed extends Command
 
         $this->seedOverlay();
         $this->seedDismissalCases($signatures, $memos);
+        // every demo student (and every real account) gets a Supervisor / Programme Manager on record; a student with a seeded appeal keeps the person it was routed to
+        $this->call('candidacy:backfill-supervisors');
         $this->info("Demo appeals created this run: {$this->created}. Demo appeals now: ".CandidacyAppeal::where('is_demo', true)->count().'.');
 
         return self::SUCCESS;

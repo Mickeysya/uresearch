@@ -4,7 +4,7 @@ Each `## cand_...` section is what CGS staff are told. A CGS user can read every
 
 ## cand_see_all_appeals
 
-Open Candidacy Management > Operations. It lists every appeal, with the cards (In Progress, Returned, Approved, Rejected), the tabs, and the filters Search, Department,
+Open Study Candidacy Management > Operations. It lists every appeal, with the cards (In Progress, Returned, Approved, Rejected), the tabs, and the filters Search, Department,
 Status, Current Step, Months Requested, Waiting At Least and Round; each row opens the appeal read-only. The Approval Portal also has a "View all appeals" link to
 the same list. The Approval Portal itself shows only the appeals waiting at your CGS Verification step (Pending my action) and the ones you decided (Decided by me).
 
@@ -20,7 +20,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_approver_rules
 
-At CGS Verification you can Verify or Return to student. Supervisor and Department Chair approve or return; the Dean approves, returns or rejects (final, with a
+At CGS Verification you can Verify or Return to student. Supervisor / Programme Manager and Department Chair approve or return; the Dean approves, returns or rejects (final, with a
 second confirmation). CGS reads every appeal on Operations but decides only at its own step.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -34,9 +34,9 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_when_how_appeal
 
-Students ask for more time with Submit an Appeal on My Candidacy: Step 1 Department and supervisor, Step 2 Research and extension (Sections A to D), Step 3
+Students ask for more time with Submit an Appeal on My Study Candidacy: Step 1 Department and Supervisor / Programme Manager (read-only, from the student record), Step 2 Research and extension (Sections A to D), Step 3
 Documents, Step 4 Review and submit. It must be submitted on or before the expiry date, and the total extension is at most {{cand_max_extension_months}} months. The
-appeal then goes Supervisor, Department Chair, CGS Verification, Dean.
+appeal then goes Supervisor / Programme Manager, Department Chair, CGS Verification, Dean.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
@@ -50,7 +50,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_approval_route
 
-Student, Supervisor, Department Chair, CGS Verification (your step), Dean. A return goes to the student and, after resubmission, back to the step that returned it; after a
+Student, Supervisor / Programme Manager, Department Chair, CGS Verification (your step), Dean. A return goes to the student and, after resubmission, back to the step that returned it; after a
 Dean return it comes to CGS first. Only the Dean can reject, and that is final. Appeals not resubmitted by the expiry date are closed as expired at 07:30.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -85,7 +85,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_after_approval
 
-When the Dean approves, the expiry date is recalculated and the memo is e-mailed to the student. The memo file is named `<appeal no>_<Student Name>_<Student ID>_Memo -
+When the Dean approves, the expiry date is recalculated from the months the Dean approved (they may differ from the months requested; the Dean's reason for a change is visible to approvers and CGS on the appeal page and in the history, not to the student, and Operations shows both Months Requested and Months Approved) and the memo is e-mailed to the student. The memo file is named `<appeal no>_<Student Name>_<Student ID>_Memo -
 Appeal for Extension.pdf` and can be downloaded from the appeal page.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -128,7 +128,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_cgs_operations_guide
 
-Candidacy Management > Operations: the cards (In Progress, Returned, Approved, Rejected) filter the list when clicked, and the tabs split it the same way. Narrow it with
+Study Candidacy Management > Operations: the cards (In Progress, Returned, Approved, Rejected) filter the list when clicked, and the tabs split it the same way. Narrow it with
 Search (appeal number, student name or ID), Department, Status, Current Step, Months Requested, Waiting At Least and Round. Each row opens the appeal read-only. The
 page refreshes by itself every 15 seconds (Pause updates stops it). Not available yet: Excel export of the Operations list.
 
@@ -136,7 +136,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_cgs_insights_guide
 
-Candidacy Insights is operational monitoring from the known expiry dates: the forecast is a projection, not a prediction. The population is research students whose
+Study Candidacy Insights is operational monitoring from the known expiry dates: the forecast is a projection, not a prediction. The population is research students whose
 expiry date has not passed and who are not dismissed, completed or inactive. Status categories, in priority order: Softbound submitted, Appeal in review, Appeal
 returned, No action yet (high risk). Bands: up to 1 month, 1 to 2 months, 2 to 3 months. Clicking a bar highlights it in every chart and the student list.
 
@@ -144,7 +144,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_cgs_dismissal_list_guide
 
-Candidacy Management > Dismissal List shows a student when today is after the expiry date and: no Softbound is submitted, no appeal is in review, the student is not
+Study Candidacy Management > Dismissal List shows a student when today is after the expiry date and: no Softbound is submitted, no appeal is in review, the student is not
 completed, inactive or already dismissed, and the programme is research. A student leaves the list when dismissed; students the Registry did not confirm stay on it.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -166,7 +166,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_cgs_process_summary
 
-1. Students appeal on or before the expiry date: Supervisor, Department Chair, CGS Verification, Dean; maximum {{cand_max_extension_months}} months in total; a Dean rejection is final.
+1. Students appeal on or before the expiry date: Supervisor / Programme Manager, Department Chair, CGS Verification, Dean; maximum {{cand_max_extension_months}} months in total; a Dean rejection is final.
 2. After approval the expiry date is recalculated and the memo is e-mailed.
 3. Reminders at 3, 2 and 1 month; they stop at Softbound submission.
 4. After expiry with no Softbound and no appeal in review the student is on the Dismissal List; CGS exports it, the Registry processes it, CGS uploads the result.

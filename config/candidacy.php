@@ -182,7 +182,7 @@ return [
     ],
 
     // E-mail wording. Placeholders: {{student_name}} {{appeal_no}} {{stage}} {{decision}} {{reasons}} {{remarks}}
-    // {{requested_months}} {{approved_months}} {{new_expiry_date}} {{expiry_date}} {{link}}. The subject always starts with the appeal number.
+    // {{requested_months}} {{approved_months}} {{approved_line}} {{approved_summary}} {{new_expiry_date}} {{expiry_date}} {{link}}. The subject always starts with the appeal number.
     'mail' => [
         'turn' => [
             'subject' => '{{appeal_no}}: appeal pending your action ({{stage}})',
@@ -249,21 +249,21 @@ return [
         ],
         'final_student' => [
             'subject' => '{{appeal_no}}: your appeal was approved',
-            'title' => 'Your appeal {{appeal_no}} was approved: {{approved_months}} month(s), new expiry {{new_expiry_date}}.',
+            'title' => 'Your appeal {{appeal_no}} was approved: {{approved_summary}}, new expiry {{new_expiry_date}}.',
             'lines' => [
                 'Dear {{student_name}},',
                 'Your Study Candidacy Appeal {{appeal_no}} has been approved by the Dean of Postgraduate and Research.',
-                'Approved extension: **{{approved_months}} month(s)**',
+                '{{approved_line}}',
                 'New candidacy expiry date: **{{new_expiry_date}}**',
                 'The approved memo is attached to this e-mail and is available from the appeal page: {{link}}',
             ],
         ],
         'final_info' => [
             'subject' => '{{appeal_no}}: the appeal was approved',
-            'title' => 'Appeal {{appeal_no}} was approved: {{approved_months}} month(s), new expiry {{new_expiry_date}}.',
+            'title' => 'Appeal {{appeal_no}} was approved: {{approved_summary}}, new expiry {{new_expiry_date}}.',
             'lines' => [
                 'Dear colleague,',
-                'The Study Candidacy Appeal {{appeal_no}} of {{student_name}} was approved by the Dean: {{approved_months}} month(s), new expiry date {{new_expiry_date}}.',
+                'The Study Candidacy Appeal {{appeal_no}} of {{student_name}} was approved by the Dean: {{approved_summary}}, new expiry date {{new_expiry_date}}.',
                 'Details: {{link}}',
             ],
         ],

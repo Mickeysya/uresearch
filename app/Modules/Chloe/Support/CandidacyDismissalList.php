@@ -77,7 +77,7 @@ final class CandidacyDismissalList
         }
 
         if ($today->toDateString() <= $s['expiry']->toDateString()) {
-            return $no('not_expired', 'Candidacy not expired yet (expires '.$s['expiry']->format('j M Y').')');
+            return $no('not_expired', 'Study Candidacy not expired yet (expires '.$s['expiry']->format('j M Y').')');
         }
 
         foreach (['softbound' => [$status->softboundSubmitted, 'Softbound submitted'], 'completed' => [$status->completed, 'Completed'], 'inactive' => [$status->inactive, 'Inactive or deferred']] as $code => [$hit, $why]) {

@@ -224,7 +224,7 @@ class CandidacyReminderEngineTest extends TestCase
         $text = implode("\n", $mail->introLines).' '.implode("\n", $mail->outroLines);
 
         $this->assertSame('A', $n->variant);
-        $this->assertSame('Candidacy expiry reminder: 2 month(s) left (expires 31 May 2027)', $mail->subject);
+        $this->assertSame('Study Candidacy expiry reminder: 2 month(s) left (expires 31 May 2027)', $mail->subject);
         $this->assertSame('Dear Ahmad Danial,', $mail->greeting);
         $this->assertStringContainsString('Your candidacy period ends on 31 May 2027 (2 month(s) from now). Before that date you can:', $text);
         $this->assertStringContainsString('1) Submit your soft-bound thesis (the candidacy period ends at Softbound submission).', $text);
@@ -244,7 +244,7 @@ class CandidacyReminderEngineTest extends TestCase
         $text = implode("\n", $n->toMail($this->student)->introLines);
 
         $this->assertSame('B', $n->variant);
-        $this->assertSame('Candidacy expiry reminder: 1 month(s) left (expires 31 May 2027)', $n->subject());
+        $this->assertSame('Study Candidacy expiry reminder: 1 month(s) left (expires 31 May 2027)', $n->subject());
         $this->assertStringContainsString('2) No further extension appeal can be submitted for this candidacy (the 12-month extension allowance has been used). Please submit your soft-bound thesis on or before 31 May 2027.', $text);
         $this->assertStringNotContainsString('Apply for an extension', $text);
 
@@ -267,7 +267,7 @@ class CandidacyReminderEngineTest extends TestCase
 
         $this->assertSame('C', $n->variant);
         $this->assertSame('Action needed: your extension appeal was returned (candidacy expires 31 May 2027)', $mail->subject);
-        $this->assertStringContainsString("Your extension appeal {$appeal->appeal_no} was returned to you at the Lecturer/Supervisor step.", $text);
+        $this->assertStringContainsString("Your extension appeal {$appeal->appeal_no} was returned to you at the Supervisor / Programme Manager step.", $text);
         $this->assertStringContainsString('Supporting documents missing', $text);
         $this->assertStringContainsString('Add the transcript.', $text);
         $this->assertStringContainsString('resubmit it on or before 31 May 2027', $text);
@@ -282,7 +282,7 @@ class CandidacyReminderEngineTest extends TestCase
 
         $this->assertSame(['mail', 'database'], $n->via($this->student));
         $bell = $n->toArray($this->student);
-        $this->assertSame('Candidacy expiry reminder: 3 month(s) left (expires 31 May 2027)', $bell['title']);
+        $this->assertSame('Study Candidacy expiry reminder: 3 month(s) left (expires 31 May 2027)', $bell['title']);
         $this->assertSame(route('candidacy.status'), $bell['url']);
         $this->assertSame(['mail'], $n->via(new \Illuminate\Notifications\AnonymousNotifiable));
     }

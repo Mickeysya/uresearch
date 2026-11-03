@@ -351,12 +351,12 @@ final class CandidacyLookups
     {
         $n = Ops::counts(Ops::filters([]))['in_progress'];
 
-        return self::done(self::plural($n, 'appeal is', 'appeals are').' in progress (with the Supervisor, Department Chair, CGS or Dean).', [self::link('Operations', 'candidacy.cgs.operations', ['group' => 'in_progress'])], $n);
+        return self::done(self::plural($n, 'appeal is', 'appeals are').' in progress (with the Supervisor / Programme Manager, Department Chair, CGS or Dean).', [self::link('Operations', 'candidacy.cgs.operations', ['group' => 'in_progress'])], $n);
     }
 
     protected static function cgsPendingByStep(User $user, array $p): array
     {
-        $steps = ['with_supervisor' => 'Supervisor', 'with_chair' => 'Department Chair', 'with_cgs' => 'CGS verification', 'with_dean' => 'Dean'];
+        $steps = ['with_supervisor' => 'Supervisor / Programme Manager', 'with_chair' => 'Department Chair', 'with_cgs' => 'CGS verification', 'with_dean' => 'Dean'];
         $lines = [];
         $total = 0;
 
@@ -406,7 +406,7 @@ final class CandidacyLookups
 
     protected static function cgsAverageWaiting(User $user, array $p): array
     {
-        $steps = ['with_supervisor' => 'Supervisor', 'with_chair' => 'Department Chair', 'with_cgs' => 'CGS verification', 'with_dean' => 'Dean'];
+        $steps = ['with_supervisor' => 'Supervisor / Programme Manager', 'with_chair' => 'Department Chair', 'with_cgs' => 'CGS verification', 'with_dean' => 'Dean'];
         $lines = [];
 
         foreach ($steps as $status => $label) {
@@ -426,7 +426,7 @@ final class CandidacyLookups
             ? 'Students whose candidacy expires within '.self::plural($asked, 'month', 'months').': '.$within($asked).'.'
             : 'Students whose candidacy expires within 1 month: '.$within(1).'; within 2 months: '.$within(2).'; within 3 months: '.$within(3).'.';
 
-        return self::done($text.' (Research students with an active candidacy.)', [self::link('Candidacy Insights', 'candidacy.cgs.insights')], $within($asked ?? 3));
+        return self::done($text.' (Research students with an active candidacy.)', [self::link('Study Candidacy Insights', 'candidacy.cgs.insights')], $within($asked ?? 3));
     }
 
     protected static function cgsNoAction(User $user, array $p): array
@@ -434,7 +434,7 @@ final class CandidacyLookups
         $summary = Stats::summary(Stats::population());
         $none = array_sum(array_column($summary['bands'], 'none'));
 
-        return self::done("Of the {$summary['within3']} students expiring within 3 months, {$none} have taken no action yet (no Softbound, no appeal in review and no returned appeal).", [self::link('Candidacy Insights', 'candidacy.cgs.insights')], $none);
+        return self::done("Of the {$summary['within3']} students expiring within 3 months, {$none} have taken no action yet (no Softbound, no appeal in review and no returned appeal).", [self::link('Study Candidacy Insights', 'candidacy.cgs.insights')], $none);
     }
 
     protected static function cgsTwelve(User $user, array $p): array
@@ -442,7 +442,7 @@ final class CandidacyLookups
         $max = (int) config('candidacy.max_extension_months', 12);
         $n = Stats::population()->filter(fn ($r) => $r['monthsUsed'] >= $max)->count();
 
-        return self::done(self::plural($n, 'student has', 'students have')." used all {$max} of {$max} months of extension, so no further appeal is possible.", [self::link('Candidacy Insights', 'candidacy.cgs.insights')], $n);
+        return self::done(self::plural($n, 'student has', 'students have')." used all {$max} of {$max} months of extension, so no further appeal is possible.", [self::link('Study Candidacy Insights', 'candidacy.cgs.insights')], $n);
     }
 
     protected static function cgsByDepartment(User $user, array $p): array
@@ -470,7 +470,7 @@ final class CandidacyLookups
             ? 'Reminders sent '.self::WINDOWS[$w].': '.self::reminderCount($w).'.'
             : 'Reminders sent this month: '.self::reminderCount('this_month').'; last month: '.self::reminderCount('last_month').'.';
 
-        return self::done($text, [self::link('Candidacy Insights', 'candidacy.cgs.insights')], self::reminderCount($w ?? 'this_month'));
+        return self::done($text, [self::link('Study Candidacy Insights', 'candidacy.cgs.insights')], self::reminderCount($w ?? 'this_month'));
     }
 
     protected static function cgsReminderResponse(User $user, array $p): array
@@ -480,7 +480,7 @@ final class CandidacyLookups
 
         return self::done($rows->isEmpty()
             ? 'No reminders were sent in the last six months.'
-            : "{$answered} of {$rows->count()} reminders (".round(100 * $answered / $rows->count()).'%) were followed by a Softbound submission or an appeal within 30 days (last six months and this month).', [self::link('Candidacy Insights', 'candidacy.cgs.insights')], $rows->count());
+            : "{$answered} of {$rows->count()} reminders (".round(100 * $answered / $rows->count()).'%) were followed by a Softbound submission or an appeal within 30 days (last six months and this month).', [self::link('Study Candidacy Insights', 'candidacy.cgs.insights')], $rows->count());
     }
 
     protected static function cgsDismissalCandidates(User $user, array $p): array

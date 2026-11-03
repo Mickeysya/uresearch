@@ -86,6 +86,29 @@
         if (e.target.closest('[data-modal-close]') || (e.target.classList && e.target.classList.contains('wca-modal'))) { closeModals(); }
     });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (openConfirms().length) { closeConfirms(); } else { closeModals(); } } });
+    // ---- the Dean's approved months: a different number than requested needs a reason; the new expiry date follows the choice
+    function addMonths(iso, n) {
+        var p = iso.split('-'), y = +p[0], m = +p[1] - 1 + n, d = +p[2];
+        var last = new Date(Date.UTC(y + Math.floor(m / 12), (m % 12 + 12) % 12 + 1, 0)).getUTCDate();
+        return new Date(Date.UTC(y + Math.floor(m / 12), (m % 12 + 12) % 12, Math.min(d, last)));
+    }
+    function syncApprovedMonths(sel) {
+        var field = document.getElementById('wca-adjust-field'), out = document.getElementById('wca-approved-expiry');
+        if (field) { field.classList.toggle('wca-hidden', +sel.value === +sel.getAttribute('data-requested')); }
+        if (out && sel.getAttribute('data-base-expiry')) {
+            var dt = addMonths(sel.getAttribute('data-base-expiry'), +sel.value);
+            out.textContent = dt.getUTCDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getUTCMonth()] + ' ' + dt.getUTCFullYear();
+        }
+    }
+    document.addEventListener('change', function (e) {
+        if (e.target.id === 'wca-approved-months') { syncApprovedMonths(e.target); }
+    });
+    document.addEventListener('submit', function (e) {
+        var sel = e.target.querySelector && e.target.querySelector('#wca-approved-months');
+        if (!sel || +sel.value === +sel.getAttribute('data-requested')) { return; }
+        var reason = e.target.querySelector('#wca-adjust-reason');
+        if (reason && reason.value.trim().length < 5) { e.preventDefault(); var field = document.getElementById('wca-adjust-field'); if (field) { field.classList.remove('wca-hidden'); } reason.focus(); reason.setAttribute('aria-invalid', 'true'); }
+    });
     document.addEventListener('change', function (e) {
         var other = e.target.closest('input[value="other"]');
         if (other) { var need = $('[data-remark-need]', other.closest('form')); if (need) { need.classList.toggle('wca-hidden', !other.checked); } }

@@ -70,7 +70,10 @@
     <h3 id="wca-h-d">Section D: Extension requested</h3>
     <div class="wca-field">
         <label for="wca-months">Months requested (1 to {{ $remaining }})</label>
-        <input id="wca-months" name="requested_months" class="wca-input" type="number" min="1" max="{{ max(1, $remaining) }}" value="{{ $v('requested_months') }}">
+        <select id="wca-months" name="requested_months" class="wca-select">
+            <option value="">Choose the number of months</option>
+            @for ($m = 1; $m <= $remaining; $m++)<option value="{{ $m }}" @selected((int) $v('requested_months') === $m)>{{ $m }} month(s)</option>@endfor
+        </select>
         <p class="wca-muted wca-small">You have {{ $remaining }} month(s) of allowance left.</p>
         @error('requested_months')<p class="wca-error">{{ $message }}</p>@enderror
     </div>

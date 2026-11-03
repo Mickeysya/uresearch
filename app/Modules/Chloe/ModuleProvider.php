@@ -7,6 +7,7 @@ use App\Modules\Chloe\Assistant\FakeModel;
 use App\Modules\Chloe\Assistant\GeminiModel;
 use App\Modules\Chloe\Console\Commands\AssistantAsk;
 use App\Modules\Chloe\Console\Commands\BackfillCandidacyAppeals;
+use App\Modules\Chloe\Console\Commands\BackfillCandidacySupervisors;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoClear;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoRegistryFile;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoSeed;
@@ -122,6 +123,7 @@ class ModuleProvider extends ServiceProvider
                 AssistantCheck::class,
                 AssistantCatalogue::class,
                 BackfillCandidacyAppeals::class,
+                BackfillCandidacySupervisors::class,
                 CheckCandidacyAllowance::class,
                 CloseExpiredCandidacyAppeals::class,
                 CandidacyDemoSeed::class,

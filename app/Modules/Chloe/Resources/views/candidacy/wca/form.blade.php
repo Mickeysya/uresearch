@@ -5,7 +5,7 @@
 @include('chloe::candidacy.wca._assets')
 
 @php
-    $steps = [1 => 'Department and supervisor', 2 => 'Research and extension', 3 => 'Documents', 4 => 'Review and submit'];
+    $steps = [1 => 'Department and Supervisor / Programme Manager', 2 => 'Research and extension', 3 => 'Documents', 4 => 'Review and submit'];
 @endphp
 
 @section('content')

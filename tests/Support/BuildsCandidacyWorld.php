@@ -8,6 +8,7 @@ use App\Modules\Chloe\Models\CandidacyAppealEvent;
 use App\Modules\Chloe\Models\CandidacyDepartment;
 use App\Modules\Chloe\Models\CandidacyStaffAssignment;
 use App\Modules\Chloe\Models\CandidacyStaffProfile;
+use App\Modules\Chloe\Models\CandidacyStudentSupervisor;
 use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Chloe\Notifications\CandidacyAppealNotice;
 use App\Modules\Chloe\Services\CandidacyAppealService;
@@ -65,12 +66,20 @@ trait BuildsCandidacyWorld
             'student_id' => $this->student->id, 'department_id' => $dept->id, 'programme_start_date' => '2024-01-10',
             'candidacy_expiry_date' => '2027-01-31', 'original_expiry_date' => '2027-01-31', 'status' => StudyCandidacy::STATUS_ACTIVE,
         ]);
+
+        // fixed at enrolment: the student does not choose a Supervisor / Programme Manager (round 4)
+        $this->recordSupervisor($this->student, $this->profile($this->lecturer));
     }
 
     protected function tearDown(): void
     {
         Carbon::setTestNow();
         parent::tearDown();
+    }
+
+    protected function recordSupervisor(User $student, CandidacyStaffProfile $profile): void
+    {
+        CandidacyStudentSupervisor::updateOrCreate(['student_id' => $student->id], ['staff_profile_id' => $profile->id, 'kind' => CandidacyStudentSupervisor::KIND_SUPERVISOR]);
     }
 
     protected function service_signatures(): CandidacySignatureService

@@ -1,4 +1,4 @@
-# Study Candidacy: answers for approvers (Supervisor, Department Chair, Dean)
+# Study Candidacy: answers for approvers (Supervisor / Programme Manager, Department Chair, Dean)
 
 Each `## cand_...` section is what an approver is told. Students' pages and CGS pages are not described here.
 
@@ -12,8 +12,8 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_how_decide
 
 Open the Approval Portal, press Review on an appeal in Pending my action, read it, then:
-• Supervisor and Department Chair: Approve (it moves on) or Return to student (at least one reason; "Other" needs a remark).
-• Dean: Approve, Return to student, or Reject (final). Reject needs a reason and a second confirmation (Confirm rejection).
+• Supervisor / Programme Manager and Department Chair: Approve (it moves on) or Return to student (at least one reason; "Other" needs a remark).
+• Dean: Approve, Return to student, or Reject (final). Reject needs a reason and a second confirmation (Confirm rejection). When approving, the Dean chooses the months to approve from a list that runs from 1 to the student's remaining allowance, with the requested months preselected. A different number needs a short reason; the reason is shown to approvers and CGS on the appeal page and in the history, never to the student and not on the memo.
 You must have a signature saved on My Signature before you can approve.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -21,7 +21,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_approver_rules
 
 • You act only on appeals Pending my action, and see only appeals named on you.
-• Supervisor and Department Chair: Approve or Return. Dean: Approve, Return or Reject (final).
+• Supervisor / Programme Manager and Department Chair: Approve or Return. Dean: Approve, Return or Reject (final).
 • A return needs at least one reason; "Other" needs a remark.
 • A signature is required to approve (My Signature).
 • After a Dean return, CGS re-checks before it comes back to the Dean.
@@ -31,13 +31,13 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_my_signature
 
 Open My Signature (the link on the Approval Portal), upload a PNG or JPEG of your signature (up to 1 MB) and press Save signature; Remove my signature takes it
-away. Your signature is stamped on your decisions and on the approval memo. Supervisors, Department Chairs and the Dean must have one to approve.
+away. Your signature is stamped on your decisions and on the approval memo. Supervisors / Programme Managers, Department Chairs and the Dean must have one to approve.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_approval_route
 
-An appeal goes Student, Supervisor, Department Chair, CGS Verification, Dean. Your step sees it only when it is your turn. Each step approves it or returns it to the
+An appeal goes Student, Supervisor / Programme Manager, Department Chair, CGS Verification, Dean. Your step sees it only when it is your turn. Each step approves it or returns it to the
 student; only the Dean can reject. After the student resubmits a returned appeal it comes back to the step that returned it.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -51,8 +51,8 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_return_reasons
 
-Supervisor and Department Chair reasons: unclear or insufficient justification, research progress not demonstrated, publication list incomplete, RCS status or
-date missing, requested duration not justified, wrong supervisor or department, supporting documents missing, other. Dean return reasons: clarification needed,
+Supervisor / Programme Manager and Department Chair reasons: unclear or insufficient justification, research progress not demonstrated, publication list incomplete, RCS status or
+date missing, requested duration not justified, wrong Supervisor / Programme Manager or department, supporting documents missing, other. Dean return reasons: clarification needed,
 supporting documents insufficient, justification insufficient, other. Dean reject reasons: progress insufficient, completion plan not realistic, documents
 insufficient or invalid, reason for delay not acceptable, previous extension not used as planned, other (remark required).
 
@@ -99,7 +99,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_after_approval
 
-After the Dean approves, the student's expiry date is recalculated and the memo "Memo - Appeal for Extension" is e-mailed to the student; it carries the signatures of
+After the Dean approves (for the months the Dean chose, which may differ from the months requested), the student's expiry date is recalculated and the memo "Memo - Appeal for Extension" is e-mailed to the student; it carries the signatures of
 the approvers. The appeal moves to History.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).

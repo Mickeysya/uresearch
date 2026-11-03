@@ -6,25 +6,25 @@ without an id are background for the team and are never shown. Role-specific ans
 
 ## Users and roles
 
-Students (research and coursework). Approvers: Supervisor, Department Chair, Dean of Postgraduate and Research. CGS (Centre for Graduate Studies) staff, who also
+Students (research and coursework). Approvers: Supervisor / Programme Manager, Department Chair, Dean of Postgraduate and Research. CGS (Centre for Graduate Studies) staff, who also
 verify appeals. Registry staff work outside the system.
 
 ## Student pages
 
-My Candidacy (Track My Applications > My Candidacy, page title "My Study Candidacy"): expiry date, extension months used and left, My Appeals table, and the
-"Submit an Appeal" button when allowed. New Appeal has 4 steps: 1 Department and supervisor; 2 Research and extension (Section A Research progress, B Earlier
+My Study Candidacy (Track My Applications > My Study Candidacy, page title "My Study Candidacy"): expiry date, extension months used and left, My Appeals table, and the
+"Submit an Appeal" button when allowed. New Appeal has 4 steps: 1 Department and Supervisor / Programme Manager (read-only, from the student record); 2 Research and extension (Section A Research progress, B Earlier
 extensions, C Publications, D Extension requested); 3 Documents (official appeal form .xlsx, up to 4 supporting files); 4 Review and submit. Appeal number SCA-<student ID>-<NN>.
 
 ## Approval route
 
-Student, Supervisor, Department Chair, CGS Verification, Dean. Return needs at least one reason ("Other" needs a remark). A return goes to the student and, after
+Student, Supervisor / Programme Manager, Department Chair, CGS Verification, Dean. Return needs at least one reason ("Other" needs a remark). A return goes to the student and, after
 resubmission, back to the step that returned it; after a Dean return CGS re-checks first. A Dean rejection is final and needs a second confirmation. An appeal
 that stays returned past the expiry date is closed as expired (daily 07:30).
 
 ## Approval Portal
 
 Tabs Pending my action, Ongoing, History (CGS: Pending my action and Decided by me, plus a "View all appeals" link to Operations). Filters: Search, Department,
-Months Requested, Waiting At Least, Round. Waiting-days dot: grey under 5 days, amber 5 to 9, red 10 or more. Supervisor, Department Chair and Dean must have a
+Months Requested, Waiting At Least, Round. Waiting-days dot: grey under 5 days, amber 5 to 9, red 10 or more. Supervisor / Programme Manager, Department Chair and Dean must have a
 signature (My Signature) before approving; signatures are stamped on decisions and the memo.
 
 ## Memo
@@ -34,14 +34,14 @@ After Dean approval the memo "Memo - Appeal for Extension" is e-mailed to the st
 
 ## CGS pages and reminders
 
-Candidacy Management: Operations, Insights, Dismissal List, Dismissal Upload. Reminders go to research students 3, 2 and 1 month before the expiry date at 08:00
+Study Candidacy Management: Operations, Insights, Dismissal List, Dismissal Upload. Reminders go to research students 3, 2 and 1 month before the expiry date at 08:00
 (command candidacy:send-reminders) and stop or pause as described in the reminders answer. Not available yet: Excel export of the Operations list, a reminder
 log page, 3-day and 1-day urgent reminders, a CGS page to change an expiry date by hand. Softbound status comes from demo data for now. Expiry changes for
 deferment, change of mode and change of programme are approved by the Registrar and updated by CGS.
 
 ## cand_approval_route
 
-An appeal goes in this order: Student, Supervisor, Department Chair, CGS Verification, Dean of Postgraduate and Research. Each step approves it (it moves on) or
+An appeal goes in this order: Student, Supervisor / Programme Manager, Department Chair, CGS Verification, Dean of Postgraduate and Research. Each step approves it (it moves on) or
 returns it to the student with a reason. Only the Dean can reject, and a rejection is final.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -49,7 +49,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_status_meanings
 
 • Draft: started, not submitted yet.
-• With Supervisor, With Department Chair, With CGS, With Dean: waiting for that step.
+• With Supervisor / Programme Manager, With Department Chair, With CGS, With Dean: waiting for that step.
 • Returned: sent back to the student with reasons.
 • Approved: the Dean approved; the expiry date is recalculated and the memo is e-mailed.
 • Rejected (final): the Dean rejected it.
@@ -82,7 +82,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 • Submit on or before the expiry date (the expiry day is allowed).
 • Maximum extension {{cand_max_extension_months}} months in total.
 • One appeal at a time; no withdrawal after submission.
-• Route: Student, Supervisor, Department Chair, CGS Verification, Dean. Only the Dean can reject, and a rejection is final.
+• Route: Student, Supervisor / Programme Manager, Department Chair, CGS Verification, Dean. Only the Dean can reject, and a rejection is final.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 

@@ -33,7 +33,7 @@
 <body>
 @php
     $by = fn ($stage) => $approvals->get($stage);
-    $stageName = ['supervisor' => 'Lecturer/Supervisor', 'chair' => 'Department Chair', 'cgs' => 'CGS verification', 'dean' => 'Dean of Postgraduate and Research'];
+    $stageName = ['supervisor' => 'Supervisor / Programme Manager', 'chair' => 'Department Chair', 'cgs' => 'CGS verification', 'dean' => 'Dean of Postgraduate and Research'];
     $dean = $by('dean');
 @endphp
     <div class="logo">@if ($logo)<img src="{{ $logo }}" alt="Universiti Teknologi PETRONAS">@endif</div>
@@ -51,7 +51,7 @@
         <tr>
             <td class="label">Through</td><td class="sep">:</td>
             <td>
-                {{ $by('supervisor')?->full_name ?? $appeal->supervisorProfile?->full_name }} (Supervisor)
+                {{ $by('supervisor')?->full_name ?? $appeal->supervisorProfile?->full_name }} (Supervisor / Programme Manager)
                 @if ($by('supervisor'))<div class="stamp">@if ($signatures->get('supervisor'))<div class="sig"><img src="{{ $signatures->get('supervisor') }}" alt=""></div>@endif<div class="txt">{{ $stamp($by('supervisor')) }}</div></div>@endif
             </td>
         </tr>
@@ -59,7 +59,7 @@
         <tr><td class="label">Date</td><td class="sep">:</td><td>{{ $appeal->submitted_at?->copy()->setTimezone('Asia/Kuala_Lumpur')->format('j F Y') }} · Ref {{ $appeal->appeal_no }}</td></tr>
     </table>
 
-    <p class="subject">Appeal for Extension of Candidacy</p>
+    <p class="subject">Appeal for Extension of Study Candidacy</p>
 
     <div class="body">
         <p>Dear {{ $dean?->full_name ?? 'Sir/Madam' }},</p>
@@ -72,7 +72,7 @@
 
     @if ($dean)
         <div class="approved">
-            <div class="head">APPROVED: {{ $appeal->approved_months }} month(s). New candidacy expiry date: {{ $appeal->new_expiry_date?->format('j F Y') }}</div>
+            <div class="head">APPROVED: @if ($appeal->wasAdjustedByDean())Requested: {{ $appeal->requested_months }} month(s). Approved: {{ $appeal->approved_months }} month(s).@else{{ $appeal->approved_months }} month(s).@endif New candidacy expiry date: {{ $appeal->new_expiry_date?->format('j F Y') }}</div>
             @if ($signatures->get('dean'))<div class="sig"><img class="deansig" src="{{ $signatures->get('dean') }}" alt=""></div>@endif
             <div class="stamp"><div class="txt">{{ $stamp($dean) }}</div></div>
         </div>

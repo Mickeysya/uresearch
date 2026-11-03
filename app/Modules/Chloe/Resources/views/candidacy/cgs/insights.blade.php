@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'Candidacy Insights')
+@section('title', 'Study Candidacy Insights')
 
 @push('head')
     <link rel="stylesheet" href="{{ asset('css/chloe-candidacy.css') }}">
@@ -9,7 +9,7 @@
 
 @section('content')
     <div class="wsi-page" id="wsi-page">
-        <x-core::page-header title="Candidacy Insights" :back="route('candidacy.cgs.operations')" :back-history="false">
+        <x-core::page-header title="Study Candidacy Insights" :back="route('candidacy.cgs.operations')" :back-history="false">
             <a href="{{ route('candidacy.cgs.operations') }}"><button type="button">Home</button></a>
         </x-core::page-header>
 

@@ -47,7 +47,7 @@ class CandidacyExpiryReminder extends Notification implements ShouldQueue
     {
         return $this->variant === 'C'
             ? "Action needed: your extension appeal was returned (candidacy expires {$this->date()})"
-            : "Candidacy expiry reminder: {$this->months} month(s) left (expires {$this->date()})";
+            : "Study Candidacy expiry reminder: {$this->months} month(s) left (expires {$this->date()})";
     }
 
     public function link(): string

@@ -33,7 +33,7 @@ class CandidacyDismissed extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Study Candidacy — Candidacy Ended')
+            ->subject('Study Candidacy — Study Candidacy Ended')
             ->greeting('Dear '.$this->studentName.',')
             ->line(self::MESSAGE)
             ->salutation("Best regards,\nCentre for Graduate Studies (CGS)\nUniversiti Teknologi PETRONAS");

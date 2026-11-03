@@ -35,7 +35,7 @@ class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDeta
     public function stages(?Application $application = null): array
     {
         return [
-            new Stage('supervisor', 'Lecturer/Supervisor', Role::SUPERVISOR, 'endorsed'),
+            new Stage('supervisor', 'Supervisor / Programme Manager', Role::SUPERVISOR, 'endorsed'),
             new Stage('chair', 'Department Chair', Role::CHAIR, 'endorsed'),
             new Stage('cgs_verify', 'CGS Verification', Role::NON_EXEC_CGS, 'verified'),
             new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'approved'),
@@ -60,12 +60,12 @@ class CandidacyAppealWorkflow implements WorkflowModule, SuppliesApplicationDeta
         $links = [];
 
         if (in_array($user->role, array_diff((array) config('candidacy.cgs_roles'), [Role::NON_EXEC_CGS]), true)) {
-            $links[] = ['label' => 'Candidacy Appeals', 'route' => 'candidacy.portal.queue'];
+            $links[] = ['label' => 'Study Candidacy Appeals', 'route' => 'candidacy.portal.queue'];
         }
 
         if (in_array($user->role, (array) config('candidacy.cgs_roles'), true)) {
             // The shared CGS sidebar hard-codes Operations and Dismissal List; Insights is added here (Actions) until a line is added there.
-            $links[] = ['label' => 'Candidacy Insights', 'route' => 'candidacy.cgs.insights'];
+            $links[] = ['label' => 'Study Candidacy Insights', 'route' => 'candidacy.cgs.insights'];
         }
 
         if (in_array($user->role, array_merge(Role::cgsTeam(), [Role::REGISTRY]), true)) {

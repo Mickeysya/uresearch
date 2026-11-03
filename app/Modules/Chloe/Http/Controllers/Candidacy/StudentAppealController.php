@@ -121,6 +121,10 @@ class StudentAppealController extends Controller
 
         $department = CandidacyDepartmentResolver::forCandidacy($candidacy);
 
+        if ($step === 1 && ! CandidacyStaffDirectory::supervisorForStudent($user->id)) {
+            return back()->withErrors(['supervisor' => CandidacyAppealService::NO_SUPERVISOR_MESSAGE]);
+        }
+
         if ($step === 1 && ! $department) {
             return back()->withErrors(['department' => 'Your department could not be found in your student record, so the appeal cannot be submitted. Please contact the Centre for Graduate Studies.']);
         }
@@ -294,7 +298,8 @@ class StudentAppealController extends Controller
         return [
             'appeal' => $appeal, 'candidacy' => $candidacy, 'step' => $step, 'mode' => $mode,
             'department' => $department,
-            'lecturers' => $department ? CandidacyStaffDirectory::lecturers($department) : collect(),
+            'supervisor' => $appeal->student_id ? CandidacyStaffDirectory::supervisorForStudent($appeal->student_id) : null,
+            'programme' => $appeal->student?->programme,
             'chair' => $department ? CandidacyStaffDirectory::chair($department) : null,
             'dean' => CandidacyStaffDirectory::dean(),
             'remaining' => $candidacy?->remainingAppealMonths() ?? 0,
@@ -315,7 +320,6 @@ class StudentAppealController extends Controller
             return [
                 // the department is not a choice: a posted value that is not the student's own is refused (a tampered form)
                 'department_id' => ['nullable', 'integer', Rule::in([$departmentId])],
-                'supervisor_profile_id' => [$req, 'integer', Rule::exists('candidacy_staff_assignments', 'staff_profile_id')->where('department_id', $departmentId)->where('role', 'lecturer')],
             ];
         }
 
@@ -343,9 +347,7 @@ class StudentAppealController extends Controller
     protected function messages(): array
     {
         return [
-            'supervisor_profile_id.exists' => 'Pick a supervisor from the lecturers of your department.',
             'department_id.in' => 'Your department comes from your student record and cannot be changed.',
-            'supervisor_profile_id.required' => 'Choose your supervisor.',
             'requested_months.max' => 'You can request at most your remaining allowance (:max month(s)).',
             'reason.min' => 'Please give a reason of at least 20 characters.',
             'declaration.accepted' => 'Accept the declaration to continue.',

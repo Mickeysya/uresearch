@@ -101,62 +101,99 @@ class CandidacyDepartmentRosterTest extends TestCase
         return [$dept, $mk('Dr. Elsewhere Lecturer', 'lecturer'), $mk('Prof. Dr. Elsewhere Chair', 'chair')];
     }
 
-    public function test_step_one_lists_only_the_lecturers_of_the_students_department_sorted_by_name_without_chairs(): void
+    public function test_step_one_shows_the_recorded_supervisor_programme_manager_chair_and_dean_read_only(): void
     {
         [, $elsewhere] = $this->otherDepartment();
-        $dept = $this->candidacy->department;
-        foreach (['Prof. Dr. Zainal Abidin', 'Ir. Dr. Aminah Daud', 'Assoc. Prof. Dr. Lim Wei Ming'] as $n) {
-            $p = CandidacyStaffProfile::create(['full_name' => $n, 'designation' => 'Lecturer', 'department_id' => $dept->id]);
-            CandidacyStaffAssignment::create(['department_id' => $dept->id, 'staff_profile_id' => $p->id, 'role' => 'lecturer']);
-        }
+        $this->student->update(['programme' => 'PhD in Information Systems (Full-Time)']);
 
-        $html = $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1))->assertOk()->assertSee('Computer & Information Sciences')->assertSee('Taken from your student record.')->getContent();
-        preg_match('~<select id="wca-supervisor".*?</select>~s', $html, $m);
-        preg_match_all('~<option value="\d+"[^>]*>([^<]*)</option>~', $m[0], $o);
+        $html = $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1))->assertOk()
+            ->assertSee('Computer & Information Sciences')->assertSee('PhD in Information Systems (Full-Time)')->assertSee('Supervisor / Programme Manager')->getContent();
 
-        $this->assertSame(['Dr. Aisyah Rahman', 'Ir. Dr. Aminah Daud', 'Assoc. Prof. Dr. Lim Wei Ming', 'Prof. Dr. Zainal Abidin'], array_map('html_entity_decode', $o[1]), 'sorted by the name itself, titles shown');
         $this->assertSingleEscaped($html, 'new appeal step 1');
-        $this->assertStringNotContainsString($elsewhere->full_name, $m[0]);
-        $this->assertStringNotContainsString($this->chairUser->name, $m[0], 'a chair is never offered as a supervisor');
-        $this->assertStringContainsString('value="'.$this->profile($this->chairUser)->full_name.'" readonly', $html); // the Chair is shown read-only
-        $this->assertStringContainsString('id="wca-chair"', $html);
-        $this->assertStringContainsString('readonly', $html);
+        $this->assertStringNotContainsString('<select id="wca-supervisor"', $html, 'the student no longer chooses');
+        $this->assertStringContainsString('id="wca-supervisor" class="wca-input" type="text" value="'.$this->profile($this->lecturer)->full_name.'" readonly', $html);
+        $this->assertStringContainsString('value="'.$this->profile($this->chairUser)->full_name.'" readonly', $html);
+        $this->assertStringContainsString('value="'.$this->profile($this->deanUser)->full_name.'" readonly', $html);
+        $this->assertStringNotContainsString($elsewhere->full_name, $html);
     }
 
-    public function test_a_tampered_department_or_supervisor_is_refused(): void
+    public function test_a_posted_supervisor_is_ignored_and_a_tampered_department_is_refused(): void
     {
-        [$other, $elsewhere, $elsewhereChair] = $this->otherDepartment();
+        [$other, $elsewhere] = $this->otherDepartment();
         $post = fn (array $data) => $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'next'] + $data);
         $own = $this->profile($this->lecturer)->id;
 
-        $post(['department_id' => $other->id, 'supervisor_profile_id' => $own])->assertSessionHasErrors('department_id');
-        $post(['supervisor_profile_id' => $elsewhere->id])->assertSessionHasErrors('supervisor_profile_id');
-        $post(['supervisor_profile_id' => $elsewhereChair->id])->assertSessionHasErrors('supervisor_profile_id');
-        $post(['supervisor_profile_id' => $this->profile($this->chairUser)->id])->assertSessionHasErrors('supervisor_profile_id');
-        $post(['supervisor_profile_id' => $this->profile($this->deanUser)->id])->assertSessionHasErrors('supervisor_profile_id');
-        $this->assertNull(CandidacyAppeal::where('student_id', $this->student->id)->value('supervisor_profile_id'));
+        $post(['department_id' => $other->id])->assertSessionHasErrors('department_id');
 
-        $post(['department_id' => $this->candidacy->department_id, 'supervisor_profile_id' => $own])->assertSessionHasNoErrors();
+        // a posted supervisor (a tampered form) changes nothing: the person on record is used
+        $post(['supervisor_profile_id' => $elsewhere->id])->assertSessionHasNoErrors();
         $this->assertSame($own, CandidacyAppeal::where('student_id', $this->student->id)->value('supervisor_profile_id'));
     }
 
-    public function test_the_service_refuses_a_supervisor_of_another_department_even_if_the_draft_was_tampered_with(): void
+    public function test_an_appeal_is_always_routed_to_the_person_on_record_even_if_the_draft_was_tampered_with(): void
     {
         [, $elsewhere] = $this->otherDepartment();
         $draft = $this->draft();
-        $draft->update(['supervisor_profile_id' => $elsewhere->id, 'department_id' => $elsewhere->department_id]);
+        $draft->update(['supervisor_profile_id' => $elsewhere->id]);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        $this->service->submit($this->student, $draft->fresh());
+        $appeal = $this->service->submit($this->student, $draft->fresh());
+
+        $this->assertSame($this->profile($this->lecturer)->id, $appeal->supervisor_profile_id);
+    }
+
+    public function test_a_student_without_a_supervisor_programme_manager_on_record_cannot_start_an_appeal(): void
+    {
+        \App\Modules\Chloe\Models\CandidacyStudentSupervisor::where('student_id', $this->student->id)->delete();
+        $message = 'Your Supervisor / Programme Manager is not recorded yet. Please contact CGS.';
+
+        $this->actingAs($this->student)->get(route('candidacy.status'))->assertOk()->assertSee($message);
+        $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertRedirect(route('candidacy.status'))->assertSessionHasErrors('appeal');
+        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1))->assertRedirect(route('candidacy.status'));
+        $this->assertSame(0, CandidacyAppeal::where('student_id', $this->student->id)->count());
+        $this->assertContains($message, $this->service->eligibilityProblems($this->candidacy->fresh()));
+    }
+
+    public function test_an_appeal_already_submitted_keeps_its_person_when_the_record_changes_later(): void
+    {
+        $appeal = $this->submitted();
+        $routedTo = $appeal->supervisor_profile_id;
+        [, $elsewhere] = $this->otherDepartment();
+
+        \App\Modules\Chloe\Models\CandidacyStudentSupervisor::where('student_id', $this->student->id)->update(['staff_profile_id' => $elsewhere->id]);
+
+        $this->assertSame($routedTo, $appeal->fresh()->supervisor_profile_id);
+    }
+
+    public function test_the_backfill_gives_each_student_a_lecturer_of_their_own_department_and_only_adds(): void
+    {
+        $dept = $this->candidacy->department;
+        [$otherDept] = $this->otherDepartment();
+        $second = $this->student('22009991', 'second@test.my', ['programme' => 'PhD in Information Systems (Full-Time)']);
+        StudyCandidacy::create(['student_id' => $second->id, 'department_id' => $dept->id, 'programme_start_date' => '2025-01-01', 'candidacy_expiry_date' => '2027-06-01', 'status' => 'active']);
+        $demo = \App\Modules\Chloe\Models\DemoStudentProfile::create(['matric_no' => '99000001', 'name' => 'Demo One', 'email' => 'demo1@x.my', 'gender' => 'male', 'programme' => 'MSc in Data Science (Coursework)', 'programme_start_date' => '2025-01-01', 'candidacy_expiry_date' => '2027-06-01', 'status' => 'active']);
+
+        $this->artisan('candidacy:backfill-supervisors --dry-run')->assertSuccessful();
+        $this->assertNull(CandidacyStaffDirectory::supervisorForStudent($second->id), 'a dry run writes nothing');
+
+        $this->artisan('candidacy:backfill-supervisors')->assertSuccessful();
+
+        $this->assertSame($this->profile($this->lecturer)->id, CandidacyStaffDirectory::supervisorForStudent($second->id)->id, 'a lecturer of the student\'s own department (here the only one)');
+        $this->assertSame($this->profile($this->lecturer)->id, CandidacyStaffDirectory::supervisorForStudent($this->student->id)->id, 'the existing row is left alone');
+        $this->assertSame(\App\Modules\Chloe\Models\CandidacyStudentSupervisor::KIND_PROGRAMME_MANAGER, \App\Modules\Chloe\Models\CandidacyStudentSupervisor::where('demo_profile_id', $demo->id)->value('kind'));
+        $count = \App\Modules\Chloe\Models\CandidacyStudentSupervisor::count();
+
+        $this->artisan('candidacy:backfill-supervisors')->assertSuccessful();
+        $this->assertSame($count, \App\Modules\Chloe\Models\CandidacyStudentSupervisor::count(), 'a second run adds nothing');
     }
 
     public function test_a_student_without_a_department_is_told_so_and_cannot_submit(): void
     {
         $student = $this->student('22009993', 'nodept@test.my', ['programme' => 'PhD Chemical Engineering']); // CHE does not exist in this fixture
         StudyCandidacy::create(['student_id' => $student->id, 'programme_start_date' => '2025-01-01', 'candidacy_expiry_date' => '2027-06-01', 'status' => 'active']);
+        $this->recordSupervisor($student, $this->profile($this->lecturer));
 
         $this->actingAs($student)->get(route('candidacy.appeals.draft', 1))->assertOk()->assertSee('Your department could not be found in your student record');
-        $this->actingAs($student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'next', 'supervisor_profile_id' => $this->profile($this->lecturer)->id])->assertSessionHasErrors('department');
+        $this->actingAs($student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'next'])->assertSessionHasErrors('department');
     }
 
     public function test_the_dean_is_one_person_for_every_department(): void
@@ -174,7 +211,10 @@ class CandidacyDepartmentRosterTest extends TestCase
     /** The text a person reads: tags removed, entities decoded once. A double-escaped name would still read "Computer &amp; ...". */
     protected function visible(string $html): string
     {
-        return html_entity_decode(strip_tags(preg_replace('~<(script|style)\b.*?</\1>~s', '', $html)));
+        // a read-only input shows its value as text, so its value attribute counts as what a person reads
+        $html = preg_replace('~<input\b[^>]*\bvalue="([^"]*)"[^>]*>~', ' $1 ', preg_replace('~<(script|style)\b.*?</\1>~s', '', $html));
+
+        return html_entity_decode(strip_tags($html));
     }
 
     protected function assertSingleEscaped(string $html, string $where): void
@@ -235,7 +275,6 @@ class CandidacyDepartmentRosterTest extends TestCase
         $html = $this->actingAs($this->lecturer)->get(route('candidacy.portal.queue'))->getContent();
 
         $this->assertMatchesRegularExpression('~<h2>\s*Study Candidacy Approval Portal\s*</h2>~', $html);
-        $this->assertStringContainsString('Study Candidacy Appeals you are named on.', $html);
         // the shared layout writes a fixed <title>, so our own script sets the tab title from this attribute
         $this->assertStringContainsString('data-doc-title="Study Candidacy Approval Portal"', $html);
         $this->assertStringContainsString('document.title', file_get_contents(public_path('js/chloe-candidacy.js')));
@@ -258,7 +297,7 @@ class CandidacyDepartmentRosterTest extends TestCase
     {
         $appeal = $this->submitted();
         $portal = html_entity_decode($this->actingAs($this->lecturer)->get(route('candidacy.portal.queue', ['q' => 'SCA', 'tab' => 'ongoing']))->getContent());
-        $this->assertMatchesRegularExpression('~href="[^"]*/candidacy/signature\?return=%2Fcandidacy%2Fportal%3Ftab%3Dongoing%26q%3DSCA"[^>]*>My Signature~', $portal);
+        $this->assertMatchesRegularExpression('~href="[^"]*/candidacy/signature\?return=%2Fcandidacy%2Fportal%3Ftab%3Dongoing%26q%3DSCA"[^>]*><button[^>]*>My Signature~', $portal);
 
         $this->service_signatures()->remove($this->profile($this->lecturer));
         $page = html_entity_decode($this->actingAs($this->lecturer)->get(route('candidacy.appeals.show', ['appeal' => $appeal->id, 'return' => '/candidacy/portal?tab=pending&page=2']))->getContent());

@@ -10,11 +10,12 @@
         @if ($appeal->needs_cgs_recheck && $isCgs)<p><strong>Re-check after Dean return:</strong> the Dean returned this appeal and the student revised it. Verify it again before it goes back to the Dean.</p>@endif
         @if ($isDean && $preview)
             <dl class="wca-kv">
-                <dt>New expiry date preview</dt><dd>{{ $preview['new_expiry']->format('j M Y') }}</dd>
-                <dt>Months that would be approved</dt><dd>{{ $appeal->requested_months }} (fixed)</dd>
-                <dt>Allowance after approval</dt><dd>{{ $preview['allowance_after'] }} of {{ config('candidacy.max_extension_months') }} months</dd>
+                <dt>Months requested</dt><dd>{{ $appeal->requested_months }}</dd>
+                <dt>Months remaining in the allowance</dt><dd>{{ $candidacy?->remainingAppealMonths() ?? 0 }}</dd>
+                <dt>New expiry date preview</dt><dd>{{ $preview['new_expiry']->format('j M Y') }} (if approved as requested)</dd>
+                <dt>Allowance after approval</dt><dd>{{ $preview['allowance_after'] }} of {{ config('candidacy.max_extension_months') }} months (if approved as requested)</dd>
             </dl>
-            <p class="wca-muted wca-small">The Dean cannot change the number of months: the approved months are the months the student requested.</p>
+            <p class="wca-muted wca-small">You may approve a different number of months, from 1 up to the months remaining. A short reason is then required; the student does not see it.</p>
         @endif
         <div class="wca-actions">
             <button type="button" class="wca-btn is-primary" data-modal-open="wca-modal-approve">{{ $isCgs ? 'Verify' : 'Approve' }}</button>
