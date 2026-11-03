@@ -109,6 +109,22 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
         @break
 
+    @case('plane')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5a1.8 1.8 0 0 0-2.5-2.5L13.5 8.5 5.3 6.7a.6.6 0 0 0-.6.9L9 12l-3 3H4l-1 2 2-1 1 2 3-3 4.3 4.3a.6.6 0 0 0 1-.1z"/></svg>
+        @break
+
+    @case('receipt')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2h14v20l-2.5-1.5L14 22l-2-1.5L10 22l-2.5-1.5L5 22z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>
+        @break
+
+    @case('coin')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 15.5c0 1 1 1.8 2.5 1.8s2.5-.8 2.5-1.8-1-1.4-2.5-1.8-2.5-.8-2.5-1.8 1-1.8 2.5-1.8 2.5.8 2.5 1.8"/><line x1="12" y1="6.5" x2="12" y2="7.8"/><line x1="12" y1="16.2" x2="12" y2="17.5"/></svg>
+        @break
+
+    @case('flag')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/></svg>
+        @break
+
     @default
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>
 @endswitch

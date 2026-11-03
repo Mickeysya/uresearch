@@ -5,6 +5,8 @@ namespace App\Modules\Chloe;
 use App\Modules\Chloe\Console\Commands\GenerateCandidacyDismissals;
 use App\Modules\Chloe\Console\Commands\RemindOverdueLockerKeys;
 use App\Modules\Chloe\Console\Commands\SendCandidacyReminders;
+use App\Modules\Chloe\Services\CandidacyStatusProvider;
+use App\Modules\Core\Contracts\SuppliesCandidacyStatus;
 use App\Modules\Core\Services\ModuleRegistry;
 use Illuminate\Support\ServiceProvider;
 
@@ -25,6 +27,14 @@ use Illuminate\Support\ServiceProvider;
  */
 class ModuleProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        // Core's student dashboard reads candidacy through this contract,
+        // never through App\Modules\Chloe\Models\StudyCandidacy directly --
+        // see Services\CandidacyStatusProvider.
+        $this->app->bind(SuppliesCandidacyStatus::class, CandidacyStatusProvider::class);
+    }
+
     public function boot(ModuleRegistry $registry): void
     {
         $registry->register(new Workflows\CandidacyAppealWorkflow());

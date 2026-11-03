@@ -168,6 +168,355 @@
 .pill-critical { background: var(--danger-bg); color: var(--danger-fg); }
 .pill-muted    { background: var(--surface-hover); color: var(--text-grey); }
 
+/* ---- the top row: Today, Study candidacy, Viva, GA allowance ----
+
+   Explicit column counts (4 / 2 / 1), not auto-fit: there are always
+   exactly four of these, so an explicit count never leaves an odd card
+   alone on its own row the way auto-fit can at an in-between width. Same
+   two breakpoints as .sdash-panels below (1100px, 560px), so the top row
+   and the panel grid always change shape together. */
+.sdash-top {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+    gap: var(--sdash-gap);
+}
+
+.sdash-top-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border-grey);
+    border-radius: 12px;
+    padding: 16px;
+    min-width: 0;
+}
+
+.sdash-top-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.sdash-top-icon-wrap {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    background: var(--surface-hover);
+    color: var(--navy);
+}
+
+.sdash-top-icon-wrap svg { width: 15px; height: 15px; }
+.sdash-top-icon-wrap.tone-purple { background: var(--tone-purple); color: var(--text-on-accent); }
+.sdash-top-icon-wrap.tone-blue   { background: var(--tone-blue); color: var(--text-on-accent); }
+.sdash-top-icon-wrap.tone-green  { background: var(--tone-green); color: var(--text-on-accent); }
+
+.sdash-top-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-dark);
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sdash-top-badge { margin-top: 0; align-self: center; flex-shrink: 0; }
+
+.sdash-top-value {
+    font-size: clamp(24px, 2.4vw, 32px);
+    font-weight: 700;
+    color: var(--navy);
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+}
+
+.sdash-top-unit {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-grey);
+}
+
+.sdash-top-progress {
+    margin-top: 10px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-hover);
+    overflow: hidden;
+}
+
+.sdash-top-progress-bar {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--navy);
+}
+
+.sdash-top-progress-bar.tone-warn     { background: var(--warning-fg); }
+.sdash-top-progress-bar.tone-critical { background: var(--danger-fg); }
+
+.sdash-top-progress-labels {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-grey);
+}
+
+.sdash-top-fact {
+    margin-top: 10px;
+    font-size: 12.5px;
+    color: var(--text-grey);
+}
+
+.sdash-top-fact strong { color: var(--text-dark); }
+
+.sdash-top-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.sdash-top-stat-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sdash-top-fact-label {
+    font-size: 11px;
+    color: var(--text-grey);
+}
+
+.sdash-top-fact-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.sdash-top-note {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--surface-hover);
+    font-size: 11.5px;
+    color: var(--text-dark);
+}
+
+/* auto top margin: pushes the button to the bottom of the card -- it
+   consumes all the free space left in the flex column -- so it lines up
+   across all four top cards even though their content above it is a
+   different height. */
+.sdash-top-action {
+    display: block;
+    margin-top: auto;
+    padding: 8px 0;
+    border: 1px solid var(--border-grey);
+    border-radius: 8px;
+    text-align: center;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--navy);
+    text-decoration: none;
+}
+
+.sdash-top-action:hover { background: var(--surface-hover); border-color: var(--navy); }
+
+/* auto top+bottom margin: centres the empty state in whatever vertical
+   space is left once the header's done, so it reads as a deliberate
+   "nothing here yet" panel instead of a short message stranded at the
+   bottom of a card that stretched to match its taller row-mates (the
+   Today card, almost always the tallest of the four). */
+.sdash-top-empty {
+    margin: auto 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+    padding: 12px 6px;
+}
+
+.sdash-top-empty-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--surface-hover);
+    color: var(--text-grey);
+}
+
+.sdash-top-empty-icon svg { width: 19px; height: 19px; }
+
+.sdash-top-empty p {
+    margin: 0;
+    max-width: 220px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--text-grey);
+}
+
+/* ---- the Today card ---- */
+
+.sdash-today-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.sdash-today-dow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--gold);
+}
+
+.sdash-today-month {
+    font-size: 11.5px;
+    color: var(--text-grey);
+}
+
+.sdash-today-date {
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--navy);
+    line-height: 1.1;
+    margin-top: 2px;
+}
+
+.sdash-mini-week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-top: 10px;
+}
+
+.sdash-mini-week-label {
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-grey);
+}
+
+.sdash-mini-day {
+    /* A fixed, equal width and height, centred in its (wider) grid cell:
+       border-radius: 50% only draws a circle on a square box -- without
+       an explicit width this stretched to the 1fr column's width and drew
+       an ellipse around today's date instead of a circle. */
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    margin: 0 auto;
+    border-radius: 50%;
+    font-size: 12px;
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.sdash-mini-day.is-today {
+    background: var(--navy);
+    color: var(--text-on-accent);
+    font-weight: 700;
+    box-shadow: 0 2px 6px -1px color-mix(in srgb, var(--navy) 55%, transparent);
+}
+
+.sdash-today-events {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 auto;
+}
+
+.sdash-today-event {
+    padding: 6px 0 6px 10px;
+    border-left: 3px solid var(--info-fg);
+}
+
+.sdash-today-event.tone-good     { border-left-color: var(--success-fg); }
+.sdash-today-event.tone-warn     { border-left-color: var(--warning-fg); }
+.sdash-today-event.tone-critical { border-left-color: var(--danger-fg); }
+
+.sdash-today-event-title {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.sdash-today-event-meta {
+    display: block;
+    font-size: 11px;
+    color: var(--text-grey);
+}
+
+.sdash-today-empty {
+    font-size: 12px;
+    color: var(--text-grey);
+}
+
+.sdash-today-footer {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 11.5px;
+    color: var(--navy);
+    text-decoration: none;
+}
+
+.sdash-today-footer:hover { text-decoration: underline; }
+
+/* ---- the "Start a new application" grid ---- */
+
+.sdash-quicklinks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.sdash-quicklink {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-grey);
+    border-radius: 9px;
+    text-decoration: none;
+    color: var(--text-dark);
+    min-width: 0;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.sdash-quicklink:hover { border-color: var(--navy); background: var(--surface-sunken); }
+
+.sdash-quicklink-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    background: var(--surface-hover);
+    color: var(--navy);
+}
+
+.sdash-quicklink-icon svg { width: 15px; height: 15px; }
+
+.sdash-quicklink-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* ---- the four panels ---- */
 
 /* One grid, four direct children (see student.blade.php) -- not two
@@ -211,6 +560,12 @@
     font-size: clamp(14px, 1.05vw, 16px);
     font-weight: 700;
     color: var(--text-dark);
+}
+
+.sdash-card-subtitle {
+    margin: 2px 0 0;
+    font-size: 11.5px;
+    color: var(--text-grey);
 }
 
 .sdash-action {
@@ -477,6 +832,52 @@
 .sdash-dot.tone-warn     { background: var(--warning-fg); }
 .sdash-dot.tone-critical { background: var(--danger-fg); }
 
+/* ---- "what to do next about attendance" strip ---- */
+
+.sdash-action-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 0 14px 14px;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border-left: 3px solid var(--info-fg);
+    background: var(--surface-hover);
+}
+
+.sdash-action-strip.tone-good     { border-left-color: var(--success-fg); }
+.sdash-action-strip.tone-warn     { border-left-color: var(--warning-fg); }
+.sdash-action-strip.tone-critical { border-left-color: var(--danger-fg); }
+.sdash-action-strip.tone-muted    { border-left-color: var(--border-strong); }
+
+.sdash-action-strip-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.sdash-action-strip-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-grey);
+}
+
+.sdash-action-strip-value {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+.sdash-action-strip-note {
+    font-size: 11.5px;
+    color: var(--text-grey);
+}
+
+.sdash-action-strip .sdash-pill { margin-top: 0; flex-shrink: 0; }
+
 .sdash-note {
     display: flex;
     align-items: center;
@@ -570,6 +971,10 @@
 
 @media (max-width: 1100px) {
     .sdash-panels { grid-template-columns: minmax(0, 1fr); }
+
+    /* Four across is cramped once each card has under ~250px -- two
+       across keeps the Today mini-calendar and the progress bars legible. */
+    .sdash-top { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 560px) {
@@ -586,6 +991,14 @@
     .chart-gauge-wrap { margin: 0 auto 4px; }
 
     .sdash-row-side { display: none; }
+
+    /* One column at phone width, same as the panel grid above it. */
+    .sdash-top { grid-template-columns: minmax(0, 1fr); }
+
+    /* Two columns of quick-link buttons get too narrow to read their
+       labels below ~360px of actual card width (phone minus page gutters
+       minus card padding) -- one column keeps every label on one line. */
+    .sdash-quicklinks { grid-template-columns: minmax(0, 1fr); }
 }
 
 

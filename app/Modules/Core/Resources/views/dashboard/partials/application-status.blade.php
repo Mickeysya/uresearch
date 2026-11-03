@@ -25,7 +25,20 @@
     @endif
 
     <header class="sdash-card-head">
-        <h3>My Application Status</h3>
+        <div>
+            <h3>My Application Status</h3>
+            {{-- Same wording the old "Active Applications" stat card used,
+                 just living beside the list it describes instead of a
+                 separate tile. --}}
+            <p class="sdash-card-subtitle">
+                {{ $activeCount }} {{ \Illuminate\Support\Str::plural('application', $activeCount) }}:
+                @if ($nextDecision)
+                    In progress · next decision by {{ $nextDecision->format('j M') }}
+                @else
+                    In progress
+                @endif
+            </p>
+        </div>
         <a href="{{ route('applications.index') }}" class="sdash-action">View All</a>
     </header>
 
@@ -45,6 +58,15 @@
                     \App\Modules\Core\Models\Application::STATUS_RETURNED => 'Returned — Action Needed',
                     default => $decision ? 'Under Review' : 'Pending Approval',
                 };
+                // A charter date, only for a module that keeps one
+                // (Contracts\SuppliesDecisionDates) and only while still
+                // pending -- an approved/rejected row shows when it was
+                // decided instead, above.
+                $module = $application->module();
+                $expectedBy = $application->status === \App\Modules\Core\Models\Application::STATUS_PENDING
+                    && $module instanceof \App\Modules\Core\Contracts\SuppliesDecisionDates
+                    ? $module->expectedDecisionDate($application)
+                    : null;
             @endphp
 
             <a href="{{ route('applications.show', $application) }}" class="sdash-row">
@@ -61,7 +83,11 @@
                     <span class="sdash-pill pill-{{ $tone }}">{{ $statusLabel }}</span>
                     <span class="sdash-row-meta">
                         @if ($application->status === \App\Modules\Core\Models\Application::STATUS_PENDING)
-                            Submitted on {{ $application->submitted_at?->format('j M Y') ?? '—' }}
+                            @if ($expectedBy)
+                                Decision by {{ $expectedBy->format('j M') }}
+                            @else
+                                Submitted on {{ $application->submitted_at?->format('j M Y') ?? '—' }}
+                            @endif
                         @else
                             {{ $statusLabel }} on {{ $decision?->created_at->format('j M Y') ?? '—' }}
                         @endif
