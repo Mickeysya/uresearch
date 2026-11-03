@@ -124,7 +124,9 @@ class LettersTest extends TestCase
 
         $this->actingAs($this->cgs)
             ->get(route('supervision.queue', ['stage' => 'cgs_review']))
-            ->assertSee('Preview letter')
+            // The draft letter is a Documents row (View / Download) now.
+            ->assertSee('Appointment letter (draft preview)')
+            ->assertSee(route('supervision.letter.preview', $application), false)
             ->assertSee('Endorse &amp; issue letter', false);
 
         $this->actingAs($this->cgs)->post(route('supervision.decide', $application), ['decision' => 'approve']);
@@ -282,7 +284,8 @@ class LettersTest extends TestCase
 
         $this->actingAs($approver)
             ->get(route('ga-certification.queue', ['stage' => 'senior_director']))
-            ->assertSee('Preview letter');
+            ->assertSee('Certification letter (draft preview)')
+            ->assertSee(route('ga-certification.letter.preview', $application), false);
 
         $this->actingAs($approver)->post(route('ga-certification.decide', $application), ['decision' => 'approve']);
 

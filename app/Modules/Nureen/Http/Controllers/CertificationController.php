@@ -175,6 +175,17 @@ class CertificationController extends Controller
      */
     public function attachment(Request $request, Application $application, LetterRenderer $letters)
     {
+        return $this->attachmentResponse($request, $application, $letters, 'attachment');
+    }
+
+    /** The same attachment, inline -- the preview overlay's source. Same check. */
+    public function attachmentView(Request $request, Application $application, LetterRenderer $letters)
+    {
+        return $this->attachmentResponse($request, $application, $letters, 'inline');
+    }
+
+    protected function attachmentResponse(Request $request, Application $application, LetterRenderer $letters, string $disposition)
+    {
         abort_unless($application->module_type === $this->moduleKey(), 404);
         abort_unless($application->student_id === $request->user()->id, 403, 'This request is not yours.');
 
@@ -182,7 +193,7 @@ class CertificationController extends Controller
 
         return response($letters->certificationAttachment($application), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Disposition' => $disposition.'; filename="'.$filename.'"',
         ]);
     }
 
@@ -488,9 +499,13 @@ class CertificationController extends Controller
             abort(403, 'This request was not addressed to you.');
         }
 
+        // A rejection needs a reason, as in Supervision; the decision bar
+        // asks for it in the browser too (components/decision-bar).
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
+            'remarks' => [$request->input('decision') === 'reject' ? 'required' : 'nullable', 'string', 'max:2000'],
+        ], [
+            'remarks.required' => 'Say why this request is being rejected — the student is owed a reason.',
         ]);
 
         try {
@@ -548,7 +563,8 @@ class CertificationController extends Controller
 
         return response($letters->certification($application, draft: true, previewer: $request->user()), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="certification-'.$application->id.'-draft.pdf"',
+            // ?download=1: the Documents section's Download for the same draft.
+            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline').'; filename="certification-'.$application->id.'-draft.pdf"',
             'Cache-Control' => 'no-store',
         ]);
     }

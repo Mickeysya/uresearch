@@ -7,6 +7,7 @@ use App\Modules\Nureen\Http\Controllers\AttendanceController;
 use App\Modules\Nureen\Http\Controllers\AttendanceIngestController;
 use App\Modules\Nureen\Http\Controllers\CertificateVerificationController;
 use App\Modules\Nureen\Http\Controllers\CertificationController;
+use App\Modules\Nureen\Http\Controllers\DocumentPreviewController;
 use App\Modules\Nureen\Http\Controllers\DraftsController;
 use App\Modules\Nureen\Http\Controllers\ExpectedDecisionController;
 use App\Modules\Nureen\Http\Controllers\GaExtensionController;
@@ -63,6 +64,12 @@ Route::middleware('auth')->group(function () {
     // which application is GaExtensionController::canViewForm() -- the
     // owning student and that application's own approvers.
     Route::get('/ga-extension/{application}/form', [GaExtensionController::class, 'formPdf'])->name('ga-extension.form-pdf');
+    Route::get('/ga-extension/{application}/form/view', [GaExtensionController::class, 'formPdfView'])->name('ga-extension.form-pdf.view');
+
+    // View an attached file inline (the preview overlay) -- Core's
+    // documents.show rule, ApplicationDocument::visibleTo(); Nureen's
+    // modules only. See DocumentPreviewController.
+    Route::get('/nureen/documents/{document}/view', [DocumentPreviewController::class, 'view'])->name('nureen.documents.view');
 
     // ---- Supervision ----------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
@@ -102,6 +109,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/ga-certification/draft/{application}', [CertificationController::class, 'destroyDraft'])->name('ga-certification.draft.destroy');
         // The pre-filled course-owner attachment (owner only).
         Route::get('/ga-certification/{application}/attachment', [CertificationController::class, 'attachment'])->name('ga-certification.attachment');
+        Route::get('/ga-certification/{application}/attachment/view', [CertificationController::class, 'attachmentView'])->name('ga-certification.attachment.view');
     });
 
     Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS]))->group(function () {

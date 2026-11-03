@@ -126,6 +126,144 @@ Run with `db:seed --class=...`; none are wired into Core's seeder:
 
 ---
 
+## 2026-11-08 — Approver rows: one decision bar, and a preview overlay for every document
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit.
+SHARED_CHANGES §17 has the Core proposal with exact diffs.
+
+### The ask
+
+Two problems on the approver queues, first seen on Supervision as
+Non-Executive CGS:
+1. **The decision controls were split.** Preview and Endorse sat in their own
+   box, "Remarks (optional)" came below it, and Reject was alone at the
+   bottom. The fix: one reusable bar (System checks → Documents → Remarks →
+   one action row), with a reason required for Reject and Return.
+2. **Approvers had to download every file.** The fix: a preview overlay
+   (PDF iframe, image, or "Preview not available" for Word), inline routes
+   under the same authorisation as the downloads, and a Documents section
+   with View and Download.
+
+### Key findings before writing any code
+
+- **Core's `partials/queue.blade.php` has no opt-out.** It always prints a
+  download-only `doc-list` and `<x-core::decision-form>` after the module's
+  detail view.
+- **Only Supervision required a reason to reject;** Certification, GA
+  Extension and the appeal accepted an empty one. Every existing test that
+  rejects there already sends remarks.
+- **Core's CSP needs no change for previews.** `ContentSecurityPolicy` only
+  adds its header and `X-Frame-Options: DENY` to HTML responses, so inline
+  PDFs and images aren't affected, and the page allows same-origin frames
+  through `default-src 'self'`. HTML can never be framed
+  (`frame-ancestors 'none'`), so the "not available" state is drawn by the
+  overlay, not loaded in the iframe.
+- **Both draft-letter previews were already inline;** the GA Extension Form
+  and the certification attachment were download-only.
+
+### The design
+
+- **`components/decision-bar`:** one form, using `formaction` for Return
+  (it posts the same `remarks` to `ga-extension.return`).
+  - A hidden `_row` field brings a server-side refusal back to its own row,
+    opened.
+  - The script stops a reasonless Reject or Return, relabels the field
+    "Reason (required)", fills a reserved one-line message and focuses the
+    box.
+- **`components/documents` and `components/file-preview`:**
+  - View is a real link to the inline route; the overlay intercepts it, so
+    without JavaScript the file opens in a new tab.
+  - The `<dialog>` uses `showModal()`, plus a Tab trap, close on backdrop
+    click, and focus returned to the View link.
+- **`Support\ApproverPanel`:** per module, the documents, the primary label
+  and hint, and the return action.
+  - Supervision: "Endorse & issue letter" at `cgs_review` in `endorse` mode;
+    "Approve & issue letter" in `manual` mode, or at the Chair or Dean in
+    `automatic` mode.
+  - Certification: "Approve & issue letter" for the Senior Director.
+  - Appeal: "Approve appeal".
+- **`Support\DocumentPreviews`:** file kind and inline MIME by extension
+  (pdf, jpg/jpeg, png; everything else is not previewable).
+- **Routes:**
+  - `nureen.documents.view` (`DocumentPreviewController`): `visibleTo()`,
+    Nureen's modules only, activity-logged "previewed";
+  - `ga-extension.form-pdf.view` and `ga-certification.attachment.view`
+    (same checks as their downloads);
+  - `?download=1` on both draft-letter previews.
+- **Core's duplicate blocks:** each Nureen `_detail` view is wrapped in
+  `.nureen-row`, and one `:has()` rule hides Core's list and form in those
+  rows only. §17 proposes `$ownsDecision` to replace it.
+
+### What changed
+
+- **New:**
+  - `Http/Controllers/DocumentPreviewController.php`;
+  - `Support/DocumentPreviews.php` and `Support/ApproverPanel.php`;
+  - components `decision-bar`, `documents` and `file-preview`;
+  - view `documents/preview_unavailable`;
+  - `tests/Feature/Nureen/DocumentPreviewTest.php` (14 tests).
+- **Detail views:** `supervision/_detail` (the "Preview letter" box is gone),
+  `ga_certification/_detail` (the same), `ga_extension/_detail` (the
+  download button is now a Documents row) and `attendance_appeal/_detail`
+  (its own Approve form and CSS hack are gone; the sessions field moved into
+  the bar).
+- **Controllers:**
+  - `GaExtensionController::formPdfView()`;
+  - `CertificationController::attachmentView()` and `?download=1`;
+  - `SupervisionController::previewLetter()` with `?download=1`;
+  - remarks required on reject in `CertificationController`,
+    `GaExtensionController` and `AttendanceAppealController`.
+- **Student forms:** View links on the GA Extension form (own applications,
+  draft as last saved) and the certification form (attachment as last saved).
+- **Existing tests:** four assertions follow the new wording (`LettersTest`
+  ×2, `GaExtensionFormTest`, `AttendanceDataRulesTest`).
+
+### Bugs caught
+
+- **The overlay opened invisibly** (a 0×0 box). `@once` had rendered it
+  inside the first queue row's closed `<details>`, and a modal dialog can't
+  show inside a hidden ancestor. The script now moves the dialog to `<body>`.
+- **Esc stopped working once focus entered the PDF.** Chrome's viewer keeps
+  key presses. The iframe is now out of the Tab order (`tabindex="-1"`) and
+  the trap cycles only the overlay's own controls. One limit remains: after
+  someone clicks into a PDF, they close with Close or a click outside.
+- **Two new test assertions matched the component's own script text**
+  (`data-decision-error`). They now count the rendered attribute.
+
+### Verification
+
+- **Full suite:** 652 passed. `failed_jobs` and `jobs` were 0 before and
+  after.
+- **Headless browser:** full Chromium (new headless). The default headless
+  shell has no PDF viewer and turns a framed PDF into a download, which is a
+  test-browser limitation, not the app.
+  - **As `cgs@`, in light, dark and at 400px:**
+    - Supervision #199, Certification #198 and GA Extension #197: the order
+      was System checks → Documents → Remarks → actions;
+    - Core's duplicate form and list are hidden;
+    - Endorse/Approve and Reject (and Return on GA Extension) are 44px tall,
+      side by side, and full width at 400px;
+    - no horizontal scroll.
+  - **The overlay:**
+    - the draft appointment letter, a PDF attachment and the generated GA
+      Extension Form each opened in it (1296×810 at 1440×900; full screen
+      at 400px);
+    - focus started on Close and Tab stayed inside;
+    - Esc closed it and returned focus to the View link, and a click outside
+      closed it at desktop width.
+  - **Empty Reject:** stayed on the page, read "Reason (required)", showed
+    "Give a reason before rejecting: the student is told why." and focused
+    the box.
+  - **Real rejections:**
+    - #200 (GA Extension, past candidacy) rejected by `cgs@` with a reason;
+    - #201, a fresh certification from `student2@` for this check, viewed by
+      `supervisor@` in light and dark, then rejected with a reason.
+  - No console errors.
+- **Dev data:** #200 is now rejected and #201 is new and rejected. #197, #198
+  and #199 stay pending.
+
+---
+
 ## 2026-11-07 — Postgraduate Handbook 2025 rules across all four modules
 
 **Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit.

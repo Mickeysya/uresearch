@@ -36,7 +36,14 @@
                     <li>
                         <span><b>#{{ $application->id }}</b> &middot; {{ ucfirst($application->status) }}
                             @if ($application->submitted_at) &middot; submitted {{ $application->submitted_at->format('j M Y') }} @endif</span>
-                        <a href="{{ route('ga-extension.form-pdf', $application) }}">Download GA Extension Form (PDF)</a>
+                        <span>
+                            <a href="{{ route('ga-extension.form-pdf.view', $application) }}" target="_blank" rel="noopener"
+                               data-preview-url="{{ route('ga-extension.form-pdf.view', $application) }}" data-preview-kind="pdf"
+                               data-preview-name="GA Extension Form #{{ $application->id }}"
+                               data-preview-download="{{ route('ga-extension.form-pdf', $application) }}">View</a>
+                            &middot;
+                            <a href="{{ route('ga-extension.form-pdf', $application) }}">Download GA Extension Form (PDF)</a>
+                        </span>
                     </li>
                 @endforeach
             </ul>
@@ -59,7 +66,10 @@
                 <input type="hidden" name="draft_id" value="{{ $draft->id }}">
                 <p class="queue-meta" style="margin-top: 0;">
                     Continuing your draft, last saved {{ \App\Modules\Nureen\Support\Drafts::lastSaved($draft)->format('j M Y, g:ia') }}.
-                    <a href="{{ route('ga-extension.form-pdf', $draft) }}">Download the form as last saved</a>
+                    <a href="{{ route('ga-extension.form-pdf.view', $draft) }}" target="_blank" rel="noopener"
+                       data-preview-url="{{ route('ga-extension.form-pdf.view', $draft) }}" data-preview-kind="pdf"
+                       data-preview-name="GA Extension Form (draft)" data-preview-download="{{ route('ga-extension.form-pdf', $draft) }}">View the form as last saved</a>
+                    &middot; <a href="{{ route('ga-extension.form-pdf', $draft) }}">Download it</a>
                 </p>
             @endif
             <input type="hidden" name="draft_step" value="{{ $detail?->draft_step ?? 0 }}" data-draft-step>
@@ -291,6 +301,7 @@
 @endpush
 
 @include('core::partials.form-stepper')
+<x-nureen::file-preview />
 
 {{-- In the scripts stack, after form-stepper's own: the auto-download
      below navigates, and running it inline (before the stepper had set

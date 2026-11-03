@@ -873,3 +873,135 @@ column, reminders and the letter wording. The Dean role is not
 department-scoped (`Role::isDepartmentScoped()`), so one Dean sees every
 department's requests, which matches the handbook. The default stays
 `chair`, as in CGS's workflow diagrams.
+
+## 17. Approver queues: one decision bar, and View (not only Download) for every document
+
+**What Nureen does now, inside its own folder.** Each Nureen queue row ends
+in this order: System checks → **Documents** (each file with **View** and
+**Download**) → **Remarks** → one action row (primary · Reject · Return).
+- **Components:** `N/Resources/views/components/decision-bar.blade.php`,
+  `documents.blade.php`, `file-preview.blade.php`, and
+  `N/Support/ApproverPanel.php`.
+- **View** opens a preview overlay (`<dialog>`, ~90% of the viewport,
+  full screen on phones). PDFs show in an `<iframe>`, JPG/PNG in an `<img>`,
+  and Word files show "Preview not available".
+- **Inline routes:**
+  - `nureen.documents.view` for attached files (`DocumentPreviewController`,
+    the same `ApplicationDocument::visibleTo()` rule as `documents.show`);
+  - `ga-extension.form-pdf.view` and `ga-certification.attachment.view`;
+  - `?download=1` on the two draft-letter previews.
+
+**The workaround this section would remove.** Core's
+`partials/queue.blade.php` always prints its own download-only `<ul class="doc-list">`
+and `<x-core::decision-form>` after the module's detail view, with no way to
+opt out. Nureen's detail views wrap themselves in `.nureen-row`, and one CSS
+rule hides Core's two blocks in those rows only:
+
+```css
+.queue-row-body:has(> .nureen-row) > ul.doc-list,
+.queue-row-body:has(> .nureen-row) > form:not([class]),
+.queue-row-body:has(> .nureen-row) > form.decision-return { display: none; }
+```
+
+Teammates' queues are untouched, but the hidden form is still in the DOM
+and the rule depends on Core's markup staying as it is.
+
+**Proposal (three parts; each is useful on its own).**
+
+**a. Let a module own the end of its row.** `app/Modules/Core/Resources/views/partials/queue.blade.php`:
+
+```diff
+@@ Optional: (header comment)
++              $ownsDecision -- true when $detailView renders its own documents
++              and decision controls (Nureen's components/decision-bar);
++              Core then prints neither.
+@@
+                     @include($detailView, ['application' => $application])
+
+-                    @if ($application->documents->isNotEmpty())
++                    @if (! ($ownsDecision ?? false) && $application->documents->isNotEmpty())
+                         <ul class="doc-list">
+                             @foreach ($application->documents as $doc)
+-                                <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
++                                <li>
++                                    {{ $doc->doc_type }}: {{ $doc->original_name }}
++                                    <a href="{{ route('documents.view', $doc) }}" target="_blank" rel="noopener"
++                                       data-preview-url="{{ route('documents.view', $doc) }}"
++                                       data-preview-kind="{{ \App\Modules\Core\Support\FilePreview::kind($doc->original_name) }}"
++                                       data-preview-name="{{ $doc->original_name }}"
++                                       data-preview-download="{{ $doc->url() }}">View</a>
++                                    · <a href="{{ $doc->url() }}">Download</a>
++                                </li>
+                             @endforeach
+                         </ul>
++                        <x-core::file-preview />
+                     @endif
+
++                    @unless ($ownsDecision ?? false)
+                     <x-core::decision-form
+                         ...
+                             : null" />
++                    @endunless
+```
+
+Nureen would then pass `'ownsDecision' => true` from its four `queue.blade.php`
+files and delete the CSS rule above.
+
+**b. An inline route beside the download.** `app/Modules/Core/routes.php`:
+
+```diff
+     Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
++    Route::get('/documents/{document}/view', [DocumentController::class, 'view'])->name('documents.view');
+```
+
+`app/Modules/Core/Http/Controllers/DocumentController.php`, the same rule
+and the same audit entry as `show()`:
+
+```php
+public function view(Request $request, ApplicationDocument $document)
+{
+    abort_unless($document->visibleTo($request->user()), 403);
+    abort_unless($document->exists(), 404);
+
+    $mime = \App\Modules\Core\Support\FilePreview::inlineMime($document->original_name);
+
+    if ($mime === null) {   // Word and anything else: no conversion
+        return response()->view('core::documents.preview-unavailable', ['document' => $document]);
+    }
+
+    activity('document')->causedBy($request->user())->performedOn($document)
+        ->withProperties(['action' => 'previewed', 'doc_type' => $document->doc_type, 'application_id' => $document->application_id])
+        ->log('Previewed document');
+
+    return Storage::disk('local')->response($document->path, $document->original_name,
+        ['Content-Type' => $mime, 'X-Content-Type-Options' => 'nosniff'], 'inline');
+}
+```
+
+`Core\Support\FilePreview` would hold `kind()` and `inlineMime()`, moved
+unchanged from `N/Support/DocumentPreviews.php` (pdf → `application/pdf`,
+jpg/jpeg → `image/jpeg`, png → `image/png`, everything else → not previewable).
+
+**c. Promote the overlay to Core.** Move
+`N/Resources/views/components/file-preview.blade.php` to
+`app/Modules/Core/Resources/views/components/file-preview.blade.php`
+unchanged (it uses only shared tokens: `--surface`, `--surface-raised`,
+`--border-subtle`, `--shadow-lg`, `--navy`). Nureen's `documents` component
+would then render `<x-core::file-preview />`. Any module can open a file by
+adding the four `data-preview-*` attributes to a link.
+
+**CSP: no change needed (checked).** `ContentSecurityPolicy` only adds its
+header and `X-Frame-Options: DENY` to HTML responses, so an inline PDF or
+image carries neither. The page around it allows a same-origin frame through
+`default-src 'self'` (no `frame-src` is set). Verified in Chromium: the PDF
+renders in the overlay with Chrome's viewer, and `object-src 'none'` doesn't
+affect an `<iframe>`.
+
+What CSP *does* block, correctly: framing any HTML page (`frame-ancestors
+'none'`). That's why the overlay shows "Preview not available" itself rather
+than loading the unavailable page into the iframe. An explicit
+`"frame-src 'self'"` line would document the intent, but nothing needs it
+today.
+
+**Browser support note.** The interim CSS rule uses `:has()` (Chrome 105+,
+Firefox 121+, Safari 15.4+). Part (a) removes that dependency.
