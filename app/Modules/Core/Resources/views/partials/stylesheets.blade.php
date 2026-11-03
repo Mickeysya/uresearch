@@ -17,6 +17,7 @@
       sidebar.css         sidebar nav
       dashboard-*.css     one dashboard screen each
       notifications.css   the /notifications feed
+      tracking.css        Track My Applications (/applications), scoped to .trk
       profile.css         the /profile screen
       charts.css          every Chart.js surface, shared by all dashboards
       sidebar-identity.css the sidebar's identity card
@@ -35,6 +36,7 @@
     'dashboard-states',
     'dashboard-cgs',
     'notifications',
+    'tracking',
     'dashboard-admin',
     'profile',
     'charts',

@@ -115,6 +115,10 @@
     --warning-fg: #8A5D12;  --warning-bg: #FFF6E5;  --warning-border: #F0D9A3;
     --danger-fg:  #B32D22;  --danger-bg:  #FDEEED;  --danger-border:  #F3C4C0;
     --info-fg:    #2456A6;  --info-bg:    #E8F0FC;  --info-border:    #BFD4F2;
+    /* Two more text-safe tones (>= 4.5:1 on --surface and their own -bg),
+       for Track My Applications' category colours (tracking.css). */
+    --purple-fg:  #5B3FC4;  --purple-bg:  #EFEAFE;
+    --teal-fg:    #0B6E78;  --teal-bg:    #E3F6F8;
 
     /* --------------------------------------------------------------
        Category tones. NOT status -- these colour the icon disc on a
@@ -264,6 +268,8 @@
     --warning-fg: #E8BC6B;  --warning-bg: #322611;  --warning-border: #7A5B1E;
     --danger-fg:  #F19A92;  --danger-bg:  #351A17;  --danger-border:  #8A3A32;
     --info-fg:    #8FB6F0;  --info-bg:    #17233A;  --info-border:    #2F5390;
+    --purple-fg:  #C2B3FF;  --purple-bg:  #2A2440;
+    --teal-fg:    #6FD3DD;  --teal-bg:    #12302F;
 
     /* Shadows go nearly flat and the border carries the edge instead. */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -307,6 +313,8 @@
         --warning-fg: #E8BC6B;  --warning-bg: #322611;  --warning-border: #7A5B1E;
         --danger-fg:  #F19A92;  --danger-bg:  #351A17;  --danger-border:  #8A3A32;
         --info-fg:    #8FB6F0;  --info-bg:    #17233A;  --info-border:    #2F5390;
+        --purple-fg:  #C2B3FF;  --purple-bg:  #2A2440;
+        --teal-fg:    #6FD3DD;  --teal-bg:    #12302F;
 
         --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
         --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.40);

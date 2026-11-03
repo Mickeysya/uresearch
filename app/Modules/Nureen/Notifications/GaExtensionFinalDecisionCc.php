@@ -47,7 +47,8 @@ class GaExtensionFinalDecisionCc extends Notification implements ShouldQueue
                 "GA Extension application #{$this->application->id} for {$this->application->student?->name} ".
                 "has been {$verb} at the {$this->stage->label} stage.")
             ->line('This is a copy for your records -- no action is needed from you.')
-            ->action('View the application', route('applications.index'))
+            // The staff view: applications.index is students-only.
+            ->action('View the application', route('nureen.application', $this->application))
             ->line('Thank you for using UResearch 2.0.');
     }
 }

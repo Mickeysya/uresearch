@@ -2,6 +2,7 @@
 
 namespace App\Modules\Nureen\Http\Controllers;
 
+use App\Modules\Nureen\Support\SubmissionNotifier;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
@@ -14,6 +15,7 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionInformational;
+use App\Modules\Nureen\Support\SupervisorCheck;
 use App\Modules\Nureen\Support\ClientCharter;
 use App\Modules\Nureen\Support\Drafts;
 use App\Modules\Nureen\Support\LetterRenderer;
@@ -49,6 +51,7 @@ class GaExtensionController extends Controller
 
         return view('nureen::ga_extension.form', [
             'student' => $student,
+            'supervisorProblem' => SupervisorCheck::problemFor($student),
             'requiredDocuments' => config('nureen.ga_extension.required_documents'),
             'stageGateDocuments' => config('nureen.ga_extension.stage_gate_documents'),
             'applicantFields' => $this->applicantFields(),
@@ -173,10 +176,10 @@ class GaExtensionController extends Controller
             : null;
 
         // The first stage is addressed to the student's own named
-        // supervisor, so there has to be one -- same rule as
-        // CertificationController::store().
-        if (! $request->user()->supervisor_id) {
-            return back()->with('error', 'No supervisor is assigned to your account. Please contact CGS.');
+        // supervisor, so there has to be one who can act -- same rule as
+        // CertificationController::store(); see Support\SupervisorCheck.
+        if ($problem = SupervisorCheck::problemFor($request->user())) {
+            return back()->withInput()->with('error', $problem);
         }
 
         $requiredDocuments = config('nureen.ga_extension.required_documents');
@@ -279,6 +282,10 @@ class GaExtensionController extends Controller
 
             return $engine->submit($application);
         });
+
+        // Whoever acts first is told now -- Core's engine only notifies a
+        // stage when an earlier one decides. See Support\SubmissionNotifier.
+        app(SubmissionNotifier::class)->notify($application);
 
         return redirect()
             ->route('applications.index')

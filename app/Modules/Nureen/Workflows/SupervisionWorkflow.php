@@ -3,6 +3,12 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
+use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
+use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Core\Contracts\DescribesApplicationProgress;
+use App\Modules\Core\Contracts\SuppliesOverdueStatus;
+use App\Modules\Nureen\Support\TrackingDescriptions;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
@@ -38,8 +44,52 @@ use App\Modules\Nureen\Models\SupervisionDetail;
  * rather than in this class, since that write is a side effect of a
  * decision, not part of the chain itself.
  */
-class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates
+class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus, DescribesApplicationProgress, DescribesApplicationDetails
 {
+    /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
+    use DescribesApplicationDetailsDefaults;
+
+    public function details(Application $application): array
+    {
+        return app(ApplicationDetailsContent::class)->supervision($application);
+    }
+
+    public function timelineEvents(Application $application): array
+    {
+        return [
+            ...app(ApplicationDetailsContent::class)->reminders($application),
+            ...app(ApplicationDetailsContent::class)->letterEvents($this->issuedDocument($application)),
+        ];
+    }
+
+    public function stageTargetDays(Application $application, string $stageKey): ?int
+    {
+        return app(ApplicationDetailsContent::class)->target($application, $stageKey);
+    }
+
+    public function waitingFor(Application $application): ?string
+    {
+        return app(ApplicationDetailsContent::class)->waitingFor($application);
+    }
+
+    public function issuedDocument(Application $application): ?array
+    {
+        return app(ApplicationDetailsContent::class)->appointmentLetter($application);
+    }
+
+    /** Track My Applications tab (config/tracking.php) and card icon. */
+    public const CATEGORY = 'supervision';
+
+    public const ICON = 'person';
+
+    /** Track My Applications: Core\Contracts\DescribesApplicationProgress -- see Support\TrackingDescriptions. */
+    public function describeProgress(Application $application): array
+    {
+        $detail = SupervisionDetail::where('application_id', $application->id)->first();
+
+        return app(TrackingDescriptions::class)->letter($application, \App\Modules\Nureen\Support\LetterRenderer::APPOINTMENT_DOC_TYPE, $detail?->letter_reference, $detail?->letter_revoked_at);
+    }
+
     /** expectedDecisionDate(): the Client Charter date, for the student dashboard. */
     use ExpectsDecisionByCharter;
 
@@ -164,7 +214,7 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
     public function modeFor(?Application $application): string
     {
         if ($application) {
-            $detail = SupervisionDetail::where('application_id', $application->id)->first();
+            $detail = $this->detailFor($application);
 
             if ($detail?->cgs_stage_snapshot) {
                 return $detail->cgs_stage_snapshot;
@@ -173,6 +223,32 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
 
         return config('nureen.supervision.cgs_stage');
     }
+
+    /**
+     * The application's detail row, read once per Application object: the
+     * stored snapshot never changes once written, and Track My Applications
+     * asks for one card's chain (and summary) several times. A row not
+     * written yet -- mid-submit -- is never cached.
+     */
+    protected function detailFor(Application $application): ?SupervisionDetail
+    {
+        $this->details ??= new \WeakMap();
+
+        if (isset($this->details[$application])) {
+            return $this->details[$application];
+        }
+
+        $detail = SupervisionDetail::where('application_id', $application->id)->first();
+
+        if ($detail) {
+            $this->details[$application] = $detail;
+        }
+
+        return $detail;
+    }
+
+    /** @var \WeakMap<Application, SupervisionDetail>|null see detailFor() */
+    private ?\WeakMap $details = null;
 
     public function summary(Application $application): string
     {

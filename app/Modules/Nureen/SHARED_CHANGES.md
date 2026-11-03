@@ -480,6 +480,266 @@ appeals it seeds without them show "missing" in CGS's checks.
 
 ---
 
+## 10. Track My Applications redesign (branch `feature/track-applications-redesign`, uncommitted)
+
+The student's Track My Applications page (`/applications`) now has tabs by
+category, status filters ("Needs you", "In progress", "Approved",
+"Rejected") and one card per application, with a stepper built from that
+application's own chain. **Core still names no module.** Every module
+already appears and works with no change; the lines below are optional
+extras.
+
+### For teammates: the ONE line that gives your module its own tab
+
+Add a `CATEGORY` constant to your workflow class (the class you register
+in your `ModuleProvider`):
+
+```php
+public const CATEGORY = 'thesis';
+```
+
+Use one of these keys (the labels live in `config/tracking.php`, so a
+rename never touches your module):
+
+| Key | Tab label | Suggested for |
+|---|---|---|
+| `assistantships` | Assistantships | GA Extension, Certification Letter (Nureen, done) |
+| `supervision` | Supervision & Examination | Supervision Request (Nureen, done), Examiner Nomination, Re-viva Monitoring (Hani), Appointment Letter (Jason) |
+| `candidacy` | Candidacy & Progress | Attendance Appeal (Nureen, done), Study Candidacy Appeal (Chloe), RPD Extension Appeal, RPD Dismissal (Norhanis) |
+| `thesis` | Thesis Submission | Hardbound Submission, Appeal Hardbound Submission (Jason) |
+| `travel-funding` | Travel & Funding | Travel, Student Claims, Publication (Norhanis) |
+
+Without the line, your applications show under **Other**. A key not in the
+table still gets its own tab (labelled from the key, in a neutral colour).
+Optionally, a second line picks the card icon from
+`core::dashboard.partials.icon`, e.g. `public const ICON = 'book';`.
+
+### Optional contracts (implement only if you want them; checked with `instanceof`)
+
+- **`Core\Contracts\DescribesApplicationProgress`**: `describeProgress(Application $application): array`.
+  Return any of these keys:
+  - `sentence`: your own footer line;
+  - `actions`: extra buttons, as `[['label' => ..., 'url' => ..., 'primary' => true]]`;
+  - `reference`: e.g. an issued letter's real reference, shown beside the
+    application reference;
+  - `needs_student`: counts under "Needs you"; make your action the primary
+    button;
+  - `resubmission_expected`: a REJECTED application counts as "Needs you"
+    only when this is true.
+
+  Return `[]` for nothing. Without it, Core writes a generic sentence ("Now
+  with CGS Staff. No action needed from you.") and offers View details.
+- **`Core\Contracts\SuppliesOverdueStatus`**: `decisionIsOverdue(Application $application): bool`
+  marks the current step "Taking longer than usual". It was deliberately
+  NOT added to `SuppliesDecisionDates`, because adding a method to an
+  existing interface would break anyone already implementing it.
+
+### Every Core / shared change
+
+| File | Change |
+|---|---|
+| `Core/Http/Controllers/ApplicationTrackingController.php` | `index()`: validates `tab`, `status`, `page` and hands off to the service. `show()` unchanged |
+| `Core/Services/ApplicationTracker.php` (new) | tabs, counts, filters, cards, 20 per page |
+| `Core/Services/ModuleRegistry.php` | `categoryFor($key)` reads a module's optional `CATEGORY` / `ICON` constants plus `config/tracking.php` |
+| `Core/Contracts/DescribesApplicationProgress.php` (new) | optional contract, above |
+| `Core/Contracts/SuppliesOverdueStatus.php` (new) | optional contract, above |
+| `Core/Support/WorkingDayCalendar.php` (new) | the portal's one working-day calculator (Mon to Fri minus `config('calendar.holidays')`), moved from Nureen. Nureen's calendar now extends it, unchanged in behaviour (tested day by day for all of 2026) |
+| `config/calendar.php` (new) | `holidays => []`, portal-wide |
+| `config/tracking.php` (new) | category key → label, fixed tone, default icon. Tones are fixed per category, not per tab position, so a category has the same colour for every student. No modules are listed |
+| `Core/Resources/views/applications/index.blade.php` | rewritten |
+| `Core/Resources/views/components/track-card.blade.php` (new) | one card |
+| `Core/Resources/views/partials/stylesheets.blade.php` | loads `tracking.css` |
+| `public/css/tracking.css` (new) | scoped to `.trk` |
+| `public/css/tokens.css` | adds `--purple-fg/-bg` and `--teal-fg/-bg` (light and both dark blocks), text-safe at 4.5:1 or better |
+
+The shared `<x-core::stepper>` (also used by `applications.show` and
+Chloe's appeal page) is **unchanged**; the new stepper lives in the card.
+
+**Found, not fixed globally:** in `layout.css`, `.page-header-text { flex: 1 1 24rem }`
+becomes a 24rem *height* once `.page-header` stacks into a column below
+720px, leaving a ~380px blank gap above the actions on every page that has
+header actions. Fixed only on this page (`.trk .page-header-text { flex-basis: auto; }`).
+Suggested global fix: the same rule inside the existing `@media (max-width: 720px)` block
+in `layout.css`.
+
+### 10b. The application details page ("View details"), same branch
+
+`ApplicationTrackingController::show()` now renders a full details page from
+`Core\Services\ApplicationDetails`:
+- **Header:** breadcrumb back to the list's own tab and filter; label,
+  reference, title; "Pending · with CGS Staff"; the expected-date card, or
+  the student's action when they must act.
+- **Progress:** who acted, when, and working days against each stage's
+  target.
+- **"What happens next".**
+- **Activity:** newest first.
+- **"Your application"** (optional).
+- **Documents:** with the issued letter, its reference and verification
+  link.
+- **"Need help?".**
+
+**Bug fixed in `WorkflowEngine::progress()` (affects every module, in a good way).**
+A stage before the current position used to count as completed by its
+position alone. Now it is completed only if `approval_history` has a decision
+for it; otherwise its state is `'skipped'`, shown as "Not required for this
+application". That is the case of a stage added to a chain after an
+application had already passed that point. Found on certification #144: it
+was submitted before the Supervisor stage existed, and showed Supervisor as
+done with "No decisions recorded yet" underneath. The shared
+`<x-core::stepper>` (Chloe's appeal page) no longer ticks such a stage either.
+No existing test changed.
+
+**For teammates: optional, to fill the "Your application" section and more.**
+Implement `Core\Contracts\DescribesApplicationDetails` on your workflow class
+with its defaults trait, and override only what you have:
+
+```php
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
+use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
+
+class TravelWorkflow implements WorkflowModule, DescribesApplicationDetails
+{
+    use DescribesApplicationDetailsDefaults;
+
+    public function details(Application $application): array
+    {
+        return ['Destination' => '...', 'Dates' => '...'];   // label => value
+    }
+}
+```
+
+The interface's four methods are below. Each one has a do-nothing default in
+the trait, so a method added later never breaks you:
+
+| Method | Returns |
+|---|---|
+| `details()` | label => value |
+| `timelineEvents()` | your own events, e.g. reminders, letters; never staff names |
+| `issuedDocument()` | the letter you issue, with reference, verify URL and revocation |
+| `stageTargetDays()` | each stage's promised working days |
+
+It is a separate interface rather than a `details()` method added to
+`DescribesApplicationProgress`, for the same reason as `SuppliesOverdueStatus`.
+`DescribesApplicationProgress` also accepts an optional `next` key, which sets
+the "What happens next" text.
+
+**Never return internal-only data** from these: everything is shown to the
+student.
+
+| File | Change |
+|---|---|
+| `Core/Services/WorkflowEngine.php` | `progress()`: a stage with no decision is `'skipped'`, never `'completed'`; reads loaded history (no extra query) |
+| `Core/Services/ApplicationDetails.php` (new) | the page's data |
+| `Core/Services/ApplicationTracker.php` | `summarise()` public (one "needs you" rule for list and page); View details links carry `?tab=&status=`; skipped steps on cards |
+| `Core/Contracts/DescribesApplicationDetails.php` (new) + `Contracts/Defaults/DescribesApplicationDetailsDefaults.php` (new) | above |
+| `Core/Contracts/DescribesApplicationProgress.php` | documents the optional `next` key |
+| `Core/Http/Controllers/ApplicationTrackingController.php` | `show()`: same owner check, validates `tab`/`status`, renders from the service |
+| `Core/Resources/views/applications/show.blade.php` | rewritten (still opens with `<x-core::page-header>`) |
+| `Core/Resources/views/components/track-card.blade.php` | "not required" wording for skipped steps |
+| `config/tracking.php` | `help` contact for "Need help?" (PLACEHOLDERS until CGS confirms) |
+| `public/css/tracking.css` | `.trk-detail` styles; muted, dashed "skipped" step |
+
+**Who can open it:** students only, their own applications only, as before.
+Approvers never had this page and still don't.
+
+---
+
+## 11. `phpunit.xml`: tests no longer leak jobs onto the real queue (done on `feature/track-applications-redesign`)
+
+**Symptom everyone has seen:** after every `php artisan test`, the dev queue
+worker logs about 120 `FAIL` lines (`ApplicationDecided`, `ApplicationReturned`,
+Chloe's `CandidacyAppealApproved`, Jason's `HardboundSubmissionRejected`, …),
+`storage/logs/laravel.log` fills with "Database file at path [uresearch] does
+not exist (Connection: sqlite)", and `failed_jobs` grows. It held over 8,000
+rows on 3 Nov 2026.
+
+**Cause:**
+- **The container's variable wins.** The Docker app container exports
+  `QUEUE_CONNECTION=redis`, and `phpunit.xml`'s `<env>` lines are ignored for
+  any variable the environment already has (no `force`).
+- **`force` alone wasn't enough.** Even forced, `<env>` only sets `$_ENV` and
+  `getenv()`, while PHP also copies the container environment into
+  `$_SERVER`, which Laravel reads first. A probe test showed
+  `config('queue.default') === 'redis'` inside tests.
+- **What then happened:** tests queued their notifications onto the REAL
+  Redis queue, and the dev worker tried to run them against the tests'
+  in-memory SQLite database.
+
+**Change:** every setting in the `<php>` block is now set twice, both forced:
+
+```xml
+<env name="QUEUE_CONNECTION" value="sync" force="true"/>
+<server name="QUEUE_CONNECTION" value="sync" force="true"/>
+```
+
+(The same for `APP_ENV`, `DB_CONNECTION`, `DB_DATABASE`, `MAIL_MAILER`,
+`CACHE_STORE`, `SESSION_DRIVER` and `BCRYPT_ROUNDS`.)
+
+**Verified:** a clean full run (488 tests) sent **0** jobs to the worker,
+and `failed_jobs` didn't change.
+
+**Nothing for teammates to do.** Per-test workarounds such as Nureen's
+`KeepsJobsOffTheDevQueue` trait still work but are no longer needed. The
+8,000+ old rows in `failed_jobs` are leftovers from before this fix. They
+are safe to clear once someone has looked at them (`php artisan queue:flush`),
+but do not clear them blindly: a genuine failure could be among them.
+
+## 12. Revocation reason: who sees it (Nureen, both letter types)
+
+The CGS revoke forms said the reason was "shown nowhere public, but is kept
+for the record". That was already inaccurate for Supervision, where the
+revocation email to the student AND the supervisor quotes it. The forms now
+show this hint under the reason box (linked with `aria-describedby`), and the
+validation message says the same:
+
+> This reason is shown to the student and their supervisor. It is not shown on the public verification page.
+
+**Caveat:** for a GA/GRA **certification**, the reason is shown to the
+student (application details page) but nothing currently shows it to the
+supervisor. Either the hint drops "and their supervisor" there, or the
+certification revocation also emails the supervisor. That decision is open.
+
+## 13. No Electrical & Electronics Chair in the seeded data (for whoever owns `DemoDataSeeder`)
+
+Core's seeders create Chair accounts for **Computing** (`chair@utp.edu.my`) and
+**Chemical Engineering** (`meiling.tan@utp.edu.my`) only. Five roster students
+are in **Electrical & Electronics Engineering**:
+- Tan Wei Jian (22001012)
+- Lee Xin Yi (22001015)
+- Siti Khadijah Yusof (22001018)
+- Ravindran Subramaniam (22001021)
+- Ahmad Zaki Hilmi (22001024)
+
+The Chair's queue is department-scoped, so a Supervision request from any of
+them stops at the Chair stage with nobody able to act. Tan Wei Jian's #88
+will, once endorsed. `docs/test-accounts.md` used to list
+`chair-electrical-electronics-engineering@utp.edu.my`, but no seeder creates
+it; it came from a hand-made account on someone's machine.
+
+**Proposed:** add one line to `DemoDataSeeder`'s staff list, next to Dr. Mei
+Ling Tan:
+
+```php
+['<name>', '<email>@utp.edu.my', Role::CHAIR, 'Electrical & Electronics Engineering', 'FOE'],
+```
+
+**Until then:** Nureen's CGS **Stuck Reviews** page (`/reviews/stuck`) lists
+any Supervision request waiting at a Chair stage whose department has no
+Chair.
+
+### 10c. Addition to `DescribesApplicationDetails` (3 Nov 2026)
+
+`waitingFor(Application): ?string` names who a pending application is waiting
+for ("Dr. Aisyah Rahman, your supervisor"). The details page shows it in the
+status line and on the current step; without it, the page names the role.
+Its default in `DescribesApplicationDetailsDefaults` returns null, so no
+implementer breaks.
+
+Files: `Core/Contracts/DescribesApplicationDetails.php`,
+`Core/Contracts/Defaults/DescribesApplicationDetailsDefaults.php`,
+`Core/Services/ApplicationDetails.php` (the `waiting_for` key),
+`Core/Resources/views/applications/show.blade.php`, `public/css/tracking.css`.
+
 ## 14. Saved drafts (GA Extension, Certification): what Core shows, and two small Core proposals
 
 Numbered 14 so it doesn't collide with §10–§13 on `feature/track-applications-redesign`

@@ -464,7 +464,9 @@ return [
         // a weekday. Empty by default. CGS can list Malaysian national and
         // Perak state public holidays here (e.g. '2026-12-25'); every due
         // date, expected decision date, reminder and compliance figure is
-        // counted on Support\WorkingDayCalendar, which reads this one list.
+        // counted on Support\WorkingDayCalendar, which adds this list to
+        // the portal-wide config('calendar.holidays') -- put holidays that
+        // apply to everyone there instead.
         'holidays' => [],
 
     ],

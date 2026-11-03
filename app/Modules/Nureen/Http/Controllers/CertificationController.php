@@ -2,14 +2,18 @@
 
 namespace App\Modules\Nureen\Http\Controllers;
 
+use App\Modules\Nureen\Support\SubmissionNotifier;
+use App\Modules\Nureen\Notifications\CertificationRevoked;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Notifications\CertificationIssued;
+use App\Modules\Nureen\Support\SupervisorCheck;
 use App\Modules\Nureen\Support\AppointmentVerifier;
 use App\Modules\Nureen\Support\ClientCharter;
 use App\Modules\Nureen\Support\Drafts;
@@ -53,7 +57,7 @@ class CertificationController extends Controller
             'downloadAttachment' => session('download_attachment') && $draft ? route('ga-certification.attachment', $draft) : null,
             'fields' => config('nureen.ga_certification.fields'),
             'supportingDocumentLabel' => config('nureen.ga_certification.supporting_document_label'),
-            'hasSupervisor' => $request->user()->supervisor_id !== null,
+            'supervisorProblem' => SupervisorCheck::problemFor($request->user()),
             'purposeMax' => config('nureen.ga_certification.purpose_max'),
             'draft' => $draft,
             'detail' => $draft ? GaCertificationDetail::where('application_id', $draft->id)->first() : null,
@@ -204,8 +208,8 @@ class CertificationController extends Controller
         // application nobody can review" -- the new first stage is
         // addressed to the student's own named supervisor, so there has to
         // be one to address it to.
-        if (! $student->supervisor_id) {
-            return back()->with('error', 'No supervisor is assigned to your account. Please contact CGS.');
+        if ($problem = SupervisorCheck::problemFor($student)) {
+            return back()->withInput()->with('error', $problem);
         }
 
         $identityOnFile = $draft && filled(GaCertificationDetail::where('application_id', $draft->id)->first()?->identity_number);
@@ -292,6 +296,10 @@ class CertificationController extends Controller
 
             return $engine->submit($application);
         });
+
+        // Whoever acts first is told now -- Core's engine only notifies a
+        // stage when an earlier one decides. See Support\SubmissionNotifier.
+        app(SubmissionNotifier::class)->notify($application);
 
         return redirect()
             ->route('applications.index')
@@ -562,7 +570,7 @@ class CertificationController extends Controller
         $data = $request->validate([
             'revoked_reason' => ['required', 'string', 'max:255'],
         ], [
-            'revoked_reason.required' => 'Say why this certificate is being revoked — it is shown nowhere public, but is kept for the record.',
+            'revoked_reason.required' => 'Say why this certificate is being revoked. This reason is shown to the student and their supervisor. It is not shown on the public verification page.',
         ]);
 
         $detail->update([
@@ -575,6 +583,13 @@ class CertificationController extends Controller
         $letters = app(LetterRenderer::class);
         $letters->replaceStored($application, LetterRenderer::CERTIFICATION_DOC_TYPE, $letters->certification($application));
 
-        return back()->with('status', "Certificate {$detail->reference_number} revoked.");
+        // The student and the supervisor named on the request, with the
+        // reason -- what the revoke form's hint promises.
+        $application->student?->notify(new CertificationRevoked($detail));
+        if ($detail->supervisor_id && $detail->supervisor_id !== $application->student_id) {
+            User::find($detail->supervisor_id)?->notify(new CertificationRevoked($detail));
+        }
+
+        return back()->with('status', "Certificate {$detail->reference_number} revoked; the student and their supervisor have been emailed.");
     }
 }

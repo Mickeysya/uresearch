@@ -266,6 +266,59 @@ implement Core's `SuppliesDecisionDates` (`Workflows\Concerns\ExpectsDecisionByC
 Demo data: `NureenClientCharterDemoSeeder` (matric numbers 22091001–22091024,
 on-time and overdue at every stage).
 
+## Track My Applications (Core page, this module's part)
+
+Each workflow declares its tab and icon (`public const CATEGORY` / `ICON`):
+GA Extension and Certification under `assistantships`, Supervision under
+`supervision`, Attendance Appeal under `candidacy`. Supervision and
+Certification implement Core's `DescribesApplicationProgress`
+(`Support\TrackingDescriptions`): an issued letter's real reference,
+Download letter (PDF) as the primary button, and "Needs you" until the
+student first opens it. Revoked letters say so. GA Extension says "All 4
+required documents received." when they all arrived. The three charter
+workflows implement `SuppliesOverdueStatus` through the charter trait.
+`Support\WorkingDayCalendar` now extends Core's shared calendar and adds
+`nureen.charter.holidays`. See `SHARED_CHANGES.md` §10.
+The details page ("View details"): all four workflows implement
+`DescribesApplicationDetails` (`Support\ApplicationDetailsContent`) for
+"Your application" (GA Extension: dates and reason; Certification: the GA
+course or GRA project fields, never the appointment check; Supervision:
+supervisor, role, type and justification; Attendance Appeal: period and
+sessions), reminders ("CGS Staff reminded", never a name), letter issued and
+revoked events, the issued letter with its verification link, and each
+stage's charter target. See `SHARED_CHANGES.md` §10b.
+
+**Supervisor safeguards (3 Nov 2026):**
+- **Blocked submission:** GA Extension and Certification can't be submitted
+  without a supervisor who can act (`Support\SupervisorCheck`, on the form
+  and on submit).
+- **Submission email:** whoever acts first is emailed when a request is
+  submitted, with the charter due date and a queue link
+  (`Support\SubmissionNotifier`, `Notifications\ApplicationAwaitingYou`):
+  the named supervisor for GA Extension, Certification and Supervision, and
+  every Non-Executive CGS for an Attendance Appeal.
+- **Waiting-for:** the details page names who it is waiting for
+  (`waitingFor()`).
+- **Stuck Reviews:** CGS's page at `/reviews/stuck`
+  (`Support\StuckSupervisorStages`) lists requests nobody can act on, and
+  reassigns a GA Extension or Certification to another supervisor. The
+  reassignment is recorded in approval_history as `reassigned`, with the
+  reason; it restarts the charter clock and is not counted as a decision.
+- **Revocation email:** a revoked certification emails the student and the
+  supervisor (`Notifications\CertificationRevoked`).
+
+**Every email link opens for its recipient** (`EmailLinksTest` follows each
+button as that person and expects 200):
+- **Staff:** they land on `nureen.application`
+  (`StaffApplicationController`), a read-only view of one application. It is
+  open only to staff with a part in it (`Support\StaffApplicationAccess`):
+  the named or requested supervisor, anyone who decided on it, a role on its
+  chain (Chair: own department only), and for GA Extension the Senior
+  Director.
+- **Students:** they land on their own details page.
+- **The appointment letter:** now emailed to the supervisor as their own
+  message, not a CC on the student's.
+
 ## Official letters
 
 Both letters, the Supervision appointment letter and the GA/GRA
@@ -380,7 +433,7 @@ role-scoped pending that decision.
 | `SupervisionTest` | the required document, that it lands on the private disk under a random name, and that a supervisor sees only the requests naming them |
 | `CertificationTest` | the letter being generated, attached as an `ApplicationDocument`, and actually dispatched |
 | `CertificationOnlineFormTest` | GA and GRA submissions storing every online-form field; an option outside config's list rejected; profile fields (name, matric, department, programme, supervisor) not overridable through the request; the profile shown read-only; non-PDF rejected and several PDFs accepted; the declaration required to submit but not to save a draft; the identity number encrypted at rest, masked for the supervisor, full for CGS, never echoed on the form and kept when left blank; `ask_period` on (required, printed) and off (hidden, ignored, not printed, queue still renders); the attachment as a PDF for the owner only, and from a draft with the auto-download |
-| `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday |
+| `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday; the charter calendar agreeing with Core's shared one for every day of 2026; both holiday lists applied |
 | `GaExtensionFormTest` | every Section B field stored; profile fields not overridable; visa date required only with a visa; declaration on submit not draft; backdated refused; account/IC encrypted at rest, masked for supervisor, student and Senior Director, full at the CGS stage, never echoed, blank keeps; bank flag both ways; publications JSON round-trip, half-filled rows on drafts but not submit, ISSN format; Section A ticks and CGS ticks after CGS passes; Section E on both chains, a rejection, and after a return; Section J at the CGS stage only; who may download (owner incl. draft, chain approvers, not other students/supervisors/Chair, not the Director on the `cgs` chain); an old application with an uploaded form still renders |
 | `GaExtensionRulesTest` | each Terms and Conditions check passing and failing for MSc and PhD; the stage gate level at every boundary month; whole months since admission; the right proof per level and the old combined proof; unknown without data; every number read from config |
 | `DraftsTest` | empty draft saves (both modules); saving again updates the same draft and keeps files; light validation only; Remove deletes the file; the 5-file limit counts attached files; an incomplete draft fails submit with the normal messages; a complete one goes to pending at the first stage as the same application, files intact; a Certification switching GA→GRA relabels its files; another student (or staff) can't open, change, submit or delete it; delete removes everything; no queue, reminder or analytics sees a draft |
