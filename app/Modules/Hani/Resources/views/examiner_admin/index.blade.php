@@ -177,6 +177,10 @@
         title="Examiner Pool"
         subtitle="{{ $examiners->total() }} {{ Str::plural('examiner', $examiners->total()) }} on record. State is derived, so anyone on gap becomes available again on their own.">
         <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
+        <a href="{{ route('examiner-import.create') }}" class="btn-secondary">Import from Excel</a>
+        @if ($openReviewItems)
+            <a href="{{ route('examiner-import.review') }}" class="btn-secondary">Review list ({{ $openReviewItems }})</a>
+        @endif
     </x-core::page-header>
 
     <nav class="exam-tabs" aria-label="Examiner lists">
@@ -314,7 +318,14 @@
                         <td>
                             <div class="examiner-name-cell">
                                 <span class="examiner-avatar">{{ strtoupper($initials) }}</span>
-                                <span>{{ $examiner->name }}</span>
+                                <span>
+                                    {{ $examiner->name }}
+                                    {{-- CGS's pool file has no email column; nothing that
+                                         writes to an examiner will reach this one yet. --}}
+                                    @if ($examiner->needsEmail())
+                                        <span class="examiner-state-badge tone-warn">Email needed</span>
+                                    @endif
+                                </span>
                             </div>
                         </td>
                         @if (! $type)
@@ -361,6 +372,7 @@
                             @endif
                         </td>
                         <td>
+                            <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary">Edit</a>
                             @if ($examiner->is_active)
                                 <button type="button" class="btn-reject"
                                         data-unavailable="{{ $examiner->id }}"
@@ -368,7 +380,7 @@
                                     Mark Unavailable
                                 </button>
                             @else
-                                <form method="POST" action="{{ route('examiner-admin.toggle-active', $examiner) }}">
+                                <form method="POST" action="{{ route('examiner-admin.toggle-active', $examiner) }}" style="display: inline;">
                                     @csrf
                                     <button type="submit">Reactivate</button>
                                 </form>

@@ -3,6 +3,7 @@
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Http\Controllers\ConflictDetectionController;
 use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
+use App\Modules\Hani\Http\Controllers\ExaminerImportController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\VivaController;
@@ -121,6 +122,17 @@ Route::middleware('auth')->group(function () {
         Route::post('/examiners', [ExaminerAdminController::class, 'store'])->name('examiner-admin.store');
         Route::post('/examiners/{examiner}/toggle-active', [ExaminerAdminController::class, 'toggleActive'])
             ->name('examiner-admin.toggle-active');
+        Route::get('/examiners/{examiner}/edit', [ExaminerAdminController::class, 'edit'])->name('examiner-admin.edit');
+        Route::put('/examiners/{examiner}', [ExaminerAdminController::class, 'update'])->name('examiner-admin.update');
+
+        // Pool import: upload -> preview -> confirm. See ExaminerImportController.
+        Route::get('/examiners/import', [ExaminerImportController::class, 'create'])->name('examiner-import.create');
+        Route::post('/examiners/import', [ExaminerImportController::class, 'store'])->name('examiner-import.store');
+        Route::get('/examiners/import/template', [ExaminerImportController::class, 'template'])->name('examiner-import.template');
+        Route::get('/examiners/import/{batch}', [ExaminerImportController::class, 'show'])->name('examiner-import.show');
+        Route::post('/examiners/import/{batch}/confirm', [ExaminerImportController::class, 'confirm'])->name('examiner-import.confirm');
+        Route::get('/examiners/review', [ExaminerImportController::class, 'review'])->name('examiner-import.review');
+        Route::post('/examiners/review/{item}/resolve', [ExaminerImportController::class, 'resolve'])->name('examiner-import.resolve');
     });
 
     // ---- Re-viva Monitoring --------------------------------------------

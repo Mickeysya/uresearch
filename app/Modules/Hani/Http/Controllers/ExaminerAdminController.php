@@ -5,14 +5,18 @@ namespace App\Modules\Hani\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
+use App\Modules\Hani\Models\ExaminerReviewItem;
+use App\Modules\Hani\Support\Departments;
+use App\Modules\Hani\Support\Import\Cells;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 
 /**
- * Day-to-day upkeep of the examiner pool for CGS: add an examiner, or flip
- * one to Unavailable (retired, resigned, deceased) without deleting their
+ * Day-to-day upkeep of the examiner pool for the Senior Executive CGS: add
+ * or edit an examiner, or flip one to Unavailable (retired, resigned, deceased) without deleting their
  * history. Everything else about the pool -- eligibility, the gap, the
  * assigned tie-up -- is derived state the nomination and evaluation flows
  * already maintain; this screen only ever touches the fields a human has to
@@ -88,6 +92,7 @@ class ExaminerAdminController extends Controller
             'departments' => $tabPool->pluck('department')->unique()->sort()->values(),
             'studentsByExaminer' => $this->studentsByExaminer($examiners->getCollection()->pluck('id')),
             'filters' => $request->only(['department', 'type', 'status', 'search']),
+            'openReviewItems' => ExaminerReviewItem::open()->count(),
         ]);
     }
 
@@ -140,17 +145,62 @@ class ExaminerAdminController extends Controller
 
     public function create()
     {
-        return view('hani::examiner_admin.form');
+        return view('hani::examiner_admin.form', ['examiner' => null]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, Departments $departments)
+    {
+        $data = $this->validated($request, $departments);
+
+        $examiner = Examiner::create(Arr::except($data, 'keywords') + ['is_active' => true]);
+        $this->syncKeywords($examiner, $data['keywords']);
+
+        return redirect()
+            ->route('examiner-admin.index')
+            ->with('status', "Examiner {$data['name']} added to the pool.");
+    }
+
+    public function edit(Examiner $examiner)
+    {
+        return view('hani::examiner_admin.form', ['examiner' => $examiner->load('expertiseKeywords')]);
+    }
+
+    /**
+     * The same rules as adding one. Availability is not edited here: going
+     * Unavailable needs its reason modal on the pool list (toggleActive()).
+     */
+    public function update(Request $request, Examiner $examiner, Departments $departments)
+    {
+        $data = $this->validated($request, $departments, $examiner);
+
+        // A switch to internal empties the external record rather than
+        // leaving it behind on a row that no longer shows it.
+        if ($data['type'] === Examiner::TYPE_INTERNAL) {
+            $data += array_fill_keys(Examiner::EXTERNAL_FIELDS, null);
+        }
+
+        $examiner->update(Arr::except($data, 'keywords'));
+        $this->syncKeywords($examiner, $data['keywords']);
+
+        return redirect()
+            ->route('examiner-admin.index')
+            ->with('status', "Examiner {$examiner->name} updated.");
+    }
+
+    /** @return array<string, mixed> */
+    protected function validated(Request $request, Departments $departments, ?Examiner $examiner = null): array
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:150'],
-            'email' => ['required', 'email', 'max:150', 'unique:examiners,email'],
+            // Optional since 2026-11-03: CGS's own pool file has no email
+            // column, and an examiner without one is still in the pool --
+            // shown as "Email needed" and skipped by anything that writes.
+            'email' => ['nullable', 'email', 'max:150', Rule::unique('examiners', 'email')->ignore($examiner?->id)],
             'department' => ['required', 'string', 'max:150'],
             'faculty' => ['nullable', 'string', 'max:100'],
             'type' => ['required', 'in:internal,external'],
+            'expertise' => ['nullable', 'string', 'max:2000'],
+            'keywords' => ['nullable', 'string', 'max:2000'],
 
             // External only. Nullable because CGS regularly adds an examiner
             // before the faculty paper is approved -- except the institution,
@@ -158,12 +208,24 @@ class ExaminerAdminController extends Controller
             'institution' => ['nullable', 'required_if:type,external', 'string', 'max:150'],
             'faculty_approval' => ['nullable', 'string', 'max:30'],
             'sector' => ['nullable', 'in:technical,research'],
-            'expertise' => ['nullable', 'string', 'max:2000'],
             'utp_cluster' => ['nullable', 'string', 'max:150'],
             'years_experience' => ['nullable', 'integer', 'min:0', 'max:80'],
             'msc_graduated' => ['nullable', 'integer', 'min:0', 'max:999'],
             'phd_graduated' => ['nullable', 'integer', 'min:0', 'max:999'],
+            'current_utp_appointment' => ['nullable', 'string', 'max:150'],
+            'former_utp_until' => ['nullable', 'date', 'before_or_equal:today'],
         ]);
+
+        // "Computer & Information Sciences" is filed as "Computing", so the
+        // own-department rule can match it against a student's account. A
+        // name nobody knows is kept as typed.
+        if ($resolved = $departments->resolve($data['department'])) {
+            $data['department'] = $resolved['name'];
+            $data['faculty'] = ($data['faculty'] ?? null) ?: $resolved['faculty'];
+        }
+
+        $data['email'] = filled($data['email'] ?? null) ? mb_strtolower($data['email']) : null;
+        $data['keywords'] = Cells::terms($data['keywords'] ?? '');
 
         // An internal examiner has no external record, whatever was posted:
         // the fields are hidden for internal, so anything arriving in them
@@ -172,11 +234,19 @@ class ExaminerAdminController extends Controller
             $data = Arr::except($data, Examiner::EXTERNAL_FIELDS);
         }
 
-        Examiner::create($data + ['is_active' => true]);
+        return $data;
+    }
 
-        return redirect()
-            ->route('examiner-admin.index')
-            ->with('status', "Examiner {$data['name']} added to the pool.");
+    /** The form's keyword list is the examiner's list. */
+    protected function syncKeywords(Examiner $examiner, array $keywords): void
+    {
+        $current = $examiner->expertiseKeywords()->pluck('keyword')->all();
+
+        foreach (array_diff($keywords, $current) as $keyword) {
+            $examiner->expertiseKeywords()->create(['keyword' => $keyword]);
+        }
+
+        $examiner->expertiseKeywords()->whereNotIn('keyword', $keywords ?: [''])->get()->each->delete();
     }
 
     /**

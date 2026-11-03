@@ -34,7 +34,46 @@ return [
             'Geoscience' => 'Geosciences',
             'Petroleum Geoscience' => 'Geosciences',
             'Management & Humanities' => 'Management',
+            // In CGS's internal sheet, not in the seeder's list.
+            'Fundamental & Applied Sciences' => 'Applied Sciences',
         ],
+    ],
+
+    'names' => [
+
+        // Stripped before two names are compared (Support\NameNormaliser).
+        // Compared as whole words after punctuation is removed, so "Assoc.
+        // Prof." and "Assoc Prof" are the same. "tan" is deliberately NOT a
+        // title on its own -- it is a common surname; "Tan Sri" is handled as
+        // a phrase. Provisional: extend as CGS's sheets show more forms.
+        'titles' => [
+            'prof', 'professor', 'assoc', 'associate', 'asst', 'assistant', 'madya',
+            'ap', 'dr', 'ir', 'ts', 'ar', 'sr', 'emeritus',
+            'datuk', 'dato', 'datin', 'datuk seri', 'dato sri', 'tan sri', 'puan sri', 'toh puan',
+            'haji', 'hj', 'hajah', 'hjh',
+            'phd', 'ph d', 'dphil', 'mr', 'mrs', 'ms', 'miss', 'puan', 'pn', 'encik', 'en', 'cik',
+        ],
+
+        // Patronymic connectors: "bin", "binti", "a/l", "a/p". Dropped so
+        // "Hassan bin Omar" and "Hassan Omar" compare equal.
+        'connectors' => ['bin', 'binti', 'bte', 'bt', 'binte', 'al', 'ap', 'so', 'do'],
+    ],
+
+    'duplicates' => [
+        // Two names at or above this similarity (0-100) are flagged as a
+        // possible duplicate. Flagged, never blocked. Provisional.
+        'threshold' => 85,
+    ],
+
+    'import' => [
+        // Largest pool file accepted, in KB. Provisional.
+        'max_kb' => 5120,
+
+        // An uploaded file is parsed into a preview and kept only as rows in
+        // examiner_import_batches until it is confirmed. Previews nobody
+        // confirmed are purged after this many hours, on the next upload and
+        // by `examiners:sweep`. Provisional.
+        'batch_ttl_hours' => 24,
     ],
 
 ];
