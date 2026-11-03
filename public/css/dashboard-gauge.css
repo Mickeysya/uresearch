@@ -1,7 +1,7 @@
 /* ============================================================
-   dashboard-gauge.css — the attendance gauge — animation, legend, facts
+   dashboard-gauge.css — the attendance gauge — status chip, stat grid
 
-   The SVG gauge's sweep, its band legend and the two figures beneath.
+   The status chip and the four-figure stat grid beside the ring.
    Loads after dashboard-student.css, whose .sdash-attendance-body sizes
    the column this sits in.
 
@@ -12,109 +12,72 @@
    ============================================================ */
 
 /* =====================================================================
-   Attendance gauge — animation, legend column and facts.
+   Attendance gauge — status chip and the stat grid beside the ring.
    ===================================================================== */
-
-.sdash-gauge { display: block; width: 100%; height: auto; overflow: visible; }
-
-.sdash-gauge-fill.tone-good     { stroke: var(--success-fg); }
-.sdash-gauge-fill.tone-warn     { stroke: var(--warning-fg); }
-.sdash-gauge-fill.tone-critical { stroke: var(--danger-fg); }
-.sdash-gauge-fill.tone-none     { stroke: var(--border-strong); }
-
-/* Sweeps from empty to the student's value on load. --arc and --arc-offset
-   are written onto the element by the partial, so the maths stays in one
-   place and CSS only animates between them. */
-.sdash-gauge-fill {
-    stroke-dasharray: var(--arc) var(--arc);
-    stroke-dashoffset: var(--arc);
-    animation: sdash-sweep 0.95s cubic-bezier(0.22, 0.61, 0.36, 1) var(--rise-start, 0s) backwards;
-    animation-fill-mode: forwards;
-}
-
-@keyframes sdash-sweep {
-    to { stroke-dashoffset: var(--arc-offset); }
-}
-
-/* The marker lands as the sweep finishes rather than sitting there from
-   the first frame. */
-.sdash-gauge-marker {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: sdash-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--rise-start, 0s) + 0.7s) backwards;
-}
-
-@keyframes sdash-pop {
-    from { opacity: 0; transform: scale(0.2); }
-    to   { opacity: 1; transform: scale(1); }
-}
 
 .sdash-gauge-side {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     min-width: 0;
 }
 
-.sdash-legend li {
-    padding: 4px 8px;
-    border-radius: 7px;
-    transition: background-color 0.2s;
-}
-
-/* The band the student is actually in is called out, so the legend says
-   something rather than only labelling colours. */
-.sdash-legend li.is-active {
-    background: var(--surface-hover);
-    font-weight: 600;
-}
-
-.sdash-legend-label { min-width: 0; }
-
-.sdash-legend-now {
-    margin-left: auto;
-    padding: 1px 7px;
+/* A single pill standing in for the old three-row band legend: the dial
+   only ever shows this student's own tone, so the full Good/Warning/
+   Critical scale belongs in text, once, rather than as three rows most of
+   which do not apply to them. */
+.sdash-status-chip {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 13px;
     border-radius: 20px;
-    background: var(--navy);
-    color: var(--text-on-accent);
-    font-size: 10px;
+    font-size: 13px;
     font-weight: 700;
-    letter-spacing: 0.3px;
-    flex-shrink: 0;
 }
 
-/* Two real figures under the legend, so the right-hand column carries its
-   own weight instead of being three coloured dots in a lot of white. */
-.sdash-facts {
+.sdash-status-chip .sdash-dot { width: 8px; height: 8px; }
+
+.sdash-status-chip-qualifier { font-weight: 500; opacity: 0.85; }
+
+.sdash-status-chip.tone-good     { background: var(--success-bg); color: var(--success-fg); }
+.sdash-status-chip.tone-warn     { background: var(--warning-bg); color: var(--warning-fg); }
+.sdash-status-chip.tone-critical { background: var(--danger-bg);  color: var(--danger-fg); }
+
+/* Sessions attended / Missed / Period ending / Target, two by two. */
+.sdash-stat-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin: 0;
-    padding-top: 10px;
-    border-top: 1px solid var(--border-subtle);
+    column-gap: 10px;
+    row-gap: 12px;
 }
 
-.sdash-facts div { min-width: 0; }
-
-.sdash-facts dt {
-    margin: 0 0 2px;
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    color: var(--text-grey);
+.sdash-stat-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
-.sdash-facts dd {
-    margin: 0;
-    font-size: 14px;
+.sdash-stat-cell-label { font-size: 12px; color: var(--text-grey); }
+
+.sdash-stat-cell-value {
+    font-size: 15px;
     font-weight: 700;
     color: var(--text-dark);
     font-variant-numeric: tabular-nums;
 }
 
-.sdash-facts dd span {
+.sdash-fact-unit {
     font-weight: 500;
     font-size: 12px;
+    color: var(--text-grey);
+}
+
+.sdash-stat-grid-empty {
+    margin: 0;
+    font-size: 12.5px;
     color: var(--text-grey);
 }
 

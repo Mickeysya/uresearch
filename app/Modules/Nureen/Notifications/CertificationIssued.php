@@ -6,6 +6,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApplicationDocument;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Mail\Attachment;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -54,11 +55,13 @@ class CertificationIssued extends Notification implements ShouldQueue
         // file is unreadable (a wiped storage volume in development, say).
         // A missing attachment should not cost the student the notification.
         if ($this->certificate->exists()) {
-            $mail->attachFromStorageDisk(
-                'local',
-                $this->certificate->path,
-                $this->certificate->original_name,
-                ['mime' => $this->certificate->mime_type ?? 'application/pdf'],
+            // MailMessage has no attachFromStorageDisk(); this is the
+            // Attachable form Laravel actually supports. The old call failed
+            // every one of these jobs in the queue worker.
+            $mail->attach(
+                Attachment::fromStorageDisk('local', $this->certificate->path)
+                    ->as($this->certificate->original_name)
+                    ->withMime($this->certificate->mime_type ?? 'application/pdf')
             );
         }
 

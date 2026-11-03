@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AttendanceAppealDetail extends Model
 {
     protected $fillable = [
-        'application_id', 'attendance_record_id', 'reason',
+        'application_id', 'attendance_record_id', 'sessions_requested', 'sessions_approved', 'reason',
     ];
 
     public function application(): BelongsTo

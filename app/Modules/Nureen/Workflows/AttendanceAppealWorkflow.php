@@ -2,6 +2,7 @@
 
 namespace App\Modules\Nureen\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
@@ -21,7 +22,7 @@ use Illuminate\Support\Str;
  * already exposes. A student's own Overview/History pair lives in the app's
  * fixed sidebar tree instead, not declared here.
  */
-class AttendanceAppealWorkflow implements WorkflowModule, ProvidesLinks
+class AttendanceAppealWorkflow implements WorkflowModule, ProvidesLinks, DecidesOneAtATime
 {
     public function key(): string
     {

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 class AttendanceRecord extends Model
 {
     protected $fillable = [
-        'student_id', 'period_end', 'sessions_attended', 'sessions_total', 'percentage', 'at_risk',
+        'student_id', 'period_end', 'sessions_attended', 'sessions_total', 'sessions_excused', 'percentage', 'at_risk',
     ];
 
     protected function casts(): array
@@ -27,11 +27,65 @@ class AttendanceRecord extends Model
     {
         // Percentage is always derived from the two counts, never taken
         // as-is from the CSV -- rule 7, "derive, don't trust".
+        //
+        // Sessions excused by an approved appeal are folded in according to
+        // config('nureen.attendance.excused_sessions') -- see
+        // countedAttended() / countedTotal().
         static::saving(function (self $record) {
-            $record->percentage = $record->sessions_total > 0
-                ? round(($record->sessions_attended / $record->sessions_total) * 100, 2)
-                : 0;
+            $record->percentage = $record->countedPercentage();
         });
+    }
+
+    /** Excused sessions are counted per config: as attended (default) or out of the total. */
+    public static function excusalRule(): string
+    {
+        return config('nureen.attendance.excused_sessions') === 'exclude_from_total'
+            ? 'exclude_from_total'
+            : 'count_as_attended';
+    }
+
+    /**
+     * Sessions counted as attended. 'count_as_attended': attended + excused,
+     * never more than the total. 'exclude_from_total': attended only. The one
+     * place an approved appeal's excusal is folded into attended -- used by
+     * `percentage`, the semester figure and the projection alike.
+     */
+    public function countedAttended(): int
+    {
+        return self::excusalRule() === 'exclude_from_total'
+            ? (int) $this->sessions_attended
+            : min((int) $this->sessions_total, (int) $this->sessions_attended + (int) $this->sessions_excused);
+    }
+
+    /** Sessions counted in the period. 'exclude_from_total': total - excused. */
+    public function countedTotal(): int
+    {
+        return self::excusalRule() === 'exclude_from_total'
+            ? max(0, (int) $this->sessions_total - (int) $this->sessions_excused)
+            : (int) $this->sessions_total;
+    }
+
+    /**
+     * The period's percentage under the configured rule. A period whose
+     * every missed session was excused under 'exclude_from_total' has
+     * nothing countable left that was missed, so it reads 100%, not 0%;
+     * a period with no sessions at all reads 0%, as it always has.
+     */
+    public function countedPercentage(): float
+    {
+        if ((int) $this->sessions_total <= 0) {
+            return 0.0;
+        }
+
+        $total = $this->countedTotal();
+
+        return $total > 0 ? round(($this->countedAttended() / $total) * 100, 2) : 100.0;
+    }
+
+    /** Missed sessions not yet excused -- what an appeal could still ask for, whichever rule applies. */
+    public function sessionsMissed(): int
+    {
+        return max(0, (int) $this->sessions_total - (int) $this->sessions_attended - (int) $this->sessions_excused);
     }
 
     public function student(): BelongsTo

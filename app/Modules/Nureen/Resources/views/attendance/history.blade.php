@@ -14,6 +14,9 @@
                     <p><b>Period ending {{ $record->period_end->format('j M Y') }}</b></p>
                     <span style="color: var(--text-grey); font-size: 12.5px;">
                         {{ $record->sessions_attended }} / {{ $record->sessions_total }} sessions
+                        @if ($record->sessions_excused > 0)
+                            + {{ $record->sessions_excused }} excused by an approved appeal
+                        @endif
                     </span>
                 </div>
                 <p>{{ $record->percentage }}%
