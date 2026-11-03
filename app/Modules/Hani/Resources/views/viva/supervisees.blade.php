@@ -43,7 +43,7 @@
                                             <br><span class="fstep-hint">Resubmit {{ $p->detail->resubmission_opens_at->format('j M Y') }} to {{ $p->detail->resubmission_closes_at->format('j M Y') }}</span>
                                         @endif
                                     @else
-                                        &mdash;
+                                        Not recorded
                                     @endif
                                 </td>
                             </tr>
