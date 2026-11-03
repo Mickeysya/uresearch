@@ -93,6 +93,11 @@
     .examiner-duplicate .btn-link { background: none; border: none; padding: 0; margin: 0 0 0 4px; color: inherit; text-decoration: underline; font-size: inherit; cursor: pointer; }
     .examiner-reason { display: block; font-size: var(--text-2xs); color: var(--text-grey); margin-top: 2px; max-width: 220px; }
 
+    .exam-proposals {
+        background: var(--surface); border: 1px solid var(--border-subtle);
+        border-radius: 12px; padding: 4px 16px 16px; overflow-x: auto; margin-bottom: 18px;
+    }
+
     .examiner-pagination { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
     .examiner-pagination a, .examiner-pagination span {
         padding: 6px 11px; border-radius: 8px; font-size: var(--text-sm); border: 1px solid var(--border-grey);
@@ -192,7 +197,10 @@
     </x-core::page-header>
 
     @if ($proposals->isNotEmpty())
-        <div class="exam-table-wrap" id="proposed-emails" style="margin-bottom: 18px;">
+        {{-- Not a RegionSwap region (its own class, not .exam-table-wrap, which
+             RegionSwap swaps by its first match), so it is left alone by tab and
+             filter swaps and its links and forms are ordinary navigations. --}}
+        <div class="exam-proposals" id="proposed-emails">
             <h3 style="margin: 12px 0 4px;">Proposed emails to confirm ({{ $proposals->count() }})</h3>
             <p class="exam-tab-note" style="margin: 0 0 8px;">Given by supervisors at nomination for examiners whose email was missing or reported not working. Confirming makes it the examiner's email and logs it; nothing changes until then.</p>
             @error('proposal') <p class="message-error">{{ $message }}</p> @enderror
@@ -201,11 +209,11 @@
                 <tbody>
                     @foreach ($proposals as $proposal)
                         <tr>
-                            <td><a href="{{ route('examiner-admin.show', $proposal->examiner) }}">{{ $proposal->examiner->name }}</a></td>
+                            <td><a href="{{ route('examiner-admin.show', $proposal->examiner) }}" data-region-swap-ignore>{{ $proposal->examiner->name }}</a></td>
                             <td>{{ $proposal->examiner->email ?? 'None' }} @include('hani::examiner_admin._email_badge', ['examiner' => $proposal->examiner])</td>
                             <td><b>{{ $proposal->proposed_email }}</b></td>
                             <td>{{ $proposal->proposedBy?->name ?? 'Unknown' }}@if ($proposal->nomination), nomination #{{ $proposal->nomination->application_id }}@endif<span class="examiner-reason">{{ $proposal->created_at->format('j M Y') }}</span></td>
-                            <td>@if ($proposal->cv_path)<a href="{{ route('examiner-admin.proposal.cv', $proposal) }}">Download CV</a>@else None @endif</td>
+                            <td>@if ($proposal->cv_path)<a href="{{ route('examiner-admin.proposal.cv', $proposal) }}" data-region-swap-ignore>Download CV</a>@else None @endif</td>
                             <td>
                                 <form method="POST" action="{{ route('examiner-admin.proposal.confirm', $proposal) }}" style="display: inline;">
                                     @csrf
@@ -367,7 +375,7 @@
                             <div class="examiner-name-cell">
                                 <span class="examiner-avatar">{{ strtoupper($initials) }}</span>
                                 <span>
-                                    <a href="{{ route('examiner-admin.show', $examiner) }}">{{ $examiner->name }}</a>
+                                    <a href="{{ route('examiner-admin.show', $examiner) }}" data-region-swap-ignore>{{ $examiner->name }}</a>
                                     {{-- CGS's pool file has no email column; nothing that
                                          writes to an examiner will reach this one yet. --}}
                                     @if ($examiner->emailInvalid())
@@ -439,9 +447,9 @@
                         </td>
                         <td>
                             @if (! $canManage)
-                                <a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn-secondary">Update email</a>
+                                <a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Update email</a>
                             @else
-                            <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary">Edit</a>
+                            <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Edit</a>
                             @if ($examiner->is_active)
                                 <button type="button" class="btn-reject"
                                         data-unavailable="{{ $examiner->id }}"
@@ -542,6 +550,10 @@
         });
         // Non-Executive CGS gets no modal and no "Mark Unavailable" buttons.
 
+        // Links in these regions that leave the pool (an examiner's page,
+        // Edit, Update email) carry data-region-swap-ignore, so they are
+        // real navigations; without it RegionSwap fetches the page, finds
+        // none of these regions in it, and only changes the address bar.
         RegionSwap({
             selectors: [
                 '.page-header p',

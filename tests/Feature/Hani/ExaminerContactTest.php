@@ -406,4 +406,42 @@ class ExaminerContactTest extends TestCase
         // Only CGS confirms.
         $this->actingAs($this->academicExec())->post(route('examiner-admin.proposal.dismiss', $proposal))->assertForbidden();
     }
+
+    /**
+     * The pool page runs RegionSwap over its tabs, filters and table: a link
+     * inside those regions is fetched and swapped in place unless it carries
+     * data-region-swap-ignore. "Update email", the examiner name and Edit
+     * leave the page, so without the marker the address bar changed and the
+     * page did not (fixed 2026-11-04).
+     */
+    public function test_pool_links_that_leave_the_page_are_real_navigations(): void
+    {
+        $examiner = $this->external(['email' => null]);
+        ExaminerEmailProposal::create(['examiner_id' => $examiner->id, 'proposed_email' => 'p@example.com']);
+
+        foreach ([$this->cgs(), $this->seniorExec()] as $user) {
+            $html = $this->actingAs($user)->get(route('examiner-admin.index'))->assertOk()->getContent();
+            $dom = new \DOMDocument;
+            @$dom->loadHTML($html);
+            $xpath = new \DOMXPath($dom);
+
+            // One table region only: RegionSwap swaps the first .exam-table-wrap it finds.
+            $this->assertSame(1, $xpath->query('//*[contains(concat(" ", normalize-space(@class), " "), " exam-table-wrap ")]')->length);
+
+            $leaving = 0;
+            foreach ($xpath->query('//a[@href]') as $link) {
+                $href = $link->getAttribute('href');
+                $staysOnPool = str_starts_with($href, route('examiner-admin.index').'?') || $href === route('examiner-admin.index');
+                if (! $staysOnPool && preg_match('#/examiners/(\d+|proposed-emails)#', $href)) {
+                    $leaving++;
+                    $this->assertTrue($link->hasAttribute('data-region-swap-ignore'), "{$href} must carry data-region-swap-ignore");
+                }
+            }
+            $this->assertGreaterThan(0, $leaving);
+        }
+
+        // And the link's target is the email form itself.
+        $this->actingAs(\App\Modules\Core\Models\User::where('role', \App\Modules\Core\Support\Role::NON_EXEC_CGS)->first())
+            ->get(route('examiner-admin.email.edit', $examiner))->assertOk()->assertSee('name="reason"', false);
+    }
 }
