@@ -9,6 +9,19 @@
            reference, a title, a state and one action, in the same place on
            every row so the eye can run down a column. */
         .sub-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+
+        /* A candidate who has filed a dozen theses should not push the form
+           itself off the page. Past about half a dozen rows the list scrolls
+           in its own box; a shorter list is untouched, since a max-height
+           only bites once the content passes it. The reserved gutter keeps
+           the action column in the same place whether it scrolls or not. */
+        .sub-list {
+            max-height: min(21rem, 45vh);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+        }
+
         .sub-list > li { border-top: 1px solid var(--border-subtle); }
         .sub-list > li:first-child { border-top: 0; }
 
@@ -107,7 +120,9 @@
 
         @if (($filed ?? collect())->isNotEmpty())
             <div class="app-item" style="margin-bottom: 18px;">
-                <p style="margin-top: 0;"><b>Submissions you have filed</b></p>
+                <p style="margin-top: 0;"><b>Submissions you have filed</b>
+                    <span class="field-hint" style="font-weight: normal;">({{ $filed->count() }} in all)</span>
+                </p>
 
                 <ul class="sub-list">
                     @foreach ($filed as $app)
