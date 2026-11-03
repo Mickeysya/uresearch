@@ -816,3 +816,60 @@ Ling Tan:
 **Until then:** Nureen's CGS **Stuck Reviews** page (`/reviews/stuck`) lists
 any Supervision request waiting at a Chair stage whose department has no
 Chair.
+
+---
+
+## 16. Postgraduate Handbook 2025 rules: a study mode/level field on users, and one sidebar link
+
+No Core edit was made for these rules. Three notes for the team:
+
+**a. PROPOSAL: `users.study_mode`, `users.programme_type`, `users.level_of_study`.**
+The handbook makes several rules depend on whether a student is full-time,
+by research, and MSc or PhD:
+- UTrace attendance is compulsory only for full-time research students;
+- GA and GRA are only for full-time research students;
+- the candidacy limit depends on the level.
+
+Core's `users` table has none of this. `programme` is free text: sometimes it
+says "PhD Part-Time", often "Master of Science (…)", which doesn't say
+research or coursework, and 19 seeded students have none at all. So
+Nureen's `Support\StudyProfile` pieces it together from what the student
+declared on a GA/GRA Certification or GA Extension, then from that text.
+That is self-declared and only exists for students who applied for
+something, so the attendance rule sits behind a switch,
+`config('nureen.attendance.scope')`, which defaults to `'all'` (the
+behaviour before).
+
+The proposal: three nullable columns on `users`, set from the student
+record (by Admin/CGS, or an import), not by the student:
+
+| Column | Values |
+|---|---|
+| `study_mode` | `full_time`, `part_time`, `full_time_odl` |
+| `programme_type` | `research`, `coursework` |
+| `level_of_study` | `msc`, `phd` |
+
+`StudyProfile::for()` would read these first and fall back to the
+declarations. CGS could then set `NUREEN_ATTENDANCE_SCOPE=full_time_research`
+with confidence, and `scope_unknown` would rarely matter. Nothing here
+invents a column; it's a request.
+
+**b. The CGS sidebar has no "Approved Leave" link.** `sidebar-cgs-nav.blade.php`
+lists its attendance links by hand (`$attendanceLinkRoutes =
+['attendance.upload.form', 'attendance.at-risk']`), so the new page
+(`attendance.leave`, from `AttendanceAppealWorkflow::links()`) doesn't
+appear there. Today it is reachable from the At-Risk Students page (a
+button, plus the over-allowance warning) and from the upload page's column
+table. **Proposed:** add `'attendance.leave'` to that list with the label
+"Approved Leave".
+
+**c. Dean of PGR as the Co-Supervisor approver: no Core change needed.**
+`Role::DEAN_PGR` already exists ("Dean of PGR", `dean@utp.edu.my` in the
+seeds, used by Norhanis's Travel chain). Setting
+`NUREEN_SUPERVISION_CO_SUPERVISOR_APPROVER=dean_pgr` puts that role on
+Co-Supervisor requests with Nureen-side changes only: a stage key
+`dean_pgr`, the role added to the Supervision queue routes, the snapshot
+column, reminders and the letter wording. The Dean role is not
+department-scoped (`Role::isDepartmentScoped()`), so one Dean sees every
+department's requests, which matches the handbook. The default stays
+`chair`, as in CGS's workflow diagrams.

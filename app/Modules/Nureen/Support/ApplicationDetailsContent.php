@@ -227,6 +227,12 @@ class ApplicationDetailsContent
                 : "{$person->name}, your supervisor";
         }
 
+        if ($stage?->key === 'dean_pgr') {
+            $deans = User::where('role', Role::DEAN_PGR)->get();
+
+            return $deans->count() === 1 ? "{$deans->first()->name}, Dean of PGR" : null;
+        }
+
         if ($stage?->key === 'chair' && ($department = $application->student?->department)) {
             $chairs = User::where('role', Role::CHAIR)->where('department', $department)->get();
 

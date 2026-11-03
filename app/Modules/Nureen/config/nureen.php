@@ -70,6 +70,47 @@ return [
         // points since that alert. See Support\AttendanceEarlyWarning.
         'realert_margin' => 5.0,
 
+        // ---- Who is monitored (Postgraduate Handbook 2025) ----
+        // UTrace attendance is compulsory only for FULL-TIME RESEARCH
+        // students. Core's users table has no study mode or level (see
+        // SHARED_CHANGES.md §16), so who that is comes from
+        // Support\StudyProfile: the student's most recent GA/GRA
+        // Certification or GA Extension declaration, then the free-text
+        // users.programme ("PhD Part-Time"). See Support\AttendanceScope.
+        //   'all'                DEFAULT, the behaviour before this switch:
+        //                        everyone with attendance is evaluated.
+        //   'full_time_research' only full-time research students are
+        //                        risk-evaluated, flagged or alerted.
+        'scope' => env('NUREEN_ATTENDANCE_SCOPE', 'all'),
+
+        // Under 'full_time_research', a student whose mode or programme
+        // type is not known anywhere (most students, until Core has a
+        // field):
+        //   'include'  DEFAULT. Still monitored -- nobody drops out of the
+        //              early warning just because nothing is on record.
+        //   'exclude'  Not monitored until something shows they are
+        //              full-time research.
+        'scope_unknown' => env('NUREEN_ATTENDANCE_SCOPE_UNKNOWN', 'include'),
+
+        // ---- Approved annual leave (Postgraduate Handbook 2025) ----
+        // Full-time research students get up to 14 days a year, approved by
+        // the Chair via UCampus: January semester 5, May 4, September 5.
+        // Unused leave is not carried over, so each semester has its own
+        // cap as well as the year's. Approved leave never counts as
+        // absence: it is counted the same way as sessions excused by an
+        // appeal ('excused_sessions' above). Going over the allowance only
+        // WARNS CGS (Support\AttendanceLeave); the days still count.
+        'leave' => [
+            'annual_days' => 14,
+            'semesters' => [
+                'jan' => ['label' => 'January semester', 'months' => [1, 2, 3, 4], 'days' => 5],
+                'may' => ['label' => 'May semester', 'months' => [5, 6, 7, 8], 'days' => 4],
+                'sep' => ['label' => 'September semester', 'months' => [9, 10, 11, 12], 'days' => 5],
+            ],
+            // UTrace sessions one day of leave stands for (one check-in a day).
+            'sessions_per_day' => 1,
+        ],
+
     ],
 
     'attendance_appeal' => [
@@ -139,6 +180,10 @@ return [
         'applicant_fields' => [
             'mode_of_study' => ['label' => 'Mode of study', 'type' => 'select', 'required' => true, 'step' => 'details',
                 'options' => ['full_time' => 'Full-time', 'full_time_odl' => 'Full-time ODL', 'part_time' => 'Part-time']],
+            // Not on the July 2026 form; GA is for full-time research
+            // students only, and the eligibility check needs to know.
+            'study_type' => ['label' => 'Programme type', 'type' => 'select', 'required' => true, 'step' => 'details',
+                'options' => ['research' => 'Research', 'coursework' => 'Coursework']],
             'admission_date' => ['label' => 'Admission date', 'type' => 'date', 'required' => true, 'step' => 'details'],
             'candidature_period' => ['label' => 'Period of candidature', 'type' => 'text', 'max' => 60, 'required' => true, 'step' => 'details',
                 'placeholder' => 'e.g. Sep 2025 – Aug 2028'],
@@ -154,6 +199,18 @@ return [
             'visa_expiry_date' => ['label' => 'Visa expiry date', 'type' => 'date', 'required_if' => 'holds_visa', 'step' => 'identity'],
         ],
 
+        // Levels that may apply. The July 2026 form offers MSc and PhD; the
+        // Postgraduate Handbook 2025 says GA is PhD-only, and CGS has not
+        // confirmed which applies. Set to ['phd'] (env: "phd") and an MSc
+        // student is told so on the form and cannot submit -- the one
+        // handbook rule here that blocks.
+        'allowed_levels' => array_values(array_filter(explode(',', (string) env('NUREEN_GA_EXTENSION_ALLOWED_LEVELS', 'msc,phd')))),
+
+        // Who counts as eligible (Postgraduate Handbook 2025: GA is for
+        // full-time research students). Checked by GaExtensionRules::
+        // eligibility(); it warns, it does not block.
+        'eligible' => ['mode_of_study' => ['full_time'], 'study_type' => ['research']],
+
         // Name of bank and Account no. -- pending CGS confirming whether
         // they already hold these. When false they are not asked, not
         // validated, not changed, and left blank on the generated form.
@@ -165,6 +222,9 @@ return [
             'types' => ['journal' => 'Journal', 'conference' => 'Conference', 'book' => 'Book'],
             'databases' => ['scopus' => 'Scopus', 'wos' => 'Web of Science', 'era' => 'ERA', 'other' => 'Other'],
             'quartiles' => ['Q1' => 'Q1', 'Q2' => 'Q2', 'Q3' => 'Q3', 'Q4' => 'Q4'],
+            // Accepted or already published -- PhD Stage Gate Level 3's
+            // second option needs one of each.
+            'statuses' => ['published' => 'Published', 'accepted' => 'Accepted'],
         ],
 
         // Section D, word for word from the form.
@@ -200,6 +260,21 @@ return [
             'end_days' => [15, 'last'],
             // (iii) "submitted at least one (1) month before".
             'notice_months' => 1,
+            // Postgraduate Handbook 2025: no allowance beyond candidacy.
+            // Maximum candidature, full-time by research, in years from the
+            // admission date.
+            'max_candidacy_years' => ['msc' => 4, 'phd' => 8],
+            // PhD Stage Gate Level 3 (viii) has two valid options, checked
+            // against Section C and the attached proofs:
+            //   1. one article PUBLISHED in a journal in q1q2_databases with
+            //      a quartile in q1q2_quartiles;
+            //   2. one article ACCEPTED and one PUBLISHED, both in journals
+            //      in indexed_databases.
+            'phd_level3' => [
+                'q1q2_databases' => ['wos'],
+                'q1q2_quartiles' => ['Q1', 'Q2'],
+                'indexed_databases' => ['wos', 'era', 'scopus'],
+            ],
             // (vii) MSc and (viii) PhD stage gates. 'from'/'to' are the
             // "Timeframe for completion" months. The level is the highest
             // whose 'from' is at or below the months completed since
@@ -274,6 +349,27 @@ return [
         // CGS/SVAPPT/<year>/<sequence>. See Support\AppointmentReferenceGenerator,
         // the same race-safe pattern as CertificateReferenceGenerator.
         'reference_prefix' => 'CGS/SVAPPT',
+
+        // Who approves a CO-SUPERVISOR request after the supervisor. The
+        // Postgraduate Handbook 2025 says the Dean of PGR; CGS's workflow
+        // diagrams say the Chair of Department, and that is the default.
+        // Snapshotted per application (SupervisionDetail::
+        // co_supervisor_approver_snapshot) like cgs_stage. Main Supervisor
+        // requests always go to the Chair.
+        //   'chair'     DEFAULT.
+        //   'dean_pgr'  Core's Role::DEAN_PGR (dean@utp.edu.my in the seeds).
+        'co_supervisor_approver' => env('NUREEN_SUPERVISION_CO_SUPERVISOR_APPROVER', 'chair'),
+
+        // A GA changing supervisor needs PGFAC approval first, with the
+        // supervisor's memo as evidence (Postgraduate Handbook 2025). Asked
+        // for when the request is a change of Main Supervisor and the
+        // student is a GA: an active GaAppointmentRecord of one of
+        // ga_types, or -- with no record at all -- the student's own
+        // declaration on the form.
+        'pgfac_memo' => [
+            'label' => 'PGFAC Approval Memo',
+            'ga_types' => ['GA'],
+        ],
 
     ],
 
@@ -359,6 +455,12 @@ return [
         // period. Stored values on older applications are left alone.
         'ask_period' => (bool) env('NUREEN_GA_CERTIFICATION_ASK_PERIOD', true),
 
+        // GA and GRA are for full-time research students (Postgraduate
+        // Handbook 2025). Anything else gets a note on the form and a
+        // warning in CGS's System checks -- never a block: a former GA may
+        // still need a letter.
+        'eligible' => ['study_level' => ['research'], 'mode_of_study' => ['full_time']],
+
         // Section 5 of the online form, shown beside the checkbox and
         // recorded (declaration_accepted_at) when ticked.
         'declaration' => 'I confirm that the information given in this application is true and complete. '
@@ -415,6 +517,7 @@ return [
         'supervision' => [
             'supervisor' => 3,
             'chair' => 3,
+            'dean_pgr' => 3,
             'cgs_review' => 0,
         ],
         'ga_certification' => [

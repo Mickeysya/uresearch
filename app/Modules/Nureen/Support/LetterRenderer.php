@@ -66,7 +66,10 @@ class LetterRenderer
         $roleLabel = $isCo ? 'Co-Supervisor' : 'Main Supervisor';
         $mode = app(SupervisionWorkflow::class)->modeFor($application);
 
-        $chairDecision = $this->decision($application, 'chair', ['approved', 'endorsed']);
+        // The Chair of Department, or the Dean of PGR for a Co-Supervisor
+        // request under co_supervisor_approver = 'dean_pgr'.
+        $approverKey = app(SupervisionWorkflow::class)->approverFor($application);
+        $chairDecision = $this->decision($application, $approverKey, ['approved', 'endorsed']);
         $date = $draft ? now() : ($detail->letter_issued_at ?? now());
 
         if ($draft) {
@@ -83,7 +86,7 @@ class LetterRenderer
 
         $basis = $signatory
             ? 'following the endorsement of the Centre for Graduate Studies'
-            : 'following approval by the Chair of Department'
+            : 'following approval by the '.($approverKey === 'dean_pgr' ? 'Dean of PGR' : 'Chair of Department')
                 .($chairDecision?->approver ? ', '.$chairDecision->approver->name : '');
 
         // The supervisor is named once, in the details table (and the cc)

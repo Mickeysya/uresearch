@@ -28,6 +28,7 @@
                             @selected((string) old('attendance_record_id', $defaultPeriodId) === (string) $period->id)>
                         {{ 'Period ending '.$period->period_end->format('j M Y').': attended '.$period->sessions_attended.' of '.$period->sessions_total
                             .($period->sessions_excused > 0 ? ', '.$period->sessions_excused.' already excused' : '')
+                            .($period->leave_days > 0 ? ', '.$period->leave_days.' on approved leave' : '')
                             .', '.$period->sessionsMissed().' missed' }}
                     </option>
                 @endforeach

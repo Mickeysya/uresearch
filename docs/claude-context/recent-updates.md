@@ -8,6 +8,297 @@ diff alone.
 
 ---
 
+## Where Nureen's modules stand (snapshot, 3 Nov 2026)
+
+A summary of everything below, module by module, for anyone starting fresh.
+`app/Modules/Nureen/README.md` has the detail, and `SHARED_CHANGES.md` covers
+every Core change and open team decision.
+
+### GA Extension (`ga_extension`)
+- **Chain:**
+  - Default mode `cgs`: Supervisor endorses (3 working days), then
+    Non-Executive CGS decides (2), and the Senior Director is emailed every
+    outcome for information only.
+  - Mode `senior_director`: Supervisor, then CGS review, then the Senior
+    Director approves.
+  - Each application keeps the chain it was submitted under
+    (`final_approver_snapshot`).
+- **Submission:** four required document types, multi-file. The supervisor
+  stage is scoped to the student's own supervisor, recorded on the detail
+  row. CGS can return an application to the supervisor (with a reason)
+  instead of rejecting it.
+- **Timing:** Client Charter due dates, expected decision dates and
+  reminders (`ga-extension:remind-stalled`, daily 08:00). Shown on the
+  calendar.
+
+### Supervision (`supervision`)
+- **Chain:** the requested supervisor, then the Chair of Department, then
+  CGS.
+- **Modes:**
+  - `endorse` (default): CGS previews and endorses the appointment letter.
+  - `automatic`: the Chair's approval is final, and the letter names no CGS
+    endorser.
+  - `manual`: CGS makes an eligibility decision.
+- **On approval:** a Main Supervisor appointment updates the student's
+  `supervisor_id` (and records the previous one).
+- **The letter:** issued as `CGS/SVAPPT/<year>/<seq>` on the shared formal
+  Dompdf layout, one A4 page, with a QR code to `/verify/appointment/{ref}`.
+  CGS can revoke it, which emails the student and the supervisor with the
+  reason.
+
+### GA/GRA Certification Letter (`ga_certification`)
+- **Chain:** Supervisor (3) → CGS Staff (2), who checks the appointment
+  record ("Verified / Mismatch / Not found", CGS-only) → Senior Director
+  (2), who can preview and then approves.
+- **The letter:** `CGS/GACERT/<year>/<seq>`, with GA course or GRA project
+  fields from one config list. Max field lengths keep it on one page. It is
+  verifiable at `/verify/certificate/{ref}` and can be revoked.
+
+### Attendance and Attendance Appeal (`attendance_appeal`)
+- **Data in:**
+  - CSV upload, an inbox folder, a push API, or a simulated source;
+  - `attendance:sync` runs nightly at 02:00;
+  - no period may end in the future, and mixed period lengths are refused.
+- **Risk check:**
+  - **The original rule:** below 80%, or three declining periods ending at
+    or below 85%.
+  - **A least-squares end-of-semester projection,** which may flag only
+    from period 4 up to 60% of the semester. That window was tuned on the
+    backtest.
+  - **Automatic early-warning emails,** with a supervisor copy, that never
+    show the projection.
+  - **CGS's At-Risk list** shows current %, projected %, trend and reason.
+- **Students** see their own figures and the dashboard's Attendance Action
+  card ("Attend N of the next M sessions", "Justification needed", "On
+  track", "Keep checking in"). Never the projection.
+- **Appeals:**
+  - require a Justification Letter and a Monthly Activity Breakdown;
+  - CGS may approve fewer sessions than requested;
+  - excused sessions count as attended or are left out of the total
+    (`attendance.excused_sessions`, pending CGS's answer).
+- **Evidence:** `attendance:backtest` (synthetic data or a real export,
+  `--runs`, `--compare`) reports MAE, RMSE, precision, recall, F1 and
+  earliness.
+
+### Shared pieces built or extended along the way (in Core, recorded in SHARED_CHANGES.md)
+- **Track My Applications** (`/applications`): tabs by each module's
+  `CATEGORY`, status filters, and cards with per-application steppers.
+- **Application details page:** progress against charter targets,
+  timeline, "Your application", documents, help.
+- **Optional contracts:** `SuppliesDecisionDates`, `SuppliesOverdueStatus`,
+  `DescribesApplicationProgress` and `DescribesApplicationDetails`.
+- **The shared `WorkingDayCalendar`** (`config/calendar.php`).
+- **`WorkflowEngine::progress()`** never marks an undecided stage as done.
+- **`phpunit.xml`** forces the test environment (no more leaked jobs).
+
+### Demo data
+Run with `db:seed --class=...`; none are wired into Core's seeder:
+- `AttendanceRiskDemoSeeder`: the three viva cases.
+- `NureenAttendanceDemoSeeder`: a weekly semester starting 5 Oct 2026.
+- `NureenClientCharterDemoSeeder`.
+- `NureenRealignedWorkflowDemoSeeder`.
+- `GaAppointmentRecordSeeder`.
+
+### Open items and decisions waiting on someone
+- **Lee Xin Yi's GA Extension (#183):** resolved with no data change.
+  Endorsed by `supervisor@` and approved by `cgs@` on 3 Nov.
+- **No Electrical & Electronics Chair** in the seeded data: SHARED_CHANGES
+  §15.
+- **Six real letter emails** (4 `AppointmentLetterIssued`, 2
+  `CertificationIssued`, all from 29 Oct–1 Nov) sit in `failed_jobs`. They
+  failed on a since-fixed bug and are kept for Nureen to decide whether to
+  retry.
+- **Waiting on CGS:**
+  - the excused-sessions rule;
+  - the tab category names;
+  - the help contact details;
+  - the holiday list;
+  - signatory titles;
+  - whether a certification revocation should also tell the supervisor
+    (SHARED_CHANGES §14).
+- **Waiting on the team:**
+  - SHARED_CHANGES §9b–d: Core's semester-vs-latest attendance figure,
+    CGS dashboard counts, and `DemoDataSeeder`'s monthly attendance;
+  - the `layout.css` phone gap above page-header actions;
+  - each teammate's one-line `CATEGORY`.
+- **`docs/design/application-details.png`** was never added, so the details
+  page follows the written spec.
+
+---
+
+## 2026-11-07 — Postgraduate Handbook 2025 rules across all four modules
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit.
+SHARED_CHANGES §16 has the proposals.
+
+### The ask
+
+Cross-checked against the Postgraduate Handbook 2025, the GA Terms &
+Conditions and the CGS onboarding briefing. New rules warn in the
+approver's System checks; every number and switch goes in config.
+- **Attendance:**
+  - only full-time research students are monitored, behind a switch if no
+    reliable source exists;
+  - approved annual leave (14 days: Jan 5, May 4, Sept 5, no carry-over)
+    isn't absence: CGS records it per student or through an optional sheet
+    column, and is warned over the allowance;
+  - the alert states the real consequences.
+- **GA Extension:**
+  - eligibility (full-time research);
+  - `allowed_levels` (MSc + PhD by default; PhD-only blocks MSc);
+  - the candidacy limit;
+  - PhD Stage Gate Level 3's two options.
+- **Supervision:**
+  - the PGFAC memo for a GA changing supervisor;
+  - a configurable Co-Supervisor approver (Chair by default, or Dean of PGR).
+- **Certification:** a non-blocking full-time-research note and warning.
+
+### Key findings before writing any code
+
+- **Nothing reliable knows study mode or type.** `users` has no such column.
+  `programme` is free text: "PhD Part-Time" on some students, "Master of
+  Science (…)" on others (never research vs coursework), and NULL on 19.
+  No teammate's module stores it. The only declarations are this module's
+  own GA/GRA Certification (type, mode, level) and GA Extension (mode,
+  level). So: `attendance.scope` defaults to `'all'`, plus SHARED §16a.
+- **The GA Extension Form never asks research vs coursework,** so eligibility
+  had nothing to check. A "Programme type" field was added (the PDF prints
+  it beside the mode).
+- **Section C couldn't tell an accepted article from a published one,**
+  which PhD Level 3 option 2 needs. Each row now has a status.
+- **Core already has a Dean of PGR role** (`Role::DEAN_PGR`, `dean@utp.edu.my`,
+  used by Norhanis's Travel chain), so `'dean_pgr'` was built rather than
+  only documented.
+- **Core's dashboards read attendance only through Nureen's
+  `AttendanceProvider`,** so applying the scope there keeps Core consistent
+  without touching it.
+- **Leave units:** one leave day is one UTrace session by default
+  (`leave.sessions_per_day`). Leave can only cover sessions actually missed
+  and not already excused.
+- **Core's CGS sidebar lists attendance links by hand,** so a new page's link
+  from `links()` doesn't show there (SHARED §16b).
+
+### The design
+
+- **`Support\StudyProfile`:** mode, type and level from the latest submitted
+  Certification, then GA Extension, then the programme text. Drafts never
+  count.
+- **`Support\AttendanceScope::monitors()`:**
+  - `'all'` → yes;
+  - `'full_time_research'` → `StudyProfile`'s answer, with unknown students
+    following `scope_unknown` (default `'include'`, so nobody drops out of
+    the early warning just because nothing is on record).
+
+  It is asked by `AttendanceRiskEvaluator::isAtRisk()`/`assess()`,
+  `AttendanceEarlyWarning::check()` (which also clears a stale state and
+  flags when someone falls out of scope) and `AttendanceProvider`.
+- **Leave:**
+  - `attendance_records.leave_days` is folded into
+    `countedAttended()`/`countedTotal()`/`sessionsMissed()` beside
+    `sessions_excused`, so both `excused_sessions` rules apply.
+  - It is written by `recordPeriod(..., ?int $leaveDays)` (null keeps the
+    value) and `recordLeave()`.
+  - The sheet's fifth column `leave_days` is read only when the header says
+    so, and the push API accepts it.
+  - `Support\AttendanceLeave` works out usage per semester (by period-end
+    month) and per year, plus the warnings.
+- **GA Extension:** `GaExtensionRules` gains `eligibility()`, `candidacy()`
+  and `phdLevelThree()`. `allowed_levels` is a submit-only validation rule,
+  so drafts still save.
+- **Supervision:**
+  - Snapshotted at submission: `is_change_of_supervisor` (a Main request
+    while another supervisor is on record), `is_ga` with `ga_status_source`
+    (`Support\GaStatus` from an active `GaAppointmentRecord` of `ga_types`,
+    else the student's declaration), and `co_supervisor_approver_snapshot`.
+  - `SupervisionWorkflow::approverStage()` gives `chair` or `dean_pgr`.
+  - The superset lists the Dean's stage only while the switch is on or
+    something waits there.
+- **Certification:** `GaCertificationDetail::eligibilityCheck()`, plus a
+  form note shown by script and rendered visible for a draft that needs it.
+
+### What changed
+
+- **New:**
+  - migrations `2026_11_07_000100` (`leave_days`) and `2026_11_07_000200`
+    (`study_type` and the four supervision columns);
+  - `Support/StudyProfile`, `AttendanceScope`, `AttendanceLeave`, `GaStatus`;
+  - views `attendance/leave` and `attendance/_leave_warnings`;
+  - routes `attendance.leave` and `attendance.leave.store`;
+  - four test files (59 tests).
+- **Config:**
+  - `attendance.scope`, `scope_unknown`, `leave`;
+  - `ga_extension.allowed_levels`, `eligible`, `applicant_fields.study_type`,
+    `publications.statuses`, `rules.max_candidacy_years`, `rules.phd_level3`;
+  - `ga_certification.eligible`;
+  - `supervision.co_supervisor_approver`, `pgfac_memo`;
+  - `charter_days.supervision.dean_pgr`.
+- **Changed:**
+  - **Attendance:** `AttendanceRecord`, `AttendanceIngestor`, `IngestSummary`,
+    `AttendanceSheet`, `AttendanceIngestController`, `AttendanceController`
+    (leave actions, upload warnings, at-risk banner),
+    `AttendanceRiskEvaluator`, `AttendanceEarlyWarning`,
+    `AttendanceProvider`, and the `AttendanceAtRisk` email;
+  - **GA Extension:** `GaExtensionRules`, `GaExtensionController`,
+    `GaExtensionDetail`, and the GA Extension form and PDF;
+  - **Supervision:** `SupervisionWorkflow`, `SupervisionController`,
+    `SupervisionDetail`, the Supervision form and `_detail` (a new System
+    checks panel), `LetterRenderer` (the Dean in automatic-mode wording),
+    `RemindStalledSupervisionRequests`, `ApplicationDetailsContent` (who it
+    waits for), and the routes (DEAN_PGR on the Supervision queue);
+  - **Certification:** `GaCertificationDetail`, the certification form and
+    `_detail`;
+  - the history, upload, at-risk and appeal-form attendance views.
+- **Existing tests:**
+  - the shared GA Extension payload gained `study_type`;
+  - publication fixtures gained a status;
+  - one `SupervisionTest` change-of-supervisor case now declares "not a GA".
+
+### Bugs caught
+
+- **A one-line `@php(...)` placed before a `@php … @endphp` block** in
+  `ga_certification/_detail` (the same Blade trap as on 5 Nov). Changed to
+  block form before it shipped.
+- **Two test assertions were trivially true:** `assertSee('data-level-blocked')`
+  matched the script's own query selector. They now assert on the element's
+  markup.
+
+### Verification
+
+- **Full suite:** 638 passed. `failed_jobs` and `jobs` were 0 before and
+  after.
+- **Headless browser.** Applications went in through the real form
+  endpoints (with their CSRF tokens) as the students, were approved by the
+  real supervisors and Chair, then checked as `cgs@` in light and dark mode:
+  - **#197** (`student2@`, PhD part-time): ✗ Full-time research student; ✓
+    Stage gate "Level 3, option 2 … accepted and … published, with both
+    proofs attached".
+  - **#200** (`divya.sri.kumar@`, PhD admitted Feb 2019): ✗ "Candidacy ends
+    31 Jan 2027 … No allowance is paid beyond candidacy" (and the existing
+    42-month check also fails).
+  - **#198** (`student2@`, certification, part-time): ✗ with the "former GA"
+    note. The form note appeared on picking Part-time.
+  - **#199** (`divya.sri.kumar@` changing to Dr Farid Kamal, no GA record,
+    declared GA):
+    - without the memo, refused with "As a GA changing supervisor, attach the
+      PGFAC Approval Memo …";
+    - with it, CGS sees "Change of Main Supervisor · Graduate Assistant
+      (declared by the student) · ✓ PGFAC Approval Memo (1 file)".
+  - **`student2@`** has an expired GRA on record, so she isn't asked and no
+    memo is needed.
+  - **Leave:** 4 + 3 days recorded for 22001011 in the September semester
+    showed "7 days recorded, allowance 5" on the leave page, the warning and
+    the At-Risk banner. Both were then reset to 0, and his at-risk flag
+    came back.
+  - No console errors.
+- **Dev data left:** #197–#200 (pending at the CGS stage, reasons starting
+  "Handbook check") as demo records of the warnings. #199 is NOT endorsed:
+  endorsing would change Divya's main supervisor.
+- **Not checked in the browser:** `scope = full_time_research` and
+  `co_supervisor_approver = dean_pgr` (both config switches; the dev `.env`
+  is on the defaults). Both are covered by tests.
+
+---
+
 ## 2026-11-06 — GA Extension Form generated instead of uploaded (UTP/CGS/001-A2)
 
 **Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only. There was no
@@ -501,124 +792,6 @@ half-finished GA Extension or Certification request and come back later.
 - **Certification draft:** saved and pre-filled correctly, then deleted.
   Draft #186 (an earlier interrupted run) was also deleted through the
   Delete button.
-
----
-
-## Where Nureen's modules stand (snapshot, 3 Nov 2026)
-
-A summary of everything below, module by module, for anyone starting fresh.
-`app/Modules/Nureen/README.md` has the detail, and `SHARED_CHANGES.md` covers
-every Core change and open team decision.
-
-### GA Extension (`ga_extension`)
-- **Chain:**
-  - Default mode `cgs`: Supervisor endorses (3 working days), then
-    Non-Executive CGS decides (2), and the Senior Director is emailed every
-    outcome for information only.
-  - Mode `senior_director`: Supervisor, then CGS review, then the Senior
-    Director approves.
-  - Each application keeps the chain it was submitted under
-    (`final_approver_snapshot`).
-- **Submission:** four required document types, multi-file. The supervisor
-  stage is scoped to the student's own supervisor, recorded on the detail
-  row. CGS can return an application to the supervisor (with a reason)
-  instead of rejecting it.
-- **Timing:** Client Charter due dates, expected decision dates and
-  reminders (`ga-extension:remind-stalled`, daily 08:00). Shown on the
-  calendar.
-
-### Supervision (`supervision`)
-- **Chain:** the requested supervisor, then the Chair of Department, then
-  CGS.
-- **Modes:**
-  - `endorse` (default): CGS previews and endorses the appointment letter.
-  - `automatic`: the Chair's approval is final, and the letter names no CGS
-    endorser.
-  - `manual`: CGS makes an eligibility decision.
-- **On approval:** a Main Supervisor appointment updates the student's
-  `supervisor_id` (and records the previous one).
-- **The letter:** issued as `CGS/SVAPPT/<year>/<seq>` on the shared formal
-  Dompdf layout, one A4 page, with a QR code to `/verify/appointment/{ref}`.
-  CGS can revoke it, which emails the student and the supervisor with the
-  reason.
-
-### GA/GRA Certification Letter (`ga_certification`)
-- **Chain:** Supervisor (3) → CGS Staff (2), who checks the appointment
-  record ("Verified / Mismatch / Not found", CGS-only) → Senior Director
-  (2), who can preview and then approves.
-- **The letter:** `CGS/GACERT/<year>/<seq>`, with GA course or GRA project
-  fields from one config list. Max field lengths keep it on one page. It is
-  verifiable at `/verify/certificate/{ref}` and can be revoked.
-
-### Attendance and Attendance Appeal (`attendance_appeal`)
-- **Data in:**
-  - CSV upload, an inbox folder, a push API, or a simulated source;
-  - `attendance:sync` runs nightly at 02:00;
-  - no period may end in the future, and mixed period lengths are refused.
-- **Risk check:**
-  - **The original rule:** below 80%, or three declining periods ending at
-    or below 85%.
-  - **A least-squares end-of-semester projection,** which may flag only
-    from period 4 up to 60% of the semester. That window was tuned on the
-    backtest.
-  - **Automatic early-warning emails,** with a supervisor copy, that never
-    show the projection.
-  - **CGS's At-Risk list** shows current %, projected %, trend and reason.
-- **Students** see their own figures and the dashboard's Attendance Action
-  card ("Attend N of the next M sessions", "Justification needed", "On
-  track", "Keep checking in"). Never the projection.
-- **Appeals:**
-  - require a Justification Letter and a Monthly Activity Breakdown;
-  - CGS may approve fewer sessions than requested;
-  - excused sessions count as attended or are left out of the total
-    (`attendance.excused_sessions`, pending CGS's answer).
-- **Evidence:** `attendance:backtest` (synthetic data or a real export,
-  `--runs`, `--compare`) reports MAE, RMSE, precision, recall, F1 and
-  earliness.
-
-### Shared pieces built or extended along the way (in Core, recorded in SHARED_CHANGES.md)
-- **Track My Applications** (`/applications`): tabs by each module's
-  `CATEGORY`, status filters, and cards with per-application steppers.
-- **Application details page:** progress against charter targets,
-  timeline, "Your application", documents, help.
-- **Optional contracts:** `SuppliesDecisionDates`, `SuppliesOverdueStatus`,
-  `DescribesApplicationProgress` and `DescribesApplicationDetails`.
-- **The shared `WorkingDayCalendar`** (`config/calendar.php`).
-- **`WorkflowEngine::progress()`** never marks an undecided stage as done.
-- **`phpunit.xml`** forces the test environment (no more leaked jobs).
-
-### Demo data
-Run with `db:seed --class=...`; none are wired into Core's seeder:
-- `AttendanceRiskDemoSeeder`: the three viva cases.
-- `NureenAttendanceDemoSeeder`: a weekly semester starting 5 Oct 2026.
-- `NureenClientCharterDemoSeeder`.
-- `NureenRealignedWorkflowDemoSeeder`.
-- `GaAppointmentRecordSeeder`.
-
-### Open items and decisions waiting on someone
-- **Lee Xin Yi's GA Extension (#183):** resolved with no data change.
-  Endorsed by `supervisor@` and approved by `cgs@` on 3 Nov.
-- **No Electrical & Electronics Chair** in the seeded data: SHARED_CHANGES
-  §15.
-- **Six real letter emails** (4 `AppointmentLetterIssued`, 2
-  `CertificationIssued`, all from 29 Oct–1 Nov) sit in `failed_jobs`. They
-  failed on a since-fixed bug and are kept for Nureen to decide whether to
-  retry.
-- **Waiting on CGS:**
-  - the excused-sessions rule;
-  - the tab category names;
-  - the help contact details;
-  - the holiday list;
-  - signatory titles;
-  - whether a certification revocation should also tell the supervisor
-    (SHARED_CHANGES §14).
-- **Waiting on the team:**
-  - SHARED_CHANGES §9b–d: Core's semester-vs-latest attendance figure,
-    CGS dashboard counts, and `DemoDataSeeder`'s monthly attendance;
-  - the `layout.css` phone gap above page-header actions;
-  - each teammate's one-line `CATEGORY`.
-- **`docs/design/application-details.png`** was never added, so the details
-  page follows the written spec.
 
 ---
 

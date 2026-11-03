@@ -39,6 +39,9 @@ class AttendanceIngestController extends Controller
             'records.*.period_end' => ['required'],
             'records.*.sessions_attended' => ['required'],
             'records.*.sessions_total' => ['required'],
+            // Optional approved leave days; checked by AttendanceIngestor
+            // like the manual upload's column.
+            'records.*.leave_days' => ['nullable'],
         ]);
 
         foreach ($data['records'] as $record) {

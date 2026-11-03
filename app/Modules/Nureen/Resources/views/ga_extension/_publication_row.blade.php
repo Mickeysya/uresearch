@@ -29,6 +29,16 @@
             @if ($error('type')) <p class="field-error">{{ $error('type') }}</p> @endif
         </div>
         <div>
+            <label for="{{ $id('status') }}">Status</label>
+            <select name="{{ $name('status') }}" id="{{ $id('status') }}" class="{{ $error('status') ? 'is-invalid' : '' }}">
+                <option value="">Select&hellip;</option>
+                @foreach ($options['statuses'] as $value => $label)
+                    <option value="{{ $value }}" @selected(($row['status'] ?? null) === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+            @if ($error('status')) <p class="field-error">{{ $error('status') }}</p> @endif
+        </div>
+        <div>
             <label for="{{ $id('year') }}">Publication year</label>
             <input type="number" name="{{ $name('year') }}" id="{{ $id('year') }}" min="1950" max="{{ now()->year + 1 }}"
                    value="{{ $row['year'] ?? '' }}" class="{{ $error('year') ? 'is-invalid' : '' }}">

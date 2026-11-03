@@ -76,6 +76,7 @@ class RemindStalledSupervisionRequests extends Command
                 'chair' => User::where('role', Role::CHAIR)
                     ->where('department', $application->student?->department)
                     ->get(),
+                'dean_pgr' => User::where('role', Role::DEAN_PGR)->get(),
                 default => User::where('role', Role::NON_EXEC_CGS)->get(),
             };
 
@@ -97,10 +98,12 @@ class RemindStalledSupervisionRequests extends Command
                 'reminded_stage_key' => $stage->key,
             ]);
 
-            if (in_array($stage->key, ['supervisor', 'chair'], true) && $reminderCount >= $escalateAfter) {
-                $stalledParty = $stage->key === 'supervisor'
-                    ? (User::find($detail->requested_supervisor_id)?->name ?? 'the supervisor')
-                    : 'the Chair of Department';
+            if (in_array($stage->key, ['supervisor', 'chair', 'dean_pgr'], true) && $reminderCount >= $escalateAfter) {
+                $stalledParty = match ($stage->key) {
+                    'supervisor' => User::find($detail->requested_supervisor_id)?->name ?? 'the supervisor',
+                    'dean_pgr' => 'the Dean of PGR',
+                    default => 'the Chair of Department',
+                };
 
                 foreach (User::where('role', Role::NON_EXEC_CGS)->get() as $cgsStaff) {
                     $cgsStaff->notify(new SupervisionEscalatedToCgs($application, $stalledParty, $reminderCount));

@@ -34,13 +34,57 @@ class GaExtensionRules
     public function check(GaExtensionDetail $detail, Application $application, Collection $documents): array
     {
         return [
+            $this->eligibility($detail),
             $this->totalDuration($detail),
+            $this->candidacy($detail),
             $this->extensionLength($detail),
             $this->startDay($detail),
             $this->endDay($detail),
             $this->notice($detail, $application),
             $this->stageGate($detail, $documents),
         ];
+    }
+
+    /**
+     * Postgraduate Handbook 2025: GA is for full-time research students.
+     * config('nureen.ga_extension.eligible').
+     */
+    public function eligibility(GaExtensionDetail $detail): array
+    {
+        $label = 'Full-time research student';
+
+        if (! $detail->mode_of_study || ! $detail->study_type) {
+            return $this->unknown('eligibility', $label, 'Needs the mode of study and programme type.');
+        }
+
+        $eligible = config('nureen.ga_extension.eligible');
+        $declared = $detail->optionLabel('mode_of_study').' · '.$detail->optionLabel('study_type');
+
+        return in_array($detail->mode_of_study, $eligible['mode_of_study'], true) && in_array($detail->study_type, $eligible['study_type'], true)
+            ? $this->result('eligibility', $label, self::PASS, "{$declared}.")
+            : $this->result('eligibility', $label, self::FAIL, "{$declared}: GA is for full-time research students only (Postgraduate Handbook 2025).");
+    }
+
+    /**
+     * Postgraduate Handbook 2025: no allowance is paid beyond candidacy --
+     * admission date plus rules.max_candidacy_years for the level.
+     */
+    public function candidacy(GaExtensionDetail $detail): array
+    {
+        $label = 'Within the candidacy period';
+        $years = config("nureen.ga_extension.rules.max_candidacy_years.{$detail->level_of_study}");
+
+        if (! $detail->admission_date || ! $years || ! $detail->requested_new_end_date) {
+            return $this->unknown('candidacy', $label, 'Needs the admission date, level of study and requested end date.');
+        }
+
+        $end = $detail->admission_date->copy()->addYearsNoOverflow((int) $years)->subDay();
+        $level = $detail->optionLabel('level_of_study');
+        $span = "Candidacy ends {$end->format('j M Y')} ({$level}, {$years} years from {$detail->admission_date->format('j M Y')})";
+
+        return $detail->requested_new_end_date->lte($end)
+            ? $this->result('candidacy', $label, self::PASS, "{$span}; the extension ends {$detail->requested_new_end_date->format('j M Y')}.")
+            : $this->result('candidacy', $label, self::FAIL, "{$span}, before the requested {$detail->requested_new_end_date->format('j M Y')}. No allowance is paid beyond candidacy.");
     }
 
     /** (iii) Total GA duration from admission within the level's maximum. */
@@ -166,6 +210,10 @@ class GaExtensionRules
             return $this->result('stage_gate', $label, self::PASS, "{$head}. Nothing to attach; CGS confirms it from the student record.");
         }
 
+        if ($detail->level_of_study === 'phd' && $level === 3) {
+            return $this->phdLevelThree($detail, $documents, $at);
+        }
+
         $proof = config("nureen.ga_extension.stage_gate_documents.{$gate['proof']}");
         $byType = $documents->groupBy('doc_type');
 
@@ -180,6 +228,76 @@ class GaExtensionRules
         }
 
         return $this->result('stage_gate', $label, self::FAIL, "{$head}. \"{$proof}\" is not attached.");
+    }
+
+    /**
+     * PhD Stage Gate Level 3 (viii) has two valid options; either passes.
+     *   1. One article PUBLISHED in a Q1/Q2 WoS-indexed journal.
+     *   2. One article ACCEPTED and one PUBLISHED in WoS/ERA/Scopus-indexed
+     *      journals.
+     * Read from Section C (each journal article's status, database and
+     * quartile) and the proofs attached. Numbers and lists:
+     * config('nureen.ga_extension.rules.phd_level3').
+     *
+     * @param  Collection<int, \App\Modules\Core\Models\ApplicationDocument>  $documents
+     */
+    public function phdLevelThree(GaExtensionDetail $detail, Collection $documents, string $at): array
+    {
+        $label = 'Stage gate proof attached';
+        $config = config('nureen.ga_extension.rules.phd_level3');
+        $byType = $documents->groupBy('doc_type');
+        $proofs = config('nureen.ga_extension.stage_gate_documents');
+        $legacy = config('nureen.ga_extension.legacy_documents.stage_gate_proof');
+        $hasPublishedProof = $byType->has($proofs['published_article_documents']) || $byType->has($legacy);
+        $hasAcceptanceProof = $byType->has($proofs['acceptance_proof_documents']) || $byType->has($legacy);
+
+        $articles = collect($detail->publicationRows())->filter(fn (array $row) => ($row['type'] ?? null) === 'journal');
+        $published = $articles->filter(fn ($row) => ($row['status'] ?? null) === 'published');
+        $accepted = $articles->filter(fn ($row) => ($row['status'] ?? null) === 'accepted');
+        $indexed = fn ($row) => in_array($row['database'] ?? null, $config['indexed_databases'], true);
+        $q1q2 = $published->first(fn ($row) => in_array($row['database'] ?? null, $config['q1q2_databases'], true)
+            && in_array($row['quartile'] ?? null, $config['q1q2_quartiles'], true));
+        $title = fn (?array $row) => $row ? '"'.\Illuminate\Support\Str::limit((string) ($row['title'] ?? 'Untitled'), 60).'"' : '';
+
+        $head = "{$at}: Level 3";
+
+        // Option 1
+        $missing1 = array_filter([
+            $q1q2 ? null : 'no published '.implode('/', $config['q1q2_quartiles']).' '.$this->databaseNames($config['q1q2_databases']).' journal article in Section C',
+            $hasPublishedProof ? null : 'the published article is not attached',
+        ]);
+
+        if ($missing1 === []) {
+            return $this->result('stage_gate', $label, self::PASS, "{$head}, option 1: {$title($q1q2)} published in a {$q1q2['quartile']} ".$this->databaseNames([$q1q2['database']])." journal, and the published article is attached.");
+        }
+
+        // Option 2
+        $acceptedRow = $accepted->first($indexed);
+        $publishedRow = $published->first($indexed);
+        $missing2 = array_filter([
+            $acceptedRow ? null : 'no accepted '.$this->databaseNames($config['indexed_databases']).' journal article in Section C',
+            $publishedRow ? null : 'no published '.$this->databaseNames($config['indexed_databases']).' journal article in Section C',
+            $hasAcceptanceProof ? null : 'the acceptance proof is not attached',
+            $hasPublishedProof ? null : 'the published article is not attached',
+        ]);
+
+        if ($missing2 === []) {
+            return $this->result('stage_gate', $label, self::PASS, "{$head}, option 2: {$title($acceptedRow)} accepted and {$title($publishedRow)} published, with both proofs attached.");
+        }
+
+        $noStatus = $articles->filter(fn ($row) => blank($row['status'] ?? null))->count();
+
+        return $this->result('stage_gate', $label, self::FAIL, "{$head} needs (1) a published Q1/Q2 WoS article, or (2) one accepted and one published WoS/ERA/Scopus article. "
+            .'Option 1: '.implode('; ', $missing1).'. Option 2: '.implode('; ', $missing2).'.'
+            .($noStatus ? " {$noStatus} journal ".($noStatus === 1 ? 'article has' : 'articles have').' no accepted/published status.' : ''));
+    }
+
+    /** ['wos', 'scopus'] => "WoS/Scopus" */
+    protected function databaseNames(array $keys): string
+    {
+        $short = ['wos' => 'WoS', 'era' => 'ERA', 'scopus' => 'Scopus'];
+
+        return implode('/', array_map(fn ($key) => $short[$key] ?? config("nureen.ga_extension.publications.databases.{$key}", $key), $keys));
     }
 
     /** Whole months completed between $admission and $at. */

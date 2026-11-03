@@ -26,6 +26,29 @@
         title="At-Risk Students"
         subtitle="{{ $states->count() }} {{ Str::plural('student', $states->count()) }} below the {{ $pct($threshold) }} attendance requirement, close to it, or projected to fall below it by the end of the semester." />
 
+    {{-- Core's CGS sidebar lists its attendance links by hand
+         (SHARED_CHANGES.md §16), so Approved Leave is linked from here. --}}
+    <p style="margin: 0 0 var(--space-4);">
+        <a href="{{ route('attendance.leave') }}" class="btn-secondary">Approved Leave</a>
+    </p>
+
+    {{-- Approved leave over the allowance this year (Support\AttendanceLeave). --}}
+    @if ($leaveOver->isNotEmpty())
+        <div class="message-warning" role="status" style="margin-bottom: var(--space-4);">
+            <p style="margin: 0 0 var(--space-1);">
+                <b>{{ $leaveOver->count() }} {{ Str::plural('student', $leaveOver->count()) }} over the approved-leave allowance this year.</b>
+                The leave still counts; check it with the Chair. <a href="{{ route('attendance.leave') }}">See Approved Leave</a>
+            </p>
+            <ul style="margin: 0; padding-left: var(--space-5);">
+                @foreach ($leaveOver as $row)
+                    @foreach ($row['problems'] as $problem)
+                        <li>{{ $row['student']->name }} ({{ $row['student']->matric_no }}): {{ $problem }}</li>
+                    @endforeach
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <form method="GET" class="queue-tools">
         <input type="hidden" name="sort" value="{{ $sort }}">
         <div class="queue-tool-field">

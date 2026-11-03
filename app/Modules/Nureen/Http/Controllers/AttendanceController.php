@@ -3,12 +3,15 @@
 namespace App\Modules\Nureen\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
+use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Exports\AttendanceTemplateExport;
 use App\Modules\Nureen\Models\AttendanceRecord;
 use App\Modules\Nureen\Models\AttendanceRiskState;
 use App\Modules\Nureen\Models\AttendanceSyncRun;
 use App\Modules\Nureen\Support\AttendanceEarlyWarning;
 use App\Modules\Nureen\Support\AttendanceIngestor;
+use App\Modules\Nureen\Support\AttendanceLeave;
 use App\Modules\Nureen\Support\AttendanceRiskEvaluator;
 use App\Modules\Nureen\Support\AttendanceSheet;
 use App\Modules\Nureen\Support\AttendanceSourceFactory;
@@ -123,6 +126,12 @@ class AttendanceController extends Controller
         $message = "Processed {$summary->processed()} ".Str::plural('record', $summary->processed()).'. '
             .$warnings['newly_at_risk'].' newly flagged at-risk.';
 
+        // The sheet's leave_days put someone over the allowance: warn, the
+        // leave still counts (AttendanceLeave).
+        if ($summary->leaveWarnings !== []) {
+            session()->flash('leave_warnings', $summary->leaveWarnings);
+        }
+
         if ($summary->rejected === 0) {
             return back()->with('status', $message);
         }
@@ -202,11 +211,71 @@ class AttendanceController extends Controller
         };
 
         return view('nureen::attendance.at_risk', [
+            // Students over a leave allowance this year -- AttendanceLeave.
+            'leaveOver' => app(AttendanceLeave::class)->overview()->filter(fn ($row) => $row['problems'] !== [])->values(),
             'states' => $states->values(),
             'sort' => $sort,
             'search' => $search,
             'threshold' => AttendanceRiskEvaluator::THRESHOLD,
             'semesterPeriods' => (int) config('nureen.attendance.semester_periods'),
         ]);
+    }
+
+    /**
+     * Approved annual leave: what each student has on record this year
+     * against the allowance (config('nureen.attendance.leave')), and a form
+     * for CGS to record days for a period already on file. Leave approved
+     * by the Chair via UCampus never counts as absence.
+     */
+    public function leave(Request $request, AttendanceLeave $leave)
+    {
+        $year = (int) $request->query('year', now()->year);
+
+        return view('nureen::attendance.leave', [
+            'year' => $year,
+            'rows' => $leave->overview($year),
+            'config' => config('nureen.attendance.leave'),
+        ]);
+    }
+
+    /**
+     * Record approved leave days for one student's period. Through
+     * AttendanceRecord::recordLeave() -- the same column and recount as
+     * the sheet's leave_days -- then the same risk check an upload runs.
+     */
+    public function recordLeave(Request $request, AttendanceLeave $leave)
+    {
+        $data = $request->validate([
+            'matric_no' => ['required', 'string', 'max:30'],
+            'period_end' => ['required', 'date'],
+            'leave_days' => ['required', 'integer', 'min:0', 'max:31'],
+        ]);
+
+        $student = User::where('matric_no', trim($data['matric_no']))->where('role', Role::STUDENT)->first();
+
+        if (! $student) {
+            return back()->withInput()->withErrors(['matric_no' => 'No student has that matric number.']);
+        }
+
+        $periodEnd = \Illuminate\Support\Carbon::parse($data['period_end'])->toDateString();
+        $record = AttendanceRecord::where('student_id', $student->id)->whereDate('period_end', $periodEnd)->first();
+
+        if (! $record) {
+            return back()->withInput()->withErrors(['period_end' => "{$student->name} has no attendance on file for the period ending {$periodEnd}. Upload that period first, or include leave_days in the sheet."]);
+        }
+
+        if ((int) $data['leave_days'] > $record->leaveCapacity()) {
+            return back()->withInput()->withErrors(['leave_days' => "That period has {$record->leaveCapacity()} missed ".Str::plural('session', $record->leaveCapacity())
+                .' not already excused, so at most that many leave days.']);
+        }
+
+        AttendanceRecord::recordLeave($student->id, $periodEnd, (int) $data['leave_days']);
+        app(AttendanceEarlyWarning::class)->run([$student->id]);
+
+        $problems = $leave->warningsFor([$student->id]);
+
+        return redirect()->route('attendance.leave', ['year' => \Illuminate\Support\Carbon::parse($periodEnd)->year])
+            ->with('status', "Recorded {$data['leave_days']} leave ".Str::plural('day', (int) $data['leave_days'])." for {$student->name}, period ending {$periodEnd}.")
+            ->with('leave_warnings', $problems);
     }
 }
