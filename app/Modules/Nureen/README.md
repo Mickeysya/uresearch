@@ -4,9 +4,11 @@
 
 ## Built
 
-- **GA Extension** — complete. Supervisor → CGS Staff → Senior Director CGS,
-  with a required supporting document enforced at validation so incomplete
-  applications never reach CGS.
+- **GA Extension** — complete. Supervisor → Non-Executive CGS (default), or
+  Supervisor → CGS Staff → Senior Director CGS (`final_approver`). Required
+  documents are enforced at validation, so incomplete applications never
+  reach CGS. The official GA Extension Form is generated from the student's
+  answers rather than uploaded; see "The GA Extension Form, generated" below.
 
 - **Attendance Record** — complete. UTrace data comes in as a CGS-uploaded
   CSV (`/attendance/upload`), not a live API — there's no UTP system access
@@ -61,6 +63,90 @@
   Senior Director CGS endorses → Dompdf generates the certificate and
   `DocumentStore::storeGenerated()` attaches it, so the existing download
   route and permission check apply with no extra code.
+
+## The GA Extension Form, generated (UTP/CGS/001-A2)
+
+Students no longer fill in and upload the GA Extension Form. They enter the
+information and the system generates the official form as a PDF
+(`LetterRenderer::gaExtensionForm()`, view `letters/ga_extension_form`,
+route `ga-extension.form-pdf`). It is rendered fresh on each download, so it
+shows the progress so far.
+
+**Section A, the checklist.**
+- **Items 1–3** are the required documents: IC/passport/visa, Admission &
+  Offer letter, and the supervisor's letter.
+- **Item 4** is the stage gate proof: an acceptance, a published article, or
+  a soft bound submission. It is optional at submission, because a Level 1
+  student has none yet.
+- **Ticks:** the student column is ticked from the documents actually
+  attached. The CGS column is ticked once CGS has passed the application.
+
+**Section B.**
+- **From the profile, read-only:** Name, Student ID, Programme and
+  Supervisor. They are never read from the request.
+- **Entered by the student:** the rest, defined in
+  `config('nureen.ga_extension.applicant_fields')`. Each field is a column
+  on `ga_extension_details`.
+- **Account no. and IC/passport no.:** stored with the `encrypted` cast.
+  They are masked (`•••• 1234`) everywhere except for the CGS stage's role
+  (`GaExtensionDetail::revealsSensitiveTo()`), and that applies to the PDF
+  too. The form never shows them back; leaving one blank keeps what is on
+  file.
+- **Bank details:** sit behind `collect_bank_details`
+  (`NUREEN_GA_EXTENSION_COLLECT_BANK_DETAILS`, default true). When off,
+  they are not asked, not validated, not changed, and left blank on the PDF.
+- **Visa expiry date:** asked only when the student says they hold a visa.
+
+**Section C, publications.** An add/remove-row list stored as JSON in
+`publications`: type, authors, year, title, venue, volume, pages, DOI, ISSN,
+database, quartile and impact factor. Rows left empty are dropped. On submit,
+each remaining row needs its type, authors, year, title and venue.
+
+**Section D, the declaration.** The form's wording, timestamped in
+`declaration_accepted_at`. Required to submit, not to save a draft.
+
+**Section E, endorsements.** The name, role and date of whoever acted at the
+supervisor, CGS and Senior Director stages, read from `approval_history`.
+- A stage not reached yet, or not on this application's chain
+  (`final_approver_snapshot`), is left blank.
+- Decisions before the latest return don't count, so a returned application
+  shows only the endorsements it has now.
+
+**Section J, CGS remarks.** Filled by CGS staff on the queue at
+`cgs_verify` (route `ga-extension.cgs-remarks`); the fields are in
+`cgs_remarks_fields`.
+
+**Who can download it.**
+- The owning student, a draft included: from the draft form, and from the
+  list of their applications on the GA Extension page.
+- The supervisor it is addressed to, and anyone holding another stage's role
+  on that application's own chain.
+- Everyone else gets 403.
+
+**Rule checks** (`Support\GaExtensionRules`, numbers in
+`config('nureen.ga_extension.rules')`). These come from the form's Terms and
+Conditions and are shown on the approver's System checks panel as pass, fail
+or unknown with the reason. They warn and don't block:
+- total duration from admission within 24 months (MSc) or 42 months (PhD);
+- extension length 3–12 months;
+- start on the 1st or 16th;
+- end on the 15th or the last day of the month;
+- submitted at least one month before the start;
+- the stage gate proof for the level.
+
+The stage gate level is worked out from whole months completed since
+admission at the extension's start. It is the highest level whose `from` is
+at or below that number, so a boundary month belongs to the later level
+(MSc month 18 → Level 3).
+
+**The one hard rule** is that a backdated start is refused at submission.
+The terms say backdated appointments are "not allowed".
+
+**Older applications.** Applications submitted before this keep their
+uploaded "GA Extension Form" and combined "Acceptance Letter or Published
+Paper" (`legacy_documents`). Both still show; the combined proof still ticks
+item 4 and counts for Levels 2–3. The rules they lack data for show as
+unknown, not failed.
 
 ## The GA/GRA Certification form (CGS's online form)
 
@@ -295,6 +381,8 @@ role-scoped pending that decision.
 | `CertificationTest` | the letter being generated, attached as an `ApplicationDocument`, and actually dispatched |
 | `CertificationOnlineFormTest` | GA and GRA submissions storing every online-form field; an option outside config's list rejected; profile fields (name, matric, department, programme, supervisor) not overridable through the request; the profile shown read-only; non-PDF rejected and several PDFs accepted; the declaration required to submit but not to save a draft; the identity number encrypted at rest, masked for the supervisor, full for CGS, never echoed on the form and kept when left blank; `ask_period` on (required, printed) and off (hidden, ignored, not printed, queue still renders); the attachment as a PDF for the owner only, and from a draft with the auto-download |
 | `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday |
+| `GaExtensionFormTest` | every Section B field stored; profile fields not overridable; visa date required only with a visa; declaration on submit not draft; backdated refused; account/IC encrypted at rest, masked for supervisor, student and Senior Director, full at the CGS stage, never echoed, blank keeps; bank flag both ways; publications JSON round-trip, half-filled rows on drafts but not submit, ISSN format; Section A ticks and CGS ticks after CGS passes; Section E on both chains, a rejection, and after a return; Section J at the CGS stage only; who may download (owner incl. draft, chain approvers, not other students/supervisors/Chair, not the Director on the `cgs` chain); an old application with an uploaded form still renders |
+| `GaExtensionRulesTest` | each Terms and Conditions check passing and failing for MSc and PhD; the stage gate level at every boundary month; whole months since admission; the right proof per level and the old combined proof; unknown without data; every number read from config |
 | `DraftsTest` | empty draft saves (both modules); saving again updates the same draft and keeps files; light validation only; Remove deletes the file; the 5-file limit counts attached files; an incomplete draft fails submit with the normal messages; a complete one goes to pending at the first stage as the same application, files intact; a Certification switching GA→GRA relabels its files; another student (or staff) can't open, change, submit or delete it; delete removes everything; no queue, reminder or analytics sees a draft |
 | `ClientCharterTest` | each chain's expected date (GA Extension both modes, Supervision `'automatic'`, Certification), a `null` stage never inventing a date, overdue never giving a past date, a returned application timed from its actual stage, decided/draft returning nothing |
 | `ClientCharterDisplayTest` | the student page (pending shown, decided not, overdue message only when overdue, own rows only) and the queue's overdue marker and order |

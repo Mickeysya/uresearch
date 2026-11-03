@@ -6,7 +6,10 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
+use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaCertificationDetail;
+use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Models\SupervisionDetail;
 use App\Modules\Nureen\Support\Contracts\GeneratesQrCode;
 use App\Modules\Nureen\Workflows\SupervisionWorkflow;
@@ -247,6 +250,132 @@ class LetterRenderer
             'rows' => array_merge([$first], array_fill(0, 4, ['code' => null, 'course' => null, 'owner' => null])),
             'verificationUrl' => null,
         ];
+    }
+
+    /* -----------------------------------------------------------------
+     | The GA Extension Form (UTP/CGS/001-A2)
+     |------------------------------------------------------------------*/
+
+    /**
+     * CGS's GA Extension Form, generated from what the student entered
+     * instead of uploaded: Section A's ticks from the documents actually
+     * attached, B-D from the detail row, E from approval_history, J from
+     * CGS's remarks. Rendered fresh on every download, so it shows the
+     * application's progress so far.
+     *
+     * $viewer decides masking: the account and IC/passport numbers print in
+     * full only for the CGS stage's role (GaExtensionDetail::
+     * revealsSensitiveTo()).
+     */
+    public function gaExtensionForm(Application $application, ?User $viewer): string
+    {
+        $pdf = Pdf::loadView('nureen::letters.ga_extension_form', $this->gaExtensionFormData($application, $viewer))
+            ->setPaper('a4')
+            ->setOption(['isFontSubsettingEnabled' => true, 'defaultFont' => 'DejaVu Sans', 'isRemoteEnabled' => false]);
+
+        // "Page X of Y", bottom right as on the paper form: the total is
+        // only known once laid out, and Dompdf has no counter(pages).
+        $pdf->render();
+        $dompdf = $pdf->getDomPDF();
+        $canvas = $dompdf->getCanvas();
+        $font = $dompdf->getFontMetrics()->getFont('DejaVu Sans', 'bold');
+        $canvas->page_text($canvas->get_width() - 92, $canvas->get_height() - 24, 'Page {PAGE_NUM} of {PAGE_COUNT}', $font, 6.6);
+
+        return $pdf->output();
+    }
+
+    /** @return array<string, mixed> */
+    public function gaExtensionFormData(Application $application, ?User $viewer): array
+    {
+        $detail = GaExtensionDetail::where('application_id', $application->id)->first() ?? new GaExtensionDetail;
+        $student = $application->student()->with('supervisor')->first();
+        $config = config('nureen.ga_extension');
+
+        // Section E: who acted at each stage of THIS application's chain.
+        // Only decisions after the latest return count -- a return sends
+        // the application back, and the stages it skipped back over must be
+        // signed again.
+        $chain = collect(app(WorkflowEngine::class)->stagesFor($application))->keyBy(fn (Stage $stage) => $stage->key);
+        $history = ApprovalHistory::with('approver')->where('application_id', $application->id)->orderBy('id')->get();
+        $lastReturn = $history->where('decision', 'returned')->max('id') ?? 0;
+        $current = $history->filter(fn (ApprovalHistory $row) => $row->id > $lastReturn && $row->decision !== 'returned');
+
+        $endorsement = function (string $key) use ($chain, $current): ?array {
+            if (! $chain->has($key)) {
+                return null;
+            }
+
+            $row = $current->where('stage_key', $key)->last();
+
+            return $row ? [
+                'name' => $row->approver?->name,
+                'role' => $row->approver ? Role::label($row->approver->role) : $row->stage_label,
+                'decision' => ucfirst($row->decision),
+                'at' => $row->created_at,
+                'passed' => $row->decision !== 'rejected',
+            ] : null;
+        };
+
+        $endorsements = [
+            'supervisor' => $endorsement('supervisor'),
+            'cgs' => $endorsement('cgs_verify'),
+            'senior_director' => $endorsement('senior_director'),
+        ];
+
+        // Section A: a student tick per item with a document attached; the
+        // CGS tick on those once CGS has passed the application.
+        $byType = $application->documents()->get()->groupBy('doc_type');
+        $cgsPassed = (bool) ($endorsements['cgs']['passed'] ?? false);
+        $required = $config['required_documents'];
+        $items = [
+            ['Copy of Student Visa / Identification Card (IC)', [$required['identity_document_documents'] ?? null]],
+            ['Copy of Admission Letter & Offer letter', [$required['admission_letter_documents'] ?? null]],
+            ['Supporting Letter from Supervisor', [$required['supervisor_letter_documents'] ?? null]],
+            [null, [...array_values($config['stage_gate_documents']), $config['legacy_documents']['stage_gate_proof']]],
+        ];
+        $checklist = array_map(function (array $item) use ($byType, $cgsPassed) {
+            $attached = array_values(array_filter($item[1], fn ($label) => $label && $byType->has($label)));
+
+            return ['label' => $item[0], 'attached' => $attached, 'student' => $attached !== [], 'cgs' => $attached !== [] && $cgsPassed];
+        }, $items);
+
+        $remarks = $detail->cgs_remarks ?? [];
+
+        return [
+            'student' => $student,
+            'detail' => $detail,
+            'application' => $application,
+            'logo' => $this->logo(),
+            'checklist' => $checklist,
+            'bank' => (bool) $config['collect_bank_details'],
+            'account' => $detail->sensitiveFor('bank_account_no', $viewer),
+            'identity' => $detail->sensitiveFor('identity_number', $viewer),
+            // At least three rows, as on the paper form.
+            'publications' => array_pad($detail->publicationRows(), 3, null),
+            'declaration' => $config['declaration'],
+            'endorsements' => $endorsements,
+            'remarks' => collect($config['cgs_remarks_fields'])->map(fn (array $field, string $key) => [
+                'label' => $field['label'],
+                'value' => filled($remarks[$key] ?? null) && ($field['type'] ?? 'text') === 'date'
+                    ? \Illuminate\Support\Carbon::parse($remarks[$key])->format('j M Y')
+                    : ($remarks[$key] ?? null),
+            ])->all(),
+            'status' => $this->progressLabel($application),
+            'generatedAt' => now(),
+            'verificationUrl' => null,
+        ];
+    }
+
+    /** "Draft", "Pending: Non-Executive CGS", "Approved"... for the form's footer. */
+    protected function progressLabel(Application $application): string
+    {
+        if ($application->status === Application::STATUS_PENDING) {
+            $stage = app(WorkflowEngine::class)->currentStage($application);
+
+            return 'Pending'.($stage ? ': '.$stage->label : '');
+        }
+
+        return ucfirst((string) $application->status);
     }
 
     /* -----------------------------------------------------------------

@@ -46,6 +46,17 @@ Route::middleware('auth')->group(function () {
         Route::post('/ga-extension/{application}/return', [GaExtensionController::class, 'returnToSupervisor'])->name('ga-extension.return');
     });
 
+    // Section J of the generated form: CGS staff, at the cgs_verify stage
+    // only (checked in the controller against the application's stage).
+    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+        Route::post('/ga-extension/{application}/cgs-remarks', [GaExtensionController::class, 'saveCgsRemarks'])->name('ga-extension.cgs-remarks');
+    });
+
+    // The generated GA Extension Form: any signed-in user here; who may see
+    // which application is GaExtensionController::canViewForm() -- the
+    // owning student and that application's own approvers.
+    Route::get('/ga-extension/{application}/form', [GaExtensionController::class, 'formPdf'])->name('ga-extension.form-pdf');
+
     // ---- Supervision ----------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/supervision/new', [SupervisionController::class, 'create'])->name('supervision.create');

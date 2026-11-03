@@ -8,6 +8,203 @@ diff alone.
 
 ---
 
+## 2026-11-06 — GA Extension Form generated instead of uploaded (UTP/CGS/001-A2)
+
+**Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only. There was no
+Core edit; one Core proposal is in SHARED_CHANGES.md §15.
+
+### The ask
+
+Stop students uploading a filled-in GA Extension Form. Collect its data and
+generate the official form as a PDF:
+- **Section A:** checklist ticks computed from what is attached; the CGS
+  column ticked once CGS passes the application.
+- **Section B:** the profile fields read-only, plus fields the student
+  enters. Account no. and IC/passport no. are encrypted and masked except at
+  the CGS stage. Bank details sit behind a config flag.
+- **Section C:** publications as add/remove rows, stored as JSON.
+- **Section D:** the declaration, with a timestamp.
+- **Section E:** names, roles and dates from `approval_history`, respecting
+  the application's own chain.
+- **Section J:** remarks filled by CGS staff.
+
+Also:
+- The PDF is downloadable by the owner at any time and by every approver.
+- The Terms and Conditions become warning-level checks on the System
+  checks panel, with all numbers in config.
+- `ga_extension_form_documents` is removed from `required_documents`, while
+  older applications keep their upload.
+
+### Key findings before writing any code
+
+- **The PDF was not on this branch.** It is only on
+  `feature/track-applications-redesign`, so I read it from there (pages 1–4)
+  with `git show`, without adding it here. That file was not modified,
+  as asked earlier.
+- **The form has a Section D that isn't labelled "D".** It is the
+  certification sentence with Signature / Name / Date lines. After Section E
+  comes J; there are no F–I.
+- **Section A item 4 differs by stage gate level:** acceptance for Level 2,
+  published article for Level 3, soft bound for PhD Level 4. The only upload
+  was one combined "Acceptance Letter or Published Paper", which was
+  required, so a Level 1 student couldn't submit, and a check couldn't tell
+  which proof was given.
+- **Item 2 (Admission & Offer letter) was never collected.**
+- **`encrypted` works on a column, not on one key inside the
+  `additional_info` JSON.** So Section B is real columns.
+- **A boundary month in the stage gate tables sits in two rows.** MSc Level
+  2 is "Month 12 to Month 18" and Level 3 is "Month 18 to Month 24".
+- **Dompdf has no `counter(pages)`;** the first render said "Page 1 of 0".
+- **Script order:** an inline script calling `location.assign()` before
+  `form-stepper`'s pushed script left the page without its steps. The
+  browser check caught it.
+
+### The design
+
+- **Migration `2026_11_06_000100`:** adds to `ga_extension_details`:
+  - `mode_of_study`, `admission_date`, `candidature_period`,
+    `level_of_study`, `contact_no`, `contact_email`;
+  - `bank_name`, `bank_account_no` (encrypted), `identity_number`
+    (encrypted);
+  - `holds_visa`, `visa_expiry_date`;
+  - `publications` (JSON), `declaration_accepted_at`;
+  - `cgs_remarks` (JSON), `cgs_remarks_by_id`, `cgs_remarks_at`.
+
+  All nullable, for drafts and older rows.
+- **Config, `nureen.ga_extension`:**
+  - `applicant_fields`: label, type, required, options, max, step, and the
+    `bank`, `sensitive` and `required_if` flags. The form, validation and
+    storage are all built from it.
+  - `collect_bank_details`, `publications` (types, databases, quartiles,
+    max rows), `declaration`, `cgs_remarks_fields`;
+  - `rules`: max months per level, extension min/max, start and end days,
+    notice months, and the stage gate tables;
+  - `stage_gate_documents` and `legacy_documents`;
+  - `additional_fields` stays for anything without a column.
+- **Required documents:**
+  - IC/passport/visa, **Admission & Offer letter (new; item 2 of the
+    official checklist)**, and the supervisor's letter;
+  - **the combined proof is replaced by three optional stage gate proofs.**
+    The rule check says which one the level needs.
+- **Masking:** `GaExtensionDetail::revealsSensitiveTo()` is true only for
+  the role of the `cgs_verify` stage, read from the workflow. The student,
+  the supervisor and the Senior Director all see `•••• 1234`, on screen and
+  in the PDF.
+- **`Support\GaExtensionRules`:** six checks, each pass, fail or unknown
+  with a reason.
+  - **The stage gate level** is the highest level whose `from` is at or
+    below the whole months completed since admission at the extension's
+    start. 18 months completed is month 19, so MSc Level 3.
+  - **The old combined proof** passes Levels 2–3 with "check it is the
+    right one".
+- **Only one hard rule:** a backdated start is refused at submission,
+  because the terms say "Backdated appointment … is not allowed".
+- **Section E:** for each of `supervisor`, `cgs_verify` and
+  `senior_director`, the latest decision after the latest `returned` row,
+  and only for stages on `stagesFor($application)`. A Senior Director
+  column on the `cgs` chain stays blank.
+- **Downloads:**
+  - the owner (drafts included);
+  - the named supervisor (or whoever endorsed);
+  - anyone holding another stage's role on that chain.
+
+  For the student, the link is on the draft form ("Download the form
+  (PDF)" saves first, then auto-downloads) and in a list of their
+  applications on `/ga-extension/new`. Core's application page has no slot
+  for it; SHARED §15 proposes one.
+
+### What changed
+
+- **New:**
+  - the migration;
+  - `Support/GaExtensionRules.php`;
+  - views `letters/ga_extension_form`, `ga_extension/_field` and
+    `ga_extension/_publication_row`;
+  - tests `GaExtensionFormTest` (26) and `GaExtensionRulesTest` (13), and
+    the `Concerns/FilesGaExtensions` payload.
+- **`GaExtensionController`:**
+  - `form()` passes the fields, options, rules and submitted list;
+  - `saveDraft()` and `store()` are built from `applicantRules()`,
+    `applicantValues()`, `normalisePublications()` and
+    `publicationRules()`;
+  - the backdated block;
+  - new `formPdf()`, `canViewForm()` and `saveCgsRemarks()`;
+  - the queue eager-loads `cgsRemarksBy`.
+- **Routes:** `ga-extension.form-pdf` (auth, checked in the controller) and
+  `ga-extension.cgs-remarks` (Non-Executive CGS).
+- **`GaExtensionDetail`:** casts, `revealsSensitiveTo()`,
+  `sensitiveFor()`, `mask()`, `extensionStart()`, `extensionMonths()`,
+  `extensionSummary()`, `publicationRows()`, `citation()`,
+  `databaseAndQuartile()`.
+- **`LetterRenderer`:** `gaExtensionForm()`, which stamps "Page X of Y" on
+  the canvas, and `gaExtensionFormData()`.
+- **`ga_extension/form.blade.php`:** rewritten into Your details →
+  Identity & bank → Extension details → Publications → Supporting documents
+  → Declaration (then Review). It has the visa toggle, add/remove rows, a
+  live stage gate hint, the download button and the auto-download.
+- **`ga_extension/_detail.blade.php`:**
+  - the PDF link and the Section B summary (masked);
+  - publications;
+  - System checks: documents, including legacy ones, plus the rules;
+  - Section J: a form for CGS at their stage, read-only otherwise.
+- **Existing tests:** `GaExtensionTest`, `DraftsTest` and
+  `SnapshotChainReachabilityTest` use the shared payload and the new
+  document types. Their fixed dates became relative where a fixed date
+  would one day be backdated.
+- **Docs:** README ("The GA Extension Form, generated" and test rows) and
+  SHARED_CHANGES §15.
+
+### Bugs caught
+
+- **The empty stepper after the auto-download:** an inline script
+  navigated before `form-stepper` had run. It is now in the `scripts`
+  stack, after the stepper, and waits for `load`.
+- **"Page 1 of 0":** fixed by `page_text()` on the Dompdf canvas.
+- **A–E spilled onto a second page;** tightened to one, as on the paper
+  form.
+- **Fixed test dates** (`2026-12-31`) in `SnapshotChainReachabilityTest`
+  would have become backdated, and so refused, after December; they are
+  now relative.
+
+### Verification
+
+- **Full suite:** 527 passed (`QUEUE_CONNECTION=sync`, `MAIL_MAILER=array`).
+  `failed_jobs` and `jobs` were 0 before and after.
+- **Headless browser on the dev app** (`cgs` chain, the configured
+  default): student 22001001 → `supervisor@` → `cgs@` (final).
+  - **Student:** every step was filled.
+    - The visa date shows only on "Yes".
+    - Two publication rows were added and one removed.
+    - The stage gate hint read "16 months … Level 2 … Attach Proof of
+      Journal Article Acceptance".
+    - "Download the form (PDF)" saved draft #194, returned to the
+      Declaration step and downloaded a 2-page PDF: student ticks only,
+      blank D/E, masked numbers.
+    - The On file hints showed `•••• 5566` and `•••• 1234`.
+    - Submitted from Review.
+  - **Supervisor:** the queue showed the numbers masked and all six checks
+    passing. The PDF had the endorsement blank, and the supervisor
+    approved.
+  - **CGS** (dark mode): filled and saved Section J ("Last saved … by M
+    Syahmi Ifwat M Jafri") and saw the numbers in full. The PDF showed the
+    supervisor's endorsement and full numbers, and CGS approved.
+  - **Student again:** #194 listed as Approved. The final PDF has the CGS
+    ticks, Section E with the supervisor and CGS ("Approved
+    electronically"), the Senior Director column blank, and Section J
+    filled on page 2. No console errors.
+- **Dark mode:** checked on the student form (Your details,
+  Identity & bank, Publications) and the CGS queue.
+- **Not checked in the browser:** the `senior_director` chain (the dev
+  `.env` is on `cgs`; the tests cover it, including Section E's three
+  names) and the no-JavaScript fallbacks.
+- **Dev data:**
+  - #194 (approved) is left as the demo record;
+  - drafts #191 and #192 and pending #193, all created by my two failed
+    runs minutes earlier, were deleted with `Drafts::delete()`;
+  - #184 and #187 (earlier sessions) were left alone.
+
+---
+
 ## 2026-11-05 — GA/GRA Certification form aligned with CGS's online form
 
 **Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core
