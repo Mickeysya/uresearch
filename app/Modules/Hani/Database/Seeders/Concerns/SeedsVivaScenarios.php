@@ -144,8 +144,18 @@ trait SeedsVivaScenarios
             ->each->delete();
         VivaEligibility::whereIn('student_id', $ids)->delete();
 
-        $emails = collect($this->dataset()['examiners'] ?? [])->pluck('email')->filter()->map(fn ($e) => mb_strtolower($e));
-        Examiner::whereIn(DB::raw('LOWER(email)'), $emails->all())->update(['assigned_until' => null]);
+        // The pool as the dataset describes it, moved to today. The import
+        // never moves an examination date backwards (right for a real
+        // upload), so an evaluation completed during a demo would otherwise
+        // stay; and no tie-up survives from the last run.
+        foreach ($this->dataset()['examiners'] ?? [] as $row) {
+            if (filled($row['email'] ?? null)) {
+                Examiner::whereRaw('LOWER(email) = ?', [mb_strtolower($row['email'])])->update([
+                    'assigned_until' => null,
+                    'last_examination_date' => $this->shift(($row['last_examination_date'] ?? '') ?: null),
+                ]);
+            }
+        }
     }
 
     protected function scenarioS02(array $row, User $student): void
