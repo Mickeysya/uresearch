@@ -131,6 +131,36 @@ class VivaSchedulingAssistTest extends TestCase
         $this->assertSame(3, VivaReminderLog::count());
     }
 
+    public function test_a_viva_set_less_than_7_days_ahead_gets_only_the_1_day_reminder(): void
+    {
+        // Later today: panel_1d at the next run, never a late panel_7d.
+        $today = $this->viva('22001011');
+        $this->schedule($today, '2027-01-04', '15:00', ['override_warnings' => 1]);
+
+        // Tomorrow.
+        $tomorrow = $this->viva('22001012');
+        $this->schedule($tomorrow, '2027-01-05', '10:00', ['venue' => 'Room 2', 'chair_email' => 'chair2@example.com', 'override_warnings' => 1]);
+
+        // Three days out: nothing now (the invitation is fresh), panel_1d the day before.
+        $soon = $this->viva('22001013');
+        $this->schedule($soon, '2027-01-07', '10:00', ['venue' => 'Room 3', 'chair_email' => 'chair3@example.com', 'override_warnings' => 1]);
+
+        $this->artisan('viva:reminders')->assertSuccessful();
+        $this->artisan('viva:reminders')->assertSuccessful();
+
+        $kinds = fn (array $viva) => VivaReminderLog::where('viva_application_id', $viva['notice']->id)->orderBy('kind')->pluck('kind')->all();
+        $this->assertSame(['panel_1d'], $kinds($today));
+        $this->assertSame(['panel_1d'], $kinds($tomorrow));
+        $this->assertSame([], $kinds($soon));
+        Notification::assertSentTo($today['student'], VivaReminder::class, fn ($n) => $n->kind === 'panel_1d' && str_starts_with($n->toMail($today['student'])->subject, 'Viva today: '));
+        Notification::assertNotSentTo($today['student'], VivaReminder::class, fn ($n) => $n->kind === 'panel_7d');
+
+        Carbon::setTestNow('2027-01-06 07:45');
+        $this->artisan('viva:reminders')->assertSuccessful();
+        $this->assertSame(['panel_1d'], $kinds($soon));
+        $this->assertSame(3, VivaReminderLog::count());
+    }
+
     public function test_softbound_nudge_and_overdue_notice_are_sent_once(): void
     {
         $viva = $this->viva(softbound: false, panel: false);

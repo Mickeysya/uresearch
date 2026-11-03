@@ -28,7 +28,8 @@ use Illuminate\Support\Facades\Notification;
  *                    the examiner received the thesis) -> the AE
  *
  * Scheduling:
- *   panel_7d / panel_1d   7 days and 1 day before the viva, with the
+ *   panel_7d / panel_1d   7 days and 1 day before the viva (a viva set
+ *                         closer than 7 days gets only panel_1d), with the
  *                         calendar file -> everyone invited; a reschedule
  *                         sends them again (keyed on the schedule sequence)
  *   softbound_nudge       the expected softbound date is within 14 days and
@@ -229,14 +230,24 @@ class VivaReminders extends Command
             ->whereHas('application', fn ($q) => $q->where('module_type', 'viva_voce')->where('status', Application::STATUS_APPROVED))
             ->get();
 
+        $thresholds = collect((array) config('hani.reminders.panel_days', [7, 1]))->map(fn ($d) => (int) $d)->sort()->values();
+        $last = $thresholds->first();
+
         foreach ($details as $detail) {
             $notice = $detail->application;
             $daysAway = (int) now()->startOfDay()->diffInDays($detail->viva_at->copy()->startOfDay());
 
-            foreach ((array) config('hani.reminders.panel_days', [7, 1]) as $days) {
-                // On the day, or the day after if a run was missed -- never
-                // for a viva set closer than that (its invitation is fresh).
-                if ($daysAway > $days || $daysAway < max(1, $days - 1) || ($days > 1 && $daysAway <= 1)) {
+            foreach ($thresholds as $days) {
+                // The last reminder (1 day) goes to any viva that close, even
+                // one set for later today. An earlier one (7 days) goes on the
+                // day, or the day after if a run was missed -- never to a viva
+                // already inside the last reminder's window, and never late
+                // to one set closer than that (its invitation is fresh).
+                $due = $days === $last
+                    ? $daysAway <= $days
+                    : $daysAway <= $days && $daysAway >= max($last + 1, $days - 1);
+
+                if (! $due) {
                     continue;
                 }
 
@@ -246,7 +257,7 @@ class VivaReminders extends Command
 
                 yield [$notice, "panel_{$days}d", 'seq:'.$detail->schedule_sequence, $recipients['users'], $recipients['emails'], new VivaReminder(
                     "panel_{$days}d", $notice,
-                    ($days === 1 ? 'Viva tomorrow: ' : "Viva in {$days} days: ").$notice->student?->name,
+                    match (true) { $daysAway === 0 => 'Viva today: ', $daysAway === 1 => 'Viva tomorrow: ', default => "Viva in {$daysAway} days: " }.$notice->student?->name,
                     [
                         "A reminder that the viva voce of {$notice->student?->name} is on {$when} at {$detail->venue}.",
                         'Thesis: '.$detail->thesis_title.'. Chairman: '.$detail->chair_name.'.',
