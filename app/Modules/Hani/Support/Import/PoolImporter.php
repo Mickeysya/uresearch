@@ -100,13 +100,29 @@ class PoolImporter
             return ['layout' => null, 'rows' => [], 'messages' => ['This file mixes CGS\'s layout with the UResearch template. Upload one or the other.']];
         }
 
+        $rows = $this->prepare($rows, $publications, $messages);
+
+        return ['layout' => array_key_first($layouts), 'rows' => $rows, 'messages' => $messages];
+    }
+
+    /**
+     * Rows already read (from a sheet, or from HaniDemoSeeder's JSON) made
+     * ready to classify: publications attached by email, every row held to
+     * the import rules. The step a spreadsheet and the seeder share.
+     *
+     * @param  array<int, PoolRow>  $rows
+     * @param  array<string, array<int, array>>  $publications  by examiner email
+     * @return array<int, PoolRow>
+     */
+    public function prepare(array $rows, array $publications = [], array &$messages = []): array
+    {
         $rows = $this->attachPublications($rows, $publications, $messages);
 
         foreach ($rows as $row) {
             $this->validate($row);
         }
 
-        return ['layout' => array_key_first($layouts), 'rows' => $rows, 'messages' => $messages];
+        return $rows;
     }
 
     /**
