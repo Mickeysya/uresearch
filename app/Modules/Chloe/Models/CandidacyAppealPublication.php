@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CandidacyAppealPublication extends Model
 {
-    protected $fillable = ['candidacy_appeal_detail_id', 'description'];
+    // Legacy rows: candidacy_appeal_detail_id + description. New rows: candidacy_appeal_id + title/venue/status/year.
+    protected $fillable = ['candidacy_appeal_detail_id', 'description', 'candidacy_appeal_id', 'title', 'venue', 'status', 'year'];
 
     public function detail(): BelongsTo
     {

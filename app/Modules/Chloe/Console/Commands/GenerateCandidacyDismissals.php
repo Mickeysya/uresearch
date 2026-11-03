@@ -2,25 +2,21 @@
 
 namespace App\Modules\Chloe\Console\Commands;
 
-use App\Modules\Chloe\Services\DismissalGenerator;
 use Illuminate\Console\Command;
 
 /**
- * Daily refresh of the dismissal candidate list. See DismissalGenerator for
- * the eligibility rule — also called on demand from CGS's "Refresh List"
- * button, so the rule lives in exactly one place.
+ * DEPRECATED, does nothing. The Dismissal List is now live (Support\CandidacyDismissalList): students whose candidacy has expired, with no list to
+ * generate or review. The shared routes/console.php still schedules this name at 07:15, so it stays as a harmless no-op until that line is removed.
  */
 class GenerateCandidacyDismissals extends Command
 {
     protected $signature = 'candidacy:generate-dismissals';
 
-    protected $description = 'Generate the study-candidacy dismissal candidate list for CGS to review';
+    protected $description = 'DEPRECATED (does nothing): the Dismissal List is now live; see Study Candidacy Management > Dismissal List';
 
-    public function handle(DismissalGenerator $generator): int
+    public function handle(): int
     {
-        $created = $generator->generate();
-
-        $this->info("Added {$created} new dismissal candidate(s).");
+        $this->line('candidacy:generate-dismissals is deprecated and does nothing. The Dismissal List is live in Study Candidacy Management.');
 
         return self::SUCCESS;
     }

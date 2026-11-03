@@ -2,65 +2,74 @@
 
 namespace App\Modules\Chloe\Http\Controllers\Cgs;
 
-use App\Modules\Chloe\Models\CandidacyDismissal;
-use App\Modules\Chloe\Notifications\CandidacyDismissed;
-use App\Modules\Chloe\Services\DismissalGenerator;
+use App\Modules\Chloe\Exports\CandidacyDismissalExport;
+use App\Modules\Chloe\Models\CandidacyDepartment;
+use App\Modules\Chloe\Models\CandidacyDismissalExport as ExportRow;
+use App\Modules\Chloe\Support\CandidacyDismissalList as L;
+use App\Modules\Chloe\Support\CandidacyPagination as Pg;
+use App\Modules\Chloe\Support\CandidacyReturnPath;
 use App\Modules\Core\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
- * CGS reviews the generated list, then confirms only after Registry (outside
- * this system) has actually processed a dismissal — see
- * app/Modules/Chloe/README.md and Services\DismissalGenerator.
+ * Candidacy Management > Dismissal List (CGS roles): students whose candidacy has expired, live. CGS exports the list, the Registry processes it
+ * outside this system, and the result comes back through the Dismissal Upload page. No keep status, no per-row reason, no batch.
  */
 class CandidacyDismissalController extends Controller
 {
-    public function index()
+    public const PER_PAGE = 25;
+
+    public function index(Request $request)
     {
-        $pending = CandidacyDismissal::with('student', 'candidacy')
-            ->where('status', CandidacyDismissal::STATUS_PENDING_REVIEW)
-            ->oldest('generated_at')
-            ->get();
-
-        $confirmed = CandidacyDismissal::with('student', 'candidacy', 'confirmedBy')
-            ->where('status', CandidacyDismissal::STATUS_CONFIRMED)
-            ->latest('confirmed_at')
-            ->limit(20)
-            ->get();
-
-        return view('chloe::candidacy.cgs.dismissals', compact('pending', 'confirmed'));
+        return view('chloe::candidacy.cgs.dismissals', $this->data($request));
     }
 
-    public function refresh(DismissalGenerator $generator)
+    public function region(Request $request)
     {
-        $created = $generator->generate();
-
-        return redirect()->route('candidacy.cgs.dismissals')
-            ->with('status', $created === 0
-                ? 'The list is already up to date. There are no new candidates.'
-                : "{$created} new candidate(s) added to the list.");
+        return view('chloe::candidacy.cgs._dismissals_region', $this->data($request));
     }
 
-    public function confirm(CandidacyDismissal $dismissal)
+    public function liveVersion()
     {
-        if ($dismissal->status === CandidacyDismissal::STATUS_CONFIRMED) {
-            return redirect()->route('candidacy.cgs.dismissals')->with('error', 'That dismissal is already confirmed.');
-        }
+        return response()->json(['version' => L::version()]);
+    }
 
-        $dismissal->update([
-            'status' => CandidacyDismissal::STATUS_CONFIRMED,
-            'confirmed_by_id' => auth()->id(),
-            'confirmed_at' => now(),
-        ]);
+    /** Exports exactly the rows the page shows for these filters (every candidate when none are set), then records the export. */
+    public function export(Request $request)
+    {
+        $f = L::filters($request->all());
+        $rows = L::filter(L::candidates(), $f);
 
-        $dismissal->candidacy->update([
-            'status' => \App\Modules\Chloe\Models\StudyCandidacy::STATUS_DISMISSED,
-            'dismissed_at' => now(),
-            'dismissed_by_id' => auth()->id(),
-        ]);
+        DB::transaction(function () use ($rows, $request) {
+            $at = now();
 
-        $dismissal->student?->notify(new CandidacyDismissed($dismissal));
+            foreach ($rows as $r) {
+                ExportRow::create(['candidacy_id' => $r['candidacy']?->id, 'demo_profile_id' => $r['demo']?->id, 'exported_at' => $at, 'exported_by' => $request->user()->id]);
+            }
+        });
 
-        return redirect()->route('candidacy.cgs.dismissals')
-            ->with('status', "Dismissal confirmed for {$dismissal->student->name}.");
+        return Excel::download(new CandidacyDismissalExport($rows), 'dismissal-candidates_'.now(L::TZ)->format('Y-m-d').'.xlsx');
+    }
+
+    /** @return array<string, mixed> */
+    protected function data(Request $request): array
+    {
+        $f = L::filters($request->query());
+        $all = L::candidates();
+        $counts = L::counts($all, $f);
+        $rows = L::filter($all, $f);
+        $total = $rows->count();
+        $pages = Pg::pages($total, self::PER_PAGE);
+        $f['page'] = Pg::page($request->query('page'), $pages);
+        $query = array_filter(['group' => $f['group'], 'q' => $f['q'], 'department' => $f['department'], 'level' => $f['level'], 'outcome' => $f['outcome'], 'exported' => $f['exported'], 'page' => $f['page'] > 1 ? $f['page'] : null]);
+
+        return [
+            'f' => $f, 'counts' => $counts, 'rows' => $rows->slice(($f['page'] - 1) * self::PER_PAGE, self::PER_PAGE)->values(), 'total' => $total, 'pages' => $pages,
+            'perPage' => self::PER_PAGE, 'query' => $query, 'filtered' => (bool) array_filter(array_diff_key($f, ['page' => 1])),
+            'returnTo' => CandidacyReturnPath::current($request, '/cgs/candidacy/dismissals', $query),
+            'departments' => CandidacyDepartment::orderBy('name')->get(), 'liveVersion' => L::version(), 'today' => L::today(),
+        ];
     }
 }

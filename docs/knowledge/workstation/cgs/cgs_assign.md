@@ -1,0 +1,3 @@
+Assign Student is only for a student who has no seat at all -- a student who already holds one (one student holds only one seat) is moved with Reassign instead, never Assign Student.
+
+On an Available seat's Seat Details page, choose Assign Student. Search by name, student ID or email -- only students eligible for a workstation (Active, full-time research, candidacy not expired), of the matching gender as the room, and who do not already hold a seat, are offered. Pick a student, a reason (Student unable to use the system, System error, Special case approved by CGS, or Other), and an optional remark. The student is notified by email that a seat has been assigned.

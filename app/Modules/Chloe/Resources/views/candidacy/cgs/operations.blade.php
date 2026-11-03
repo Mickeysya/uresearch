@@ -1,90 +1,70 @@
 @extends('core::layouts.app')
 
-@section('title', 'Candidacy Management')
+@section('title', 'Study Candidacy Management')
+
+@include('chloe::candidacy.wca._assets')
 
 @section('content')
-@include('chloe::partials.styles')
+    <div class="card-container-inline wca-page">
+        @php
+            $mode = collect(['q', 'department', 'status', 'step', 'months', 'waiting', 'round', 'group'])->contains(fn ($k) => ($f[$k] ?? '') !== '' && ($f[$k] ?? null) !== null) ? 'results' : 'browse';
+            $cards = ['in_progress' => ['In Progress', 'blue'], 'returned' => ['Returned', 'gold'], 'approved' => ['Approved', 'green'], 'rejected' => ['Rejected', 'red']];
+            $cardLink = fn (?string $group) => route('candidacy.cgs.operations', array_filter(array_diff_key($query, ['group' => 1, 'page' => 1]) + ['group' => $group]));
+        @endphp
+        <x-core::page-header title="Study Candidacy Management">
+            <a href="{{ route('candidacy.cgs.insights') }}"><button type="button" class="btn-secondary">Insights</button></a>
+            <a href="{{ route('candidacy.cgs.dismissals') }}"><button type="button">Dismissal List</button></a>
+        </x-core::page-header>
 
-@php
-    $summaryTones = ['green', 'orange', 'purple', 'teal'];
-@endphp
+        @include('chloe::candidacy.wca._flash')
 
-<div class="card-container-inline">
-    <x-core::page-header title="Candidacy Management"
-                         subtitle="Study candidacy appeals in progress, and the students whose candidacy is about to run out.">
-        <a href="{{ route('candidacy.cgs.dismissals') }}" class="btn-secondary">Dismissal list</a>
-    </x-core::page-header>
+        <div class="card card-wide cgs-top-card">
+            <form method="GET" action="{{ route('candidacy.cgs.operations') }}" role="search">
+                @if ($f['group'])<input type="hidden" name="group" value="{{ $f['group'] }}">@endif
+                <div class="cgs-search-row">
+                    <div class="cgs-search-wrap">
+                        <input type="search" name="q" id="wca-q" value="{{ $f['q'] }}" placeholder="Search" aria-label="Search by appeal number, student name or student ID" autocomplete="off">
+                    </div>
+                    <button type="submit">Search</button>
+                </div>
 
-    <div class="sdash-stats chloe-stats">
-        <div class="sdash-stat tone-blue">
-            <div class="sdash-stat-top">
-                <span class="sdash-stat-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'clock'])</span>
-                <span class="sdash-stat-label">Pending appeals</span>
+                <div class="cgs-filters-row">
+                    <div class="field"><label for="wca-f-dept">Department</label>
+                        <select id="wca-f-dept" name="department"><option value="">All Departments</option>@foreach ($departments->groupBy('faculty') as $faculty => $group)<optgroup label="{{ $faculty }}">@foreach ($group as $d)<option value="{{ $d->id }}" @selected($f['department'] === $d->id)>{{ $d->name }}</option>@endforeach</optgroup>@endforeach</select></div>
+                    <div class="field"><label for="wca-f-status">Status</label>
+                        <select id="wca-f-status" name="status"><option value="">Any Status</option>@foreach (['with_supervisor' => 'With Supervisor / Programme Manager', 'with_chair' => 'With Department Chair', 'with_cgs' => 'With CGS', 'with_dean' => 'With Dean', 'returned' => 'Returned to student', 'approved' => 'Approved', 'rejected' => 'Rejected (final)', 'closed_expired' => 'Closed expired'] as $k => $label)<option value="{{ $k }}" @selected($f['status'] === $k)>{{ $label }}</option>@endforeach</select></div>
+                    <div class="field"><label for="wca-f-step">Current Step</label>
+                        <select id="wca-f-step" name="step"><option value="">Any Step</option>@foreach (\App\Modules\Chloe\Support\CandidacyAppealPresenter::STAGES as $k => $label)<option value="{{ $k }}" @selected($f['step'] === $k)>{{ $label }}</option>@endforeach</select></div>
+                    <div class="field"><label for="wca-f-months">Months Requested</label>
+                        <select id="wca-f-months" name="months"><option value="">Any Months</option>@foreach (range(1, 12) as $m)<option value="{{ $m }}" @selected($f['months'] === $m)>{{ $m }}</option>@endforeach</select></div>
+                    <div class="field"><label for="wca-f-wait">Waiting At Least</label>
+                        <select id="wca-f-wait" name="waiting"><option value="">Any Time</option>@foreach ([1, 3, 5, 10, 14] as $d)<option value="{{ $d }}" @selected($f['waiting'] === $d)>{{ $d }} day(s)</option>@endforeach</select></div>
+                    <div class="field"><label for="wca-f-round">Round</label>
+                        <select id="wca-f-round" name="round"><option value="">Any Round</option>@foreach (range(1, 5) as $r)<option value="{{ $r }}" @selected($f['round'] === $r)>{{ $r }}</option>@endforeach</select></div>
+
+                    <button type="submit">Apply Filters</button>
+
+                    @if ($mode === 'results')
+                        <a href="{{ route('candidacy.cgs.operations') }}" class="clear-link">Clear</a>
+                    @endif
+                </div>
+            </form>
+
+            <div class="cgs-stats-row" role="group" aria-label="Appeals by status">
+                @foreach ($cards as $key => [$label, $accent])
+                    @php $active = $f['group'] === $key; @endphp
+                    <a href="{{ $active ? $cardLink(null) : $cardLink($key) }}" class="{{ $active ? 'is-active' : '' }}" aria-pressed="{{ $active ? 'true' : 'false' }}">
+                        <div class="stat-card accent-{{ $accent }}"><div class="stat-number" data-live-stat="{{ $key }}">{{ $counts[$key] }}</div><div class="stat-label">{{ $label }}</div></div>
+                    </a>
+                @endforeach
             </div>
-            <div class="sdash-stat-value">{{ $pendingAppeals->count() }}</div>
-        </div>
-        @foreach ($appealStatusSummary as $label => $count)
-            <div class="sdash-stat tone-{{ $summaryTones[$loop->index % count($summaryTones)] }}">
-                <div class="sdash-stat-top">
-                    <span class="sdash-stat-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'doc'])</span>
-                    <span class="sdash-stat-label">{{ $label }}</span>
-                </div>
-                <div class="sdash-stat-value">{{ $count }}</div>
-            </div>
-        @endforeach
-    </div>
-
-    <div class="chloe-stack">
-        <div class="card card-wide">
-            <h3>Pending appeals</h3>
-
-            @if ($pendingAppeals->isEmpty())
-                <div class="empty-state">No appeals are in progress.</div>
-            @else
-                <div class="table-scroll">
-                    <table class="data-table">
-                        <thead><tr><th>Reference</th><th>Student</th><th>Stage</th><th>Submitted</th></tr></thead>
-                        <tbody>
-                            @foreach ($pendingAppeals as $application)
-                                <tr>
-                                    <td>{{ $application->reference() }}</td>
-                                    <td>{{ $application->student->name ?? '—' }}</td>
-                                    <td>{{ $application->currentStage()?->label ?? '—' }}</td>
-                                    <td>{{ $application->submitted_at?->format('j M Y') ?? '—' }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
         </div>
 
-        <div class="card card-wide">
-            <h3>Students near candidacy expiry</h3>
-            <p class="queue-meta">Active candidacies expiring within three months.</p>
+        @include('chloe::candidacy.wca._live', ['liveVersion' => $liveVersion, 'liveRegionUrl' => route('candidacy.cgs.operations.region', $query), 'liveVersionUrl' => route('candidacy.cgs.live.version'), 'liveStatsUrl' => route('candidacy.cgs.live.stats', $query)])
 
-            @if ($nearExpiry->isEmpty())
-                <div class="empty-state">No students are near expiry.</div>
-            @else
-                <div class="table-scroll">
-                    <table class="data-table">
-                        <thead><tr><th>Student</th><th>Expiry date</th><th>Remaining</th></tr></thead>
-                        <tbody>
-                            @foreach ($nearExpiry as $candidacy)
-                                @php($days = $candidacy->daysUntilExpiry())
-                                <tr>
-                                    <td>{{ $candidacy->student->name ?? '—' }}</td>
-                                    <td class="rpd-num">{{ $candidacy->candidacy_expiry_date->format('j M Y') }}</td>
-                                    <td class="rpd-num tone-{{ $days < 0 ? 'critical' : ($days <= 30 ? 'warn' : 'info') }}">
-                                        {{ $days < 0 ? abs($days).'d overdue' : $days.'d' }}
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
+        <div id="wca-live-region">
+            @include('chloe::candidacy.cgs._operations_region')
         </div>
     </div>
-</div>
+    @include('chloe::workstation._assistant-widget', ['wsaDomain' => 'candidacy'])
 @endsection

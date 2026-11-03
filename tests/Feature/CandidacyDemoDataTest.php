@@ -1,0 +1,456 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Modules\Chloe\Models\CandidacyAppeal;
+use App\Modules\Chloe\Models\CandidacyDepartment;
+use App\Modules\Chloe\Models\CandidacyStaffAssignment;
+use App\Modules\Chloe\Models\CandidacyStaffProfile;
+use App\Modules\Chloe\Models\DemoStudentProfile;
+use App\Modules\Chloe\Models\StudyCandidacy;
+use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Role;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+/** Stage 3: candidacy:demo-seed / demo-clear -- idempotent, rule-abiding, and removing only what they made. */
+class CandidacyDemoDataTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+        Carbon::setTestNow('2026-11-01 10:00:00');
+
+        $mk = fn ($role, $email, $name, $x = []) => User::create($x + ['name' => $name, 'email' => $email, 'password' => 'password', 'role' => $role]);
+        $cis = CandidacyDepartment::create(['code' => 'CIS', 'name' => 'Computer & Information Sciences']);
+        foreach ([[$mk(Role::SUPERVISOR, 'supervisor@utp.edu.my', 'Dr. Aisyah Rahman'), 'Lecturer', 'lecturer'], [$mk(Role::CHAIR, 'chair@utp.edu.my', 'Dr. Lim Wei Chun'), 'Chair', 'chair']] as [$u, $t, $r]) {
+            $p = CandidacyStaffProfile::create(['user_id' => $u->id, 'full_name' => $u->name, 'designation' => $t, 'department_id' => $cis->id]);
+            CandidacyStaffAssignment::create(['department_id' => $cis->id, 'staff_profile_id' => $p->id, 'role' => $r]);
+        }
+        $dean = $mk(Role::DEAN_PGR, 'dean@utp.edu.my', 'Prof. Dr. Hafiz Osman');
+        CandidacyStaffProfile::create(['user_id' => $dean->id, 'full_name' => $dean->name, 'designation' => 'Dean, Postgraduate and Research']);
+        $mk(Role::NON_EXEC_CGS, 'cgs@utp.edu.my', 'Puan Waheeda');
+
+        $real = $mk(Role::STUDENT, 'student2@utp.edu.my', 'Nur Farah Adilah', ['matric_no' => '22001002']);
+        StudyCandidacy::create(['student_id' => $real->id, 'programme_start_date' => '2022-10-11', 'candidacy_expiry_date' => '2026-10-01', 'status' => 'dismissed']);
+
+        // one catalogue programme per department (20 students each), the way the Workstation demo seeder labels them
+        $programmes = ['PhD in Chemical Engineering (Full-Time)', 'PhD in Civil Engineering (Full-Time)', 'PhD in Electrical and Electronics Engineering (Full-Time)', 'Master of Science in Mechanical Engineering (Full-Time)',
+            'Master of Science in Petroleum Engineering (Full-Time)', 'PhD in Petroleum Geoscience (Full-Time)', 'Master of Science in Information Technology (Full-Time)', 'PhD in Applied Science (Full-Time)', 'PhD in Management (Full-Time)'];
+        $n = 0;
+        foreach ($programmes as $programme) {
+            foreach (range(1, 20) as $i) {
+                DemoStudentProfile::create(['matric_no' => (string) (21010000 + ++$n), 'name' => "Demo Student {$n}", 'email' => "demo{$n}@utp.edu.my", 'gender' => 'male', 'programme' => $programme,
+                    'programme_start_date' => '2025-01-10', 'candidacy_expiry_date' => Carbon::parse('2027-03-01')->addDays($n * 5)->toDateString(), 'status' => 'active']);
+            }
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    /** @return array<string,int> */
+    protected function counts(): array
+    {
+        return collect(['candidacy_appeals', 'candidacy_appeal_events', 'candidacy_appeal_approvals', 'candidacy_appeal_documents', 'candidacy_appeal_publications', 'candidacy_staff_profiles', 'candidacy_staff_assignments', 'candidacy_departments', 'demo_student_profiles', 'users', 'study_candidacies', 'candidacy_demo_student_statuses', 'candidacy_reminder_log'])
+            ->mapWithKeys(fn ($t) => [$t => DB::table($t)->count()])->all();
+    }
+
+    public function test_seeding_twice_gives_identical_counts(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $first = $this->counts();
+        $this->artisan('candidacy:demo-seed')->expectsOutputToContain('created this run: 0')->assertSuccessful();
+
+        $this->assertSame($first, $this->counts());
+        $this->assertGreaterThanOrEqual(50, $first['candidacy_appeals']);
+        $this->assertLessThanOrEqual(80, $first['candidacy_appeals']);
+    }
+
+    public function test_nine_departments_with_the_agreed_roster(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+
+        $this->assertSame(9, CandidacyDepartment::count());
+        $this->assertSame(['Faculty of Engineering' => 6, 'Faculty of Science, Management & Computing' => 3], CandidacyDepartment::all()->countBy('faculty')->sortKeys()->all());
+        $this->assertSame(0, CandidacyDepartment::where('name', 'like', '%Geosciences & Petroleum%')->count());
+
+        foreach (CandidacyDepartment::all() as $dept) {
+            $roles = CandidacyStaffAssignment::where('department_id', $dept->id)->get()->groupBy('role');
+            $lecturers = $roles->get('lecturer', collect())->count();
+            $this->assertGreaterThanOrEqual(5, $lecturers, $dept->code);
+            $this->assertLessThanOrEqual(7, $lecturers, $dept->code);
+            $this->assertSame(1, $roles->get('chair', collect())->count(), "{$dept->code}: exactly one Department Chair");
+            $this->assertFalse($roles->has('dean'), "{$dept->code}: a department has no Dean");
+        }
+
+        // 9 chairs, none a lecturer; nobody holds two roles or two departments
+        $this->assertSame(9, CandidacyStaffAssignment::where('role', 'chair')->count());
+        $this->assertSame(0, CandidacyStaffAssignment::where('role', 'dean')->count());
+        $this->assertSame(0, CandidacyStaffAssignment::select('staff_profile_id')->groupBy('staff_profile_id')->havingRaw('count(*) > 1')->get()->count());
+        $chairIds = CandidacyStaffAssignment::where('role', 'chair')->pluck('staff_profile_id');
+        $this->assertSame(0, CandidacyStaffAssignment::where('role', 'lecturer')->whereIn('staff_profile_id', $chairIds)->count());
+
+        // the fake staff have no login; exactly the real lecturer and chair have one (plus the Dean and a CGS profile that are not in departments)
+        $fake = CandidacyStaffProfile::where('is_demo', true);
+        $this->assertSame(0, (clone $fake)->whereNotNull('user_id')->count());
+        $this->assertSame(8, (clone $fake)->whereIn('id', $chairIds)->count());
+        $names = CandidacyStaffProfile::pluck('full_name');
+        $this->assertSame($names->count(), $names->unique()->count(), 'all names are unique');
+        $this->assertSame(0, (clone $fake)->get()->filter(fn ($p) => User::where('name', $p->full_name)->exists())->count(), 'no fake name equals an account name');
+        foreach ((clone $fake)->get() as $p) {
+            $this->assertMatchesRegularExpression('/^(Dr\.|Ir\. Dr\.|Assoc\. Prof\. Dr\.|Prof\. Dr\.|Prof\. Ir\. Dr\.) /', $p->full_name);
+        }
+
+        // the real lecturer and chair belong to Computer & Information Sciences; the real lecturer is one of 5 to 7 there
+        $cis = CandidacyDepartment::where('code', 'CIS')->first();
+        $real = CandidacyStaffProfile::whereIn('user_id', User::whereIn('email', ['supervisor@utp.edu.my', 'chair@utp.edu.my'])->pluck('id'))->get();
+        $this->assertCount(2, $real);
+        $this->assertTrue($real->every(fn ($p) => ! $p->hasSignature() && ! $p->is_demo));
+        $this->assertSame(2, CandidacyStaffAssignment::where('department_id', $cis->id)->whereIn('staff_profile_id', $real->pluck('id'))->count());
+    }
+
+    public function test_there_is_exactly_one_dean_and_every_appeal_uses_the_roster(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $dean = CandidacyStaffProfile::where('user_id', User::where('role', Role::DEAN_PGR)->value('id'))->first();
+
+        $this->assertNull($dean->department_id);
+        $this->assertSame(1, CandidacyStaffProfile::where('designation', 'like', '%Dean%')->count(), 'one Dean in our tables');
+        $this->assertSame([$dean->id], CandidacyAppeal::distinct()->pluck('dean_profile_id')->all());
+        $this->assertSame(0, \App\Modules\Chloe\Models\CandidacyAppealApproval::where('designation', 'like', '%Dean%')->where('profile_id', '!=', $dean->id)->count());
+
+        foreach (CandidacyAppeal::with(['supervisorProfile', 'chairProfile'])->get() as $a) {
+            $chairOf = CandidacyStaffAssignment::where('department_id', $a->department_id)->where('role', 'chair')->value('staff_profile_id');
+            $this->assertSame($chairOf, $a->chair_profile_id, "{$a->appeal_no}: the Chair of its department");
+            $this->assertTrue(CandidacyStaffAssignment::where('department_id', $a->department_id)->where('role', 'lecturer')->where('staff_profile_id', $a->supervisor_profile_id)->exists(), "{$a->appeal_no}: a lecturer of its department");
+        }
+    }
+
+    public function test_every_department_that_has_students_has_at_least_two_appeals_and_computer_and_information_sciences_has_the_agreed_mix(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $byDept = CandidacyAppeal::where('is_demo', true)->get()->groupBy('department_id');
+        $withStudents = DemoStudentProfile::pluck('programme')->map(fn ($p) => \App\Modules\Chloe\Support\CandidacyDepartmentResolver::codeFor($p, '1'))->unique();
+        $this->assertCount(9, $withStudents, "all nine departments have demo students");
+
+        foreach (CandidacyDepartment::whereIn('code', $withStudents)->get() as $d) {
+            $this->assertGreaterThanOrEqual(2, ($byDept[$d->id] ?? collect())->count(), $d->code);
+        }
+
+        $cis = CandidacyDepartment::where('code', 'CIS')->first();
+        $a = CandidacyAppeal::where('department_id', $cis->id)->get();
+        $lec = CandidacyStaffProfile::where('user_id', User::where('email', 'supervisor@utp.edu.my')->value('id'))->first();
+        $chair = CandidacyStaffProfile::where('user_id', User::where('email', 'chair@utp.edu.my')->value('id'))->first();
+
+        $this->assertGreaterThanOrEqual(12, $a->count());
+        $this->assertGreaterThanOrEqual(3, $a->where('status', 'with_supervisor')->where('supervisor_profile_id', $lec->id)->count());
+        $this->assertGreaterThanOrEqual(3, $a->where('status', 'with_chair')->where('chair_profile_id', $chair->id)->count());
+        $this->assertGreaterThanOrEqual(2, $a->where('status', 'with_cgs')->count());
+        $this->assertGreaterThanOrEqual(2, $a->where('status', 'with_dean')->count());
+        $this->assertGreaterThanOrEqual(1, $a->where('status', 'returned')->count());
+        $this->assertGreaterThanOrEqual(2, $a->where('status', 'approved')->count());
+        $this->assertGreaterThanOrEqual(1, $a->where('status', 'rejected')->count());
+        $this->assertGreaterThanOrEqual(1, $a->where('supervisor_profile_id', $lec->id)->whereIn('status', ['with_chair', 'with_cgs', 'with_dean', 'returned'])->count(), 'Ongoing for the real lecturer');
+
+        // the real Dean has appeals waiting from several departments
+        $this->assertGreaterThanOrEqual(3, CandidacyAppeal::where('status', 'with_dean')->distinct()->pluck('department_id')->count());
+        $this->assertGreaterThanOrEqual(3, CandidacyAppeal::where('status', 'with_cgs')->count());
+    }
+
+    public function test_every_state_is_covered_with_waiting_days_from_0_to_14(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $a = CandidacyAppeal::where('is_demo', true)->get();
+
+        foreach (['draft', 'with_supervisor', 'with_chair', 'with_cgs', 'with_dean', 'returned', 'approved', 'rejected', 'closed_expired'] as $status) {
+            $this->assertTrue($a->contains('status', $status), $status);
+        }
+        foreach (['supervisor', 'chair', 'cgs', 'dean'] as $by) {
+            $this->assertTrue($a->where('status', 'returned')->contains('returned_by_stage', $by), "returned by {$by}");
+        }
+        $this->assertTrue($a->contains(fn ($x) => $x->needs_cgs_recheck && $x->status === 'with_cgs'));
+        $days = $a->filter(fn ($x) => $x->current_stage)->map->waitingDays();
+        $this->assertSame(0, $days->min());
+        $this->assertGreaterThanOrEqual(13, $days->max());
+        $this->assertLessThanOrEqual(15, $days->max());
+        $this->assertSame(3, $a->where('status', 'draft')->count());
+        $this->assertNull($a->where('status', 'draft')->first()->appeal_no);
+    }
+
+    public function test_the_rules_hold_for_every_demo_appeal(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $appeals = CandidacyAppeal::where('is_demo', true)->orderBy('id')->get();
+        $byStudent = $appeals->groupBy(fn ($a) => $a->student_id ? 'u'.$a->student_id : 'd'.$a->demo_profile_id);
+
+        $twelve = $twoApproved = 0;
+        foreach ($byStudent as $key => $list) {
+            $this->assertLessThanOrEqual(12, $list->where('status', 'approved')->sum('approved_months'), "{$key} allowance");
+            $this->assertLessThanOrEqual(1, $list->whereIn('status', CandidacyAppeal::OPEN_STATUSES)->count(), "{$key} one open");
+            $this->assertLessThanOrEqual(1, $list->where('status', 'draft')->count(), "{$key} one draft");
+            $rejected = $list->firstWhere('status', 'rejected');
+            if ($rejected) {
+                $this->assertSame($rejected->id, $list->sortBy('id')->last()->id, "{$key}: nothing after a final rejection");
+            }
+            $twelve += $list->where('status', 'approved')->sum('approved_months') === 12 ? 1 : 0;
+            $twoApproved += $list->where('status', 'approved')->count() >= 2 ? 1 : 0;
+        }
+        $this->assertGreaterThanOrEqual(1, $twelve, 'a student at exactly 12 of 12 months');
+        $this->assertGreaterThanOrEqual(2, $twoApproved, 'students with two approved appeals');
+
+        foreach ($appeals->whereNotNull('appeal_no') as $a) {
+            $this->assertMatchesRegularExpression('/^SCA-\d+-\d\d$/', $a->appeal_no);
+            $this->assertNotNull($a->submitted_at);
+            $this->assertGreaterThanOrEqual($a->submitted_at->toDateString(), $a->expiry_at_submission->toDateString(), "{$a->appeal_no} submitted before its expiry");
+            $this->assertNotNull($a->events()->where('action', 'submitted')->first(), $a->appeal_no);
+            $this->assertTrue($a->documents()->where('kind', 'official_form')->exists());
+        }
+
+        foreach ($appeals->where('status', 'approved') as $a) {
+            $this->assertNotNull($a->memo_path, $a->appeal_no);
+            Storage::disk('local')->assertExists($a->memo_path);
+            $this->assertSame($a->requested_months, $a->approved_months);
+            $this->assertSame(4, $a->approvals()->whereIn('decision', ['approved', 'verified'])->count());
+            $this->artisan('candidacy:verify-memo', ['appeal_no' => $a->appeal_no])->assertSuccessful();
+        }
+
+        // the closed one belongs to a past-expiry candidacy and was returned before it expired
+        $closed = $appeals->firstWhere('status', 'closed_expired');
+        $this->assertSame(22001002, (int) $closed->student->matric_no);
+        $this->assertGreaterThan($closed->events()->where('action', 'returned')->first()->occurred_at, $closed->closed_at);
+    }
+
+    public function test_the_real_candidacies_get_a_department_and_the_live_demo_accounts_none_of_the_demo_appeals(): void
+    {
+        $live = User::create(['name' => 'Live Student', 'email' => 'student@utp.edu.my', 'password' => 'password', 'role' => Role::STUDENT, 'matric_no' => '22001001', 'programme' => 'Master of Science in Information Systems (Full-Time)']);
+        StudyCandidacy::create(['student_id' => $live->id, 'programme_start_date' => '2025-01-01', 'candidacy_expiry_date' => '2027-06-10', 'status' => 'active']);
+
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+
+        $this->assertTrue(StudyCandidacy::all()->every(fn ($c) => $c->department_id && $c->original_expiry_date));
+        $this->assertSame('CIS', CandidacyDepartment::find(StudyCandidacy::where('student_id', $live->id)->value('department_id'))->code);
+        $this->assertSame(0, CandidacyAppeal::where('student_id', $live->id)->count(), 'no demo appeal for a live demo account');
+        $this->assertSame(0, StudyCandidacy::where('student_id', $live->id)->value('extension_months_used'));
+    }
+
+    public function test_the_demo_students_expiry_dates_are_never_changed(): void
+    {
+        $before = DemoStudentProfile::orderBy('id')->pluck('candidacy_expiry_date', 'id')->map(fn ($d) => (string) $d)->all();
+
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+
+        $this->assertSame($before, DemoStudentProfile::orderBy('id')->pluck('candidacy_expiry_date', 'id')->map(fn ($d) => (string) $d)->all());
+    }
+
+    public function test_demo_clear_removes_only_demo_data_and_files(): void
+    {
+        $real = $this->counts();
+        $realFiles = Storage::disk('local')->allFiles();
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $this->assertNotEmpty(Storage::disk('local')->allFiles('candidacy'));
+
+        $this->artisan('candidacy:demo-clear')->assertSuccessful();
+
+        $after = $this->counts();
+        $this->assertSame(0, CandidacyAppeal::count());
+        $this->assertSame(0, \App\Modules\Chloe\Models\CandidacyAppealEvent::count(), 'the history went with its appeals (cascade)');
+        $this->assertSame(0, CandidacyStaffProfile::where('is_demo', true)->count());
+        $this->assertSame(0, CandidacyDepartment::where('is_demo', true)->count());
+        $this->assertSame($real['users'], $after['users']);
+        $this->assertSame($real['demo_student_profiles'], $after['demo_student_profiles']);
+        $this->assertSame(Storage::disk('local')->allFiles(), $realFiles); // every demo file is gone
+        $this->assertSame(3, CandidacyStaffProfile::whereIn('user_id', User::pluck('id'))->count()); // the real profiles stay
+        $this->assertTrue(CandidacyDepartment::where('code', 'CIS')->exists());
+
+        $this->artisan('candidacy:demo-seed')->assertSuccessful(); // and it can be seeded again
+        $this->assertGreaterThanOrEqual(50, CandidacyAppeal::count());
+    }
+
+    public function test_check_allowance_still_passes_after_seeding(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+
+        $this->artisan('candidacy:check-allowance')->assertSuccessful();
+    }
+
+    public function test_the_overlay_rows_are_demo_students_only_and_are_cleared_with_the_demo_data(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $rows = \App\Modules\Chloe\Models\CandidacyDemoStudentStatus::all();
+
+        $this->assertGreaterThanOrEqual(10, $rows->count());
+        $this->assertGreaterThanOrEqual(4, $rows->whereNotNull('softbound_submitted_at')->count());
+        $this->assertGreaterThanOrEqual(2, $rows->where('completed', true)->count());
+        $this->assertGreaterThanOrEqual(2, $rows->where('inactive', true)->count());
+        $this->assertTrue($rows->every(fn ($r) => $r->label === 'Demo data' && DemoStudentProfile::withoutGlobalScopes()->find($r->demo_profile_id)));
+        $this->assertSame(0, CandidacyAppeal::whereIn('demo_profile_id', $rows->pluck('demo_profile_id'))->count(), 'overlay students have no appeal');
+
+        $this->artisan('candidacy:send-reminders', ['--date' => '2027-03-01', '--dry-run' => true])->assertSuccessful();
+        $this->app['env'] = 'local';
+        \Illuminate\Support\Facades\Notification::fake();
+        $this->artisan('candidacy:send-reminders', ['--date' => '2027-03-01'])->assertSuccessful();
+        $this->assertGreaterThan(0, \App\Modules\Chloe\Models\CandidacyReminderLog::whereNotNull('demo_profile_id')->count());
+
+        $this->artisan('candidacy:demo-clear')->assertSuccessful();
+
+        $this->assertSame(0, \App\Modules\Chloe\Models\CandidacyDemoStudentStatus::count());
+        $this->assertSame(0, \App\Modules\Chloe\Models\CandidacyReminderLog::whereNotNull('demo_profile_id')->count());
+    }
+
+    public function test_the_demo_appeals_cover_reminder_variants_a_b_and_c_and_the_paused_case(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $engine = app(\App\Modules\Chloe\Support\CandidacyReminderEngine::class);
+        $seen = [];
+
+        foreach (DemoStudentProfile::pluck('candidacy_expiry_date')->map(fn ($d) => \Illuminate\Support\Carbon::parse($d)->toDateString())->unique() as $expiry) {
+            $day = \Carbon\CarbonImmutable::parse($expiry)->subMonthsNoOverflow(3);
+
+            foreach ($engine->run($day, true) as $r) {
+                $seen[$r['action'] === 'send' ? 'variant '.$r['variant'] : $r['reason']] = true;
+            }
+        }
+
+        foreach (['variant A', 'variant B', 'variant C', 'appeal in review', 'softbound submitted', 'completed', 'inactive'] as $case) {
+            $this->assertArrayHasKey($case, $seen, $case);
+        }
+    }
+
+    // ---- Dismissal demo (candidacy-only students) ----------------------------------------------------------------------
+
+    public function test_the_dismissal_demo_has_the_agreed_candidates_exclusions_and_coursework_students(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $list = \App\Modules\Chloe\Support\CandidacyDismissalList::class;
+        $all = $list::all();
+        $c = $list::candidates();
+
+        $this->assertGreaterThanOrEqual(12, $c->count());
+        $this->assertGreaterThanOrEqual(6, $c->pluck('department.code')->unique()->count());
+        $this->assertEqualsCanonicalizing(['master', 'phd'], $c->pluck('level')->unique()->all());
+        $this->assertSame(2, $c->whereNotNull('exportedAt')->count());
+        $this->assertEqualsCanonicalizing(['none', 'rejected', 'closed_expired', 'approved'], $c->pluck('outcome')->unique()->all());
+
+        $excluded = $all->where('candidate', false)->whereIn('studentId', array_map(fn ($i) => (string) $i, range(21020015, 21020030)))->groupBy('code')->map->count()->all();
+        $this->assertSame(['softbound' => 2, 'inactive' => 1, 'completed' => 1, 'appeal_in_review' => 2, 'dismissed' => 2, 'coursework' => 8], $excluded);
+
+        $coursework = $all->where('code', 'coursework')->where('studentId', '>=', '21020023');
+        $this->assertCount(8, $coursework);
+        $this->assertEqualsCanonicalizing(['CHE', 'CEE', 'CIS'], $coursework->pluck('department.code')->unique()->all());
+        $this->assertTrue($coursework->every(fn ($r) => str_ends_with($r['programme'], '(Coursework)')));
+        $days = $coursework->map(fn ($r) => (int) now()->startOfDay()->diffInDays($r['expiry'], false))->all();
+        $this->assertTrue(collect($days)->contains(fn ($d) => $d > 0 && $d <= 92), 'some expire within 3 months');
+        $this->assertTrue(collect($days)->contains(fn ($d) => $d > 365), 'some far away');
+        $this->assertTrue(collect($days)->contains(fn ($d) => $d < 0), 'some expired');
+        $this->assertSame(['research'], config('candidacy.reminders.programme_types'));
+        $this->assertFalse(config('candidacy.dismissal.include_coursework'));
+    }
+
+    public function test_the_candidacy_only_students_never_reach_workstation_statistics_insights_or_assistant_answers(): void
+    {
+        $workstation = fn () => json_encode([
+            \App\Modules\Chloe\Support\WorkstationStatistics::overall(), \App\Modules\Chloe\Support\WorkstationStatistics::programmeBreakdown(50),
+            \App\Modules\Chloe\Support\WorkstationStatistics::candidacyExpiryBuckets(), \App\Modules\Chloe\Support\WorkstationStatistics::insightsFactRows(),
+            \App\Modules\Chloe\Support\WorkstationStatistics::candidacyExpiringCount(), \App\Modules\Chloe\Support\StudentDirectory::search('Demo') ?? null,
+            \App\Modules\Chloe\Support\StudentDirectory::all()->pluck('studentId')->all(),
+            \App\Modules\Chloe\Assistant\Lookups::run('programme_breakdown', [], User::where('email', 'cgs@utp.edu.my')->first(), 'cgs'),
+            \App\Modules\Chloe\Assistant\Lookups::run('overall_stats', [], User::where('email', 'cgs@utp.edu.my')->first(), 'cgs'),
+        ]);
+        $before = $workstation();
+        $profilesBefore = DemoStudentProfile::count();
+
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+
+        $this->assertGreaterThan(0, \Illuminate\Support\Facades\DB::table('demo_student_profiles')->where('candidacy_only', true)->count());
+        $this->assertSame($profilesBefore, DemoStudentProfile::count(), 'ordinary queries do not see them');
+        $this->assertSame($before, $workstation());
+        $this->assertSame(0, \Illuminate\Support\Facades\DB::table('workstation_requests')->whereIn('demo_profile_id', \Illuminate\Support\Facades\DB::table('demo_student_profiles')->where('candidacy_only', true)->pluck('id'))->count());
+    }
+
+    public function test_the_registry_sample_file_shows_every_status_and_applies_only_the_confirmed_half(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $this->artisan('candidacy:demo-registry-file')->assertSuccessful();
+        $path = storage_path('app/demo/registry-confirmed-sample.xlsx');
+        $this->assertFileExists($path);
+
+        $upload = app(\App\Modules\Chloe\Services\CandidacyDismissalUpload::class);
+        $rows = $upload->classify($upload->parse(new \Illuminate\Http\UploadedFile($path, 'registry-confirmed-sample.xlsx', null, null, true)));
+        $counts = $upload->counts($rows);
+
+        $this->assertSame([7, 1, 1, 1], [$counts['will'], $counts['unknown'], $counts['not_candidate'], $counts['duplicate']]);
+        @unlink($path);
+    }
+
+    public function test_demo_clear_removes_the_dismissal_demo_and_reseeding_restores_it(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $registry = User::create(['name' => 'Registry', 'email' => 'registry@utp.edu.my', 'password' => 'password', 'role' => \App\Modules\Core\Support\Role::REGISTRY]);
+        $candidates = \App\Modules\Chloe\Support\CandidacyDismissalList::candidates()->pluck('studentId')->all();
+        \Illuminate\Support\Facades\Notification::fake();
+        $upload = app(\App\Modules\Chloe\Services\CandidacyDismissalUpload::class);
+        $upload->apply([['row' => 2, 'id' => $candidates[0]]], 'x.xlsx', $registry);
+        $this->assertCount(count($candidates) - 1, \App\Modules\Chloe\Support\CandidacyDismissalList::candidates());
+
+        $this->artisan('candidacy:demo-clear')->assertSuccessful();
+        foreach (['candidacy_dismissal_exports', 'candidacy_dismissal_imports', 'candidacy_dismissal_import_rows'] as $t) {
+            $this->assertSame(0, \Illuminate\Support\Facades\DB::table($t)->count(), $t);
+        }
+        $this->assertSame(0, \Illuminate\Support\Facades\DB::table('demo_student_profiles')->where('candidacy_only', true)->count());
+        $this->assertSame(180, DemoStudentProfile::count(), 'ordinary demo students are untouched');
+
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $this->assertSame($candidates, \App\Modules\Chloe\Support\CandidacyDismissalList::candidates()->pluck('studentId')->all(), 'dismissed_at is back to its seed value');
+    }
+
+    public function test_the_demo_reminder_history_never_changes_what_the_engine_would_send(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $rows = \App\Modules\Chloe\Models\CandidacyReminderLog::whereNotNull('demo_profile_id')->get();
+        $this->assertGreaterThan(20, $rows->count());
+        $profiles = \Illuminate\Support\Facades\DB::table('demo_student_profiles')->whereIn('id', $rows->pluck('demo_profile_id'))->get();
+        $this->assertTrue($profiles->every(fn ($p) => $p->candidacy_only), 'history only for candidacy-only students');
+        $this->assertTrue($rows->every(fn ($r) => $r->sent_at->lt(now())), 'every history row is in the past');
+
+        $run = function (string $date) {
+            \Illuminate\Support\Facades\Artisan::call('candidacy:send-reminders', ['--dry-run' => true, '-v' => true, '--date' => $date]);
+
+            return \Illuminate\Support\Facades\Artisan::output();
+        };
+        $today = now()->toDateString();
+
+        // the engine sends nothing to a candidacy-only student today: every milestone already due is on record
+        $this->assertDoesNotMatchRegularExpression('/WOULD SEND.*2102\d{4}/', $run($today));
+
+        // and the rows of the EXPIRED students (the six-month history) never change a decision: the engine stops at "expired" before it reads them
+        $with = [$run($today), $run(now()->addDay()->toDateString())];
+        $expired = \Illuminate\Support\Facades\DB::table('demo_student_profiles')->where('candidacy_only', true)->whereDate('candidacy_expiry_date', '<', $today)->pluck('id');
+        \Illuminate\Support\Facades\DB::table('candidacy_reminder_log')->whereIn('demo_profile_id', $expired)->delete();
+
+        $this->assertSame($with, [$run($today), $run(now()->addDay()->toDateString())]);
+    }
+
+    public function test_the_demo_forecast_has_something_to_show_in_every_band_and_in_the_next_twelve_months(): void
+    {
+        $this->artisan('candidacy:demo-seed')->assertSuccessful();
+        $rows = \App\Modules\Chloe\Support\CandidacyStatistics::population();
+        $summary = \App\Modules\Chloe\Support\CandidacyStatistics::summary($rows);
+
+        foreach (['m1', 'm2', 'm3'] as $band) {
+            $this->assertGreaterThanOrEqual(4, array_sum($summary['bands'][$band]), $band);
+        }
+
+        $this->assertGreaterThanOrEqual(40, array_sum(array_column(\App\Modules\Chloe\Support\CandidacyStatistics::forecast($rows, 'month'), 'total')));
+        $this->assertSame(['softbound', 'in_review', 'returned', 'none'], array_keys(array_filter($summary['by_category'], fn ($n) => $n > 0)), 'every status category is represented');
+    }
+}

@@ -1,0 +1,1 @@
+Release Hold is for a seat stuck Awaiting Key Return when the key is genuinely not coming back (lost, lock replaced). Pick a reason (Key lost, Lock replaced, or Other) and an optional remark. The outstanding key is marked Lost and the seat becomes Available again. No email or bell notification is sent for this action.

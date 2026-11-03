@@ -2,138 +2,264 @@
 
 @section('title', 'Workstation')
 
-@section('content')
-@include('chloe::partials.styles')
-
 @php
-    $lockerBadgeTone = ['requested' => 'pending', 'collected' => 'approved', 'returned' => 'draft'];
-    $rooms = $roomsByBlock->flatten();
-    $freeSeats = $rooms->sum('available_count');
-    $allSeats = $rooms->sum('workstations_count');
+    use App\Modules\Chloe\Models\LockerKey;
+    use App\Modules\Chloe\Services\WorkstationAllocator;
+
+    $lockerBadgeTone = [
+        'requested' => 'pending', 'collected' => 'approved',
+        'return_pending' => 'pending', 'returned' => 'draft',
+    ];
 @endphp
 
-<div class="card-container-inline">
-    <x-core::page-header title="Workstation">
-        <x-slot:subtitle>
-            @if ($gender)
-                {{ $freeSeats }} of {{ $allSeats }} seats free across {{ $rooms->count() }} {{ Str::plural('room', $rooms->count()) }} for {{ $gender }} students.
-            @else
-                Book a postgraduate workstation and request its locker key.
+@section('content')
+    @include('chloe::workstation._assistant-widget')
+
+{{-- Scoped to this page -- nothing here touches a Core/shared stylesheet.
+     Same reasoning as the Block page's room grid: a fixed
+     `repeat(4, minmax(0,1fr))` grid, not auto-fit/flex-grow, so a lone card
+     in a short last row stays the same size as the rest and sits at the
+     left instead of stretching to fill the row. --}}
+<style>
+    .ws-block-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        justify-items: stretch;
+        gap: 24px;
+        width: 100%;
+    }
+
+    @media (max-width: 1099px) {
+        .ws-block-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 799px) {
+        .ws-block-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 519px) {
+        .ws-block-grid { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+    }
+
+    .ws-block-card {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .ws-block-image {
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        object-fit: cover;
+        display: block;
+        background: var(--surface-sunken, #eef1f6);
+    }
+
+    .ws-block-body {
+        height: 120px;
+        padding: 18px;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+</style>
+
+@include('chloe::workstation._live', ['liveKind' => 'student'])
+
+<div class="card-container-inline" data-live-region>
+    <x-core::page-header title="Workstation" />
+
+    <div class="card card-wide">
+        @if ($activeRequest)
+            <p>
+                Seat <b>{{ $activeRequest->workstation->seat_code }}</b>,
+                {{ $activeRequest->workstation->location->name }} ({{ $activeRequest->workstation->location->block }})
+                <span class="status-badge approved">Confirmed</span>
+            </p>
+            <p style="color: var(--text-grey); font-size: 13px;">
+                Since {{ $activeRequest->requested_at->format('j M Y, g:ia') }}
+            </p>
+            {{-- PART 2: the loan period's own end date -- candidacy expiry,
+                 including any approved extension, since that IS the stored
+                 date already. --}}
+            @if ($loanValidUntil)
+                <p style="color: var(--text-grey); font-size: 13px;">
+                    Loan valid until {{ \Illuminate\Support\Carbon::parse($loanValidUntil)->format('j M Y') }}
+                </p>
             @endif
-        </x-slot:subtitle>
+            {{-- PART 3 #3c: the termination banner -- the seat stays
+                 Occupied throughout the notice period, this is the only
+                 sign on this page that the clock is running. --}}
+            @if ($terminationNotice)
+                <p style="font-weight: 600; color: var(--text-red, #c0392b);">
+                    Your workstation loan has been terminated. Please vacate by
+                    {{ $terminationNotice->vacate_by_date->format('j M Y') }}.
+                </p>
+            @endif
 
-        @if ($gender)
-            <details class="chloe-setting">
-                <summary class="btn-secondary">Rooms for: {{ ucfirst($gender) }}</summary>
-                <form method="POST" action="{{ route('workstation.gender.set') }}" class="chloe-inline">
-                    @csrf
-                    <select name="gender" aria-label="Gender" required>
-                        <option value="male" @selected($gender === 'male')>Male</option>
-                        <option value="female" @selected($gender === 'female')>Female</option>
-                    </select>
-                    <button type="submit">Save</button>
-                </form>
-            </details>
-        @endif
-    </x-core::page-header>
+            <div class="card-divider"></div>
 
-    @if ($activeRequest)
-        {{-- What they hold, first: it is the thing a returning student came
-             to check or act on. --}}
-        <section class="chloe-held" aria-label="Your workstation">
-            <div class="chloe-held-seat">
-                <span class="chloe-eyebrow">Your seat</span>
-                <span class="chloe-held-code">{{ $activeRequest->workstation->seat_code }}</span>
-            </div>
-            <dl class="chloe-held-facts">
-                <div><dt>Room</dt><dd>{{ $activeRequest->workstation->location->name }}</dd></div>
-                <div><dt>Block</dt><dd>{{ $activeRequest->workstation->location->block }}</dd></div>
-                <div><dt>Held since</dt><dd>{{ $activeRequest->requested_at->format('j M Y') }}</dd></div>
-                <div>
-                    <dt>Locker key</dt>
-                    <dd>
-                        @if ($activeRequest->lockerKey)
-                            <span class="status-badge {{ $lockerBadgeTone[$activeRequest->lockerKey->status] ?? 'draft' }}">{{ ucfirst($activeRequest->lockerKey->status) }}</span>
-                        @else
-                            Not requested
-                        @endif
-                    </dd>
-                </div>
-            </dl>
-            <div class="chloe-held-actions">
-                <a href="{{ route('workstation.seats', $activeRequest->workstation->workstation_location_id) }}" class="btn-secondary">View on map</a>
-                @unless ($activeRequest->lockerKey)
-                    <form method="POST" action="{{ route('workstation.locker-key.request') }}">
-                        @csrf
-                        <button type="submit">Request locker key</button>
-                    </form>
-                @endunless
-                <form method="POST" action="{{ route('workstation.release', $activeRequest) }}">
-                    @csrf
-                    <button type="submit" class="btn-reject">Release seat</button>
-                </form>
-            </div>
-        </section>
-    @endif
-
-    @if (! $gender)
-        {{-- Nothing else on this page means anything until we know which
-             rooms apply, so this is the whole page. --}}
-        <div class="card card-wide">
-            <h3>Which rooms apply to you?</h3>
-            <p class="queue-meta">Postgraduate rooms are designated by gender. You only need to tell us once; CGS can correct it later.</p>
-            <form method="POST" action="{{ route('workstation.gender.set') }}" class="chloe-actions">
+            {{-- STEP 5: no confirmation popup here -- choosing a reason IS
+                 the deliberate step, enforced by disabling the button until
+                 one is picked, not by a second "are you sure" dialog. --}}
+            <h3 style="font-size: 14px;">Return Workstation</h3>
+            <form method="POST" action="{{ route('workstation.return') }}" id="return-workstation-form">
                 @csrf
-                <button type="submit" name="gender" value="male" class="btn-secondary">Male rooms</button>
-                <button type="submit" name="gender" value="female" class="btn-secondary">Female rooms</button>
-            </form>
-        </div>
-    @else
-        @unless ($activeRequest)
-            <p class="message-info">You do not hold a workstation yet. Pick a room below to see its seat map and book a seat.</p>
-        @endunless
-
-        @forelse ($roomsByBlock as $block => $blockRooms)
-            <section class="chloe-block" aria-labelledby="block-{{ Str::slug($block) }}">
-                <header class="chloe-block-head">
-                    <h3 id="block-{{ Str::slug($block) }}">Block {{ $block }}</h3>
-                    <span class="chloe-tile-meta">
-                        {{ $blockRooms->sum('available_count') }} of {{ $blockRooms->sum('workstations_count') }} seats free
-                        · {{ $blockRooms->count() }} {{ Str::plural('room', $blockRooms->count()) }}
-                    </span>
-                </header>
-
-                <div class="chloe-tiles">
-                    @foreach ($blockRooms as $room)
-                        @php
-                            $share = $room->workstations_count ? $room->available_count / $room->workstations_count : 0;
-                            $tone = $room->available_count === 0 ? 'critical' : ($share < 0.25 ? 'warn' : 'good');
-                        @endphp
-                        <a href="{{ route('workstation.seats', $room) }}" class="chloe-tile">
-                            <span class="chloe-tile-title">{{ $room->name }}</span>
-                            @if ($room->room_code !== $room->name)
-                                <span class="chloe-tile-meta">{{ $room->room_code }}</span>
-                            @endif
-                            <span class="chloe-meter tone-{{ $tone }}" role="img"
-                                  aria-label="{{ $room->available_count }} of {{ $room->workstations_count }} seats free">
-                                <span style="width: {{ round($share * 100) }}%"></span>
-                            </span>
-                            <span class="chloe-tile-foot">
-                                <span class="chloe-tile-count tone-{{ $tone }}">
-                                    {{ $room->available_count === 0 ? 'Full' : $room->available_count.' free' }}
-                                </span>
-                                <span class="chloe-tile-meta">of {{ $room->workstations_count }}</span>
-                            </span>
-                        </a>
+                <label for="return-reason">Reason</label>
+                <select name="reason" id="return-reason" required>
+                    <option value="">Select a reason&hellip;</option>
+                    @foreach (WorkstationAllocator::REASONS_STUDENT_RETURN as $reasonOption)
+                        <option value="{{ $reasonOption }}" @selected(old('reason') === $reasonOption)>{{ $reasonOption }}</option>
                     @endforeach
-                </div>
-            </section>
-        @empty
+                </select>
+
+                <label for="return-remark">Remark (optional)</label>
+                <textarea name="remark" id="return-remark" rows="2" maxlength="1000">{{ old('remark') }}</textarea>
+
+                <button type="submit" id="return-workstation-submit" disabled>Return Workstation</button>
+            </form>
+
+            <script @cspNonce>
+                (function () {
+                    var select = document.getElementById('return-reason');
+                    var submit = document.getElementById('return-workstation-submit');
+                    if (! select || ! submit) return;
+
+                    var sync = function () { submit.disabled = select.value === ''; };
+                    select.addEventListener('change', sync);
+                    sync();
+                })();
+            </script>
+        @else
             <div class="empty-state">
-                <p>No rooms are designated for {{ $gender }} students yet.</p>
-                <p class="queue-meta">CGS adds rooms to the catalogue. If you picked the wrong designation, change it above.</p>
+                You do not currently hold a workstation. Choose a block below to browse rooms and pick a seat.
             </div>
-        @endforelse
-    @endif
+        @endif
+
+        <div class="card-divider"></div>
+
+        {{-- Locker Key. Its own section regardless of which of the 4 states
+             applies, so "no confirmed seat yet" reads as this section's own
+             state rather than a repeat of the empty-state above. A CANCELLED
+             row (the student's own cancel, or the 7-day auto-cancel) is
+             treated exactly like no row at all here -- it's history, not a
+             status to show. --}}
+        <h3 style="font-size: 14px; margin-top: 4px;">Locker Key</h3>
+
+        @php
+            $lockerKey = $activeRequest?->lockerKey;
+            $lockerStatus = $lockerKey && in_array($lockerKey->status, [LockerKey::STATUS_REQUESTED, LockerKey::STATUS_COLLECTED])
+                ? $lockerKey->status
+                : null;
+            $lockerNote = 'Please request your key here before collecting it at: Centre for Graduate Studies (CGS), Monday to Friday, 8:00 AM - 5:00 PM (GMT +8.00).';
+        @endphp
+
+        {{-- An outstanding return (from a seat that was released/reassigned
+             while the key was already Collected) takes priority over
+             whatever the key status is for the CURRENT seat, if any --
+             it's a standing obligation, not something a new seat clears. --}}
+        @if ($returnPendingKey)
+            <p>
+                <span class="status-badge {{ $lockerBadgeTone[LockerKey::STATUS_RETURN_PENDING] }}">Return Pending</span>
+                @if ($returnPendingKey->isOverdueForReturn())
+                    <span class="status-badge rejected">Overdue</span>
+                @endif
+            </p>
+            <p style="color: var(--text-grey); font-size: 13px;">
+                Please return your locker key to the Centre for Graduate Studies (CGS) on or before
+                {{ $returnPendingKey->return_due_at->format('j M Y') }}.
+            </p>
+            <p style="color: var(--text-grey); font-size: 13px;">
+                Centre for Graduate Studies (CGS), Monday to Friday, 8:00 AM - 5:00 PM (GMT +8.00).
+            </p>
+            {{-- PART 4: this replaces the Request Key button a current seat
+                 would otherwise show -- the branch above already never
+                 renders one while a Return Pending key exists, this just
+                 says so explicitly rather than leaving the absence
+                 unexplained. --}}
+            <p style="font-weight: 600; margin-top: 8px;">Please return your previous locker key first.</p>
+        @elseif (! $activeRequest)
+            <p style="color: var(--text-grey); font-size: 13px;">Select a workstation first to request your locker key.</p>
+        @elseif ($lockerStatus === LockerKey::STATUS_COLLECTED)
+            <p>
+                <span class="status-badge {{ $lockerBadgeTone[LockerKey::STATUS_COLLECTED] }}">Collected</span>
+            </p>
+            <p style="color: var(--text-grey); font-size: 13px;">
+                Collected on {{ $lockerKey->collected_at->format('j M Y, g:ia') }}
+            </p>
+        @elseif ($lockerStatus === LockerKey::STATUS_REQUESTED)
+            <p>
+                <span class="status-badge {{ $lockerBadgeTone[LockerKey::STATUS_REQUESTED] }}">Pending Collection</span>
+            </p>
+            <p style="color: var(--text-grey); font-size: 13px;">
+                Requested on {{ $lockerKey->requested_at->format('j M Y, g:ia') }}.
+                Please collect by {{ $lockerKey->collectByDate()->format('j M Y') }}.
+            </p>
+            <p style="color: var(--text-grey); font-size: 13px;">{{ $lockerNote }}</p>
+
+            <form method="POST" action="{{ route('workstation.locker-key.cancel') }}"
+                  class="js-confirm-form" data-confirm="Do you want to cancel your locker key request?">
+                @csrf
+                <button type="submit">Cancel Request</button>
+            </form>
+        @else
+            <p style="color: var(--text-grey); font-size: 13px;">{{ $lockerNote }}</p>
+
+            <form method="POST" action="{{ route('workstation.locker-key.request') }}"
+                  class="js-confirm-form" data-confirm="Do you want to request the locker key for Seat {{ $activeRequest->workstation->seat_code }}?">
+                @csrf
+                <button type="submit">Request Key</button>
+            </form>
+        @endif
+
+        {{-- PART 4 #2. --}}
+        <p style="color: var(--text-grey); font-size: 13px; margin-top: 8px;">
+            By selecting a seat and pressing Confirm, you agree to the
+            <a href="{{ route('workstation.terms') }}">Postgraduate Workstation Term of Use</a>.
+        </p>
+
+        <script @cspNonce>
+            document.querySelectorAll('.js-confirm-form').forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    if (! confirm(form.dataset.confirm)) {
+                        event.preventDefault();
+                    }
+                });
+            });
+        </script>
+    </div>
+</div>
+
+<div class="card-container-inline">
+    <div class="card card-wide">
+        <h3>Postgraduate Workstation Availability</h3>
+        <div class="card-divider"></div>
+
+        @if (! $gender)
+            <div class="empty-state">
+                Your gender information is missing. Please contact the Centre for Graduate Studies (CGS).
+            </div>
+        @else
+            <p style="color: var(--text-grey); font-size: 13px;">Click a block to see its rooms.</p>
+            <div class="ws-block-grid">
+                @foreach ($blocks as $block)
+                    <a href="{{ route('workstation.rooms', $block->code) }}" class="card ws-block-card">
+                        <img src="{{ $block->photoUrl() }}" alt="{{ $block->name }}" loading="lazy" class="ws-block-image">
+                        <div class="ws-block-body">
+                            <b style="font-size:15px;">{{ $block->name }}</b>
+                        </div>
+                    </a>
+                @endforeach
+            </div>
+        @endif
+    </div>
 </div>
 @endsection

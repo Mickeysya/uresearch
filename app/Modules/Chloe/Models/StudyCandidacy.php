@@ -23,8 +23,8 @@ class StudyCandidacy extends Model
     public const MAX_APPEAL_MONTHS = 12;
 
     protected $fillable = [
-        'student_id', 'programme_start_date', 'candidacy_expiry_date', 'status',
-        'cumulative_extension_months', 'last_rejection_at', 'dismissed_at', 'dismissed_by_id',
+        'student_id', 'department_id', 'programme_start_date', 'candidacy_expiry_date', 'original_expiry_date', 'status',
+        'cumulative_extension_months', 'extension_months_used', 'last_rejection_at', 'dismissed_at', 'dismissed_by_id',
     ];
 
     protected function casts(): array
@@ -32,6 +32,7 @@ class StudyCandidacy extends Model
         return [
             'programme_start_date' => 'date',
             'candidacy_expiry_date' => 'date',
+            'original_expiry_date' => 'date',
             'last_rejection_at' => 'datetime',
             'dismissed_at' => 'datetime',
         ];
@@ -57,9 +58,37 @@ class StudyCandidacy extends Model
         return $this->hasMany(CandidacyAppealDetail::class);
     }
 
+    /** The appeals in OUR tables -- the source of truth (the `appeals()` relation above is the legacy per-application detail). */
+    public function candidacyAppeals(): HasMany
+    {
+        return $this->hasMany(CandidacyAppeal::class, 'study_candidacy_id');
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(CandidacyDepartment::class, 'department_id');
+    }
+
+    /**
+     * Months of extension granted so far. extension_months_used is the new bookkeeping; cumulative_extension_months is
+     * the legacy counter the old flow still wrote until candidacy:backfill-appeals copied it across -- the larger of the
+     * two is used so an appeal approved in the old flow is never forgotten.
+     */
+    public function allowanceUsed(): int
+    {
+        return max((int) $this->extension_months_used, (int) $this->cumulative_extension_months);
+    }
+
     public function remainingAppealMonths(): int
     {
-        return max(0, self::MAX_APPEAL_MONTHS - $this->cumulative_extension_months);
+        return max(0, (int) config('candidacy.max_extension_months', self::MAX_APPEAL_MONTHS) - $this->allowanceUsed());
+    }
+
+    /** True once the Dean has rejected an appeal for this candidacy (final: no further appeal, ever). */
+    public function hasFinalRejection(): bool
+    {
+        return $this->last_rejection_at !== null
+            || $this->candidacyAppeals()->where('final_outcome', CandidacyAppeal::OUTCOME_REJECTED_FINAL)->exists();
     }
 
     /**
@@ -67,13 +96,13 @@ class StudyCandidacy extends Model
      * has ever been rejected -- at any stage, not only by the Dean. Either
      * one permanently blocks a new appeal. A Return is deliberately not
      * this: it only reopens that same application for editing, it never
-     * touches last_rejection_at. See CandidacyAppealController::decide().
+     * touches last_rejection_at. See CandidacyAppealService::decide().
      */
     public function canAppeal(): bool
     {
         return $this->status === self::STATUS_ACTIVE
             && $this->remainingAppealMonths() > 0
-            && $this->last_rejection_at === null;
+            && ! $this->hasFinalRejection();
     }
 
     /**
@@ -108,11 +137,17 @@ class StudyCandidacy extends Model
 
     public function hasOpenAppeal(): bool
     {
+        if ($this->candidacyAppeals()->whereIn('status', CandidacyAppeal::OPEN_STATUSES)->exists()) {
+            return true;
+        }
+
+        // A legacy appeal that has not been backfilled yet is still open in the shared engine's tables.
         return $this->appeals()
             ->whereHas('application', fn ($q) => $q->whereIn('status', [
                 \App\Modules\Core\Models\Application::STATUS_PENDING,
                 \App\Modules\Core\Models\Application::STATUS_RETURNED,
             ]))
+            ->whereNotIn('application_id', CandidacyAppeal::whereNotNull('legacy_application_id')->select('legacy_application_id'))
             ->exists();
     }
 

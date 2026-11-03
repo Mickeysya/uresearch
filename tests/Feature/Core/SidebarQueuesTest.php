@@ -161,6 +161,6 @@ class SidebarQueuesTest extends TestCase
         $this->assertStringContainsString('>RPD Candidacy<', $sidebar);
         $this->assertStringContainsString(route('candidacies.mine'), $sidebar);
         // Chloe's study-candidacy link keeps its own name, once.
-        $this->assertSame(1, substr_count($sidebar, 'title="My Candidacy"'));
+        $this->assertSame(1, substr_count($sidebar, '>My Candidacy<'));
     }
 }

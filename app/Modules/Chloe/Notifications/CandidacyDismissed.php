@@ -2,36 +2,40 @@
 
 namespace App\Modules\Chloe\Notifications;
 
-use App\Modules\Chloe\Models\CandidacyDismissal;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Sent to a student when an upload of the Registry's result marks them as dismissed. An immediate, user-triggered action, so it is sent at once
+ * (never held to 08:00). A demo student has no login: e-mail only.
+ */
 class CandidacyDismissed extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(protected CandidacyDismissal $dismissal) {}
+    public const MESSAGE = 'Your candidacy has been ended because the maximum candidacy period was exceeded (Postgraduate Student Handbook section 4.3), as confirmed by the Registry. The Handbook (section 4.4) describes how to appeal for reinstatement; please contact the Registry.';
+
+    public function __construct(protected string $studentName) {}
 
     public function via(object $notifiable): array
     {
-        return ['mail', 'database'];
+        return $notifiable instanceof AnonymousNotifiable ? ['mail'] : ['mail', 'database'];
     }
 
     public function toArray(object $notifiable): array
     {
-        return ['title' => 'Your study candidacy has been dismissed.'];
+        return ['title' => 'Your study candidacy has been ended.', 'body' => self::MESSAGE];
     }
 
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Study Candidacy — Dismissal Confirmed')
-            ->greeting('Hi '.$notifiable->name.',')
-            ->line('This confirms that your study candidacy has been dismissed, and the Registry has processed it.')
-            ->line('Reason: '.CandidacyDismissal::reasonLabel($this->dismissal->reason).'.')
-            ->line('If you believe this is a mistake, please contact CGS.')
-            ->line('Thank you for using UResearch 2.0.');
+            ->subject('Study Candidacy — Study Candidacy Ended')
+            ->greeting('Dear '.$this->studentName.',')
+            ->line(self::MESSAGE)
+            ->salutation("Best regards,\nCentre for Graduate Studies (CGS)\nUniversiti Teknologi PETRONAS");
     }
 }
