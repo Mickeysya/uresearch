@@ -518,7 +518,8 @@ class GaExtensionFormTest extends TestCase
 
         $this->actingAs($this->supervisor)->get(route('ga-extension.queue'))
             ->assertSee(route('ga-extension.form-pdf', $application), false)
-            ->assertSee('Download GA Extension Form (PDF)');
+            ->assertSee(route('ga-extension.form-pdf.view', $application), false)
+            ->assertSee('GA Extension Form (generated)');
     }
 
     /* -----------------------------------------------------------------

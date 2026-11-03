@@ -176,6 +176,12 @@
                      downloads it. Without JavaScript the stepper doesn't
                      run, so a real submit button is safe there. --}}
                 <button type="button" class="btn-secondary" data-attachment-download>Download pre-filled attachment (PDF)</button>
+                @if ($draft)
+                    <a href="{{ route('ga-certification.attachment.view', $draft) }}" target="_blank" rel="noopener" class="btn-secondary"
+                       data-preview-url="{{ route('ga-certification.attachment.view', $draft) }}" data-preview-kind="pdf"
+                       data-preview-name="GA/GRA certification attachment (as last saved)"
+                       data-preview-download="{{ route('ga-certification.attachment', $draft) }}">View as last saved</a>
+                @endif
                 <noscript>
                     <button type="submit" class="btn-secondary" name="download_attachment" value="1" formnovalidate
                             formaction="{{ $draft ? route('ga-certification.draft.update', $draft) : route('ga-certification.draft.save') }}">Download pre-filled attachment (PDF)</button>
@@ -239,6 +245,7 @@
     @endif
 </div>
 @include('core::partials.form-stepper')
+<x-nureen::file-preview />
 
 @push('head')
 <style>

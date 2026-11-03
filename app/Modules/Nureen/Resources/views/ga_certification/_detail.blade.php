@@ -1,8 +1,13 @@
+{{-- .nureen-row: the wrapper components/decision-bar keys on. --}}
+<div class="nureen-row">
 @include('nureen::charter._queue_clock')
 
 @php
     $detail = $details[$application->id] ?? null;
     $check = $appointmentChecks[$application->id] ?? null;
+    // Documents and the decision bar -- Support\ApproverPanel. The Senior
+    // Director's draft letter is a Documents row (was "Preview letter").
+    $panel = \App\Modules\Nureen\Support\ApproverPanel::certification($application, auth()->user());
     $student = $application->student;
 @endphp
 
@@ -58,16 +63,6 @@
         <p class="queue-meta">Declaration accepted {{ $detail->declaration_accepted_at->format('j M Y, g:i a') }}</p>
     @endif
 
-    {{-- The Senior Director sees the exact letter, in their own name,
-         before approving -- approving is what issues it. --}}
-    @if ($application->current_stage === 'senior_director')
-        @include('nureen::letters._preview_styles')
-        <div class="nureen-letter-actions">
-            <a href="{{ route('ga-certification.letter.preview', $application) }}" target="_blank" rel="noopener" class="btn-secondary">Preview letter</a>
-            <p class="hint">A DRAFT of the letter that approving will issue, with your name as signatory. Nothing is issued or sent by previewing.</p>
-        </div>
-    @endif
-
     {{--
         "Before CGS staff review, the system automatically checks the
         student's GA/GRA appointment" -- NOT part of CGS's confirmed
@@ -106,3 +101,9 @@
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif
+
+{{-- System checks (above) → Documents → Remarks → actions. --}}
+<x-nureen::documents :items="$panel['documents']" />
+<x-nureen::decision-bar :application="$application" :route="route('ga-certification.decide', $application)"
+    :approve-label="$panel['approveLabel']" :hint="$panel['hint']" />
+</div>

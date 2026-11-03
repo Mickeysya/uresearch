@@ -310,6 +310,17 @@ class GaExtensionController extends Controller
      */
     public function formPdf(Request $request, Application $application, LetterRenderer $letters)
     {
+        return $this->formResponse($request, $application, $letters, 'attachment');
+    }
+
+    /** The same form, inline -- the preview overlay's source. Same check as formPdf(). */
+    public function formPdfView(Request $request, Application $application, LetterRenderer $letters)
+    {
+        return $this->formResponse($request, $application, $letters, 'inline');
+    }
+
+    protected function formResponse(Request $request, Application $application, LetterRenderer $letters, string $disposition)
+    {
         abort_unless($application->module_type === $this->moduleKey(), 404);
         abort_unless($this->canViewForm($request->user(), $application), 403, 'This application is not yours to view.');
 
@@ -317,7 +328,7 @@ class GaExtensionController extends Controller
 
         return response($letters->gaExtensionForm($application, $request->user()), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Disposition' => $disposition.'; filename="'.$filename.'"',
         ]);
     }
 
@@ -626,9 +637,13 @@ class GaExtensionController extends Controller
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
 
+        // A rejection needs a reason, as in Supervision; the decision bar
+        // asks for it in the browser too (components/decision-bar).
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
+            'remarks' => [$request->input('decision') === 'reject' ? 'required' : 'nullable', 'string', 'max:2000'],
+        ], [
+            'remarks.required' => 'Say why this request is being rejected — the student is owed a reason.',
         ]);
 
         $stage = $engine->currentStage($application);

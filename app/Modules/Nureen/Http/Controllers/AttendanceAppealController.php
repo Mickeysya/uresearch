@@ -149,9 +149,11 @@ class AttendanceAppealController extends Controller
         // more; left blank it defaults to the number requested.
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
+            // A rejection needs a reason, as in Supervision.
+            'remarks' => [$request->input('decision') === 'reject' ? 'required' : 'nullable', 'string', 'max:2000'],
             'sessions_approved' => ['nullable', 'integer', 'min:0', 'max:'.$requested],
         ], [
+            'remarks.required' => 'Say why this request is being rejected — the student is owed a reason.',
             'sessions_approved.max' => "No more than the {$requested} ".Str::plural('session', $requested).' the student asked for can be approved.',
         ]);
 

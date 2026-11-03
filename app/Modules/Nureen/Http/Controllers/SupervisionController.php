@@ -325,7 +325,8 @@ class SupervisionController extends Controller
 
         return response($letters->appointment($application, draft: true, previewer: $request->user()), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="appointment-'.$application->id.'-draft.pdf"',
+            // ?download=1: the Documents section's Download for the same draft.
+            'Content-Disposition' => ($request->boolean('download') ? 'attachment' : 'inline').'; filename="appointment-'.$application->id.'-draft.pdf"',
             'Cache-Control' => 'no-store',
         ]);
     }

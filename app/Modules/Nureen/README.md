@@ -64,6 +64,59 @@
   `DocumentStore::storeGenerated()` attaches it, so the existing download
   route and permission check apply with no extra code.
 
+## Approver rows: Documents, the preview overlay and the decision bar
+
+Every Nureen queue row (Supervision, Certification, GA Extension and
+Attendance Appeal) ends the same way: **System checks → Documents → Remarks
+→ one action row**. `Support\ApproverPanel` decides per module what goes in
+it.
+
+**Documents** (`components/documents`):
+- every attached file the viewer may open (`ApplicationDocument::visibleTo()`),
+  plus generated documents:
+  - the GA Extension Form;
+  - the draft appointment letter, for CGS at `cgs_review` (this replaced the
+    old "Preview letter" box);
+  - the draft certification letter, for the Senior Director;
+- each row has **View** (the overlay) and **Download**.
+
+**The overlay** (`components/file-preview`):
+- a native `<dialog>`, ~90% of the viewport and full screen at ≤ 640px;
+- PDFs in an `<iframe>`, JPG/PNG in an `<img>`; Word and other files say
+  "Preview not available" and offer the download (nothing is converted);
+- Esc, Close or a click outside closes it, Tab stays inside, and focus
+  returns to the View link. The iframe is kept out of the Tab order:
+  inside the browser's PDF viewer, key presses never reach the page.
+
+**Inline routes,** each with the same authorisation as its download:
+
+| Route | Serves |
+|---|---|
+| `nureen.documents.view` | attached files (`DocumentPreviewController`) |
+| `ga-extension.form-pdf.view` | the generated GA Extension Form |
+| `ga-certification.attachment.view` | the pre-filled attachment, owner only |
+| `?download=1` on `supervision.letter.preview` and `ga-certification.letter.preview` | the draft letters as downloads |
+
+Students also get View on their own GA Extension forms and on the
+certification attachment.
+
+**The decision bar** (`components/decision-bar`):
+- **Remarks** (labelled optional), then the primary action ("Approve",
+  "Endorse & issue letter" or "Approve & issue letter", with a one-line hint),
+  **Reject** beside it, and **Return to supervisor** for GA Extension at
+  `cgs_verify`. Buttons are 44px tall, stacked full width at ≤ 480px. The
+  appeal puts "Sessions to excuse if approved" above the remarks.
+- Reject or Return with no remarks is stopped in the browser: the label
+  becomes "Reason (required)", an inline message appears in a space already
+  reserved for it, and the box gets focus.
+- Every decide controller now **requires remarks on reject** (Supervision
+  already did), so that check is real. A refusal reopens its own row with
+  the message.
+
+Core's queue partial still prints its own download list and decision form,
+so a CSS rule hides both in rows wrapped in `.nureen-row`. SHARED_CHANGES §17
+proposes the Core switch, an inline `documents.view`, and the overlay in Core.
+
 ## Postgraduate Handbook 2025 rules
 
 These come from cross-checking each module against UTP's Postgraduate
@@ -516,6 +569,7 @@ role-scoped pending that decision.
 | `GaExtensionHandbookTest` | eligibility pass/fail/unknown for MSc and PhD, with an ineligible student still submitting and the warning shown; the candidacy limit inside and past it for MSc and PhD, and from config; PhD Level 3 option 1, option 2, what each is missing, proofs needed beyond the listing, conference papers and status-less rows not counting, and MSc Level 3 unchanged; `allowed_levels` both ways (the message, the form note, a draft still saving, PhD accepted); a publication's status required on submit |
 | `SupervisionHandbookTest` | GA status from records (expired, GRA, active GA); the PGFAC memo required for a GA on record changing supervisor, and for a declared GA, but not for a declared or recorded non-GA, a first Main Supervisor or a Co-Supervisor; the question shown only with no record; System checks; older requests; the Co-Supervisor approver as Chair by default and Dean of PGR when switched (the Chair refused, the Dean deciding), Main requests still to the Chair, the snapshot surviving a config change, and the automatic-mode letter naming the Dean |
 | `CertificationHandbookTest` | the eligibility check pass/fail/unknown; a part-time student still submitting with CGS warned; an eligible request passing; the form note hidden until needed and shown for a coursework draft |
+| `DocumentPreviewTest` | attached PDFs and images inline for the owner, the current approver and an earlier one; 403 for another student, a Chair and a Senior Director (as the download); Word gets "Preview not available" and never the file; another module's file 404; the GA Extension Form, the certification attachment (owner only) and the draft letters inline, with `?download=1`; each row's Documents and decision bar, and Return only for CGS; reject without remarks refused in all four modules, approve without them fine; a refused reject coming back to its own row |
 | `DraftsTest` | empty draft saves (both modules); saving again updates the same draft and keeps files; light validation only; Remove deletes the file; the 5-file limit counts attached files; an incomplete draft fails submit with the normal messages; a complete one goes to pending at the first stage as the same application, files intact; a Certification switching GA→GRA relabels its files; another student (or staff) can't open, change, submit or delete it; delete removes everything; no queue, reminder or analytics sees a draft |
 | `ClientCharterTest` | each chain's expected date (GA Extension both modes, Supervision `'automatic'`, Certification), a `null` stage never inventing a date, overdue never giving a past date, a returned application timed from its actual stage, decided/draft returning nothing |
 | `ClientCharterDisplayTest` | the student page (pending shown, decided not, overdue message only when overdue, own rows only) and the queue's overdue marker and order |

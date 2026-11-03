@@ -1,8 +1,13 @@
+{{-- .nureen-row: the wrapper components/decision-bar keys on. --}}
+<div class="nureen-row">
 @include('nureen::charter._queue_clock')
 
 @php
     $detail = $details[$application->id] ?? null;
     $viewer = auth()->user();
+    // Documents (the generated form first) and the decision bar, with
+    // Return to supervisor at cgs_verify -- Support\ApproverPanel.
+    $panel = \App\Modules\Nureen\Support\ApproverPanel::gaExtension($application, $viewer);
     $student = $application->student;
     $config = config('nureen.ga_extension');
     $byType = $application->documents->groupBy('doc_type');
@@ -32,10 +37,6 @@
         </p>
     @endif
 
-    <p>
-        <a href="{{ route('ga-extension.form-pdf', $application) }}" class="btn-secondary">Download GA Extension Form (PDF)</a>
-        <span class="queue-meta">Generated from this application as it stands now, endorsements so far included.</span>
-    </p>
 
     <p>Current End Date: {{ $detail->current_end_date?->format('j M Y') ?? '—' }}</p>
     <p>Requested New End Date: <b>{{ $detail->requested_new_end_date?->format('j M Y') ?? '—' }}</b>
@@ -170,3 +171,9 @@
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif
+
+{{-- System checks and Section J (above) → Documents → Remarks → actions. --}}
+<x-nureen::documents :items="$panel['documents']" />
+<x-nureen::decision-bar :application="$application" :route="route('ga-extension.decide', $application)"
+    :approve-label="$panel['approveLabel']" :hint="$panel['hint']" :return-action="$panel['returnAction']" />
+</div>
