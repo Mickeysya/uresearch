@@ -176,6 +176,23 @@ class VivaScheduleTest extends TestCase
         $this->assertCount(1, $events);
     }
 
+    public function test_a_student_sees_examiner_status_never_names(): void
+    {
+        $this->approveNomination();
+
+        $this->actingAs($this->student)->get(route('applications.index'))
+            ->assertOk()
+            ->assertSee('Examiners appointed')
+            ->assertDontSee('Dr. Internal')
+            ->assertDontSee('Prof. External');
+
+        // The viva tracker: notice, softbound and examiners done; the date is next.
+        $this->actingAs($this->student)->get(route('viva.eligibility'))
+            ->assertSee('What to do now:')
+            ->assertSee('Your Academic Executive will set your viva date')
+            ->assertDontSee('Dr. Internal');
+    }
+
     public function test_another_departments_ae_cannot_schedule(): void
     {
         $this->approveNomination();

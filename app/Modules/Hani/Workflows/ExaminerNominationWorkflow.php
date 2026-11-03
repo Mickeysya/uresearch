@@ -105,6 +105,16 @@ class ExaminerNominationWorkflow implements WorkflowModule, ProvidesLinks
 
     public function summary(Application $application): string
     {
+        // The candidate sees this row on their own tracking page, and a
+        // candidate must never learn who their examiners are. Status only.
+        if (auth()->user()?->isStudent()) {
+            return match ($application->status) {
+                Application::STATUS_APPROVED => 'Examiners appointed',
+                Application::STATUS_REJECTED => 'Examiner nomination not approved',
+                default => 'Examiner nomination in progress',
+            };
+        }
+
         $nomination = ExaminerNomination::with('internalMain', 'externalMain')
             ->where('application_id', $application->id)
             ->first();
