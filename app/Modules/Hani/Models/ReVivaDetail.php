@@ -20,8 +20,10 @@ class ReVivaDetail extends Model
     public const OUTCOME_DISMISSED = 5;
 
     protected $fillable = [
-        'application_id', 'cycle_number', 'previous_cycle_id',
-        'resubmission_at', 'correction_deadline', 'hardbound_deadline',
+        'application_id', 'cycle_number', 'previous_cycle_id', 'viva_application_id',
+        'resubmission_at', 'resubmission_opens_at', 'resubmission_closes_at',
+        'viva_result_date', 'logged_outside_window',
+        'correction_deadline', 'hardbound_deadline',
         'outcome_level', 'outcome_remarks',
     ];
 
@@ -29,6 +31,10 @@ class ReVivaDetail extends Model
     {
         return [
             'resubmission_at' => 'datetime',
+            'resubmission_opens_at' => 'date',
+            'resubmission_closes_at' => 'date',
+            'viva_result_date' => 'date',
+            'logged_outside_window' => 'boolean',
             'correction_deadline' => 'date',
             'hardbound_deadline' => 'date',
         ];
@@ -42,6 +48,25 @@ class ReVivaDetail extends Model
     public function previousCycle(): BelongsTo
     {
         return $this->belongsTo(self::class, 'previous_cycle_id');
+    }
+
+    /** The viva_voce notice whose category-4 result this round re-examines. */
+    public function vivaNotice(): BelongsTo
+    {
+        return $this->belongsTo(Application::class, 'viva_application_id');
+    }
+
+    public function vivaDetail(): ?VivaDetail
+    {
+        return $this->viva_application_id ? VivaDetail::where('application_id', $this->viva_application_id)->first() : null;
+    }
+
+    /** "1 Jun 2027 to 1 Dec 2027", or null for a row logged before Prompt 3. */
+    public function windowLabel(): ?string
+    {
+        return $this->resubmission_opens_at && $this->resubmission_closes_at
+            ? $this->resubmission_opens_at->format('j M Y').' to '.$this->resubmission_closes_at->format('j M Y')
+            : null;
     }
 
     public function nextCycle(): HasOne

@@ -33,6 +33,8 @@ class ReVivaRolesTest extends TestCase
         $this->actingAs($this->senior)->post(route('reviva.store'), [
             'student_id' => $student->id,
             'thesis' => UploadedFile::fake()->create('corrected-thesis.pdf', 64, 'application/pdf'),
+            'viva_result_date' => now()->subMonths(7)->toDateString(),
+            'summary_of_corrections' => UploadedFile::fake()->create('summary.pdf', 20, 'application/pdf'),
         ])->assertSessionHasNoErrors();
 
         return ReVivaDetail::whereHas('application', fn ($q) => $q->where('student_id', $student->id))

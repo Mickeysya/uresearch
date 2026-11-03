@@ -31,6 +31,8 @@ class ModuleTrackerTest extends TestCase
         $this->actingAs($this->seniorExec())->post(route('reviva.store'), [
             'student_id' => $this->student()->id,
             'thesis' => UploadedFile::fake()->create('thesis.pdf', 64, 'application/pdf'),
+            'viva_result_date' => now()->subMonths(7)->toDateString(),
+            'summary_of_corrections' => UploadedFile::fake()->create('summary.pdf', 20, 'application/pdf'),
         ]);
 
         return ReVivaDetail::with('application')->sole();

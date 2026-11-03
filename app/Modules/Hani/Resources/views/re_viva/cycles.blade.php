@@ -55,6 +55,10 @@
                                     </td>
                                     <td>
                                         Resubmitted {{ $detail->resubmission_at->format('j M Y') }}
+                                        @if ($detail->windowLabel())
+                                            <br>Window {{ $detail->windowLabel() }}
+                                            @if ($detail->logged_outside_window) <span class="status-badge returned">Logged outside window</span> @endif
+                                        @endif
                                         @if ($detail->correction_deadline)
                                             <br>Corrections due {{ $detail->correction_deadline->format('j M Y') }}
                                         @endif

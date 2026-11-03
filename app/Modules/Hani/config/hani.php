@@ -283,6 +283,18 @@ return [
         'reminder_days' => [30, 7],
     ],
 
+    'reviva' => [
+        // Round N+1 (after a level-4 outcome): the corrected thesis is due
+        // between these many months after the outcome date. Provisional
+        // (agreed for the FYP 2026-11-04, not a CGS figure).
+        'next_round_window_months' => [0, 6],
+
+        // Logging a re-viva keeps the two main examiners Assigned until at
+        // most this many months later; the outcome releases them sooner.
+        // Provisional (the original 12-month hardbound horizon).
+        'hold_months' => 12,
+    ],
+
     'reminders' => [
         // When `viva:reminders` runs each day. Provisional.
         'daily_at' => '07:45',

@@ -31,9 +31,16 @@
                 @if ($detail)
                     @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::reviva($detail->setRelation('application', $application))])
 
-                    <p>Resubmitted: {{ $detail->resubmission_at->format('j M Y') }}</p>
-                    <p>Correction deadline: {{ $detail->correction_deadline->format('j M Y') }}
-                        Hardbound deadline: {{ $detail->hardbound_deadline->format('j M Y') }}</p>
+                    <p>Resubmitted: {{ $detail->resubmission_at->format('j M Y') }}
+                        @if ($detail->windowLabel()) (window {{ $detail->windowLabel() }}) @endif
+                        @if ($detail->logged_outside_window) <span class="status-badge returned">Logged outside window</span> @endif
+                    </p>
+                    @if ($detail->correction_deadline || $detail->hardbound_deadline)
+                        <p>
+                            @if ($detail->correction_deadline) Correction deadline: {{ $detail->correction_deadline->format('j M Y') }} @endif
+                            @if ($detail->hardbound_deadline) Hardbound deadline: {{ $detail->hardbound_deadline->format('j M Y') }} @endif
+                        </p>
+                    @endif
                 @endif
 
                 @if ($application->documents->isNotEmpty())
