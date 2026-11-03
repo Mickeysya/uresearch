@@ -39,3 +39,9 @@ yarn-error.log
 Thumbs.db
 *.swp
 *~
+
+# Local-only files (never commit)
+.env.testing
+storage/app/assistant-evaluate-progress*.json
+docs/knowledge/**/*.pdf
+docs/knowledge/*.pdf
