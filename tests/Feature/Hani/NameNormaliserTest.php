@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Hani\Support\NameNormaliser;
 use Tests\TestCase;
 
@@ -11,6 +12,7 @@ use Tests\TestCase;
  */
 class NameNormaliserTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     protected function names(): NameNormaliser
     {
         return app(NameNormaliser::class);

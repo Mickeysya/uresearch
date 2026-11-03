@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Hani\Models\Examiner;
@@ -19,6 +20,7 @@ use Tests\TestCase;
 /** `examiners:sweep`: reminders after the viva, once per window; stale previews purged. */
 class ExaminersSweepTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 

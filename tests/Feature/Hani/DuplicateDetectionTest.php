@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Application;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerDuplicateDismissal;
@@ -14,6 +15,7 @@ use Tests\TestCase;
 /** Support\DuplicateDetector: in the pool, and across departments at cgs_compile. */
 class DuplicateDetectionTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 

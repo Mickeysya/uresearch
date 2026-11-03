@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Hani\Models\Examiner;
@@ -15,6 +16,7 @@ use Tests\TestCase;
 /** Support\ConflictOfInterest: the UTP/CGS/026 pre-check, rule by rule. */
 class ConflictOfInterestTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 

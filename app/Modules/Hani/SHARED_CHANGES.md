@@ -283,3 +283,38 @@ Hani's `examiner_nomination/queue.blade.php` would then pass
   - `HaniDemoSeeder` (on demand)
 - **Test count:** Hani's own folder is now 126 tests
   (`php artisan test tests/Feature/Hani`).
+
+---
+
+## 7. `phpunit.xml`: force the test queue to `sync`
+
+**Status:** proposed, not applied. Nureen proposed the same fix (her
+SHARED_CHANGES.md §7c).
+
+**Reason.** Inside the app container docker-compose sets
+`QUEUE_CONNECTION=redis`, and phpunit.xml's `QUEUE_CONNECTION=sync` has no
+`force="true"`, so the container's value wins. Every queued notification a
+test does not fake lands on the **real** Redis queue. The dev worker then
+fails it with `SQLiteDatabaseDoesNotExistException: Database file at path
+[uresearch] does not exist`, because the job names a model on the test's
+in-memory SQLite connection, and writes a `failed_jobs` row into the dev
+database. On 2026-11-03 that had built up to 4,243 failed jobs across six
+modules' notifications. Measured after flushing, with Hani's and Nureen's
+tests already guarded, one full run of the suite still adds 93:
+- 88 Core `ApplicationDecided`
+- 2 Chloe `CandidacyAppealApproved`
+- 2 Jason `HardboundSubmissionRejected`
+- 1 Jason `ExaminerSignatureRequest`
+
+No email is sent (`MAIL_MAILER=array` still applies). The cost is a worker
+log full of FAILs that look like real bugs.
+
+**Impact.** Tests only. Every member's tests run queued jobs synchronously
+again, as phpunit.xml already intends. Hani's and Nureen's per-folder traits
+(`KeepsJobsOffTheDevQueue`) can be deleted afterwards.
+
+### File: `phpunit.xml`
+
+```xml
+<env name="QUEUE_CONNECTION" value="sync" force="true"/>
+```

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Department;
 use App\Modules\Core\Models\User;
 use App\Modules\Hani\Database\Seeders\HaniDemoSeeder;
@@ -14,6 +15,7 @@ use Tests\TestCase;
 /** HaniDemoSeeder, part 1: the examiner pool from the fictional JSON dataset. */
 class HaniDemoSeederTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 

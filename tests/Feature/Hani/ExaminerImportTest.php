@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Department;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerImportBatch;
@@ -22,6 +23,7 @@ use Tests\TestCase;
  */
 class ExaminerImportTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 

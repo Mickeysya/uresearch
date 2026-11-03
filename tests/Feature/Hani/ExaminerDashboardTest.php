@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
@@ -13,6 +14,7 @@ use Tests\TestCase;
 /** The examiner availability dashboard: scoping, the returning list, stages and expertise gaps. */
 class ExaminerDashboardTest extends TestCase
 {
+    use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
 
