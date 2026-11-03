@@ -26,6 +26,17 @@
                         @include('hani::examiner_admin._email_badge')
                     </td>
                 </tr>
+                @if (filled($examiner->email))
+                    <tr>
+                        <th scope="row">Last confirmed</th>
+                        <td>
+                            {{ $examiner->email_confirmed_at?->format('j M Y') ?? 'Never' }}
+                            @if ($examiner->emailStale())
+                                <span class="status-badge pending">Not confirmed in {{ config('hani.examiner_contact.stale_months') }} months</span>
+                            @endif
+                        </td>
+                    </tr>
+                @endif
                 @if ($examiner->emailInvalid())
                     <tr>
                         <th scope="row">Problem</th>
@@ -40,7 +51,15 @@
         @endif
 
         @if ($canEditEmail)
-            <p><a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn">{{ $examiner->emailNeedsUpdating() ? 'Add the current email' : 'Update email' }}</a></p>
+            <div class="decision-row">
+                <a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn">{{ $examiner->emailNeedsUpdating() ? 'Add the current email' : 'Update email' }}</a>
+                @if (filled($examiner->email))
+                    <form method="POST" action="{{ route('examiner-admin.email.confirm', $examiner) }}" style="display: inline;">
+                        @csrf
+                        <button type="submit" class="btn-secondary">Confirm email still valid</button>
+                    </form>
+                @endif
+            </div>
         @endif
     </div>
 

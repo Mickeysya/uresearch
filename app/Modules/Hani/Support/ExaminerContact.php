@@ -44,6 +44,7 @@ class ExaminerContact
                 'email' => $email,
                 'email_status' => Examiner::EMAIL_OK,
                 'email_flagged_at' => null,
+                'email_confirmed_at' => $email ? now() : null,
             ]);
             $this->log($examiner, $old, $email, $by, $source, $reason);
         });
@@ -80,6 +81,23 @@ class ExaminerContact
         } catch (\Throwable $e) {
             report($e);
         }
+    }
+
+    /**
+     * "Still valid": someone has checked the address. Restarts the 12-month
+     * clock, and clears a "not working" flag (a report can be wrong).
+     */
+    public function confirm(Examiner $examiner, User $by, ?string $note = null): void
+    {
+        DB::transaction(function () use ($examiner, $by, $note) {
+            $examiner->update([
+                'email_status' => Examiner::EMAIL_OK,
+                'email_flagged_at' => null,
+                'email_confirmed_at' => now(),
+            ]);
+
+            $this->log($examiner, $examiner->email, $examiner->email, $by, 'confirmed', $note);
+        });
     }
 
     /**

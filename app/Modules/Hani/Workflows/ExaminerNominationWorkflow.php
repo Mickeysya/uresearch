@@ -178,6 +178,7 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
             Role::NON_EXEC_CGS => [
                 ['label' => 'Examiner Pool', 'route' => 'examiner-admin.index'],
                 $report,
+                $dashboard,
             ],
             // Puan Waheeda keeps the pool as well as the list.
             Role::SENIOR_EXEC_CGS => [

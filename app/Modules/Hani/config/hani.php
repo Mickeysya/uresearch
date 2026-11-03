@@ -316,6 +316,13 @@ return [
         'gap_threshold' => 2,
     ],
 
+    'examiner_contact' => [
+        // An email nobody has added, changed or confirmed for this many
+        // months is listed as "not confirmed" in the pool and on the
+        // dashboard. A prompt to check it, not a block. Provisional.
+        'stale_months' => 12,
+    ],
+
     'import' => [
         // Largest pool file accepted, in KB. Provisional.
         'max_kb' => 5120,

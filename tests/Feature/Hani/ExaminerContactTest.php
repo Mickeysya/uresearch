@@ -247,4 +247,67 @@ class ExaminerContactTest extends TestCase
         $this->schedule($viva, '2027-01-21')->assertSessionMissing('warning');
         $this->assertTrue($this->invited('new.address@example.com'));
     }
+
+    public function test_email_freshness_is_set_on_change_and_confirm_and_filtered_after_12_months(): void
+    {
+        $nonExec = $this->cgs();
+        $fresh = $this->external(['name' => 'Dr Fresh', 'email' => 'fresh@example.com', 'email_confirmed_at' => now()->subMonths(2)]);
+        $stale = $this->external(['name' => 'Dr Stale', 'email' => 'stale@example.com', 'email_confirmed_at' => now()->subMonths(13)]);
+        $never = $this->external(['name' => 'Dr Never Confirmed', 'email' => 'never@example.com']);
+        $missing = $this->external(['name' => 'Dr Missing', 'email' => null]);
+        $invalid = $this->external(['name' => 'Dr Invalid', 'email' => 'bad@example.com', 'email_status' => Examiner::EMAIL_INVALID, 'email_confirmed_at' => now()->subMonths(20)]);
+        $retired = $this->external(['name' => 'Dr Retired', 'email' => null, 'is_active' => false, 'unavailable_reason' => 'Retired']);
+
+        $names = fn ($response) => collect(['Dr Fresh', 'Dr Stale', 'Dr Never Confirmed', 'Dr Missing', 'Dr Invalid', 'Dr Retired'])
+            ->filter(fn ($n) => str_contains($response->getContent(), $n))->values()->all();
+
+        // Stale: an OK address older than 12 months, or never confirmed.
+        $this->assertSame(['Dr Stale', 'Dr Never Confirmed'], $names($this->actingAs($nonExec)->get(route('examiner-admin.index', ['email' => 'stale']))));
+        // Missing or invalid: active examiners only.
+        $this->assertSame(['Dr Missing', 'Dr Invalid'], $names($this->actingAs($nonExec)->get(route('examiner-admin.index', ['email' => 'problem']))));
+
+        // The dashboard tiles count the same.
+        $this->actingAs($nonExec)->get(route('examiner-dashboard'))->assertOk()
+            ->assertSeeInOrder(['Missing or invalid emails', 'data-email-tile="problem">2<', 'Emails not confirmed in 12 months', 'data-email-tile="stale">2<'], false);
+
+        // Confirming restarts the clock and is logged.
+        $this->actingAs($nonExec)->post(route('examiner-admin.email.confirm', $stale))->assertSessionHasNoErrors();
+        $this->assertTrue($stale->fresh()->email_confirmed_at->isToday());
+        $this->assertFalse($stale->fresh()->emailStale());
+        $this->assertSame('confirmed', ExaminerContactHistory::where('examiner_id', $stale->id)->sole()->source);
+
+        // Changing the email sets it too.
+        $this->actingAs($nonExec)->put(route('examiner-admin.email.update', $never), ['email' => 'never.new@example.com', 'reason' => 'Checked']);
+        $this->assertTrue($never->fresh()->email_confirmed_at->isToday());
+        $this->assertFalse($never->fresh()->emailStale());
+
+        // Confirming a reported email clears the flag (a report can be wrong).
+        $this->actingAs($nonExec)->post(route('examiner-admin.email.confirm', $invalid));
+        $this->assertSame(Examiner::EMAIL_OK, $invalid->fresh()->emailStatus());
+
+        // Only CGS confirms.
+        $this->actingAs($this->academicExec())->post(route('examiner-admin.email.confirm', $fresh))->assertForbidden();
+
+        // An AE's tiles cover their own department.
+        $ae = $this->academicExecFor('Petroleum Engineering');
+        $this->actingAs($ae)->get(route('examiner-dashboard'))->assertOk()
+            ->assertSee('data-email-tile="problem">0<', false)
+            ->assertDontSee(route('examiner-admin.index', ['email' => 'problem']));
+    }
+
+    public function test_existing_examiners_are_confirmed_as_of_the_migration(): void
+    {
+        $migration = require base_path('app/Modules/Hani/Database/Migrations/2026_11_05_000200_add_email_status_to_examiners_table.php');
+        $migration->down();
+
+        \Illuminate\Support\Facades\DB::table('examiners')->insert([
+            ['name' => 'Dr With Email', 'email' => 'with@example.com', 'department' => 'Computing', 'type' => 'internal', 'is_active' => true],
+            ['name' => 'Dr Without', 'email' => null, 'department' => 'Computing', 'type' => 'internal', 'is_active' => true],
+        ]);
+        $migration->up();
+
+        $this->assertTrue(Examiner::where('name', 'Dr With Email')->value('email_confirmed_at') !== null);
+        $this->assertNull(Examiner::where('name', 'Dr Without')->value('email_confirmed_at'));
+        $this->assertSame(['ok', 'ok'], Examiner::orderBy('name')->pluck('email_status')->all());
+    }
 }

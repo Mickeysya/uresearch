@@ -62,10 +62,14 @@ class ExaminerAdminController extends Controller
         $department = (string) $request->input('department', '');
         $status = (string) $request->input('status', '');
         $search = mb_strtolower((string) $request->input('search', ''));
+        $emailFilter = in_array($request->input('email'), ['problem', 'stale'], true) ? (string) $request->input('email') : '';
 
         $filtered = $tabPool
             ->when($department !== '', fn ($c) => $c->where('department', $department))
             ->when($status !== '', fn ($c) => $c->filter(fn (Examiner $e) => $e->state() === $status))
+            // Email upkeep: active examiners only, as on the dashboard tiles.
+            ->when($emailFilter === 'problem', fn ($c) => $c->filter(fn (Examiner $e) => $e->is_active && $e->emailNeedsUpdating()))
+            ->when($emailFilter === 'stale', fn ($c) => $c->filter(fn (Examiner $e) => $e->is_active && $e->emailStale()))
             ->when($search !== '', fn ($c) => $c->filter(fn (Examiner $e) => str_contains(mb_strtolower($e->name), $search)
                 || str_contains(mb_strtolower($e->department), $search)
                 || str_contains(mb_strtolower((string) $e->institution), $search)))
@@ -94,7 +98,7 @@ class ExaminerAdminController extends Controller
             // tab only ever filters everything away.
             'departments' => $tabPool->pluck('department')->unique()->sort()->values(),
             'studentsByExaminer' => $this->studentsByExaminer($examiners->getCollection()->pluck('id')),
-            'filters' => $request->only(['department', 'type', 'status', 'search']),
+            'filters' => $request->only(['department', 'type', 'status', 'search', 'email']),
             'openReviewItems' => ExaminerReviewItem::open()->count(),
             // Across the whole pool, not just this page: a duplicate is
             // usually on another page or the other tab.

@@ -82,6 +82,21 @@ class ExaminerContactController extends Controller
         return back()->with('status', "{$examiner->name}'s email has been marked as not working. CGS has been asked to update it; nothing is sent to this examiner until then.");
     }
 
+    /** "Confirm email still valid": restarts the 12-month clock, and is logged. */
+    public function confirmEmail(Request $request, Examiner $examiner, ExaminerContact $contact)
+    {
+        abort_unless($this->canEditEmail($request), 403);
+
+        if ($examiner->needsEmail()) {
+            return back()->with('error', "No email is on record for {$examiner->name}. Add one instead.");
+        }
+
+        $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
+        $contact->confirm($examiner, $request->user(), $data['note'] ?? null);
+
+        return back()->with('status', "{$examiner->name}'s email confirmed as still valid.");
+    }
+
     protected function canEditEmail(Request $request): bool
     {
         return in_array($request->user()->role, [Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS], true);

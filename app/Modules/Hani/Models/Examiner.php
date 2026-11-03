@@ -145,6 +145,22 @@ class Examiner extends Model
         return $this->emailStatus() !== self::EMAIL_OK;
     }
 
+    /**
+     * An address nobody has added, changed or confirmed within
+     * config('hani.examiner_contact.stale_months'). Still used: stale is a
+     * prompt to check, not a block. A missing or invalid email is a different
+     * problem and is not counted here.
+     */
+    public function emailStale(): bool
+    {
+        if ($this->emailStatus() !== self::EMAIL_OK) {
+            return false;
+        }
+
+        return $this->email_confirmed_at === null
+            || $this->email_confirmed_at->lt(now()->subMonths((int) config('hani.examiner_contact.stale_months', 12)));
+    }
+
     /** An address it is worth writing to, or null. */
     public function usableEmail(): ?string
     {

@@ -274,6 +274,14 @@
                     @endforeach
                 </select>
             </div>
+            <div class="field">
+                <label for="f-email">Email</label>
+                <select name="email" id="f-email" data-autosubmit>
+                    <option value="">All emails</option>
+                    <option value="problem" @selected(($filters['email'] ?? null) === 'problem')>Missing or invalid emails</option>
+                    <option value="stale" @selected(($filters['email'] ?? null) === 'stale')>Emails not confirmed in {{ config('hani.examiner_contact.stale_months') }} months</option>
+                </select>
+            </div>
             <div class="field search-field">
                 <label for="f-search">Search</label>
                 <input type="text" name="search" id="f-search" placeholder="Search by name, department..."
@@ -334,6 +342,8 @@
                                         <span class="examiner-state-badge tone-critical">Email needs updating</span>
                                     @elseif ($examiner->needsEmail())
                                         <span class="examiner-state-badge tone-warn">Email needed</span>
+                                    @elseif ($examiner->emailStale())
+                                        <span class="examiner-state-badge tone-info">Email not confirmed</span>
                                     @endif
                                     {{-- Support\DuplicateDetector: flagged, never blocked. --}}
                                     @foreach ($duplicates[$examiner->id] ?? [] as $dup)

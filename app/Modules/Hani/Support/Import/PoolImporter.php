@@ -232,6 +232,7 @@ class PoolImporter
                 // The import only ever fills a missing email (updatable()),
                 // and that goes in the contact history like any other change.
                 if ($examiner->email !== null && $examiner->email !== $before) {
+                    $examiner->update(['email_confirmed_at' => now()]);
                     app(ExaminerContact::class)->log($examiner, $before, $examiner->email, $by, 'import', $batchId ? "Import batch #{$batchId}" : null);
                 }
 

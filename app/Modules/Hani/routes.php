@@ -157,7 +157,7 @@ Route::middleware('auth')->group(function () {
     // ---- Examiner availability dashboard --------------------------------
     // The AE sees their own department (the dashboard scopes itself).
     Route::middleware('role:'.implode(',', [
-        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR,
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR, Role::NON_EXEC_CGS,
     ]))->get('/examiner-dashboard', ExaminerDashboardController::class)->name('examiner-dashboard');
 
     // ---- Examiner pool admin -------------------------------------------
@@ -168,6 +168,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
         Route::get('/examiners/{examiner}/email', [ExaminerContactController::class, 'editEmail'])->whereNumber('examiner')->name('examiner-admin.email.edit');
         Route::put('/examiners/{examiner}/email', [ExaminerContactController::class, 'updateEmail'])->whereNumber('examiner')->name('examiner-admin.email.update');
+        Route::post('/examiners/{examiner}/confirm-email', [ExaminerContactController::class, 'confirmEmail'])->whereNumber('examiner')->name('examiner-admin.email.confirm');
     });
 
     // The examiner page and "Email not working". The controller narrows an

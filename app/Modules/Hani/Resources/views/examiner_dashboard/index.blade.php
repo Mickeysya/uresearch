@@ -46,6 +46,26 @@
             </ul>
         </section>
 
+        <section class="exd-card" id="email-upkeep">
+            <h3>Examiner emails</h3>
+            <p class="exd-note">Active examiners only. Nothing is emailed to an examiner whose email is missing or reported not working.</p>
+            @php($canOpenPool = in_array(auth()->user()->role, [\App\Modules\Core\Support\Role::SENIOR_EXEC_CGS, \App\Modules\Core\Support\Role::NON_EXEC_CGS], true))
+            <div class="sdash-stats examiner-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                @foreach ([
+                    'problem' => ['label' => 'Missing or invalid emails', 'tone' => 'red', 'pill' => 'critical'],
+                    'stale' => ['label' => 'Emails not confirmed in '.config('hani.examiner_contact.stale_months').' months', 'tone' => 'orange', 'pill' => 'warn'],
+                ] as $key => $tile)
+                    <div class="sdash-stat tone-{{ $tile['tone'] }}" style="max-width: none;">
+                        <div class="sdash-stat-top"><span class="sdash-stat-label">{{ $tile['label'] }}</span></div>
+                        <div class="sdash-stat-value" data-email-tile="{{ $key }}">{{ $emails[$key] }}</div>
+                        @if ($canOpenPool)
+                            <a href="{{ route('examiner-admin.index', ['email' => $key]) }}" class="sdash-pill pill-{{ $tile['pill'] }}">View list</a>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </section>
+
         <section class="exd-card">
             <h3>Nominations by stage</h3>
             <p class="exd-note">Pending at each stage of the chain, and lists released in the last 12 months.</p>
