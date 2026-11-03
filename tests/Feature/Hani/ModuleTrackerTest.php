@@ -28,7 +28,7 @@ class ModuleTrackerTest extends TestCase
     {
         Storage::fake('local');
 
-        $this->actingAs($this->cgs())->post(route('reviva.store'), [
+        $this->actingAs($this->seniorExec())->post(route('reviva.store'), [
             'student_id' => $this->student()->id,
             'thesis' => UploadedFile::fake()->create('thesis.pdf', 64, 'application/pdf'),
         ]);

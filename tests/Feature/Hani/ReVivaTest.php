@@ -41,7 +41,7 @@ class ReVivaTest extends TestCase
     {
         Storage::fake('local');
 
-        $cgs = $this->cgs();
+        $cgs = $this->seniorExec();
         $student = $this->student();
 
         $this->actingAs($cgs)
@@ -62,7 +62,7 @@ class ReVivaTest extends TestCase
     {
         Storage::fake('local');
 
-        $cgs = $this->cgs();
+        $cgs = $this->seniorExec();
         $passed = $this->student('22001001', 'a@test.my');
         $loops = $this->student('22001002', 'b@test.my');
 
@@ -96,7 +96,7 @@ class ReVivaTest extends TestCase
     {
         Storage::fake('local');
 
-        $cgs = $this->cgs();
+        $cgs = $this->seniorExec();
         $blocked = $this->student('22001001', 'a@test.my');
         $free = $this->student('22001002', 'b@test.my');
 

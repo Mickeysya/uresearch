@@ -83,16 +83,20 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
     }
 
     /**
-     * Two roles need a link here that queuesForRole() (stage-derived) cannot
-     * produce: CGS Staff logs a new cycle but owns no stage in this chain;
-     * the Academic Executive's outcome-recording step happens after an
-     * application leaves the chain, not on any stage in it.
+     * Links queuesForRole() (stage-derived) cannot produce: CGS owns no stage
+     * in this chain -- the Senior Executive logs cycles, and both CGS roles
+     * read Re-viva Cycles (the Non-Executive read-only) -- and the Academic
+     * Executive's outcome step happens after an application leaves the chain.
      */
     public function links(User $user): array
     {
         return match ($user->role) {
-            Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS => [
+            Role::SENIOR_EXEC_CGS => [
                 ['label' => 'Log Re-viva Submission', 'route' => 'reviva.create'],
+                ['label' => 'Re-viva Cycles', 'route' => 'reviva.cycles.index'],
+            ],
+            Role::NON_EXEC_CGS => [
+                ['label' => 'Re-viva Cycles', 'route' => 'reviva.cycles.index'],
             ],
             Role::ACADEMIC_EXEC => [
                 ['label' => 'Re-viva Outcomes', 'route' => 'reviva.outcomes.index'],
