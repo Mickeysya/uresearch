@@ -94,19 +94,138 @@ return [
         // rules and attach each type; ga_extension/_detail.blade.php reads
         // the same list for the System checks panel, so a required type
         // cannot drift between what is enforced and what is shown.
+        //
+        // The GA Extension Form itself is no longer uploaded: the system
+        // generates it from what the student enters (LetterRenderer::
+        // gaExtensionForm()). Applications submitted before that still
+        // carry their uploaded 'GA Extension Form' -- see legacy_documents.
+        // Items 1-3 of the form's Section A checklist.
         'required_documents' => [
-            'ga_extension_form_documents' => 'GA Extension Form',
             'identity_document_documents' => 'IC or Passport/Visa Copy',
+            'admission_letter_documents' => 'Admission Letter & Offer Letter',
             'supervisor_letter_documents' => "Supervisor's Supporting Letter",
-            'acceptance_or_paper_documents' => 'Acceptance Letter or Published Paper',
         ],
 
-        // Provisional, empty until the real CGS online form is confirmed --
-        // see GaExtensionDetail::additional_info. Each entry:
+        // Section A item 4: the proof for the student's stage gate level,
+        // optional at submission (a Level 1 student has no paper yet).
+        // GaExtensionRules checks the right one is attached for the level
+        // worked out from rules.stage_gates, and warns if not.
+        'stage_gate_documents' => [
+            'acceptance_proof_documents' => 'Proof of Journal Article Acceptance',
+            'published_article_documents' => 'Published Journal Article (front page)',
+            'softbound_proof_documents' => 'Proof of Soft Bound Submission',
+        ],
+
+        // Document types only applications submitted before the form was
+        // generated can have. Never asked for again; still shown wherever
+        // an older application's documents are, and the combined proof
+        // still counts towards Section A item 4.
+        'legacy_documents' => [
+            'form' => 'GA Extension Form',
+            'stage_gate_proof' => 'Acceptance Letter or Published Paper',
+        ],
+
+        // Section B of UTP/CGS/001-A2. Name, Student ID, Programme and
+        // Supervisor come from the student's profile and are never read
+        // from the request. Each entry:
+        //   label, type (select|radio|date|text|tel|email|yesno), required,
+        //   options (select/radio), max (text/tel/email), placeholder,
+        //   step: which step of the form it sits on ('details' or 'identity'),
+        //   bank: only asked while collect_bank_details is true,
+        //   sensitive: stored with the `encrypted` cast, masked everywhere
+        //              but the CGS stage, never shown back on the form,
+        //   required_if: required only when that yesno field is "yes".
+        // Each key is a column on ga_extension_details.
+        'applicant_fields' => [
+            'mode_of_study' => ['label' => 'Mode of study', 'type' => 'select', 'required' => true, 'step' => 'details',
+                'options' => ['full_time' => 'Full-time', 'full_time_odl' => 'Full-time ODL', 'part_time' => 'Part-time']],
+            'admission_date' => ['label' => 'Admission date', 'type' => 'date', 'required' => true, 'step' => 'details'],
+            'candidature_period' => ['label' => 'Period of candidature', 'type' => 'text', 'max' => 60, 'required' => true, 'step' => 'details',
+                'placeholder' => 'e.g. Sep 2025 – Aug 2028'],
+            'level_of_study' => ['label' => 'Level of study', 'type' => 'radio', 'required' => true, 'step' => 'details',
+                'options' => ['msc' => 'MSc', 'phd' => 'PhD']],
+            'contact_no' => ['label' => 'Contact no.', 'type' => 'tel', 'max' => 20, 'required' => true, 'step' => 'details',
+                'placeholder' => 'e.g. +60 12-345 6789'],
+            'contact_email' => ['label' => 'Email', 'type' => 'email', 'max' => 150, 'required' => true, 'step' => 'details'],
+            'bank_name' => ['label' => 'Name of bank', 'type' => 'text', 'max' => 80, 'required' => true, 'step' => 'identity', 'bank' => true],
+            'bank_account_no' => ['label' => 'Account no.', 'type' => 'text', 'max' => 30, 'required' => true, 'step' => 'identity', 'bank' => true, 'sensitive' => true],
+            'identity_number' => ['label' => 'IC no. or passport no.', 'type' => 'text', 'max' => 30, 'required' => true, 'step' => 'identity', 'sensitive' => true],
+            'holds_visa' => ['label' => 'Do you hold a student visa?', 'type' => 'yesno', 'required' => true, 'step' => 'identity'],
+            'visa_expiry_date' => ['label' => 'Visa expiry date', 'type' => 'date', 'required_if' => 'holds_visa', 'step' => 'identity'],
+        ],
+
+        // Name of bank and Account no. -- pending CGS confirming whether
+        // they already hold these. When false they are not asked, not
+        // validated, not changed, and left blank on the generated form.
+        'collect_bank_details' => (bool) env('NUREEN_GA_EXTENSION_COLLECT_BANK_DETAILS', true),
+
+        // Section C: one row per publication.
+        'publications' => [
+            'max_rows' => 10,
+            'types' => ['journal' => 'Journal', 'conference' => 'Conference', 'book' => 'Book'],
+            'databases' => ['scopus' => 'Scopus', 'wos' => 'Web of Science', 'era' => 'ERA', 'other' => 'Other'],
+            'quartiles' => ['Q1' => 'Q1', 'Q2' => 'Q2', 'Q3' => 'Q3', 'Q4' => 'Q4'],
+        ],
+
+        // Section D, word for word from the form.
+        'declaration' => 'I hereby certify that the statement and information in the application form are true and correct. '
+            .'I also understand and agree that falsification or material omission of information provided herein may result '
+            .'in my GA contract to be terminated.',
+
+        // Section J, "Centre for Graduate Studies (CGS) use remarks": filled
+        // by CGS staff at the cgs_verify stage, printed on the form.
+        'cgs_remarks_fields' => [
+            'reporting_duty_date' => ['label' => 'Date of Reporting Duty', 'type' => 'date'],
+            'registration_status' => ['label' => 'Current Semester Registration status', 'type' => 'text'],
+            'softbound_submission' => ['label' => 'Softbound submission', 'type' => 'text'],
+            'rcs_viva_status' => ['label' => 'RCS / VIVA status', 'type' => 'text'],
+            'previous_result' => ['label' => 'Result: a. Previous result', 'type' => 'text'],
+            'rpd_rm_result' => ['label' => 'Result: b. RPD & RM result', 'type' => 'text'],
+            'ga_duration' => ['label' => 'GA Status: a. Duration of GA', 'type' => 'text'],
+            'total_ta_hours' => ['label' => 'GA Status: b. Total TA hours', 'type' => 'text'],
+        ],
+
+        // The "GA Scheme Terms and Conditions" page of the form, as checks
+        // on the approver's System checks panel (Support\GaExtensionRules).
+        // They warn; only a backdated start blocks submission ("Backdated
+        // appointment ... is not allowed"). CGS can change any number here.
+        'rules' => [
+            // (iii) Maximum GA duration, counted from the admission date.
+            'max_months' => ['msc' => 24, 'phd' => 42],
+            // (iii) "at least three (3) months and twelve (12) months".
+            'extension_months' => ['min' => 3, 'max' => 12],
+            // (iii) Appointments start on the 1st or 16th, end on the 15th
+            // or the last day of the month ('last').
+            'start_days' => [1, 16],
+            'end_days' => [15, 'last'],
+            // (iii) "submitted at least one (1) month before".
+            'notice_months' => 1,
+            // (vii) MSc and (viii) PhD stage gates. 'from'/'to' are the
+            // "Timeframe for completion" months. The level is the highest
+            // whose 'from' is at or below the months completed since
+            // admission at the extension's start: 18 months completed is
+            // month 19, so MSc Level 3. 'proof' is the stage_gate_documents
+            // field that shows it; null means nothing to attach (RPD).
+            'stage_gates' => [
+                'msc' => [
+                    1 => ['from' => 3, 'to' => 6, 'requirement' => 'RPD completion', 'proof' => null],
+                    2 => ['from' => 12, 'to' => 18, 'requirement' => 'One article accepted in a WoS/ERA/Scopus-indexed journal', 'proof' => 'acceptance_proof_documents'],
+                    3 => ['from' => 18, 'to' => 24, 'requirement' => 'One article published in a WoS/ERA/Scopus-indexed journal', 'proof' => 'published_article_documents'],
+                ],
+                'phd' => [
+                    1 => ['from' => 6, 'to' => 9, 'requirement' => 'RPD completion', 'proof' => null],
+                    2 => ['from' => 18, 'to' => 30, 'requirement' => 'One article accepted in a WoS/ERA or Scopus-indexed journal', 'proof' => 'acceptance_proof_documents'],
+                    3 => ['from' => 30, 'to' => 36, 'requirement' => 'One article published in a Q1/Q2 WoS journal, or one accepted and one published (WoS/ERA/Scopus)', 'proof' => 'published_article_documents'],
+                    4 => ['from' => 36, 'to' => 42, 'requirement' => 'Soft bound submission for RCS', 'proof' => 'softbound_proof_documents'],
+                ],
+            ],
+        ],
+
+        // Provisional, empty -- the official form's fields are now
+        // applicant_fields above; this stays for anything CGS adds later
+        // that has no column (stored in GaExtensionDetail::additional_info).
+        // Each entry:
         // key => ['label' => ..., 'type' => 'text'|'textarea'|'date', 'required' => bool].
-        // Adding a field later is one entry here; the form, the validation
-        // and the detail panel all read this same list, so nothing else
-        // needs to change.
         'additional_fields' => [
             // 'funding_source' => ['label' => 'Funding Source', 'type' => 'text', 'required' => false],
         ],

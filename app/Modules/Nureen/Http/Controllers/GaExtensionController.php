@@ -16,6 +16,7 @@ use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionInformational;
 use App\Modules\Nureen\Support\ClientCharter;
 use App\Modules\Nureen\Support\Drafts;
+use App\Modules\Nureen\Support\LetterRenderer;
 use App\Modules\Nureen\Workflows\GaExtensionWorkflow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,15 +45,34 @@ class GaExtensionController extends Controller
 
     protected function form(Request $request, ?Application $draft)
     {
+        $student = $request->user()->loadMissing('supervisor');
+
         return view('nureen::ga_extension.form', [
-            'student' => $request->user(),
+            'student' => $student,
             'requiredDocuments' => config('nureen.ga_extension.required_documents'),
+            'stageGateDocuments' => config('nureen.ga_extension.stage_gate_documents'),
+            'applicantFields' => $this->applicantFields(),
+            'publicationOptions' => config('nureen.ga_extension.publications'),
+            'declaration' => config('nureen.ga_extension.declaration'),
+            'rules' => config('nureen.ga_extension.rules'),
             'additionalFields' => config('nureen.ga_extension.additional_fields'),
             'draft' => $draft,
             'detail' => $draft ? GaExtensionDetail::where('application_id', $draft->id)->first() : null,
             'attached' => $draft ? Drafts::attached($draft) : collect(),
             // On a fresh form, offer any draft already in progress.
             'otherDrafts' => $draft ? collect() : Drafts::of($request->user(), $this->moduleKey()),
+            // The generated form of every application already submitted --
+            // Core's application page has no slot for a module's download
+            // yet (SHARED_CHANGES.md), so the student finds it here.
+            'submitted' => $draft ? collect() : Application::query()
+                ->where('student_id', $student->id)
+                ->where('module_type', $this->moduleKey())
+                ->where('status', '!=', Application::STATUS_DRAFT)
+                ->latest('id')
+                ->limit(10)
+                ->get(),
+            // "Download form (PDF)" saved the draft first; start the download.
+            'downloadForm' => session('download_form') && $draft ? route('ga-extension.form-pdf', $draft) : null,
         ]);
     }
 
@@ -73,15 +93,20 @@ class GaExtensionController extends Controller
         $additionalFields = config('nureen.ga_extension.additional_fields');
         $removing = $this->removing($request, $application);
 
+        $detail = $application ? GaExtensionDetail::where('application_id', $application->id)->first() : null;
+        $this->normalisePublications($request);
+
         $rules = [
             'current_end_date' => ['nullable', 'date'],
             'requested_new_end_date' => ['nullable', 'date'],
             'reason_for_extension' => ['nullable', 'string', 'max:2000'],
             'draft_step' => ['nullable', 'integer', 'min:0', 'max:20'],
-        ];
-        $messages = [];
+            'declaration' => ['nullable', 'boolean'],
+            'download_form' => ['nullable', 'boolean'],
+        ] + $this->applicantRules(required: false, existing: $detail) + $this->publicationRules(required: false);
+        $messages = $this->publicationMessages();
 
-        foreach ($requiredDocuments as $field => $label) {
+        foreach ($requiredDocuments + config('nureen.ga_extension.stage_gate_documents') as $field => $label) {
             $rules += $this->documentRules($field, $label, $application, $removing, required: false);
             $messages += DocumentStore::manyMessages($field);
         }
@@ -93,7 +118,7 @@ class GaExtensionController extends Controller
 
         $data = $request->validate($rules, $messages);
 
-        $application = DB::transaction(function () use ($request, $data, $application, $requiredDocuments, $additionalFields, $removing, $documents) {
+        $application = DB::transaction(function () use ($request, $data, $application, $detail, $requiredDocuments, $additionalFields, $removing, $documents) {
             $application ??= Application::create([
                 'student_id' => $request->user()->id,
                 'submitted_by_id' => $request->user()->id,
@@ -107,11 +132,13 @@ class GaExtensionController extends Controller
                 'reason_for_extension' => $data['reason_for_extension'] ?? null,
                 'additional_info' => $additionalFields === [] ? null : ($data['additional_info'] ?? []),
                 'draft_step' => $data['draft_step'] ?? null,
-            ]);
+                'publications' => $data['publications'] ?? [],
+                'declaration_accepted_at' => ! empty($data['declaration']) ? ($detail?->declaration_accepted_at ?? now()) : null,
+            ] + $this->applicantValues($data, $detail));
 
             Drafts::removeDocuments($application, $removing);
 
-            foreach ($requiredDocuments as $field => $label) {
+            foreach ($requiredDocuments + config('nureen.ga_extension.stage_gate_documents') as $field => $label) {
                 if ($files = $request->file($field)) {
                     $documents->attachMany($application, $files, $label);
                 }
@@ -125,7 +152,8 @@ class GaExtensionController extends Controller
 
         return redirect()
             ->route('ga-extension.draft.edit', $application)
-            ->with('status', 'Draft saved at '.now()->format('g:ia').'. Continue it any time from My Drafts.');
+            ->with('status', 'Draft saved at '.now()->format('g:ia').'. Continue it any time from My Drafts.')
+            ->with('download_form', ! empty($data['download_form']));
     }
 
     /** Delete a draft: its stored files, its detail row and the application row. */
@@ -154,17 +182,22 @@ class GaExtensionController extends Controller
         $requiredDocuments = config('nureen.ga_extension.required_documents');
         $additionalFields = config('nureen.ga_extension.additional_fields');
         $removing = $this->removing($request, $draft);
+        $existing = $draft ? GaExtensionDetail::where('application_id', $draft->id)->first() : null;
+        $this->normalisePublications($request);
 
         $rules = [
             'current_end_date' => ['required', 'date'],
             'requested_new_end_date' => ['required', 'date', 'after:current_end_date'],
             'reason_for_extension' => ['required', 'string', 'min:20', 'max:2000'],
-        ];
+            'declaration' => ['accepted'],
+        ] + $this->applicantRules(required: true, existing: $existing) + $this->publicationRules(required: true);
 
         $messages = [
             'requested_new_end_date.after' => 'The new end date must be later than the current one.',
             'reason_for_extension.min' => 'Please give CGS at least a sentence or two of justification.',
-        ];
+            'declaration.accepted' => 'Please tick the declaration to confirm the information is true and correct.',
+            'visa_expiry_date.required_if' => 'Enter your visa expiry date.',
+        ] + $this->publicationMessages();
 
         // The scope calls for document completeness validation before an
         // application may reach CGS, so each required type is enforced
@@ -181,13 +214,27 @@ class GaExtensionController extends Controller
         // Provisional fields from config('nureen.ga_extension.additional_fields')
         // -- empty today, so this adds nothing until the real CGS form is
         // confirmed and a field is declared there.
+        foreach (config('nureen.ga_extension.stage_gate_documents') as $field => $label) {
+            $rules += $this->documentRules($field, $label, $draft, $removing, required: false);
+            $messages += DocumentStore::manyMessages($field);
+        }
+
         foreach ($additionalFields as $key => $field) {
             $rules["additional_info.{$key}"] = $this->additionalFieldRules($field);
         }
 
         $data = $request->validate($rules, $messages);
 
-        $application = DB::transaction(function () use ($request, $data, $draft, $removing, $requiredDocuments, $additionalFields, $engine, $documents) {
+        // The one rule of the form's Terms and Conditions that is absolute:
+        // "Backdated appointment ... is not allowed". The rest only warn,
+        // on the approver's System checks (Support\GaExtensionRules).
+        if (\Illuminate\Support\Carbon::parse($data['current_end_date'])->addDay()->lt(today())) {
+            return back()->withInput()->withErrors([
+                'current_end_date' => 'The extension would start before today. Backdated GA appointments are not allowed; contact CGS.',
+            ]);
+        }
+
+        $application = DB::transaction(function () use ($request, $data, $draft, $existing, $removing, $requiredDocuments, $additionalFields, $engine, $documents) {
             if ($draft) {
                 // Locked and re-checked, so a double-click can never submit
                 // the same draft twice.
@@ -218,11 +265,13 @@ class GaExtensionController extends Controller
                 // application is running.
                 'final_approver_snapshot' => config('nureen.ga_extension.final_approver'),
                 'draft_step' => null,
-            ]);
+                'publications' => $data['publications'] ?? [],
+                'declaration_accepted_at' => now(),
+            ] + $this->applicantValues($data, $existing));
 
             Drafts::removeDocuments($application, $removing);
 
-            foreach ($requiredDocuments as $field => $label) {
+            foreach ($requiredDocuments + config('nureen.ga_extension.stage_gate_documents') as $field => $label) {
                 if ($files = $request->file($field)) {
                     $documents->attachMany($application, $files, $label);
                 }
@@ -234,6 +283,203 @@ class GaExtensionController extends Controller
         return redirect()
             ->route('applications.index')
             ->with('status', "GA Extension application #{$application->id} submitted.");
+    }
+
+    /**
+     * The generated GA Extension Form (UTP/CGS/001-A2), as it stands now --
+     * see LetterRenderer::gaExtensionForm(). For the student who owns it
+     * (a draft included) and for the approvers of a submitted one.
+     */
+    public function formPdf(Request $request, Application $application, LetterRenderer $letters)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($this->canViewForm($request->user(), $application), 403, 'This application is not yours to view.');
+
+        $filename = 'GA_Extension_Form_'.($application->student?->matric_no ?: 'application').'_'.$application->id.'.pdf';
+
+        return response($letters->gaExtensionForm($application, $request->user()), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
+    }
+
+    /**
+     * The owner; and once submitted, the supervisor it is addressed to (or
+     * who endorsed it, if that has since changed) and anyone holding the
+     * role of another stage on this application's own chain.
+     */
+    protected function canViewForm(User $user, Application $application): bool
+    {
+        if ($application->student_id === $user->id) {
+            return true;
+        }
+
+        if ($application->status === Application::STATUS_DRAFT) {
+            return false;
+        }
+
+        $detail = GaExtensionDetail::where('application_id', $application->id)->first();
+
+        if ($detail?->supervisor_id === $user->id
+            || ApprovalHistory::where('application_id', $application->id)->where('stage_key', 'supervisor')->where('approver_id', $user->id)->exists()) {
+            return true;
+        }
+
+        foreach (app(WorkflowEngine::class)->stagesFor($application) as $stage) {
+            if ($stage->key !== 'supervisor' && $stage->role === $user->role) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Section J, "CGS use remarks": saved by CGS staff while the
+     * application is at their stage. Not a decision -- approving or
+     * rejecting is still the decision form below it.
+     */
+    public function saveCgsRemarks(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        $stage = $engine->currentStage($application);
+        abort_unless($stage?->key === 'cgs_verify' && $request->user()->role === $stage->role, 403, 'Section J is filled at the CGS stage.');
+
+        $fields = config('nureen.ga_extension.cgs_remarks_fields');
+        $rules = [];
+        foreach ($fields as $key => $field) {
+            $rules["cgs_remarks.{$key}"] = ['nullable', ($field['type'] ?? 'text') === 'date' ? 'date' : 'string', 'max:255'];
+        }
+
+        $data = $request->validate($rules);
+
+        GaExtensionDetail::where('application_id', $application->id)->firstOrFail()->update([
+            'cgs_remarks' => array_intersect_key($data['cgs_remarks'] ?? [], $fields),
+            'cgs_remarks_by_id' => $request->user()->id,
+            'cgs_remarks_at' => now(),
+        ]);
+
+        return back()->with('status', "Section J saved for application #{$application->id}.");
+    }
+
+    /** config('nureen.ga_extension.applicant_fields'), less the bank fields when they are not collected. */
+    protected function applicantFields(): array
+    {
+        $collectBank = (bool) config('nureen.ga_extension.collect_bank_details');
+
+        return array_filter(config('nureen.ga_extension.applicant_fields'), fn (array $field) => $collectBank || empty($field['bank']));
+    }
+
+    /**
+     * Section B's rules, built from applicantFields(). On a draft nothing is
+     * required. A sensitive field already on file may be left blank.
+     */
+    protected function applicantRules(bool $required, ?GaExtensionDetail $existing): array
+    {
+        $rules = [];
+
+        foreach ($this->applicantFields() as $key => $field) {
+            $type = $field['type'] ?? 'text';
+            $onFile = ! empty($field['sensitive']) && filled($existing?->{$key});
+
+            $presence = match (true) {
+                ! $required => 'nullable',
+                isset($field['required_if']) => "required_if:{$field['required_if']},1",
+                ($field['required'] ?? false) && ! $onFile => 'required',
+                default => 'nullable',
+            };
+
+            $rules[$key] = array_values(array_filter([
+                $presence,
+                ...match ($type) {
+                    'select', 'radio' => ['string', 'in:'.implode(',', array_keys($field['options']))],
+                    'date' => ['date', $key === 'admission_date' ? 'before_or_equal:today' : null],
+                    'yesno' => ['boolean'],
+                    'email' => ['email', 'max:'.($field['max'] ?? 150)],
+                    'tel' => ['string', 'max:'.($field['max'] ?? 20), 'regex:/^\+?[0-9][0-9 ()\-]{6,}$/'],
+                    default => ['string', 'max:'.($field['max'] ?? 255),
+                        ! empty($field['sensitive']) ? 'regex:/^[A-Za-z0-9][A-Za-z0-9\- ]*$/' : null],
+                },
+            ]));
+        }
+
+        return $rules;
+    }
+
+    /**
+     * What to write to the detail row for Section B. Profile fields are not
+     * here at all -- they are read from the user when shown. A blank
+     * sensitive field keeps what is on file; the visa date is cleared when
+     * the student says they hold no visa.
+     */
+    protected function applicantValues(array $data, ?GaExtensionDetail $existing): array
+    {
+        $values = [];
+
+        foreach ($this->applicantFields() as $key => $field) {
+            if (! empty($field['sensitive']) && blank($data[$key] ?? null)) {
+                continue;
+            }
+
+            $values[$key] = $data[$key] ?? null;
+        }
+
+        if (array_key_exists('holds_visa', $values) && $values['holds_visa'] !== null && ! $values['holds_visa']) {
+            $values['visa_expiry_date'] = null;
+        }
+
+        return $values;
+    }
+
+    /**
+     * Section C arrives as rows from the add/remove list; rows left wholly
+     * empty are dropped and the rest re-indexed before validation, so an
+     * untouched blank row never fails or gets stored.
+     */
+    protected function normalisePublications(Request $request): void
+    {
+        $rows = $request->input('publications');
+
+        if (! is_array($rows)) {
+            $request->merge(['publications' => []]);
+
+            return;
+        }
+
+        $request->merge(['publications' => array_values(array_filter($rows,
+            fn ($row) => is_array($row) && array_filter($row, fn ($value) => is_string($value) && trim($value) !== '') !== []))]);
+    }
+
+    protected function publicationRules(bool $required): array
+    {
+        $config = config('nureen.ga_extension.publications');
+        $need = $required ? 'required' : 'nullable';
+
+        return [
+            'publications' => ['array', 'max:'.$config['max_rows']],
+            'publications.*.type' => [$need, 'in:'.implode(',', array_keys($config['types']))],
+            'publications.*.authors' => [$need, 'string', 'max:500'],
+            'publications.*.year' => [$need, 'integer', 'between:1950,'.(now()->year + 1)],
+            'publications.*.title' => [$need, 'string', 'max:300'],
+            'publications.*.venue' => [$need, 'string', 'max:200'],
+            'publications.*.volume' => ['nullable', 'string', 'max:30'],
+            'publications.*.pages' => ['nullable', 'string', 'max:30'],
+            'publications.*.doi' => ['nullable', 'string', 'max:100'],
+            'publications.*.issn' => ['nullable', 'string', 'max:20', 'regex:/^[0-9]{4}-?[0-9]{3}[0-9Xx]$/'],
+            'publications.*.database' => ['nullable', 'in:'.implode(',', array_keys($config['databases']))],
+            'publications.*.quartile' => ['nullable', 'in:'.implode(',', array_keys($config['quartiles']))],
+            'publications.*.impact_factor' => ['nullable', 'numeric', 'between:0,1000'],
+        ];
+    }
+
+    protected function publicationMessages(): array
+    {
+        return [
+            'publications.max' => 'List at most :max publications.',
+            'publications.*.*.required' => 'Fill this in for every publication you list, or remove the row.',
+            'publications.*.issn.regex' => 'An ISSN looks like 1234-5678.',
+        ];
     }
 
     /**
@@ -290,6 +536,7 @@ class GaExtensionController extends Controller
             });
 
         $details = GaExtensionDetail::whereIn('application_id', $queue['applications']->pluck('id'))
+            ->with('cgsRemarksBy')
             ->get()
             ->keyBy('application_id');
 

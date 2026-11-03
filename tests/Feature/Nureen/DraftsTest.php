@@ -16,6 +16,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Tests\Feature\Nureen\Concerns\FilesGaExtensions;
 use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
@@ -28,6 +29,7 @@ use Tests\TestCase;
  */
 class DraftsTest extends TestCase
 {
+    use FilesGaExtensions;
     use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
@@ -53,24 +55,24 @@ class DraftsTest extends TestCase
         return UploadedFile::fake()->create($name, 40, 'application/pdf');
     }
 
-    /** All four GA Extension document types, one file each. */
+    /** The three required GA Extension document types, one file each. */
     protected function gaDocuments(): array
     {
         return [
-            'ga_extension_form_documents' => [$this->pdf('ga-form.pdf')],
             'identity_document_documents' => [$this->pdf('ic.pdf')],
+            'admission_letter_documents' => [$this->pdf('admission.pdf')],
             'supervisor_letter_documents' => [$this->pdf('letter.pdf')],
-            'acceptance_or_paper_documents' => [$this->pdf('acceptance.pdf')],
         ];
     }
 
+    /** Every field the generated form needs (Concerns\FilesGaExtensions). */
     protected function gaFields(): array
     {
-        return [
-            'current_end_date' => '2026-12-01',
-            'requested_new_end_date' => '2027-06-01',
+        return $this->gaExtensionFields([
+            'current_end_date' => '2026-12-31',
+            'requested_new_end_date' => '2027-06-30',
             'reason_for_extension' => 'Fieldwork slipped two semesters and the analysis needs the assistantship to continue.',
-        ];
+        ]);
     }
 
     protected function draft(): Application
@@ -104,7 +106,7 @@ class DraftsTest extends TestCase
     {
         $this->actingAs($this->student)->post(route('ga-extension.draft.save'), [
             'reason_for_extension' => 'First thoughts.',
-            'ga_extension_form_documents' => [$this->pdf('ga-form.pdf')],
+            'admission_letter_documents' => [$this->pdf('ga-form.pdf')],
             'draft_step' => 1,
         ])->assertRedirect();
         $draft = $this->draft();
@@ -136,15 +138,15 @@ class DraftsTest extends TestCase
         $this->actingAs($this->student)->post(route('ga-extension.draft.save'), [
             'current_end_date' => 'not a date',
             'reason_for_extension' => str_repeat('x', 2001),
-            'ga_extension_form_documents' => [UploadedFile::fake()->create('virus.exe', 10, 'application/x-msdownload')],
-        ])->assertSessionHasErrors(['current_end_date', 'reason_for_extension', 'ga_extension_form_documents.0']);
+            'admission_letter_documents' => [UploadedFile::fake()->create('virus.exe', 10, 'application/x-msdownload')],
+        ])->assertSessionHasErrors(['current_end_date', 'reason_for_extension', 'admission_letter_documents.0']);
 
         $this->assertSame(0, Application::count());
     }
 
     public function test_a_ticked_file_is_removed_from_the_draft_and_the_disk(): void
     {
-        $this->actingAs($this->student)->post(route('ga-extension.draft.save'), ['ga_extension_form_documents' => [$this->pdf('old.pdf'), $this->pdf('keep.pdf')]]);
+        $this->actingAs($this->student)->post(route('ga-extension.draft.save'), ['admission_letter_documents' => [$this->pdf('old.pdf'), $this->pdf('keep.pdf')]]);
         $draft = $this->draft();
         $old = $draft->documents()->where('original_name', 'old.pdf')->sole();
 
@@ -157,13 +159,13 @@ class DraftsTest extends TestCase
     public function test_the_five_file_limit_counts_files_already_attached(): void
     {
         $this->actingAs($this->student)->post(route('ga-extension.draft.save'), [
-            'ga_extension_form_documents' => array_map(fn ($i) => $this->pdf("f{$i}.pdf"), range(1, 4)),
+            'admission_letter_documents' => array_map(fn ($i) => $this->pdf("f{$i}.pdf"), range(1, 4)),
         ]);
         $draft = $this->draft();
 
         $this->actingAs($this->student)->post(route('ga-extension.draft.update', $draft), [
-            'ga_extension_form_documents' => [$this->pdf('f5.pdf'), $this->pdf('f6.pdf')],
-        ])->assertSessionHasErrors('ga_extension_form_documents');
+            'admission_letter_documents' => [$this->pdf('f5.pdf'), $this->pdf('f6.pdf')],
+        ])->assertSessionHasErrors('admission_letter_documents');
 
         $this->assertSame(4, $draft->documents()->count());
     }
@@ -182,7 +184,7 @@ class DraftsTest extends TestCase
                 'current_end_date' => 'The current end date field is required.',
                 'requested_new_end_date' => 'The requested new end date field is required.',
                 'reason_for_extension' => 'Please give CGS at least a sentence or two of justification.',
-                'ga_extension_form_documents' => 'Attach at least one file for "GA Extension Form".',
+                'admission_letter_documents' => 'Attach at least one file for "Admission Letter & Offer Letter".',
             ]);
 
         $this->assertSame(Application::STATUS_DRAFT, $draft->fresh()->status);
@@ -191,20 +193,20 @@ class DraftsTest extends TestCase
 
     public function test_submitting_a_complete_draft_reuses_it_at_the_first_stage_with_its_files(): void
     {
-        // Session 1: the dates and two of the four documents.
+        // Session 1: the dates and two of the three required documents.
         $this->actingAs($this->student)->post(route('ga-extension.draft.save'), [
             'current_end_date' => '2026-12-01',
-            'ga_extension_form_documents' => [$this->pdf('ga-form.pdf')],
+            'admission_letter_documents' => [$this->pdf('admission.pdf')],
             'identity_document_documents' => [$this->pdf('ic.pdf')],
         ]);
         $draft = $this->draft();
         $saved = $draft->documents()->orderBy('id')->get();
 
-        // Session 2: the rest, then Submit.
+        // Session 2: the rest and a stage gate proof, then Submit.
         $this->actingAs($this->student)->post(route('ga-extension.store'), [
             'draft_id' => $draft->id,
             'supervisor_letter_documents' => [$this->pdf('letter.pdf')],
-            'acceptance_or_paper_documents' => [$this->pdf('acceptance.pdf')],
+            'published_article_documents' => [$this->pdf('paper.pdf')],
         ] + $this->gaFields())->assertSessionHasNoErrors()->assertRedirect(route('applications.index'));
 
         $this->assertSame(1, Application::count());
@@ -275,7 +277,7 @@ class DraftsTest extends TestCase
 
     public function test_another_student_cannot_open_change_submit_or_delete_my_draft(): void
     {
-        $this->actingAs($this->student)->post(route('ga-extension.draft.save'), ['reason_for_extension' => 'Mine.', 'ga_extension_form_documents' => [$this->pdf('mine.pdf')]]);
+        $this->actingAs($this->student)->post(route('ga-extension.draft.save'), ['reason_for_extension' => 'Mine.', 'admission_letter_documents' => [$this->pdf('mine.pdf')]]);
         $draft = $this->draft();
         $other = $this->student('22001002', 'other@test.my', ['supervisor_id' => $this->supervisor->id]);
 

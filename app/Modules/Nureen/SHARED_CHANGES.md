@@ -526,3 +526,36 @@ e. **`DocumentStore` has no way to remove a file.** Drafts let a student
    deletes the stored file and its `application_documents` row itself. A
    `DocumentStore::remove(ApplicationDocument)` would keep uploads and
    removals in one place.
+
+## 15. Generated GA Extension Form: a module download on Core's application page
+
+The GA Extension Form (UTP/CGS/001-A2) is no longer uploaded: Nureen generates
+it from what the student enters (`LetterRenderer::gaExtensionForm()`, route
+`ga-extension.form-pdf`). It is rendered fresh on every download, so it is not
+an `application_documents` row and doesn't appear in Core's document lists.
+No Core edit was made.
+
+**Where it is reachable today:**
+- **The student:** the GA Extension page (`/ga-extension/new`) lists their
+  submitted applications, each with a download link, and the draft form has
+  one too.
+- **Approvers:** the link is on the GA Extension queue's detail panel.
+
+**What Core shows today.** `applications.show` (Track My Applications → an
+application) lists the uploaded documents only. A student looking at a
+submitted GA Extension there won't see the generated form, and has to go back
+to the GA Extension page for it.
+
+**Proposed:** an optional contract a module can implement, e.g.
+
+```php
+interface ProvidesApplicationDownloads
+{
+    /** @return array<int, array{label: string, url: string}> */
+    public function downloadsFor(Application $application, User $viewer): array;
+}
+```
+
+Core's application page would list these next to the documents. Nureen
+would return the GA Extension Form, and the GA/GRA certification attachment
+could use it too. Modules that don't implement it are unaffected.
