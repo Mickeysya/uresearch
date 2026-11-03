@@ -198,11 +198,15 @@ class ExaminerNominationTest extends TestCase
 
         $this->assertSame(Application::STATUS_APPROVED, $application->fresh()->status);
 
-        foreach ($panel as $id) {
-            $this->assertNotNull(
-                Examiner::find($id)->assigned_until,
-                'Every seat on the panel is tied up once the chain finishes.'
-            );
+        // CGS confirmed: letters go to the two mains only, so release ties up
+        // the mains and leaves the backups Available on standby.
+        foreach (['internal_main_id', 'external_main_id'] as $main) {
+            $this->assertNotNull(Examiner::find($panel[$main])->assigned_until, "{$main} is tied up on release.");
+        }
+
+        foreach (['internal_backup_id', 'external_backup_id'] as $backup) {
+            $this->assertNull(Examiner::find($panel[$backup])->assigned_until, "{$backup} stays on standby.");
+            $this->assertTrue(Examiner::find($panel[$backup])->isEligible());
         }
     }
 

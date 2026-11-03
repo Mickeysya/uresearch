@@ -10,6 +10,8 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Exports\ExaminerListExport;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
+use App\Modules\Hani\Models\ExaminerSeatHistory;
+use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Notifications\NominationsNeedCompileReview;
 use App\Modules\Hani\Support\ConflictOfInterest;
 use App\Modules\Hani\Support\CrossDepartmentClashes;
@@ -169,11 +171,21 @@ class ExaminerNominationController extends Controller
                 'status' => Application::STATUS_DRAFT,
             ]);
 
-            ExaminerNomination::create([
+            $nomination = ExaminerNomination::create([
                 'application_id' => $application->id,
                 'thesis_title' => $data['thesis_title'],
                 'notes' => $data['notes'] ?? null,
             ] + array_combine($slots, array_map(fn ($slot) => $data[$slot] ?? null, $slots)));
+
+            // The panel's history starts here (Support\PanelSeats).
+            foreach ($slots as $slot) {
+                if (! empty($data[$slot])) {
+                    ExaminerSeatHistory::create([
+                        'nomination_id' => $nomination->id, 'seat' => $slot, 'examiner_id' => $data[$slot],
+                        'event' => 'nominated', 'actor_id' => $request->user()->id,
+                    ]);
+                }
+            }
 
             return $engine->submit($application);
         });
@@ -218,10 +230,10 @@ class ExaminerNominationController extends Controller
 
     /**
      * Overrides ApprovesApplications::decide() to close the loop the trait
-     * cannot know about: on approval, every examiner on the panel becomes
-     * tied up. This is the only place that writes Examiner::assigned_until --
-     * nothing else in the module ever will, so an examiner cannot silently
-     * drift back to "Available" while still on an active case.
+     * cannot know about: when the chain finishes, the panel is released and
+     * its two main examiners tied up (Support\PanelSeats, the only code that
+     * writes Examiner::assigned_until for a panel), so an examiner cannot
+     * silently drift back to "Available" while still on an active case.
      */
     public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
     {
@@ -252,7 +264,11 @@ class ExaminerNominationController extends Controller
         // first approval would hold four examiners for 180 days while the
         // list was still being argued over.
         if ($application->refresh()->status === Application::STATUS_APPROVED) {
-            $this->tieUpExaminers($application);
+            $nomination = ExaminerNomination::where('application_id', $application->id)->first();
+
+            if ($nomination) {
+                app(PanelSeats::class)->release($nomination, $request->user());
+            }
         }
 
         $verb = $finalising
@@ -505,64 +521,49 @@ class ExaminerNominationController extends Controller
         return $flags;
     }
 
-    /** Nominations approved but not yet marked as evaluated, for the Academic Executive to close out. */
-    public function pendingEvaluation()
+    /**
+     * Released panels whose evaluation has not been marked complete, for the
+     * Academic Executive to close out -- their own department's only.
+     */
+    public function pendingEvaluation(Request $request)
     {
+        $department = $request->user()->department;
+
         $nominations = ExaminerNomination::with(array_merge(
             ExaminerNomination::slotRelations(),
             ['application.student']
         ))
             ->whereHas('application', fn ($q) => $q->where('module_type', $this->moduleKey())
-                ->where('status', Application::STATUS_APPROVED))
+                ->where('status', Application::STATUS_APPROVED)
+                ->whereHas('student', fn ($s) => $s->where('department', $department)))
             ->get()
-            // Any seat still tied up means this panel has not been closed out.
-            ->filter(fn (ExaminerNomination $n) => $n->examiners()->contains(
-                fn (Examiner $e) => $e->assigned_until !== null
-            ))
+            // Any seat still tied up, or a main seat left empty by a decline,
+            // means this panel has not been closed out.
+            ->filter(fn (ExaminerNomination $n) => $n->examiners()->contains(fn (Examiner $e) => $e->assigned_until !== null)
+                || ! $n->internal_main_id || ! $n->external_main_id)
             ->values();
 
         return view('hani::examiner_nomination.pending_evaluation', ['nominations' => $nominations]);
     }
 
     /**
-     * Marks the evaluation as actually finished: clears the tie-up and
-     * starts the real 90-day gap from today, on every examiner on the panel.
+     * Marks the evaluation as actually finished: the examiners in the main
+     * seats start the real 90-day gap from today; a backup this panel had
+     * tied up is freed without one (Support\PanelSeats::complete()).
      * This is the other half of the lifecycle -- the gap Examiner::state()
      * enforces never begins until someone confirms the evaluation happened.
      */
-    public function markComplete(ExaminerNomination $nomination)
+    public function markComplete(Request $request, ExaminerNomination $nomination, PanelSeats $seats)
     {
         abort_unless($nomination->application->module_type === $this->moduleKey(), 404);
         abort_unless($nomination->application->status === Application::STATUS_APPROVED, 404);
+        // Their own department's panels only.
+        abort_unless($nomination->application->student?->department === $request->user()->department, 403);
 
-        DB::transaction(function () use ($nomination) {
-            foreach ($nomination->examiners() as $examiner) {
-                $examiner->update([
-                    'assigned_until' => null,
-                    'last_examination_date' => now(),
-                ]);
-            }
-        });
+        $seats->complete($nomination, $request->user());
 
         return redirect()
             ->route('examiner-nomination.pending-evaluation')
             ->with('status', "Evaluation marked complete for nomination #{$nomination->application_id}.");
-    }
-
-    protected function tieUpExaminers(Application $application): void
-    {
-        $nomination = ExaminerNomination::with(ExaminerNomination::slotRelations())
-            ->where('application_id', $application->id)
-            ->first();
-
-        if (! $nomination) {
-            return;
-        }
-
-        $assignedUntil = now()->addDays(Examiner::DEFAULT_ASSIGNMENT_DAYS);
-
-        foreach ($nomination->examiners() as $examiner) {
-            $examiner->update(['assigned_until' => $assignedUntil]);
-        }
     }
 }

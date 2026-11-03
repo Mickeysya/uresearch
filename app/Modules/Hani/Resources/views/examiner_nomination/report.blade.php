@@ -113,6 +113,10 @@
                                         <span class="rep-seat">
                                             {{ $application?->student?->matric_no }} · #{{ $application?->id }}
                                         </span>
+                                        {{-- Declines are recorded here, by the department's AE or the Senior Executive. --}}
+                                        @if ($application?->status === 'approved' && (auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS || auth()->user()->role === \App\Modules\Core\Support\Role::ACADEMIC_EXEC))
+                                            <a href="{{ route('examiner-panel.show', $nomination) }}" class="rep-seat">Manage panel</a>
+                                        @endif
                                     </td>
                                     <td>{{ $nomination->thesis_title }}</td>
 

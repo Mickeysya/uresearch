@@ -6,6 +6,7 @@ use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
 use App\Modules\Hani\Http\Controllers\ExaminerImportController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
 use App\Modules\Hani\Http\Controllers\ExaminerSuggestionController;
+use App\Modules\Hani\Http\Controllers\PanelController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\VivaController;
 use App\Modules\Hani\Http\Controllers\VivaScheduleController;
@@ -110,6 +111,14 @@ Route::middleware('auth')->group(function () {
             ->name('examiner-nomination.pending-evaluation');
         Route::post('/examiner-nomination/{nomination}/mark-complete', [ExaminerNominationController::class, 'markComplete'])
             ->name('examiner-nomination.mark-complete');
+    });
+
+    // A released panel: declines, backup promotion, replacements. The
+    // controller narrows an AE to their own department's panels.
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS)->group(function () {
+        Route::get('/examiner-nomination/panels/{nomination}', [PanelController::class, 'show'])->name('examiner-panel.show');
+        Route::post('/examiner-nomination/panels/{nomination}/decline', [PanelController::class, 'decline'])->name('examiner-panel.decline');
+        Route::post('/examiner-nomination/panels/{nomination}/replace', [PanelController::class, 'replace'])->name('examiner-panel.replace');
     });
 
     // Touchpoint 2: cross-department conflict compilation. The Academic

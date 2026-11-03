@@ -12,6 +12,19 @@
 
 return [
 
+    'appointments' => [
+
+        // CONFIRMED by CGS: appointment letters go to the two MAIN examiners
+        // only, so release ties up the two mains and the backups stay
+        // Available on standby. true would send letters to, and tie up, all
+        // four seats.
+        'letters_to_backups' => false,
+
+        // How long release ties an examiner up, absent a completed
+        // evaluation (Examiner::DEFAULT_ASSIGNMENT_DAYS). Confirmed: 180.
+        'assignment_days' => 180,
+    ],
+
     'departments' => [
 
         // Names that appear in CGS's spreadsheets (and older accounts) mapped
