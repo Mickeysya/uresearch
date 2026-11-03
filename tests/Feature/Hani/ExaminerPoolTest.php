@@ -270,4 +270,56 @@ class ExaminerPoolTest extends TestCase
 
         $this->actingAs($this->seniorExec())->get(route('examiner-admin.index'))->assertOk();
     }
+
+    public function test_an_examiner_keeps_expertise_keywords_and_publications(): void
+    {
+        $examiner = $this->external();
+        $examiner->forceFill(['updated_at' => now()->subDay()])->saveQuietly();
+        $before = $examiner->fresh()->updated_at;
+
+        $examiner->expertiseKeywords()->create(['keyword' => 'anomaly detection']);
+        $examiner->publications()->create([
+            'title' => 'Time-series anomaly detection for sensor streams',
+            'year' => 2024,
+            'coauthors' => 'Priya Ramasamy; Nurul Aina Aziz',
+        ]);
+
+        $examiner->refresh();
+        $this->assertSame(['anomaly detection'], $examiner->expertiseKeywords->pluck('keyword')->all());
+        $this->assertSame(['Priya Ramasamy', 'Nurul Aina Aziz'], $examiner->publications->first()->coauthorList());
+
+        // Touching the examiner is what invalidates the matcher's cached statistics.
+        $this->assertTrue($examiner->updated_at->gt($before));
+    }
+
+    public function test_an_examiner_may_be_in_the_pool_without_an_email(): void
+    {
+        $examiner = Examiner::create([
+            'name' => 'Dr No Email',
+            'department' => 'Computing',
+            'type' => Examiner::TYPE_INTERNAL,
+            'is_active' => true,
+        ]);
+
+        $this->assertTrue($examiner->needsEmail());
+        $this->assertFalse($this->internal()->needsEmail());
+    }
+
+    public function test_utp_links_are_part_of_the_external_record_only(): void
+    {
+        $this->actingAs($this->seniorExec())
+            ->post(route('examiner-admin.store'), [
+                'name' => 'Dr Internal',
+                'email' => 'dr.internal2@utp.edu.my',
+                'department' => 'Computing',
+                'type' => Examiner::TYPE_INTERNAL,
+                'current_utp_appointment' => 'Adjunct Professor',
+                'former_utp_until' => '2024-01-01',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $examiner = Examiner::sole();
+        $this->assertNull($examiner->current_utp_appointment);
+        $this->assertNull($examiner->former_utp_until);
+    }
 }
