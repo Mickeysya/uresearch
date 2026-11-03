@@ -149,7 +149,9 @@
                                 @if ($stage && $stage->role === $role)
                                     <a href="{{ route($module->queueRoute(), ['stage' => $stage->key, 'q' => '#'.$application->id]) }}" class="btn-secondary">Review</a>
                                 @endif
-                                <a href="{{ route('norhanis.pack.pdf', $application) }}" class="btn-secondary" title="Summary of the application as a PDF">PDF</a>
+                                <x-core::doc-link class="btn-secondary" title="Summary of the application as a PDF" data-region-swap-ignore
+                                    :url="route('norhanis.pack.pdf', [$application, 'inline' => 1])"
+                                    :download="route('norhanis.pack.pdf', $application)" name="Application summary">PDF</x-core::doc-link>
                                 <a href="{{ route('norhanis.pack.zip', $application) }}" class="btn-secondary" title="The summary and every file you may open, as a ZIP">ZIP</a>
                             </span>
                         </td>

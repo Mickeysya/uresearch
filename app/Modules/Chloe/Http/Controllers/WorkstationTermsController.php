@@ -5,6 +5,7 @@ namespace App\Modules\Chloe\Http\Controllers;
 use App\Modules\Chloe\Support\WorkstationHeaderLinks;
 use App\Modules\Core\Http\Controllers\Controller;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 
 /**
  * PART 4 #1. Public, not gated by `auth` -- every email this module sends
@@ -38,15 +39,21 @@ class WorkstationTermsController extends Controller
         ]);
     }
 
-    public function downloadPdf()
+    public function downloadPdf(Request $request)
     {
+        $name = 'Postgraduate Workstation - Term of Use (First Edition).pdf';
+        // ?inline=1 is Core's in-app viewer (components/doc-link).
+        $inline = $request->boolean('inline');
+
         if ($original = self::findOriginalPdf()) {
-            return response()->download($original, 'Postgraduate Workstation - Term of Use (First Edition).pdf');
+            return $inline
+                ? response()->file($original, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="'.$name.'"'])
+                : response()->download($original, $name);
         }
 
         $pdf = Pdf::loadView('chloe::workstation.terms-pdf');
 
-        return $pdf->download('Postgraduate Workstation - Term of Use (First Edition).pdf');
+        return $inline ? $pdf->stream($name) : $pdf->download($name);
     }
 
     /**

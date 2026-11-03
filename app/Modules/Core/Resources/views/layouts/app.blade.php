@@ -68,6 +68,10 @@
          see the partial for why it enhances the native input rather than
          replacing it. --}}
 
+    {{-- The in-app document viewer, for every [data-preview-url] link
+         (components/doc-link). --}}
+    <x-core::file-preview />
+
     @stack('scripts')
 </body>
 </html>

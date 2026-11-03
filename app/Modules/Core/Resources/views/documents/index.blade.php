@@ -64,12 +64,13 @@
                             </span>
 
                             <div class="doc-main">
-                                {{-- Not a same-page filter -- a download and a link to a
-                                     different page's detail view, so RegionSwap must leave
-                                     both as real navigations. --}}
-                                <a href="{{ $doc->url() }}" class="doc-name" data-region-swap-ignore>{{ $doc->original_name }}</a>
+                                {{-- Not a same-page filter -- the viewer, a download and a
+                                     link to a different page's detail view, so RegionSwap
+                                     must leave all three alone. --}}
+                                <x-core::doc-link :document="$doc" class="doc-name" data-region-swap-ignore>{{ $doc->original_name }}</x-core::doc-link>
                                 <p class="doc-meta">
                                     {{ $doc->doc_type }}
+                                    &middot; <a href="{{ $doc->url() }}" data-region-swap-ignore>Download</a>
                                     &middot; {{ $moduleLabels[$doc->application->module_type] ?? $doc->application->module_type }}
                                     &middot; <a href="{{ route('applications.show', $doc->application) }}" data-region-swap-ignore>{{ $doc->application->reference() }}</a>
                                     @unless ($isOwnList)

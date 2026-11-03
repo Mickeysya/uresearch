@@ -16,6 +16,9 @@
                      color: {{ $detail->isRevoked() ? 'var(--danger-fg)' : 'var(--success-fg)' }};">
             {{ $detail->isRevoked() ? 'Revoked' : 'Valid' }}
         </span>
+        &middot; <x-core::doc-link :url="route('supervision.letter.download', [$application, 'inline' => 1])"
+                                   :download="route('supervision.letter.download', $application)"
+                                   :name="'Appointment letter '.$detail->letter_reference" />
         &middot; <a href="{{ route('supervision.letter.download', $application) }}">Download</a>
     </p>
 

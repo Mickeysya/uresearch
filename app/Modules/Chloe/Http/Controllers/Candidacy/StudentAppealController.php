@@ -202,10 +202,19 @@ class StudentAppealController extends Controller
         return back()->with('wca_status', 'Document removed.');
     }
 
-    public function downloadDocument(CandidacyAppeal $appeal, CandidacyAppealDocument $document): StreamedResponse
+    public function downloadDocument(Request $request, CandidacyAppeal $appeal, CandidacyAppealDocument $document): StreamedResponse
     {
         Gate::authorize('downloadDocument', $appeal);
         abort_unless($document->candidacy_appeal_id === $appeal->id && Storage::disk('local')->exists($document->stored_path), 404);
+
+        // ?inline=1 is Core's in-app viewer (components/doc-link) -- only for
+        // what a browser can render; anything else is still a download.
+        if ($request->boolean('inline') && $mime = \App\Modules\Core\Support\FilePreview::inlineMime($document->original_name)) {
+            return Storage::disk('local')->response($document->stored_path, $document->original_name, [
+                'Content-Type' => $mime,
+                'X-Content-Type-Options' => 'nosniff',
+            ], 'inline');
+        }
 
         return Storage::disk('local')->download($document->stored_path, $document->original_name, ['Content-Type' => $document->mime]);
     }

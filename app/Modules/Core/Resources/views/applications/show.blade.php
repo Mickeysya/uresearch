@@ -188,7 +188,8 @@
                                 </p>
                             @endif
                             <div class="trk-actions">
-                                <a href="{{ $issued['document']->url() }}" class="{{ empty($issued['revoked_at']) ? 'btn' : 'btn-secondary' }}">Download letter (PDF)</a>
+                                <x-core::doc-link :document="$issued['document']" class="{{ empty($issued['revoked_at']) ? 'btn' : 'btn-secondary' }}">View letter</x-core::doc-link>
+                                <a href="{{ $issued['document']->url() }}" class="btn-secondary">Download (PDF)</a>
                                 @if (! empty($issued['verify_url']) && empty($issued['revoked_at']))
                                     <a href="{{ $issued['verify_url'] }}" class="btn-secondary">Verification page</a>
                                 @endif
@@ -205,8 +206,8 @@
                             <li>
                                 <span class="trk-file-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'doc'])</span>
                                 <span class="trk-file-text">
-                                    <a href="{{ $doc->url() }}">{{ $doc->original_name }}</a>
-                                    <span class="trk-muted">{{ $doc->doc_type }}@if ($size($doc->size_bytes)) · {{ $size($doc->size_bytes) }}@endif</span>
+                                    <x-core::doc-link :document="$doc">{{ $doc->original_name }}</x-core::doc-link>
+                                    <span class="trk-muted">{{ $doc->doc_type }}@if ($size($doc->size_bytes)) · {{ $size($doc->size_bytes) }}@endif · <a href="{{ $doc->url() }}">Download</a></span>
                                 </span>
                             </li>
                         @endforeach

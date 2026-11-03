@@ -109,7 +109,11 @@
         <ul class="wca-list">
             @foreach ($appeal->documents->sortBy('id') as $doc)
                 <li><span>{{ $doc->kind === 'official_form' ? 'Official appeal form' : 'Supporting' }}: {{ $doc->original_name }} <span class="wca-muted wca-small">(round {{ $doc->round_uploaded }})</span></span>
-                    <a class="wca-btn is-small" href="{{ route('candidacy.appeals.documents.download', [$appeal, $doc]) }}">Download</a></li>
+                    <span><x-core::doc-link class="wca-btn is-small" data-region-swap-ignore
+                            :url="route('candidacy.appeals.documents.download', [$appeal, $doc, 'inline' => 1])"
+                            :download="route('candidacy.appeals.documents.download', [$appeal, $doc])"
+                            :name="$doc->original_name" :kind="\App\Modules\Core\Support\FilePreview::kind($doc->original_name)" />
+                    <a class="wca-btn is-small" href="{{ route('candidacy.appeals.documents.download', [$appeal, $doc]) }}">Download</a></span></li>
             @endforeach
         </ul>
     @endif

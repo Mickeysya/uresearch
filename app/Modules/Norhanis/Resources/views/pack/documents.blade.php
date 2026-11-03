@@ -58,6 +58,8 @@
 
         <x-core::page-header :title="'Documents · '.$application->module()->label().' Application #'.$application->id"
                              :subtitle="$application->student?->name.' · '.$application->module()->summary($application)">
+            <x-core::doc-link class="btn-secondary" :url="route('norhanis.pack.pdf', [$application, 'inline' => 1])"
+                              :download="route('norhanis.pack.pdf', $application)" name="Application summary">View summary</x-core::doc-link>
             <a href="{{ route('norhanis.pack.pdf', $application) }}" class="btn-secondary">Download summary (PDF)</a>
             <a href="{{ route('norhanis.pack.zip', $application) }}" class="btn-secondary">Download all files (ZIP)</a>
         </x-core::page-header>

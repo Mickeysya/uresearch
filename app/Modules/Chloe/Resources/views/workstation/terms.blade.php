@@ -72,6 +72,8 @@
 
         <div class="card-divider"></div>
 
+        <x-core::doc-link :url="route('workstation.terms.pdf', ['inline' => 1])" :download="route('workstation.terms.pdf')"
+                          name="Postgraduate Workstation - Term of Use (First Edition).pdf"><button type="button">View PDF</button></x-core::doc-link>
         <a href="{{ route('workstation.terms.pdf') }}"><button type="button">Download PDF</button></a>
         {{--
             Shown only while no real PDF is found in

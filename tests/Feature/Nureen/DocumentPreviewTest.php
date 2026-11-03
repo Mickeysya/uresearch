@@ -217,7 +217,7 @@ class DocumentPreviewTest extends TestCase
             ->assertSee('href="'.$document->url().'"', false)
             ->assertSee('data-decision-bar', false)
             ->assertSee('Remarks (optional)')
-            ->assertSee('class="nureen-preview"', false);
+            ->assertSee('class="file-preview"', false);
     }
 
     public function test_ga_extension_shows_return_to_supervisor_in_the_bar_for_cgs_only(): void

@@ -61,11 +61,14 @@ class ApplicationPackController extends ApplicationOverviewController
     {
         $this->authorizePack($request, $registry, $application);
 
-        $this->log($request, $application, 'downloaded the application summary');
+        // ?inline=1 is Core's in-app viewer (components/doc-link).
+        $inline = $request->boolean('inline');
+
+        $this->log($request, $application, $inline ? 'viewed the application summary' : 'downloaded the application summary');
 
         return response($this->summaryPdf($request, $application), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$this->baseName($application).'-summary.pdf"',
+            'Content-Disposition' => ($inline ? 'inline' : 'attachment').'; filename="'.$this->baseName($application).'-summary.pdf"',
         ]);
     }
 

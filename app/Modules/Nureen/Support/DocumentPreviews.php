@@ -5,6 +5,7 @@ namespace App\Modules\Nureen\Support;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApplicationDocument;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\FilePreview;
 
 /**
  * The rows of an approver's Documents section: every file attached to the
@@ -32,23 +33,13 @@ final class DocumentPreviews
     /** pdf / image / word / other, from the file's extension. */
     public static function kind(string $filename): string
     {
-        return match (strtolower(pathinfo($filename, PATHINFO_EXTENSION))) {
-            'pdf' => self::PDF,
-            'jpg', 'jpeg', 'png' => self::IMAGE,
-            'doc', 'docx' => self::WORD,
-            default => self::OTHER,
-        };
+        return FilePreview::kind($filename);
     }
 
     /** The Content-Type to serve an inline preview with, or null if it can't be previewed. */
     public static function inlineMime(string $filename): ?string
     {
-        return match (strtolower(pathinfo($filename, PATHINFO_EXTENSION))) {
-            'pdf' => 'application/pdf',
-            'jpg', 'jpeg' => 'image/jpeg',
-            'png' => 'image/png',
-            default => null,
-        };
+        return FilePreview::inlineMime($filename);
     }
 
     /**
@@ -62,7 +53,7 @@ final class DocumentPreviews
             'label' => $document->doc_type,
             'name' => $document->original_name,
             'kind' => self::kind($document->original_name),
-            'view' => route('nureen.documents.view', $document),
+            'view' => $document->viewUrl(),
             'download' => $document->url(),
             'note' => null,
         ];

@@ -42,6 +42,8 @@ Route::middleware('auth')->group(function () {
         ->name('queue.decide-bulk');
 
     Route::get('/documents/{document}', [DocumentController::class, 'show'])->name('documents.show');
+    // The same file inline, for the in-app viewer (components/file-preview).
+    Route::get('/documents/{document}/view', [DocumentController::class, 'view'])->name('documents.view');
 
     // The notification feed. Real, for every role -- see NotificationController.
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');

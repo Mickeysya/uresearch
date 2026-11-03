@@ -18,5 +18,7 @@
     </div>
 
     @yield('content')
+    {{-- The in-app document viewer (components/doc-link). --}}
+    <x-core::file-preview />
 </body>
 </html>

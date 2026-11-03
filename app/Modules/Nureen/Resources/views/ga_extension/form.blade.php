@@ -301,7 +301,6 @@
 @endpush
 
 @include('core::partials.form-stepper')
-<x-nureen::file-preview />
 
 {{-- In the scripts stack, after form-stepper's own: the auto-download
      below navigates, and running it inline (before the stepper had set

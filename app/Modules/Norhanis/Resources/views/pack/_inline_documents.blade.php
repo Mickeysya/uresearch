@@ -1,7 +1,7 @@
 {{--
     The application's documents inside its queue card, like a course page on
-    ULearn: one row per file. Its name opens the PDF or image in a new tab,
-    so the queue stays where it was; Download saves it. Drawn at the end of
+    ULearn: one row per file. Its name opens the PDF or image in Core's
+    in-app viewer, so the queue stays where it was; Download saves it. Drawn at the end of
     each module's _detail partial, and replaces Core's plain list of the
     same files on that card (see pack/_styles).
 
@@ -23,9 +23,8 @@
                         <li class="pv-row">
                             @include('norhanis::pack._file_icon', ['label' => $pack::fileLabel($document)])
                             <span class="pv-title">
-                                {{-- A file the browser cannot show is downloaded instead. --}}
-                                <a href="{{ $pack::previewType($document) ? route('norhanis.pack.preview', $document) : $document->url() }}"
-                                   target="_blank" rel="noopener">{{ $document->doc_type }}</a>
+                                {{-- Core's in-app viewer; a file the browser cannot show offers its download. --}}
+                                <x-core::doc-link :document="$document">{{ $document->doc_type }}</x-core::doc-link>
                                 <span>{{ $document->original_name }}</span>
                             </span>
                             <a class="btn-secondary" href="{{ $document->url() }}">Download</a>

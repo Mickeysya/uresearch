@@ -13,7 +13,8 @@
            to {{ $detail->travel_end_date->format('j M Y') }}</p>
 
         @if ($currentDocument)
-            <p>Current file: <a href="{{ $currentDocument->url() }}">{{ $currentDocument->original_name }}</a></p>
+            <p>Current file: <x-core::doc-link :document="$currentDocument">{{ $currentDocument->original_name }}</x-core::doc-link>
+               · <a href="{{ $currentDocument->url() }}">Download</a></p>
         @else
             <p style="color: var(--text-grey);">No supporting document uploaded yet.</p>
         @endif

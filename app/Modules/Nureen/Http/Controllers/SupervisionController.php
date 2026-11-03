@@ -371,7 +371,10 @@ class SupervisionController extends Controller
             ->latest()
             ->firstOrFail();
 
-        return Storage::disk('local')->download($letter->path, $letter->original_name);
+        // ?inline=1 is Core's in-app viewer (components/doc-link).
+        return $request->boolean('inline')
+            ? Storage::disk('local')->response($letter->path, $letter->original_name, ['Content-Type' => 'application/pdf'], 'inline')
+            : Storage::disk('local')->download($letter->path, $letter->original_name);
     }
 
     /**

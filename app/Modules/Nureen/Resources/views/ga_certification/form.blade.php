@@ -245,7 +245,6 @@
     @endif
 </div>
 @include('core::partials.form-stepper')
-<x-nureen::file-preview />
 
 @push('head')
 <style>

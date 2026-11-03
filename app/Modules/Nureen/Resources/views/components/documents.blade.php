@@ -52,5 +52,4 @@
         .nureen-docs-actions .btn-secondary { min-height: 36px; padding: 6px 14px; font-size: var(--text-sm); }
         .nureen-docs-actions a:focus-visible { outline: 3px solid var(--navy); outline-offset: 2px; }
     </style>
-    <x-nureen::file-preview />
 @endonce

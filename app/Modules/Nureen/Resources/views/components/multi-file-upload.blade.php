@@ -71,7 +71,7 @@
         <ul class="doc-upload-existing" aria-label="{{ $label }}: already attached">
             @foreach ($existing as $document)
                 <li>
-                    <a href="{{ $document->url() }}">{{ $document->original_name }}</a>
+                    <x-core::doc-link :document="$document">{{ $document->original_name }}</x-core::doc-link>
                     <span class="queue-meta">saved {{ $document->created_at->format('j M, g:ia') }}</span>
                     <label class="doc-upload-remove">
                         <input type="checkbox" name="remove_documents[]" value="{{ $document->id }}"

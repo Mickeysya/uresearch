@@ -33,6 +33,12 @@ class ApplicationDocument extends Model
         return route('documents.show', $this);
     }
 
+    /** Inline, for the in-app viewer; url() is the download. */
+    public function viewUrl(): string
+    {
+        return route('documents.view', $this);
+    }
+
     public function exists(): bool
     {
         return Storage::disk('local')->exists($this->path);
