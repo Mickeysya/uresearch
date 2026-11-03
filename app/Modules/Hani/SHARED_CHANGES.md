@@ -196,3 +196,90 @@ Jason's binding, in `app/Modules/Jason/ModuleProvider.php` `register()`:
 ```php
 $this->app->bind(\App\Modules\Core\Contracts\SuppliesAppointmentDispatch::class, \App\Modules\Jason\Support\AppointmentDispatch::class);
 ```
+
+---
+
+## 5. Optional `approveLabel` on Core's decision form
+
+**Status:** proposed, not applied.
+
+**Reason.** At the examiner nomination's `cgs_final` stage, the Senior
+Executive's one Approve records two decisions, `cgs_final` and then
+`cgs_release` ("Finalise and release",
+`ExaminerNominationController::finaliseAndRelease()`). Core's decision form
+always labels the button "Approve". Until it can be relabelled, Hani's stage
+card shows a line beside it: "Approving this stage finalises the list AND
+releases it to CGS operations (two steps recorded)."
+
+**Impact.** Backward compatible. The prop defaults to "Approve", so every
+other module renders exactly as before.
+
+### File: `app/Modules/Core/Resources/views/components/decision-form.blade.php`
+
+```blade
+@props(['application', 'route', 'allowReturn' => false, 'returnAction' => null, 'approveLabel' => 'Approve'])
+...
+<button type="submit" name="decision" value="approve">{{ $approveLabel }}</button>
+```
+
+### File: `app/Modules/Core/Resources/views/partials/queue.blade.php`
+
+Pass it through. This is optional per queue, like `$returnRoute`:
+
+```blade
+<x-core::decision-form
+    :application="$application"
+    :route="route($decideRoute, $application)"
+    :allow-return="$allowReturn ?? false"
+    :approve-label="$approveLabel ?? 'Approve'"
+    :return-action="..." />
+```
+
+Hani's `examiner_nomination/queue.blade.php` would then pass
+`'approveLabel' => 'Finalise and release'` at `cgs_final`.
+
+---
+
+## 6. `TODO.md`: Hani's section is out of date (notes for whoever edits it)
+
+**Status:** for the team. `TODO.md` is shared, so Hani does not edit it.
+
+- **Missing entirely: Viva Voce Assessment** (`viva_voce`, `viva_softbound`).
+  It is built, and should be recorded:
+  - the eligibility checklist and the Notice of Thesis Submission
+  - the softbound thesis (Form #019)
+  - the AE acknowledgement, with the supervisor prompted to nominate examiners
+  - viva scheduling (date, venue, chairman, co-supervisor, calendar event)
+  - the student step trackers, and the single "Viva" sidebar entry (item 1
+    above)
+- **"Conflict detection has no feature test"**: done.
+  `tests/Feature/Hani/ConflictDetectionTest.php` covers Conflict Detection,
+  the compiled report's clash set, the form warning, the AE card and the
+  compile notification on one two-department fixture.
+- **Six-stage chain:** `cgs_release` (same key) now belongs to **Senior
+  Executive CGS** and is labelled "Release to CGS operations". At `cgs_final`
+  one Approve records both stages. Non-Executive CGS has read-only access to
+  the Examiner Report and is notified on release.
+- **Examiner pool:** now maintained by **Senior Executive CGS**, not
+  Non-Executive. New features:
+  - import from CGS's Excel layout or the UResearch template, with a preview
+  - an edit page
+  - expertise keywords and publications
+  - optional email ("Email needed")
+  - fuzzy duplicate flags with "Not the same person"
+- **Lifecycle:** release ties up the two **main** examiners only. CGS
+  confirmed that letters go to mains only. Declines are recorded on the panel
+  page:
+  - the backup is promoted, and the seat columns are updated
+  - the seat history is kept
+  - Non-Executive CGS is told who needs a letter
+
+  Pending Evaluation and mark-complete are scoped to the AE's department.
+- **New:**
+  - explainable examiner suggestions (TF-IDF, plain PHP)
+  - the conflict-of-interest pre-check (UTP/CGS/026)
+  - the `examiners:sweep` daily command
+  - the examiner availability dashboard
+  - `HaniDemoSeeder` (on demand)
+- **Test count:** Hani's own folder is now 126 tests
+  (`php artisan test tests/Feature/Hani`).
