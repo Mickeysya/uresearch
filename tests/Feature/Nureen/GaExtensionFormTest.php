@@ -279,12 +279,12 @@ class GaExtensionFormTest extends TestCase
     public function test_publications_round_trip_as_json_and_blank_rows_are_dropped(): void
     {
         $journal = [
-            'type' => 'journal', 'authors' => 'A. Danial, A. Rahman', 'year' => '2026',
+            'type' => 'journal', 'status' => 'published', 'authors' => 'A. Danial, A. Rahman', 'year' => '2026',
             'title' => 'Predicting attendance risk with sparse data', 'venue' => 'Journal of Educational Data Mining',
             'volume' => '18', 'pages' => '1-22', 'doi' => '10.1234/jedm.2026.001', 'issn' => '2157-2100',
             'database' => 'scopus', 'quartile' => 'Q1', 'impact_factor' => '3.21',
         ];
-        $conference = ['type' => 'conference', 'authors' => 'A. Danial', 'year' => '2025', 'title' => 'Early warning', 'venue' => 'ICEIT 2025'];
+        $conference = ['type' => 'conference', 'status' => 'published', 'authors' => 'A. Danial', 'year' => '2025', 'title' => 'Early warning', 'venue' => 'ICEIT 2025'];
 
         $application = $this->submit(['publications' => [$journal, ['title' => '', 'authors' => ''], $conference]]);
 
@@ -299,7 +299,7 @@ class GaExtensionFormTest extends TestCase
         $rows = $this->formData($application, $this->student)['publications'];
         $this->assertSame('Early warning', $rows[1]['title']);
         $this->assertNull($rows[2]);
-        $this->assertStringContainsString('A. Danial, A. Rahman (2026). Predicting attendance risk', GaExtensionDetail::citation($rows[0]));
+        $this->assertStringContainsString('A. Danial, A. Rahman (2026). Predicting attendance risk with sparse data (Published)', GaExtensionDetail::citation($rows[0]));
         $this->assertSame('Scopus, Q1', GaExtensionDetail::databaseAndQuartile($rows[0]));
     }
 
@@ -315,14 +315,14 @@ class GaExtensionFormTest extends TestCase
 
         $this->actingAs($this->student)
             ->post(route('ga-extension.store'), ['draft_id' => $draft->id] + $this->gaExtensionFields(['publications' => [['title' => 'Half done']]]) + $this->gaExtensionDocuments())
-            ->assertSessionHasErrors(['publications.0.type', 'publications.0.authors', 'publications.0.year', 'publications.0.venue']);
+            ->assertSessionHasErrors(['publications.0.type', 'publications.0.status', 'publications.0.authors', 'publications.0.year', 'publications.0.venue']);
     }
 
     public function test_a_bad_issn_is_rejected(): void
     {
         $this->actingAs($this->student)
             ->post(route('ga-extension.store'), $this->gaExtensionFields(['publications' => [
-                ['type' => 'journal', 'authors' => 'A', 'year' => '2025', 'title' => 'T', 'venue' => 'V', 'issn' => 'not-an-issn'],
+                ['type' => 'journal', 'status' => 'accepted', 'authors' => 'A', 'year' => '2025', 'title' => 'T', 'venue' => 'V', 'issn' => 'not-an-issn'],
             ]]) + $this->gaExtensionDocuments())
             ->assertSessionHasErrors(['publications.0.issn' => 'An ISSN looks like 1234-5678.']);
     }

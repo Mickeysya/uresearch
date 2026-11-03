@@ -44,7 +44,7 @@ class AttendanceEarlyWarning
         // (config nureen.attendance.excused_sessions). Re-derive it for the
         // few rows with excusals, so a change of rule takes effect at the
         // next check rather than leaving stale figures behind.
-        AttendanceRecord::where('sessions_excused', '>', 0)
+        AttendanceRecord::where(fn ($q) => $q->where('sessions_excused', '>', 0)->orWhere('leave_days', '>', 0))
             ->when($studentIds !== null, fn ($q) => $q->whereIn('student_id', $ids))
             ->get()
             ->each(function (AttendanceRecord $record) {
@@ -75,6 +75,16 @@ class AttendanceEarlyWarning
     /** @return array{newly_at_risk: bool, alerted: bool} */
     public function check(User $student): array
     {
+        // Not monitored (AttendanceScope): never evaluated or alerted. A
+        // state left over from before the scope changed is cleared, so the
+        // at-risk list and dashboards stop showing it.
+        if (! AttendanceScope::monitors($student)) {
+            AttendanceRiskState::where('student_id', $student->id)->update(['at_risk' => false, 'reason' => null, 'evaluated_at' => now()]);
+            AttendanceRecord::where('student_id', $student->id)->where('at_risk', true)->update(['at_risk' => false]);
+
+            return ['newly_at_risk' => false, 'alerted' => false];
+        }
+
         $assessment = AttendanceRiskEvaluator::assess($student->id);
 
         $state = AttendanceRiskState::firstOrNew(['student_id' => $student->id]);

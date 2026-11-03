@@ -132,14 +132,26 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
                 }
             }
 
+            // config('nureen.supervision.co_supervisor_approver'): the Dean
+            // of PGR's stage, after the Chair's -- see deanStageInUse().
+            if ($this->deanStageInUse()) {
+                array_splice($stages, array_search('chair', $keys, true) + 1, 0, [$this->approverStage('dean_pgr', 'endorsed')]);
+            }
+
             return $stages;
         }
 
-        return $this->chainFor($this->modeFor($application));
+        return $this->chainFor($this->modeFor($application), $this->approverFor($application));
     }
 
-    /** @return array<int, Stage> */
-    protected function chainFor(string $mode): array
+    /**
+     * @param  string  $approver  who approves after the supervisor: 'chair' (always, for a
+     *                            Main Supervisor request) or, for a Co-Supervisor request under
+     *                            config('nureen.supervision.co_supervisor_approver') = 'dean_pgr',
+     *                            the Dean of PGR. See approverFor().
+     * @return array<int, Stage>
+     */
+    protected function chainFor(string $mode, string $approver = 'chair'): array
     {
         $supervisorStage = new Stage(
             key: 'supervisor',
@@ -152,13 +164,7 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
         if ($mode === 'endorse') {
             return [
                 $supervisorStage,
-                new Stage(
-                    key: 'chair',
-                    label: 'Chair of Department',
-                    role: Role::CHAIR,
-                    decision: 'endorsed',
-                    queueTitle: 'Pending Department Approval',
-                ),
+                $this->approverStage($approver, 'endorsed'),
                 // Same Stage key as 'manual' mode's eligibility review, so
                 // an application sitting at cgs_review is found the same way
                 // whichever of the two it was submitted under. Endorsing
@@ -177,13 +183,7 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
         if ($mode === 'manual') {
             return [
                 $supervisorStage,
-                new Stage(
-                    key: 'chair',
-                    label: 'Chair of Department',
-                    role: Role::CHAIR,
-                    decision: 'endorsed',
-                    queueTitle: 'Pending Department Approval',
-                ),
+                $this->approverStage($approver, 'endorsed'),
                 new Stage(
                     key: 'cgs_review',
                     label: 'Non-Executive CGS',
@@ -196,15 +196,68 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
 
         return [
             $supervisorStage,
-            new Stage(
+            $this->approverStage($approver, 'approved'),
+        ];
+    }
+
+    /**
+     * The stage after the supervisor's: the Chair of Department (stage key
+     * 'chair', as it always was), or the Dean of PGR (key 'dean_pgr',
+     * Core's Role::DEAN_PGR). Stage keys are stored in rows, so neither
+     * ever changes.
+     */
+    protected function approverStage(string $approver, string $decision): Stage
+    {
+        return $approver === 'dean_pgr'
+            ? new Stage(
+                key: 'dean_pgr',
+                label: 'Dean of PGR',
+                role: Role::DEAN_PGR,
+                decision: $decision,
+                queueTitle: 'Pending Dean Approval',
+            )
+            : new Stage(
                 key: 'chair',
                 label: 'Chair of Department',
                 role: Role::CHAIR,
-                decision: 'approved',
+                decision: $decision,
                 queueTitle: 'Pending Department Approval',
-            ),
-        ];
+            );
     }
+
+    /**
+     * Who approves this application after the supervisor. A Co-Supervisor
+     * request runs the approver it was submitted under
+     * (co_supervisor_approver_snapshot); one submitted before the switch
+     * existed, and every Main Supervisor request, goes to the Chair.
+     */
+    public function approverFor(?Application $application): string
+    {
+        $detail = $application ? $this->detailFor($application) : null;
+
+        if (! $detail || $detail->appointment_role !== SupervisionDetail::ROLE_CO) {
+            return 'chair';
+        }
+
+        return $detail->co_supervisor_approver_snapshot === 'dean_pgr' ? 'dean_pgr' : 'chair';
+    }
+
+    /**
+     * Whether the Dean of PGR's stage belongs in the superset: while the
+     * switch is on, or while any request submitted under it still waits
+     * there -- so the Dean's queue is reachable for exactly as long as it
+     * can hold something.
+     */
+    protected function deanStageInUse(): bool
+    {
+        return $this->deanInUse ??= config('nureen.supervision.co_supervisor_approver') === 'dean_pgr'
+            || Application::where('module_type', $this->key())
+                ->where('status', Application::STATUS_PENDING)
+                ->where('current_stage', 'dean_pgr')
+                ->exists();
+    }
+
+    private ?bool $deanInUse = null;
 
     /**
      * 'endorse', 'automatic' or 'manual' -- the application's own snapshot when it has

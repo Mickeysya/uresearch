@@ -70,7 +70,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/supervision', [SupervisionController::class, 'store'])->name('supervision.store');
     });
 
-    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS]))->group(function () {
+    // DEAN_PGR: config('nureen.supervision.co_supervisor_approver') =
+    // 'dean_pgr' puts the Dean of PGR on Co-Supervisor requests; the engine
+    // still checks the role against the application's own stage.
+    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR, Role::NON_EXEC_CGS]))->group(function () {
         Route::get('/supervision/queue', [SupervisionController::class, 'queue'])->name('supervision.queue');
         Route::post('/supervision/{application}/decide', [SupervisionController::class, 'decide'])->name('supervision.decide');
     });
@@ -141,6 +144,10 @@ Route::middleware('auth')->group(function () {
         // The blank sheet to fill in. ?format=csv for CSV; .xlsx by default.
         Route::get('/attendance/template', [AttendanceController::class, 'template'])->name('attendance.template');
         Route::get('/attendance/at-risk', [AttendanceController::class, 'atRisk'])->name('attendance.at-risk');
+        // Approved annual leave per student, against the allowance --
+        // Support\AttendanceLeave, config('nureen.attendance.leave').
+        Route::get('/attendance/leave', [AttendanceController::class, 'leave'])->name('attendance.leave');
+        Route::post('/attendance/leave', [AttendanceController::class, 'recordLeave'])->name('attendance.leave.store');
         // Runs attendance:sync on demand -- see AttendanceController::syncNow().
         Route::post('/attendance/sync-now', [AttendanceController::class, 'syncNow'])->name('attendance.sync-now');
 

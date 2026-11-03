@@ -58,6 +58,7 @@ class GaExtensionController extends Controller
             'publicationOptions' => config('nureen.ga_extension.publications'),
             'declaration' => config('nureen.ga_extension.declaration'),
             'rules' => config('nureen.ga_extension.rules'),
+            'allowedLevels' => $this->allowedLevels(),
             'additionalFields' => config('nureen.ga_extension.additional_fields'),
             'draft' => $draft,
             'detail' => $draft ? GaExtensionDetail::where('application_id', $draft->id)->first() : null,
@@ -194,6 +195,16 @@ class GaExtensionController extends Controller
             'reason_for_extension' => ['required', 'string', 'min:20', 'max:2000'],
             'declaration' => ['accepted'],
         ] + $this->applicantRules(required: true, existing: $existing) + $this->publicationRules(required: true);
+
+        // config('nureen.ga_extension.allowed_levels'): the July 2026 form
+        // offers MSc and PhD, the Postgraduate Handbook says PhD only. The
+        // one handbook rule that blocks -- and only on submit, so a draft
+        // still saves.
+        $rules['level_of_study'][] = function (string $attribute, $value, \Closure $fail) {
+            if (filled($value) && ! array_key_exists($value, $this->allowedLevels())) {
+                $fail('GA extension is open to '.implode(' and ', $this->allowedLevels()).' students only. Contact CGS if you think this is wrong.');
+            }
+        };
 
         $messages = [
             'requested_new_end_date.after' => 'The new end date must be later than the current one.',
@@ -370,6 +381,14 @@ class GaExtensionController extends Controller
         return back()->with('status', "Section J saved for application #{$application->id}.");
     }
 
+    /** config('nureen.ga_extension.allowed_levels') as key => label, e.g. ['phd' => 'PhD']. */
+    protected function allowedLevels(): array
+    {
+        $options = config('nureen.ga_extension.applicant_fields.level_of_study.options');
+
+        return array_intersect_key($options, array_flip(config('nureen.ga_extension.allowed_levels')));
+    }
+
     /** config('nureen.ga_extension.applicant_fields'), less the bank fields when they are not collected. */
     protected function applicantFields(): array
     {
@@ -466,6 +485,7 @@ class GaExtensionController extends Controller
         return [
             'publications' => ['array', 'max:'.$config['max_rows']],
             'publications.*.type' => [$need, 'in:'.implode(',', array_keys($config['types']))],
+            'publications.*.status' => [$need, 'in:'.implode(',', array_keys($config['statuses']))],
             'publications.*.authors' => [$need, 'string', 'max:500'],
             'publications.*.year' => [$need, 'integer', 'between:1950,'.(now()->year + 1)],
             'publications.*.title' => [$need, 'string', 'max:300'],

@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 class AttendanceIngestor
 {
     /**
-     * @param  Collection<int, array{matric_no: mixed, period_end: mixed, sessions_attended: mixed, sessions_total: mixed, line?: int|string}>  $rows
+     * @param  Collection<int, array{matric_no: mixed, period_end: mixed, sessions_attended: mixed, sessions_total: mixed, leave_days?: mixed, line?: int|string}>  $rows
      */
     public function ingest(Collection $rows): IngestSummary
     {
@@ -31,8 +31,9 @@ class AttendanceIngestor
         $updated = 0;
         $problems = [];
         $newlyAtRisk = [];
+        $leaveStudents = [];
 
-        DB::transaction(function () use ($rows, &$added, &$updated, &$problems, &$newlyAtRisk) {
+        DB::transaction(function () use ($rows, &$added, &$updated, &$problems, &$newlyAtRisk, &$leaveStudents) {
             foreach ($rows as $row) {
                 $label = isset($row['line']) ? "Row {$row['line']}" : 'Row';
 
@@ -95,6 +96,28 @@ class AttendanceIngestor
                     continue;
                 }
 
+                // Approved annual leave, optional -- the same column for the
+                // manual upload, the inbox and the push API. Blank or absent
+                // keeps what is on file (AttendanceRecord::recordPeriod()).
+                $leaveRaw = $row['leave_days'] ?? null;
+                $leaveDays = null;
+
+                if ($leaveRaw !== null && trim((string) $leaveRaw) !== '') {
+                    if (! is_numeric($leaveRaw) || (int) $leaveRaw < 0 || (float) $leaveRaw != (int) $leaveRaw) {
+                        $problems[] = "{$label}: leave_days must be a whole number of days, 0 or more.";
+
+                        continue;
+                    }
+
+                    $leaveDays = (int) $leaveRaw;
+
+                    if ((int) $attended + $leaveDays * AttendanceRecord::sessionsPerLeaveDay() > (int) $total) {
+                        $problems[] = "{$label}: {$leaveDays} leave days plus {$attended} attended is more than the {$total} sessions in the period.";
+
+                        continue;
+                    }
+                }
+
                 // Whether this period already exists decides added vs
                 // updated for the summary -- recordPeriod() itself does not
                 // distinguish, it just upserts.
@@ -115,7 +138,12 @@ class AttendanceIngestor
                     $periodEnd,
                     (int) $attended,
                     (int) $total,
+                    $leaveDays,
                 );
+
+                if ($leaveDays !== null) {
+                    $leaveStudents[$student->id] = true;
+                }
 
                 $existed ? $updated++ : $added++;
 
@@ -140,6 +168,9 @@ class AttendanceIngestor
             rejected: count($problems),
             newlyAtRisk: count($newlyAtRisk),
             reasons: $problems,
+            // Students whose leave this sheet set and who are now over the
+            // allowance -- the caller warns CGS (AttendanceLeave).
+            leaveWarnings: app(AttendanceLeave::class)->warningsFor(array_keys($leaveStudents)),
         );
     }
 }

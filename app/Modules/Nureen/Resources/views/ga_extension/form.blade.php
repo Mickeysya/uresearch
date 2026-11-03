@@ -85,6 +85,21 @@
                 @continue(($field['step'] ?? 'details') !== 'details')
                 @include('nureen::ga_extension._field', ['key' => $key, 'field' => $field, 'detail' => $detail])
             @endforeach
+
+            {{-- config('nureen.ga_extension.allowed_levels'): when a level is
+                 not allowed, say so here; store() refuses it on submit. --}}
+            @if (count($allowedLevels) < count($applicantFields['level_of_study']['options']))
+                <p class="message-warning" data-level-blocked hidden>
+                    GA extension is open to {{ implode(' and ', $allowedLevels) }} students only, so this application can't be submitted.
+                    Contact CGS if you think this is wrong.
+                </p>
+                <p class="queue-meta" data-level-note data-allowed-levels="{{ json_encode(array_keys($allowedLevels)) }}">
+                    Open to {{ implode(' and ', $allowedLevels) }} students only.
+                </p>
+            @endif
+            <p class="message-warning" data-eligibility-note hidden>
+                GA is for full-time research students (Postgraduate Handbook 2025). You can still apply; CGS will see this when it reviews your application.
+            </p>
             </fieldset>
 
             {{-- ---- Section B (2 of 2) ---- --}}
@@ -285,6 +300,25 @@
 (function () {
     var form = document.getElementById('ga-extension-form');
     if (!form) return;
+
+    // Allowed levels and eligibility: notes only, the server decides.
+    var levelNote = form.querySelector('[data-level-note]');
+    var levelBlocked = form.querySelector('[data-level-blocked]');
+    var eligibility = form.querySelector('[data-eligibility-note]');
+    function syncEligibility() {
+        var level = form.querySelector('[name="level_of_study"]:checked');
+        if (levelNote && levelBlocked) {
+            var allowed = JSON.parse(levelNote.getAttribute('data-allowed-levels'));
+            levelBlocked.hidden = !(level && allowed.indexOf(level.value) === -1);
+        }
+        var mode = form.querySelector('[name="mode_of_study"]').value;
+        var type = form.querySelector('[name="study_type"]').value;
+        eligibility.hidden = !((mode && mode !== 'full_time') || (type && type !== 'research'));
+    }
+    form.querySelectorAll('[name="level_of_study"], [name="mode_of_study"], [name="study_type"]').forEach(function (input) {
+        input.addEventListener('change', syncEligibility);
+    });
+    syncEligibility();
 
     // Visa expiry: shown and required only for a student holding a visa.
     var visaOnly = form.querySelectorAll('[data-visa-only]');

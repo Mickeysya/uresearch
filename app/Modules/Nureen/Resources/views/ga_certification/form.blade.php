@@ -68,6 +68,16 @@
                 </select>
                 @error($name) <p class="field-error">{{ $message }}</p> @enderror
             @endforeach
+
+            {{-- GA and GRA are for full-time research students (Postgraduate
+                 Handbook 2025). A note, not a block: a former GA may still
+                 need a letter. CGS sees the same in its System checks. --}}
+            <p class="message-warning" data-eligibility-note
+               data-eligible="{{ json_encode(config('nureen.ga_certification.eligible')) }}"
+               @unless (($detail?->study_level && $detail->study_level !== 'research') || ($detail?->mode_of_study && $detail->mode_of_study !== 'full_time')) hidden @endunless>
+                GA and GRA appointments are for full-time research students. You can still request a letter (for example for an
+                appointment you held before), and CGS will check it.
+            </p>
             </fieldset>
 
             {{-- ---- 2. Application type ---- --}}
@@ -251,6 +261,21 @@
         if (! form) return;
 
         var typeSelect = document.getElementById('appointment_type');
+
+        // The eligibility note -- shown while the choices are not full-time research.
+        var note = form.querySelector('[data-eligibility-note]');
+        var eligible = JSON.parse(note.getAttribute('data-eligible'));
+        function syncEligibility() {
+            var off = Object.keys(eligible).some(function (name) {
+                var value = form.querySelector('[name="' + name + '"]').value;
+                return value !== '' && eligible[name].indexOf(value) === -1;
+            });
+            note.hidden = !off;
+        }
+        Object.keys(eligible).forEach(function (name) {
+            form.querySelector('[name="' + name + '"]').addEventListener('change', syncEligibility);
+        });
+        syncEligibility();
 
         // Only the fields for the chosen type are shown, and only those
         // are required, so what the student sees matches exactly what

@@ -17,6 +17,9 @@
                         @if ($record->sessions_excused > 0)
                             + {{ $record->sessions_excused }} excused by an approved appeal
                         @endif
+                        @if ($record->leave_days > 0)
+                            + {{ $record->leave_days }} {{ Str::plural('day', $record->leave_days) }} of approved leave
+                        @endif
                     </span>
                 </div>
                 <p>{{ $record->percentage }}%

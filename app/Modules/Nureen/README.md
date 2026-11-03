@@ -64,6 +64,82 @@
   `DocumentStore::storeGenerated()` attaches it, so the existing download
   route and permission check apply with no extra code.
 
+## Postgraduate Handbook 2025 rules
+
+These come from cross-checking each module against UTP's Postgraduate
+Handbook 2025, the GA Terms & Conditions and the CGS onboarding briefing.
+Every number and switch is in `config('nureen.*')`. New rules **warn** in the
+approver's System checks; the one exception, which blocks, is
+`ga_extension.allowed_levels` when CGS narrows it.
+
+**Who is full-time research.** Core's `users` table doesn't say
+(SHARED_CHANGES §16 proposes the fields). `Support\StudyProfile` takes it
+from, in order:
+1. the student's latest submitted GA/GRA Certification;
+2. the student's latest submitted GA Extension;
+3. `users.programme` text such as "PhD Part-Time" (mode and level only,
+   never research/coursework).
+
+Drafts never count.
+
+**Attendance.**
+- **Scope:** `attendance.scope`, `'all'` (default, as before) or
+  `'full_time_research'`. Under the second, only full-time research students
+  are risk-evaluated, flagged or alerted (`Support\AttendanceScope`, asked
+  by the evaluator, the early warning and `AttendanceProvider`, so Core's
+  dashboards agree). Students nothing is known about follow
+  `attendance.scope_unknown`, default `'include'`. Attendance is still
+  recorded and shown for everyone; an unmonitored student's card says "Not
+  monitored".
+- **Approved annual leave:** `attendance.leave` holds 14 days a year, split
+  January 5, May 4, September 5, with no carry-over.
+  - It is stored as `attendance_records.leave_days` and counted exactly like
+    appeal-excused sessions, under `excused_sessions`.
+  - It arrives two ways, both through the same column and recount:
+    - an optional fifth sheet column, `leave_days`. A blank keeps what is
+      recorded. It goes through `AttendanceIngestor`, so the manual upload,
+      the inbox and the push API behave identically;
+    - CGS's **Approved Leave** page (`/attendance/leave`), for a period
+      already on file.
+  - Going over a semester's or the year's allowance warns CGS: after an
+    upload, on the leave page and on the At-Risk page. The days still count.
+- **Alert email:** states the consequences. The GA/GRA allowance may be
+  suspended, registration may be barred, and an international student's
+  visa renewal may not be supported. This is wording only.
+
+**GA Extension** (added to System checks):
+- **Eligibility:** full-time by research (`ga_extension.eligible`). The form
+  gained a **Programme type** (Research/Coursework) field for it.
+- **Candidacy limit:** the requested end date must not pass admission +
+  `rules.max_candidacy_years` (MSc 4, PhD 8). No allowance is paid beyond
+  candidacy.
+- **PhD Stage Gate Level 3:** either option passes. (1) A PUBLISHED Q1/Q2
+  WoS article, or (2) one ACCEPTED and one PUBLISHED WoS/ERA/Scopus article.
+  Both read Section C (each journal row now has an Accepted/Published
+  status) plus the attached proofs, and the check says which option was met
+  or what each is missing (`rules.phd_level3`).
+- **`allowed_levels`:** default `['msc', 'phd']`, as on the July 2026 form.
+  Set it to `['phd']` (`NUREEN_GA_EXTENSION_ALLOWED_LEVELS=phd`) and an MSc
+  student sees why on the form and can't submit. A draft still saves.
+
+**Supervision:**
+- **A GA changing Main Supervisor** needs PGFAC approval first, so the
+  request needs a **PGFAC Approval Memo** upload (`supervision.pgfac_memo`).
+  - "Changing" means a Main Supervisor request while another is on record.
+  - "GA" means an active `GaAppointmentRecord` of a `ga_types` type. With no
+    record at all, the form asks the student.
+  - What was known at submission is stored on `supervision_details`, and
+    the approver's new System checks panel shows it with the memo.
+- **Co-Supervisor approver:** `supervision.co_supervisor_approver`, `'chair'`
+  (default) or `'dean_pgr'` (Core's existing Dean of PGR role). It is
+  snapshotted per request like `cgs_stage`. Main Supervisor requests always
+  go to the Chair.
+
+**GA/GRA Certification:** choosing Coursework, Part-time or Full-time ODL
+shows a note on the form and a warning in the System checks. It never
+blocks, because a former GA may still need a letter
+(`ga_certification.eligible`, `GaCertificationDetail::eligibilityCheck()`).
+
 ## The GA Extension Form, generated (UTP/CGS/001-A2)
 
 Students no longer fill in and upload the GA Extension Form. They enter the
@@ -436,6 +512,10 @@ role-scoped pending that decision.
 | `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday; the charter calendar agreeing with Core's shared one for every day of 2026; both holiday lists applied |
 | `GaExtensionFormTest` | every Section B field stored; profile fields not overridable; visa date required only with a visa; declaration on submit not draft; backdated refused; account/IC encrypted at rest, masked for supervisor, student and Senior Director, full at the CGS stage, never echoed, blank keeps; bank flag both ways; publications JSON round-trip, half-filled rows on drafts but not submit, ISSN format; Section A ticks and CGS ticks after CGS passes; Section E on both chains, a rejection, and after a return; Section J at the CGS stage only; who may download (owner incl. draft, chain approvers, not other students/supervisors/Chair, not the Director on the `cgs` chain); an old application with an uploaded form still renders |
 | `GaExtensionRulesTest` | each Terms and Conditions check passing and failing for MSc and PhD; the stage gate level at every boundary month; whole months since admission; the right proof per level and the old combined proof; unknown without data; every number read from config |
+| `AttendanceHandbookTest` | `StudyProfile` from the programme text, the latest declaration and never a draft; the scope switch both ways (a part-time student flagged and alerted under `'all'`, not under `'full_time_research'`, while a full-time research student still is), `scope_unknown` both ways, and a stale flag cleared; leave counted like excused sessions under both `excused_sessions` rules and taking a student out of risk; the `leave_days` column through the ingestor, the manual upload (with and without it) and the push API/sync, a blank keeping recorded leave, and bad values rejected; CGS recording leave (and the refusals); the allowance within, over a semester and over the year, warned after recording, after an upload and on the At-Risk page; the alert's handbook consequences for student and supervisor |
+| `GaExtensionHandbookTest` | eligibility pass/fail/unknown for MSc and PhD, with an ineligible student still submitting and the warning shown; the candidacy limit inside and past it for MSc and PhD, and from config; PhD Level 3 option 1, option 2, what each is missing, proofs needed beyond the listing, conference papers and status-less rows not counting, and MSc Level 3 unchanged; `allowed_levels` both ways (the message, the form note, a draft still saving, PhD accepted); a publication's status required on submit |
+| `SupervisionHandbookTest` | GA status from records (expired, GRA, active GA); the PGFAC memo required for a GA on record changing supervisor, and for a declared GA, but not for a declared or recorded non-GA, a first Main Supervisor or a Co-Supervisor; the question shown only with no record; System checks; older requests; the Co-Supervisor approver as Chair by default and Dean of PGR when switched (the Chair refused, the Dean deciding), Main requests still to the Chair, the snapshot surviving a config change, and the automatic-mode letter naming the Dean |
+| `CertificationHandbookTest` | the eligibility check pass/fail/unknown; a part-time student still submitting with CGS warned; an eligible request passing; the form note hidden until needed and shown for a coursework draft |
 | `DraftsTest` | empty draft saves (both modules); saving again updates the same draft and keeps files; light validation only; Remove deletes the file; the 5-file limit counts attached files; an incomplete draft fails submit with the normal messages; a complete one goes to pending at the first stage as the same application, files intact; a Certification switching GA→GRA relabels its files; another student (or staff) can't open, change, submit or delete it; delete removes everything; no queue, reminder or analytics sees a draft |
 | `ClientCharterTest` | each chain's expected date (GA Extension both modes, Supervision `'automatic'`, Certification), a `null` stage never inventing a date, overdue never giving a past date, a returned application timed from its actual stage, decided/draft returning nothing |
 | `ClientCharterDisplayTest` | the student page (pending shown, decided not, overdue message only when overdue, own rows only) and the queue's overdue marker and order |

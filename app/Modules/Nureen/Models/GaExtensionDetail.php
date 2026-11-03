@@ -15,7 +15,7 @@ class GaExtensionDetail extends Model
         'application_id', 'supervisor_id', 'current_end_date', 'requested_new_end_date', 'reason_for_extension',
         'additional_info', 'final_approver_snapshot', 'draft_step',
         // The GA Extension Form's Section B -- config('nureen.ga_extension.applicant_fields').
-        'mode_of_study', 'admission_date', 'candidature_period', 'level_of_study', 'contact_no', 'contact_email',
+        'mode_of_study', 'study_type', 'admission_date', 'candidature_period', 'level_of_study', 'contact_no', 'contact_email',
         'bank_name', 'bank_account_no', 'identity_number', 'holds_visa', 'visa_expiry_date',
         'publications', 'declaration_accepted_at',
         'cgs_remarks', 'cgs_remarks_by_id', 'cgs_remarks_at',
@@ -168,9 +168,11 @@ class GaExtensionDetail extends Model
             filled($row['pages'] ?? null) ? 'pp. '.$row['pages'] : null,
         ], 'filled'));
 
+        $status = config('nureen.ga_extension.publications.statuses')[$row['status'] ?? ''] ?? null;
+
         return implode('. ', array_filter([
             $head,
-            $row['title'] ?? null,
+            ($row['title'] ?? null).($status ? " ({$status})" : ''),
             $tail,
             filled($row['doi'] ?? null) ? 'DOI: '.$row['doi'] : null,
         ], 'filled'));

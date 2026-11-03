@@ -126,7 +126,7 @@
         <tr><td class="lbl">Name</td><td class="colon">:</td><td class="val" colspan="4">{{ $student?->name }}</td></tr>
         <tr>
             <td class="lbl">Student ID</td><td class="colon">:</td><td class="val" style="width: 26%;">{{ $student?->matric_no }}</td>
-            <td class="b" style="width: 18%;">Mode of study&nbsp;&nbsp;:</td><td class="val" colspan="2">{{ $detail->mode_of_study ? $detail->optionLabel('mode_of_study') : '' }}</td>
+            <td class="b" style="width: 18%;">Mode of study&nbsp;&nbsp;:</td><td class="val" colspan="2">{{ implode(' · ', array_filter([$detail->mode_of_study ? $detail->optionLabel('mode_of_study') : null, $detail->study_type ? $detail->optionLabel('study_type') : null])) }}</td>
         </tr>
         <tr>
             <td class="lbl">Admission Date</td><td class="colon">:</td><td class="val">{{ $detail->admission_date?->format('j M Y') }}</td>

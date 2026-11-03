@@ -70,6 +70,28 @@ class GaCertificationDetail extends Model
         return str_repeat('•', max(4, mb_strlen($value) - 4)).' '.$visible;
     }
 
+    /**
+     * GA and GRA are for full-time research students (Postgraduate
+     * Handbook 2025; config('nureen.ga_certification.eligible')). A warning
+     * for CGS, never a block: a former GA may still need a letter.
+     *
+     * @return array{status: 'pass'|'fail'|'unknown', reason: string}
+     */
+    public function eligibilityCheck(): array
+    {
+        if (! $this->study_level || ! $this->mode_of_study) {
+            return ['status' => 'unknown', 'reason' => 'Level and mode of study were not given (submitted before the online form).'];
+        }
+
+        $eligible = config('nureen.ga_certification.eligible');
+        $options = config('nureen.ga_certification.options');
+        $declared = ($options['study_level'][$this->study_level] ?? $this->study_level).' · '.($options['mode_of_study'][$this->mode_of_study] ?? $this->mode_of_study);
+
+        return in_array($this->study_level, $eligible['study_level'], true) && in_array($this->mode_of_study, $eligible['mode_of_study'], true)
+            ? ['status' => 'pass', 'reason' => "{$declared}."]
+            : ['status' => 'fail', 'reason' => "{$declared}: GA and GRA are for full-time research students. A former GA may still legitimately need a letter; check before approving."];
+    }
+
     /** "Master · Research · Full-time ODL", from config's option lists. */
     public function studySummary(): ?string
     {

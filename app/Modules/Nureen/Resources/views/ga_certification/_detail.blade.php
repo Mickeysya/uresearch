@@ -33,6 +33,27 @@
         <p>Purpose: {{ $detail->purpose }}</p>
     @endif
 
+    {{-- Postgraduate Handbook 2025: GA/GRA are for full-time research
+         students. A warning, not a block -- GaCertificationDetail::eligibilityCheck(). --}}
+    @php
+        $eligibility = $detail->eligibilityCheck();
+    @endphp
+    <div class="cert-checks">
+        <p class="cert-checks-title">System checks</p>
+        <p class="cert-check-{{ $eligibility['status'] }}">
+            {{ ['pass' => '✓', 'fail' => '✗', 'unknown' => '?'][$eligibility['status']] }} Full-time research student
+            <span class="queue-meta">{{ $eligibility['reason'] }}</span>
+        </p>
+    </div>
+    @once
+        <style>
+            .cert-checks { margin: var(--space-3) 0; padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
+            .cert-checks-title { margin: 0 0 var(--space-2); font-weight: var(--weight-semi); color: var(--text-dark); }
+            .cert-checks .queue-meta { display: block; margin-left: 1.3em; }
+            .cert-check-pass { color: var(--success-fg); } .cert-check-fail { color: var(--danger-fg); } .cert-check-unknown { color: var(--text-grey); }
+        </style>
+    @endonce
+
     @if ($detail->declaration_accepted_at)
         <p class="queue-meta">Declaration accepted {{ $detail->declaration_accepted_at->format('j M Y, g:i a') }}</p>
     @endif

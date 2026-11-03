@@ -90,6 +90,7 @@ class AttendanceAppealWorkflow implements WorkflowModule, ProvidesLinks, Decides
             Role::NON_EXEC_CGS => [
                 ['label' => 'Upload Attendance CSV', 'route' => 'attendance.upload.form'],
                 ['label' => 'At-Risk Students', 'route' => 'attendance.at-risk'],
+                ['label' => 'Approved Leave', 'route' => 'attendance.leave'],
             ],
             default => [],
         };

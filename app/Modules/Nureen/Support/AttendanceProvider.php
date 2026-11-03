@@ -42,6 +42,15 @@ class AttendanceProvider implements SuppliesAttendance
      */
     public function actionFor(User $student): ?array
     {
+        // UTrace attendance is not compulsory for this student (AttendanceScope).
+        if (! AttendanceScope::monitors($student)) {
+            return [
+                'label' => 'Attendance', 'value' => 'Not monitored',
+                'note' => 'UTrace attendance applies to full-time research students',
+                'pill' => 'View Attendance', 'pillTone' => 'muted', 'url' => route('attendance.overview'),
+            ];
+        }
+
         $target = app(AttendanceTarget::class)->for($student);
         $view = route('attendance.overview');
 
@@ -102,7 +111,9 @@ class AttendanceProvider implements SuppliesAttendance
             period_end: $record->period_end,
             sessions_attended: (int) $record->sessions_attended,
             sessions_total: (int) $record->sessions_total,
-            at_risk: (bool) $record->at_risk,
+            // A flag stored before the scope changed must not reach Core's
+            // dashboards for a student who is no longer monitored.
+            at_risk: (bool) $record->at_risk && AttendanceScope::monitors($record->student_id),
         );
     }
 }

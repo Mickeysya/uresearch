@@ -27,6 +27,7 @@ trait FilesGaExtensions
             'reason_for_extension' => 'Fieldwork at the Gurun plant slipped two semesters '
                 .'and the remaining analysis needs the assistantship to continue.',
             'mode_of_study' => 'full_time',
+            'study_type' => 'research',
             'admission_date' => now()->subMonths(8)->startOfMonth()->toDateString(),
             'candidature_period' => 'Mar 2026 – Feb 2028',
             'level_of_study' => 'msc',
