@@ -51,6 +51,13 @@
                    class="@error('email') is-invalid @enderror">
             @error('email') <p class="field-error">{{ $message }}</p> @enderror
 
+            @if ($examiner)
+                <label for="email_change_reason">Reason for an email change <span style="color: var(--text-grey)">(optional; kept in the examiner's contact history)</span></label>
+                <input type="text" name="email_change_reason" id="email_change_reason" maxlength="500" value="{{ old('email_change_reason') }}"
+                       placeholder="e.g. Moved to another university" class="@error('email_change_reason') is-invalid @enderror">
+                @error('email_change_reason') <p class="field-error">{{ $message }}</p> @enderror
+            @endif
+
             <label for="department">Department</label>
             <input type="text" name="department" id="department" required value="{{ old('department', $examiner?->department) }}"
                    class="@error('department') is-invalid @enderror">

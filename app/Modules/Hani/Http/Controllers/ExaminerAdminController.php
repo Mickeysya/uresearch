@@ -7,6 +7,7 @@ use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerReviewItem;
 use App\Modules\Hani\Support\Departments;
+use App\Modules\Hani\Support\ExaminerContact;
 use App\Modules\Hani\Support\DuplicateDetector;
 use App\Modules\Hani\Models\ExaminerDuplicateDismissal;
 use App\Modules\Hani\Support\Import\Cells;
@@ -153,11 +154,14 @@ class ExaminerAdminController extends Controller
         return view('hani::examiner_admin.form', ['examiner' => null]);
     }
 
-    public function store(Request $request, Departments $departments)
+    public function store(Request $request, Departments $departments, ExaminerContact $contact)
     {
         $data = $this->validated($request, $departments);
 
-        $examiner = Examiner::create(Arr::except($data, 'keywords') + ['is_active' => true]);
+        // The email goes in through ExaminerContact, so the history starts
+        // with where the first address came from.
+        $examiner = Examiner::create(Arr::except($data, ['keywords', 'email', 'email_change_reason']) + ['is_active' => true]);
+        $contact->changeEmail($examiner, $data['email'], $request->user(), 'manual', 'Added with the examiner.');
         $this->syncKeywords($examiner, $data['keywords']);
 
         return redirect()
@@ -174,7 +178,7 @@ class ExaminerAdminController extends Controller
      * The same rules as adding one. Availability is not edited here: going
      * Unavailable needs its reason modal on the pool list (toggleActive()).
      */
-    public function update(Request $request, Examiner $examiner, Departments $departments)
+    public function update(Request $request, Examiner $examiner, Departments $departments, ExaminerContact $contact)
     {
         $data = $this->validated($request, $departments, $examiner);
 
@@ -184,7 +188,8 @@ class ExaminerAdminController extends Controller
             $data += array_fill_keys(Examiner::EXTERNAL_FIELDS, null);
         }
 
-        $examiner->update(Arr::except($data, 'keywords'));
+        $examiner->update(Arr::except($data, ['keywords', 'email', 'email_change_reason']));
+        $contact->changeEmail($examiner, $data['email'], $request->user(), 'manual', $data['email_change_reason'] ?? null);
         $this->syncKeywords($examiner, $data['keywords']);
 
         return redirect()
@@ -201,6 +206,7 @@ class ExaminerAdminController extends Controller
             // column, and an examiner without one is still in the pool --
             // shown as "Email needed" and skipped by anything that writes.
             'email' => ['nullable', 'email', 'max:150', Rule::unique('examiners', 'email')->ignore($examiner?->id)],
+            'email_change_reason' => ['nullable', 'string', 'max:500'],
             'department' => ['required', 'string', 'max:150'],
             'faculty' => ['nullable', 'string', 'max:100'],
             'type' => ['required', 'in:internal,external'],

@@ -4,6 +4,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Http\Controllers\ConflictDetectionController;
 use App\Modules\Hani\Http\Controllers\ExaminerDashboardController;
 use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
+use App\Modules\Hani\Http\Controllers\ExaminerContactController;
 use App\Modules\Hani\Http\Controllers\ExaminerImportController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
 use App\Modules\Hani\Http\Controllers\ExaminerSuggestionController;
@@ -161,9 +162,19 @@ Route::middleware('auth')->group(function () {
 
     // ---- Examiner pool admin -------------------------------------------
     // Senior Executive CGS (Puan Waheeda) since 2026-11-03. Non-Executive CGS
-    // has no write access to the pool.
-    Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
+    // (Encik Syahmi, who sends the letters) reads the pool and may keep an
+    // examiner's EMAIL current, nothing else (2026-11-05).
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
+        Route::get('/examiners/{examiner}/email', [ExaminerContactController::class, 'editEmail'])->whereNumber('examiner')->name('examiner-admin.email.edit');
+        Route::put('/examiners/{examiner}/email', [ExaminerContactController::class, 'updateEmail'])->whereNumber('examiner')->name('examiner-admin.email.update');
+    });
+
+    // The examiner page. The controller decides who may open it.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)
+        ->get('/examiners/{examiner}', [ExaminerContactController::class, 'show'])->whereNumber('examiner')->name('examiner-admin.show');
+
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
         Route::get('/examiners/new', [ExaminerAdminController::class, 'create'])->name('examiner-admin.create');
         Route::post('/examiners', [ExaminerAdminController::class, 'store'])->name('examiner-admin.store');
         Route::post('/examiners/{examiner}/toggle-active', [ExaminerAdminController::class, 'toggleActive'])

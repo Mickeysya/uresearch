@@ -100,6 +100,12 @@ class Examiner extends Model
         return $this->hasMany(ExaminerPublication::class);
     }
 
+    /** Email changes, reports and confirmations, newest first. */
+    public function contactHistory(): HasMany
+    {
+        return $this->hasMany(ExaminerContactHistory::class)->latest('id');
+    }
+
     /**
      * True when there is no address to write to. CGS's pool file has no email
      * column, so an imported examiner can be in the pool without one; the

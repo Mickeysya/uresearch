@@ -2,7 +2,9 @@
 
 namespace App\Modules\Hani\Support\Import;
 
+use App\Modules\Core\Models\User;
 use App\Modules\Hani\Models\Examiner;
+use App\Modules\Hani\Support\ExaminerContact;
 use App\Modules\Hani\Models\ExaminerReviewItem;
 use App\Modules\Hani\Support\Departments;
 use App\Modules\Hani\Support\NameNormaliser;
@@ -207,9 +209,9 @@ class PoolImporter
      * @param  array<int, PoolRow>  $rows
      * @return array<string, int> counts by status, plus review items raised
      */
-    public function apply(array $rows, ?int $batchId = null): array
+    public function apply(array $rows, ?int $batchId = null, ?User $by = null): array
     {
-        return DB::transaction(function () use ($rows, $batchId) {
+        return DB::transaction(function () use ($rows, $batchId, $by) {
             $classified = $this->classify($rows);
             $counts = array_fill_keys(array_keys(self::LABELS), 0) + ['review_items' => 0, 'missing_email' => 0];
 
@@ -222,9 +224,16 @@ class PoolImporter
                     continue;
                 }
 
+                $before = $result['examiner']?->email;
                 $examiner = $result['examiner']
                     ? $this->update($result['examiner'], $row)
                     : Examiner::create($row->attributes + ['is_active' => true]);
+
+                // The import only ever fills a missing email (updatable()),
+                // and that goes in the contact history like any other change.
+                if ($examiner->email !== null && $examiner->email !== $before) {
+                    app(ExaminerContact::class)->log($examiner, $before, $examiner->email, $by, 'import', $batchId ? "Import batch #{$batchId}" : null);
+                }
 
                 $this->syncKeywords($examiner, $row);
                 $this->addPublications($examiner, $row);

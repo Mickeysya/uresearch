@@ -102,7 +102,7 @@ class ExaminerImportController extends Controller
     {
         $this->authoriseBatch($request, $batch);
 
-        $summary = $importer->apply($batch->poolRows(), $batch->id);
+        $summary = $importer->apply($batch->poolRows(), $batch->id, $request->user());
         $batch->update(['summary' => $summary, 'confirmed_at' => now()]);
 
         $parts = array_filter([
