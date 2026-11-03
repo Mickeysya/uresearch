@@ -25,6 +25,15 @@
     @if ($nomination->notes)
         <p>Notes: {{ $nomination->notes }}</p>
     @endif
+
+    {{-- Core's decision form always reads "Approve"; until it takes a label
+         (app/Modules/Hani/SHARED_CHANGES.md), this says what Approve does here.
+         See ExaminerNominationController::finaliseAndRelease(). --}}
+    @if ($application->current_stage === \App\Modules\Hani\Http\Controllers\ExaminerNominationController::FINALISE_STAGE)
+        <p class="message-warning">
+            Approving this stage finalises the list AND releases it to CGS operations (two steps recorded).
+        </p>
+    @endif
 @else
     <p style="color: var(--text-grey);">Nomination record missing for this application.</p>
 @endif

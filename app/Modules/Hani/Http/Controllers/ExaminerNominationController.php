@@ -33,6 +33,9 @@ class ExaminerNominationController extends Controller
 
     protected const RETURN_TARGET = 'academic_exec';
 
+    /** The stage whose Approve also releases the list -- see finaliseAndRelease(). */
+    public const FINALISE_STAGE = 'cgs_final';
+
     /** Who may read the compiled list, and whether they see every department or one. */
     protected const REPORT_ROLES = [
         Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS,
@@ -191,8 +194,12 @@ class ExaminerNominationController extends Controller
             'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        $finalising = $data['decision'] === 'approve' && $application->current_stage === self::FINALISE_STAGE;
+
         try {
-            $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
+            $finalising
+                ? $this->finaliseAndRelease($application, $request->user(), $engine, $data['remarks'] ?? null)
+                : $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
         } catch (UnauthorizedException $e) {
             return back()->with('error', $e->getMessage());
         } catch (\LogicException $e) {
@@ -208,9 +215,44 @@ class ExaminerNominationController extends Controller
             $this->tieUpExaminers($application);
         }
 
-        $verb = $data['decision'] === 'approve' ? 'approved' : 'rejected';
+        $verb = $finalising
+            ? 'finalised and released to CGS operations'
+            : ($data['decision'] === 'approve' ? 'approved' : 'rejected');
 
         return back()->with('status', "Application #{$application->id} {$verb}.");
+    }
+
+    /**
+     * "Finalise and release": the Senior Executive's one Approve at cgs_final
+     * records BOTH remaining stages, cgs_final then cgs_release, each through
+     * the engine, so approval_history keeps two rows and the audit trail reads
+     * exactly as if she had clicked twice.
+     *
+     * One transaction, with the application row locked first. Two tabs (or a
+     * double click) would otherwise both read cgs_final and both try to walk
+     * the list forward; the second now waits, re-reads, finds it no longer at
+     * cgs_final and stops. The engine's own transactions nest inside this one
+     * as savepoints, and its after-commit notifications wait for this outer
+     * commit -- so if the second decision fails, the first is undone too and
+     * nobody is told anything.
+     */
+    protected function finaliseAndRelease(Application $application, \App\Modules\Core\Models\User $actor, WorkflowEngine $engine, ?string $remarks): void
+    {
+        DB::transaction(function () use ($application, $actor, $engine, $remarks) {
+            $locked = Application::whereKey($application->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status !== Application::STATUS_PENDING || $locked->current_stage !== self::FINALISE_STAGE) {
+                throw new \LogicException("Application #{$application->id} is no longer awaiting finalisation.");
+            }
+
+            $engine->decide($locked, $actor, 'approve', $remarks);
+
+            // The engine refreshed $locked; it now sits at cgs_release, which
+            // the same role owns, so the second decision passes the same check.
+            $engine->decide($locked, $actor, 'approve', $remarks ?? 'Released together with finalisation.');
+        });
+
+        $application->refresh();
     }
 
     /**

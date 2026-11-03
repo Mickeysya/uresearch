@@ -86,19 +86,19 @@ class ExaminerNominationTest extends TestCase
 
     /**
      * Whoever acts at a stage above the department. Memoised because the
-     * Senior Executive owns two of them (cgs_compile and cgs_final) and a
+     * Senior Executive owns three of them (cgs_compile, cgs_final, cgs_release) and a
      * test often needs the same Dean again afterwards -- calling the
      * MakesUsers helper twice inserts the same email twice.
      */
     protected function actorFor(string $stage): User
     {
         return $this->chainActors[$stage] ??= match ($stage) {
-            'cgs_compile', 'cgs_final' => $this->chainActors['cgs_compile']
+            'cgs_compile', 'cgs_final', 'cgs_release' => $this->chainActors['cgs_compile']
                 ?? $this->chainActors['cgs_final']
+                ?? $this->chainActors['cgs_release']
                 ?? $this->seniorExec(),
             'senior_director' => $this->seniorDirector(),
             'dean' => $this->dean(),
-            'cgs_release' => $this->cgs(),
         };
     }
 
@@ -111,7 +111,10 @@ class ExaminerNominationTest extends TestCase
         foreach (['cgs_compile', 'senior_director', 'dean', 'cgs_final', 'cgs_release'] as $stage) {
             $actor = $this->actorFor($stage);
 
-            if ($application->fresh()->current_stage === $stageKey) {
+            $fresh = $application->fresh();
+
+            // Finished: at cgs_final one Approve records cgs_release as well.
+            if ($fresh->current_stage === $stageKey || $fresh->status !== Application::STATUS_PENDING) {
                 return;
             }
 
@@ -349,5 +352,88 @@ class ExaminerNominationTest extends TestCase
         $this->actingAs($student)
             ->get(route('examiner-nomination.report'))
             ->assertForbidden();
+    }
+
+    /** Files a full panel and approves it to the given stage. */
+    protected function filedAndAdvancedTo(string $stageKey): Application
+    {
+        [$supervisor, $student, $ae] = $this->cast();
+
+        $this->actingAs($supervisor)->post(route('examiner-nomination.store'), [
+            'student_id' => $student->id,
+            'thesis_title' => 'A Study of Something',
+        ] + $this->panel());
+
+        $application = Application::sole();
+        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->advanceTo($application, $stageKey);
+
+        return $application->fresh();
+    }
+
+    public function test_finalise_and_release_records_both_stages_in_one_approve(): void
+    {
+        $application = $this->filedAndAdvancedTo('cgs_final');
+        $this->assertSame('cgs_final', $application->current_stage);
+
+        $this->actingAs($this->actorFor('cgs_final'))
+            ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve', 'remarks' => 'Final list.'])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status', "Application #{$application->id} finalised and released to CGS operations.");
+
+        $application->refresh();
+        $this->assertSame(Application::STATUS_APPROVED, $application->status);
+
+        // Two rows, in order, both by the Senior Executive.
+        $history = \App\Modules\Core\Models\ApprovalHistory::where('application_id', $application->id)
+            ->whereIn('stage_key', ['cgs_final', 'cgs_release'])
+            ->orderBy('id')
+            ->get();
+
+        $this->assertSame(['cgs_final', 'cgs_release'], $history->pluck('stage_key')->all());
+        $this->assertSame(['finalised', 'released'], $history->pluck('decision')->all());
+        $this->assertSame([$this->actorFor('cgs_final')->id], $history->pluck('approver_id')->unique()->values()->all());
+
+        // A second click (another tab) is refused, not recorded twice.
+        $this->actingAs($this->actorFor('cgs_final'))
+            ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve'])
+            ->assertSessionHas('error');
+
+        $this->assertSame(2, \App\Modules\Core\Models\ApprovalHistory::where('application_id', $application->id)
+            ->whereIn('stage_key', ['cgs_final', 'cgs_release'])->count());
+    }
+
+    public function test_the_finalise_card_says_approve_also_releases(): void
+    {
+        $application = $this->filedAndAdvancedTo('cgs_final');
+
+        $this->actingAs($this->actorFor('cgs_final'))
+            ->get(route('examiner-nomination.queue', ['stage' => 'cgs_final']))
+            ->assertOk()
+            ->assertSee('Approving this stage finalises the list AND releases it to CGS operations (two steps recorded).');
+    }
+
+    public function test_the_release_stage_belongs_to_the_senior_executive(): void
+    {
+        $stage = collect((new \App\Modules\Hani\Workflows\ExaminerNominationWorkflow())->stages())
+            ->firstWhere('key', 'cgs_release');
+
+        $this->assertSame(\App\Modules\Core\Support\Role::SENIOR_EXEC_CGS, $stage->role);
+        $this->assertSame('Release to CGS operations', $stage->label);
+    }
+
+    public function test_non_executive_cgs_reads_the_report_and_nothing_else_here(): void
+    {
+        $application = $this->filedAndAdvancedTo('cgs_compile');
+        $nonExec = $this->cgs();
+
+        $this->actingAs($nonExec)->get(route('examiner-nomination.report'))->assertOk();
+        $this->actingAs($nonExec)->get(route('examiner-nomination.export', ['format' => 'csv']))->assertOk();
+
+        $this->actingAs($nonExec)->get(route('examiner-nomination.queue'))->assertForbidden();
+        $this->actingAs($nonExec)
+            ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve'])
+            ->assertForbidden();
+        $this->actingAs($nonExec)->get(route('conflict-detection.index'))->assertForbidden();
     }
 }

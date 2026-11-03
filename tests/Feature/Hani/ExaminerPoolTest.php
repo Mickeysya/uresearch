@@ -60,7 +60,7 @@ class ExaminerPoolTest extends TestCase
         $this->internal();
         $this->external();
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.index', ['type' => Examiner::TYPE_EXTERNAL]))
             ->assertOk()
             ->assertSee('Faculty Approval')
@@ -78,7 +78,7 @@ class ExaminerPoolTest extends TestCase
         $this->internal();
         $this->external();
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.index', ['type' => Examiner::TYPE_INTERNAL]))
             ->assertOk()
             ->assertSee('Approved Internal Examiner')
@@ -94,7 +94,7 @@ class ExaminerPoolTest extends TestCase
         $this->internal();
         $this->external();
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.index'))
             ->assertOk()
             ->assertSee('AP Dr Low Tang Jung')
@@ -108,7 +108,7 @@ class ExaminerPoolTest extends TestCase
         $external = $this->external();           // assigned
         $external->update(['assigned_until' => now()->addDays(30)]);
 
-        $cgs = $this->cgs();
+        $cgs = $this->seniorExec();
 
         $internalCounts = $this->actingAs($cgs)
             ->get(route('examiner-admin.index', ['type' => Examiner::TYPE_INTERNAL]))
@@ -144,7 +144,7 @@ class ExaminerPoolTest extends TestCase
             'thesis_title' => 'A Study of Something',
         ]);
 
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.index', ['type' => Examiner::TYPE_EXTERNAL]))
             ->assertOk()
             ->assertSee($student->name.'_'.$student->matric_no);
@@ -152,7 +152,7 @@ class ExaminerPoolTest extends TestCase
 
     public function test_an_internal_examiner_cannot_be_given_an_external_record(): void
     {
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->post(route('examiner-admin.store'), [
                 'name' => 'Dr Internal',
                 'email' => 'dr.internal@utp.edu.my',
@@ -174,7 +174,7 @@ class ExaminerPoolTest extends TestCase
 
     public function test_an_external_examiner_must_say_where_they_are_from(): void
     {
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->post(route('examiner-admin.store'), [
                 'name' => 'Dr External',
                 'email' => 'dr.external@elsewhere.edu.my',
@@ -188,7 +188,7 @@ class ExaminerPoolTest extends TestCase
 
     public function test_an_external_examiner_keeps_their_record(): void
     {
-        $this->actingAs($this->cgs())
+        $this->actingAs($this->seniorExec())
             ->post(route('examiner-admin.store'), [
                 'name' => 'Dr External',
                 'email' => 'dr.external@elsewhere.edu.my',
@@ -226,7 +226,7 @@ class ExaminerPoolTest extends TestCase
      */
     public function test_the_add_examiner_form_is_a_stepper(): void
     {
-        $html = $this->actingAs($this->cgs())
+        $html = $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.create'))
             ->assertOk()
             ->getContent();
@@ -249,11 +249,25 @@ class ExaminerPoolTest extends TestCase
      */
     public function test_the_external_record_is_disabled_for_an_internal_examiner(): void
     {
-        $html = $this->actingAs($this->cgs())
+        $html = $this->actingAs($this->seniorExec())
             ->get(route('examiner-admin.create'))
             ->assertOk()
             ->getContent();
 
         $this->assertMatchesRegularExpression('/id="external-fields"[^>]*hidden disabled/s', $html);
+    }
+
+    public function test_only_the_senior_executive_maintains_the_pool(): void
+    {
+        $examiner = $this->internal();
+
+        // Non-Executive CGS reads the released list elsewhere; the pool is not theirs.
+        $nonExec = $this->cgs();
+        $this->actingAs($nonExec)->get(route('examiner-admin.index'))->assertForbidden();
+        $this->actingAs($nonExec)->get(route('examiner-admin.create'))->assertForbidden();
+        $this->actingAs($nonExec)->post(route('examiner-admin.store'), [])->assertForbidden();
+        $this->actingAs($nonExec)->post(route('examiner-admin.toggle-active', $examiner))->assertForbidden();
+
+        $this->actingAs($this->seniorExec())->get(route('examiner-admin.index'))->assertOk();
     }
 }

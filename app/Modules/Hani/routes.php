@@ -64,9 +64,12 @@ Route::middleware('auth')->group(function () {
     // WorkflowEngine decides what each of them is allowed to do with it, so
     // one route per action is enough for all six stages. See
     // ExaminerNominationWorkflow for the chain itself.
+    // Non-Executive CGS owns no stage here since 2026-11-03 (the Senior
+    // Executive releases the list), so is not on the queue routes; they keep
+    // the compiled list below, read-only.
     Route::middleware('role:'.implode(',', [
         Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS,
-        Role::DEAN_PGR, Role::NON_EXEC_CGS,
+        Role::DEAN_PGR,
     ]))->group(function () {
         Route::get('/examiner-nomination/queue', [ExaminerNominationController::class, 'queue'])
             ->name('examiner-nomination.queue');
@@ -79,7 +82,12 @@ Route::middleware('auth')->group(function () {
         // to WorkflowEngine::returnTo(), not to a middleware list.
         Route::post('/examiner-nomination/{application}/return', [ExaminerNominationController::class, 'returnToDepartment'])
             ->name('examiner-nomination.return');
+    });
 
+    Route::middleware('role:'.implode(',', [
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS,
+        Role::DEAN_PGR, Role::NON_EXEC_CGS,
+    ]))->group(function () {
         // The compiled list, and the same rows as a file.
         Route::get('/examiner-nomination/report', [ExaminerNominationController::class, 'report'])
             ->name('examiner-nomination.report');
@@ -94,14 +102,20 @@ Route::middleware('auth')->group(function () {
             ->name('examiner-nomination.pending-evaluation');
         Route::post('/examiner-nomination/{nomination}/mark-complete', [ExaminerNominationController::class, 'markComplete'])
             ->name('examiner-nomination.mark-complete');
+    });
 
-        // Touchpoint 2: cross-department conflict compilation.
+    // Touchpoint 2: cross-department conflict compilation. The Academic
+    // Executive for their department; the Senior Executive across all of
+    // them, since cgs_compile is where the department lists are merged.
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS)->group(function () {
         Route::get('/examiner-nomination/conflicts', [ConflictDetectionController::class, 'index'])
             ->name('conflict-detection.index');
     });
 
     // ---- Examiner pool admin -------------------------------------------
-    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+    // Senior Executive CGS (Puan Waheeda) since 2026-11-03. Non-Executive CGS
+    // has no write access to the pool.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
         Route::get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
         Route::get('/examiners/new', [ExaminerAdminController::class, 'create'])->name('examiner-admin.create');
         Route::post('/examiners', [ExaminerAdminController::class, 'store'])->name('examiner-admin.store');

@@ -15,6 +15,11 @@ use Illuminate\Support\ServiceProvider;
  */
 class ModuleProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        $this->mergeConfigFrom(__DIR__.'/config/hani.php', 'hani');
+    }
+
     public function boot(ModuleRegistry $registry): void
     {
         $registry->register(new ExaminerNominationWorkflow());
