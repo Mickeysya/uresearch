@@ -17,7 +17,7 @@
         </p>
 
         <table class="data-table">
-            <thead><tr><th>Seat</th><th>Examiner</th><th>State</th><th></th></tr></thead>
+            <thead><tr><th>Seat</th><th>Examiner</th><th>State</th>@if ($lettersSent !== null)<th>Appointment letter</th>@endif<th></th></tr></thead>
             <tbody>
                 @foreach (\App\Modules\Hani\Models\ExaminerNomination::SLOTS as $seat => $label)
                     @php($examiner = $nomination->{\Illuminate\Support\Str::camel(str_replace('_id', '', $seat))})
@@ -36,6 +36,15 @@
                                 —
                             @endif
                         </td>
+                        @if ($lettersSent !== null)
+                            <td>
+                                @if (array_key_exists($seat, $lettersSent))
+                                    {{ $lettersSent[$seat] ? 'Sent '.$lettersSent[$seat]->format('j M Y') : 'Not sent yet' }}
+                                @else
+                                    —
+                                @endif
+                            </td>
+                        @endif
                         <td>
                             @if ($examiner && array_key_exists($seat, \App\Modules\Hani\Support\PanelSeats::MAINS))
                                 <details>

@@ -29,11 +29,16 @@ class ExaminerListExport implements FromArray, WithHeadings
     public function headings(): array
     {
         return [
-            'Application', 'Faculty', 'Department', 'Candidate', 'Matric No', 'Programme',
+            // "Application No." is the key Jason's appointment-letter import
+            // matches on to read the seat ids from examiner_nominations.
+            // Columns are only ever ADDED at the end; see README.md,
+            // "Examiner Report export layout".
+            'Application No.', 'Faculty', 'Department', 'Candidate', 'Matric No', 'Programme',
             'Thesis Title', 'Supervisor',
             'Internal Main', 'Internal Main Dept', 'Internal Backup',
             'External Main', 'External Main Institution', 'External Backup',
             'Stage', 'Status', 'Submitted',
+            'Internal Main Email', 'External Main Email',
         ];
     }
 
@@ -64,6 +69,8 @@ class ExaminerListExport implements FromArray, WithHeadings
                 $application?->currentStage()?->label ?? '—',
                 ucfirst((string) $application?->status),
                 $application?->submitted_at?->format('Y-m-d'),
+                $nomination->internalMain?->email,
+                $nomination->externalMain?->email,
             ];
         })->values()->all();
     }

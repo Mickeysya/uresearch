@@ -12,6 +12,7 @@ use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerSeatHistory;
 use App\Modules\Hani\Support\PanelSeats;
+use App\Modules\Hani\Notifications\ExaminersReleased;
 use App\Modules\Hani\Notifications\NominationsNeedCompileReview;
 use App\Modules\Hani\Support\ConflictOfInterest;
 use App\Modules\Hani\Support\CrossDepartmentClashes;
@@ -269,6 +270,8 @@ class ExaminerNominationController extends Controller
             if ($nomination) {
                 app(PanelSeats::class)->release($nomination, $request->user());
             }
+
+            $this->announceRelease($application);
         }
 
         $verb = $finalising
@@ -311,6 +314,20 @@ class ExaminerNominationController extends Controller
 
             \App\Modules\Core\Models\User::where('role', Role::SENIOR_EXEC_CGS)->get()
                 ->each(fn ($user) => $user->notify(new NominationsNeedCompileReview($application, $findings)));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
+     * Non-Executive CGS sends the appointment letters, so every one of them is
+     * told the moment a list is released. Best effort, after commit.
+     */
+    protected function announceRelease(Application $application): void
+    {
+        try {
+            \App\Modules\Core\Models\User::where('role', Role::NON_EXEC_CGS)->get()
+                ->each(fn ($user) => $user->notify(new ExaminersReleased($application)));
         } catch (\Throwable $e) {
             report($e);
         }

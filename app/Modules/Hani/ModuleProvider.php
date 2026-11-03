@@ -27,6 +27,24 @@ class ModuleProvider extends ServiceProvider
         // default; anything implementing the contract (an embeddings model,
         // say) can be bound here instead -- see README.md.
         $this->app->bind(ExaminerMatcher::class, TfIdfMatcher::class);
+
+        $this->bindReleasedExaminers();
+    }
+
+    /**
+     * Hands the released examiner lists to whoever asks through Core's
+     * contract -- Jason's appointment letters. The contract is proposed in
+     * SHARED_CHANGES.md and not in Core yet; until it is, nothing is bound and
+     * nothing breaks. interface_exists() autoloads, so this is safe to call
+     * at register time.
+     */
+    public function bindReleasedExaminers(): void
+    {
+        $contract = 'App\\Modules\\Core\\Contracts\\SuppliesReleasedExaminers';
+
+        if (interface_exists($contract)) {
+            $this->app->bind($contract, \App\Modules\Hani\Support\ReleasedExaminerBinding::class);
+        }
     }
 
     public function boot(ModuleRegistry $registry): void

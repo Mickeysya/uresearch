@@ -86,3 +86,113 @@ scheduled twice. It would still send only once, because of the log table.
 // stale import previews purged. See App\Modules\Hani\Console\ExaminersSweep.
 Schedule::command('examiners:sweep')->dailyAt('07:30')->withoutOverlapping();
 ```
+
+---
+
+## 3. New Core contract: `SuppliesReleasedExaminers`
+
+**Status:** proposed, not applied.
+
+**Reason.** Today Puan Waheeda (Senior Executive CGS) emails Encik Syahmi
+(Non-Executive CGS) an Excel file of the final examiner list, and he retypes
+it into the appointment letters. This contract hands Jason's
+appointment-letter module the same list in code. It covers released
+nominations only, and gives each panel as it stands now, after any decline
+and backup promotion.
+
+**Impact.** Additive. It is one new file in `Core/Contracts`. Nothing changes
+until someone binds or reads it.
+- **Hani:** binds it automatically once the file exists
+  (`Hani\ModuleProvider::bindReleasedExaminers()` checks `interface_exists()`
+  first), through `Hani\Support\ReleasedExaminerBinding`.
+- **Jason:** reads it with `app(SuppliesReleasedExaminers::class)` instead of
+  importing anything from Hani's folder.
+
+Until it exists, Jason's module can keep importing the Examiner Report export.
+That export's **"Application No."** column is the key to
+`examiner_nominations.application_id` (see Hani's README, "Examiner Report
+export layout").
+
+### File: `app/Modules/Core/Contracts/SuppliesReleasedExaminers.php` (new)
+
+```php
+<?php
+
+namespace App\Modules\Core\Contracts;
+
+/**
+ * Released examiner panels, for the appointment letters. Implemented by
+ * whichever module owns examiner nomination (Hani); read by whichever sends
+ * the letters (Jason). Bound only if the implementing module is installed.
+ *
+ * A panel:
+ *   [
+ *     'nomination_id'  => int,
+ *     'application_id' => int,                    // the "Application No."
+ *     'released_at'    => \DateTimeInterface,
+ *     'student'    => ['id', 'name', 'matric_id', 'programme', 'degree', 'department'],
+ *     'supervisor' => ['name', 'email'],
+ *     'thesis_title'   => string,
+ *     'examiners' => [
+ *       'internal_main'   => ['name', 'email', 'department', 'faculty'],
+ *       'internal_backup' => ['name', 'email', 'department', 'faculty'] | null,
+ *       'external_main'   => ['name', 'email', 'institution', 'department'],
+ *       'external_backup' => ['name', 'email', 'institution', 'department'] | null,
+ *     ],
+ *   ]
+ *
+ * Always the CURRENT panel: after a decline, the promoted backup is in the
+ * main seat. An examiner's email may be null (CGS's pool file has none);
+ * skip and flag them rather than send.
+ */
+interface SuppliesReleasedExaminers
+{
+    /** @return array<int, array> newest first; only those released at or after $since if given */
+    public function releasedPanels(?\DateTimeInterface $since = null): array;
+
+    /** The candidate's current released panel, or null if none has been released. */
+    public function panelForStudent(int $studentId): ?array;
+}
+```
+
+---
+
+## 4. New Core contract: `SuppliesAppointmentDispatch`
+
+**Status:** proposed, not applied.
+
+**Reason.** Acceptance slips come back on paper or by email, so Hani's
+panel page is where a decline is recorded. It is far easier to act on when
+it shows whether each main examiner's appointment pack has actually gone out.
+Jason's module already records that in `appointment_examiners.pack_sent_at`.
+
+**Impact.** Additive.
+- **Jason:** implements and binds it in his own `ModuleProvider`.
+- **Hani:** reads it only if it is bound
+  (`PanelController::lettersSent()`). Until then the "Appointment letter"
+  column simply does not appear.
+
+### File: `app/Modules/Core/Contracts/SuppliesAppointmentDispatch.php` (new)
+
+```php
+<?php
+
+namespace App\Modules\Core\Contracts;
+
+/**
+ * When an examiner's appointment pack was sent, for the module that owns the
+ * panel (Hani) to show next to each seat. Implemented by the module that
+ * sends the letters (Jason: appointment_examiners.pack_sent_at).
+ */
+interface SuppliesAppointmentDispatch
+{
+    /** Null when nothing has been sent to this examiner for this application. */
+    public function packSentAt(int $applicationId, int $examinerId): ?\DateTimeInterface;
+}
+```
+
+Jason's binding, in `app/Modules/Jason/ModuleProvider.php` `register()`:
+
+```php
+$this->app->bind(\App\Modules\Core\Contracts\SuppliesAppointmentDispatch::class, \App\Modules\Jason\Support\AppointmentDispatch::class);
+```

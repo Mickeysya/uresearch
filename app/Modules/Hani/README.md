@@ -155,6 +155,33 @@ Bind it in `ModuleProvider::register()` instead of `TfIdfMatcher`. Keep the
 explanation: report the expertise keywords closest to the thesis, so a score
 is never shown without its reason.
 
+## Examiner Report export layout (for Jason's appointment letters)
+
+`/examiner-nomination/report/export?format=xlsx|csv`. There is one row per
+candidate, one sheet, and the same columns in both formats
+(`Exports/ExaminerListExport.php`).
+
+| # | Column | Notes |
+|---|---|---|
+| 1 | **Application No.** | `applications.id` = `examiner_nominations.application_id`. Jason's import matches on this to read the seat ids exactly. |
+| 2–6 | Faculty, Department, Candidate, Matric No, Programme | the candidate |
+| 7–8 | Thesis Title, Supervisor | |
+| 9–11 | Internal Main, Internal Main Dept, Internal Backup | the **current** panel, after any decline |
+| 12–14 | External Main, External Main Institution, External Backup | the **current** panel |
+| 15–17 | Stage, Status, Submitted | |
+| 18–19 | Internal Main Email, External Main Email | blank where CGS has no email yet |
+
+**Stability rule:** columns are only ever added at the end; none is renamed,
+reordered or removed. Code-level access is the proposed Core contract
+`SuppliesReleasedExaminers` (SHARED_CHANGES.md, item 3), implemented by
+`Support/ReleasedExaminerProvider`. It returns released panels only and is
+bound automatically once the contract exists.
+
+On release, every Non-Executive CGS user gets "New examiner list released"
+(email and in-app). Letters go to the two **main** examiners only. Backups
+stay on standby, and a decline promotes one (`Support/PanelSeats`), which
+notifies Non-Executive CGS again with the name to send the letter to.
+
 ## Still to build
 
 Nothing from the original TODO list remains unscoped. Candidates for

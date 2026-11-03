@@ -56,6 +56,7 @@ class PanelController extends Controller
         }
 
         return view('hani::examiner_nomination.panel', [
+            'lettersSent' => $this->lettersSent($nomination),
             'nomination' => $nomination,
             'student' => $student,
             'replacements' => $replacements,
@@ -95,6 +96,32 @@ class PanelController extends Controller
 
         return redirect()->route('examiner-panel.show', $nomination)
             ->with('status', "{$examiner->name} appointed to the ".ExaminerNomination::SLOTS[$data['seat']].' seat. Non-Executive CGS has been asked to send the appointment letter.');
+    }
+
+    /**
+     * When Jason's module sent each main examiner their appointment pack,
+     * through the Core contract proposed in SHARED_CHANGES.md
+     * (SuppliesAppointmentDispatch). Read only if something is bound to it;
+     * null means "not known here", not "not sent".
+     *
+     * @return array<string, ?\DateTimeInterface>|null seat => sent at, or null when the contract is not available
+     */
+    protected function lettersSent(ExaminerNomination $nomination): ?array
+    {
+        $contract = 'App\\Modules\\Core\\Contracts\\SuppliesAppointmentDispatch';
+
+        if (! interface_exists($contract) || ! app()->bound($contract)) {
+            return null;
+        }
+
+        $dispatch = app($contract);
+        $sent = [];
+
+        foreach (array_keys(PanelSeats::MAINS) as $seat) {
+            $sent[$seat] = $nomination->{$seat} ? $dispatch->packSentAt($nomination->application_id, $nomination->{$seat}) : null;
+        }
+
+        return $sent;
     }
 
     /** The candidate's own Academic Executive, or the Senior Executive; released panels only. */
