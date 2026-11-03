@@ -112,6 +112,8 @@ class VivaScheduleTest extends TestCase
             'venue' => 'Chancellor Hall, Block 2',
             'chair_name' => 'Prof. Chair',
             'chair_email' => 'chair@test.my',
+            // These tests are about invitations, not the clash checks (VivaSchedulingAssistTest).
+            'override_warnings' => 1,
         ]);
     }
 

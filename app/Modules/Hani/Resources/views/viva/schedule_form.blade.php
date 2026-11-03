@@ -34,6 +34,30 @@
             </p>
         @endif
 
+        @if (session('scheduleWarnings'))
+            <div class="message-warning" role="alert">
+                <p><b>Check this slot before scheduling:</b></p>
+                <ul>
+                    @foreach (session('scheduleWarnings') as $warning)
+                        <li>{{ $warning }}</li>
+                    @endforeach
+                </ul>
+                <p>Pick a suggested slot below, or tick "Schedule anyway" to keep this one.</p>
+            </div>
+        @endif
+
+        @if ($suggestions)
+            <p><b>Next free weekday slots</b>
+                <span class="fstep-hint">(no clash with the examiners, chairman, supervisor or venue; weekends and public holidays skipped)</span></p>
+            <p id="slot-suggestions">
+                @foreach ($suggestions as $slot)
+                    <button type="button" class="btn-secondary" data-slot-date="{{ $slot->toDateString() }}" data-slot-time="{{ $slot->format('H:i') }}">
+                        {{ $slot->format('D j M Y, g:i a') }}
+                    </button>
+                @endforeach
+            </p>
+        @endif
+
         <form method="POST" action="{{ route('viva.schedule.update', $progress->notice) }}">
             @csrf
 
@@ -85,8 +109,27 @@
                 the chairman and the co-supervisor if given.
             </p>
 
+            @if (session('scheduleWarnings'))
+                <div class="checkbox-row">
+                    <input type="checkbox" name="override_warnings" id="override_warnings" value="1">
+                    <label for="override_warnings">Schedule anyway: I have checked the warnings above.</label>
+                </div>
+            @endif
+
             <button type="submit">{{ $detail->isScheduled() ? 'Reschedule and Notify' : 'Schedule and Notify' }}</button>
         </form>
     </div>
 </div>
+@push('scripts')
+    <script @cspNonce>
+        // A suggested slot fills in the date and time; the AE still saves.
+        document.querySelectorAll('[data-slot-date]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('viva_date').value = button.dataset.slotDate;
+                document.getElementById('viva_time').value = button.dataset.slotTime;
+                document.getElementById('viva_date').focus();
+            });
+        });
+    </script>
+@endpush
 @endsection

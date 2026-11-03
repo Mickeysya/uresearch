@@ -212,9 +212,73 @@ return [
         ],
     ],
 
+    'scheduling' => [
+        // Two vivas closer than this (in hours) that share an examiner, the
+        // chairman, the supervisor or the venue are a clash. Matches the
+        // 2-hour calendar event. Provisional.
+        'clash_hours' => 2,
+
+        // Start times offered as free slots, and how far ahead to look.
+        // Provisional.
+        'slot_times' => ['09:00', '14:00'],
+        'suggestions' => 3,
+        'lookahead_days' => 60,
+
+        // Malaysian public holidays (federal, plus Perak, where UTP is).
+        // PROVISIONAL: Islamic, Chinese and Hindu dates follow the published
+        // calendars as we understand them and can move by a day; check them
+        // against the official gazette each year.
+        'public_holidays' => [
+            '2026-01-01' => 'New Year\'s Day',
+            '2026-02-01' => 'Thaipusam',
+            '2026-02-17' => 'Chinese New Year',
+            '2026-02-18' => 'Chinese New Year (second day)',
+            '2026-03-07' => 'Nuzul Al-Quran',
+            '2026-03-21' => 'Hari Raya Aidilfitri',
+            '2026-03-22' => 'Hari Raya Aidilfitri (second day)',
+            '2026-05-01' => 'Labour Day',
+            '2026-05-27' => 'Hari Raya Haji',
+            '2026-05-31' => 'Wesak Day',
+            '2026-06-01' => 'Birthday of the Yang di-Pertuan Agong',
+            '2026-06-17' => 'Awal Muharram',
+            '2026-08-26' => 'Maulidur Rasul',
+            '2026-08-31' => 'National Day',
+            '2026-09-16' => 'Malaysia Day',
+            '2026-11-06' => 'Birthday of the Sultan of Perak',
+            '2026-11-08' => 'Deepavali',
+            '2026-12-25' => 'Christmas Day',
+            '2027-01-01' => 'New Year\'s Day',
+            '2027-01-22' => 'Thaipusam',
+            '2027-02-06' => 'Chinese New Year',
+            '2027-02-07' => 'Chinese New Year (second day)',
+            '2027-02-24' => 'Nuzul Al-Quran',
+            '2027-03-10' => 'Hari Raya Aidilfitri',
+            '2027-03-11' => 'Hari Raya Aidilfitri (second day)',
+            '2027-05-01' => 'Labour Day',
+            '2027-05-17' => 'Hari Raya Haji',
+            '2027-05-20' => 'Wesak Day',
+            '2027-06-06' => 'Awal Muharram',
+            '2027-06-07' => 'Birthday of the Yang di-Pertuan Agong',
+            '2027-08-15' => 'Maulidur Rasul',
+            '2027-08-31' => 'National Day',
+            '2027-09-16' => 'Malaysia Day',
+            '2027-10-28' => 'Deepavali',
+            '2027-11-05' => 'Birthday of the Sultan of Perak',
+            '2027-12-25' => 'Christmas Day',
+        ],
+    ],
+
     'reminders' => [
         // When `viva:reminders` runs each day. Provisional.
         'daily_at' => '07:45',
+
+        // Panel reminders (with the calendar file) this many days before
+        // the viva. Provisional.
+        'panel_days' => [7, 1],
+
+        // Nudge the student once when the expected softbound date is this
+        // close and nothing is filed. Provisional.
+        'softbound_nudge_days' => 14,
     ],
 
     'sweep' => [

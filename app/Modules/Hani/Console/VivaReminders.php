@@ -5,10 +5,13 @@ namespace App\Modules\Hani\Console;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
+use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaExaminerProgress;
 use App\Modules\Hani\Models\VivaReminderLog;
 use App\Modules\Hani\Notifications\VivaReminder;
 use App\Modules\Hani\Support\VivaChecklist;
+use App\Modules\Hani\Support\VivaInvite;
+use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
@@ -23,6 +26,14 @@ use Illuminate\Support\Facades\Notification;
  *   report_overdue   the report is past due (4 weeks Master / 6 PhD after
  *                    the examiner received the thesis) -> the AE
  *
+ * Scheduling:
+ *   panel_7d / panel_1d   7 days and 1 day before the viva, with the
+ *                         calendar file -> everyone invited; a reschedule
+ *                         sends them again (keyed on the schedule sequence)
+ *   softbound_nudge       the expected softbound date is within 14 days and
+ *                         nothing is filed -> the student
+ *   softbound_overdue     that date has passed and nothing is filed -> the AE
+ *
  * Each reminder is sent ONCE. As with `rpd:remind` and `examiners:sweep`,
  * the log row is written BEFORE sending, and the unique key on (viva, kind,
  * reference) makes the database decide that a second run skips it.
@@ -34,7 +45,7 @@ class VivaReminders extends Command
     protected $signature = 'viva:reminders
                             {--dry-run : List what would be sent without sending or logging anything}';
 
-    protected $description = 'Send the viva reminders: examiner replies and reports';
+    protected $description = 'Send the viva reminders: examiner replies and reports, panel reminders, softbound deadlines';
 
     public function handle(): int
     {
@@ -95,6 +106,95 @@ class VivaReminders extends Command
     {
         yield from $this->examinerReplies();
         yield from $this->overdueReports();
+        yield from $this->panelReminders();
+        yield from $this->softboundDeadlines();
+    }
+
+    protected function panelReminders(): iterable
+    {
+        $details = VivaDetail::with('application.student.supervisor')
+            ->whereNotNull('viva_at')
+            ->where('viva_at', '>', now())
+            ->where('viva_at', '<=', now()->addDays(max((array) config('hani.reminders.panel_days', [7, 1])) + 1))
+            ->whereHas('application', fn ($q) => $q->where('module_type', 'viva_voce')->where('status', Application::STATUS_APPROVED))
+            ->get();
+
+        foreach ($details as $detail) {
+            $notice = $detail->application;
+            $daysAway = (int) now()->startOfDay()->diffInDays($detail->viva_at->copy()->startOfDay());
+
+            foreach ((array) config('hani.reminders.panel_days', [7, 1]) as $days) {
+                // On the day, or the day after if a run was missed -- never
+                // for a viva set closer than that (its invitation is fresh).
+                if ($daysAway > $days || $daysAway < max(1, $days - 1) || ($days > 1 && $daysAway <= 1)) {
+                    continue;
+                }
+
+                $panel = VivaProgress::forNotices(collect([$notice]))->first()->panel();
+                $recipients = VivaInvite::recipients($notice, $detail, $panel);
+                $when = $detail->viva_at->format('l, j F Y, g:i a');
+
+                yield [$notice, "panel_{$days}d", 'seq:'.$detail->schedule_sequence, $recipients['users'], $recipients['emails'], new VivaReminder(
+                    "panel_{$days}d", $notice,
+                    ($days === 1 ? 'Viva tomorrow: ' : "Viva in {$days} days: ").$notice->student?->name,
+                    [
+                        "A reminder that the viva voce of {$notice->student?->name} is on {$when} at {$detail->venue}.",
+                        'Thesis: '.$detail->thesis_title.'. Chairman: '.$detail->chair_name.'.',
+                        'The calendar file is attached again in case you need it.',
+                    ],
+                    null, null,
+                    VivaInvite::ics($notice, $detail),
+                )];
+            }
+        }
+    }
+
+    protected function softboundDeadlines(): iterable
+    {
+        $nudgeDays = (int) config('hani.reminders.softbound_nudge_days', 14);
+
+        $details = VivaDetail::with('application.student')
+            ->whereNotNull('expected_softbound_date')
+            ->where('expected_softbound_date', '<=', now()->addDays($nudgeDays)->toDateString())
+            ->whereHas('application', fn ($q) => $q->where('module_type', 'viva_voce')->where('status', Application::STATUS_APPROVED))
+            ->get();
+
+        foreach ($details as $detail) {
+            $notice = $detail->application;
+            $student = $notice->student;
+
+            // Filed (waiting or verified) means nothing to chase.
+            $filed = Application::where('module_type', 'viva_softbound')->where('student_id', $notice->student_id)
+                ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED])->exists();
+
+            if ($filed || ! $student) {
+                continue;
+            }
+
+            $date = $detail->expected_softbound_date->format('j M Y');
+
+            if ($detail->expected_softbound_date->isBefore(today())) {
+                yield [$notice, 'softbound_overdue', '', $this->academicExecs($notice), [], new VivaReminder(
+                    'softbound_overdue', $notice,
+                    'Softbound thesis not filed: '.$student->name,
+                    [
+                        "{$student->name} expected to file the softbound thesis by {$date}, and nothing has been filed.",
+                        'You may want to contact the student and their supervisor.',
+                    ],
+                    'Open Viva Scheduling', route('viva.schedule.index'),
+                )];
+            } else {
+                yield [$notice, 'softbound_nudge', '', [$student], [], new VivaReminder(
+                    'softbound_nudge', $notice,
+                    'Your softbound thesis is due by '.$date,
+                    [
+                        "You told CGS you would submit your softbound thesis by {$date}.",
+                        'When it is ready, file it through Form #019 in UResearch, with your thesis, the format confirmation form and your Turnitin report from ULearn.',
+                    ],
+                    'Open your viva page', route('viva.eligibility'),
+                )];
+            }
+        }
     }
 
     protected function examinerReplies(): iterable

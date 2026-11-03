@@ -9,6 +9,8 @@ use App\Modules\Hani\Models\VivaSoftboundDetail;
 use App\Modules\Hani\Notifications\VivaScheduled;
 use App\Modules\Hani\Support\ExaminerDivergence;
 use App\Modules\Hani\Support\VivaInvite;
+use App\Modules\Hani\Support\VivaSlotFinder;
+use Carbon\Carbon;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,6 +70,8 @@ class VivaScheduleController extends Controller
             'detail' => $progress->detail,
             'recipients' => VivaInvite::recipients($application, $progress->detail, $progress->panel()),
             'divergence' => ExaminerDivergence::forNotices([$application->id])[$application->id] ?? null,
+            'suggestions' => session('slotSuggestions') ?? (new VivaSlotFinder($application))
+                ->suggestions(now()->addDay(), $progress->detail->venue, $progress->detail->chair_email),
         ]);
     }
 
@@ -90,11 +94,23 @@ class VivaScheduleController extends Controller
             'chair_email' => ['required', 'email', 'max:150'],
             'co_supervisor_name' => ['nullable', 'string', 'max:150', 'required_with:co_supervisor_email'],
             'co_supervisor_email' => ['nullable', 'email', 'max:150', 'required_with:co_supervisor_name'],
+            'override_warnings' => ['nullable', 'boolean'],
         ], [
             'viva_date.after_or_equal' => 'The viva date cannot be in the past.',
             'co_supervisor_name.required_with' => 'Give the co-supervisor\'s name as well as their email.',
             'co_supervisor_email.required_with' => 'Give the co-supervisor\'s email so they receive the invitation.',
         ]);
+
+        // Clashes, weekends and holidays: warned, and the AE decides.
+        $start = Carbon::parse($data['viva_date'].' '.$data['viva_time']);
+        $finder = new VivaSlotFinder($application);
+        $warnings = $finder->warnings($start, $data['venue'], $data['chair_email']);
+
+        if ($warnings && ! $request->boolean('override_warnings')) {
+            return back()->withInput()
+                ->with('scheduleWarnings', $warnings)
+                ->with('slotSuggestions', $finder->suggestions($start->copy()->startOfDay(), $data['venue'], $data['chair_email']));
+        }
 
         $detail = $progress->detail;
         $rescheduled = $detail->isScheduled();
@@ -113,7 +129,8 @@ class VivaScheduleController extends Controller
         activity('viva')
             ->causedBy($request->user())
             ->performedOn($application)
-            ->withProperties(['action' => $rescheduled ? 'rescheduled' : 'scheduled', 'viva_at' => (string) $detail->viva_at])
+            ->withProperties(['action' => $rescheduled ? 'rescheduled' : 'scheduled', 'viva_at' => (string) $detail->viva_at]
+                + ($warnings ? ['overridden_warnings' => $warnings] : []))
             ->log($rescheduled ? 'Viva rescheduled' : 'Viva scheduled');
 
         $sent = $this->sendInvites($application, $detail, $progress, $rescheduled);
