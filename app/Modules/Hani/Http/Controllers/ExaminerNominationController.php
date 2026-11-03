@@ -10,6 +10,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Exports\ExaminerListExport;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
+use App\Modules\Hani\Support\ConflictOfInterest;
 use App\Modules\Hani\Support\Departments;
 use App\Modules\Hani\Support\DuplicateDetector;
 use Illuminate\Http\RedirectResponse;
@@ -59,7 +60,7 @@ class ExaminerNominationController extends Controller
         ]);
     }
 
-    public function store(Request $request, WorkflowEngine $engine, Departments $departments)
+    public function store(Request $request, WorkflowEngine $engine, Departments $departments, ConflictOfInterest $coi)
     {
         $slots = array_keys(ExaminerNomination::SLOTS);
 
@@ -129,6 +130,23 @@ class ExaminerNominationController extends Controller
             }
         }
 
+        // UTP/CGS/026: the candidate's supervisor or co-supervisor can never
+        // examine them. The other conflict-of-interest rules are warnings,
+        // shown to everyone in the chain; this one is a refusal.
+        foreach ($slots as $slot) {
+            if (empty($data[$slot])) {
+                continue;
+            }
+
+            $flags = $coi->flagsFor(Examiner::findOrFail($data[$slot]), $student);
+
+            if ($coi->blocks($flags)) {
+                throw ValidationException::withMessages([
+                    $slot => collect($flags)->firstWhere('level', ConflictOfInterest::BLOCK)['message'],
+                ]);
+            }
+        }
+
         // The same person cannot hold two seats on one panel, whichever two.
         $picked = array_filter(array_map(fn ($slot) => $data[$slot] ?? null, $slots));
 
@@ -167,7 +185,7 @@ class ExaminerNominationController extends Controller
     {
         $queue = $this->queueFor($request, $engine, ['submittedBy']);
 
-        $nominations = ExaminerNomination::with(ExaminerNomination::slotRelations())
+        $nominations = ExaminerNomination::with(array_merge(ExaminerNomination::slotRelations(), ['application.student']))
             ->whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()
             ->keyBy('application_id');
@@ -177,6 +195,7 @@ class ExaminerNominationController extends Controller
             // Compilation is where department lists meet, so it is where two
             // records of one person on different departments' lists can
             // first be seen (Support\DuplicateDetector).
+            'coiFlags' => $this->coiFlags($nominations),
             'duplicates' => $queue['stage']->key === 'cgs_compile'
                 ? app(DuplicateDetector::class)->acrossNominations()
                 : [],
@@ -333,6 +352,7 @@ class ExaminerNominationController extends Controller
             ->filter(fn ($departments) => $departments->count() > 1);
 
         return view('hani::examiner_nomination.report', [
+            'coiFlags' => $this->coiFlags($nominations),
             'byFaculty' => $byFaculty,
             'total' => $nominations->count(),
             'clashes' => $clashes,
@@ -399,6 +419,32 @@ class ExaminerNominationController extends Controller
                 $n->application?->student?->name,
             ])
             ->values();
+    }
+
+    /**
+     * The conflict-of-interest pre-check for every seat shown, by application
+     * then examiner. Staff screens only.
+     *
+     * @return array<int, array<int, array>>
+     */
+    protected function coiFlags(\Illuminate\Support\Collection $nominations): array
+    {
+        $coi = app(ConflictOfInterest::class);
+        $flags = [];
+
+        foreach ($nominations as $nomination) {
+            $student = $nomination->application?->student;
+
+            if (! $student) {
+                continue;
+            }
+
+            foreach ($nomination->examiners() as $examiner) {
+                $flags[$nomination->application_id][$examiner->id] = $coi->flagsFor($examiner, $student);
+            }
+        }
+
+        return $flags;
     }
 
     /** Nominations approved but not yet marked as evaluated, for the Academic Executive to close out. */

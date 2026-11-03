@@ -22,24 +22,34 @@ use Illuminate\Validation\Rule;
  */
 class ExaminerSuggestionController extends Controller
 {
-    public function __invoke(Request $request, ExaminerSuggestions $suggestions): JsonResponse
+    public function __invoke(Request $request, ExaminerSuggestions $suggestions, ConflictOfInterest $coi): JsonResponse
     {
         $data = $request->validate([
             'student_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', Role::STUDENT)],
             'title' => ['nullable', 'string', 'max:255'],
             'exclude' => ['nullable', 'array', 'max:4'],
             'exclude.*' => ['integer'],
+            'check' => ['nullable', 'array', 'max:4'],
+            'check.*' => ['integer'],
         ]);
 
         $student = User::findOrFail($data['student_id']);
         $this->authoriseFor($request->user(), $student);
 
-        if (class_exists(ConflictOfInterest::class)) {
-            $coi = app(ConflictOfInterest::class);
-            $suggestions->withFlags(fn ($examiner, $s) => $coi->flagsFor($examiner, $s));
+        $suggestions->withFlags(fn ($examiner, $s) => $coi->flagsFor($examiner, $s));
+
+        // The seats already chosen on the form, checked too, so a flag shows
+        // next to a hand-picked examiner and not only on a suggestion.
+        $checks = [];
+
+        foreach (\App\Modules\Hani\Models\Examiner::whereIn('id', $data['check'] ?? [])->get() as $examiner) {
+            $checks[$examiner->id] = $coi->flagsFor($examiner, $student);
         }
 
-        return response()->json($suggestions->forStudent($student, $data['title'] ?? null, $data['exclude'] ?? []));
+        return response()->json(
+            $suggestions->forStudent($student, $data['title'] ?? null, $data['exclude'] ?? [])
+            + ['checks' => (object) $checks, 'note' => ConflictOfInterest::NOTE]
+        );
     }
 
     protected function authoriseFor(User $user, User $student): void

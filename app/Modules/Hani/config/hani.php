@@ -65,6 +65,13 @@ return [
         'threshold' => 85,
     ],
 
+    'coi' => [
+        // An external examiner who left UTP (staff or student) less than
+        // this many years ago is flagged. From the UTP/CGS/026 declaration as
+        // described to us; provisional until CGS confirms the figure.
+        'former_utp_years' => 5,
+    ],
+
     'matcher' => [
 
         // How many "Suggested examiners" per seat type.

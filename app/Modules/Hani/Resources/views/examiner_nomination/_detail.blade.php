@@ -14,13 +14,20 @@
             @foreach ($nomination->panel() as $seat => $examiner)
                 <tr>
                     <td>{{ $seat }}</td>
-                    <td>{{ $examiner?->name ?? '—' }}</td>
+                    <td>
+                        {{ $examiner?->name ?? '—' }}
+                        @include('hani::examiner_nomination._coi', ['flags' => $examiner ? ($coiFlags[$application->id][$examiner->id] ?? []) : []])
+                    </td>
                     <td>{{ $examiner?->institution ?: $examiner?->department ?: '—' }}</td>
                     <td>{{ $examiner?->stateLabel() ?? '—' }}</td>
                 </tr>
             @endforeach
         </tbody>
     </table>
+
+    @if (collect($coiFlags[$application->id] ?? [])->flatten(1)->isNotEmpty())
+        <p class="coi-note" style="color: var(--text-grey); font-size: var(--text-xs);">{{ \App\Modules\Hani\Support\ConflictOfInterest::NOTE }}</p>
+    @endif
 
     @if ($nomination->notes)
         <p>Notes: {{ $nomination->notes }}</p>

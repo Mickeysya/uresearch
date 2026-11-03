@@ -95,6 +95,8 @@
                         @endforeach
                     </select>
                     @error($field) <p class="field-error">{{ $message }}</p> @enderror
+                    {{-- Conflict-of-interest flags for whoever is chosen here. --}}
+                    <div data-coi-for="{{ $field }}" aria-live="polite"></div>
                 @endforeach
 
                 {{-- Filled by public/js/hani/examiner-suggestions.js. --}}
@@ -130,6 +132,8 @@
                         @endforeach
                     </select>
                     @error($field) <p class="field-error">{{ $message }}</p> @enderror
+                    {{-- Conflict-of-interest flags for whoever is chosen here. --}}
+                    <div data-coi-for="{{ $field }}" aria-live="polite"></div>
                 @endforeach
 
                 <div class="suggest-box">

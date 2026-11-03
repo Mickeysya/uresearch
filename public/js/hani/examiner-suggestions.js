@@ -105,6 +105,26 @@
         panel.replaceChildren(list);
     }
 
+    function seatFields() {
+        return [seats.internal.main, seats.internal.backup, seats.external.main, seats.external.backup];
+    }
+
+    // Flags for the examiners actually chosen in the dropdowns, so a
+    // hand-picked supervisor is caught here and not only on submit.
+    function renderChecks(checks) {
+        seatFields().forEach(function (field) {
+            var slot = form.querySelector('[data-coi-for="' + field + '"]');
+            var select = form.querySelector('[name="' + field + '"]');
+            if (!slot) return;
+            var flags = (select && select.value && checks[select.value]) || [];
+            slot.replaceChildren();
+            flags.forEach(function (flag) {
+                slot.appendChild(el('div', 'suggest-flag is-' + flag.level,
+                    (flag.level === 'block' ? 'Conflict: ' : 'Check: ') + flag.message));
+            });
+        });
+    }
+
     function load() {
         if (!candidate || !candidate.value) {
             Object.keys(panels).forEach(function (type) {
@@ -115,6 +135,10 @@
 
         var ticket = ++latest;
         var params = new URLSearchParams({ student_id: candidate.value, title: title ? title.value : '' });
+        seatFields().forEach(function (field) {
+            var select = form.querySelector('[name="' + field + '"]');
+            if (select && select.value) params.append('check[]', select.value);
+        });
 
         Object.keys(panels).forEach(function (type) {
             if (panels[type]) message(panels[type], 'Finding examiners whose expertise fits…');
@@ -132,6 +156,7 @@
                 if (ticket !== latest) return; // a newer request has been sent
                 render('internal', data.internal || [], data.query);
                 render('external', data.external || [], data.query);
+                renderChecks(data.checks || {});
             })
             .catch(function () {
                 if (ticket !== latest) return;
@@ -147,6 +172,10 @@
     }
 
     if (candidate) candidate.addEventListener('change', load);
+    seatFields().forEach(function (field) {
+        var select = form.querySelector('[name="' + field + '"]');
+        if (select) select.addEventListener('change', load);
+    });
     if (title) title.addEventListener('input', soon);
     load();
 })();

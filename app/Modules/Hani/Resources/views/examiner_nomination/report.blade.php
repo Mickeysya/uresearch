@@ -70,6 +70,10 @@
         </p>
     @endif
 
+    @if (collect($coiFlags)->flatten(2)->isNotEmpty())
+        <p class="coi-note" style="color: var(--text-grey); font-size: var(--text-xs);">{{ \App\Modules\Hani\Support\ConflictOfInterest::NOTE }}</p>
+    @endif
+
     @if ($total === 0)
         <div class="empty-state">
             <p>Nothing has been nominated yet.</p>
@@ -116,6 +120,7 @@
                                         <td>
                                             @if ($nomination->$main)
                                                 {{ $nomination->$main->name }}
+                                                @include('hani::examiner_nomination._coi', ['flags' => $coiFlags[$application?->id][$nomination->$main->id] ?? []])
                                                 @if ($clashes->has($nomination->$main->id))
                                                     <span class="rep-clash"
                                                           title="Also named by: {{ $clashes[$nomination->$main->id]->join(', ') }}">
@@ -130,6 +135,7 @@
                                                 backup:
                                                 @if ($nomination->$backup)
                                                     {{ $nomination->$backup->name }}
+                                                    @include('hani::examiner_nomination._coi', ['flags' => $coiFlags[$application?->id][$nomination->$backup->id] ?? []])
                                                     @if ($clashes->has($nomination->$backup->id))
                                                         <span class="rep-clash">also elsewhere</span>
                                                     @endif
