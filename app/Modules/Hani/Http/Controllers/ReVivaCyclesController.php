@@ -23,8 +23,9 @@ class ReVivaCyclesController extends Controller
     public const SECTIONS = [
         'in_progress' => ['In progress', 'With the Academic Executive: letters, panel review, re-evaluations or consolidation.'],
         'awaiting_outcome' => ['Awaiting outcome', 'Consolidation is done. The Academic Executive records the outcome.'],
+        'final_thesis' => ['Final thesis due', 'Levels 1 to 3: the student submits the final thesis and the Academic Executive accepts the corrections.'],
         'next_round' => ['Next round to log', 'Level 4: an oral examination is required. The Senior Executive logs the next round when the corrected thesis arrives.'],
-        'closed' => ['Closed', 'Levels 1 to 3 (passed with corrections), level 5 (final), or a later round already logged.'],
+        'closed' => ['Closed', 'Corrections accepted, level 5 (final), or a later round already logged.'],
     ];
 
     public function index(Request $request)
@@ -47,6 +48,7 @@ class ReVivaCyclesController extends Controller
     {
         return match (true) {
             $detail->hasOutcome() && $detail->requiresLoopBack() && ! $detail->nextCycle => 'next_round',
+            $detail->needsFinalThesis() && $detail->corrections_accepted_at === null => 'final_thesis',
             $detail->hasOutcome(), $detail->application->status === Application::STATUS_REJECTED => 'closed',
             $detail->application->status === Application::STATUS_APPROVED => 'awaiting_outcome',
             default => 'in_progress',

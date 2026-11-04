@@ -3,7 +3,9 @@
 namespace Tests\Feature\Hani;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ReVivaReminderLog;
+use App\Modules\Hani\Models\VivaReminderLog;
 use App\Modules\Hani\Notifications\ReVivaUpdate;
 use Carbon\Carbon;
 use Illuminate\Console\Scheduling\Schedule;
@@ -107,5 +109,96 @@ class ReVivaMonitorTest extends TestCase
 
         $commands = collect(app(Schedule::class)->events())->map(fn ($e) => $e->command)->implode(' ');
         $this->assertStringContainsString('re-viva:monitor', $commands);
+    }
+
+    protected function kinds($user, string $kind): int
+    {
+        return Notification::sent($user, ReVivaUpdate::class)->filter(fn ($n) => $n->kind === $kind)->count();
+    }
+
+    public function test_the_student_is_reminded_before_the_category_four_window_closes_until_a_round_is_logged(): void
+    {
+        Carbon::setTestNow('2027-03-15 09:00');
+        $waiting = $this->categoryFourViva('22001001');   // window closes 1 Mar 2028
+        $logged = $this->categoryFourViva('22001002');
+        Carbon::setTestNow('2027-10-01 09:00');
+        $this->logReViva($logged['student']);
+
+        Carbon::setTestNow('2028-01-31 08:00');   // 30 days left
+        $this->monitor();
+        $this->monitor();
+        $this->assertSame(1, $this->kinds($waiting['student'], 'window_closing'));
+        $this->assertSame(0, $this->kinds($logged['student'], 'window_closing'));
+        $this->assertSame(1, VivaReminderLog::where('kind', 'reviva_window_30d')->count());
+
+        Carbon::setTestNow('2028-02-23 08:00');   // 7 days left
+        $this->monitor();
+        $this->assertSame(2, $this->kinds($waiting['student'], 'window_closing'));
+    }
+
+    public function test_a_level_four_window_reminds_the_student_then_frees_the_examiners_once_it_closes(): void
+    {
+        $viva = $this->roundAwaitingOutcome([4, true], [4, true]);
+        Carbon::setTestNow('2027-11-20 10:00');
+        $this->recordOutcome($viva, 4)->assertSessionHasNoErrors();   // next round due by 20 May 2028
+        $senior = $this->senior();
+
+        Carbon::setTestNow('2028-04-20 08:00');
+        $this->monitor();
+        $this->assertSame(1, $this->kinds($viva['student'], 'window_closing'));
+
+        Carbon::setTestNow('2028-05-21 08:00');
+        $this->monitor();
+        $this->monitor();
+        $this->assertSame(1, $this->kinds($viva['ae'], 'next_round_window_closed'));
+        $this->assertSame(1, $this->kinds($senior, 'next_round_window_closed'));
+
+        $examiner = Examiner::find($viva['panel']->internal_main_id);
+        $this->assertNull($examiner->assigned_until);
+        $this->assertNull($examiner->last_examination_date, 'freed with no gap');
+
+        $this->actingAs($senior)->get(route('reviva.cycles.index'))->assertSee('Window closed: examiners freed');
+    }
+
+    public function test_final_thesis_reminders_then_one_overdue_flag(): void
+    {
+        $viva = $this->roundAwaitingOutcome([1], [1]);
+        Carbon::setTestNow('2027-11-20 10:00');
+        $this->recordOutcome($viva, 1);   // final thesis due 20 Dec 2027
+        $senior = $this->senior();
+
+        Carbon::setTestNow('2027-11-21 08:00');
+        $this->monitor();
+        $this->monitor();
+        $this->assertSame(1, $this->kinds($viva['student'], 'final_due'));
+
+        Carbon::setTestNow('2027-12-13 08:00');
+        $this->monitor();
+        $this->assertSame(2, $this->kinds($viva['student'], 'final_due'));
+
+        Carbon::setTestNow('2027-12-21 08:00');
+        $this->monitor();
+        $this->monitor();
+        $this->assertSame(1, $this->kinds($viva['ae'], 'final_overdue'));
+        $this->assertSame(1, $this->kinds($senior, 'final_overdue'));
+        $this->assertSame(2, $this->kinds($viva['student'], 'final_due'));
+
+        $this->actingAs($senior)->get(route('reviva.cycles.index'))
+            ->assertSee('Final thesis due (1)')
+            ->assertSee('Overdue');
+    }
+
+    public function test_a_submitted_final_thesis_stops_the_student_reminders(): void
+    {
+        $viva = $this->roundAwaitingOutcome([2], [2]);
+        Carbon::setTestNow('2027-11-20 10:00');
+        $this->recordOutcome($viva, 2);   // due 20 Feb 2028
+        $this->actingAs($viva['student'])->post(route('reviva.final-thesis.store', $viva['round']), [
+            'final_thesis' => \Illuminate\Http\UploadedFile::fake()->create('final.pdf', 100, 'application/pdf'),
+        ]);
+
+        Carbon::setTestNow('2028-02-13 08:00');
+        $this->monitor();
+        $this->assertSame(0, $this->kinds($viva['student'], 'final_due'));
     }
 }

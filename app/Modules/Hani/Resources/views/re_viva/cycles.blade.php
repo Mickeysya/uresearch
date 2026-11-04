@@ -16,7 +16,7 @@
     </x-core::page-header>
 
     @foreach ($sections as $key => [$heading, $hint])
-        @php $rows = $groups->get($key, collect()); @endphp
+        @php($rows = $groups->get($key, collect()))
         @continue($rows->isEmpty() && $key === 'closed')
         <div class="card card-wide">
             <h3>{{ $heading }} ({{ $rows->count() }})</h3>
@@ -39,7 +39,7 @@
                         </thead>
                         <tbody>
                             @foreach ($rows as $detail)
-                                @php $student = $detail->application->student; @endphp
+                                @php($student = $detail->application->student)
                                 <tr>
                                     <td>
                                         {{ $student->name }}
@@ -64,7 +64,14 @@
                                             @if ($detail->logged_outside_window) <span class="status-badge returned">Logged outside window</span> @endif
                                         @endif
                                         @if ($detail->correction_deadline)
-                                            <br>Corrections due {{ $detail->correction_deadline->format('j M Y') }}
+                                            <br>{{ $detail->outcome_level ? 'Final thesis' : 'Corrections' }} due {{ $detail->correction_deadline->format('j M Y') }}
+                                            @if ($detail->finalThesisOverdue()) <span class="status-badge rejected">Overdue</span> @endif
+                                            @if ($detail->final_thesis_submitted_at && ! $detail->corrections_accepted_at) <br><span class="fstep-hint">Final thesis submitted {{ $detail->final_thesis_submitted_at->format('j M Y') }}</span> @endif
+                                        @endif
+                                        @if ($key === 'next_round')
+                                            @php($closes = \App\Modules\Hani\Support\ReVivaOutcome::nextRoundCloses($detail))
+                                            <br>Next round due by {{ $closes->format('j M Y') }}
+                                            @if ($closes->lt(today())) <span class="status-badge rejected">Window closed: examiners freed</span> @endif
                                         @endif
                                         @if ($detail->hardbound_deadline)
                                             <br>Hardbound due {{ $detail->hardbound_deadline->format('j M Y') }}
