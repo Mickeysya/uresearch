@@ -331,6 +331,19 @@ test accounts:
 | S09 Nur Aleesya | `aleesya.hisham@example.com` | PhD FT, Applied Sciences | Category-4 viva about 7½ months ago; re-viva round 1 Under Panel Review for 22 working days, so the AE has been reminded to chase the panel |
 | S10 Kavitha Selvaraj | `kavitha.selvaraj@example.com` | MSc PT, Chemical Eng. | Category-4 viva; re-viva round 1 finished (internal 3, external 4 + viva again), consolidated to level 4 three days ago; the Senior Exec logs round 2 |
 
+**History for Process Analytics (H01-H24).** Twenty-four further fictional
+candidates (`history.h01@example.com` to `history.h24@example.com`, password
+`password`) each have one *completed* journey, finished between 5 and about
+330 days before the run day: notice, the six-stage nomination chain (lists
+H03, H08, H13, H18 and H23 sent back once by the Senior Director or the
+Dean), softbound (H05, H11, H17 and H23 returned once), both examiner
+reports (PhD slower, some late), viva, result and corrections accepted. H04,
+H10, H16 and H22 are category 4 and go through a re-viva round to an outcome
+(levels 2, 3, 1 and 5). Durations are varied but fixed per case, so the picture is the
+same every run relative to today. This step sends no email and puts every
+examiner's `assigned_until` and `last_examination_date` back afterwards, so
+the live scenarios above see the same pool.
+
 The dataset says S03's clash partner is S10. Both are in Chemical
 Engineering, though, and a clash is by definition across departments, so
 the clash is with S04 instead. Every chain runs through `WorkflowEngine`;

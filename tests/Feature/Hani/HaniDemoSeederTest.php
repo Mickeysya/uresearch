@@ -129,7 +129,7 @@ class HaniDemoSeederTest extends TestCase
         $this->assertSame(VivaDetail::REEXAMINATION, VivaProgress::for($this->student('DEMO-S10'))->detail->result_category);
 
         // Demo accounts are example.com, with the test accounts' password.
-        $this->assertTrue(User::where('email', 'like', '%@example.com')->where('role', Role::STUDENT)->count() === 10);
+        $this->assertTrue(User::where('email', 'like', '%@example.com')->where('email', 'not like', 'history.%')->where('role', Role::STUDENT)->count() === 10);
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('password', $this->student('DEMO-S01')->password));
 
         // The examiners S01's walkthrough expects are still free to suggest.
@@ -169,7 +169,102 @@ class HaniDemoSeederTest extends TestCase
 
         Carbon::setTestNow();
 
-        $this->assertSame(2, \App\Modules\Hani\Models\ReVivaDetail::count(), 'rebuilt, not duplicated');
+        $this->assertSame(2, \App\Modules\Hani\Models\ReVivaDetail::whereHas('application.student', fn ($q) => $q->where('email', 'not like', 'history.%'))->count(), 'rebuilt, not duplicated');
+    }
+
+    /**
+     * Part 4 (Prompt 4c): the fictional history. Completed, idempotent,
+     * enough for every analytics panel over 3, 6 and 12 months, and invisible
+     * to the live scenarios: the same pool states, no new clashes, nothing
+     * for any reminder command to send.
+     */
+    public function test_the_fictional_history_fills_the_analytics_without_touching_the_live_scenarios(): void
+    {
+        Carbon::setTestNow('2026-11-04 09:00');
+
+        // Parts 1-3 only, for comparison.
+        $withoutHistory = new class extends HaniDemoSeeder
+        {
+            protected function steps(): array
+            {
+                return array_values(array_diff(parent::steps(), ['historicalCases']));
+            }
+        };
+        $withoutHistory->run();
+        $states = Examiner::orderBy('id')->get()->map(fn ($e) => [$e->email, $e->state()])->all();
+        $clashes = $this->liveClashes();
+
+        $this->seed(HaniDemoSeeder::class);
+        $history = fn () => \App\Modules\Core\Models\ApprovalHistory::whereHas('application.student', fn ($q) => $q->where('email', 'like', 'history.%'))
+            ->orderBy('created_at')->orderBy('stage_key')->get()->map(fn ($h) => $h->stage_key.'@'.$h->created_at)->all();
+        $first = $history();
+        $this->seed(HaniDemoSeeder::class);
+
+        // Idempotent: the same decisions at the same moments.
+        $this->assertSame($first, $history());
+        $this->assertSame(24, User::where('email', 'like', 'history.%')->count());
+
+        // Completed: nothing pending, every viva has a result.
+        $apps = Application::whereHas('student', fn ($q) => $q->where('email', 'like', 'history.%'));
+        $this->assertSame(0, (clone $apps)->where('status', Application::STATUS_PENDING)->count());
+        $this->assertSame(24, (clone $apps)->where('module_type', 'viva_voce')->whereHas('history')->count());
+        $this->assertSame(24, VivaDetail::whereIn('application_id', (clone $apps)->where('module_type', 'viva_voce')->pluck('id'))->whereNotNull('result_recorded_at')->count());
+        $this->assertSame(4, \App\Modules\Hani\Models\ReVivaDetail::whereIn('application_id', (clone $apps)->pluck('id'))->whereNotNull('outcome_recorded_at')->count());
+        $this->assertTrue(\App\Modules\Core\Models\ApprovalHistory::whereIn('application_id', (clone $apps)->pluck('id'))->where('decision', 'returned')->exists(), 'some lists were sent back');
+        $this->assertTrue(\App\Modules\Core\Models\ApprovalHistory::whereIn('application_id', (clone $apps)->pluck('id'))->where('decision', 'rejected')->exists(), 'some softbounds were returned');
+
+        // Invisible to the live scenarios.
+        $this->assertSame($states, Examiner::orderBy('id')->get()->map(fn ($e) => [$e->email, $e->state()])->all(), 'pool states unchanged');
+        $this->assertSame($clashes, $this->liveClashes(), 'no clash from a finished panel');
+        foreach (['viva:reminders', 're-viva:monitor', 'examiners:sweep', 'hani:sla-reminders'] as $command) {
+            \Illuminate\Support\Facades\Artisan::call($command, ['--dry-run' => true]);
+            $output = \Illuminate\Support\Facades\Artisan::output();
+            foreach (self::historyNames() as $name) {
+                $this->assertStringNotContainsString($name, $output, "{$command} would remind about a finished history case");
+            }
+        }
+
+        // Every analytics panel has data, over each period.
+        $senior = $this->user(Role::SENIOR_EXEC_CGS, ['email' => 'senior.analytics@test.my']);
+        foreach ([3, 6, 12] as $months) {
+            $data = app(\App\Modules\Hani\Support\ProcessAnalytics::class)->for($senior, $months);
+            foreach (['examiner_nomination', 'viva_voce', 'viva_softbound', 're_viva'] as $module) {
+                $this->assertGreaterThan(0, collect($data['stages'][$module]['stages'])->sum('count'), "{$module}, {$months} months");
+            }
+            // The pipeline is a cohort (notices FILED in the period); a viva
+            // takes longer than three months, so results show from 6 months.
+            $this->assertGreaterThan(0, $data['pipeline']['notices'], "notices, {$months} months");
+            if ($months >= 6) {
+                $this->assertGreaterThan(0, $data['pipeline']['steps'][4]['count'], "results, {$months} months");
+            }
+            $this->assertGreaterThan(0, collect($data['turnaround'])->sum('count'), "turnaround, {$months} months");
+            $this->assertGreaterThan(0, collect($data['utilisation'])->max('busy'), "utilisation, {$months} months");
+        }
+        $year = app(\App\Modules\Hani\Support\ProcessAnalytics::class)->for($senior, 12);
+        $this->assertGreaterThan(0, $year['turnaround']['MSC']['count']);
+        $this->assertGreaterThan(0, $year['turnaround']['PHD']['count']);
+        $this->assertGreaterThanOrEqual(3, $year['reviva']['decided']);
+        $this->assertNotNull($year['slowest']['overall']);
+
+        Carbon::setTestNow();
+    }
+
+    /** @return array<int, string> */
+    protected static function historyNames(): array
+    {
+        return (new \ReflectionClassConstant(HaniDemoSeeder::class, 'HISTORY_NAMES'))->getValue();
+    }
+
+    /** Every live demo nomination's clash flags, by student email. */
+    protected function liveClashes(): array
+    {
+        $clashes = app(\App\Modules\Hani\Support\CrossDepartmentClashes::class);
+
+        return \App\Modules\Hani\Models\ExaminerNomination::with('application.student')->get()
+            ->filter(fn ($n) => ! str_starts_with((string) $n->application?->student?->email, 'history.'))
+            ->mapWithKeys(fn ($n) => [$n->application->student->email => collect(\App\Modules\Hani\Models\ExaminerNomination::SLOTS)->keys()
+                ->map(fn ($seat) => $n->{$seat} ? count($clashes->elsewhere($n->{$seat}, $n->application->student->department, $n->application_id)) : 0)->all()])
+            ->sortKeys()->all();
     }
 
     /**

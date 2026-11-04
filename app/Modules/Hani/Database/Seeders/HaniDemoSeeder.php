@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hani\Database\Seeders;
 
+use App\Modules\Hani\Database\Seeders\Concerns\SeedsHistoricalCases;
 use App\Modules\Hani\Database\Seeders\Concerns\SeedsReVivaScenarios;
 use App\Modules\Hani\Database\Seeders\Concerns\SeedsVivaScenarios;
 use App\Modules\Hani\Support\Import\PoolImporter;
@@ -32,7 +33,11 @@ use RuntimeException;
  *   Part 2 (people, vivaScenarios; Concerns\SeedsVivaScenarios): the demo
  *   supervisors and students, each put at their stated viva stage through
  *   the real WorkflowEngine.
- * Prompt 3 adds the re-viva cases the same way.
+ *   Part 3 (reVivaScenarios; Concerns\SeedsReVivaScenarios): S09's and
+ *   S10's re-viva rounds.
+ *   Part 4 (historicalCases; Concerns\SeedsHistoricalCases): 24 fictional
+ *   completed cases over the past year (H01-H24), for Process Analytics.
+ *   No email, and the pool's state is put back afterwards.
  *
  * EVERY DATE IS RELATIVE TO THE DAY IT RUNS: the dataset's dates are moved
  * by shift(), and each scenario is rebuilt from scratch on every run (the
@@ -41,6 +46,7 @@ use RuntimeException;
  */
 class HaniDemoSeeder extends Seeder
 {
+    use SeedsHistoricalCases;
     use SeedsReVivaScenarios;
     use SeedsVivaScenarios;
 
@@ -78,7 +84,7 @@ class HaniDemoSeeder extends Seeder
     /** @return array<int, string> the step methods run() calls, in order */
     protected function steps(): array
     {
-        return ['examinerPool', 'people', 'vivaScenarios', 'reVivaScenarios'];
+        return ['examinerPool', 'people', 'vivaScenarios', 'reVivaScenarios', 'historicalCases'];
     }
 
     public function run(): void

@@ -623,9 +623,11 @@ class ExaminerNominationController extends Controller
             ->whereHas('application', fn ($q) => $q->where('module_type', $this->moduleKey())
                 ->where('status', Application::STATUS_APPROVED)
                 ->whereHas('student', fn ($s) => $s->where('department', $department)))
+            ->evaluationOpen()
             ->get()
             // Any seat still tied up, or a main seat left empty by a decline,
-            // means this panel has not been closed out.
+            // means this panel has not been closed out. A panel already
+            // examined on is closed whatever its examiners do next.
             ->filter(fn (ExaminerNomination $n) => $n->examiners()->contains(fn (Examiner $e) => $e->assigned_until !== null)
                 || ! $n->internal_main_id || ! $n->external_main_id)
             ->values();

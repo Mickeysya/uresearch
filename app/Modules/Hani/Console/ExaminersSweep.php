@@ -114,6 +114,7 @@ class ExaminersSweep extends Command
         $panels = ExaminerNomination::with(array_merge(ExaminerNomination::slotRelations(), ['application.student']))
             ->whereHas('application', fn ($q) => $q->where('module_type', 'examiner_nomination')
                 ->where('status', Application::STATUS_APPROVED))
+            ->evaluationOpen()
             ->get()
             ->filter(fn (ExaminerNomination $n) => $n->examiners()->contains(fn ($e) => $e->assigned_until !== null));
 

@@ -17,7 +17,9 @@ use Illuminate\Support\Collection;
  * which department finds a substitute is a human decision.
  *
  * "Active" means pending or approved: a rejected list no longer holds anyone,
- * and a draft has not been filed.
+ * and a draft has not been filed. Nor does a released panel whose evaluation
+ * is over (Prompt 4): its mains were examined (the gap started) or freed, so
+ * last year's examination is not a claim on the examiner today.
  */
 class CrossDepartmentClashes
 {
@@ -30,6 +32,7 @@ class CrossDepartmentClashes
         return $this->active ??= ExaminerNomination::with(array_merge(ExaminerNomination::slotRelations(), ['application.student']))
             ->whereHas('application', fn ($q) => $q->where('module_type', 'examiner_nomination')
                 ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED]))
+            ->evaluationOpen()
             ->get();
     }
 
