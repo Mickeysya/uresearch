@@ -29,6 +29,12 @@ class ReVivaTest extends TestCase
         return UploadedFile::fake()->create('corrected-thesis.pdf', 64, 'application/pdf');
     }
 
+    /** No viva result in UResearch: CGS gives the result date (Prompt 3b); the summary is required from 3c. */
+    protected function legacy(): array
+    {
+        return ['viva_result_date' => now()->subMonths(7)->toDateString(), 'summary_of_corrections' => UploadedFile::fake()->create('summary.pdf', 20, 'application/pdf')];
+    }
+
     /** The latest cycle logged for a student, whatever its outcome. */
     protected function latestCycleFor(int $studentId): ?ReVivaDetail
     {
@@ -41,18 +47,18 @@ class ReVivaTest extends TestCase
     {
         Storage::fake('local');
 
-        $cgs = $this->cgs();
+        $cgs = $this->seniorExec();
         $student = $this->student();
 
         $this->actingAs($cgs)
-            ->post(route('reviva.store'), ['student_id' => $student->id, 'thesis' => $this->thesis()])
+            ->post(route('reviva.store'), ['student_id' => $student->id, 'thesis' => $this->thesis()] + $this->legacy())
             ->assertSessionHasNoErrors();
 
         $this->assertSame(1, ReVivaDetail::sole()->cycle_number);
 
         // The first cycle has no outcome yet, so a second may not be opened.
         $this->actingAs($cgs)
-            ->post(route('reviva.store'), ['student_id' => $student->id, 'thesis' => $this->thesis()])
+            ->post(route('reviva.store'), ['student_id' => $student->id, 'thesis' => $this->thesis()] + $this->legacy())
             ->assertSessionHasErrors('student_id');
 
         $this->assertSame(1, ReVivaDetail::count());
@@ -62,7 +68,7 @@ class ReVivaTest extends TestCase
     {
         Storage::fake('local');
 
-        $cgs = $this->cgs();
+        $cgs = $this->seniorExec();
         $passed = $this->student('22001001', 'a@test.my');
         $loops = $this->student('22001002', 'b@test.my');
 
@@ -70,19 +76,19 @@ class ReVivaTest extends TestCase
             $this->actingAs($cgs)->post(route('reviva.store'), [
                 'student_id' => $student->id,
                 'thesis' => $this->thesis(),
-            ]);
+            ] + $this->legacy());
 
             $this->latestCycleFor($student->id)->update(['outcome_level' => $level]);
         }
 
         // Level 1 is a pass: the re-viva is over, no new cycle.
         $this->actingAs($cgs)
-            ->post(route('reviva.store'), ['student_id' => $passed->id, 'thesis' => $this->thesis()])
+            ->post(route('reviva.store'), ['student_id' => $passed->id, 'thesis' => $this->thesis()] + $this->legacy())
             ->assertSessionHasErrors('student_id');
 
         // Level 4 loops back: CGS may log the next cycle, linked to the last.
         $this->actingAs($cgs)
-            ->post(route('reviva.store'), ['student_id' => $loops->id, 'thesis' => $this->thesis()])
+            ->post(route('reviva.store'), ['student_id' => $loops->id, 'thesis' => $this->thesis()] + $this->legacy())
             ->assertSessionHasNoErrors();
 
         $second = $this->latestCycleFor($loops->id);
@@ -96,14 +102,14 @@ class ReVivaTest extends TestCase
     {
         Storage::fake('local');
 
-        $cgs = $this->cgs();
+        $cgs = $this->seniorExec();
         $blocked = $this->student('22001001', 'a@test.my');
         $free = $this->student('22001002', 'b@test.my');
 
         $this->actingAs($cgs)->post(route('reviva.store'), [
             'student_id' => $blocked->id,
             'thesis' => $this->thesis(),
-        ]);
+        ] + $this->legacy());
 
         $reasons = $this->actingAs($cgs)->get(route('reviva.create'))
             ->assertOk()

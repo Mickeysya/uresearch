@@ -1,8 +1,201 @@
 # Nur Hani Sofia Binti Mohd Azam (22001418)
 
-**Scope:** Examiner Nomination & Matching · Conflict Detection · Re-viva Monitoring. Constraint-based rule engine.
+**Scope:** Examiner Matching & Pool (with Conflict Detection) · Viva Voce
+Assessment · Re-viva Monitoring, plus SLA reminders and Process Analytics
+across all three. Module keys: `examiner_nomination`, `viva_voce`,
+`viva_softbound`, `re_viva`.
 
-## Built
+Everything lives in this folder. Changes the modules would like in shared
+files are proposed, never made, in [`SHARED_CHANGES.md`](SHARED_CHANGES.md);
+the history of each change is in [`CHANGELOG.md`](CHANGELOG.md); the full
+behaviour description is [`docs/hani-modules-current-behaviour.md`](docs/hani-modules-current-behaviour.md).
+
+## After pulling
+
+```bash
+./sync.sh                     # migrations, caches, and a queue worker restart
+docker exec uresearch-app php artisan db:seed --class="App\Modules\Hani\Database\Seeders\HaniDemoSeeder"
+```
+
+Restart the queue worker whenever a notification class changes (`./sync.sh`
+does it): a worker started before the pull fails the new jobs. The seeder is
+idempotent and rebuilds the demo with dates relative to the day it runs;
+re-run it whenever the demo should look fresh.
+
+## Features at a glance
+
+### Examiner Matching & Pool
+
+| Feature | Who | Where |
+|---|---|---|
+| Six-stage nomination chain, with "send back to department" (reason required) | Supervisor → AE → Senior Exec → Senior Director → Dean → Senior Exec | `/examiner-nomination/new`, queues |
+| "Finalise and release": one Approve records `cgs_final` and `cgs_release`; Non-Exec notified | Senior Exec | nomination queue |
+| Examiner pool: internal/external lists, derived state (Available, On Gap 90 days, Assigned, Unavailable), edit page, expertise and publications | Senior Exec (Non-Exec: emails only) | `/examiners` |
+| Pool import from CGS's workbook or the UResearch template, with a preview before anything is written | Senior Exec | `/examiners/import` |
+| **Suggested examiners** per seat, explained | Supervisor, AE, Senior Exec | nomination form |
+| **Duplicate examiner** flags, "Not the same person" | Senior Exec | pool, import preview, `cgs_compile` |
+| **Conflict-of-interest** pre-check (UTP/CGS/026) | everyone in the chain | form, cards, report |
+| Cross-department clashes | AE, Senior Exec | form, cards, Conflict Detection |
+| Declines recorded, backup promoted, seat history | AE, Senior Exec | panel page |
+| Examiner Report, xlsx/csv export ("Application No." for Jason's letters) | AE (own dept), CGS, Director, Dean | `/examiner-nomination/report` |
+| Examiner email upkeep: report not working, confirm still valid, history, proposals at nomination | Non-Exec, Senior Exec, AE | examiner page, pool |
+| Examiner Dashboard (state, departments, returning, stages, expertise gaps) | AE (own dept), CGS, Director, Dean | `/examiner-dashboard` |
+| Pending Evaluation, mark complete (starts the 90-day gap) | AE | `/examiner-nomination/pending-evaluation` |
+
+### Viva Voce Assessment
+
+| Feature | Who | Where |
+|---|---|---|
+| Eligibility checklist and Notice of Thesis Submission on one page; abstract and keywords feed the suggestions | Student | `/viva/eligibility` |
+| Candidacy period **verified by the system** (Study Candidacy) | system | checklist |
+| Acknowledge notice; supervisor prompted to nominate | AE | Notices Received |
+| Softbound thesis, CGS Online Form #019 (4 steps) | Student | `/viva/softbound` |
+| **Softbound System checks**: Turnitin report read, title, word count, sources above 5%, report age | system → AE | Theses to Check |
+| Examiner progress: letter, accept/reject (rejection promotes the backup), thesis, report with category | AE, Senior Exec | `/viva/{notice}/examiners` |
+| **Divergence alert** between the two reports | AE, Senior Exec | examiner progress, scheduling |
+| Scheduling with clash, weekend and holiday warnings and the next free slots; `.ics` invitations | AE | `/viva/scheduling` |
+| Result (chairman's report, category 1–5), deadlines, corrections upload and acceptance | AE, Student | `/viva/results`, `/viva/corrections` |
+| `viva:reminders` | system | daily |
+
+### Re-viva Monitoring
+
+| Feature | Who | Where |
+|---|---|---|
+| Log a round from the category-4 hand-off, with the resubmission window | Senior Exec | `/re-viva/new` |
+| Send to panel: Dompdf correction letters, signed expiring links; Resend letter | AE (Senior Exec resend) | re-viva queue |
+| Panel working-day limits (20 → AE, 25 → Senior Exec) | system | `re-viva:monitor` |
+| UTP/CGS/024 re-evaluations, divergence, **suggested outcome** | AE | queue, `/re-viva/outcomes` |
+| Final thesis, Corrections accepted, pre-filled Confirmation of Correction | Student, AE | My Re-viva, Outcomes |
+| Re-viva Cycles with a **risk score** | Senior Exec, Non-Exec (read-only) | `/re-viva/cycles` |
+| **Digital Summary of Corrections**, checked against the thesis | Student | My Re-viva |
+
+### Across the modules (Prompt 4)
+
+| Feature | Who | Where |
+|---|---|---|
+| **SLA reminders**: the current approver, when an application waits past its stage limit; the second threshold copies the Senior Exec | system | `hani:sla-reminders` |
+| **Process Analytics**: days per stage (average, median), the slowest stage and its share, overdue now, viva pipeline, re-viva rounds and outcomes, report turnaround (MSc vs PhD), pool utilisation; 3/6/12 months; xlsx/csv | AE (own dept), Senior Exec, Senior Director, Dean, Non-Exec (read-only) | `/process-analytics` (from the Examiner Dashboard and the sidebar) |
+
+## The intelligent features, and how each explains itself
+
+All of them run locally in plain PHP. Nothing is sent to an external AI or
+LLM service, every result carries its evidence, and only the confirmed hard
+rules block anything.
+
+| Feature | Method | How it explains itself |
+|---|---|---|
+| **Examiner matcher** (`Support/Matching`) | TF-IDF with cosine similarity over expertise, keywords and publication titles against the thesis title, abstract and keywords; stemming, phrase terms; ranks only examiners the form would accept; load-spreading tie-breakers | each suggestion shows its score, "matched on: anomaly detection, time series", days since the last examination and examinations in the last 12 months, plus any conflict flag |
+| **Duplicate detection** (`NameNormaliser`, `DuplicateDetector`) | names normalised (titles, "bin/binti/a/l", punctuation dropped), then similarity ≥ `hani.duplicates.threshold` | the pair, both emails and the similarity; "Not the same person" silences it for good |
+| **Conflict of interest** (`ConflictOfInterest`) | rules from UTP/CGS/026: supervisor or co-supervisor (blocks); co-authorship, current UTP appointment, left UTP < 5 years, "external" at UTP (warnings) | every flag names its evidence: the publication, the appointment, the date |
+| **Divergence** (`ExaminerDivergence`) | compares the two main examiners' categories, viva reports and re-evaluations | "minor" (categories differ) or "major" (pass vs re-examination/fail), with both categories; staff only, the chairman gets a neutral line |
+| **Risk score** (`ReVivaRisk`) | rule-based 0–100 from time used in the window, time in the current stage, divergence and earlier rounds (weights in `hani.reviva.risk`) | each factor's points are listed beside the score; "rule-based, not a prediction" |
+| **PDF reading** (`Support/Pdf`) | built-in reader (Flate and object streams, ToUnicode maps); smalot if installed | "Read: 12% similarity index from the report", or "Not checked automatically" with the reason, and the declared figure is used |
+| **SLA reminders and overdue** (`StageSla`) | time since the decision that brought the application to its stage, against `hani.sla` | "at CGS Compilation since 3 Nov: 7 working days, against a limit of 5" |
+| **Process Analytics** (`ProcessAnalytics`) | durations between consecutive `approval_history` rows, and the module's own tables | every chart states what it is computed from and over which period |
+
+## Commands
+
+All four are scheduled from `ModuleProvider` (no shared file), send each
+reminder once (a log table with a unique key, written before sending), and
+take `--dry-run`, which lists what would be sent without sending or logging.
+
+```bash
+docker exec uresearch-app php artisan examiners:sweep --dry-run      # 07:30 evaluation-overdue reminders, stale import previews
+docker exec uresearch-app php artisan viva:reminders --dry-run       # 07:45 examiner chasers, panel reminders, deadlines
+docker exec uresearch-app php artisan re-viva:monitor --dry-run      # 08:00 panel limits, windows, final thesis
+docker exec uresearch-app php artisan hani:sla-reminders --dry-run   # 08:15 stage limits (hani.sla)
+docker exec uresearch-app php artisan schedule:list                  # all four appear here
+```
+
+Without `--dry-run` they send and log. A second run the same day sends
+nothing new ("N already sent").
+
+## Configuration (`config/hani.php`)
+
+Every value CGS has not confirmed is marked **Provisional** in the file.
+
+| Key | What | Status |
+|---|---|---|
+| `appointments.letters_to_backups`, `appointments.assignment_days` | letters to mains only; 180-day tie-up | Confirmed |
+| `departments.aliases` | spreadsheet department names → Core's names | Provisional |
+| `names.titles`, `names.connectors` | stripped before names are compared | Provisional |
+| `duplicates.threshold` | 85 | Provisional |
+| `coi.former_utp_years` | 5 | Provisional |
+| `matcher.suggestions`, `matcher.explain_terms` | 5, 4 | setting |
+| `matcher.phrase_boost`, `matcher.weights` | 1.5; load tie-breakers | Provisional |
+| `eligibility.sources`, `eligibility.candidacy_months` | system-checked items; candidacy limits | Provisional (months) |
+| `notice.*` | abstract 100–500 words, 3–8 keywords | Provisional |
+| `similarity.source` | `uploaded` / `turnitin_api` / `simulated` | setting |
+| `similarity.ulearn_url` | where students download the report | Confirmed (address provisional) |
+| `similarity.single_source_warn`, `mismatch_points`, `max_report_age_days` | 5%, 1 point, 30 days | Provisional |
+| `softbound_checks.*` | word tolerance, title overlap | Provisional |
+| `examiner_progress.ack_chase_days` | 14 | Provisional |
+| `examiner_progress.report_weeks` | MSc 4, PhD 6 | Confirmed |
+| `examiner_progress.criteria`, `.sections` | rating labels | Provisional wording |
+| `scheduling.*` | clash hours, slots, public holidays | Provisional |
+| `result.*` | correction months, resubmission window, reminder days | Provisional |
+| `reviva.review_working_days`, `reviva.link_days` | 20 working days; 35-day link | Confirmed (20 days) |
+| `reviva.next_round_window_months`, `final_thesis_months`, `hold_months`, `panel_*_working_days`, `risk.*` | | Provisional |
+| `reviva.letter.*` | signatory and CGS contacts | Provisional (fictional) |
+| `reminders.*`, `sweep.*`, `sla.daily_at` | run times and reminder spacing | Provisional |
+| `sla.stages` | per-stage limits, e.g. 5 and 10 working days | Provisional |
+| `sla.skip` | stages chased by another command (re-viva panel review) | setting |
+| `dashboard.*` | returning window, gap threshold | Provisional |
+| `analytics.periods`, `analytics.default_period` | 3/6/12 months, default 12 | setting |
+| `examiner_contact.stale_months` | 12 | Provisional |
+| `import.*` | file size, preview lifetime | Provisional |
+
+## Process Analytics: what it computes
+
+`/process-analytics?months=3|6|12` (`Support/ProcessAnalytics`), read-only.
+The AE sees their own department's candidates and examiners; the Senior
+Executive, Senior Director, Dean and Non-Executive see the whole university.
+The same tables download as xlsx (one sheet each) or csv
+(`/process-analytics/export?format=xlsx|csv&months=`), scoped the same way.
+
+| Panel | Computed from | Period |
+|---|---|---|
+| Days per stage, per module (average, median, share) | `approval_history`: the time between one decision and the next, the first from submission; a returned list counts each visit | decisions in the period |
+| Slowest stage | the stage with the largest share of its workflow's time; headline by average | as above |
+| Overdue now | `StageSla` against `hani.sla` (as the SLA reminders) | today |
+| Viva pipeline | notices filed in the period: softbound filed → all current main reports in → viva held → result recorded | notices filed in the period |
+| Re-viva rounds | open rounds by stage; outcomes by level, round 1 vs later | open now; outcomes in the period |
+| Report turnaround | `viva_examiner_progress`: thesis received → report received, MSc vs PhD, against `report_weeks` | reports in the period |
+| Pool utilisation | `examiner_seat_history`: active examiners holding a main seat on a released panel in the month / active pool | each month in the period |
+
+## Demo: accounts and scenarios
+
+Fictional, on demand only, never called from `DatabaseSeeder`. Password
+`password` for every account.
+
+**Staff (shared test accounts):** `ae@utp.edu.my` (AE, Computing; other
+departments `ae.<department>@utp.edu.my`, e.g. `ae.petroleum@`,
+`ae.applied@`, `ae.chemical@`), `seniorexec@utp.edu.my` (Senior Executive
+CGS), `director@utp.edu.my` (Senior Director CGS), `dean@utp.edu.my` (Dean
+of PGR), `cgs@utp.edu.my` (Non-Executive CGS).
+
+**Demo supervisors:** `nurul.aziz@example.com` (Computing; S01, S08),
+`hairul.hashim@example.com` (Petroleum; S02), and one per department (see
+the dataset).
+
+The ten live scenarios (S01–S10) and the 24 historical cases (H01–H24) are
+described under "Demo data" below. A suggested walkthrough:
+
+| Scenario | Log in as | Do |
+|---|---|---|
+| Viva from the start (MSc) | `aiman.roslan@example.com` (S01) | eligibility and notice on one page |
+| Acknowledge | `ae@utp.edu.my` | Notices Received → acknowledge S01 |
+| Nominate with suggestions | `nurul.aziz@example.com` | Nominate Examiners → S01 → click suggestions |
+| The chain | `ae@` → `seniorexec@` → `director@` → `dean@` → `seniorexec@` | approve each; "Finalise and release" at the end; `cgs@` sees the notification |
+| Softbound with System checks | S01, then `ae@` | Form #019 with the fictional Turnitin report; AE reads the checks |
+| Divergence | `ae.mechanical@utp.edu.my` | S06's examiner progress: internal 2, external 4 |
+| Viva reminders | terminal | `viva:reminders --dry-run`: S07's 7-day reminder |
+| Re-viva | `ae.applied@utp.edu.my`, then `seniorexec@` | S09 under panel review for 22 working days (resend a letter); the Senior Exec logs S10's round 2 (`ae.chemical@` runs it) |
+| Analytics | `seniorexec@` or `ae@` | Examiner Dashboard → Process Analytics; switch 3/6/12 months; download Excel |
+
+## Module details
+
+### Examiner Matching & Pool: what is built
 
 - **Examiner pool** — `examiners` with the four-state machine (Assigned,
   On Gap, Available, Unavailable). State is *derived* in `Examiner::state()`
@@ -77,19 +270,14 @@
   "Date 2nd" is `last_examination_date`, which already drives the 90-day gap;
   "Student Name" is derived from `examiner_nominations`; and "Remark" is what
   `unavailable_reason` already shows.
-- **Re-viva monitoring** — CGS Staff logs the re-corrected thesis once it
-  reaches them (`reviva.create`, Non-Exec CGS, with an eligibility-aware
-  student picker like the examiner dropdown), which stamps `resubmission_at`
-  and computes the 6-month correction / 1-year hardbound deadlines. Not a
-  student self-service upload — see `ReVivaWorkflow`'s docblock. The AE
-  advances a 4-stage stepper (Report sent → Under panel review → Report
-  received → Consolidation scheduled), then records the 5-level outcome on a
-  separate screen (`/re-viva/outcomes`) that never touches
-  `applications.status`. A level-4 outcome doesn't loop the Stage graph; it
-  opens the door for CGS to log the next cycle, which links back to the
-  prior one via `re_viva_details.previous_cycle_id`.
+- **Re-viva monitoring** — rebuilt around CGS practice in Prompt 3; see
+  "Re-viva Monitoring: what the system does" below. The Senior Executive
+  logs a round, the AE runs the four stages (stage 1 sends the correction
+  letters), the outcome is suggested from the examiners' UTP/CGS/024
+  reports, and a level-4 outcome opens round N+1, linked by
+  `re_viva_details.previous_cycle_id`.
 
-## Examiner emails (who keeps them current)
+### Examiner emails (who keeps them current)
 
 - **Non-Executive CGS** reads the pool and may change an examiner's email,
   and nothing else. A reason is required.
@@ -109,7 +297,7 @@
   can give the current one and a CV. CGS confirms it from "Proposed emails
   to confirm" in the pool. A working email is never replaced automatically.
 
-## Examiner suggestions (how the matching works)
+### Examiner suggestions (how the matching works)
 
 The nomination form lists **Suggested examiners** for each seat type, top 5,
 each with its score, the terms it matched on ("matched on: anomaly detection,
@@ -175,7 +363,7 @@ Bind it in `ModuleProvider::register()` instead of `TfIdfMatcher`. Keep the
 explanation: report the expertise keywords closest to the thesis, so a score
 is never shown without its reason.
 
-## Viva Voce: what the system checks and chases
+### Viva Voce: what the system checks and chases
 
 All settings are in `config/hani.php`. Values CGS has not confirmed are marked
 "Provisional" there.
@@ -211,7 +399,57 @@ All settings are in `config/hani.php`. Values CGS has not confirmed are marked
   - the corrections deadlines
   - the category 4 window closing
 
-## Examiner Report export layout (for Jason's appointment letters)
+### Re-viva Monitoring: what the system does
+
+Settings in `config/hani.php` under `reviva`; unconfirmed values are marked
+"Provisional".
+
+- **Roles.** Senior Executive: logs rounds (`/re-viva/new`), reads Re-viva
+  Cycles. Non-Executive CGS: reads Re-viva Cycles and downloads the
+  staff-only files (a return contact on the letter), and gets 403 on every
+  action. The AE runs the stages and the outcome for their own department.
+- **Viva hand-off.** A category-4 viva (or a level-4 round) appears under
+  "Expected resubmissions"; the round links the viva and stores its window.
+  Logging outside the window warns, never blocks. Legacy students: the
+  Senior Executive enters the viva result date.
+- **Stage 1, Send to panel** (`Support/ReVivaLetters`): a Dompdf "Correction
+  of Master's/Doctoral Thesis" letter per current main examiner
+  (`Resources/views/re_viva/pdf/correction_letter.blade.php`, styles in one
+  block), stored staff-only, emailed with a signed link (no login, expiring,
+  throttled) to the corrected thesis and Summary of Corrections. The link
+  works for `hani.reviva.link_days` from when the email is built, not from a
+  backdated send. `Http/Middleware/ValidPanelLink` answers a tampered link
+  with 403 and an expired one with a 410 page giving the CGS contacts.
+  Flagged emails are skipped and named. The stage completes in the same
+  action.
+- **Stage 2.** Working days (`Support/WorkingDays`, the public-holiday list)
+  with the panel; 20 → AE reminded, 25 → Senior Executive told. "Resend
+  letter" (AE of the department, Senior Executive) emails an examiner the
+  same letter with a fresh link; every send is logged in
+  `re_viva_letter_sends` and shown as "last sent" per examiner.
+- **Stage 3.** Each main examiner's UTP/CGS/024: category 1–4, "viva again"
+  for a fail, signed form (staff-only), optional ratings. Both are needed.
+  `ExaminerDivergence::betweenReEvaluations` flags disagreement.
+- **Outcome** (`Support/ReVivaOutcome`): suggested when the examiners agree
+  (1→1, 2→2, 3→3, 4+YES→4, 4+NO→5), otherwise "Consolidation needed"; the AE
+  confirms. Final thesis due 1/3/6 months after; levels 1–3 and 5 complete
+  the mains' evaluation (the gap starts); level 4 holds them for round N+1.
+  Students and supervisors never see examiner names or recommendations.
+- **Corrections accepted** (`Support/ReVivaCorrections`): the student
+  uploads the final thesis on My Re-viva; the AE accepts; the Confirmation
+  of Correction is generated pre-filled, staff-only.
+- **`re-viva:monitor`**: daily, once per alert, `--dry-run`. Panel limits,
+  window and final-thesis reminders, overdue flags, level-4 windows closing.
+- **Risk score** (`Support/ReVivaRisk`): 0–100 from time used, time in
+  stage, divergence and earlier rounds, each factor shown; Re-viva Cycles
+  sorts by it. Rule-based, not a prediction.
+- **Digital Summary of Corrections** (`Support/SummaryOfCorrections`): the
+  student lists each examiner's comments, actions and pages; the system
+  checks every comment has an action and every page exists in the
+  corrected thesis (built-in PDF reader), then renders the PDF, which the
+  Senior Executive can attach at logging.
+
+### Examiner Report export layout (for Jason's appointment letters)
 
 `/examiner-nomination/report/export?format=xlsx|csv`. There is one row per
 candidate, one sheet, and the same columns in both formats
@@ -229,7 +467,7 @@ candidate, one sheet, and the same columns in both formats
 
 **Stability rule:** columns are only ever added at the end; none is renamed,
 reordered or removed. Code-level access is the proposed Core contract
-`SuppliesReleasedExaminers` (SHARED_CHANGES.md, item 3), implemented by
+`SuppliesReleasedExaminers` (SHARED_CHANGES.md, section 1a), implemented by
 `Support/ReleasedExaminerProvider`. It returns released panels only and is
 bound automatically once the contract exists.
 
@@ -240,12 +478,11 @@ notifies Non-Executive CGS again with the name to send the letter to.
 
 ## Still to build
 
-Nothing from the original TODO list remains unscoped. Candidates for
-follow-up, not currently tracked as required:
-- A student-facing view of their own re-viva cycle history (currently they
-  only see the generic tracking page's stepper for whichever cycle is open).
-- Automated reminders as correction/hardbound deadlines approach — `TODO.md`'s
-  cross-cutting section notes scheduled commands are still a gap generally.
+Nothing from the FYP scope remains unbuilt. Candidates for follow-up:
+- The real signatory and CGS contacts in `hani.reviva.letter` (fictional
+  for now), and CGS's confirmation of every Provisional value.
+- The shared-file proposals in `SHARED_CHANGES.md`, chiefly the staff-only
+  flag (section 8) so the examiner files can move into `DocumentStore`.
 
 ## Demo data (`HaniDemoSeeder`)
 
@@ -276,14 +513,29 @@ test accounts:
 |---|---|---|---|
 | S01 Aiman Hakim | `aiman.roslan@example.com` | MSc FT, Computing | Not started: the full live walkthrough (MSc) |
 | S02 Nurin Batrisyia | `nurin.azlan@example.com` | PhD FT, Petroleum Eng. | Notice waiting for the AE: the live walkthrough (PhD) |
-| S03 Harith Iskandar | `harith.z@example.com` | MSc PT, Chemical Eng. | Nomination at CGS compile; clash on Firdaus Kamarudin with S04 |
-| S04 Siti Khadijah | `khadijah.mazlan@example.com` | PhD FT, Civil & Env. Eng. | Nomination at the Senior Director; "Hassan bin Omar" vs S10's "Hassan Omar, PhD" duplicate |
+| S03 Harith Iskandar | `harith.z@example.com` | MSc PT, Chemical Eng. | Nomination at CGS compile for about 18 working days; clash on Firdaus Kamarudin with S04; `hani:sla-reminders` sends the Senior Exec its second reminder |
+| S04 Siti Khadijah | `khadijah.mazlan@example.com` | PhD FT, Civil & Env. Eng. | Nomination at the Senior Director for about 16 working days (SLA reminder); "Hassan bin Omar" vs S10's "Hassan Omar, PhD" duplicate |
 | S05 Amirah Sofea | `amirah.kamal@example.com` | MSc FT, Management | Released; softbound returned (Turnitin receipt 45 days old: System checks warn) |
 | S06 Lee Jia Hui | `lee.jiahui@example.com` | PhD PT, Mechanical Eng. | Ready to schedule; examiner reports diverge (Internal 2, External 4: major) |
 | S07 Muhammad Danish | `danish.faisal@example.com` | MSc FT, Electrical & Electronics Eng. | Viva in 7 days: `php artisan viva:reminders` sends the 7-day reminder |
 | S08 Tan Yi Xuan | `tan.yixuan@example.com` | MSc FT, Computing | Viva 14 days ago, result category 2; uploads corrections, then the AE accepts |
-| S09 Nur Aleesya | `aleesya.hisham@example.com` | PhD FT, Applied Sciences | Viva 14 days ago, result category 4; examiners held, Senior Exec asked to log a re-viva |
-| S10 Kavitha Selvaraj | `kavitha.selvaraj@example.com` | MSc PT, Chemical Eng. | Released nomination (the duplicate partner); its re-viva rounds come in Prompt 3 |
+| S09 Nur Aleesya | `aleesya.hisham@example.com` | PhD FT, Applied Sciences | Category-4 viva about 7½ months ago; re-viva round 1 Under Panel Review for 22 working days, so the AE has been reminded to chase the panel |
+| S10 Kavitha Selvaraj | `kavitha.selvaraj@example.com` | MSc PT, Chemical Eng. | Category-4 viva; re-viva round 1 finished (internal 3, external 4 + viva again), consolidated to level 4 three days ago; the Senior Exec logs round 2 |
+
+**History for Process Analytics (H01-H24).** Twenty-four further fictional
+candidates (`history.h01@example.com` to `history.h24@example.com`, password
+`password`) each have one *completed* journey, finished between 5 and about
+330 days before the run day: notice, the six-stage nomination chain (lists
+H03, H08, H13, H18 and H23 sent back once by the Senior Director or the
+Dean), softbound (H05, H11, H17 and H23 returned once), both examiner
+reports (PhD slower, some late), viva, result and corrections accepted. H04,
+H10, H16 and H22 are category 4 and go through a re-viva round to an outcome
+(levels 2, 3, 1 and 5). Durations are varied but fixed per case, so the picture is the
+same every run relative to today. The live scenarios' decisions are spread
+the same way (a notice acknowledged two days after filing, the chain moving
+every four days), so no wait is invented. This step sends no email and puts every
+examiner's `assigned_until` and `last_examination_date` back afterwards, so
+the live scenarios above see the same pool.
 
 The dataset says S03's clash partner is S10. Both are in Chemical
 Engineering, though, and a clash is by definition across departments, so
@@ -292,21 +544,25 @@ only Hani's own tables are written directly.
 
 ## Tests
 
-`tests/Feature/Hani/`: 173 tests. Examiner email upkeep is covered by
-`ExaminerContactTest`. The viva files added in Prompt 2:
-`VivaBulkSafetyTest`, `VivaEligibilityVerificationTest`,
-`VivaSoftboundChecksTest`, `VivaExaminerProgressTest`,
-`VivaSchedulingAssistTest`, `VivaResultTest`; fixtures are in
-`tests/Feature/Hani/Concerns/` (`BuildsVivas`, `FilesVivaNotices`).
+`tests/Feature/Hani/`: 250 tests. Run them with
 
-| File | Guards |
+```bash
+docker exec uresearch-app php artisan test tests/Feature/Hani
+```
+
+(the path, not `--filter=Hani`, which also matches Norhanis's tests), and the
+full suite with `docker exec uresearch-app php artisan test`.
+
+| Prompt | Files |
 |---|---|
-| `ExaminerNominationTest` | the four-seat panel, the internal-examiner department rule, the internal/external seat types, that only a FINISHED chain ties the panel up, the Senior Director's and the Dean's return-to-department path (including that a reason is required and that the first stage cannot send anything back), and that the compiled report is scoped by department for an Academic Executive and forbidden to a student |
-| `ExaminerPoolTest` | the internal/external split: which columns each list shows, tab-scoped counts, the derived student column, the external-field strip on an internal save, `institution` being required for an external examiner, and the add form's stepper contract (two steps, external block disabled for an internal examiner) |
-| `ReVivaTest` | the four-stage stepper and the level-based outcome |
+| 1, examiners | `ExaminerNominationTest`, `ExaminerPoolTest`, `ExaminerImportTest`, `ExaminerMatcherTest`, `DuplicateDetectionTest`, `NameNormaliserTest`, `ConflictOfInterestTest`, `ConflictDetectionTest`, `PanelSeatsTest`, `ExaminersSweepTest`, `ReleasedExaminerProviderTest`, `ExaminerDashboardTest`, `ExaminerContactTest` |
+| 2, viva | `VivaEligibilityTest`, `VivaEligibilityVerificationTest`, `VivaSoftboundTest`, `VivaSoftboundChecksTest`, `VivaExaminerProgressTest`, `VivaScheduleTest`, `VivaSchedulingAssistTest`, `VivaResultTest`, `VivaBulkSafetyTest`, `ModuleTrackerTest` |
+| 3, re-viva | `ReVivaTest`, `ReVivaRolesTest`, `ReVivaHandoffTest`, `ReVivaLettersTest`, `ReVivaResendTest`, `ReVivaMonitorTest`, `ReVivaEvaluationsTest`, `ReVivaOutcomeTest`, `ReVivaCorrectionsTest`, `ReVivaRiskTest`, `ReVivaSummaryTest` |
+| 4, across | `SlaRemindersTest`, `ProcessAnalyticsTest`, `EvaluationOverTest` |
+| demo | `HaniDemoSeederTest` (pool, stages, re-viva, links, the fictional history) |
 
-Run them with `docker exec uresearch-app php artisan test tests/Feature/Hani`
-(the path, not `--filter=Hani`, which also matches Norhanis's tests).
+Fixtures are in `tests/Feature/Hani/Concerns/` (`BuildsVivas`,
+`BuildsReVivas`, `FilesVivaNotices`, `KeepsJobsOffTheDevQueue`).
 
 ## Layout
 

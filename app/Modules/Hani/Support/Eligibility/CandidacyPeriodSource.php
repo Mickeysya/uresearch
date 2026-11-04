@@ -3,28 +3,31 @@
 namespace App\Modules\Hani\Support\Eligibility;
 
 use App\Modules\Core\Models\User;
-use App\Modules\Hani\Support\VivaChecklist;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * "Within candidacy period", checked from the candidature start date in
- * Norhanis's RPD masterlist (candidacies.candidature_start_date and
- * programme_type, one row per student).
+ * "Within candidacy period", checked against Chloe's Study Candidacy record
+ * (study_candidacies: one row per student, with the candidacy expiry date
+ * that already includes any extension granted on appeal, and the status).
+ *
+ * It used to read Norhanis's RPD masterlist (candidacies), which develop
+ * removed with RPD Candidacy (2026_10_30_000100_remove_rpd_candidacy).
  *
  * A guarded, read-only lookup: there is no Core contract for it yet (one is
  * proposed in SHARED_CHANGES.md), so this reads the table directly and never
  * imports her classes. If the table or a column is missing it says nothing
- * rather than failing -- the item simply stays self-declared.
- *
- * Limits in config('hani.eligibility.candidacy_months'), provisional.
+ * rather than failing: the item simply stays self-declared.
  */
 class CandidacyPeriodSource implements EligibilitySource
 {
-    protected const TABLE = 'candidacies';
+    protected const TABLE = 'study_candidacies';
 
-    protected const COLUMNS = ['student_id', 'candidature_start_date', 'programme_type'];
+    protected const COLUMNS = ['student_id', 'programme_start_date', 'candidacy_expiry_date', 'status'];
+
+    /** Study Candidacy's status for a dismissed candidature. */
+    protected const DISMISSED = 'dismissed';
 
     public function column(): string
     {
@@ -48,42 +51,22 @@ class CandidacyPeriodSource implements EligibilitySource
                 'The candidacy period could not be checked automatically just now. Try again later, or contact CGS if this continues.');
         }
 
-        if (! $row || ! $row->candidature_start_date) {
+        if (! $row || ! $row->candidacy_expiry_date) {
             return EligibilityResult::selfDeclared('No candidature record was found for you, so this stays self-declared.');
         }
 
-        [$level, $partTime] = $this->programme($row->programme_type, $student);
+        $ends = Carbon::parse($row->candidacy_expiry_date)->startOfDay();
+        $started = $row->programme_start_date ? 'Candidature started '.Carbon::parse($row->programme_start_date)->format('j M Y').'; ' : '';
 
-        if ($level === null) {
-            return EligibilityResult::selfDeclared('Your candidature record does not say which programme you are on.');
+        if ($row->status === self::DISMISSED) {
+            return new EligibilityResult(EligibilityResult::NOT_MET,
+                "{$started}your candidature is recorded as dismissed. Contact CGS.");
         }
-
-        $months = (int) config('hani.eligibility.candidacy_months.'.$level.'.'.($partTime ? 'part_time' : 'full_time'));
-        $start = Carbon::parse($row->candidature_start_date)->startOfDay();
-        $ends = $start->copy()->addMonthsNoOverflow($months);
-        $mode = ($level === VivaChecklist::PHD ? 'PhD' : 'MSc').' '.($partTime ? 'part-time' : 'full-time');
 
         return now()->startOfDay()->lte($ends)
             ? new EligibilityResult(EligibilityResult::VERIFIED,
-                "Candidature started {$start->format('j M Y')}; the {$months}-month limit for {$mode} ends {$ends->format('j M Y')}.")
+                "{$started}your candidacy period ends {$ends->format('j M Y')}, including any extension granted.")
             : new EligibilityResult(EligibilityResult::NOT_MET,
-                "Candidature started {$start->format('j M Y')}; the {$months}-month limit for {$mode} ended {$ends->format('j M Y')}. Contact CGS about an extension.");
-    }
-
-    /**
-     * msc_ft | msc_pt | phd_ft | phd_pt from the candidacy row; failing that,
-     * the student's own programme field.
-     *
-     * @return array{0: ?string, 1: bool}
-     */
-    protected function programme(?string $type, User $student): array
-    {
-        return match (strtolower((string) $type)) {
-            'msc_ft' => [VivaChecklist::MSC, false],
-            'msc_pt' => [VivaChecklist::MSC, true],
-            'phd_ft' => [VivaChecklist::PHD, false],
-            'phd_pt' => [VivaChecklist::PHD, true],
-            default => [VivaChecklist::levelFor($student), VivaChecklist::isPartTime($student)],
-        };
+                "{$started}your candidacy period ended {$ends->format('j M Y')}. Apply for an extension through Study Candidacy, or contact CGS.");
     }
 }

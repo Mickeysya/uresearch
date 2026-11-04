@@ -126,13 +126,186 @@ class HaniDemoSeederTest extends TestCase
         $this->assertSame(Examiner::STATE_ASSIGNED, Examiner::where('email', 'ain.ismail@example.com')->sole()->state());
 
         $this->assertSame(Application::STATUS_APPROVED, VivaProgress::for($this->student('DEMO-S10'))->nomination->status);
+        $this->assertSame(VivaDetail::REEXAMINATION, VivaProgress::for($this->student('DEMO-S10'))->detail->result_category);
 
         // Demo accounts are example.com, with the test accounts' password.
-        $this->assertTrue(User::where('email', 'like', '%@example.com')->where('role', Role::STUDENT)->count() === 10);
+        $this->assertTrue(User::where('email', 'like', '%@example.com')->where('email', 'not like', 'history.%')->where('role', Role::STUDENT)->count() === 10);
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('password', $this->student('DEMO-S01')->password));
 
         // The examiners S01's walkthrough expects are still free to suggest.
         $this->assertSame(Examiner::STATE_AVAILABLE, Examiner::where('email', 'farah.rosli@example.com')->sole()->state());
         $this->assertSame(Examiner::STATE_AVAILABLE, Examiner::where('email', 'melissa.teoh@example.org')->sole()->state());
+    }
+
+    /** Part 3: S09 under panel review for 22 working days, S10 at level 4 ready for round 2. */
+    public function test_re_viva_rounds_for_s09_and_s10(): void
+    {
+        foreach (['2026-11-04', '2027-06-21'] as $day) {
+            Carbon::setTestNow($day.' 09:00');
+            $this->seed(HaniDemoSeeder::class);
+
+            $s09 = \App\Modules\Hani\Support\ReVivaLogging::latestCycle($this->student('DEMO-S09')->id);
+            $this->assertSame(1, $s09->cycle_number);
+            $this->assertSame('under_panel_review', $s09->application->current_stage, $day);
+            $this->assertFalse($s09->logged_outside_window, $day);
+            $this->assertSame(22, \App\Modules\Hani\Support\WorkingDays::between($s09->sent_to_panel_at, today()), $day);
+            $this->assertSame(2, $s09->staffDocuments()->where('kind', 'correction_letter')->count());
+            $this->assertTrue(\App\Modules\Hani\Models\ReVivaReminderLog::where('re_viva_detail_id', $s09->id)->where('kind', 'panel_chase')->exists(), 'the 20-day reminder has fired');
+            $this->assertFalse(\App\Modules\Hani\Models\ReVivaReminderLog::where('re_viva_detail_id', $s09->id)->where('kind', 'panel_escalate')->exists());
+            $this->assertSame(Examiner::STATE_ASSIGNED, Examiner::where('email', 'ain.ismail@example.com')->sole()->state());
+
+            $s10Student = $this->student('DEMO-S10');
+            $s10 = \App\Modules\Hani\Support\ReVivaLogging::latestCycle($s10Student->id);
+            $this->assertSame(1, $s10->cycle_number);
+            $this->assertSame(Application::STATUS_APPROVED, $s10->application->status);
+            $this->assertSame(4, $s10->outcome_level);
+            $this->assertNull($s10->suggested_level, 'internal 3 and external 4 + YES diverge');
+            $this->assertSame(['external_main_id' => 4, 'internal_main_id' => 3], $s10->evaluations->pluck('category', 'seat')->sortKeys()->all());
+            $this->assertTrue($s10->evaluations->firstWhere('seat', 'external_main_id')->viva_again);
+            $this->assertSame(today()->subDays(3)->toDateString(), $s10->outcome_recorded_at->toDateString());
+            $this->assertNull(\App\Modules\Hani\Support\ReVivaLogging::blockReason($s10), 'round 2 may be logged');
+            $this->assertTrue(\App\Modules\Hani\Support\ReVivaWindow::for($s10Student, $s10)->contains(today()));
+        }
+
+        Carbon::setTestNow();
+
+        $this->assertSame(2, \App\Modules\Hani\Models\ReVivaDetail::whereHas('application.student', fn ($q) => $q->where('email', 'not like', 'history.%'))->count(), 'rebuilt, not duplicated');
+    }
+
+    /**
+     * Part 4 (Prompt 4c): the fictional history. Completed, idempotent,
+     * enough for every analytics panel over 3, 6 and 12 months, and invisible
+     * to the live scenarios: the same pool states, no new clashes, nothing
+     * for any reminder command to send.
+     */
+    public function test_the_fictional_history_fills_the_analytics_without_touching_the_live_scenarios(): void
+    {
+        Carbon::setTestNow('2026-11-04 09:00');
+
+        // Parts 1-3 only, for comparison.
+        $withoutHistory = new class extends HaniDemoSeeder
+        {
+            protected function steps(): array
+            {
+                return array_values(array_diff(parent::steps(), ['historicalCases']));
+            }
+        };
+        $withoutHistory->run();
+        $states = Examiner::orderBy('id')->get()->map(fn ($e) => [$e->email, $e->state()])->all();
+        $clashes = $this->liveClashes();
+
+        $this->seed(HaniDemoSeeder::class);
+        $history = fn () => \App\Modules\Core\Models\ApprovalHistory::whereHas('application.student', fn ($q) => $q->where('email', 'like', 'history.%'))
+            ->orderBy('created_at')->orderBy('stage_key')->get()->map(fn ($h) => $h->stage_key.'@'.$h->created_at)->all();
+        $first = $history();
+        $this->seed(HaniDemoSeeder::class);
+
+        // Idempotent: the same decisions at the same moments.
+        $this->assertSame($first, $history());
+        $this->assertSame(24, User::where('email', 'like', 'history.%')->count());
+
+        // Completed: nothing pending, every viva has a result.
+        $apps = Application::whereHas('student', fn ($q) => $q->where('email', 'like', 'history.%'));
+        $this->assertSame(0, (clone $apps)->where('status', Application::STATUS_PENDING)->count());
+        $this->assertSame(24, (clone $apps)->where('module_type', 'viva_voce')->whereHas('history')->count());
+        $this->assertSame(24, VivaDetail::whereIn('application_id', (clone $apps)->where('module_type', 'viva_voce')->pluck('id'))->whereNotNull('result_recorded_at')->count());
+        $this->assertSame(4, \App\Modules\Hani\Models\ReVivaDetail::whereIn('application_id', (clone $apps)->pluck('id'))->whereNotNull('outcome_recorded_at')->count());
+        $this->assertTrue(\App\Modules\Core\Models\ApprovalHistory::whereIn('application_id', (clone $apps)->pluck('id'))->where('decision', 'returned')->exists(), 'some lists were sent back');
+        $this->assertTrue(\App\Modules\Core\Models\ApprovalHistory::whereIn('application_id', (clone $apps)->pluck('id'))->where('decision', 'rejected')->exists(), 'some softbounds were returned');
+
+        // Invisible to the live scenarios.
+        $this->assertSame($states, Examiner::orderBy('id')->get()->map(fn ($e) => [$e->email, $e->state()])->all(), 'pool states unchanged');
+        $this->assertSame($clashes, $this->liveClashes(), 'no clash from a finished panel');
+        foreach (['viva:reminders', 're-viva:monitor', 'examiners:sweep', 'hani:sla-reminders'] as $command) {
+            \Illuminate\Support\Facades\Artisan::call($command, ['--dry-run' => true]);
+            $output = \Illuminate\Support\Facades\Artisan::output();
+            foreach (self::historyNames() as $name) {
+                $this->assertStringNotContainsString($name, $output, "{$command} would remind about a finished history case");
+            }
+        }
+
+        // Every analytics panel has data, over each period.
+        $senior = $this->user(Role::SENIOR_EXEC_CGS, ['email' => 'senior.analytics@test.my']);
+        foreach ([3, 6, 12] as $months) {
+            $data = app(\App\Modules\Hani\Support\ProcessAnalytics::class)->for($senior, $months);
+            foreach (['examiner_nomination', 'viva_voce', 'viva_softbound', 're_viva'] as $module) {
+                $this->assertGreaterThan(0, collect($data['stages'][$module]['stages'])->sum('count'), "{$module}, {$months} months");
+            }
+            // The pipeline is a cohort (notices FILED in the period); a viva
+            // takes longer than three months, so results show from 6 months.
+            $this->assertGreaterThan(0, $data['pipeline']['notices'], "notices, {$months} months");
+            if ($months >= 6) {
+                $this->assertGreaterThan(0, $data['pipeline']['steps'][4]['count'], "results, {$months} months");
+            }
+            $this->assertGreaterThan(0, collect($data['turnaround'])->sum('count'), "turnaround, {$months} months");
+            $this->assertGreaterThan(0, collect($data['utilisation'])->max('busy'), "utilisation, {$months} months");
+        }
+        $year = app(\App\Modules\Hani\Support\ProcessAnalytics::class)->for($senior, 12);
+        $this->assertGreaterThan(0, $year['turnaround']['MSC']['count']);
+        $this->assertGreaterThan(0, $year['turnaround']['PHD']['count']);
+        $this->assertGreaterThanOrEqual(3, $year['reviva']['decided']);
+        $this->assertNotNull($year['slowest']['overall']);
+
+        // No invented waits: the live scenarios' notices are acknowledged
+        // days after filing, and their chains move every few days.
+        $this->assertLessThan(10, $year['stages']['viva_voce']['stages'][0]['average']);
+        $this->assertLessThan(15, collect($year['stages']['examiner_nomination']['stages'])->max('average'));
+        foreach ($year['utilisation'] as $month) {
+            $this->assertLessThanOrEqual(100, $month['percent']);
+            $this->assertGreaterThan(0, $month['pool']);
+        }
+
+        Carbon::setTestNow();
+    }
+
+    /** @return array<int, string> */
+    protected static function historyNames(): array
+    {
+        return (new \ReflectionClassConstant(HaniDemoSeeder::class, 'HISTORY_NAMES'))->getValue();
+    }
+
+    /** Every live demo nomination's clash flags, by student email. */
+    protected function liveClashes(): array
+    {
+        $clashes = app(\App\Modules\Hani\Support\CrossDepartmentClashes::class);
+
+        return \App\Modules\Hani\Models\ExaminerNomination::with('application.student')->get()
+            ->filter(fn ($n) => ! str_starts_with((string) $n->application?->student?->email, 'history.'))
+            ->mapWithKeys(fn ($n) => [$n->application->student->email => collect(\App\Modules\Hani\Models\ExaminerNomination::SLOTS)->keys()
+                ->map(fn ($seat) => $n->{$seat} ? count($clashes->elsewhere($n->{$seat}, $n->application->student->department, $n->application_id)) : 0)->all()])
+            ->sortKeys()->all();
+    }
+
+    /**
+     * The seeder records S09's and S10's sends weeks in the past, but the
+     * emails are built after the commit, on the real clock (as the queue
+     * worker builds them). Every seeded examiner link must open logged out
+     * on the day of seeding and for link_days after. Kavitha's (S10) link
+     * was reported as "403 Invalid signature": it had expired on arrival.
+     */
+    public function test_the_seeded_examiner_emails_carry_links_that_open_logged_out(): void
+    {
+        Carbon::setTestNow('2026-11-04 09:00');
+        $this->seed(HaniDemoSeeder::class);
+
+        $mails = [];
+        Notification::assertSentOnDemand(\App\Modules\Hani\Notifications\ReVivaCorrectionLetter::class, function ($notification, $channels, $notifiable) use (&$mails) {
+            $mails[] = $notification->toMail($notifiable);
+
+            return true;
+        });
+        $this->assertCount(4, $mails, 'two letters each for S09 and S10');
+
+        $this->assertGuest();
+        foreach ($mails as $mail) {
+            $this->get($mail->actionUrl)->assertOk();
+        }
+
+        Carbon::setTestNow('2026-12-09 20:00');
+        foreach ($mails as $mail) {
+            $this->get($mail->actionUrl)->assertOk();
+        }
+
+        Carbon::setTestNow();
     }
 }

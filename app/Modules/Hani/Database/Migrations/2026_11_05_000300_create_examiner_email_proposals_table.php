@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Schema;
  * DocumentStore, like the viva examiner reports: an ApplicationDocument on
  * the nomination would be visible to the candidate (ApplicationDocument::
  * visibleTo), and students never see who their examiners are. See
- * SHARED_CHANGES.md item 12 (a staff-only flag for DocumentStore).
+ * SHARED_CHANGES.md, section 8 (a staff-only flag for DocumentStore).
  *
  * status: pending | confirmed | dismissed | superseded
  */

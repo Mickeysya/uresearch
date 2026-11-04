@@ -9,18 +9,35 @@ use App\Modules\Hani\Http\Controllers\ExaminerImportController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
 use App\Modules\Hani\Http\Controllers\ExaminerSuggestionController;
 use App\Modules\Hani\Http\Controllers\PanelController;
+use App\Modules\Hani\Http\Controllers\ProcessAnalyticsController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
+use App\Modules\Hani\Http\Controllers\ReVivaCyclesController;
+use App\Modules\Hani\Http\Controllers\ReVivaPanelLinkController;
+use App\Modules\Hani\Http\Controllers\ReVivaStaffDocumentController;
+use App\Modules\Hani\Http\Controllers\ReVivaStudentController;
 use App\Modules\Hani\Http\Controllers\VivaController;
 use App\Modules\Hani\Http\Controllers\VivaExaminerController;
 use App\Modules\Hani\Http\Controllers\VivaResultController;
 use App\Modules\Hani\Http\Controllers\VivaScheduleController;
 use App\Modules\Hani\Http\Controllers\VivaSoftboundController;
+use App\Modules\Hani\Http\Middleware\ValidPanelLink;
 use Illuminate\Support\Facades\Route;
 
 /*
 | Nur Hani Sofia (22001418)
 | Viva Voce · Examiner Nomination · Conflict Detection · Re-viva Monitoring
 */
+
+// The examiner's link from a re-viva correction letter, outside `auth`:
+// examiners have no account. ValidPanelLink is Laravel's `signed` check that
+// tells a tampered URL (403) from an expired one (410, with the CGS contacts)
+// before the controller runs; the controller re-checks the seat.
+Route::middleware([ValidPanelLink::class, 'throttle:30,1'])->group(function () {
+    Route::get('/re-viva/panel/{detail}/{examiner}', [ReVivaPanelLinkController::class, 'documents'])
+        ->whereNumber(['detail', 'examiner'])->name('reviva.panel.documents');
+    Route::get('/re-viva/panel/{detail}/{examiner}/documents/{document}', [ReVivaPanelLinkController::class, 'download'])
+        ->whereNumber(['detail', 'examiner', 'document'])->name('reviva.panel.download');
+});
 
 Route::middleware('auth')->group(function () {
 
@@ -160,6 +177,16 @@ Route::middleware('auth')->group(function () {
         Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR, Role::NON_EXEC_CGS,
     ]))->get('/examiner-dashboard', ExaminerDashboardController::class)->name('examiner-dashboard');
 
+    // ---- Process Analytics (linked from the Examiner Dashboard) ---------
+    // Read-only, same roles and scoping: the AE's own department, the whole
+    // university for everyone else here.
+    Route::middleware('role:'.implode(',', [
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR, Role::NON_EXEC_CGS,
+    ]))->group(function () {
+        Route::get('/process-analytics', [ProcessAnalyticsController::class, 'index'])->name('process-analytics');
+        Route::get('/process-analytics/export', [ProcessAnalyticsController::class, 'export'])->name('process-analytics.export');
+    });
+
     // ---- Examiner pool admin -------------------------------------------
     // Senior Executive CGS (Puan Waheeda) since 2026-11-03. Non-Executive CGS
     // (Encik Syahmi, who sends the letters) reads the pool and may keep an
@@ -202,24 +229,59 @@ Route::middleware('auth')->group(function () {
     });
 
     // ---- Re-viva Monitoring --------------------------------------------
+    // ->missing(ReVivaController::gone(...)): a round, application or file
+    // that no longer exists when a form is submitted goes back to the list
+    // with a message, not a bare 404 at a POST-only URL.
     // Logged by CGS Staff, not the student: the corrected thesis reaches CGS
     // through the same channel the rest of the re-viva process is informally
     // run through today, so CGS is the one who records the formal
     // resubmission timestamp -- not a self-service student upload.
-    // Senior Executive CGS logs re-vivas (CGS practice); Non-Executive keeps
-    // access until Prompt 3 makes them read-only.
-    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
+    // The student's own rounds: outcome level, deadline, final thesis upload.
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::get('/re-viva/mine', [ReVivaStudentController::class, 'mine'])->name('reviva.mine');
+        Route::get('/re-viva/summary', [ReVivaStudentController::class, 'summary'])->name('reviva.summary.edit');
+        Route::post('/re-viva/summary', [ReVivaStudentController::class, 'saveSummary'])->name('reviva.summary.save');
+        Route::get('/re-viva/summary/pdf', [ReVivaStudentController::class, 'summaryPdf'])->name('reviva.summary.pdf');
+        Route::post('/re-viva/{detail}/final-thesis', [ReVivaStudentController::class, 'submitFinalThesis'])
+            ->whereNumber('detail')->name('reviva.final-thesis.store')->missing(ReVivaController::gone('reviva.mine'));
+    });
+
+    // Senior Executive CGS logs re-vivas (CGS practice). Non-Executive CGS is
+    // read-only in re-viva since Prompt 3: Re-viva Cycles, no actions.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
         Route::get('/re-viva/new', [ReVivaController::class, 'create'])->name('reviva.create');
         Route::post('/re-viva', [ReVivaController::class, 'store'])->name('reviva.store');
     });
 
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
+        Route::get('/re-viva/cycles', [ReVivaCyclesController::class, 'index'])->name('reviva.cycles.index');
+    });
+
+    // Staff-only re-viva files (letters, UTP/CGS/024, Confirmation of
+    // Correction). The Non-Executive is a return contact on the letter, so
+    // may download them; the controller narrows an AE to their department.
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)
+        ->get('/re-viva/staff-documents/{document}', [ReVivaStaffDocumentController::class, 'download'])
+        ->name('reviva.staff-documents.download')->missing(ReVivaController::gone('dashboard'));
+
+    // "Resend letter": the same letter with a fresh link, while the round is
+    // Under Panel Review. Not the Non-Executive (read-only).
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS)
+        ->post('/re-viva/staff-documents/{document}/resend', [ReVivaStaffDocumentController::class, 'resend'])
+        ->name('reviva.letters.resend')->missing(ReVivaController::gone('dashboard'));
+
     Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
         Route::get('/re-viva/queue', [ReVivaController::class, 'queue'])->name('reviva.queue');
-        Route::post('/re-viva/{application}/decide', [ReVivaController::class, 'decide'])->name('reviva.decide');
+        Route::post('/re-viva/{application}/decide', [ReVivaController::class, 'decide'])->name('reviva.decide')->missing(ReVivaController::gone('reviva.queue'));
+        Route::post('/re-viva/{application}/send-to-panel', [ReVivaController::class, 'sendToPanel'])->name('reviva.send-to-panel')->missing(ReVivaController::gone('reviva.queue'));
+        Route::post('/re-viva/{application}/evaluations/{seat}', [ReVivaController::class, 'recordEvaluation'])
+            ->whereIn('seat', ['internal_main_id', 'external_main_id'])->name('reviva.evaluations.record')->missing(ReVivaController::gone('reviva.queue'));
 
         Route::get('/re-viva/outcomes', [ReVivaController::class, 'outcomesIndex'])->name('reviva.outcomes.index');
         Route::post('/re-viva/outcomes/{detail}', [ReVivaController::class, 'recordOutcome'])
-            ->name('reviva.outcomes.record');
+            ->name('reviva.outcomes.record')->missing(ReVivaController::gone('reviva.outcomes.index'));
+        Route::post('/re-viva/outcomes/{detail}/accept-corrections', [ReVivaController::class, 'acceptCorrections'])
+            ->name('reviva.corrections.accept')->missing(ReVivaController::gone('reviva.outcomes.index'));
     });
 
 });

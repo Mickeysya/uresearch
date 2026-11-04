@@ -3,6 +3,7 @@
 namespace App\Modules\Hani\Models;
 
 use App\Modules\Core\Models\Application;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -90,5 +91,20 @@ class ExaminerNomination extends Model
             array_values(self::SLOTS),
             [$this->internalMain, $this->internalBackup, $this->externalMain, $this->externalBackup]
         );
+    }
+
+    /**
+     * Panels whose evaluation is not over. It is over once the mains were
+     * examined (PanelSeats::complete(), the gap starts) or freed without
+     * one (a closed re-examination window). Read from the panel's own seat
+     * history, not from the examiners' assigned_until: an examiner tied up
+     * by a LATER panel must not reopen one they already examined on.
+     */
+    public function scopeEvaluationOpen(Builder $query): Builder
+    {
+        return $query->whereNotExists(fn ($q) => $q->selectRaw('1')->from('examiner_seat_history')
+            ->whereColumn('examiner_seat_history.nomination_id', 'examiner_nominations.id')
+            ->where(fn ($e) => $e->where('event', 'examined')
+                ->orWhere(fn ($f) => $f->where('event', 'freed')->whereIn('seat', ['internal_main_id', 'external_main_id']))));
     }
 }

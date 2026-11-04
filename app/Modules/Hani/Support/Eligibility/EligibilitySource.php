@@ -8,8 +8,8 @@ use App\Modules\Core\Models\User;
  * Something that can check one eligibility item for the system instead of
  * leaving it to the student's tick. Listed in config('hani.eligibility.sources').
  *
- * Today only the candidacy period has a data source (Norhanis's candidacies
- * table). RCS results, semester registration and fees are stored nowhere in
+ * Today only the candidacy period has a data source (Chloe's Study
+ * Candidacy record, study_candidacies). RCS results, semester registration and fees are stored nowhere in
  * UResearch, so those items stay self-declared until a source exists; each
  * would be one more class here.
  */

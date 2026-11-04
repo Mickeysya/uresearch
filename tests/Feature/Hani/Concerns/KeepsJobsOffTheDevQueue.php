@@ -17,7 +17,7 @@ namespace Tests\Feature\Hani\Concerns;
  * The same guard as Nureen's trait of the same name, kept in this folder
  * because one member's tests do not import another's. The proper fix for
  * everyone is force="true" in phpunit.xml -- see Hani's SHARED_CHANGES.md,
- * item 7. Laravel calls setUp<TraitName>() automatically.
+ * section 7. Laravel calls setUp<TraitName>() automatically.
  */
 trait KeepsJobsOffTheDevQueue
 {

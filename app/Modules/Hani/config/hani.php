@@ -119,9 +119,10 @@ return [
             \App\Modules\Hani\Support\Eligibility\CandidacyPeriodSource::class,
         ],
 
-        // Maximum candidacy, in months from the candidature start date.
-        // Provisional: from the Handbook as described to us, not re-confirmed
-        // with CGS.
+        // Maximum candidacy, in months from the candidature start date, shown
+        // on the checklist. The system check itself uses the expiry date in
+        // Study Candidacy (CandidacyPeriodSource). Provisional: from the
+        // Handbook as described to us, not re-confirmed with CGS.
         'candidacy_months' => [
             'MSC' => ['full_time' => 48, 'part_time' => 72],
             'PHD' => ['full_time' => 96, 'part_time' => 120],
@@ -283,6 +284,75 @@ return [
         'reminder_days' => [30, 7],
     ],
 
+    'reviva' => [
+        // Round N+1 (after a level-4 outcome): the corrected thesis is due
+        // between these many months after the outcome date. Provisional
+        // (agreed for the FYP 2026-11-04, not a CGS figure).
+        'next_round_window_months' => [0, 6],
+
+        // Months from the re-viva outcome date to the final thesis, by level
+        // (UTP/CGS/024: within 1 month, up to 3, 3 to 6). Provisional.
+        'final_thesis_months' => [1 => 1, 2 => 3, 3 => 6],
+
+        // Logging a re-viva keeps the two main examiners Assigned until at
+        // most this many months later; the outcome releases them sooner.
+        // Provisional (the original 12-month hardbound horizon).
+        'hold_months' => 12,
+
+        // CONFIRMED (the real letter): "examiners are given a maximum of
+        // twenty (20) working days". The letter prints the date this falls on.
+        'review_working_days' => 20,
+
+        // Stage 2, Under Panel Review, counted in working days from the
+        // letters: remind the AE to chase the panel, then tell the Senior
+        // Executive. Provisional (20 is the letter's limit; 25 is ours).
+        'panel_chase_working_days' => 20,
+        'panel_escalate_working_days' => 25,
+
+        // Re-viva Cycles' deadline risk score (Support\ReVivaRisk), 0-100.
+        // Rule-based and explained factor by factor. ALL PROVISIONAL: our
+        // weights and limits for the FYP, not CGS figures.
+        'risk' => [
+            'weights' => ['time_used' => 35, 'stage_time' => 30, 'divergence' => 20, 'previous_rounds' => 15],
+            // Working days a round is expected to take, logging to outcome.
+            'expected_round_working_days' => 45,
+            // Working days each stage should take; 20 is the panel's limit.
+            'stage_limits' => [
+                'report_sent' => 5, 'under_panel_review' => 20, 'report_received' => 5,
+                'consolidation_scheduled' => 10, 'outcome' => 5,
+            ],
+            // This many earlier rounds count the full "previous rounds" weight.
+            'rounds_for_full' => 2,
+            // Bands.
+            'high' => 70,
+            'medium' => 40,
+        ],
+
+        // When `re-viva:monitor` runs each day. Provisional.
+        'monitor_daily_at' => '08:00',
+
+        // How long the examiner's signed link to the corrected thesis and the
+        // Summary of Corrections works. Provisional: the 20 working days plus
+        // slack for a late report.
+        'link_days' => 35,
+
+        // The "Correction of Master's/Doctoral Thesis" letter
+        // (Resources/views/re_viva/pdf/correction_letter.blade.php).
+        // PROVISIONAL: fictional names and example.com addresses for the FYP.
+        // Replace with the real signatory and CGS contacts before go-live.
+        'letter' => [
+            'reference_prefix' => 'UTP/PGS/AD/',
+            'institution' => 'Universiti Teknologi PETRONAS',
+            'address' => ['32610 Seri Iskandar', 'Perak Darul Ridzuan, Malaysia'],
+            'signatory_name' => 'Professor Dr. Example Signatory',
+            'signatory_title' => 'Dean, Postgraduate & Research',
+            'return_contacts' => [
+                ['name' => 'Puan Waheeda', 'role' => 'Senior Executive, Centre for Graduate Studies', 'email' => 'waheeda.cgs@example.com', 'phone' => '+60 5-000 0001'],
+                ['name' => 'Encik Syahmi', 'role' => 'Executive, Centre for Graduate Studies', 'email' => 'syahmi.cgs@example.com', 'phone' => '+60 5-000 0002'],
+            ],
+        ],
+    ],
+
     'reminders' => [
         // When `viva:reminders` runs each day. Provisional.
         'daily_at' => '07:45',
@@ -294,6 +364,45 @@ return [
         // Nudge the student once when the expected softbound date is this
         // close and nothing is filed. Provisional.
         'softbound_nudge_days' => 14,
+    ],
+
+    'sla' => [
+        // When `hani:sla-reminders` runs each day. Provisional.
+        'daily_at' => '08:15',
+
+        // How long an application may wait at each stage before its
+        // approver is reminded (first figure) and reminded again with the
+        // Senior Executive CGS copied (second). Counted from the decision
+        // that brought it to the stage. working_days: Monday to Friday less
+        // hani.scheduling.public_holidays. All Provisional: CGS has not set
+        // service levels for these stages.
+        'stages' => [
+            'examiner_nomination' => [
+                'academic_exec' => ['days' => [5, 10], 'working_days' => true],
+                'cgs_compile' => ['days' => [5, 10], 'working_days' => true],
+                'senior_director' => ['days' => [5, 10], 'working_days' => true],
+                'dean' => ['days' => [5, 10], 'working_days' => true],
+                'cgs_final' => ['days' => [3, 6], 'working_days' => true],
+                'cgs_release' => ['days' => [3, 6], 'working_days' => true],
+            ],
+            'viva_voce' => [
+                'notice_received' => ['days' => [5, 10], 'working_days' => true],
+            ],
+            'viva_softbound' => [
+                'softbound_check' => ['days' => [5, 10], 'working_days' => true],
+            ],
+            're_viva' => [
+                'report_sent' => ['days' => [5, 10], 'working_days' => true],
+                'report_received' => ['days' => [5, 10], 'working_days' => true],
+                'consolidation_scheduled' => ['days' => [10, 15], 'working_days' => true],
+            ],
+        ],
+
+        // Stages another command already chases, with the reason. Never
+        // reminded by `hani:sla-reminders`, and left out of "overdue now".
+        'skip' => [
+            're_viva.under_panel_review' => 're-viva:monitor already reminds the AE at 20 working days and tells the Senior Executive at 25 (hani.reviva.panel_*_working_days).',
+        ],
     ],
 
     'sweep' => [
@@ -314,6 +423,12 @@ return [
         // many examiners covering a topic counts as a gap. Provisional.
         'gap_topics' => 8,
         'gap_threshold' => 2,
+    ],
+
+    'analytics' => [
+        // Process Analytics period filter, in months, and the default.
+        'periods' => [3, 6, 12],
+        'default_period' => 12,
     ],
 
     'examiner_contact' => [

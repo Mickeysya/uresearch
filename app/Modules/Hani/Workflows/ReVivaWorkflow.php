@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hani\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
@@ -29,13 +30,17 @@ use Carbon\CarbonInterface;
  * student's re-corrected thesis reaches them, linked to the previous cycle
  * by ReVivaDetail::previous_cycle_id. See ReVivaController::create().
  *
+ * DecidesOneAtATime (Prompt 3): stage 1 sends the correction letters and
+ * stage 3 needs both re-evaluations, so Core's bulk decide must not skip
+ * ReVivaController::decide().
+ *
  * Logged by CGS Staff, not filed by the student -- so unlike every other
  * module, createRoute() is null (it never belongs in a student's "New
  * Application" list) and the create screen is reached instead via the
  * CGS-only link below, the same mechanism the Examiner Pool admin screen
  * uses to appear for that role.
  */
-class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
+class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime
 {
     public function key(): string
     {
@@ -83,20 +88,29 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
     }
 
     /**
-     * Two roles need a link here that queuesForRole() (stage-derived) cannot
-     * produce: CGS Staff logs a new cycle but owns no stage in this chain;
-     * the Academic Executive's outcome-recording step happens after an
-     * application leaves the chain, not on any stage in it.
+     * Links queuesForRole() (stage-derived) cannot produce: CGS owns no stage
+     * in this chain -- the Senior Executive logs cycles, and both CGS roles
+     * read Re-viva Cycles (the Non-Executive read-only) -- and the Academic
+     * Executive's outcome step happens after an application leaves the chain.
      */
     public function links(User $user): array
     {
         return match ($user->role) {
-            Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS => [
+            Role::SENIOR_EXEC_CGS => [
                 ['label' => 'Log Re-viva Submission', 'route' => 'reviva.create'],
+                ['label' => 'Re-viva Cycles', 'route' => 'reviva.cycles.index'],
+            ],
+            Role::NON_EXEC_CGS => [
+                ['label' => 'Re-viva Cycles', 'route' => 'reviva.cycles.index'],
             ],
             Role::ACADEMIC_EXEC => [
                 ['label' => 'Re-viva Outcomes', 'route' => 'reviva.outcomes.index'],
             ],
+            // Only once they have a round or a category-4 viva: most never do.
+            Role::STUDENT => Application::where('module_type', $this->key())->where('student_id', $user->id)->exists()
+                    || \App\Modules\Hani\Support\ReVivaWindow::categoryFourViva($user)
+                ? [['label' => 'My Re-viva', 'route' => 'reviva.mine']]
+                : [],
             default => [],
         };
     }
@@ -121,15 +135,17 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
                 ->where('module_type', $this->key())
                 ->where('student_id', $user->id)
                 ->select('id'))
-            // A cycle that already has an outcome has stopped running.
-            ->whereNull('outcome_level')
+            // A round with a final outcome has stopped running; levels 1-3
+            // still have the final thesis due (correction_deadline).
+            ->where(fn ($q) => $q->whereNull('outcome_level')->orWhereIn('outcome_level', ReVivaDetail::OUTCOME_CORRECTIONS))
+            ->whereNull('corrections_accepted_at')
             ->get();
 
         $events = [];
 
         foreach ($details as $detail) {
             foreach ([
-                ['correction_deadline', 'Thesis corrections due', 'warn'],
+                ['correction_deadline', 'Final thesis due', 'warn'],
                 ['hardbound_deadline', 'Hardbound submission due', 'critical'],
             ] as [$field, $title, $tone]) {
                 if (! $detail->$field?->betweenIncluded($from, $to)) {

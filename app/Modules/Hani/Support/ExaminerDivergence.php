@@ -40,6 +40,32 @@ final class ExaminerDivergence
     }
 
     /**
+     * The re-viva's re-evaluations (UTP/CGS/024) disagree. Compared on the
+     * outcome level each maps to, so "Fail, viva again YES" and "Fail, viva
+     * again NO" differ even though both are category 4. Major when one is a
+     * pass (levels 1-3) and the other a fail (4-5), as for the viva.
+     *
+     * @param  Collection<string, \App\Modules\Hani\Models\ReVivaEvaluation>  $current  keyed by seat
+     * @return array{level: string, text: string}|null
+     */
+    public static function betweenReEvaluations(Collection $current): ?array
+    {
+        $internal = $current->get('internal_main_id');
+        $external = $current->get('external_main_id');
+
+        if (! $internal || ! $external || $internal->level() === $external->level()) {
+            return null;
+        }
+
+        $levels = [$internal->level(), $external->level()];
+
+        return [
+            'level' => min($levels) <= 3 && max($levels) >= 4 ? 'major' : 'minor',
+            'text' => 'Internal: '.$internal->label().' · External: '.$external->label(),
+        ];
+    }
+
+    /**
      * The same, for many notices at once (the scheduling list).
      *
      * @param  iterable<int>  $noticeIds
