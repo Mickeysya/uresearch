@@ -42,6 +42,22 @@ final class ExaminerDirectory
     }
 
     /**
+     * Whether the examiner records flag addresses that bounced.
+     *
+     * The nomination chain keeps the old address in `email` and records the
+     * fault beside it, so reading `email` alone is not enough: a column that
+     * looks perfectly good may be one the post office has already rejected.
+     * The column is optional, so it is asked for before it is read. Asked
+     * every time rather than remembered: a remembered answer outlives the
+     * schema it describes, and a stale "no" here means quietly emailing an
+     * address that was already reported as dead.
+     */
+    public static function flagsEmails(): bool
+    {
+        return self::available() && Schema::hasColumn(self::POOL, 'email_status');
+    }
+
+    /**
      * The panel a nomination names, straight from its row.
      *
      * This is the exact path: the list carries the nomination's application
@@ -145,6 +161,19 @@ final class ExaminerDirectory
             return null;
         }
 
+        $email = (string) ($row->email ?? '');
+
+        // An address that cannot be used, and why. The flagged address is
+        // kept rather than blanked: CGS needs to see what was wrong with it
+        // to put it right, and the appointment itself still stands -- the
+        // Dean signs the letter either way, and it can go by post.
+        $problem = match (true) {
+            $email === '' => 'No email address on record. CGS updates it in the Examiner Pool.',
+            self::flagsEmails() && ($row->email_status ?? null) === 'invalid'
+                => 'The address on record was reported as not working. CGS updates it in the Examiner Pool.',
+            default => null,
+        };
+
         return [
             // The nomination chain's own id for this examiner. Kept with
             // the letter: it is half the key the panel page asks dispatch
@@ -152,7 +181,8 @@ final class ExaminerDirectory
             // from an examiner who already has a letter.
             'hani_examiner_id' => isset($row->id) ? (int) $row->id : null,
             'examiner_name' => (string) $row->name,
-            'examiner_email' => (string) ($row->email ?? ''),
+            'examiner_email' => $email,
+            'email_problem' => $problem,
             'examiner_institution' => (string) ($row->institution ?: ($row->faculty ?: 'Universiti Teknologi PETRONAS')),
             'examiner_department' => (string) ($row->department ?? ''),
         ];

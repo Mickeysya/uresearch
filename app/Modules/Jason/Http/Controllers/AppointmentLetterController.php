@@ -356,6 +356,7 @@ class AppointmentLetterController extends Controller
 
         return [
             'hani_examiner_id' => $examiner['hani_examiner_id'] ?? null,
+            'email_problem' => $examiner['email_problem'] ?? null,
             'examiner_type' => $examiner['examiner_type'],
             'examiner_role' => $examiner['examiner_role'],
             'examiner_name' => $examiner['examiner_name'],
@@ -881,6 +882,15 @@ class AppointmentLetterController extends Controller
                 ->all();
 
             if ($files === []) {
+                continue;
+            }
+
+            // No usable address. The appointment stands and the documents
+            // are archived -- CGS sends this one by post, or fixes the
+            // address in the Examiner Pool and resends from the issued
+            // list. Sending anyway would bounce, and a bounce is recorded
+            // nowhere the officer looks.
+            if ($examiner->email_problem || trim((string) $examiner->examiner_email) === '') {
                 continue;
             }
 
