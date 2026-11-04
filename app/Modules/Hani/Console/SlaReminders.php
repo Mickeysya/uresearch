@@ -10,7 +10,6 @@ use App\Modules\Hani\Notifications\SlaReminder;
 use App\Modules\Hani\Support\StageSla;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Console\Command;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
 
@@ -61,7 +60,6 @@ class SlaReminders extends Command
             $level = $row['level'];
             $stage = $application->currentStage();
             $recipients = $this->recipients($application, $stage?->role, $level);
-            $unit = $row['working_days'] ? 'working days' : 'days';
 
             if ($dryRun) {
                 if ($this->alreadyLogged($application, $row, $level)) {
@@ -70,7 +68,7 @@ class SlaReminders extends Command
                     $this->line(sprintf(
                         '  would send sla_%d for %s #%d (%s) at %s: %d %s, limit %d, to %d recipient(s)',
                         $level, $application->module()->label(), $application->id, $application->student?->name,
-                        $stage?->label ?? $row['stage'], $row['days'], $unit, $row['thresholds'][$level - 1], $recipients->count(),
+                        $stage?->label ?? $row['stage'], $row['days'], $row['unit'], $row['thresholds'][$level - 1], $recipients->count(),
                     ));
                     $sent++;
                 }
@@ -78,9 +76,8 @@ class SlaReminders extends Command
                 continue;
             }
 
-            try {
-                SlaReminderLog::create($this->logRow($application, $row, $level, true));
-            } catch (QueryException) {
+            // The unique key decides: nothing inserted means an earlier run sent it.
+            if (SlaReminderLog::insertOrIgnore($this->logRow($application, $row, $level, true)) === 0) {
                 $skipped++;
 
                 continue;
@@ -149,7 +146,7 @@ class SlaReminders extends Command
         $stage = $application->currentStage();
         $module = $application->module()->label();
         $student = $application->student;
-        $unit = $row['working_days'] ? 'working days' : 'days';
+        $unit = $row['unit'];
         $limit = $row['thresholds'][$level - 1];
         $since = $row['entered_at']->format('j M Y');
 

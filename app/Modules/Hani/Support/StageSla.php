@@ -40,7 +40,7 @@ class StageSla
 
     public function skipReason(string $module, string $stage): ?string
     {
-        return config('hani.sla.skip')["{$module}.{$stage}"] ?? null;
+        return ((array) config('hani.sla.skip'))["{$module}.{$stage}"] ?? null;
     }
 
     /** @return array<int, string> module keys with at least one limit */
@@ -52,7 +52,7 @@ class StageSla
     /**
      * Every open application at a stage with a limit, longest wait first.
      *
-     * @return Collection<int, array{application: Application, stage: string, entered_at: Carbon, days: int, working_days: bool, thresholds: array<int, int>, level: int, limit: int}>
+     * @return Collection<int, array{application: Application, stage: string, entered_at: Carbon, days: int, working_days: bool, unit: string, thresholds: array<int, int>, level: int, limit: int}>
      */
     public function waiting(?string $department = null, ?CarbonInterface $today = null): Collection
     {
@@ -91,6 +91,7 @@ class StageSla
                     'entered_at' => $entered,
                     'days' => $days,
                     'working_days' => $rule['working_days'],
+                    'unit' => $rule['working_days'] ? 'working days' : 'days',
                     'thresholds' => $rule['days'],
                     'level' => $level,
                     'limit' => $rule['days'][0],

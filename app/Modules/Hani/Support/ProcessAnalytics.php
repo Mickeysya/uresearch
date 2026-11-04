@@ -139,8 +139,8 @@ class ProcessAnalytics
                     'key' => $stage->key,
                     'label' => $stage->label,
                     'count' => count($days),
-                    'average' => $days ? round(array_sum($days) / count($days), 1) : null,
-                    'median' => $days ? round($this->median($days), 1) : null,
+                    'average' => $days ? round(collect($days)->avg(), 1) : null,
+                    'median' => $days ? round(collect($days)->median(), 1) : null,
                     'total' => round(array_sum($days), 1),
                 ];
             }
@@ -195,7 +195,7 @@ class ProcessAnalytics
                 'stage' => $application->currentStage()?->label ?? $row['stage'],
                 'since' => $row['entered_at'],
                 'days' => $row['days'],
-                'unit' => $row['working_days'] ? 'working days' : 'days',
+                'unit' => $row['unit'],
                 'limit' => $row['limit'],
                 'level' => $row['level'],
             ];
@@ -325,8 +325,8 @@ class ProcessAnalytics
             $out[$level] = [
                 'label' => $label,
                 'count' => count($days),
-                'average' => $days ? round(array_sum($days) / count($days), 1) : null,
-                'median' => $days ? round($this->median($days), 1) : null,
+                'average' => $days ? round(collect($days)->avg(), 1) : null,
+                'median' => $days ? round(collect($days)->median(), 1) : null,
                 'limit' => $limit,
                 'late' => count(array_filter($days, fn ($d) => $d > $limit)),
                 'days' => $days,
@@ -344,8 +344,11 @@ class ProcessAnalytics
         $pool = Examiner::query()
             ->where('is_active', true)
             ->when($this->department, fn ($q) => $q->where('department', $this->department))
-            ->get(['id', 'created_at']);
-        $poolIds = $pool->pluck('id')->flip();
+            ->pluck('id');
+        $poolIds = $pool->flip();
+        // The active pool as it stands: examiners' created_at is when they
+        // were entered or imported, not when they joined the pool.
+        $size = $pool->count();
 
         // Who held each main seat, and when: a release, promotion or
         // replacement starts a holding; examined, freed or declined ends it.
@@ -380,10 +383,6 @@ class ProcessAnalytics
             $busy = collect($holdings)
                 ->filter(fn ($h) => isset($poolIds[$h['examiner']]) && $h['from']->lte($end) && ($h['to'] === null || $h['to']->gte($start)))
                 ->pluck('examiner')->unique()->count();
-            // The active pool as it stands: examiners' created_at is when
-            // they were entered or imported, not when they joined the pool.
-            $size = $pool->count();
-
             $months[] = [
                 'month' => $start->format('Y-m'),
                 'label' => $start->format('M Y'),
@@ -497,15 +496,5 @@ class ProcessAnalytics
     protected function scoped($query)
     {
         return $query->when($this->department, fn ($q) => $q->whereHas('student', fn ($s) => $s->where('department', $this->department)));
-    }
-
-    /** @param  array<int, float|int>  $values */
-    protected function median(array $values): float
-    {
-        sort($values);
-        $n = count($values);
-        $mid = intdiv($n, 2);
-
-        return $n % 2 ? (float) $values[$mid] : ($values[$mid - 1] + $values[$mid]) / 2;
     }
 }
