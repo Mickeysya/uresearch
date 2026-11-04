@@ -146,6 +146,11 @@ final class ExaminerDirectory
         }
 
         return [
+            // The nomination chain's own id for this examiner. Kept with
+            // the letter: it is half the key the panel page asks dispatch
+            // dates with, and it is how a promoted backup is told apart
+            // from an examiner who already has a letter.
+            'hani_examiner_id' => isset($row->id) ? (int) $row->id : null,
             'examiner_name' => (string) $row->name,
             'examiner_email' => (string) ($row->email ?? ''),
             'examiner_institution' => (string) ($row->institution ?: ($row->faculty ?: 'Universiti Teknologi PETRONAS')),

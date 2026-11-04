@@ -162,6 +162,18 @@ class JasonAppointmentLetterTest extends TestCase
                 ['internal main', 'external main'],
                 $panel->map(fn ($e) => $e->examiner_type.' '.$e->examiner_role)->all(),
             );
+
+            // The nomination chain's own ids, kept so its panel page can ask
+            // about this appointment in its own terms rather than ours.
+            $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
+
+            $this->assertNotNull($detail->nomination_application_id,
+                'The nomination\'s application number should be kept with the appointment.');
+
+            foreach ($panel as $examiner) {
+                $this->assertNotNull($examiner->hani_examiner_id,
+                    "No examiner id kept for {$examiner->examiner_name}.");
+            }
         }
     }
 

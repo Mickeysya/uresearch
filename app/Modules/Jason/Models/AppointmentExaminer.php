@@ -13,7 +13,8 @@ class AppointmentExaminer extends Model
     public const TYPE_EXTERNAL = 'external';
 
     protected $fillable = [
-        'application_id', 'pool_examiner_id', 'examiner_type', 'examiner_role', 'examiner_name', 'examiner_institution',
+        'application_id', 'pool_examiner_id', 'hani_examiner_id',
+        'examiner_type', 'examiner_role', 'examiner_name', 'examiner_institution',
         'examiner_address', 'examiner_email', 'examiner_expertise', 'letter_ref_no',
         'appointed_at', 'pack_sent_at',
     ];

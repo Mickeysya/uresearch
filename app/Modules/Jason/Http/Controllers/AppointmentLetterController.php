@@ -142,6 +142,7 @@ class AppointmentLetterController extends Controller
 
                 AppointmentDetail::create([
                     'application_id' => $application->id,
+                    'nomination_application_id' => $candidate['nomination_application_id'],
                     'candidate_degree' => $candidate['degree'],
                     'candidate_programme' => $candidate['programme'],
                     'supervisor_name' => $candidate['supervisor_name'],
@@ -240,6 +241,11 @@ class AppointmentLetterController extends Controller
                 'programme' => $cell('department') ?: $cell('programme') ?: null,
                 'supervisor_name' => $cell('supervisor_name') ?: $student->supervisor?->name,
                 'thesis_title' => $cell('thesis_title') ?: null,
+                // The export's "Application No.". Kept so the panel page
+                // can ask about this appointment in its own terms.
+                'nomination_application_id' => ctype_digit($cell('nomination_id'))
+                    ? (int) $cell('nomination_id')
+                    : null,
                 'examiners' => $examiners,
             ];
         }
@@ -349,6 +355,7 @@ class AppointmentLetterController extends Controller
         $department = $examiner['examiner_department'] ?? '';
 
         return [
+            'hani_examiner_id' => $examiner['hani_examiner_id'] ?? null,
             'examiner_type' => $examiner['examiner_type'],
             'examiner_role' => $examiner['examiner_role'],
             'examiner_name' => $examiner['examiner_name'],
