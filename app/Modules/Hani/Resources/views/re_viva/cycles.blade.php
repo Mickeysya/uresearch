@@ -35,7 +35,6 @@
                                 <th>Progress</th>
                                 <th>Resubmission and deadlines</th>
                                 <th>Outcome</th>
-                                @if ($canLog) <th></th> @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -56,6 +55,10 @@
                                         ])
                                         @if ($detail->sent_to_panel_at)
                                             <p class="fstep-hint">Sent to panel {{ $detail->sent_to_panel_at->format('j M Y') }}; reports due {{ \App\Modules\Hani\Support\ReVivaLetters::reviewDue($detail->sent_to_panel_at)->format('j M Y') }}.</p>
+                                        @endif
+                                        {{-- In the wide column: names and the divergence badge do not fit under Outcome. --}}
+                                        @if ($detail->sent_to_panel_at)
+                                            @include('hani::re_viva._evaluations', ['detail' => $detail])
                                         @endif
                                         @include('hani::re_viva._staff_documents', ['detail' => $detail])
                                     </td>
@@ -80,23 +83,17 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if ($detail->sent_to_panel_at)
-                                            @include('hani::re_viva._evaluations', ['detail' => $detail])
-                                        @endif
                                         @if ($detail->hasOutcome())
                                             <b>{{ $detail->outcomeLabel() }}</b>
                                             @if ($detail->nextCycle) <br><span class="fstep-hint">Round {{ $detail->nextCycle->cycle_number }} logged.</span> @endif
                                         @else
                                             Not recorded yet
                                         @endif
+                                        {{-- The one action on this page, Senior Executive only. --}}
+                                        @if ($canLog && $key === 'next_round')
+                                            <br><a href="{{ route('reviva.create', ['student' => $student->id]) }}" class="btn">Log round {{ $detail->cycle_number + 1 }}</a>
+                                        @endif
                                     </td>
-                                    @if ($canLog)
-                                        <td>
-                                            @if ($key === 'next_round')
-                                                <a href="{{ route('reviva.create', ['student' => $student->id]) }}" class="btn">Log round {{ $detail->cycle_number + 1 }}</a>
-                                            @endif
-                                        </td>
-                                    @endif
                                 </tr>
                             @endforeach
                         </tbody>

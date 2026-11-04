@@ -26,6 +26,12 @@
                 </li>
             @endforeach
         </ul>
-        @include('hani::viva._divergence', ['divergence' => $divergence])
+        {{-- The viva badge, allowed to wrap: in a table cell it otherwise pushes the columns off the page. --}}
+        @if ($divergence)
+            <span class="status-badge {{ $divergence['level'] === 'major' ? 'rejected' : 'pending' }}" style="white-space: normal; display: inline-block; line-height: 1.5;"
+                  title="The two main examiners recommend different outcomes">
+                {{ $divergence['level'] === 'major' ? 'Major divergence' : 'Reports differ' }}: {{ $divergence['text'] }}
+            </span>
+        @endif
     @endif
 </div>
