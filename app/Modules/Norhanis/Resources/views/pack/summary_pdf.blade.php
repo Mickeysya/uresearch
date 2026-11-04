@@ -85,6 +85,10 @@
         <h3>Claim Details</h3>
         <table class="fields">
             <tr><td class="label">Claim Type</td><td>Journal publication claim</td></tr>
+            @if ($claim->publication)
+                <tr><td class="label">For Publication</td><td>#{{ $claim->publication->application_id }} &middot; {{ $claim->publication->title_of_paper }} ({{ $claim->publication->title_of_conference_journal }})</td></tr>
+                <tr><td class="label">Publication Fee</td><td>{{ $claim->publication->currency_type }} {{ number_format((float) $claim->publication->conference_journal_fee, 2) }}</td></tr>
+            @endif
             <tr><td class="label">Total Claims</td><td><b>RM {{ number_format((float) $claim->total_claims, 2) }}</b></td></tr>
             <tr><td class="label">Bank Name</td><td>{{ $claim->bank_name }}</td></tr>
             <tr><td class="label">Bank Account No.</td><td>{{ $claim->bank_account_no }}</td></tr>

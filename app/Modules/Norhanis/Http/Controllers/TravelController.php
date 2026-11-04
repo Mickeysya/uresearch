@@ -14,6 +14,8 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\TravelDetail;
 use App\Modules\Norhanis\Models\TravelTaPlan;
 use App\Modules\Norhanis\Notifications\TravelSupportingDocumentUpdated;
+use App\Modules\Norhanis\Support\StageDurations;
+use App\Modules\Norhanis\Workflows\TravelWorkflow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -31,10 +33,25 @@ class TravelController extends Controller
         return 'travel';
     }
 
-    public function create()
+    public function create(TravelWorkflow $workflow, StageDurations $durations)
     {
+        // How long approval usually takes on each route, and so the earliest
+        // a decision should arrive if submitted now. The form warns when the
+        // trip starts before that -- a warning, never a block, because an
+        // urgent trip is sometimes legitimate.
+        $leadTimes = [];
+
+        foreach ($workflow->routes() as $route => $stages) {
+            $days = $durations->routeDays($this->moduleKey(), $stages);
+            $leadTimes[$route] = [
+                'days' => $days,
+                'expected' => StageDurations::addWorkingDays(now(), $days)->toDateString(),
+            ];
+        }
+
         return view('norhanis::travel.form', [
             'requestTypes' => TravelDetail::requestTypes(),
+            'leadTimes' => $leadTimes,
         ]);
     }
 

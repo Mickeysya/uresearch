@@ -109,6 +109,18 @@ class StageDurations
     }
 
     /**
+     * What a whole route typically takes, start to finish, for an application
+     * not yet submitted: the lead-time check on the Travel form. The same
+     * per-stage figures as estimate(), so the form and the stepper agree.
+     *
+     * @param  array<int, \App\Modules\Core\Support\Stage>  $stages
+     */
+    public function routeDays(string $module, array $stages): float
+    {
+        return round(array_sum(array_map(fn ($stage) => $this->typical($module, $stage->key)['days'] ?? 0, $stages)), 1);
+    }
+
+    /**
      * Working days from one moment to another, to the fraction: a stage
      * decided at Friday noon that arrived at Thursday noon took 1.0, and one
      * that arrived Friday noon and was decided Monday noon took 1.0 as well.

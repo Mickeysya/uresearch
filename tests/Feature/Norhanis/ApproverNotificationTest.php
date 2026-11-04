@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Tests\Feature\Norhanis\Concerns\HasApprovedPublication;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
@@ -23,6 +24,7 @@ use Tests\TestCase;
  */
 class ApproverNotificationTest extends TestCase
 {
+    use HasApprovedPublication;
     use MakesUsers;
     use RefreshDatabase;
 
@@ -45,6 +47,7 @@ class ApproverNotificationTest extends TestCase
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id, 'department' => 'Computer & Information Sciences']);
 
         $this->actingAs($student)->post(route('claims.store'), [
+            'publication_application_id' => $this->approvedPublication($student)->id,
             'bank_name' => 'Maybank',
             'bank_account_no' => '1234567890',
             'total_claims' => 900,
@@ -52,7 +55,7 @@ class ApproverNotificationTest extends TestCase
             'proof_of_payment' => UploadedFile::fake()->create('payment.pdf', 100, 'application/pdf'),
             'invoice' => UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf'),
         ])->assertRedirect();
-        $application = Application::sole();
+        $application = Application::where('module_type', 'claims_student')->sole();
 
         // Submitted: the student's receipt, and their own supervisor only.
         Notification::assertSentTo($student, ApplicationSubmitted::class);
@@ -85,6 +88,7 @@ class ApproverNotificationTest extends TestCase
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id, 'department' => 'Computer & Information Sciences']);
 
         $this->actingAs($student)->post(route('claims.store'), [
+            'publication_application_id' => $this->approvedPublication($student)->id,
             'bank_name' => 'Maybank',
             'bank_account_no' => '1234567890',
             'total_claims' => 900,
@@ -94,7 +98,7 @@ class ApproverNotificationTest extends TestCase
         ]);
 
         $this->actingAs($supervisor)
-            ->post(route('claims.decide', Application::sole()), ['decision' => 'reject', 'remarks' => 'Receipt unreadable.']);
+            ->post(route('claims.decide', Application::where('module_type', 'claims_student')->sole()), ['decision' => 'reject', 'remarks' => 'Receipt unreadable.']);
 
         Notification::assertSentTo($student, ApplicationDecided::class);
         Notification::assertNotSentTo($chair, ApplicationAwaitingAction::class);
