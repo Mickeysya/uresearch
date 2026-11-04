@@ -53,6 +53,32 @@ class ReVivaDetail extends Model
         return $this->belongsTo(self::class, 'previous_cycle_id');
     }
 
+    public function evaluations(): HasMany
+    {
+        return $this->hasMany(ReVivaEvaluation::class);
+    }
+
+    /**
+     * The re-evaluations of the CURRENT main examiners, keyed by seat. A row
+     * left by an examiner who has since been replaced does not count.
+     *
+     * @return \Illuminate\Support\Collection<string, ReVivaEvaluation>
+     */
+    public function currentEvaluations(?array $mains = null)
+    {
+        $mains ??= $this->currentMains();
+
+        return $this->evaluations
+            ->filter(fn (ReVivaEvaluation $e) => isset($mains[$e->seat]) && $mains[$e->seat]->id === $e->examiner_id)
+            ->keyBy('seat');
+    }
+
+    /** Both main examiners' re-evaluations are recorded: stage 3 may complete. */
+    public function evaluationsComplete(): bool
+    {
+        return $this->currentEvaluations()->has(['internal_main_id', 'external_main_id']);
+    }
+
     public function staffDocuments(): HasMany
     {
         return $this->hasMany(ReVivaStaffDocument::class);

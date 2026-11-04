@@ -71,6 +71,9 @@
                                         @endif
                                     </td>
                                     <td>
+                                        @if ($detail->sent_to_panel_at)
+                                            @include('hani::re_viva._evaluations', ['detail' => $detail])
+                                        @endif
                                         @if ($detail->hasOutcome())
                                             <b>{{ $detail->outcomeLabel() }}</b>
                                             @if ($detail->nextCycle) <br><span class="fstep-hint">Round {{ $detail->nextCycle->cycle_number }} logged.</span> @endif

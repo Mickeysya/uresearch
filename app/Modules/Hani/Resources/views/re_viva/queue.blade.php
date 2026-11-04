@@ -92,6 +92,22 @@
                     @endif
                     @error('send') <p class="field-error">{{ $message }}</p> @enderror
                 @else
+                    @if ($detail && in_array($stage->key, ['report_received', 'consolidation_scheduled'], true))
+                        @include('hani::re_viva._evaluations', ['detail' => $detail, 'mains' => $mains[$application->id] ?? []])
+                    @endif
+
+                    @if ($detail && $stage->key === 'report_received')
+                        @foreach ($mains[$application->id] ?? [] as $seat => $examiner)
+                            @include('hani::re_viva._evaluation_form', [
+                                'seat' => $seat, 'examiner' => $examiner,
+                                'existing' => $detail->currentEvaluations($mains[$application->id])->get($seat),
+                            ])
+                        @endforeach
+                        @unless ($detail->evaluationsComplete())
+                            <p class="fstep-hint">This step completes once both re-evaluations are recorded.</p>
+                        @endunless
+                    @endif
+
                     {{-- Advance only: this stepper has no meaningful "reject" step,
                          so unlike core::decision-form only one button is offered. --}}
                     <form method="POST" action="{{ route('reviva.decide', $application) }}">

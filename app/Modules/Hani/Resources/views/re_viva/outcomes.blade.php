@@ -19,6 +19,9 @@
                 <p>Student: {{ $detail->application->student->name }}</p>
                 <p>Resubmitted: {{ $detail->resubmission_at->format('j M Y') }}</p>
 
+                @include('hani::re_viva._evaluations', ['detail' => $detail])
+                @include('hani::re_viva._staff_documents', ['detail' => $detail])
+
                 @if ($detail->application->documents->isNotEmpty())
                     <ul class="doc-list">
                         @foreach ($detail->application->documents as $doc)

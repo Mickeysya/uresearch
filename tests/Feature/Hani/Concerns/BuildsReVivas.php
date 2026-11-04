@@ -79,6 +79,30 @@ trait BuildsReVivas
         return $viva;
     }
 
+    /** Stage 2 completed: Report Received, where the re-evaluations are recorded. */
+    protected function roundAtReportReceived(string $matric = '22001001'): array
+    {
+        $viva = $this->roundUnderPanelReview($matric);
+        $this->actingAs($viva['ae'])->post(route('reviva.decide', $viva['round']->application_id), ['decision' => 'approve'])
+            ->assertSessionHasNoErrors();
+
+        return $viva;
+    }
+
+    protected function recordEvaluation(array $viva, string $seat, int $category, ?bool $vivaAgain = null, array $extra = [])
+    {
+        return $this->actingAs($viva['ae'])->post(route('reviva.evaluations.record', [$viva['round']->application_id, $seat]), $extra + array_filter([
+            'category' => $category,
+            'viva_again' => $vivaAgain === null ? null : (int) $vivaAgain,
+            'report' => UploadedFile::fake()->create("utp-cgs-024-{$seat}.pdf", 80, 'application/pdf'),
+        ], fn ($v) => $v !== null));
+    }
+
+    protected function advance(array $viva)
+    {
+        return $this->actingAs($viva['ae'])->post(route('reviva.decide', $viva['round']->application_id), ['decision' => 'approve']);
+    }
+
     protected function latestRound(User $student): ?ReVivaDetail
     {
         return ReVivaDetail::whereHas('application', fn ($q) => $q->where('student_id', $student->id)->where('module_type', 're_viva'))

@@ -241,6 +241,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/re-viva/queue', [ReVivaController::class, 'queue'])->name('reviva.queue');
         Route::post('/re-viva/{application}/decide', [ReVivaController::class, 'decide'])->name('reviva.decide');
         Route::post('/re-viva/{application}/send-to-panel', [ReVivaController::class, 'sendToPanel'])->name('reviva.send-to-panel');
+        Route::post('/re-viva/{application}/evaluations/{seat}', [ReVivaController::class, 'recordEvaluation'])
+            ->whereIn('seat', ['internal_main_id', 'external_main_id'])->name('reviva.evaluations.record');
 
         Route::get('/re-viva/outcomes', [ReVivaController::class, 'outcomesIndex'])->name('reviva.outcomes.index');
         Route::post('/re-viva/outcomes/{detail}', [ReVivaController::class, 'recordOutcome'])

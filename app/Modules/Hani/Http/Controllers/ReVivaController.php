@@ -10,7 +10,10 @@ use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\ReVivaDetail;
+use App\Modules\Hani\Models\ReVivaEvaluation;
+use App\Modules\Hani\Models\ReVivaStaffDocument;
 use App\Modules\Hani\Models\VivaDetail;
+use App\Modules\Hani\Models\VivaExaminerProgress;
 use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Support\ReVivaLetters;
 use App\Modules\Hani\Support\ReVivaWindow;
@@ -33,6 +36,11 @@ class ReVivaController extends Controller
     public const DOC_THESIS = 'Re-corrected Thesis';
 
     public const DOC_SUMMARY = 'Summary of Corrections';
+
+    /** Stage 3: the panel's re-evaluations are recorded here. */
+    public const EVALUATION_STAGE = 'report_received';
+
+    public const REPORT_MAX_KB = 10240;
 
     protected function moduleKey(): string
     {
@@ -181,16 +189,15 @@ class ReVivaController extends Controller
     {
         $queue = $this->queueFor($request, $engine, ['documents', 'student']);
 
-        $details = ReVivaDetail::with('staffDocuments.examiner')
+        $details = ReVivaDetail::with(['staffDocuments.examiner', 'evaluations.examiner', 'evaluations.report'])
             ->whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()
             ->each(fn (ReVivaDetail $d) => $d->setRelation('application', $queue['applications']->firstWhere('id', $d->application_id)))
             ->keyBy('application_id');
 
         // Stage 1: who the letters will go to, and whose email is a problem.
-        $mains = $queue['stage']->key === ReVivaLetters::STAGE
-            ? $details->map(fn (ReVivaDetail $d) => $d->currentMains())
-            : collect();
+        // Stages 3 and 4: whose re-evaluation is recorded, and whether they diverge.
+        $mains = $details->map(fn (ReVivaDetail $d) => $d->currentMains());
 
         return view('hani::re_viva.queue', $queue + ['details' => $details, 'mains' => $mains]);
     }
@@ -226,13 +233,100 @@ class ReVivaController extends Controller
             return back()->with('error', 'Use "Send to panel": it generates and sends the correction letters and completes this step.');
         }
 
+        if ($application->status === Application::STATUS_PENDING && $application->current_stage === self::EVALUATION_STAGE
+            && $request->input('decision') === 'approve') {
+            $detail = ReVivaDetail::where('application_id', $application->id)->firstOrFail();
+            if (! $detail->evaluationsComplete()) {
+                return back()->with('error', 'Record both main examiners\' Thesis Re-evaluation Reports (UTP/CGS/024) before completing this step.');
+            }
+        }
+
         return $this->decideThroughEngine($request, $application, $engine);
+    }
+
+    /**
+     * Stage 3: one main examiner's Thesis Re-evaluation Report (UTP/CGS/024).
+     * Recording again replaces the row until the stage completes. The signed
+     * form goes to the private disk, staff-only (it comes from the examiner).
+     */
+    public function recordEvaluation(Request $request, Application $application, string $seat)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless(array_key_exists($seat, VivaExaminerProgress::SEATS), 404);
+        abort_unless($application->student->department === $request->user()->department, 403);
+
+        if ($application->status !== Application::STATUS_PENDING || $application->current_stage !== self::EVALUATION_STAGE) {
+            return back()->with('error', 'Re-evaluations are recorded at the Report Received step.');
+        }
+
+        $detail = ReVivaDetail::where('application_id', $application->id)->firstOrFail();
+        $existing = $detail->currentEvaluations()->get($seat);
+        $ratingKeys = fn (string $group) => array_keys(config("hani.examiner_progress.{$group}"));
+
+        $data = $request->validate([
+            'category' => ['required', 'integer', 'between:1,4'],
+            'viva_again' => ['nullable', 'required_if:category,4', 'boolean'],
+            'report' => [$existing ? 'nullable' : 'required', 'file', 'mimes:pdf', 'max:'.self::REPORT_MAX_KB],
+            'ratings' => ['nullable', 'array'],
+            'ratings.criteria' => ['nullable', 'array'],
+            'ratings.criteria.*' => ['nullable', 'integer', 'between:1,5'],
+            'ratings.sections' => ['nullable', 'array'],
+            'ratings.sections.*' => ['nullable', 'integer', 'between:1,5'],
+        ], [
+            'viva_again.required_if' => 'For a fail, record whether the examiner requires the candidate to attend the viva again.',
+            'report.required' => 'Upload the signed Thesis Re-evaluation Report (UTP/CGS/024).',
+        ]);
+
+        $ratings = array_filter([
+            'criteria' => array_filter(array_intersect_key($data['ratings']['criteria'] ?? [], array_flip($ratingKeys('criteria')))),
+            'sections' => array_filter(array_intersect_key($data['ratings']['sections'] ?? [], array_flip($ratingKeys('sections')))),
+        ]);
+        $user = $request->user();
+
+        $evaluation = DB::transaction(function () use ($detail, $seat, $data, $ratings, $request, $user) {
+            $locked = ReVivaDetail::whereKey($detail->id)->lockForUpdate()->firstOrFail();
+            $examiner = $locked->currentMains()[$seat] ?? null;
+
+            if (! $examiner) {
+                throw ValidationException::withMessages(['category' => 'That seat has no main examiner on the panel.']);
+            }
+
+            $fill = [
+                'examiner_id' => $examiner->id,
+                'category' => (int) $data['category'],
+                'viva_again' => (int) $data['category'] === ReVivaEvaluation::FAIL ? (bool) $data['viva_again'] : null,
+                'ratings' => $ratings ?: null,
+                'recorded_by_id' => $user->id,
+            ];
+
+            if ($file = $request->file('report')) {
+                // Private disk, random name, OUTSIDE DocumentStore.
+                $document = ReVivaStaffDocument::create([
+                    're_viva_detail_id' => $locked->id,
+                    'kind' => ReVivaStaffDocument::RE_EVALUATION,
+                    'seat' => $seat,
+                    'examiner_id' => $examiner->id,
+                    'path' => $file->store('hani/reviva-reports', 'local'),
+                    'original_name' => $file->getClientOriginalName() ?: 'utp-cgs-024.pdf',
+                    'created_by_id' => $user->id,
+                ]);
+                $fill['report_document_id'] = $document->id;
+
+                activity('document')->causedBy($user)->performedOn($document)
+                    ->withProperties(['action' => 'uploaded', 'kind' => $document->kind])
+                    ->log('Re-evaluation report uploaded');
+            }
+
+            return ReVivaEvaluation::updateOrCreate(['re_viva_detail_id' => $locked->id, 'seat' => $seat], $fill);
+        });
+
+        return back()->with('status', $evaluation->sideLabel().' examiner\'s re-evaluation recorded: '.$evaluation->label().'.');
     }
 
     /** Applications that finished the stepper but have no outcome recorded yet. */
     public function outcomesIndex()
     {
-        $details = ReVivaDetail::with(['application.student', 'application.documents'])
+        $details = ReVivaDetail::with(['application.student', 'application.documents', 'evaluations.examiner', 'evaluations.report', 'staffDocuments.examiner'])
             ->whereNull('outcome_level')
             ->whereHas('application', fn ($q) => $q->where('module_type', $this->moduleKey())
                 ->where('status', Application::STATUS_APPROVED))
