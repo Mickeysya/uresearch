@@ -908,7 +908,7 @@ query; there is no placeholder data in the views.
       other sheet may contain a colour literal.
 
 ### Docs
-- [x] `README.md`, `CLAUDE.md`, `LEGACY.md`, this file
+- [x] `README.md`, `CLAUDE.md`, this file
 - [x] `docs/` — architecture, adding-a-module, conventions, module-keys,
       migration-from-legacy, email-service-integration,
       tech-stack-and-architecture-report, test-accounts

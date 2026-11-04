@@ -389,8 +389,7 @@ rm -rf vendor
 ├── .claude/             agents, and the hook that stops Claude pushing
 ├── CLAUDE.md            project context loaded by Claude Code
 ├── TODO.md              status: done / not done / next
-├── docker-compose.yml   MySQL · phpMyAdmin · Mailpit
-└── legacy-archive.tar.gz  the pre-rewrite raw-PHP app (see LEGACY.md)
+└── docker-compose.yml   app · queue · scheduler · MySQL · Redis · phpMyAdmin · Mailpit
 ```
 
 ## Who owns what
@@ -496,7 +495,6 @@ Everything else is Sail:
 | [`docs/email-service-integration.md`](docs/email-service-integration.md) | Mailpit in development, and what real SMTP needs |
 | [`docs/tech-stack-and-architecture-report.md`](docs/tech-stack-and-architecture-report.md) | the stack and architecture write-up for the FYP report |
 | [`docs/scope/`](docs/scope/) | the FYP scope documents |
-| [`LEGACY.md`](LEGACY.md) | the archived pre-rewrite app, and how to restore it |
 
 ## Working with Claude Code
 

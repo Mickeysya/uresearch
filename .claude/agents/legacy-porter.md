@@ -13,7 +13,10 @@ those back in.
 ## Method
 
 1. **Read the legacy file completely** before writing anything. The old code is
-   in `modules/`, `Norhanis/uresearch2/`, `Nureen/uresearch/`, `Hani Sofia/uresearch/`.
+   in `modules/`, `Norhanis/uresearch2/`, `Nureen/uresearch/`, `Hani Sofia/uresearch/`
+   inside the legacy archive, which lives only in git history. Extract it
+   outside the repo, e.g.
+   `mkdir -p /tmp/legacy && git show 66221bc:legacy-archive.tar.gz | tar -xz -C /tmp/legacy`.
 2. **Extract the intent**, not the implementation: which fields, which
    approvers in which order, what conditions branch the routing, what the
    student is told at each step.

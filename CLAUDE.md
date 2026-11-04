@@ -141,6 +141,7 @@ module looks half-finished, check there before assuming it is a bug.
 described in the scope documents do not exist yet. Check it before telling
 someone a feature is missing or broken.
 
-The pre-rewrite raw-PHP app is preserved in `legacy-archive.tar.gz`; see
-`LEGACY.md`. Do not copy patterns out of it without reading
-`docs/migration-from-legacy.md` first.
+The pre-rewrite raw-PHP app is no longer in the working tree. It survives in
+git history; restore it with
+`git show 66221bc:legacy-archive.tar.gz > legacy-archive.tar.gz`. Do not copy
+patterns out of it without reading `docs/migration-from-legacy.md` first.
