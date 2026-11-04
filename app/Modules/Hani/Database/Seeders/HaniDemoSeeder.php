@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hani\Database\Seeders;
 
+use App\Modules\Hani\Database\Seeders\Concerns\SeedsReVivaScenarios;
 use App\Modules\Hani\Database\Seeders\Concerns\SeedsVivaScenarios;
 use App\Modules\Hani\Support\Import\PoolImporter;
 use App\Modules\Hani\Support\Import\TemplateLayoutReader;
@@ -40,6 +41,7 @@ use RuntimeException;
  */
 class HaniDemoSeeder extends Seeder
 {
+    use SeedsReVivaScenarios;
     use SeedsVivaScenarios;
 
     public const DATASET = __DIR__.'/../demo/hani_demo_dataset.json';
@@ -76,7 +78,7 @@ class HaniDemoSeeder extends Seeder
     /** @return array<int, string> the step methods run() calls, in order */
     protected function steps(): array
     {
-        return ['examinerPool', 'people', 'vivaScenarios'];
+        return ['examinerPool', 'people', 'vivaScenarios', 'reVivaScenarios'];
     }
 
     public function run(): void

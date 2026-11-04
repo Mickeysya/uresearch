@@ -126,11 +126,11 @@ trait SeedsVivaScenarios
         }
 
         $this->command?->info('  Viva scenarios: S01 not started, S02 notice waiting, S03/S04 nomination stages, S05 softbound returned, '
-            .'S06 ready with diverging reports, S07 viva in 7 days, S08 result 2, S09 result 4, S10 released nomination.');
+            .'S06 ready with diverging reports, S07 viva in 7 days, S08 result 2, S09 and S10 result 4.');
     }
 
     /**
-     * Remove the demo students' own viva, softbound and nomination records,
+     * Remove the demo students' own re-viva, viva, softbound and nomination records,
      * and every tie-up on the demo pool, so the scenarios are rebuilt with
      * today's dates. Cascades take the detail rows with them.
      */
@@ -139,7 +139,7 @@ trait SeedsVivaScenarios
         $ids = collect($this->demoUsers)->filter(fn (User $u) => $u->role === Role::STUDENT)->pluck('id');
 
         Application::whereIn('student_id', $ids)
-            ->whereIn('module_type', [VivaProgress::NOTICE, VivaProgress::SOFTBOUND, VivaProgress::NOMINATION])
+            ->whereIn('module_type', ['re_viva', VivaProgress::NOTICE, VivaProgress::SOFTBOUND, VivaProgress::NOMINATION])
             ->get()
             ->each->delete();
         VivaEligibility::whereIn('student_id', $ids)->delete();
@@ -209,20 +209,34 @@ trait SeedsVivaScenarios
         $this->result($notice, 2);
     }
 
+    /**
+     * S09 and S10: category-4 vivas on the re-viva timeline (part 3,
+     * SeedsReVivaScenarios), held long enough ago for their windows to be
+     * open. Reports, the viva and the result happen at their own moments.
+     */
     protected function scenarioS09(array $row, User $student): void
     {
-        $notice = $this->notice($row, $student, acknowledge: true, filedDaysAgo: 180);
-        $panel = $this->nomination($row, $student);
-        $this->softbound($row, $student, $notice, 'approve');
-        $this->examinerReports($notice, $panel, ['internal_main_id' => 4, 'external_main_id' => 4], reportsDaysAgo: [30, 28]);
-        $this->schedule($notice, today()->subDays(14)->setTime(14, 30), 'Online: meet.example.com/viva-s09', 'Prof Dr Rahimah binti Said', 'rahimah.said@example.com');
-        $this->result($notice, 4);
+        $t = $this->reVivaTimeline()['DEMO-S09'];
+        $this->categoryFourViva($row, $student, $t['viva'], ['internal_main_id' => 4, 'external_main_id' => 4],
+            'Online: meet.example.com/viva-s09', 'Prof Dr Rahimah binti Said', 'rahimah.said@example.com');
     }
 
     protected function scenarioS10(array $row, User $student): void
     {
-        $this->notice($row, $student, acknowledge: true, filedDaysAgo: 200);
-        $this->nomination($row, $student);
+        $t = $this->reVivaTimeline()['DEMO-S10'];
+        $this->categoryFourViva($row, $student, $t['viva'], ['internal_main_id' => 3, 'external_main_id' => 4],
+            'Seminar Room 2, Chancellor Complex', 'Prof Dr Zainal bin Ahmad', 'zainal.ahmad@example.com');
+    }
+
+    protected function categoryFourViva(array $row, User $student, Carbon $vivaAt, array $categories, string $venue, string $chair, string $chairEmail): void
+    {
+        $daysAgo = (int) $vivaAt->copy()->startOfDay()->diffInDays(today());
+        $notice = $this->notice($row, $student, acknowledge: true, filedDaysAgo: $daysAgo + 150);
+        $panel = $this->nomination($row, $student);
+        $this->softbound($row, $student, $notice, 'approve');
+        $this->at($vivaAt->copy()->subDays(7), fn () => $this->examinerReports($notice, $panel, $categories, reportsDaysAgo: [9, 6]));
+        $this->schedule($notice, $vivaAt, $venue, $chair, $chairEmail);
+        $this->at($vivaAt->copy()->addDay()->setTime(10, 0), fn () => $this->result($notice, 4));
     }
 
     // ---- Building blocks ------------------------------------------------------

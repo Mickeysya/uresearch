@@ -14,17 +14,15 @@ use App\Modules\Hani\Models\ReVivaEvaluation;
 use App\Modules\Hani\Models\ReVivaStaffDocument;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaExaminerProgress;
-use App\Modules\Hani\Support\PanelSeats;
-use App\Modules\Hani\Support\ReVivaLetters;
 use App\Modules\Hani\Support\ReVivaCorrections;
+use App\Modules\Hani\Support\ReVivaLetters;
+use App\Modules\Hani\Support\ReVivaLogging;
 use App\Modules\Hani\Support\ReVivaOutcome;
 use App\Modules\Hani\Support\ReVivaWindow;
-use App\Modules\Hani\Support\VivaProgress;
-use Illuminate\Support\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -35,9 +33,9 @@ class ReVivaController extends Controller
     }
 
     /** doc_type of the two uploads at logging. Stored in rows: do not rename. */
-    public const DOC_THESIS = 'Re-corrected Thesis';
+    public const DOC_THESIS = ReVivaLogging::DOC_THESIS;
 
-    public const DOC_SUMMARY = 'Summary of Corrections';
+    public const DOC_SUMMARY = ReVivaLogging::DOC_SUMMARY;
 
     /** Stage 3: the panel's re-evaluations are recorded here. */
     public const EVALUATION_STAGE = 'report_received';
@@ -111,7 +109,7 @@ class ReVivaController extends Controller
             ->values();
     }
 
-    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
+    public function store(Request $request, ReVivaLogging $logging)
     {
         $data = $request->validate([
             'student_id' => ['required', Rule::exists('users', 'id')->where('role', Role::STUDENT)],
@@ -122,69 +120,13 @@ class ReVivaController extends Controller
         ]);
 
         $student = User::findOrFail($data['student_id']);
-        $latest = $this->latestCycle($student->id);
-
-        if ($reason = $this->blockReason($latest)) {
-            throw ValidationException::withMessages(['student_id' => $reason]);
-        }
-
-        // Round 1 takes the category-4 viva's window; round N+1 runs from the
-        // level-4 outcome. A student with no viva result in UResearch (logged
-        // on paper before the portal) needs the result date from CGS.
-        $window = ReVivaWindow::for($student, $latest);
-
-        if (! $window) {
-            if (empty($data['viva_result_date'])) {
-                throw ValidationException::withMessages([
-                    'viva_result_date' => 'No category 4 viva result is recorded in UResearch for this student. Enter the date of the viva result so the resubmission window can be worked out.',
-                ]);
-            }
-            $window = ReVivaWindow::fromResultDate(Carbon::parse($data['viva_result_date']));
-        }
-
-        $resubmittedAt = now();
-        $warning = $window->warningFor($resubmittedAt);
-        $round = $latest ? $latest->cycle_number + 1 : 1;
-
-        $application = DB::transaction(function () use ($request, $data, $student, $engine, $documents, $latest, $window, $resubmittedAt, $warning, $round) {
-            $application = Application::create([
-                'student_id' => $student->id,
-                // The CGS staff member logging it, not the student.
-                'submitted_by_id' => $request->user()->id,
-                'module_type' => $this->moduleKey(),
-                'status' => Application::STATUS_DRAFT,
-            ]);
-
-            // correction_deadline is set by the outcome (levels 1-3) and
-            // hardbound_deadline is no longer used; see the 2026_11_06
-            // migration for how the original columns map.
-            ReVivaDetail::create([
-                'application_id' => $application->id,
-                'cycle_number' => $round,
-                'previous_cycle_id' => $latest?->id,
-                'viva_application_id' => $window->viva?->application_id ?? $latest?->viva_application_id,
-                'resubmission_at' => $resubmittedAt,
-                'resubmission_opens_at' => $window->opens,
-                'resubmission_closes_at' => $window->closes,
-                'viva_result_date' => $window->source === ReVivaWindow::LEGACY ? $data['viva_result_date'] : null,
-                'logged_outside_window' => $warning !== null,
-            ]);
-
-            // Both are the student's own documents, so DocumentStore is right
-            // here: the student may see them. Nothing examiner-side is.
-            $documents->attach($application, $request->file('thesis'), self::DOC_THESIS);
-            $documents->attach($application, $request->file('summary_of_corrections'), self::DOC_SUMMARY);
-
-            $this->holdReexaminers($window->viva, $resubmittedAt->copy()->addMonthsNoOverflow((int) config('hani.reviva.hold_months', 12)), $request->user());
-
-            return $engine->submit($application);
-        });
+        $result = $logging->log($student, $request->file('thesis'), $request->file('summary_of_corrections'), $data['viva_result_date'] ?? null, $request->user());
 
         $redirect = redirect()
             ->route('reviva.create')
-            ->with('status', "Re-viva round {$round} logged for {$student->name}.");
+            ->with('status', "Re-viva round {$result['round']} logged for {$student->name}.");
 
-        return $warning ? $redirect->with('warning', $warning.' It was logged anyway; check that CGS agreed the late or early submission.') : $redirect;
+        return $result['warning'] ? $redirect->with('warning', $result['warning'].' It was logged anyway; check that CGS agreed the late or early submission.') : $redirect;
     }
 
     public function queue(Request $request, WorkflowEngine $engine)
@@ -383,57 +325,13 @@ class ReVivaController extends Controller
             ->with('status', "Outcome recorded for {$detail->application->student->name}, round {$detail->cycle_number}: {$detail->outcomeLabel()}. The student and supervisor have been told.");
     }
 
-    /**
-     * The same main examiners re-examine, so keep them Assigned for the round
-     * (until $until at most); the outcome releases them (PanelSeats). Nothing
-     * to do with no linked viva, or once the window-closed sweep freed them.
-     */
-    protected function holdReexaminers(?VivaDetail $viva, \DateTimeInterface $until, User $actor): void
-    {
-        if (! $viva || $viva->examiners_freed_at !== null) {
-            return;
-        }
-
-        $panel = VivaProgress::forNotices(collect([$viva->application]))->first()?->panel();
-
-        if ($panel) {
-            app(PanelSeats::class)->holdForReexamination($panel, $until, $actor);
-        }
-    }
-
-    /**
-     * The student's most recent cycle across all their re-viva applications,
-     * whatever its outcome -- used both to gate a new submission and, for a
-     * loop-back, to link the new cycle to the one that produced it.
-     */
     protected function latestCycle(int $studentId): ?ReVivaDetail
     {
-        return ReVivaDetail::whereHas('application', fn ($q) => $q
-            ->where('module_type', $this->moduleKey())
-            ->where('student_id', $studentId))
-            ->latest('cycle_number')
-            ->first();
+        return ReVivaLogging::latestCycle($studentId);
     }
 
-    /**
-     * Why $latest blocks a new submission, or null if one may be filed.
-     * A cycle still mid-stepper always blocks; a resolved cycle blocks
-     * unless its outcome was level 4 (loop back into another cycle).
-     */
     protected function blockReason(?ReVivaDetail $latest): ?string
     {
-        if (! $latest) {
-            return null;
-        }
-
-        if (! $latest->hasOutcome()) {
-            return 'A re-viva cycle is already in progress; wait for it to reach an outcome first.';
-        }
-
-        if (! $latest->requiresLoopBack()) {
-            return 'Your re-viva has already reached a final outcome; a new cycle is not open.';
-        }
-
-        return null;
+        return ReVivaLogging::blockReason($latest);
     }
 }

@@ -126,6 +126,7 @@ class HaniDemoSeederTest extends TestCase
         $this->assertSame(Examiner::STATE_ASSIGNED, Examiner::where('email', 'ain.ismail@example.com')->sole()->state());
 
         $this->assertSame(Application::STATUS_APPROVED, VivaProgress::for($this->student('DEMO-S10'))->nomination->status);
+        $this->assertSame(VivaDetail::REEXAMINATION, VivaProgress::for($this->student('DEMO-S10'))->detail->result_category);
 
         // Demo accounts are example.com, with the test accounts' password.
         $this->assertTrue(User::where('email', 'like', '%@example.com')->where('role', Role::STUDENT)->count() === 10);
@@ -134,5 +135,40 @@ class HaniDemoSeederTest extends TestCase
         // The examiners S01's walkthrough expects are still free to suggest.
         $this->assertSame(Examiner::STATE_AVAILABLE, Examiner::where('email', 'farah.rosli@example.com')->sole()->state());
         $this->assertSame(Examiner::STATE_AVAILABLE, Examiner::where('email', 'melissa.teoh@example.org')->sole()->state());
+    }
+
+    /** Part 3: S09 under panel review for 22 working days, S10 at level 4 ready for round 2. */
+    public function test_re_viva_rounds_for_s09_and_s10(): void
+    {
+        foreach (['2026-11-04', '2027-06-21'] as $day) {
+            Carbon::setTestNow($day.' 09:00');
+            $this->seed(HaniDemoSeeder::class);
+
+            $s09 = \App\Modules\Hani\Support\ReVivaLogging::latestCycle($this->student('DEMO-S09')->id);
+            $this->assertSame(1, $s09->cycle_number);
+            $this->assertSame('under_panel_review', $s09->application->current_stage, $day);
+            $this->assertFalse($s09->logged_outside_window, $day);
+            $this->assertSame(22, \App\Modules\Hani\Support\WorkingDays::between($s09->sent_to_panel_at, today()), $day);
+            $this->assertSame(2, $s09->staffDocuments()->where('kind', 'correction_letter')->count());
+            $this->assertTrue(\App\Modules\Hani\Models\ReVivaReminderLog::where('re_viva_detail_id', $s09->id)->where('kind', 'panel_chase')->exists(), 'the 20-day reminder has fired');
+            $this->assertFalse(\App\Modules\Hani\Models\ReVivaReminderLog::where('re_viva_detail_id', $s09->id)->where('kind', 'panel_escalate')->exists());
+            $this->assertSame(Examiner::STATE_ASSIGNED, Examiner::where('email', 'ain.ismail@example.com')->sole()->state());
+
+            $s10Student = $this->student('DEMO-S10');
+            $s10 = \App\Modules\Hani\Support\ReVivaLogging::latestCycle($s10Student->id);
+            $this->assertSame(1, $s10->cycle_number);
+            $this->assertSame(Application::STATUS_APPROVED, $s10->application->status);
+            $this->assertSame(4, $s10->outcome_level);
+            $this->assertNull($s10->suggested_level, 'internal 3 and external 4 + YES diverge');
+            $this->assertSame(['external_main_id' => 4, 'internal_main_id' => 3], $s10->evaluations->pluck('category', 'seat')->sortKeys()->all());
+            $this->assertTrue($s10->evaluations->firstWhere('seat', 'external_main_id')->viva_again);
+            $this->assertSame(today()->subDays(3)->toDateString(), $s10->outcome_recorded_at->toDateString());
+            $this->assertNull(\App\Modules\Hani\Support\ReVivaLogging::blockReason($s10), 'round 2 may be logged');
+            $this->assertTrue(\App\Modules\Hani\Support\ReVivaWindow::for($s10Student, $s10)->contains(today()));
+        }
+
+        Carbon::setTestNow();
+
+        $this->assertSame(2, \App\Modules\Hani\Models\ReVivaDetail::count(), 'rebuilt, not duplicated');
     }
 }
