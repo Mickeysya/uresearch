@@ -9,7 +9,7 @@
          goes to the logging form. --}}
     <x-core::page-header
         title="Re-viva Cycles"
-        subtitle="Every re-viva round across CGS: where it stands, its deadlines and its outcome. This page is read-only.">
+        subtitle="Every re-viva round across CGS: where it stands, its deadlines and its outcome, open rounds sorted by deadline risk. This page is read-only.">
         @if ($canLog)
             <a href="{{ route('reviva.create') }}" class="btn">Log Re-viva Submission</a>
         @endif
@@ -31,6 +31,7 @@
                             <tr>
                                 <th>Student</th>
                                 <th>Round</th>
+                                <th>Risk</th>
                                 <th>Progress</th>
                                 <th>Resubmission and deadlines</th>
                                 <th>Outcome</th>
@@ -47,6 +48,7 @@
                                         @if ($student->department) <br><span class="fstep-hint">{{ $student->department }}</span> @endif
                                     </td>
                                     <td>{{ $detail->cycle_number }}</td>
+                                    <td>@include('hani::re_viva._risk', ['risk' => $risks[$detail->id] ?? null])</td>
                                     <td>
                                         @include('hani::partials.module_stepper', [
                                             'tracker' => \App\Modules\Hani\Support\ModuleTracker::reviva($detail),

@@ -308,6 +308,25 @@ return [
         'panel_chase_working_days' => 20,
         'panel_escalate_working_days' => 25,
 
+        // Re-viva Cycles' deadline risk score (Support\ReVivaRisk), 0-100.
+        // Rule-based and explained factor by factor. ALL PROVISIONAL: our
+        // weights and limits for the FYP, not CGS figures.
+        'risk' => [
+            'weights' => ['time_used' => 35, 'stage_time' => 30, 'divergence' => 20, 'previous_rounds' => 15],
+            // Working days a round is expected to take, logging to outcome.
+            'expected_round_working_days' => 45,
+            // Working days each stage should take; 20 is the panel's limit.
+            'stage_limits' => [
+                'report_sent' => 5, 'under_panel_review' => 20, 'report_received' => 5,
+                'consolidation_scheduled' => 10, 'outcome' => 5,
+            ],
+            // This many earlier rounds count the full "previous rounds" weight.
+            'rounds_for_full' => 2,
+            // Bands.
+            'high' => 70,
+            'medium' => 40,
+        ],
+
         // When `re-viva:monitor` runs each day. Provisional.
         'monitor_daily_at' => '08:00',
 

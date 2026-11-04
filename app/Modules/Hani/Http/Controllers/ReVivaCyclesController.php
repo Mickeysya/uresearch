@@ -6,6 +6,7 @@ use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\ReVivaDetail;
+use App\Modules\Hani\Support\ReVivaRisk;
 use Illuminate\Http\Request;
 
 /**
@@ -33,12 +34,18 @@ class ReVivaCyclesController extends Controller
         $details = ReVivaDetail::with(['application.student', 'nextCycle', 'staffDocuments.examiner', 'evaluations.examiner', 'evaluations.report'])
             ->whereHas('application', fn ($q) => $q->where('module_type', 're_viva'))
             ->latest('resubmission_at')
-            ->get();
+            ->get()
+            ->each(fn (ReVivaDetail $detail) => $detail->application->loadMissing('history'));
 
-        $groups = $details->groupBy(fn (ReVivaDetail $detail) => $this->section($detail));
+        // The deadline risk score, and each section sorted by it, highest first.
+        $risks = $details->mapWithKeys(fn (ReVivaDetail $detail) => [$detail->id => ReVivaRisk::for($detail)]);
+        $groups = $details
+            ->sortByDesc(fn (ReVivaDetail $detail) => $risks[$detail->id]['score'] ?? -1)
+            ->groupBy(fn (ReVivaDetail $detail) => $this->section($detail));
 
         return view('hani::re_viva.cycles', [
             'groups' => $groups,
+            'risks' => $risks,
             'sections' => self::SECTIONS,
             'canLog' => $request->user()->role === Role::SENIOR_EXEC_CGS,
         ]);
