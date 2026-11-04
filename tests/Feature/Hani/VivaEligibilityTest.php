@@ -238,7 +238,7 @@ class VivaEligibilityTest extends TestCase
         $html = $this->actingAs($student)->get(route('viva.eligibility'))->assertOk()->getContent();
 
         // Core's sidebar reads the optional navLabel()/navPattern() only once
-        // the change in app/Modules/Hani/SHARED_CHANGES.md (item 1) is applied.
+        // the change in app/Modules/Hani/SHARED_CHANGES.md (section 2) is applied.
         // Without it the one entry falls back to label(), highlighted here only.
         $coreReadsNavLabel = str_contains($html, '>Viva</a>');
         $entry = $coreReadsNavLabel ? 'Viva' : 'Notice of Thesis Submission';

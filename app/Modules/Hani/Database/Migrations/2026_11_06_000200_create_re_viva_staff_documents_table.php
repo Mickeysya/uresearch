@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Schema;
  * shows the student every one of them; these must stay staff-only. Private
  * disk, random names, downloaded through a staff route that logs each view
  * with activity('document'), as the viva examiner reports do
- * (SHARED_CHANGES.md item 12).
+ * (SHARED_CHANGES.md, section 8).
  *
  * Also stamps the cycle when the letters go out: the panel's twenty working
  * days, and the stage-2 reminders, run from sent_to_panel_at.
