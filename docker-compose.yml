@@ -58,6 +58,11 @@ services:
         condition: service_started
 
   scheduler:
+    build:
+      context: ./vendor/laravel/sail/runtimes/8.3
+      dockerfile: Dockerfile
+      args:
+        WWWGROUP: '${WWWGROUP:-1000}'
     image: sail-8.3/app
     container_name: uresearch-scheduler
     restart: unless-stopped
