@@ -78,8 +78,13 @@
                    class="@error('thesis') is-invalid @enderror">
             @error('thesis') <p class="field-error">{{ $message }}</p> @enderror
 
+            @if ($digitalSummary)
+                <label><input type="checkbox" name="use_digital_summary" value="1" @checked(old('use_digital_summary', true))>
+                    Use the Summary of Corrections {{ $preselectedStudent->name }} prepared in UResearch (checked {{ $digitalSummary->submitted_at->format('j M Y') }}, {{ count($digitalSummary->rows ?? []) }} comments)</label>
+                <p class="fstep-hint">Leave the upload below empty to use it, or upload the endorsed PDF to use that instead.</p>
+            @endif
             <label for="summary_of_corrections">Summary of Corrections (PDF, endorsed by the supervisor)</label>
-            <input type="file" name="summary_of_corrections" id="summary_of_corrections" accept="application/pdf,.pdf" required
+            <input type="file" name="summary_of_corrections" id="summary_of_corrections" accept="application/pdf,.pdf" @required(! $digitalSummary)
                    class="@error('summary_of_corrections') is-invalid @enderror">
             <p class="fstep-hint">The student's table of each examiner's comments, the action taken and the updated pages. Both files are sent to the examiners with their correction letters.</p>
             @error('summary_of_corrections') <p class="field-error">{{ $message }}</p> @enderror

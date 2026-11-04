@@ -10,6 +10,17 @@
         title="My Re-viva"
         subtitle="Each re-viva round, where it stands and what you need to do next." />
 
+    @if ($expecting)
+        <div class="card card-wide">
+            <h3>Corrected thesis due to CGS by {{ $expecting->closes?->format('j M Y') }}</h3>
+            <p>Prepare your Summary of Corrections in UResearch: the system checks every comment has an action and the pages exist in your corrected thesis, then produces the PDF for your supervisor to endorse.</p>
+            @if ($summary?->submitted_at)
+                <p class="message-success">Summary of Corrections ready since {{ $summary->submitted_at->format('j M Y') }}.</p>
+            @endif
+            <a href="{{ route('reviva.summary.edit') }}" class="btn">{{ $summary ? 'Open your Summary of Corrections' : 'Start your Summary of Corrections' }}</a>
+        </div>
+    @endif
+
     @forelse ($rounds as $round)
         <div class="card card-wide">
             <h3>Re-viva round {{ $round->cycle_number }}</h3>
@@ -58,7 +69,9 @@
             @endif
         </div>
     @empty
-        <div class="card card-wide"><div class="empty-state">You have no re-viva rounds.</div></div>
+        @unless ($expecting)
+            <div class="card card-wide"><div class="empty-state">You have no re-viva rounds.</div></div>
+        @endunless
     @endforelse
 </div>
 @endsection

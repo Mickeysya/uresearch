@@ -223,6 +223,9 @@ Route::middleware('auth')->group(function () {
     // The student's own rounds: outcome level, deadline, final thesis upload.
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/re-viva/mine', [ReVivaStudentController::class, 'mine'])->name('reviva.mine');
+        Route::get('/re-viva/summary', [ReVivaStudentController::class, 'summary'])->name('reviva.summary.edit');
+        Route::post('/re-viva/summary', [ReVivaStudentController::class, 'saveSummary'])->name('reviva.summary.save');
+        Route::get('/re-viva/summary/pdf', [ReVivaStudentController::class, 'summaryPdf'])->name('reviva.summary.pdf');
         Route::post('/re-viva/{detail}/final-thesis', [ReVivaStudentController::class, 'submitFinalThesis'])
             ->whereNumber('detail')->name('reviva.final-thesis.store');
     });

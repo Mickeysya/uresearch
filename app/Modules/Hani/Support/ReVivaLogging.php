@@ -7,6 +7,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Hani\Models\ReVivaDetail;
+use App\Modules\Hani\Models\ReVivaSummary;
 use App\Modules\Hani\Models\VivaDetail;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -39,9 +40,11 @@ class ReVivaLogging
     ) {}
 
     /**
+     * $summary: an uploaded PDF, or the student's checked digital summary.
+     *
      * @return array{detail: ReVivaDetail, round: int, warning: ?string}
      */
-    public function log(User $student, UploadedFile $thesis, UploadedFile $summary, ?string $vivaResultDate, User $actor): array
+    public function log(User $student, UploadedFile $thesis, UploadedFile|ReVivaSummary $summary, ?string $vivaResultDate, User $actor): array
     {
         $latest = self::latestCycle($student->id);
 
@@ -93,7 +96,13 @@ class ReVivaLogging
             // Both are the student's own documents, so DocumentStore is right
             // here: the student may see them. Nothing examiner-side is.
             $this->documents->attach($application, $thesis, self::DOC_THESIS);
-            $this->documents->attach($application, $summary, self::DOC_SUMMARY);
+            if ($summary instanceof ReVivaSummary) {
+                // The student's checked digital summary, rendered and attached.
+                $this->documents->storeGenerated($application, SummaryOfCorrections::render($summary), 'summary-of-corrections.pdf', self::DOC_SUMMARY);
+                $summary->update(['used_by_detail_id' => $detail->id]);
+            } else {
+                $this->documents->attach($application, $summary, self::DOC_SUMMARY);
+            }
 
             $this->holdReexaminers($window->viva, $resubmittedAt->copy()->addMonthsNoOverflow((int) config('hani.reviva.hold_months', 12)), $actor);
 

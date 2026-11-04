@@ -12,6 +12,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\ReVivaDetail;
 use App\Modules\Hani\Models\ReVivaEvaluation;
 use App\Modules\Hani\Models\ReVivaStaffDocument;
+use App\Modules\Hani\Models\ReVivaSummary;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaExaminerProgress;
 use App\Modules\Hani\Support\ReVivaCorrections;
@@ -74,6 +75,7 @@ class ReVivaController extends Controller
         $preselected = $request->integer('student') ?: null;
         $preselectedStudent = $preselected ? $students->firstWhere('id', $preselected) : null;
         $window = $preselectedStudent ? ReVivaWindow::for($preselectedStudent, $latestCycles->get($preselected)) : null;
+        $digitalSummary = $preselectedStudent ? ReVivaSummary::openFor($preselectedStudent) : null;
 
         return view('hani::re_viva.form', [
             'students' => $students,
@@ -81,6 +83,7 @@ class ReVivaController extends Controller
             'preselected' => $preselected,
             'preselectedStudent' => $preselectedStudent,
             'window' => $window,
+            'digitalSummary' => $digitalSummary?->submitted_at ? $digitalSummary : null,
             'readyToLog' => $this->readyToLog($students, $latestCycles, $blockedReasons),
         ]);
     }
@@ -115,12 +118,25 @@ class ReVivaController extends Controller
             'student_id' => ['required', Rule::exists('users', 'id')->where('role', Role::STUDENT)],
             // PDF only: examiners open both from their letter's link.
             'thesis' => [...DocumentStore::rules(required: true), 'mimes:pdf'],
-            'summary_of_corrections' => [...DocumentStore::rules(required: true), 'mimes:pdf'],
+            // Or the student's checked digital summary (use_digital_summary).
+            'summary_of_corrections' => [...DocumentStore::rules(required: ! $request->boolean('use_digital_summary')), 'mimes:pdf'],
+            'use_digital_summary' => ['nullable', 'boolean'],
             'viva_result_date' => ['nullable', 'date', 'before_or_equal:today'],
+        ], [
+            'summary_of_corrections.required' => 'Upload the Summary of Corrections, or use the one the student prepared in UResearch.',
         ]);
 
         $student = User::findOrFail($data['student_id']);
-        $result = $logging->log($student, $request->file('thesis'), $request->file('summary_of_corrections'), $data['viva_result_date'] ?? null, $request->user());
+        $summary = $request->file('summary_of_corrections');
+
+        if (! $summary) {
+            $summary = ReVivaSummary::openFor($student);
+            if (! $summary?->submitted_at) {
+                throw ValidationException::withMessages(['summary_of_corrections' => 'This student has no checked Summary of Corrections in UResearch. Upload the PDF instead.']);
+            }
+        }
+
+        $result = $logging->log($student, $request->file('thesis'), $summary, $data['viva_result_date'] ?? null, $request->user());
 
         $redirect = redirect()
             ->route('reviva.create')

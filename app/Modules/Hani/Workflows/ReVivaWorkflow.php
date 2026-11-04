@@ -106,8 +106,9 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
             Role::ACADEMIC_EXEC => [
                 ['label' => 'Re-viva Outcomes', 'route' => 'reviva.outcomes.index'],
             ],
-            // Only once they have a round: most students never do.
+            // Only once they have a round or a category-4 viva: most never do.
             Role::STUDENT => Application::where('module_type', $this->key())->where('student_id', $user->id)->exists()
+                    || \App\Modules\Hani\Support\ReVivaWindow::categoryFourViva($user)
                 ? [['label' => 'My Re-viva', 'route' => 'reviva.mine']]
                 : [],
             default => [],
