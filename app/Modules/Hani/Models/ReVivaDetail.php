@@ -26,7 +26,7 @@ class ReVivaDetail extends Model
         'resubmission_at', 'resubmission_opens_at', 'resubmission_closes_at',
         'viva_result_date', 'logged_outside_window', 'sent_to_panel_at', 'sent_to_panel_by_id',
         'correction_deadline', 'hardbound_deadline',
-        'outcome_level', 'outcome_remarks',
+        'outcome_level', 'outcome_remarks', 'suggested_level', 'outcome_recorded_at', 'outcome_recorded_by_id',
     ];
 
     protected function casts(): array
@@ -40,6 +40,9 @@ class ReVivaDetail extends Model
             'sent_to_panel_at' => 'datetime',
             'correction_deadline' => 'date',
             'hardbound_deadline' => 'date',
+            'outcome_level' => 'integer',
+            'suggested_level' => 'integer',
+            'outcome_recorded_at' => 'datetime',
         ];
     }
 
@@ -145,15 +148,29 @@ class ReVivaDetail extends Model
         return $this->outcome_level === self::OUTCOME_LOOP_BACK;
     }
 
+    /** Levels 1-3: passed, with a final thesis to submit by correction_deadline. */
+    public const OUTCOME_CORRECTIONS = [1, 2, 3];
+
+    /**
+     * Display only (the stored value is the number). Follows the four
+     * recommendations of UTP/CGS/024, with "fail" split on "required to
+     * attend the viva again".
+     */
+    public const OUTCOME_LABELS = [
+        1 => 'Level 1: Pass (final thesis within 1 month)',
+        2 => 'Level 2: Minor corrections (final thesis within 3 months)',
+        3 => 'Level 3: Major corrections (final thesis within 3 to 6 months)',
+        4 => 'Level 4: Fail, oral examination required (CGS logs the next round)',
+        5 => 'Level 5: Fail (final)',
+    ];
+
     public function outcomeLabel(): ?string
     {
-        return match ($this->outcome_level) {
-            1 => 'Level 1: Pass, minor corrections',
-            2 => 'Level 2: Pass, moderate corrections',
-            3 => 'Level 3: Pass, major corrections',
-            4 => 'Level 4: Fail, loop back to another re-viva cycle',
-            5 => 'Level 5: Dismissed',
-            default => null,
-        };
+        return self::OUTCOME_LABELS[$this->outcome_level] ?? null;
+    }
+
+    public function needsFinalThesis(): bool
+    {
+        return in_array($this->outcome_level, self::OUTCOME_CORRECTIONS, true);
     }
 }

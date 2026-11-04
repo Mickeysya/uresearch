@@ -130,15 +130,16 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
                 ->where('module_type', $this->key())
                 ->where('student_id', $user->id)
                 ->select('id'))
-            // A cycle that already has an outcome has stopped running.
-            ->whereNull('outcome_level')
+            // A round with a final outcome has stopped running; levels 1-3
+            // still have the final thesis due (correction_deadline).
+            ->where(fn ($q) => $q->whereNull('outcome_level')->orWhereIn('outcome_level', ReVivaDetail::OUTCOME_CORRECTIONS))
             ->get();
 
         $events = [];
 
         foreach ($details as $detail) {
             foreach ([
-                ['correction_deadline', 'Thesis corrections due', 'warn'],
+                ['correction_deadline', 'Final thesis due', 'warn'],
                 ['hardbound_deadline', 'Hardbound submission due', 'critical'],
             ] as [$field, $title, $tone]) {
                 if (! $detail->$field?->betweenIncluded($from, $to)) {

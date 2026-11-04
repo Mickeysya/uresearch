@@ -16,6 +16,7 @@ use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaExaminerProgress;
 use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Support\ReVivaLetters;
+use App\Modules\Hani\Support\ReVivaOutcome;
 use App\Modules\Hani\Support\ReVivaWindow;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Support\Carbon;
@@ -323,20 +324,28 @@ class ReVivaController extends Controller
         return back()->with('status', $evaluation->sideLabel().' examiner\'s re-evaluation recorded: '.$evaluation->label().'.');
     }
 
-    /** Applications that finished the stepper but have no outcome recorded yet. */
-    public function outcomesIndex()
+    /**
+     * Rounds that finished the stepper with no outcome yet, for the AE's own
+     * department, each with the system's suggestion.
+     */
+    public function outcomesIndex(Request $request)
     {
         $details = ReVivaDetail::with(['application.student', 'application.documents', 'evaluations.examiner', 'evaluations.report', 'staffDocuments.examiner'])
             ->whereNull('outcome_level')
             ->whereHas('application', fn ($q) => $q->where('module_type', $this->moduleKey())
-                ->where('status', Application::STATUS_APPROVED))
+                ->where('status', Application::STATUS_APPROVED)
+                ->whereHas('student', fn ($s) => $s->where('department', $request->user()->department)))
             ->get();
 
-        return view('hani::re_viva.outcomes', ['details' => $details]);
+        $suggestions = $details->mapWithKeys(fn (ReVivaDetail $d) => [$d->id => ReVivaOutcome::suggest($d)]);
+
+        return view('hani::re_viva.outcomes', ['details' => $details, 'suggestions' => $suggestions]);
     }
 
-    public function recordOutcome(Request $request, ReVivaDetail $detail)
+    public function recordOutcome(Request $request, ReVivaDetail $detail, ReVivaOutcome $outcomes)
     {
+        abort_unless($detail->application->module_type === $this->moduleKey(), 404);
+        abort_unless($detail->application->student->department === $request->user()->department, 403);
         abort_if($detail->hasOutcome(), 404);
         abort_unless($detail->application->status === Application::STATUS_APPROVED, 404);
 
@@ -345,11 +354,11 @@ class ReVivaController extends Controller
             'outcome_remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $detail->update($data);
+        $detail = $outcomes->record($detail, (int) $data['outcome_level'], $data['outcome_remarks'] ?? null, $request->user());
 
         return redirect()
             ->route('reviva.outcomes.index')
-            ->with('status', "Outcome recorded for re-viva #{$detail->application_id}.");
+            ->with('status', "Outcome recorded for {$detail->application->student->name}, round {$detail->cycle_number}: {$detail->outcomeLabel()}. The student and supervisor have been told.");
     }
 
     /**

@@ -103,6 +103,32 @@ trait BuildsReVivas
         return $this->actingAs($viva['ae'])->post(route('reviva.decide', $viva['round']->application_id), ['decision' => 'approve']);
     }
 
+    /**
+     * Both re-evaluations recorded and consolidation done: awaiting the outcome.
+     *
+     * @param  array{0: int, 1?: ?bool}  $internal  category, viva again
+     * @param  array{0: int, 1?: ?bool}  $external
+     */
+    protected function roundAwaitingOutcome(array $internal, array $external, string $matric = '22001001'): array
+    {
+        $viva = $this->roundAtReportReceived($matric);
+        $this->recordEvaluation($viva, 'internal_main_id', $internal[0], $internal[1] ?? null)->assertSessionHasNoErrors();
+        $this->recordEvaluation($viva, 'external_main_id', $external[0], $external[1] ?? null)->assertSessionHasNoErrors();
+        $this->advance($viva)->assertSessionHasNoErrors();
+        $this->advance($viva)->assertSessionHasNoErrors();
+        $viva['round']->refresh();
+
+        return $viva;
+    }
+
+    protected function recordOutcome(array $viva, int $level, ?string $remarks = null)
+    {
+        return $this->actingAs($viva['ae'])->post(route('reviva.outcomes.record', $viva['round']), array_filter([
+            'outcome_level' => $level,
+            'outcome_remarks' => $remarks,
+        ]));
+    }
+
     protected function latestRound(User $student): ?ReVivaDetail
     {
         return ReVivaDetail::whereHas('application', fn ($q) => $q->where('student_id', $student->id)->where('module_type', 're_viva'))

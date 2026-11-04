@@ -289,6 +289,10 @@ return [
         // (agreed for the FYP 2026-11-04, not a CGS figure).
         'next_round_window_months' => [0, 6],
 
+        // Months from the re-viva outcome date to the final thesis, by level
+        // (UTP/CGS/024: within 1 month, up to 3, 3 to 6). Provisional.
+        'final_thesis_months' => [1 => 1, 2 => 3, 3 => 6],
+
         // Logging a re-viva keeps the two main examiners Assigned until at
         // most this many months later; the outcome releases them sooner.
         // Provisional (the original 12-month hardbound horizon).
