@@ -293,6 +293,14 @@ Hani's `examiner_nomination/queue.blade.php` would then pass
   - viva scheduling (date, venue, chairman, co-supervisor, calendar event)
   - the student step trackers, and the single "Viva" sidebar entry (item 1
     above)
+- **Re-viva Monitoring (Prompt 3, 2026-11-04)** should read: logged by the
+  Senior Executive with the viva hand-off and resubmission window; "Send to
+  panel" correction letters with signed links; working-day panel alerts;
+  UTP/CGS/024 re-evaluations with divergence; suggested outcome; final thesis
+  and Confirmation of Correction; `re-viva:monitor`; Re-viva Cycles with a
+  risk score; the digital Summary of Corrections. Non-Executive CGS is
+  read-only in re-viva. The cross-cutting note "no scheduled commands yet"
+  is out of date for Hani: three commands schedule themselves.
 - **"Conflict detection has no feature test"**: done.
   `tests/Feature/Hani/ConflictDetectionTest.php` covers Conflict Detection,
   the compiled report's clash set, the form warning, the AE card and the
@@ -533,7 +541,14 @@ when proposing an examiner's email at nomination (`hani/examiner-cvs/`,
 CGS-only download): on the nomination it would be visible to the
 candidate.
 
-A flag would let both move into `DocumentStore` and the Documents page.
+Since 2026-11-04 the re-viva files that name or come from the examiners
+are kept the same way (`re_viva_staff_documents`: correction letters under
+`hani/reviva-letters/`, signed UTP/CGS/024 under `hani/reviva-reports/`,
+the Confirmation of Correction under `hani/reviva-confirmations/`), with a
+logged download for the department's AE, the Senior Executive and the
+Non-Executive CGS.
+
+A flag would let all of them move into `DocumentStore` and the Documents page.
 
 **Impact.** One nullable boolean column on `application_documents`
 (defaults to `false`). That is a shared table, so this needs the team's
@@ -553,4 +568,38 @@ if ($this->staff_only && $application->student_id === $user->id) {
 }
 
 // DocumentStore::attach(..., bool $staffOnly = false)
+```
+
+---
+
+## 13. `re-viva:monitor` in `routes/console.php` (optional alternative)
+
+**Status:** not needed. Like items 2 and 11, the command schedules itself
+from `Hani\ModuleProvider::boot()` (daily at `hani.reviva.monitor_daily_at`,
+08:00). This entry is for the team in case they would rather keep every
+schedule in one file.
+
+**Reason.** It sends the re-viva's reminders and escalations:
+- Under Panel Review for 20 working days: the AE is reminded to chase the
+  panel; 25 working days: the Senior Executive is told
+- the student, 30 and 7 days before the resubmission window closes and
+  before the final-thesis deadline
+- a final thesis overdue: the AE and Senior Executive, once
+- a level-4 round whose next window closed with nothing logged: the main
+  examiners are freed with no gap, and the AE and Senior Executive told
+
+Each is sent once (`re_viva_reminder_logs`, unique key, written before
+sending; a category-4 viva with no round yet logs in `viva_reminder_logs`),
+and the command has `--dry-run`.
+
+**Impact.** None on other modules. If this line is added, **remove the
+`re-viva:monitor` entry from the `callAfterResolving` block in
+`Hani\ModuleProvider`**.
+
+### File: `routes/console.php`
+
+```php
+// Hani: re-viva reminders and escalations (panel working-day limits,
+// resubmission windows, final-thesis deadlines). See App\Modules\Hani\Console\ReVivaMonitor.
+Schedule::command('re-viva:monitor')->dailyAt('08:00')->withoutOverlapping();
 ```

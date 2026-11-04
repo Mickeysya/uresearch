@@ -1,5 +1,116 @@
 # Changelog: Hani's modules
 
+## 2026-11-04: Re-viva Monitoring: automation and intelligence (Prompt 3)
+
+Branch `feature/hani-automation`. Commits: `7bf4d94` to `14d9b62`, plus
+this documentation commit.
+
+### Problem
+
+Re-viva Monitoring was a four-click stepper with nothing behind it:
+
+- **Logging:** Non-Executive CGS could log re-vivas (CGS practice: the
+  Senior Executive does), with no link to the viva and fixed 6- and
+  12-month deadlines that ignored the viva's resubmission window.
+- **Letters:** the AE wrote each examiner's "Correction of Thesis" letter
+  by hand and posted or emailed the thesis.
+- **Chasing:** nobody counted the panel's twenty working days.
+- **Reports:** the UTP/CGS/024 re-evaluations were recorded nowhere, so
+  disagreement surfaced only at consolidation.
+- **Outcome:** a bare 1–5 dropdown that released nobody, notified nobody
+  and set no deadline. The subtitle said the student opens the next round.
+- **After the outcome:** no final thesis, no Confirmation of Correction, no
+  reminders.
+- **Scoping:** the Outcomes page showed every department to every AE.
+
+### Decisions
+
+- **Enhance, do not rebuild.** Same module key and four stage keys; the
+  new state lives on Hani's own tables.
+- **Roles (confirmed).** The Senior Executive logs; the AE runs the stages
+  and the outcome; the Non-Executive is read-only and, as a return contact
+  on the letter, may download the staff-only files.
+- **Examiner files stay out of `DocumentStore`.** Letters, signed
+  UTP/CGS/024 forms and the Confirmation of Correction name or come from
+  the examiners, so they sit in `re_viva_staff_documents` on the private
+  disk with a logged staff download (SHARED_CHANGES.md item 12).
+- **Level 4 (confirmed).** Levels 1–3 and 5 complete the mains' evaluation
+  (the gap starts); level 4 keeps them held until round N+1 is logged or
+  its window closes, when they are freed with no gap.
+- **Next round window (confirmed, provisional).** [0, 6] months from the
+  level-4 outcome date.
+- **Explainable, local.** Every check says what it found, the outcome is a
+  suggestion the AE confirms, and the risk score shows each factor. No
+  external AI service.
+
+### What changed
+
+| Item | What it does |
+|---|---|
+| a. Roles | `/re-viva/new` Senior Executive only; new read-only Re-viva Cycles (Senior Exec, Non-Exec); sidebar links by role; every action 403 for Non-Exec |
+| b. Hand-off | Expected resubmissions list; `?student=` pre-selects; `viva_application_id` and the window stored; outside the window warns; legacy viva result date; hold extended |
+| c. Uploads | Corrected thesis and Summary of Corrections, PDF, DocumentStore |
+| d. Send to panel | Dompdf letter per current main (after declines), staff-only, emailed with a signed, expiring, throttled link; flagged emails skipped and named; stage 1 completes in the same action; `DecidesOneAtATime` |
+| e. Panel limit | `re-viva:monitor`: 20 working days → AE, 25 → Senior Exec, once each; counter on the card |
+| f. Re-evaluations | UTP/CGS/024 per main: category, viva again, signed form, ratings; both required; divergence on stages 3–4, Outcomes and Cycles |
+| g. Outcome | Suggested level or "Consolidation needed"; deadlines 1/3/6 months; student and supervisor told without examiner details; level 4 prompts the Senior Exec; PanelSeats release; department scoping; subtitle fixed |
+| h. Corrections | My Re-viva page with final thesis upload; Corrections accepted; pre-filled Confirmation of Correction, staff-only |
+| i. Monitor | Window and final-thesis reminders (30, 7 days), overdue flags to AE and Senior Exec once, level-4 window closing frees the mains |
+| j. Risk score | 0–100 from four weighted factors, each shown; Cycles sorted by it |
+| k. Demo seeder | S09 Under Panel Review for 22 working days (reminder fired); S10 round 1 at level 4, ready for round 2; every step run at its own moment, idempotent |
+| c2. Digital summary | Student fills the Summary of Corrections; checks every comment has an action and every page exists (built-in PDF reader); renders the PDF; usable at logging |
+
+New tables:
+- `re_viva_staff_documents`
+- `re_viva_evaluations`
+- `re_viva_reminder_logs`
+- `re_viva_summaries`
+
+New columns on Hani's `re_viva_details`:
+- `viva_application_id`, `resubmission_opens_at`, `resubmission_closes_at`,
+  `viva_result_date`, `logged_outside_window`
+- `sent_to_panel_at`, `sent_to_panel_by_id`
+- `suggested_level`, `outcome_recorded_at`, `outcome_recorded_by_id`
+- `final_thesis_submitted_at`, `corrections_accepted_at`,
+  `corrections_accepted_by_id`
+- `correction_deadline` and `hardbound_deadline` became nullable. Old rows
+  keep both; new rows use the window, and `correction_deadline` holds the
+  final-thesis deadline after the outcome (documented in the migration).
+
+No shared table was changed. No stage was added or removed.
+
+Bugs fixed along the way:
+- Re-viva Outcomes and recording an outcome were not department-scoped.
+- The Outcomes subtitle described level 4 wrongly.
+- Found in the walkthrough: the Re-viva Cycles table was clipped on the
+  right; re-evaluations now sit in the wide column.
+
+### Verification
+
+- `php artisan test tests/Feature/Hani`: 218 passed. Full suite: 654
+  passed.
+- Re-seeded. Headless Chromium walkthrough, all checks passed, no
+  JavaScript errors:
+  1. The Senior Exec logs S09's re-viva from the category-4 hand-off (S09's
+     seeded round was removed first so it could be logged live).
+  2. The AE sends to panel: two letters, stage 1 complete.
+  3. Both emails reach Mailpit with the PDF. The signed link opens logged
+     out, serves the document, and refuses a tampered signature.
+  4. Stage 3 refuses without both reports. The AE records 2 and 4 + viva
+     again (major divergence on stages 3–4 and Outcomes), consolidates, and
+     confirms level 3 with remarks.
+  5. S09's My Re-viva shows the level and deadline, and no examiner names.
+  6. The Senior Exec logs round 2 for S10, with the window from the level-4
+     outcome.
+  7. The Non-Exec reads Re-viva Cycles with no action forms, downloads a
+     letter, and gets 403 on logging.
+
+  Re-seeded afterwards, so the demo starts from the state described in
+  the README.
+- The queue worker had been running since before these changes and failed
+  the seed's four letter jobs on a missing route. After `queue:restart` and
+  `queue:retry`, all four were delivered. Restart the worker after pulling.
+
 ## 2026-11-03: Examiner email upkeep (Prompt 1 follow-up)
 
 Branch `feature/hani-automation`. Commits: `3cd8c4b` to `f9d4d18`.

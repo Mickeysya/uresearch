@@ -42,13 +42,13 @@ The real-world order is Viva → (Examiner Matching runs inside the viva) → Re
 
 | Role | System role key | What they do in Hani's modules |
 |---|---|---|
-| Student | `student` | Viva checklist, notice, softbound; views their own progress. Sees examiner **status only, never names**. |
+| Student | `student` | Viva checklist, notice, softbound; views their own progress. Sees examiner **status only, never names**. Re-viva: My Re-viva (outcome level, deadline, final thesis upload) and the digital Summary of Corrections. |
 | Supervisor | `supervisor` | Nominates examiners for their own students; views their students' viva progress (read only) |
-| Academic Executive (AE) | `academic_exec` | Main operator. Acknowledges notices, checks softbound theses, schedules vivas, first stage of the nomination chain, re-viva stepper and outcomes, conflict detection, pending evaluations. Department-scoped. |
-| Senior Executive CGS | `senior_exec_cgs` | Nomination chain: compiles all departments' lists, then finalises and releases the list in one Approve; maintains the examiner pool |
+| Academic Executive (AE) | `academic_exec` | Main operator. Acknowledges notices, checks softbound theses, schedules vivas, first stage of the nomination chain, re-viva stages (Send to panel, re-evaluations, consolidation), outcomes and Corrections accepted, conflict detection, pending evaluations. Department-scoped. |
+| Senior Executive CGS | `senior_exec_cgs` | Nomination chain: compiles all departments' lists, then finalises and releases the list in one Approve; maintains the examiner pool. Logs re-viva rounds; reads Re-viva Cycles; escalation point for an overdue panel or final thesis |
 | Senior Director CGS | `senior_director_cgs` | Nomination chain: verifies, or returns the list to the department |
 | Dean of PGR | `dean_pgr` | Nomination chain: approves, or returns the list to the department |
-| Non-Executive CGS | `non_exec_cgs` | Reads the released Examiner Report (read-only); logs re-viva submissions |
+| Non-Executive CGS | `non_exec_cgs` | Reads the released Examiner Report (read-only). Re-viva: reads Re-viva Cycles and downloads the staff-only letters, UTP/CGS/024 reports and Confirmation of Correction (a return contact on the letter); no actions |
 | DAC, FSMC-AC, examiners, chairman | not system users | Their decisions are represented by the chain; examiners and the chairman only receive emails |
 
 ---
@@ -203,31 +203,44 @@ All notifications are queued and sent **after** the database commit; a mail fail
 
 ## 5. Module 3: Re-viva Monitoring
 
-- **Logged by Non-Executive CGS** (`/re-viva/new`), not by the student: CGS picks the student and uploads the re-corrected thesis. The picker shows every student and disables those who cannot be logged, with the reason:
-  - a cycle is already in progress (no outcome yet), or
-  - the student's latest cycle had a final outcome (levels 1–3 or 5).
-- Logging stamps `resubmission_at` and stores two deadlines from it: **corrections in 6 months**, **hardbound in 12 months**. They're stored, so a later policy change never alters a running cycle.
-- **AE stepper** (all four stages are the AE's; advance only, no reject button):
+Rebuilt around CGS practice in Prompt 3 (2026-11-04). The four stages and
+the module key are unchanged; everything else is module-side state.
 
-| # | Stage key | Label | Decision word |
-|---|---|---|---|
-| 1 | `report_sent` | Report Sent | sent |
-| 2 | `under_panel_review` | Under Panel Review | reviewed |
-| 3 | `report_received` | Report Received | received |
-| 4 | `consolidation_scheduled` | Consolidation Scheduled | consolidated |
+**Logging** (`/re-viva/new`, Senior Executive only):
+- "Expected resubmissions" lists category-4 vivas and level-4 rounds with no round logged, earliest window close first. `?student=` pre-selects (from the notification).
+- The round links the viva (`viva_application_id`) and stores its resubmission window: round 1 from `viva_details`; round N+1 from the level-4 outcome date (`hani.reviva.next_round_window_months`, [0, 6], provisional); a legacy student with no viva result needs the viva result date.
+- Outside the window: logged anyway, with a warning and a "Logged outside window" flag.
+- Uploads: corrected thesis and Summary of Corrections (PDF, DocumentStore), or the student's checked digital summary.
+- The main examiners stay held for the round.
 
-- **Outcome** (`/re-viva/outcomes`, AE): recorded only after the four stages are done, and once per cycle. It never touches `applications.status`.
+**Stages** (AE, department-scoped; `DecidesOneAtATime`):
 
-| Level | Meaning | Effect |
+| # | Stage key | What happens |
 |---|---|---|
-| 1 | Pass, minor corrections | Done |
-| 2 | Pass, moderate corrections | Done |
-| 3 | Pass, major corrections | Done |
-| 4 | Fail, loop back | CGS may log the next cycle, linked by `previous_cycle_id`, with `cycle_number` + 1 |
-| 5 | Dismissed | Final; no new cycle |
+| 1 | `report_sent` | **Send to panel**: one "Correction of Master's/Doctoral Thesis" letter (Dompdf) per current main examiner, stored staff-only, emailed with a signed, expiring link to the corrected thesis and the Summary of Corrections; flagged emails skipped with the reason; the stage completes in the same action. A plain Approve is refused. |
+| 2 | `under_panel_review` | The card counts working days with the panel. `re-viva:monitor`: 20 working days → AE reminded; 25 → Senior Exec told (once each). |
+| 3 | `report_received` | AE records each main examiner's UTP/CGS/024: category 1–4, "viva again" for a fail, signed form (staff-only), optional ratings. Completes only with both. |
+| 4 | `consolidation_scheduled` | Divergence alert when the two reports map to different levels. |
 
-- **Student calendar:** the correction and hardbound deadlines of a cycle with no outcome yet appear on the student's Calendar.
-- Students have **no dedicated re-viva page**; they see the cycle on Track My Applications (the engine's stepper of the four stages).
+**Outcome** (`/re-viva/outcomes`, AE, own department): the system suggests the level when the examiners agree, otherwise "Consolidation needed"; remarks are required to consolidate or override.
+
+| Level | From the reports | Effect |
+|---|---|---|
+| 1 | Pass | Final thesis within 1 month; mains' evaluation complete (gap starts) |
+| 2 | Minor corrections | Within 3 months; complete |
+| 3 | Major corrections | Within 6 months; complete |
+| 4 | Fail + viva again YES | Oral examination: Senior Exec asked to log round N+1; mains stay held until it is logged or its window closes (then freed with no gap) |
+| 5 | Fail + viva again NO | Final; complete |
+
+The student and supervisor are told the level and the next step, never an examiner's name or individual recommendation.
+
+**Levels 1–3:** the student uploads the final thesis on My Re-viva; the AE clicks **Corrections accepted**, which generates the pre-filled **Confirmation of Correction** (examiners 1 and 2, chairman) for signatures, staff-only.
+
+**Re-viva Cycles** (`/re-viva/cycles`, Senior Exec and Non-Exec, read-only): every round grouped (in progress, awaiting outcome, final thesis due, next round to log, closed) with tracker, window, deadlines, re-evaluations, staff files, overdue flags and a rule-based **risk score** (0–100, factors shown, sections sorted by it).
+
+**`re-viva:monitor`** (daily, `--dry-run`): panel limits; student reminders 30 and 7 days before the window closes and before the final-thesis deadline; final thesis overdue → AE and Senior Exec once; level-4 window closed → mains freed, AE and Senior Exec once.
+
+**Old rows:** rounds logged before Prompt 3 keep `correction_deadline` (+6 months) and `hardbound_deadline` (+12 months) and still show them. New rows use the window, and `correction_deadline` holds the final-thesis deadline after the outcome.
 
 ---
 
@@ -254,7 +267,7 @@ The current step is the first step not yet done; a later step that is already do
 | Student viva home, notice page, softbound form | Notice of Thesis Submission → Softbound Thesis → Examiner Appointment *(status only)* → Viva Session → Result & Corrections |
 | AE's Set Viva Date form | Same viva steps for that student (without the "What to do now" line) |
 | Each card in the Examiner Nomination queue | The six real chain stages, with "With <stage>" / "Released…" / "Not approved…" |
-| Each card in the Re-viva queue and Re-viva Outcomes | **"Re-viva round N"**: Resubmission → Panel Review → Report & Consolidation → Re-viva Result. Levels 1–3: "passed with corrections, due by …". Level 4: "CGS logs re-viva round N+1…". Level 5: "final outcome; no further action". |
+| Each card in the Re-viva queue, Re-viva Outcomes, Re-viva Cycles and My Re-viva | **"Re-viva round N"**: Resubmission → Panel Review → Report & Consolidation → Re-viva Result. Levels 1–3: "passed with corrections, due by …" (then "final thesis accepted"). Level 4: "CGS logs re-viva round N+1…". Level 5: "final outcome; no further action". |
 
 Long list pages (the AE's notice and softbound queues, the supervisor's progress table) have no per-row tracker, to avoid extra database queries.
 
@@ -270,7 +283,9 @@ The sidebar is generated by Core from what each module declares.
 | Supervisor | Actions: Nominate Examiners · Students' Viva Progress |
 | AE | Pending My Action: Examiner Nomination · Re-viva Monitoring (4 stages) · Notice of Thesis Submission · Softbound Thesis. Actions: Pending Evaluation · Conflict Detection · Examiner Report · Re-viva Outcomes · Viva Scheduling |
 | Senior Exec CGS / Senior Director / Dean | Pending My Action: Examiner Nomination (their stages). Actions: Examiner Report |
-| Non-Exec CGS | Examiner Report (read-only) · Log Re-viva Submission |
+| Senior Exec CGS (re-viva) | Log Re-viva Submission · Re-viva Cycles |
+| Non-Exec CGS | Examiner Report (read-only) · Re-viva Cycles (read-only) |
+| Student with a re-viva | My Re-viva (once they have a round or a category-4 viva) |
 
 The single "Viva" entry relies on a small, backward-compatible Core change: Core's student sidebar uses a module's optional `navLabel()` / `navPattern()` if defined (only `VivaVoceWorkflow` defines them).
 
@@ -285,7 +300,11 @@ The single "Viva" entry relies on a small, backward-compatible Core change: Core
 | `viva_eligibility` | student | student_id (unique), research_methodology_passed, publication_accepted, rcs_passed, registered_current_semester, no_outstanding_fees, within_candidacy_period, verified_by_id, verified_at |
 | `viva_details` | notice application | application_id, programme_level (snapshot), thesis_title, expected_softbound_date, viva_at, venue, chair_name, chair_email, co_supervisor_name, co_supervisor_email, scheduled_by_id, schedule_sequence |
 | `viva_softbound_details` | softbound attempt | application_id, viva_application_id, field_of_study, contact_number, personal_email, session, year, thesis_title, similarity_percent, word_count, co_supervisor_email, declaration_accepted |
-| `re_viva_details` | re-viva cycle | application_id, cycle_number, previous_cycle_id, resubmission_at, correction_deadline, hardbound_deadline, outcome_level, outcome_remarks |
+| `re_viva_details` | re-viva round | application_id, cycle_number, previous_cycle_id, viva_application_id, resubmission_at, resubmission_opens_at/closes_at, viva_result_date, logged_outside_window, sent_to_panel_at, correction_deadline (final thesis), hardbound_deadline (old rows), outcome_level, suggested_level, outcome_recorded_at, final_thesis_submitted_at, corrections_accepted_at |
+| `re_viva_evaluations` | round and main seat | examiner_id, category 1–4, viva_again, ratings, report_document_id |
+| `re_viva_staff_documents` | staff-only file | kind (correction_letter / re_evaluation_report / confirmation_of_correction), seat, examiner_id, private path, emailed_at, email_skipped_reason |
+| `re_viva_reminder_logs` | alert sent | re_viva_detail_id, kind, reference (unique) |
+| `re_viva_summaries` | digital Summary of Corrections | student_id, rows, thesis_pages, submitted_at, used_by_detail_id |
 
 **Document types** stored via `DocumentStore`: Publication Proof; Thesis Format Confirmation Form; Softbound Thesis; Turnitin Report; RCS Correction Confirmation Form; RCS Correction Summary; re-viva thesis. Softbound attempts filed before the Form #019 rework used "Similarity Report".
 
@@ -299,7 +318,7 @@ The single "Viva" entry relies on a small, backward-compatible Core change: Core
 3. **Search box width** in every queue is narrower than intended (a one-line Core CSS bug, `:first-child` vs `:first-of-type`); not fixed, pending the team.
 4. **Candidacy end and fees are self-declared**; there is no data source for them in UResearch.
 5. **Chairman and co-supervisor are typed in** by the AE, because neither is stored anywhere else in the system.
-6. The Re-viva Outcomes page's subtitle says level 4 lets "the student open another cycle by uploading again"; in fact CGS logs the next cycle.
+6. ~~The Re-viva Outcomes page's subtitle said level 4 lets the student open another cycle.~~ Fixed in Prompt 3: CGS logs the next round.
 
 ## 11. Open questions (pending the AE)
 - Does MSc go through faculty-level compilation / Dean endorsement, or straight from DAC to FSMC-AC? (The current chain applies to both MSc and PhD.)
