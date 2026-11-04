@@ -425,6 +425,12 @@ return [
         'gap_threshold' => 2,
     ],
 
+    'analytics' => [
+        // Process Analytics period filter, in months, and the default.
+        'periods' => [3, 6, 12],
+        'default_period' => 12,
+    ],
+
     'examiner_contact' => [
         // An email nobody has added, changed or confirmed for this many
         // months is listed as "not confirmed" in the pool and on the

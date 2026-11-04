@@ -9,6 +9,7 @@ use App\Modules\Hani\Http\Controllers\ExaminerImportController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
 use App\Modules\Hani\Http\Controllers\ExaminerSuggestionController;
 use App\Modules\Hani\Http\Controllers\PanelController;
+use App\Modules\Hani\Http\Controllers\ProcessAnalyticsController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\ReVivaCyclesController;
 use App\Modules\Hani\Http\Controllers\ReVivaPanelLinkController;
@@ -175,6 +176,16 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.implode(',', [
         Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR, Role::NON_EXEC_CGS,
     ]))->get('/examiner-dashboard', ExaminerDashboardController::class)->name('examiner-dashboard');
+
+    // ---- Process Analytics (linked from the Examiner Dashboard) ---------
+    // Read-only, same roles and scoping: the AE's own department, the whole
+    // university for everyone else here.
+    Route::middleware('role:'.implode(',', [
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR, Role::NON_EXEC_CGS,
+    ]))->group(function () {
+        Route::get('/process-analytics', [ProcessAnalyticsController::class, 'index'])->name('process-analytics');
+        Route::get('/process-analytics/export', [ProcessAnalyticsController::class, 'export'])->name('process-analytics.export');
+    });
 
     // ---- Examiner pool admin -------------------------------------------
     // Senior Executive CGS (Puan Waheeda) since 2026-11-03. Non-Executive CGS
