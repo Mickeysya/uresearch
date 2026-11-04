@@ -166,18 +166,27 @@
         var data = ctx.getImageData(0, 0, c.width, c.height), px = data.data;
         var minX = c.width, minY = c.height, maxX = -1, maxY = -1;
 
-        // How bright is THIS photo's paper? Most of a signature photo is
-        // paper, so its median brightness is the paper's. Ink is whatever is
-        // clearly darker than that -- a fixed cut-off mistook the shadowed
-        // corner of a phone photo for ink.
-        var hist = new Array(256).fill(0), n = 0;
+        // How bright is THIS image's paper? Paper is the light part, so take
+        // the brightness that 90% of the visible pixels are at or below. Not
+        // the median: in an already-transparent PNG every visible pixel is
+        // ink (and a tightly cropped signature can be more than half ink),
+        // so the median WAS the ink and everything was removed. The 90th
+        // percentile of pure ink is the ink itself, which keeps it all.
+        // Ink is whatever is clearly darker than the paper -- a fixed cut-off
+        // mistook the shadowed corner of a phone photo for ink.
+        var hist = new Array(256).fill(0), n = 0, clear = 0;
         for (var j = 0; j < px.length; j += 4) {
-            if (px[j + 3] < 20) continue;
+            if (px[j + 3] < 20) { clear++; continue; }
             hist[Math.round(0.299 * px[j] + 0.587 * px[j + 1] + 0.114 * px[j + 2])]++; n++;
         }
         var acc = 0, paperLevel = 255;
-        for (var k = 0; k < 256; k++) { acc += hist[k]; if (acc >= n / 2) { paperLevel = k; break; } }
+        for (var k = 0; k < 256; k++) { acc += hist[k]; if (acc >= n * 0.9) { paperLevel = k; break; } }
         var cut = paperLevel - opts.level;   // the slider is how far below the paper ink must be
+
+        // Already transparent (a signature exported from an app or a
+        // scanner): the background is gone, so every visible pixel is ink.
+        // Measuring "paper" from the ink alone would remove the whole thing.
+        if (clear > px.length / 4 * 0.2) cut = 256;
 
         for (var i = 0; i < px.length; i += 4) {
             var light = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];

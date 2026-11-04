@@ -378,3 +378,23 @@
 
 html.sidebar-collapsed .sidebar .nav-badge { display: none; }
 
+
+/* ---- Attendance Alerts (cgs-attendance-alerts.blade.php) ----
+   Calm until there is something to act on: nothing uploaded is one line and
+   the next step; an empty band is grey, not amber or red. */
+.att-empty { align-items: center; justify-content: center; gap: var(--space-3); text-align: center; }
+.att-empty-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--accent-subtle); color: var(--navy); }
+.att-empty-icon svg { width: 20px; height: 20px; }
+.att-empty p { margin: 0; font-size: var(--text-sm); color: var(--text-grey); line-height: 1.5; }
+.att-empty b { color: var(--text-dark); }
+.att-empty .btn-secondary { margin: 0; }
+
+.att-split { display: block; width: 100%; height: 10px; border-radius: var(--radius-full); overflow: hidden; margin: var(--space-1) 0 var(--space-1); background: var(--border-subtle); }
+.att-split-seg.tone-good { fill: var(--success-fg); }
+.att-split-seg.tone-warn { fill: var(--warning-fg); }
+.att-split-seg.tone-critical { fill: var(--danger-fg); }
+.att-total { margin: 0 0 var(--space-2); font-size: var(--text-xs); color: var(--text-grey); }
+
+.cgs-band-row.is-quiet .sdash-row-title { color: var(--text-grey); }
+.sdash-row-icon.tone-none { background: var(--surface-sunken); color: var(--text-grey); }
+.cgs-band-count.tone-none { color: var(--text-grey); }

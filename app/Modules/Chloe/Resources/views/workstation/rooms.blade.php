@@ -51,7 +51,7 @@
                         <div class="ws-meter-label">
                             <span><b>{{ $room->available_count }}</b> of {{ $room->workstations_count }} seats available</span>
                         </div>
-                        <div class="ws-meter {{ $tone }}" role="presentation"><span style="width: {{ $percent }}%"></span></div>
+                        <svg class="ws-meter {{ $tone }}" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="ws-meter-track" width="100" height="6"></rect><rect class="ws-meter-fill" width="{{ $percent }}" height="6"></rect></svg>
                     </div>
                 </a>
             @endforeach

@@ -95,10 +95,12 @@
 .ws-photo-card:hover .ws-photo-cta { text-decoration: underline; }
 
 /* Availability meter */
-.ws-meter { height: 6px; border-radius: var(--radius-full); background: var(--border-subtle); overflow: hidden; }
-.ws-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--success-fg); }
-.ws-meter.is-low > span { background: var(--warning-fg); }
-.ws-meter.is-empty > span { background: var(--danger-fg); }
+/* An SVG, so the fill width is an attribute rather than an inline style. */
+.ws-meter { display: block; width: 100%; height: 6px; border-radius: var(--radius-full); overflow: hidden; }
+.ws-meter-track { fill: var(--border-subtle); }
+.ws-meter-fill { fill: var(--success-fg); }
+.ws-meter.is-low .ws-meter-fill { fill: var(--warning-fg); }
+.ws-meter.is-empty .ws-meter-fill { fill: var(--danger-fg); }
 .ws-meter-label { display: flex; justify-content: space-between; font-size: var(--text-sm); color: var(--text-grey); }
 .ws-meter-label b { color: var(--text-dark); font-weight: var(--weight-semi); }
 

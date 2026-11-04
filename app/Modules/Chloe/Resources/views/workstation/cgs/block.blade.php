@@ -36,7 +36,7 @@
                             <span class="ws-photo-name">{{ $room->name }}</span>
                             <span class="ws-chip">{{ $room->genderLabel() }}</span>
                         </div>
-                        <div class="ws-meter {{ $tone }}" role="presentation" data-tip="{{ $percent }}% of seats free"><span style="width: {{ $percent }}%"></span></div>
+                        <svg class="ws-meter {{ $tone }}" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" data-tip="{{ $percent }}% of seats free"><rect class="ws-meter-track" width="100" height="6"></rect><rect class="ws-meter-fill" width="{{ $percent }}" height="6"></rect></svg>
                         <p class="ws-count-line">
                             Available: <span data-live-count="available">{{ $room->available_count }}</span> &middot; Occupied: <span data-live-count="occupied">{{ $room->occupied_count }}</span> &middot; Maintenance: <span data-live-count="maintenance">{{ $room->maintenance_count }}</span>
                         </p>
