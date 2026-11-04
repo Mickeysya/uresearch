@@ -105,6 +105,23 @@
         </div>
     </div>
 
+    {{-- What to do next, worded entirely by the module supplying attendance
+         (SuppliesAttendance::actionFor()) -- never the projection, only
+         plain arithmetic on the student's own sessions. See
+         Services\StudentDashboard::attendanceAction(). --}}
+    @if ($attendanceAction)
+        <div class="sdash-action-strip tone-{{ $attendanceAction['pillTone'] }}">
+            <div class="sdash-action-strip-text">
+                <span class="sdash-action-strip-label">{{ $attendanceAction['label'] }}</span>
+                <span class="sdash-action-strip-value">{{ $attendanceAction['value'] }}</span>
+                <span class="sdash-action-strip-note">{{ $attendanceAction['note'] }}</span>
+            </div>
+            @if ($attendanceAction['pill'])
+                <a href="{{ $attendanceAction['url'] }}" class="sdash-pill pill-{{ $attendanceAction['pillTone'] }}">{{ $attendanceAction['pill'] }}</a>
+            @endif
+        </div>
+    @endif
+
     <footer class="sdash-note tone-{{ $tone }}">
         <span class="sdash-note-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'info'])</span>
         @if (! $attendance)
@@ -144,18 +161,28 @@
                                     : Chart.uresearchToken('--border-grey', '#E7EBF2');
                             },
                             borderWidth: 0,
-                            borderRadius: 6,
+                            // Rounded caps read as a pill at a partial
+                            // percentage, but at 100% the single segment IS
+                            // the whole circle -- its start and end sit at
+                            // the same point, so rounding them still carves
+                            // two notches out of what should be one closed
+                            // ring. No rounding, no notch, once it's full.
+                            borderRadius: pct >= 100 ? 0 : 6,
                             spacing: pct > 0 && pct < 100 ? 3 : 0,
                         },
                     ],
                 },
                 options: {
-                    // A full circle, starting at twelve o'clock. cutout
-                    // controls the ring's thickness (there is no literal
-                    // stroke-width on a Chart.js arc) -- 83% leaves a ring
-                    // about 60% as thick as the original 72%, in the same
-                    // 1 - cutout proportion either way.
-                    rotation: -90,
+                    // A full circle. Chart.js doughnuts already start at
+                    // twelve o'clock when rotation is left at its default
+                    // (0) -- an explicit -90 here used to subtract another
+                    // quarter-turn on top of that, starting the sweep at
+                    // nine o'clock instead. cutout controls the ring's
+                    // thickness (there is no literal stroke-width on a
+                    // Chart.js arc) -- 83% leaves a ring about 60% as thick
+                    // as the original 72%, in the same 1 - cutout
+                    // proportion either way.
+                    rotation: 0,
                     circumference: 360,
                     cutout: '83%',
                     animation: { animateRotate: true, duration: 900 },

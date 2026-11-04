@@ -1,0 +1,5 @@
+One student holds only one seat at a time. Reassign moves a student from their current seat to a different one in a single step -- there is no separate "unassign then assign."
+
+To reassign a student: open their current seat's Seat Details page and choose Reassign. You pick a new Available seat (the room must be the same gender as the occupant, and the occupant must still be an eligible student), a reason (Room maintenance or repair, Allocation error, Special case approved by CGS, or Other), and an optional remark. In one step: the old seat is released and the new seat becomes Occupied with the same student. The old seat becomes Available again immediately -- unless the locker key for it was already Collected, in which case the old seat becomes Awaiting Key Return instead, and the key becomes Return Pending, until CGS marks it returned.
+
+Reassign is refused if the occupant is no longer eligible for a workstation (Active, full-time research, candidacy not expired) -- release them instead.

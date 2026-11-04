@@ -119,9 +119,9 @@ class DepartmentScopingTest extends TestCase
             ->post(route('travel.decide', $mine), ['decision' => 'approve'])
             ->assertSessionHas('status');
 
-        // Chair is local travel's last stage, so an approval here sets
-        // status rather than moving current_stage on to anything else.
-        $this->assertSame(Application::STATUS_APPROVED, $mine->fresh()->status);
+        // Chair endorses; travel then goes on to the Non-Executive CGS.
+        $this->assertSame(Application::STATUS_PENDING, $mine->fresh()->status);
+        $this->assertSame('cgs_review', $mine->fresh()->current_stage);
     }
 
     public function test_bulk_deciding_skips_rows_outside_the_actors_department(): void
@@ -136,7 +136,7 @@ class DepartmentScopingTest extends TestCase
             ])
             ->assertSessionHas('status', '1 application approved. 1 skipped, already decided or not yours to act on.');
 
-        $this->assertSame(Application::STATUS_APPROVED, $mine->fresh()->status);
+        $this->assertSame('cgs_review', $mine->fresh()->current_stage);
         $this->assertSame(Application::STATUS_PENDING, $theirs->fresh()->status);
         $this->assertSame('chair', $theirs->fresh()->current_stage);
     }

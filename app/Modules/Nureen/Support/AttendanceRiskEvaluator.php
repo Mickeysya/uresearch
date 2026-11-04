@@ -70,6 +70,9 @@ class AttendanceRiskEvaluator
         }
 
         $byRule = self::isAtRisk($latest);
+        // Out of scope (AttendanceScope): the figures are still worked out
+        // for display, but neither rule nor projection may flag them.
+        $monitored = AttendanceScope::monitors($studentId);
 
         $periods = $records->map(fn (AttendanceRecord $r) => [
             'attended' => $r->countedAttended(),
@@ -80,7 +83,8 @@ class AttendanceRiskEvaluator
         $projector = new AttendanceProjector((int) config('nureen.attendance.projection_min_periods', 3));
         $projection = $projector->project($periods, (int) config('nureen.attendance.semester_periods', 14));
 
-        $byProjection = $projection !== null
+        $byProjection = $monitored
+            && $projection !== null
             && $projection['projected'] < self::THRESHOLD
             && self::projectionMayFlag($records->count(), (int) config('nureen.attendance.semester_periods', 14));
 
@@ -106,6 +110,12 @@ class AttendanceRiskEvaluator
 
     public static function isAtRisk(AttendanceRecord $current): bool
     {
+        // Only students config('nureen.attendance.scope') covers are ever
+        // flagged -- see Support\AttendanceScope.
+        if (! AttendanceScope::monitors($current->student_id)) {
+            return false;
+        }
+
         $priorTwo = AttendanceRecord::where('student_id', $current->student_id)
             ->where('period_end', '<', $current->period_end)
             ->orderByDesc('period_end')

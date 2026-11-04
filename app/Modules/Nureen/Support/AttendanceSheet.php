@@ -24,6 +24,13 @@ final class AttendanceSheet
     public const COLUMNS = ['matric_no', 'period_end', 'sessions_attended', 'sessions_total'];
 
     /**
+     * Optional, straight after the four: approved annual leave days in the
+     * period (config('nureen.attendance.leave')). Read only when the fifth
+     * header says so; a blank cell keeps what CGS has recorded.
+     */
+    public const LEAVE_COLUMN = 'leave_days';
+
+    /**
      * Two filled-in rows, so the person opening the template can see the
      * expected shape rather than guessing at it — particularly the date
      * format, which is the field that goes wrong.
@@ -133,14 +140,17 @@ final class AttendanceSheet
 
         $normalised = [];
 
+        $hasLeave = ($header[4] ?? null) === self::LEAVE_COLUMN;
+
         foreach ($rows as $i => $row) {
-            [$matricNo, $periodEnd, $attended, $total] = array_pad(array_values($row), 4, null);
+            [$matricNo, $periodEnd, $attended, $total, $leave] = array_pad(array_values($row), 5, null);
 
             $normalised[] = [
                 'matric_no' => $matricNo,
                 'period_end' => $periodEnd,
                 'sessions_attended' => $attended,
                 'sessions_total' => $total,
+                ...($hasLeave ? ['leave_days' => $leave] : []),
                 // +2: the sheet's own numbering, counting the header as row 1.
                 'line' => $i + 2,
             ];

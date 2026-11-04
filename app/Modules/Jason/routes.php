@@ -18,11 +18,13 @@ use Illuminate\Support\Facades\Route;
 // controller runs, and the controller re-checks that the link belongs to
 // this submission and to a stage still waiting for it.
 Route::middleware('signed')->group(function () {
-    Route::get('/hardbound/{application}/examiner-signature/{examiner}',
+    Route::get('/hardbound/{application}/examiner-signature/{slot}',
         [HardboundSubmissionController::class, 'examinerSignForm'])
+        ->whereIn('slot', ['internal', 'external'])
         ->name('hardbound.examiner.sign');
-    Route::post('/hardbound/{application}/examiner-signature/{examiner}',
+    Route::post('/hardbound/{application}/examiner-signature/{slot}',
         [HardboundSubmissionController::class, 'storeExaminerSignature'])
+        ->whereIn('slot', ['internal', 'external'])
         ->name('hardbound.examiner.sign.store');
 });
 

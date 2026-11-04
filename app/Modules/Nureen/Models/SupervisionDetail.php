@@ -19,6 +19,8 @@ class SupervisionDetail extends Model
         'appointment_role', 'appointment_type', 'cgs_stage_snapshot',
         'previous_supervisor_id', 'letter_reference', 'letter_issued_at',
         'letter_revoked_at', 'letter_revoked_reason', 'letter_revoke_note',
+        // Postgraduate Handbook 2025 -- see the 2026_11_07_000200 migration.
+        'is_change_of_supervisor', 'is_ga', 'ga_status_source', 'co_supervisor_approver_snapshot',
     ];
 
     protected function casts(): array
@@ -27,6 +29,8 @@ class SupervisionDetail extends Model
             'reminded_at' => 'datetime',
             'letter_issued_at' => 'datetime',
             'letter_revoked_at' => 'datetime',
+            'is_change_of_supervisor' => 'boolean',
+            'is_ga' => 'boolean',
         ];
     }
 
@@ -43,6 +47,16 @@ class SupervisionDetail extends Model
     public function previousSupervisor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'previous_supervisor_id');
+    }
+
+    /**
+     * A GA changing Main Supervisor needs PGFAC approval first, with the
+     * supervisor's memo (Postgraduate Handbook 2025). As snapshotted at
+     * submission.
+     */
+    public function needsPgfacMemo(): bool
+    {
+        return (bool) $this->is_change_of_supervisor && (bool) $this->is_ga;
     }
 
     public function isRevoked(): bool

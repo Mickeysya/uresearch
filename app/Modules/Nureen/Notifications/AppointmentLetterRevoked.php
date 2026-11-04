@@ -33,7 +33,10 @@ class AppointmentLetterRevoked extends Notification implements ShouldQueue
             ->line("The appointment letter {$this->detail->letter_reference} has been revoked.")
             ->line('Reason given: '.$this->detail->letter_revoked_reason)
             ->line('The application itself remains approved -- this only means the letter already issued is no longer valid.')
-            ->action('View the application', route('applications.index'))
+            // Sent to the student AND the supervisor: each gets a page they can open.
+            ->action('View the application', $notifiable->isStudent()
+                ? route('applications.show', $this->detail->application_id)
+                : route('nureen.application', $this->detail->application_id))
             ->line('Thank you for using UResearch 2.0.');
     }
 }

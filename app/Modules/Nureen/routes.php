@@ -7,9 +7,13 @@ use App\Modules\Nureen\Http\Controllers\AttendanceController;
 use App\Modules\Nureen\Http\Controllers\AttendanceIngestController;
 use App\Modules\Nureen\Http\Controllers\CertificateVerificationController;
 use App\Modules\Nureen\Http\Controllers\CertificationController;
+use App\Modules\Nureen\Http\Controllers\DocumentPreviewController;
+use App\Modules\Nureen\Http\Controllers\DraftsController;
 use App\Modules\Nureen\Http\Controllers\ExpectedDecisionController;
 use App\Modules\Nureen\Http\Controllers\GaExtensionController;
 use App\Modules\Nureen\Http\Controllers\SupervisionController;
+use App\Modules\Nureen\Http\Controllers\StaffApplicationController;
+use App\Modules\Nureen\Http\Controllers\StuckReviewsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -18,11 +22,25 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware('auth')->group(function () {
+    // Read-only view of one application for the staff who have a part in it
+    // -- what staff emails link to (applications.show is students-only).
+    // Access: Support\StaffApplicationAccess.
+    Route::get('/nureen/applications/{application}', [StaffApplicationController::class, 'show'])->name('nureen.application');
+
 
     // ---- GA Extension -------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/ga-extension/new', [GaExtensionController::class, 'create'])->name('ga-extension.create');
         Route::post('/ga-extension', [GaExtensionController::class, 'store'])->name('ga-extension.store');
+
+        // Saved drafts -- the owning student only (Support\Drafts::ownedBy()).
+        Route::post('/ga-extension/draft', [GaExtensionController::class, 'saveDraft'])->name('ga-extension.draft.save');
+        Route::get('/ga-extension/draft/{application}', [GaExtensionController::class, 'editDraft'])->name('ga-extension.draft.edit');
+        Route::post('/ga-extension/draft/{application}', [GaExtensionController::class, 'saveDraft'])->name('ga-extension.draft.update');
+        Route::delete('/ga-extension/draft/{application}', [GaExtensionController::class, 'destroyDraft'])->name('ga-extension.draft.destroy');
+
+        // Every saved draft, both modules.
+        Route::get('/my-drafts', [DraftsController::class, 'index'])->name('nureen.drafts');
     });
 
     Route::middleware('role:'.implode(',', [
@@ -36,13 +54,33 @@ Route::middleware('auth')->group(function () {
         Route::post('/ga-extension/{application}/return', [GaExtensionController::class, 'returnToSupervisor'])->name('ga-extension.return');
     });
 
+    // Section J of the generated form: CGS staff, at the cgs_verify stage
+    // only (checked in the controller against the application's stage).
+    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+        Route::post('/ga-extension/{application}/cgs-remarks', [GaExtensionController::class, 'saveCgsRemarks'])->name('ga-extension.cgs-remarks');
+    });
+
+    // The generated GA Extension Form: any signed-in user here; who may see
+    // which application is GaExtensionController::canViewForm() -- the
+    // owning student and that application's own approvers.
+    Route::get('/ga-extension/{application}/form', [GaExtensionController::class, 'formPdf'])->name('ga-extension.form-pdf');
+    Route::get('/ga-extension/{application}/form/view', [GaExtensionController::class, 'formPdfView'])->name('ga-extension.form-pdf.view');
+
+    // View an attached file inline (the preview overlay) -- Core's
+    // documents.show rule, ApplicationDocument::visibleTo(); Nureen's
+    // modules only. See DocumentPreviewController.
+    Route::get('/nureen/documents/{document}/view', [DocumentPreviewController::class, 'view'])->name('nureen.documents.view');
+
     // ---- Supervision ----------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/supervision/new', [SupervisionController::class, 'create'])->name('supervision.create');
         Route::post('/supervision', [SupervisionController::class, 'store'])->name('supervision.store');
     });
 
-    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS]))->group(function () {
+    // DEAN_PGR: config('nureen.supervision.co_supervisor_approver') =
+    // 'dean_pgr' puts the Dean of PGR on Co-Supervisor requests; the engine
+    // still checks the role against the application's own stage.
+    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR, Role::NON_EXEC_CGS]))->group(function () {
         Route::get('/supervision/queue', [SupervisionController::class, 'queue'])->name('supervision.queue');
         Route::post('/supervision/{application}/decide', [SupervisionController::class, 'decide'])->name('supervision.decide');
     });
@@ -64,6 +102,14 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/ga-certification/new', [CertificationController::class, 'create'])->name('ga-certification.create');
         Route::post('/ga-certification', [CertificationController::class, 'store'])->name('ga-certification.store');
+
+        Route::post('/ga-certification/draft', [CertificationController::class, 'saveDraft'])->name('ga-certification.draft.save');
+        Route::get('/ga-certification/draft/{application}', [CertificationController::class, 'editDraft'])->name('ga-certification.draft.edit');
+        Route::post('/ga-certification/draft/{application}', [CertificationController::class, 'saveDraft'])->name('ga-certification.draft.update');
+        Route::delete('/ga-certification/draft/{application}', [CertificationController::class, 'destroyDraft'])->name('ga-certification.draft.destroy');
+        // The pre-filled course-owner attachment (owner only).
+        Route::get('/ga-certification/{application}/attachment', [CertificationController::class, 'attachment'])->name('ga-certification.attachment');
+        Route::get('/ga-certification/{application}/attachment/view', [CertificationController::class, 'attachmentView'])->name('ga-certification.attachment.view');
     });
 
     Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS]))->group(function () {
@@ -106,6 +152,10 @@ Route::middleware('auth')->group(function () {
         // The blank sheet to fill in. ?format=csv for CSV; .xlsx by default.
         Route::get('/attendance/template', [AttendanceController::class, 'template'])->name('attendance.template');
         Route::get('/attendance/at-risk', [AttendanceController::class, 'atRisk'])->name('attendance.at-risk');
+        // Approved annual leave per student, against the allowance --
+        // Support\AttendanceLeave, config('nureen.attendance.leave').
+        Route::get('/attendance/leave', [AttendanceController::class, 'leave'])->name('attendance.leave');
+        Route::post('/attendance/leave', [AttendanceController::class, 'recordLeave'])->name('attendance.leave.store');
         // Runs attendance:sync on demand -- see AttendanceController::syncNow().
         Route::post('/attendance/sync-now', [AttendanceController::class, 'syncNow'])->name('attendance.sync-now');
 
@@ -114,6 +164,11 @@ Route::middleware('auth')->group(function () {
 
         // ---- Processing time analytics ---------------------------------
         Route::get('/reports/processing-time', [AnalyticsController::class, 'index'])->name('nureen.analytics');
+
+        // ---- Requests no account can act on ----------------------------
+        // See Support\StuckSupervisorStages.
+        Route::get('/reviews/stuck', [StuckReviewsController::class, 'index'])->name('nureen.stuck-reviews');
+        Route::post('/reviews/stuck/{application}/reassign', [StuckReviewsController::class, 'reassign'])->name('nureen.stuck-reviews.reassign');
     });
 
 });

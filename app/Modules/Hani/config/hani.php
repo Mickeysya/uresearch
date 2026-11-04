@@ -119,9 +119,10 @@ return [
             \App\Modules\Hani\Support\Eligibility\CandidacyPeriodSource::class,
         ],
 
-        // Maximum candidacy, in months from the candidature start date.
-        // Provisional: from the Handbook as described to us, not re-confirmed
-        // with CGS.
+        // Maximum candidacy, in months from the candidature start date, shown
+        // on the checklist. The system check itself uses the expiry date in
+        // Study Candidacy (CandidacyPeriodSource). Provisional: from the
+        // Handbook as described to us, not re-confirmed with CGS.
         'candidacy_months' => [
             'MSC' => ['full_time' => 48, 'part_time' => 72],
             'PHD' => ['full_time' => 96, 'part_time' => 120],

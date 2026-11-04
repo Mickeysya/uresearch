@@ -1,5 +1,30 @@
 # Changelog: Hani's modules
 
+## 2026-11-04: Merge of origin/feature/hani-automation (= develop 0a23bad)
+
+**What came in that touches Hani.**
+- **In-app document viewer** (`<x-core::doc-link>`, `documents.view`): the
+  re-viva queue's and Outcomes' DocumentStore lists now open in the viewer,
+  with a Download link. The viewer and the new Documents page read only
+  `application_documents` through `ApplicationDocument::visibleTo()`.
+  Staff-only re-viva letters, UTP/CGS/024 reports, the Confirmation of
+  Correction, viva examiner reports and examiner CVs are not DocumentStore
+  rows, so they stay on Hani's own role-checked routes. Checked in Chromium:
+  the student's Documents page and My Re-viva list none of them, name no
+  examiner, and get 403 on the staff routes.
+- **RPD Candidacy removed** (Norhanis, `2026_10_30_000100_remove_rpd_candidacy`
+  drops `candidacies`). `Eligibility\CandidacyPeriodSource` read the
+  candidature start date there; with the table gone it fell back to
+  "Self-declared" without failing, and three tests broke. It now reads
+  Chloe's Study Candidacy record (`study_candidacies.candidacy_expiry_date`,
+  which includes extensions, and `status`): inside the expiry date is
+  verified, past it or dismissed is not met. Guarded and read-only as before.
+
+**Conflict.** `re_viva/outcomes.blade.php`: develop switched the student's
+document list to `<x-core::doc-link>`, and Prompt 3 had replaced that list
+with the evaluations and staff files. Both are kept: the list, with the
+viewer, then the evaluations, staff files and suggestion.
+
 ## 2026-11-04: Resend letter
 
 **Why.** An examiner's link works for 35 days, and the panel is escalated at

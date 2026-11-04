@@ -37,6 +37,9 @@ class PagesTest extends TestCase
                 'travel_end_date' => now()->addDays(9)->toDateString(),
                 'reason_for_travel' => 'Workshop',
                 'destination_address' => 'Kuala Lumpur',
+                'is_international' => 0,
+                'contact_person_email' => 'contact@utp.edu.my',
+                'is_ga_gra' => 'no',
                 'supporting_document' => UploadedFile::fake()->create($file, 40, 'application/pdf'),
             ])->assertRedirect();
         }
@@ -48,23 +51,37 @@ class PagesTest extends TestCase
             ->assertDontSee('theirs.pdf');
     }
 
-    public function test_the_calendar_renders_and_shows_a_real_deadline(): void
+    public function test_the_calendar_renders_and_shows_a_real_date(): void
     {
         $student = $this->student();
         $student->update(['supervisor_id' => $this->supervisor()->id]);
 
-        \App\Modules\Norhanis\Models\Candidacy::create([
+        // A trip that leaves today, so it falls in the month the calendar opens on.
+        $application = \App\Modules\Core\Models\Application::create([
             'student_id' => $student->id,
-            'programme_type' => 'phd_ft',
-            'candidature_start_date' => now()->subMonths(6),
-            'rpd_deadline' => now()->addDays(10),
-            'status' => 'active',
+            'module_type' => 'travel',
+            'status' => \App\Modules\Core\Models\Application::STATUS_DRAFT,
         ]);
+
+        \App\Modules\Norhanis\Models\TravelDetail::create([
+            'application_id' => $application->id,
+            'type_of_request' => 'data_collection',
+            'travel_start_date' => today(),
+            'travel_end_date' => today(),
+            'duration_days' => 1,
+            'reason_for_travel' => 'Fieldwork',
+            'destination_address' => 'Kuala Lumpur',
+            'is_international' => false,
+            'contact_person_email' => 'contact@test.my',
+            'is_ga_gra' => false,
+        ]);
+
+        app(\App\Modules\Core\Services\WorkflowEngine::class)->submit($application);
 
         $this->actingAs($student)
             ->get(route('calendar.index'))
             ->assertOk()
-            ->assertSee('RPD deadline');
+            ->assertSee('Travel: departs');
     }
 
     public function test_the_calendar_survives_a_junk_month_parameter(): void
@@ -94,17 +111,23 @@ class PagesTest extends TestCase
         // (The class name itself is no good as a marker -- the sidebar's own
         // script mentions it on every page.)
 
-        // Chair owns five: travel, claims, publication, RPD appeal, hardbound.
+        // Chair owns four: travel, claims, publication, hardbound.
         $this->actingAs($this->chair())->get(route('dashboard'))
             ->assertOk()
             ->assertSee('title="Pending My Action"', false);
 
-        // Registry owns one, so it keeps the plain list.
-        $this->actingAs($this->registry())->get(route('dashboard'))
-            ->assertOk()
-            ->assertSee('nav-section-label', false)
-            ->assertSee('Pending My Action')
-            ->assertDontSee('title="Pending My Action"', false);
+        // Fewer than four keeps the plain list. No approver role on this
+        // nav has fewer today (Travel's longer chain took the Dean to four;
+        // the CGS roles have their own nav), so the partial is rendered
+        // with one module's queues directly.
+        $this->actingAs($this->seniorExec());
+        $html = view('core::partials.sidebar-approver-nav', [
+            'queues' => app(\App\Modules\Core\Services\ModuleRegistry::class)->queuesForRole(\App\Modules\Core\Support\Role::SENIOR_EXEC_CGS),
+        ])->render();
+
+        $this->assertStringContainsString('nav-section-label', $html);
+        $this->assertStringContainsString('Pending My Action', $html);
+        $this->assertStringNotContainsString('title="Pending My Action"', $html);
     }
 
     /**

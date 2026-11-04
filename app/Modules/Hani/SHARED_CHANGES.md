@@ -399,19 +399,22 @@ again, as phpunit.xml already intends. Hani's and Nureen's per-folder traits
 **Status:** proposed, not applied.
 
 **Reason.** "Within candidacy period" is now checked by the system before
-a student files the Notice of Thesis Submission. The candidature start date
-and programme type live in Norhanis's RPD masterlist (`candidacies`). With no
-contract, Hani's `Support/Eligibility/CandidacyPeriodSource` reads that table
+a student files the Notice of Thesis Submission. The candidacy expiry date
+(with any extension granted) lives in Chloe's Study Candidacy record
+(`study_candidacies`). It used to be read from Norhanis's RPD masterlist
+(`candidacies`), which develop removed with RPD Candidacy. With no contract,
+Hani's `Support/Eligibility/CandidacyPeriodSource` reads that table
 directly:
 - read-only
 - guarded with `Schema::hasTable()` / `hasColumns()`
 - never importing her classes
 
-If she renames a column, the check quietly falls back to "Self-declared"
-instead of breaking. A contract makes the dependency explicit.
+If a column is renamed or the table removed, the check quietly falls back
+to "Self-declared" instead of breaking. That is what happened when
+`candidacies` was dropped: nothing failed, but the check went quiet. A contract makes the dependency explicit.
 
 **Impact.** Additive.
-- **Norhanis:** implements and binds it, from `candidacies`.
+- **Chloe:** implements and binds it, from `study_candidacies`.
 - **Hani:** prefers it when bound and keeps the guarded lookup as the
   fallback. No change for anyone else.
 
@@ -424,7 +427,7 @@ namespace App\Modules\Core\Contracts;
 
 /**
  * A student's candidature, for modules that need the clock without owning
- * it. Implemented by the module that keeps the RPD masterlist (Norhanis).
+ * it. Implemented by the module that keeps Study Candidacy (Chloe).
  */
 interface SuppliesCandidature
 {

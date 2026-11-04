@@ -3,40 +3,56 @@
 namespace App\Modules\Norhanis;
 
 use App\Modules\Core\Services\ModuleRegistry;
-use App\Modules\Norhanis\Console\Commands\SendRpdReminders;
+use App\Modules\Norhanis\Console\Commands\RemindStalledApplications;
+use App\Modules\Norhanis\Console\Commands\SeedDemoApplications;
+use App\Modules\Norhanis\Support\StageDurations;
 use App\Modules\Norhanis\Workflows\ClaimsWorkflow;
 use App\Modules\Norhanis\Workflows\PublicationWorkflow;
-use App\Modules\Norhanis\Workflows\RpdAppealWorkflow;
-use App\Modules\Norhanis\Workflows\RpdDismissalWorkflow;
 use App\Modules\Norhanis\Workflows\TravelWorkflow;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Norhanis Erna Natasha (22006318) — Travel, Publication, Claims, RPD.
+ * Norhanis Erna Natasha (22006318) — Travel, Publication, Claims.
  *
  * Register each workflow you own here. This is the ONLY file in the project
  * you share with nobody, so adding a module never conflicts with a teammate.
  */
 class ModuleProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        // config('norhanis.charter.<module>.<stage>'): CGS's client charter days.
+        $this->mergeConfigFrom(__DIR__.'/Config/charter.php', 'norhanis.charter');
+
+        // config('norhanis.cgs.officer'): the CGS officer for these modules.
+        $this->mergeConfigFrom(__DIR__.'/Config/cgs.php', 'norhanis.cgs');
+
+        // One per request, so the stage history is read once however many
+        // applications a page estimates.
+        $this->app->singleton(StageDurations::class);
+    }
+
     public function boot(ModuleRegistry $registry): void
     {
         $registry->register(new TravelWorkflow());
         $registry->register(new ClaimsWorkflow());
         $registry->register(new PublicationWorkflow());
 
-        // RPD candidacy. Reminders are a scheduled command (rpd:remind) and
-        // register nothing here -- only the two approval chains are workflows.
-        $registry->register(new RpdAppealWorkflow());
-        $registry->register(new RpdDismissalWorkflow());
-
-        // The 3/2/1-month reminder scheduler. Scheduled from
-        // routes/console.php; registered here because module folders are
-        // outside the path Laravel auto-discovers commands from.
+        // Registered here because module folders are outside the path
+        // Laravel auto-discovers commands from.
         if ($this->app->runningInConsole()) {
             $this->commands([
-                SendRpdReminders::class,
+                // Example students and applications, for development only.
+                SeedDemoApplications::class,
+                RemindStalledApplications::class,
             ]);
         }
+
+        // Every weekday morning, from here rather than routes/console.php so
+        // nothing outside this folder changes -- the same scheduler reads it.
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command('norhanis:remind-stalled')->weekdays()->dailyAt('08:00');
+        });
     }
 }

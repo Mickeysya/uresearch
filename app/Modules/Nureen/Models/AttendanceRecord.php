@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 class AttendanceRecord extends Model
 {
     protected $fillable = [
-        'student_id', 'period_end', 'sessions_attended', 'sessions_total', 'sessions_excused', 'percentage', 'at_risk',
+        'student_id', 'period_end', 'sessions_attended', 'sessions_total', 'sessions_excused', 'leave_days', 'percentage', 'at_risk',
     ];
 
     protected function casts(): array
@@ -45,23 +45,48 @@ class AttendanceRecord extends Model
     }
 
     /**
-     * Sessions counted as attended. 'count_as_attended': attended + excused,
-     * never more than the total. 'exclude_from_total': attended only. The one
-     * place an approved appeal's excusal is folded into attended -- used by
-     * `percentage`, the semester figure and the projection alike.
+     * Sessions on approved annual leave this period: leave_days times
+     * config('nureen.attendance.leave.sessions_per_day').
+     */
+    public function leaveSessions(): int
+    {
+        return (int) $this->leave_days * self::sessionsPerLeaveDay();
+    }
+
+    public static function sessionsPerLeaveDay(): int
+    {
+        return max(1, (int) config('nureen.attendance.leave.sessions_per_day', 1));
+    }
+
+    /**
+     * Sessions that do not count as absence: excused by an approved appeal,
+     * or on approved annual leave. Both are treated the same way
+     * (Postgraduate Handbook 2025: approved leave is not absence).
+     */
+    public function sessionsExcusedOrOnLeave(): int
+    {
+        return (int) $this->sessions_excused + $this->leaveSessions();
+    }
+
+    /**
+     * Sessions counted as attended. 'count_as_attended': attended + excused
+     * + leave, never more than the total. 'exclude_from_total': attended
+     * only. The one place an approved appeal's excusal and approved leave
+     * are folded into attended -- used by `percentage`, the semester figure
+     * and the projection alike.
      */
     public function countedAttended(): int
     {
         return self::excusalRule() === 'exclude_from_total'
             ? (int) $this->sessions_attended
-            : min((int) $this->sessions_total, (int) $this->sessions_attended + (int) $this->sessions_excused);
+            : min((int) $this->sessions_total, (int) $this->sessions_attended + $this->sessionsExcusedOrOnLeave());
     }
 
-    /** Sessions counted in the period. 'exclude_from_total': total - excused. */
+    /** Sessions counted in the period. 'exclude_from_total': total - excused - leave. */
     public function countedTotal(): int
     {
         return self::excusalRule() === 'exclude_from_total'
-            ? max(0, (int) $this->sessions_total - (int) $this->sessions_excused)
+            ? max(0, (int) $this->sessions_total - $this->sessionsExcusedOrOnLeave())
             : (int) $this->sessions_total;
     }
 
@@ -82,10 +107,10 @@ class AttendanceRecord extends Model
         return $total > 0 ? round(($this->countedAttended() / $total) * 100, 2) : 100.0;
     }
 
-    /** Missed sessions not yet excused -- what an appeal could still ask for, whichever rule applies. */
+    /** Missed sessions not yet excused or on leave -- what an appeal could still ask for, whichever rule applies. */
     public function sessionsMissed(): int
     {
-        return max(0, (int) $this->sessions_total - (int) $this->sessions_attended - (int) $this->sessions_excused);
+        return max(0, (int) $this->sessions_total - (int) $this->sessions_attended - $this->sessionsExcusedOrOnLeave());
     }
 
     public function student(): BelongsTo
@@ -111,7 +136,7 @@ class AttendanceRecord extends Model
      * promise about this table, and the upload screen is not the only thing
      * that will eventually write to it.
      */
-    public static function recordPeriod(int $studentId, string $periodEnd, int $attended, int $total): self
+    public static function recordPeriod(int $studentId, string $periodEnd, int $attended, int $total, ?int $leaveDays = null): self
     {
         $record = static::query()
             ->where('student_id', $studentId)
@@ -124,9 +149,51 @@ class AttendanceRecord extends Model
         $record->fill([
             'sessions_attended' => $attended,
             'sessions_total' => $total,
-        ])->save();
+        ]);
+
+        // Approved leave from the sheet's optional leave_days column. Null
+        // -- no column, or left blank -- keeps whatever CGS recorded, so a
+        // re-upload without the column never wipes it.
+        if ($leaveDays !== null) {
+            $record->leave_days = $leaveDays;
+        }
+
+        $record->save();
 
         return $record;
+    }
+
+    /**
+     * CGS records approved leave days for a period already on file (the
+     * Approved Leave page). The same column the sheet's leave_days writes,
+     * the same recount. Returns null when the period is not on file.
+     */
+    public static function recordLeave(int $studentId, string $periodEnd, int $days): ?self
+    {
+        $record = static::query()
+            ->where('student_id', $studentId)
+            ->whereDate('period_end', $periodEnd)
+            ->first();
+
+        if (! $record) {
+            return null;
+        }
+
+        $record->update(['leave_days' => $days]);
+        $record->update(['at_risk' => \App\Modules\Nureen\Support\AttendanceRiskEvaluator::isAtRisk($record)]);
+
+        return $record;
+    }
+
+    /**
+     * The most leave days this period can take: one per missed session not
+     * already excused by an appeal.
+     */
+    public function leaveCapacity(?int $attended = null, ?int $total = null): int
+    {
+        $missed = ($total ?? (int) $this->sessions_total) - ($attended ?? (int) $this->sessions_attended) - (int) $this->sessions_excused;
+
+        return max(0, intdiv(max(0, $missed), self::sessionsPerLeaveDay()));
     }
 
     /**

@@ -23,6 +23,14 @@
 
                 <p>Resubmitted: {{ $detail->resubmission_at->format('j M Y') }}</p>
 
+                @if ($detail->application->documents->isNotEmpty())
+                    <ul class="doc-list">
+                        @foreach ($detail->application->documents as $doc)
+                            <li><x-core::doc-link :document="$doc">{{ $doc->doc_type }}: {{ $doc->original_name }}</x-core::doc-link> · <x-core::doc-link :document="$doc" action="download">Download</x-core::doc-link></li>
+                        @endforeach
+                    </ul>
+                @endif
+
                 @include('hani::re_viva._evaluations', ['detail' => $detail])
                 @include('hani::re_viva._staff_documents', ['detail' => $detail])
 

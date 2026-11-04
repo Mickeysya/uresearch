@@ -12,7 +12,10 @@ class HardboundSubmissionDetail extends Model
     protected $fillable = [
         'application_id', 'thesis_title', 'matric_no', 'programme',
         'country', 'intake', 'passport_no', 'date_of_birth',
-        'supervisor_name', 'viva_date', 'co_supervisor_name', 'resubmission_of_id', 'response_to_comments',
+        'supervisor_name',
+        'internal_examiner_id', 'internal_examiner_name', 'internal_examiner_email',
+        'external_examiner_id', 'external_examiner_name', 'external_examiner_email',
+        'viva_date', 'co_supervisor_name', 'resubmission_of_id', 'response_to_comments',
     ];
 
     protected function casts(): array
@@ -29,6 +32,33 @@ class HardboundSubmissionDetail extends Model
     public function resubmissionOf(): BelongsTo
     {
         return $this->belongsTo(Application::class, 'resubmission_of_id');
+    }
+
+    /**
+     * The examiners the candidate named, as [slot => [name, email]].
+     *
+     * A slot left empty is simply not named: the Confirmation has one
+     * examiner block and either of them signing fills it, so a submission
+     * naming only one is complete.
+     *
+     * @return array<string, array{name: string, email: string}>
+     */
+    public function namedExaminers(): array
+    {
+        $named = [];
+
+        foreach (['internal', 'external'] as $slot) {
+            $email = $this->{$slot.'_examiner_email'};
+
+            if (filled($email)) {
+                $named[$slot] = [
+                    'name' => (string) $this->{$slot.'_examiner_name'},
+                    'email' => (string) $email,
+                ];
+            }
+        }
+
+        return $named;
     }
 
     public function isResubmission(): bool

@@ -60,4 +60,43 @@ class WorkingDayCalendarTest extends TestCase
         $this->assertSame('2026-11-04', $this->calendar()->addWorkingDays(Carbon::parse('2026-11-04 17:00'), 0)->format('Y-m-d'));
         $this->assertSame(0, $this->calendar()->workingDaysBetween(Carbon::parse('2026-11-04 09:00'), Carbon::parse('2026-11-04 17:00')));
     }
+
+    /* -----------------------------------------------------------------
+     | Now Core's shared calendar (2026-11-02): nothing may change
+     |------------------------------------------------------------------*/
+
+    /**
+     * Every day of 2026, every offset from 0 to 10 working days, and every
+     * span up to 30 days: Nureen's calendar (the Client Charter's) gives
+     * exactly what Core's shared one does, so moving the maths into Core
+     * changed no due date, expected decision date or reminder.
+     */
+    public function test_the_charter_calendar_agrees_with_cores_shared_one_day_by_day(): void
+    {
+        $nureen = $this->calendar();
+        $core = new \App\Modules\Core\Support\WorkingDayCalendar();
+        $day = \Carbon\CarbonImmutable::parse('2026-01-01 09:30');
+
+        for ($i = 0; $i < 365; $i++, $day = $day->addDay()) {
+            $this->assertSame($core->isWorkingDay($day), $nureen->isWorkingDay($day), $day->toDateString());
+            $this->assertSame($core->onOrAfter($day)->toDateString(), $nureen->onOrAfter($day)->toDateString());
+
+            foreach ([0, 1, 2, 3, 5, 10] as $offset) {
+                $this->assertSame($core->addWorkingDays($day, $offset)->toDateString(), $nureen->addWorkingDays($day, $offset)->toDateString());
+            }
+
+            $this->assertSame($core->workingDaysBetween($day, $day->addDays($i % 31)), $nureen->workingDaysBetween($day, $day->addDays($i % 31)));
+        }
+    }
+
+    public function test_both_holiday_lists_apply_to_the_charter_and_only_the_shared_one_to_core(): void
+    {
+        config(['calendar.holidays' => ['2026-11-05'], 'nureen.charter.holidays' => ['2026-11-06']]);
+        $core = new \App\Modules\Core\Support\WorkingDayCalendar();
+
+        // Monday 2 Nov + 3 working days: Thursday 5 Nov is a portal-wide
+        // holiday, Friday 6 Nov a charter one.
+        $this->assertSame('2026-11-06', $core->addWorkingDays(Carbon::parse('2026-11-02'), 3)->format('Y-m-d'));
+        $this->assertSame('2026-11-09', $this->calendar()->addWorkingDays(Carbon::parse('2026-11-02'), 3)->format('Y-m-d'));
+    }
 }

@@ -1,3 +1,5 @@
+{{-- .nureen-row: the wrapper components/decision-bar keys on. --}}
+<div class="nureen-row">
 @php($detail = $details[$application->id] ?? null)
 
 @if ($detail)
@@ -8,33 +10,6 @@
             <p><b>Asks to excuse {{ $detail->sessions_requested }} {{ Str::plural('session', $detail->sessions_requested) }}</b>
                 ({{ $detail->attendanceRecord->sessionsMissed() }} still missed in that period).</p>
 
-            {{-- CGS may approve fewer than requested, never more. This form
-                 replaces Core's generic Approve button in this row only (the
-                 rule below); Reject, with its reason, is still Core's. --}}
-            @once
-                <style>
-                    .queue-row:has(.nureen-appeal-approve) .decision-row button[value="approve"] { display: none; }
-                    .nureen-appeal-approve { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3); margin: var(--space-3) 0; padding: var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--surface); }
-                    .nureen-appeal-approve label { margin: 0; }
-                    .nureen-appeal-approve input[type="number"] { width: 7em; }
-                    .nureen-appeal-approve .hint { flex-basis: 100%; margin: 0; font-size: var(--text-xs); color: var(--text-grey); }
-                </style>
-            @endonce
-            <form method="POST" action="{{ route('attendance-appeal.decide', $application) }}" class="nureen-appeal-approve">
-                @csrf
-                <input type="hidden" name="decision" value="approve">
-                <div>
-                    <label for="sessions-approved-{{ $application->id }}">Sessions to approve</label>
-                    <input type="number" name="sessions_approved" id="sessions-approved-{{ $application->id }}"
-                           min="0" max="{{ $detail->sessions_requested }}" value="{{ $detail->sessions_requested }}" required>
-                </div>
-                <button type="submit">Approve appeal</button>
-                <p class="hint">
-                    Defaults to the {{ $detail->sessions_requested }} requested; you may approve fewer. Approved sessions are
-                    {{ \App\Modules\Nureen\Models\AttendanceRecord::excusalRule() === 'exclude_from_total' ? 'taken out of the period\'s total' : 'counted as attended' }},
-                    and the student's attendance and risk status are recalculated at once.
-                </p>
-            </form>
         @endif
     @else
         <p class="queue-meta">This appeal names no period, so approving it does not change any attendance figures.</p>
@@ -56,3 +31,26 @@
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif
+
+{{-- System checks (the required documents, above) → Documents → the
+     sessions to excuse → Remarks → actions. CGS may approve fewer
+     sessions than requested, never more (AttendanceAppealController::decide()). --}}
+@php($excuses = $detail?->attendanceRecord && $detail->sessions_requested)
+@php($panel = \App\Modules\Nureen\Support\ApproverPanel::attendanceAppeal($application, auth()->user(), (bool) $excuses))
+<x-nureen::documents :items="$panel['documents']" />
+<x-nureen::decision-bar :application="$application" :route="route('attendance-appeal.decide', $application)"
+    :approve-label="$panel['approveLabel']" :hint="$panel['hint']">
+    @if ($excuses)
+        <div class="nureen-appeal-sessions">
+            <label for="sessions-approved-{{ $application->id }}">Sessions to excuse if approved</label>
+            <input type="number" name="sessions_approved" id="sessions-approved-{{ $application->id }}"
+                   min="0" max="{{ $detail->sessions_requested }}" value="{{ $detail->sessions_requested }}"
+                   aria-describedby="sessions-approved-hint-{{ $application->id }}">
+            <p class="queue-meta" id="sessions-approved-hint-{{ $application->id }}">
+                Defaults to the {{ $detail->sessions_requested }} requested; you may approve fewer. Approved sessions are
+                {{ \App\Modules\Nureen\Models\AttendanceRecord::excusalRule() === 'exclude_from_total' ? 'taken out of the period\'s total' : 'counted as attended' }}.
+            </p>
+        </div>
+    @endif
+</x-nureen::decision-bar>
+</div>

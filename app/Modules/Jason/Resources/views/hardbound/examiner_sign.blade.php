@@ -13,16 +13,16 @@
             <div class="empty-state">
                 <p><b>This form has already been signed.</b></p>
                 <p class="queue-meta">
-                    {{ $signed->examiner?->examiner_name ?? 'An examiner' }} signed it on
+                    {{ $signed->examiner_name ?: 'An examiner' }} signed it on
                     {{ $signed->signed_at?->format('j F Y') }}. Nothing further is needed from you.
                 </p>
             </div>
         @else
             <p class="queue-meta">
-                Dear {{ $examiner->examiner_name }}, the candidate below has completed the
-                corrections required at their viva voce examination. The supervisor and the
-                Chairman of the Viva Voce Examination have both confirmed this, and the form
-                now needs your signature as {{ strtolower($examiner->typeLabel()) }}.
+                Dear {{ $examiner['name'] }}, the candidate below has completed the corrections
+                required at their viva voce examination, and their supervisor has confirmed it.
+                They named you as their {{ $slot }} examiner, and the form needs your signature
+                before it goes to the Chairman of the Viva Voce Examination.
             </p>
 
             <table class="data-table" style="margin-bottom: 20px;">
@@ -37,7 +37,7 @@
             </table>
 
             <form method="POST"
-                  action="{{ url()->signedRoute('hardbound.examiner.sign.store', ['application' => $application->id, 'examiner' => $examiner->id], now()->addDay()) }}"
+                  action="{{ url()->signedRoute('hardbound.examiner.sign.store', ['application' => $application->id, 'slot' => $slot], now()->addDay()) }}"
                   enctype="multipart/form-data">
                 @csrf
 

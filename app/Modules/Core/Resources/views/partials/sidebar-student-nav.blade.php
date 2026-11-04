@@ -1,6 +1,6 @@
 {{--
-    The student-only section of the sidebar: a fixed "Track My Applications"
-    link plus two trees. Attendance is fixed (every student has one); My
+    The student-only section of the sidebar: a "Track My Applications" tree
+    plus two more. Attendance is fixed (every student has one); My
     Application is driven by ModuleRegistry::submittable(), same as the
     "New Application" section it replaces, so a new module's create form
     appears here on its own -- nothing to edit when Norhanis, Hani, Jason or
@@ -8,31 +8,41 @@
 
     Expects: $submittable, $myApplicationOpen
 --}}
-<a href="{{ route('applications.index') }}" class="nav-item @if(request()->routeIs('applications.*')) active @endif" title="Track My Applications">
-    <span class="nav-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    </span>
-    <span class="nav-label">Track My Applications</span>
-</a>
+{{-- Track My Applications (Core) + My Candidacy (Chloe) nested under it --
+     candidacy.status's own "View" link and this tree's Overview sub-item
+     land on the exact same applications.show/index screens now
+     (CandidacyAppealWorkflow's SuppliesApplicationDetail hook), so a
+     second top-level entry for My Candidacy was two names for one place.
+     Overview is a real sub-item, not a redundant parent link, because
+     every nav-tree trigger here is a <button> that only toggles -- same
+     reason Attendance has its own "Overview" below. --}}
+<div class="nav-tree @if(request()->routeIs('applications.*') || request()->routeIs('candidacy.status')) open @endif">
+    <button type="button" class="nav-item nav-tree-trigger" title="Track My Applications"
+            aria-expanded="@if(request()->routeIs('applications.*') || request()->routeIs('candidacy.status')) true @else false @endif">
+        <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </span>
+        <span class="nav-label">Track My Applications</span>
+        <span class="nav-chevron">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        </span>
+    </button>
+    <div class="nav-tree-panel">
+        <div class="nav-tree-items">
+            <a href="{{ route('applications.index') }}" class="nav-subitem @if(request()->routeIs('applications.*')) active @endif">Overview</a>
+            <a href="{{ route('candidacy.status') }}" class="nav-subitem @if(request()->routeIs('candidacy.status')) active @endif">My Candidacy</a>
+        </div>
+    </div>
+</div>
 
 {{-- Workstation Management (Chloe) — not an approval chain, so it is not
      driven by ModuleRegistry::submittable() like the tree below; it is a
-     fixed link the same way Track My Applications is. --}}
+     fixed link the same way Track My Applications used to be. --}}
 <a href="{{ route('workstation.select') }}" class="nav-item @if(request()->routeIs('workstation.select') || request()->routeIs('workstation.register')) active @endif" title="Workstation">
     <span class="nav-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
     </span>
     <span class="nav-label">Workstation</span>
-</a>
-
-{{-- My Candidacy (Chloe) — status/expiry/reminder history, a fixed link
-     the same way. The appeal *form* is a real WorkflowModule and already
-     appears in the My Application tree below on its own. --}}
-<a href="{{ route('candidacy.status') }}" class="nav-item @if(request()->routeIs('candidacy.status')) active @endif" title="My Candidacy">
-    <span class="nav-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-    </span>
-    <span class="nav-label">My Candidacy</span>
 </a>
 
 <div class="nav-tree @if(request()->routeIs('attendance.*')) open @endif">

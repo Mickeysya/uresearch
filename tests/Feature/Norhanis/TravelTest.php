@@ -28,7 +28,15 @@ class TravelTest extends TestCase
         return $this->sup ??= $this->supervisor();
     }
 
-    public function test_local_travel_ends_at_the_chair(): void
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The supporting document is required, so every submission uploads one.
+        \Illuminate\Support\Facades\Storage::fake('local');
+    }
+
+    public function test_local_travel_goes_through_cgs_to_the_senior_director(): void
     {
         $application = $this->submit(['is_international' => 0]);
 
@@ -38,10 +46,53 @@ class TravelTest extends TestCase
         $this->actingAs($this->chair())
             ->post(route('travel.decide', $application), ['decision' => 'approve']);
 
-        $application->refresh();
+        // The Chair no longer has the final say on local travel.
+        $this->assertSame(Application::STATUS_PENDING, $application->refresh()->status);
+        $this->assertSame('cgs_review', $application->current_stage);
 
-        // The Chair holds the final say on local travel -- no CGS, no Dean.
-        $this->assertSame(Application::STATUS_APPROVED, $application->status);
+        $this->actingAs($this->cgs())
+            ->post(route('travel.decide', $application), ['decision' => 'approve']);
+
+        // Local travel ends with the Senior Director CGS, never the Dean.
+        $this->assertSame('senior_director', $application->refresh()->current_stage);
+
+        $this->actingAs($this->dean())
+            ->post(route('travel.decide', $application), ['decision' => 'approve']);
+        $this->assertSame(Application::STATUS_PENDING, $application->refresh()->status);
+
+        $this->actingAs($this->seniorDirector())
+            ->post(route('travel.decide', $application), ['decision' => 'approve']);
+
+        $this->assertSame(Application::STATUS_APPROVED, $application->refresh()->status);
+    }
+
+    public function test_local_or_international_must_be_chosen(): void
+    {
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('travel.store'), array_diff_key($this->payload(), ['is_international' => true]))
+            ->assertSessionHasErrors('is_international');
+
+        $this->actingAs($student)
+            ->post(route('travel.store'), $this->payload(['is_international' => 'maybe']))
+            ->assertSessionHasErrors('is_international');
+    }
+
+    public function test_the_supporting_document_is_required(): void
+    {
+        $this->actingAs($this->student())
+            ->post(route('travel.store'), array_diff_key($this->payload(), ['supporting_document' => true]))
+            ->assertSessionHasErrors('supporting_document');
+    }
+
+    public function test_the_cost_centre_is_optional_and_saved_when_given(): void
+    {
+        $with = $this->submitAs($this->student('22001001', 'a@test.my'), ['cost_centre' => 'YUTP-015LC0-123']);
+        $without = $this->submitAs($this->student('22001002', 'b@test.my'));
+
+        $this->assertSame('YUTP-015LC0-123', \App\Modules\Norhanis\Models\TravelDetail::where('application_id', $with->id)->value('cost_centre'));
+        $this->assertNull(\App\Modules\Norhanis\Models\TravelDetail::where('application_id', $without->id)->value('cost_centre'));
     }
 
     public function test_international_travel_continues_to_cgs_and_the_dean(): void
@@ -114,6 +165,161 @@ class TravelTest extends TestCase
         $this->assertSame(0, Application::where('module_type', 'travel')->count());
     }
 
+    public function test_a_ga_gra_student_must_provide_the_ta_plan(): void
+    {
+        $this->actingAs($this->student());
+
+        $this->post(route('travel.store'), $this->payload(['is_ga_gra' => 'yes']))
+            ->assertSessionHasErrors(['ta_hours_completed', 'ta_hours_during_travel', 'ta_management_method']);
+    }
+
+    public function test_the_ta_plan_is_saved_with_its_dates(): void
+    {
+        $application = $this->submit([
+            'is_ga_gra' => 'yes',
+            'ta_hours_completed' => 20,
+            'ta_hours_during_travel' => 8,
+            'ta_management_method' => 'rescheduled_after_travel',
+            'ta_plan_dates' => [now()->addDays(20)->toDateString(), now()->addDays(21)->toDateString()],
+        ]);
+
+        $plan = \App\Modules\Norhanis\Models\TravelTaPlan::where('application_id', $application->id)->sole();
+
+        // Fixed per semester, never trusted from the form.
+        $this->assertSame(84, $plan->total_hours_required);
+        $this->assertEquals(20, $plan->hours_completed);
+        $this->assertEquals(8, $plan->hours_during_travel);
+        $this->assertSame('rescheduled_after_travel', $plan->management_method);
+        $this->assertCount(2, $plan->dates);
+    }
+
+    public function test_no_ta_plan_is_saved_for_a_non_ga_gra_student(): void
+    {
+        $application = $this->submit(['is_ga_gra' => 'no']);
+
+        $this->assertSame(0, \App\Modules\Norhanis\Models\TravelTaPlan::where('application_id', $application->id)->count());
+    }
+
+    public function test_proposed_dates_are_not_required_when_the_method_does_not_need_them(): void
+    {
+        $application = $this->submit([
+            'is_ga_gra' => 'yes',
+            'ta_hours_completed' => 10,
+            'ta_hours_during_travel' => 5,
+            'ta_management_method' => 'no_ta_activities_affected',
+        ]);
+
+        $plan = \App\Modules\Norhanis\Models\TravelTaPlan::where('application_id', $application->id)->sole();
+        $this->assertCount(0, $plan->dates);
+    }
+
+    public function test_proposed_dates_are_required_when_the_method_needs_them(): void
+    {
+        $this->actingAs($this->student());
+
+        $this->post(route('travel.store'), $this->payload([
+            'is_ga_gra' => 'yes',
+            'ta_hours_completed' => 10,
+            'ta_hours_during_travel' => 5,
+            'ta_management_method' => 'replacement_arrangement',
+        ]))->assertSessionHasErrors('ta_plan_dates');
+    }
+
+    public function test_the_ta_plan_shows_in_the_supervisors_queue(): void
+    {
+        $this->submit([
+            'is_ga_gra' => 'yes',
+            'ta_hours_completed' => 15,
+            'ta_hours_during_travel' => 6,
+            'ta_management_method' => 'completed_before_travel',
+        ]);
+
+        $this->actingAs($this->sup())
+            ->get(route('travel.queue'))
+            ->assertOk()
+            ->assertSee('Completed before travel');
+    }
+
+    public function test_the_applicant_can_open_the_full_details_page(): void
+    {
+        $student = $this->student();
+        $application = $this->submitAs($student);
+
+        $this->actingAs($student)
+            ->get(route('travel.show', $application))
+            ->assertOk()
+            ->assertSee('Universiti Malaya, Kuala Lumpur');
+    }
+
+    public function test_the_current_approver_can_open_the_full_details_page_but_an_unrelated_student_cannot(): void
+    {
+        $application = $this->submit(['is_international' => 0]);
+
+        $this->actingAs($this->sup())
+            ->get(route('travel.show', $application))
+            ->assertOk();
+
+        $this->actingAs($this->student('22009999', 'other@test.my'))
+            ->get(route('travel.show', $application))
+            ->assertForbidden();
+    }
+
+    public function test_only_the_applicant_can_update_the_supporting_document_and_only_for_international_travel(): void
+    {
+        $localStudent = $this->student('22002222', 'student2@test.my');
+        $local = $this->submitAs($localStudent, ['is_international' => 0]);
+
+        // Local travel: the page does not apply, even for the applicant.
+        $this->actingAs($localStudent)
+            ->get(route('travel.document.edit', $local))
+            ->assertForbidden();
+
+        $student = $this->student('22003333', 'student3@test.my');
+        $international = $this->submitAs($student, ['is_international' => 1]);
+
+        // Someone else's international application.
+        $this->actingAs($this->student('22004444', 'student4@test.my'))
+            ->get(route('travel.document.edit', $international))
+            ->assertForbidden();
+
+        // The applicant, on their own international application: allowed.
+        $this->actingAs($student)
+            ->get(route('travel.document.edit', $international))
+            ->assertOk();
+    }
+
+    public function test_updating_the_supporting_document_replaces_the_file_and_logs_the_history(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        \Illuminate\Support\Facades\Notification::fake();
+
+        $student = $this->student();
+        $application = $this->submitAs($student, [
+            'is_international' => 1,
+            'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('memo-old.pdf', 40, 'application/pdf'),
+        ]);
+
+        $old = $application->documents()->where('doc_type', 'Supporting Document')->sole();
+
+        $this->actingAs($student)
+            ->post(route('travel.document.update', $application), [
+                'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('memo-new.pdf', 40, 'application/pdf'),
+            ])
+            ->assertRedirect(route('travel.show', $application));
+
+        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk('local')->exists($old->path));
+
+        $new = $application->documents()->where('doc_type', 'Supporting Document')->sole();
+        $this->assertSame('memo-new.pdf', $new->original_name);
+
+        $this->assertDatabaseHas('approval_history', [
+            'application_id' => $application->id,
+            'remarks' => 'Supporting document updated',
+        ]);
+
+        \Illuminate\Support\Facades\Notification::assertSentTo($this->sup(), \App\Modules\Norhanis\Notifications\TravelSupportingDocumentUpdated::class);
+    }
+
     public function test_the_form_renders_with_the_wizard_wired_up(): void
     {
         $this->actingAs($this->student());
@@ -130,14 +336,18 @@ class TravelTest extends TestCase
 
     protected function submit(array $overrides = []): Application
     {
-        $student = $this->student();
+        return $this->submitAs($this->student(), $overrides);
+    }
+
+    protected function submitAs(\App\Modules\Core\Models\User $student, array $overrides = []): Application
+    {
         $student->update(['supervisor_id' => $this->sup()->id]);
 
         $this->actingAs($student)
             ->post(route('travel.store'), $this->payload($overrides))
             ->assertRedirect(route('applications.index'));
 
-        return Application::where('module_type', 'travel')->sole();
+        return Application::where('student_id', $student->id)->where('module_type', 'travel')->sole();
     }
 
     protected function payload(array $overrides = []): array
@@ -149,6 +359,9 @@ class TravelTest extends TestCase
             'reason_for_travel' => 'Reservoir simulation workshop',
             'destination_address' => 'Universiti Malaya, Kuala Lumpur',
             'is_international' => 0,
+            'contact_person_email' => 'contact@utp.edu.my',
+            'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('memo.pdf', 20, 'application/pdf'),
+            'is_ga_gra' => 'no',
         ];
     }
 }

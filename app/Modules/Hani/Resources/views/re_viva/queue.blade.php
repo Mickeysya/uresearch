@@ -46,7 +46,7 @@
                 @if ($application->documents->isNotEmpty())
                     <ul class="doc-list">
                         @foreach ($application->documents as $doc)
-                            <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
+                            <li><x-core::doc-link :document="$doc">{{ $doc->doc_type }}: {{ $doc->original_name }}</x-core::doc-link> · <x-core::doc-link :document="$doc" action="download">Download</x-core::doc-link></li>
                         @endforeach
                     </ul>
                 @endif

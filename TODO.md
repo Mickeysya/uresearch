@@ -15,10 +15,10 @@ as the work it describes.
 | Core (auth, RBAC, workflow engine, uploads, UI) | done |
 | Student dashboard (5 stat cards + 4 live panels) | done |
 | Database notifications (in-app feed + unread count) | done |
-| Norhanis — Travel | done · reference implementation |
-| Norhanis — Claims | done |
-| Norhanis — Publication | done |
-| Norhanis — RPD (reminders · appeals · dismissals) | done |
+| Norhanis — Travel | done · reference implementation · 2026-10-30: local travel now Supervisor → Chair → Non-Exec CGS → Senior Director CGS; Local/International chosen on the form; supporting document required; optional cost centre |
+| Norhanis — Claims | done · 2026-10-30: Travel, Claims and Publication now also email each approver when an application reaches their stage, and the student when Travel or Claims is submitted (`ApproverNotifier`; Core still emails the student after each decision) |
+| Norhanis — Publication | done · 2026-10-30: cost centre chosen from a list (CGS – Pay and Claims / CGS – Letter of Undertaking / Split Memo / Others); fee in MYR, LOU tick box and the digital split memo removed (`publication_memos` dropped); every document required; Authorship Contribution Form removed |
+| Norhanis — RPD (reminders · appeals · dismissals) | **removed 2026-10-30** · out of Norhanis' scope; code and tables taken out (`remove_rpd_candidacy` migration); `rpd_appeal` / `rpd_dismissal` keys retired · Haziq's Stage Gate planned to read `candidacies.rpd_completed_at`, so that dependency needs a new owner |
 | Nureen — GA Extension · Attendance · Supervision · Certification | done · matches `docs/scope/nureen.md` |
 | Hani — Examiner pool + Nomination, lifecycle closure, admin screen, conflict detection T2, Re-viva | done · four-seat panel and the six-stage chain landed 2026-09-22 |
 | CGS dashboard (5 stat cards + 5 live panels) | done |
@@ -1433,11 +1433,40 @@ while no workflow declares it.
         `approval_history` row the engine wrote, so the stamped form and the
         audit trail cannot disagree. CGS has no block on 017A; its signature
         belongs on paper in 021's office block.
-  - [x] **The examiner signs too, from 2026-09-30, and without an account.**
+  - [x] **The candidate names their own examiners**, from 2026-11-02. The
+        viva happens before the hardbound submission, so by this point they
+        know which two examiners examined them. A step of its own on the form
+        offers the nomination chain's examiner records, internal and external
+        in separate lists, each with a **search box** that filters by name
+        and institution as you type; the whole list is in the markup, so the
+        posted value is a plain id and nothing depends on a round trip. Held
+        as an id **and** a snapshot of name and email, so a record edited
+        later cannot rewrite a submission already filed or break a link
+        already sent. At least one is required — unless the records are
+        absent or empty, where refusing would leave the candidate unable to
+        file at all over a list they do not keep.
+        This replaced reading the panel back from the Appointment Letter
+        chain and emailing everyone on it: only the two named are written to
+        now, and a candidate whose appointment was handled off-system can
+        still name them.
+  - [x] **The examiner countersigns between the Supervisor and the
+        Chairman**, which is the order the work actually happens in: the
+        supervisor confirms the corrections were made, the examiner who
+        asked for them agrees, and only then does it reach the viva
+        chairman. They are emailed the moment the Supervisor approves, and
+        **the Chairman cannot certify until one of them has signed** — the
+        gate moved there from `cgs_review` on 2026-11-02. Enforced only where
+        the candidate named somebody: a submission naming nobody cannot be
+        waiting on anybody.
+        Still a gate rather than a fourth stage: the engine routes a stage to
+        a role, and giving external examiners accounts for one signature is
+        not worth it. The order is enforced; the stepper shows three stages
+        and the wait shows on the queue.
+  - [x] **The examiner signs without an account.**
         They were the one signatory left on paper, because they have no login
         and are not going to be given one for a single signature. Instead:
-        when the **Chairman** approves — the last signatory with an account —
-        every examiner the Dean appointed for that candidate is emailed a
+        when the **Supervisor** approves, each examiner the candidate named
+        is emailed a
         **temporary signed URL** (`ExaminerSignatureRequest`, a plain
         Mailable for the same reason `AppointmentLetterMail` is one). The
         link opens a page with the candidate, thesis and viva details and
@@ -1451,7 +1480,9 @@ while no workflow declares it.
         single "INTERNAL / EXTERNAL EXAMINER" block and the first examiner to
         sign fills it. Signing re-issues the Confirmation with all three
         signatures.
-  - [x] **CGS cannot accept until the examiner has signed.** The examiner
+  - [x] **(moved to the Chairman, 2026-11-02 — see above.)** CGS's own
+        acceptance no longer waits on the examiner, because the Chairman
+        already did. The examiner
         signs through a link rather than a queue, so without this the
         submission could complete with the block the form exists for still
         empty. Enforced only where the portal knows of an examiner: a

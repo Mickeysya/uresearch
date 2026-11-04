@@ -50,7 +50,8 @@
         // is no way to infer it from the href alone.
         function bindLinks(scope) {
             scope.querySelectorAll('a[href]').forEach(function (link) {
-                if (link.dataset.regionSwapIgnore !== undefined) return;
+                // The in-app document viewer (components/file-preview) owns these.
+                if (link.dataset.regionSwapIgnore !== undefined || link.dataset.previewUrl !== undefined) return;
 
                 link.addEventListener('click', function (e) {
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;

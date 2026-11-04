@@ -4,22 +4,24 @@ namespace App\Modules\Chloe\Workflows;
 
 use App\Modules\Chloe\Models\CandidacyAppealDetail;
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\SuppliesApplicationDetail;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 
 /**
- * Student -> Supervisor -> Programme Chair -> CGS Verification -> Dean of PGR.
+ * Student -> Supervisor -> Department Chair -> CGS Verification -> Dean of PGR.
  *
- * "Programme Chair" reuses Role::CHAIR (see app/Modules/Chloe/README.md —
+ * "Department Chair" reuses Role::CHAIR (see app/Modules/Chloe/README.md —
  * docs/module-keys.md and TODO.md both already tentatively concluded this is
- * the same person as Norhanis' "Chair of Department", still unconfirmed with
+ * the same person as Norhanis' "Department Chair", still unconfirmed with
  * CGS). "CGS Verification" and "Dean" reuse the `cgs_verify`/`non_exec_cgs`
  * and `dean`/`dean_pgr` pairing already listed in docs/module-keys.md's
  * stage-key table, put there for exactly this chain.
  */
-class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime
+class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesApplicationDetail, ProvidesLinks
 {
     public function key(): string
     {
@@ -34,8 +36,8 @@ class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime
     public function stages(?Application $application = null): array
     {
         return [
-            new Stage('supervisor', 'Lecturer/Supervisor', Role::SUPERVISOR, 'endorsed'),
-            new Stage('chair', 'Programme Chair', Role::CHAIR, 'endorsed'),
+            new Stage('supervisor', 'Supervisor / Programme Manager', Role::SUPERVISOR, 'endorsed'),
+            new Stage('chair', 'Department Chair', Role::CHAIR, 'endorsed'),
             new Stage('cgs_verify', 'CGS Verification', Role::NON_EXEC_CGS, 'verified'),
             new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'approved'),
         ];
@@ -50,6 +52,34 @@ class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime
             : 'Study candidacy appeal';
     }
 
+    /**
+     * Sidebar and dashboard shortcuts through the module mechanism (no shared layout edit): the portal queue for every CGS role
+     * (the engine only knows non_exec_cgs as a stage owner) and "My Signature" for everyone who signs.
+     */
+    public function links(\App\Modules\Core\Models\User $user): array
+    {
+        $links = [];
+
+        if (in_array($user->role, array_diff((array) config('candidacy.cgs_roles'), [Role::NON_EXEC_CGS]), true)) {
+            $links[] = ['label' => 'Study Candidacy Appeals', 'route' => 'candidacy.portal.queue'];
+        }
+
+        if (in_array($user->role, (array) config('candidacy.cgs_roles'), true)) {
+            // The shared CGS sidebar hard-codes Operations and Dismissal List; Insights is added here (Actions) until a line is added there.
+            $links[] = ['label' => 'Study Candidacy Insights', 'route' => 'candidacy.cgs.insights'];
+        }
+
+        if (in_array($user->role, array_merge(Role::cgsTeam(), [Role::REGISTRY]), true)) {
+            $links[] = ['label' => 'Dismissal Upload', 'route' => 'candidacy.cgs.dismissal-upload'];
+        }
+
+        if (in_array($user->role, array_unique(array_merge([Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], (array) config('candidacy.cgs_roles'))), true)) {
+            $links[] = ['label' => 'My Signature', 'route' => 'candidacy.signature.show'];
+        }
+
+        return $links;
+    }
+
     public function createRoute(): ?string
     {
         return 'candidacy-appeal.create';
@@ -57,6 +87,17 @@ class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime
 
     public function queueRoute(): string
     {
-        return 'candidacy-appeal.queue';
+        return 'candidacy.portal.queue';
+    }
+
+    /**
+     * Reused on both screens: the approver's queue (via
+     * core::partials.queue's $detailView) and the student's own "Track My
+     * Application" page (via this interface) both include the same
+     * partial. See Resources/views/candidacy/appeal/_detail.blade.php.
+     */
+    public function detailView(): string
+    {
+        return 'chloe::candidacy.appeal._detail';
     }
 }

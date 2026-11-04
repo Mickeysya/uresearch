@@ -2,6 +2,7 @@
 
 namespace App\Modules\Nureen\Http\Controllers;
 
+use App\Modules\Nureen\Support\SubmissionNotifier;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
@@ -119,6 +120,10 @@ class AttendanceAppealController extends Controller
             return $engine->submit($application);
         });
 
+        // Whoever acts first is told now -- Core's engine only notifies a
+        // stage when an earlier one decides. See Support\SubmissionNotifier.
+        app(SubmissionNotifier::class)->notify($application);
+
         return redirect()
             ->route('applications.index')
             ->with('status', "Attendance appeal #{$application->id} submitted.");
@@ -144,9 +149,11 @@ class AttendanceAppealController extends Controller
         // more; left blank it defaults to the number requested.
         $data = $request->validate([
             'decision' => ['required', 'in:approve,reject'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
+            // A rejection needs a reason, as in Supervision.
+            'remarks' => [$request->input('decision') === 'reject' ? 'required' : 'nullable', 'string', 'max:2000'],
             'sessions_approved' => ['nullable', 'integer', 'min:0', 'max:'.$requested],
         ], [
+            'remarks.required' => 'Say why this request is being rejected — the student is owed a reason.',
             'sessions_approved.max' => "No more than the {$requested} ".Str::plural('session', $requested).' the student asked for can be approved.',
         ]);
 

@@ -18,6 +18,8 @@
     <x-core::page-header
         title="Upload Attendance" />
 
+    @include('nureen::attendance._leave_warnings')
+
     {{--
         The automated side: attendance:sync pulls from whichever source is
         configured (an inbox folder standing in for a nightly Power Automate
@@ -152,6 +154,13 @@
                             <td><code>sessions_total</code></td>
                             <td>Sessions held in that period. Must be more than zero, and not less than <code>sessions_attended</code>.</td>
                             <td>20</td>
+                        </tr>
+                        <tr>
+                            <td><code>leave_days</code> <span class="queue-meta">(optional, 5th column)</span></td>
+                            <td>Days of annual leave the Chair approved in that period. Approved leave is not counted as absence.
+                                Leave a cell blank to keep what is already recorded; CGS can also record leave on the
+                                <a href="{{ route('attendance.leave') }}">Approved Leave</a> page.</td>
+                            <td>2</td>
                         </tr>
                     </tbody>
                 </table>

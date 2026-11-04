@@ -27,6 +27,14 @@
     'label',
     'required' => true,
     'hint' => null,
+    // Files already attached to a saved draft (ApplicationDocument rows).
+    // They count towards the limit and satisfy "required"; each can be
+    // ticked to remove on the next Save draft or Submit
+    // (remove_documents[] -- Support\Drafts::removeDocuments()).
+    'existing' => collect(),
+    // Narrower than DocumentStore's list for a form that needs it (the
+    // certification takes PDF only); the server enforces the same list.
+    'allowed' => null,
 ])
 @php
     use App\Modules\Core\Services\DocumentStore;
@@ -34,9 +42,13 @@
     $maxFiles = DocumentStore::MULTI_MAX_FILES;
     $maxFileKb = DocumentStore::MULTI_MAX_FILE_KB;
     $maxTotalKb = DocumentStore::MULTI_MAX_TOTAL_KB;
-    $allowed = DocumentStore::MULTI_ALLOWED;
+    $allowed = $allowed ?? DocumentStore::MULTI_ALLOWED;
     $accept = implode(',', array_map(fn ($ext) => ".{$ext}", $allowed));
     $inputId = $name.'-input-'.uniqid();
+    $existing = collect($existing);
+    // Already attached files: required is met, and fewer new files fit.
+    $required = $required && $existing->isEmpty();
+    $maxFiles = max(0, $maxFiles - $existing->count());
 @endphp
 
 <div class="doc-upload" data-doc-upload
@@ -47,12 +59,34 @@
 
     <label for="{{ $inputId }}">
         {{ $label }}
-        <span style="color: var(--text-grey)">({{ $required ? 'required' : 'optional' }}, up to {{ $maxFiles }} files)</span>
+        @if ($existing->isNotEmpty())
+            {{-- Still required on submit; the attached file already counts. --}}
+            <span style="color: var(--text-grey)">({{ $existing->count() }} attached, up to {{ $maxFiles }} more {{ $maxFiles === 1 ? 'file' : 'files' }})</span>
+        @else
+            <span style="color: var(--text-grey)">({{ $required ? 'required' : 'optional' }}, up to {{ $maxFiles }} files)</span>
+        @endif
     </label>
+
+    @if ($existing->isNotEmpty())
+        <ul class="doc-upload-existing" aria-label="{{ $label }}: already attached">
+            @foreach ($existing as $document)
+                <li>
+                    <x-core::doc-link :document="$document">{{ $document->original_name }}</x-core::doc-link>
+                    <span class="queue-meta">saved {{ $document->created_at->format('j M, g:ia') }}</span>
+                    <label class="doc-upload-remove">
+                        <input type="checkbox" name="remove_documents[]" value="{{ $document->id }}"
+                               aria-label="Remove {{ $document->original_name }}">
+                        Remove
+                    </label>
+                </li>
+            @endforeach
+        </ul>
+    @endif
 
     <input type="file" id="{{ $inputId }}" name="{{ $name }}[]" multiple
            accept="{{ $accept }}"
            data-doc-upload-input
+           @if ($existing->isNotEmpty()) data-has-existing @endif
            @required($required)
            class="@error($name) is-invalid @enderror">
 
@@ -75,11 +109,21 @@
         <p class="queue-meta" style="margin-top: -8px;">{{ $hint }}</p>
     @endif
     <p class="queue-meta" style="margin-top: -8px;">
-        PDF, JPG, PNG or DOCX. Up to {{ $maxFiles }} files, {{ $maxFileKb / 1024 }}&nbsp;MB
+        {{ count($allowed) === 1 ? strtoupper($allowed[0]).' only' : strtoupper(implode(', ', array_slice($allowed, 0, -1))).' or '.strtoupper(last($allowed)) }}. Up to {{ $maxFiles }} files, {{ $maxFileKb / 1024 }}&nbsp;MB
         each, {{ $maxTotalKb / 1024 }}&nbsp;MB total.
     </p>
 </div>
 
+@once
+    @push('head')
+        <style>
+            .doc-upload-existing { list-style: none; margin: 4px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+            .doc-upload-existing li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 10px; border: 1px solid var(--border-grey); border-radius: 8px; font-size: 13.5px; }
+            .doc-upload-existing a { color: var(--navy); font-weight: 600; overflow-wrap: anywhere; }
+            .doc-upload-remove { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 0 auto; font-weight: 400; color: var(--danger-fg); }
+        </style>
+    @endpush
+@endonce
 @once
 <style>
     .doc-upload-list {
@@ -249,7 +293,7 @@
                         }
 
                         if (allowed.indexOf(extOf(file.name)) === -1) {
-                            errors.push('"' + file.name + '" is not an allowed file type. Use PDF, JPG, PNG or DOCX.');
+                            errors.push('"' + file.name + '" is not an allowed file type. Use ' + allowed.join(', ').toUpperCase() + '.');
                             continue;
                         }
 

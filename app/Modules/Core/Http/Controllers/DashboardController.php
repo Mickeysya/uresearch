@@ -30,9 +30,17 @@ class DashboardController extends Controller
         if ($user->isStudent()) {
             // Every figure on the student dashboard comes from here, one
             // named method per panel -- see Services\StudentDashboard.
-            $dash = new StudentDashboard($user);
+            $dash = new StudentDashboard($user, $registry);
 
             return view('core::dashboard.student', [
+                'bannerSubtitle' => $dash->bannerSubtitle(),
+                'today' => $dash->todayCard(),
+                'dueTodayCount' => $dash->dueTodayCount(),
+                'candidacy' => $dash->candidacyCard(),
+                'viva' => $dash->vivaCard(),
+                'allowance' => $dash->allowanceCard(),
+                'quickLinks' => $dash->quickLinks(),
+                'drafts' => $dash->drafts(),
                 'attendance' => $dash->attendance(),
                 'attendanceAction' => $dash->attendanceAction(),
                 'activeCount' => $dash->activeApplications(),

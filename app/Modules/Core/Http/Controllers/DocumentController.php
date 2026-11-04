@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Http\Controllers;
 
 use App\Modules\Core\Models\ApplicationDocument;
+use App\Modules\Core\Support\FilePreview;
 use App\Modules\Core\Support\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -14,6 +15,34 @@ use Illuminate\Support\Facades\Storage;
 class DocumentController extends Controller
 {
     public function show(Request $request, ApplicationDocument $document)
+    {
+        $this->authorizeAndLog($request, $document, 'viewed', 'Viewed document');
+
+        return Storage::disk('local')->download($document->path, $document->original_name);
+    }
+
+    /**
+     * The same file, inline, for the in-app viewer (components/file-preview).
+     * Same rule and the same audit trail as show(). A file no browser can
+     * render (Word, above all) is simply downloaded.
+     */
+    public function view(Request $request, ApplicationDocument $document)
+    {
+        $mime = FilePreview::inlineMime($document->original_name);
+
+        if ($mime === null) {
+            return $this->show($request, $document);
+        }
+
+        $this->authorizeAndLog($request, $document, 'previewed', 'Previewed document');
+
+        return Storage::disk('local')->response($document->path, $document->original_name, [
+            'Content-Type' => $mime,
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline');
+    }
+
+    protected function authorizeAndLog(Request $request, ApplicationDocument $document, string $action, string $message): void
     {
         $user = $request->user();
         $application = $document->application;
@@ -30,13 +59,11 @@ class DocumentController extends Controller
             ->causedBy($user)
             ->performedOn($document)
             ->withProperties([
-                'action' => 'viewed',
+                'action' => $action,
                 'doc_type' => $document->doc_type,
                 'application_id' => $application->id,
                 'student' => $application->student?->name,
             ])
-            ->log('Viewed document');
-
-        return Storage::disk('local')->download($document->path, $document->original_name);
+            ->log($message);
     }
 }

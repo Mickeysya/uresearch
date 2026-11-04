@@ -216,7 +216,7 @@ class AttendanceDataRulesTest extends TestCase
         $cgs = $this->cgs();
 
         $this->actingAs($cgs)->get(route('attendance-appeal.queue'))
-            ->assertSee('Sessions to approve')
+            ->assertSee('Sessions to excuse if approved')
             ->assertSee('max="6"', false);
 
         // More than requested is refused, and nothing is decided.

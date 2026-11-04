@@ -47,15 +47,29 @@ class FormsTest extends TestCase
     {
         $student = $this->student(attributes: ['supervisor_id' => $this->supervisor()->id]);
 
+        // The examiner step only renders a search box when there is a list
+        // to search; the candidate names who examined them from it.
+        DB::table('examiners')->insert([
+            ['name' => 'Dr. Internal', 'email' => 'int@test.my', 'department' => 'Computing',
+             'faculty' => 'FSMC', 'institution' => null, 'type' => 'internal', 'is_active' => true,
+             'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Dr. External', 'email' => 'ext@test.my', 'department' => 'Computing',
+             'faculty' => 'USM', 'institution' => 'Universiti Sains Malaysia', 'type' => 'external',
+             'is_active' => true, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
         $response = $this->actingAs($student)->get(route('hardbound.create'));
 
-        // Three steps since 2026-10-19: the candidate's own details, the
-        // thesis, and the Confirmation. Nothing is downloaded or uploaded --
-        // the portal writes both CGS forms.
-        $this->assertIsStepper($response, 3);
+        // Four steps: the candidate's own details, the thesis, the
+        // examiners they name, and the Confirmation. Nothing is downloaded
+        // or uploaded -- the portal writes both CGS forms.
+        $this->assertIsStepper($response, 4);
 
         $response->assertSee('About you')
             ->assertSee('Passport / IC Number')
+            ->assertSee('Your examiners')
+            // The examiner lists carry a search box each.
+            ->assertSee('Search internal examiners by name or institution', false)
             ->assertDontSee('type="file"', false);
     }
 

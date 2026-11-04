@@ -26,7 +26,7 @@ Nothing central lists the modules. Each teammate's folder is discovered by conve
 flowchart TB
     subgraph mods["app/Modules/*, one folder per person, auto-discovered at boot"]
         direction LR
-        N[Norhanis<br/>Travel · RPD]
+        N[Norhanis<br/>Travel · Claims · Publication]
         NU[Nureen<br/>Attendance · GA]
         H[Hani<br/>Examiners · Re-viva]
         J[Jason<br/>Hardbound]
@@ -156,7 +156,7 @@ Everyone owns exactly one directory under `app/Modules/`, holding migrations, mo
 | Folder | Owner | Scope | Status |
 |---|---|---|---|
 | `Core/` | the team | Auth, WorkflowEngine, uploads, layout | shared foundation |
-| `Norhanis/` | Norhanis Erna Natasha | Travel · Publication · Claims · RPD | Travel built (reference implementation) |
+| `Norhanis/` | Norhanis Erna Natasha | Travel · Publication · Claims | Travel built (reference implementation) |
 | `Nureen/` | Nureen Nellysha | Attendance · GA Extension · Supervision · Certification | built |
 | `Hani/` | Nur Hani Sofia | Examiner Nomination · Conflict Detection · Re-viva | built |
 | `Jason/` | Jason | Hardbound Submission · Appeal · Appointment Letters | scoped |

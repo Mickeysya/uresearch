@@ -3,6 +3,12 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
+use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
+use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Core\Contracts\DescribesApplicationProgress;
+use App\Modules\Core\Contracts\SuppliesOverdueStatus;
+use App\Modules\Nureen\Support\TrackingDescriptions;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
@@ -38,8 +44,52 @@ use App\Modules\Nureen\Models\SupervisionDetail;
  * rather than in this class, since that write is a side effect of a
  * decision, not part of the chain itself.
  */
-class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates
+class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus, DescribesApplicationProgress, DescribesApplicationDetails
 {
+    /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
+    use DescribesApplicationDetailsDefaults;
+
+    public function details(Application $application): array
+    {
+        return app(ApplicationDetailsContent::class)->supervision($application);
+    }
+
+    public function timelineEvents(Application $application): array
+    {
+        return [
+            ...app(ApplicationDetailsContent::class)->reminders($application),
+            ...app(ApplicationDetailsContent::class)->letterEvents($this->issuedDocument($application)),
+        ];
+    }
+
+    public function stageTargetDays(Application $application, string $stageKey): ?int
+    {
+        return app(ApplicationDetailsContent::class)->target($application, $stageKey);
+    }
+
+    public function waitingFor(Application $application): ?string
+    {
+        return app(ApplicationDetailsContent::class)->waitingFor($application);
+    }
+
+    public function issuedDocument(Application $application): ?array
+    {
+        return app(ApplicationDetailsContent::class)->appointmentLetter($application);
+    }
+
+    /** Track My Applications tab (config/tracking.php) and card icon. */
+    public const CATEGORY = 'supervision';
+
+    public const ICON = 'person';
+
+    /** Track My Applications: Core\Contracts\DescribesApplicationProgress -- see Support\TrackingDescriptions. */
+    public function describeProgress(Application $application): array
+    {
+        $detail = SupervisionDetail::where('application_id', $application->id)->first();
+
+        return app(TrackingDescriptions::class)->letter($application, \App\Modules\Nureen\Support\LetterRenderer::APPOINTMENT_DOC_TYPE, $detail?->letter_reference, $detail?->letter_revoked_at);
+    }
+
     /** expectedDecisionDate(): the Client Charter date, for the student dashboard. */
     use ExpectsDecisionByCharter;
 
@@ -82,14 +132,26 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
                 }
             }
 
+            // config('nureen.supervision.co_supervisor_approver'): the Dean
+            // of PGR's stage, after the Chair's -- see deanStageInUse().
+            if ($this->deanStageInUse()) {
+                array_splice($stages, array_search('chair', $keys, true) + 1, 0, [$this->approverStage('dean_pgr', 'endorsed')]);
+            }
+
             return $stages;
         }
 
-        return $this->chainFor($this->modeFor($application));
+        return $this->chainFor($this->modeFor($application), $this->approverFor($application));
     }
 
-    /** @return array<int, Stage> */
-    protected function chainFor(string $mode): array
+    /**
+     * @param  string  $approver  who approves after the supervisor: 'chair' (always, for a
+     *                            Main Supervisor request) or, for a Co-Supervisor request under
+     *                            config('nureen.supervision.co_supervisor_approver') = 'dean_pgr',
+     *                            the Dean of PGR. See approverFor().
+     * @return array<int, Stage>
+     */
+    protected function chainFor(string $mode, string $approver = 'chair'): array
     {
         $supervisorStage = new Stage(
             key: 'supervisor',
@@ -102,13 +164,7 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
         if ($mode === 'endorse') {
             return [
                 $supervisorStage,
-                new Stage(
-                    key: 'chair',
-                    label: 'Chair of Department',
-                    role: Role::CHAIR,
-                    decision: 'endorsed',
-                    queueTitle: 'Pending Department Approval',
-                ),
+                $this->approverStage($approver, 'endorsed'),
                 // Same Stage key as 'manual' mode's eligibility review, so
                 // an application sitting at cgs_review is found the same way
                 // whichever of the two it was submitted under. Endorsing
@@ -127,13 +183,7 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
         if ($mode === 'manual') {
             return [
                 $supervisorStage,
-                new Stage(
-                    key: 'chair',
-                    label: 'Chair of Department',
-                    role: Role::CHAIR,
-                    decision: 'endorsed',
-                    queueTitle: 'Pending Department Approval',
-                ),
+                $this->approverStage($approver, 'endorsed'),
                 new Stage(
                     key: 'cgs_review',
                     label: 'Non-Executive CGS',
@@ -146,15 +196,68 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
 
         return [
             $supervisorStage,
-            new Stage(
+            $this->approverStage($approver, 'approved'),
+        ];
+    }
+
+    /**
+     * The stage after the supervisor's: the Chair of Department (stage key
+     * 'chair', as it always was), or the Dean of PGR (key 'dean_pgr',
+     * Core's Role::DEAN_PGR). Stage keys are stored in rows, so neither
+     * ever changes.
+     */
+    protected function approverStage(string $approver, string $decision): Stage
+    {
+        return $approver === 'dean_pgr'
+            ? new Stage(
+                key: 'dean_pgr',
+                label: 'Dean of PGR',
+                role: Role::DEAN_PGR,
+                decision: $decision,
+                queueTitle: 'Pending Dean Approval',
+            )
+            : new Stage(
                 key: 'chair',
                 label: 'Chair of Department',
                 role: Role::CHAIR,
-                decision: 'approved',
+                decision: $decision,
                 queueTitle: 'Pending Department Approval',
-            ),
-        ];
+            );
     }
+
+    /**
+     * Who approves this application after the supervisor. A Co-Supervisor
+     * request runs the approver it was submitted under
+     * (co_supervisor_approver_snapshot); one submitted before the switch
+     * existed, and every Main Supervisor request, goes to the Chair.
+     */
+    public function approverFor(?Application $application): string
+    {
+        $detail = $application ? $this->detailFor($application) : null;
+
+        if (! $detail || $detail->appointment_role !== SupervisionDetail::ROLE_CO) {
+            return 'chair';
+        }
+
+        return $detail->co_supervisor_approver_snapshot === 'dean_pgr' ? 'dean_pgr' : 'chair';
+    }
+
+    /**
+     * Whether the Dean of PGR's stage belongs in the superset: while the
+     * switch is on, or while any request submitted under it still waits
+     * there -- so the Dean's queue is reachable for exactly as long as it
+     * can hold something.
+     */
+    protected function deanStageInUse(): bool
+    {
+        return $this->deanInUse ??= config('nureen.supervision.co_supervisor_approver') === 'dean_pgr'
+            || Application::where('module_type', $this->key())
+                ->where('status', Application::STATUS_PENDING)
+                ->where('current_stage', 'dean_pgr')
+                ->exists();
+    }
+
+    private ?bool $deanInUse = null;
 
     /**
      * 'endorse', 'automatic' or 'manual' -- the application's own snapshot when it has
@@ -164,7 +267,7 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
     public function modeFor(?Application $application): string
     {
         if ($application) {
-            $detail = SupervisionDetail::where('application_id', $application->id)->first();
+            $detail = $this->detailFor($application);
 
             if ($detail?->cgs_stage_snapshot) {
                 return $detail->cgs_stage_snapshot;
@@ -173,6 +276,32 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
 
         return config('nureen.supervision.cgs_stage');
     }
+
+    /**
+     * The application's detail row, read once per Application object: the
+     * stored snapshot never changes once written, and Track My Applications
+     * asks for one card's chain (and summary) several times. A row not
+     * written yet -- mid-submit -- is never cached.
+     */
+    protected function detailFor(Application $application): ?SupervisionDetail
+    {
+        $this->details ??= new \WeakMap();
+
+        if (isset($this->details[$application])) {
+            return $this->details[$application];
+        }
+
+        $detail = SupervisionDetail::where('application_id', $application->id)->first();
+
+        if ($detail) {
+            $this->details[$application] = $detail;
+        }
+
+        return $detail;
+    }
+
+    /** @var \WeakMap<Application, SupervisionDetail>|null see detailFor() */
+    private ?\WeakMap $details = null;
 
     public function summary(Application $application): string
     {

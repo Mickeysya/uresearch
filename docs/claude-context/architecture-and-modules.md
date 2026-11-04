@@ -448,6 +448,45 @@ approval is what triggers PDF generation).
   controller, the validation, and the relevant view, rather than
   hardcoded in three places that could drift.
 
+## Track My Applications (Core, `/applications`)
+
+One page for every module's applications, built by `Core\Services\ApplicationTracker`
+without naming any module:
+- **Tabs:** each module's optional `public const CATEGORY = '<key>';`,
+  labelled and coloured by `config/tracking.php` (fixed tone per category).
+  A module without one appears under "Other".
+- **Status filters:** All, Needs you, In progress, Approved, Rejected.
+- **Cards:** newest activity first, 20 a page. Each card's stepper is the
+  application's own `stages($application)`, so it respects the stored
+  snapshot. Done steps show their `approval_history` decision and date; the
+  current step shows "Waiting N working days" on Core's shared
+  `Support\WorkingDayCalendar` (moved from Nureen, `config/calendar.php`
+  holidays).
+- **Optional contracts:** `SuppliesDecisionDates` (expected date),
+  `SuppliesOverdueStatus` ("Taking longer than usual") and
+  `DescribesApplicationProgress` (footer sentence, buttons, real letter
+  reference, needs-you).
+- **"Needs you":** returned to the student, a module saying so (Nureen: an
+  issued, unrevoked letter not yet opened), or a rejection whose module
+  expects resubmission.
+- **Cost:** 31 queries for a page of 20 GA Extension cards. See
+  `SHARED_CHANGES.md` §10.
+- **The details page** (`applications.show`, `Core\Services\ApplicationDetails`)
+  has these parts:
+  - header with the current holder and the expected-date card (or the
+    student's action);
+  - progress, with who acted and working days against each stage's target
+    (`DescribesApplicationDetails::stageTargetDays()`);
+  - "What happens next";
+  - Activity, newest first (decisions, reminders, letter events);
+  - "Your application" (`details()`);
+  - documents with the issued letter;
+  - "Need help?".
+
+  12 queries for a certification. `WorkflowEngine::progress()` marks a stage
+  with no `approval_history` row as `skipped` ("Not required for this
+  application"), never as completed.
+
 ## Dashboards (brief)
 
 Six dashboards total: student, CGS, admin, Chair, Supervisor, and a shared

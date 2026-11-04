@@ -18,9 +18,9 @@ use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
- * "Within candidacy period" is checked by the system from the candidature
- * start date in the RPD masterlist (candidacies); the rest stays
- * self-declared. The AE's acknowledgement confirms the lot.
+ * "Within candidacy period" is checked by the system from the candidacy
+ * expiry date in Study Candidacy (study_candidacies, Chloe's module); the
+ * rest stays self-declared. The AE's acknowledgement confirms the lot.
  */
 class VivaEligibilityVerificationTest extends TestCase
 {
@@ -46,14 +46,14 @@ class VivaEligibilityVerificationTest extends TestCase
         $this->student = $this->student(attributes: ['programme' => 'MSc Full-Time', 'department' => 'Computing']);
     }
 
-    protected function candidacy(string $type, string $start): void
+    /** A Study Candidacy row, as Chloe's module keeps it (read-only here). */
+    protected function candidacy(string $start, string $expiry, string $status = 'active'): void
     {
-        DB::table('candidacies')->insert([
+        DB::table('study_candidacies')->insert([
             'student_id' => $this->student->id,
-            'programme_type' => $type,
-            'candidature_start_date' => $start,
-            'rpd_deadline' => now()->addYear()->toDateString(),
-            'status' => 'active',
+            'programme_start_date' => $start,
+            'candidacy_expiry_date' => $expiry,
+            'status' => $status,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -61,11 +61,11 @@ class VivaEligibilityVerificationTest extends TestCase
 
     public function test_inside_the_period_is_verified_by_the_system_and_needs_no_tick(): void
     {
-        $this->candidacy('msc_ft', now()->subMonths(30)->toDateString());
+        $this->candidacy(now()->subMonths(30)->toDateString(), now()->addMonths(18)->toDateString());
 
         $check = app(CandidacyPeriodSource::class)->check($this->student);
         $this->assertSame(EligibilityResult::VERIFIED, $check->status);
-        $this->assertStringContainsString('48-month limit for MSc full-time', $check->message);
+        $this->assertStringContainsString('your candidacy period ends '.now()->addMonths(18)->format('j M Y').', including any extension granted', $check->message);
 
         $this->actingAs($this->student)->get(route('viva.eligibility'))
             ->assertOk()
@@ -84,13 +84,13 @@ class VivaEligibilityVerificationTest extends TestCase
 
     public function test_outside_the_period_blocks_the_notice_whatever_was_ticked(): void
     {
-        // The candidacy row's part-time wins over the profile's "Full-Time".
-        $this->candidacy('msc_pt', now()->subMonths(73)->toDateString());
+        // The expiry date (with any extension) decides, not the profile.
+        $this->candidacy(now()->subMonths(73)->toDateString(), now()->subMonth()->toDateString());
 
         $this->actingAs($this->student)->get(route('viva.eligibility'))
             ->assertOk()
             ->assertSee('Not met (system check)')
-            ->assertSee('72-month limit for MSc part-time ended');
+            ->assertSee('your candidacy period ended '.now()->subMonth()->format('j M Y'));
 
         $this->actingAs($this->student)->post(route('viva.notice.store'),
             self::DECLARED + ['within_candidacy_period' => 1] + $this->noticeFields())
@@ -98,6 +98,15 @@ class VivaEligibilityVerificationTest extends TestCase
             ->assertSessionHas('error', fn ($m) => str_contains($m, 'ended'));
 
         $this->assertSame(0, Application::count());
+    }
+
+    public function test_a_dismissed_candidature_is_not_met_even_inside_the_dates(): void
+    {
+        $this->candidacy(now()->subMonths(12)->toDateString(), now()->addMonths(36)->toDateString(), 'dismissed');
+
+        $check = app(CandidacyPeriodSource::class)->check($this->student);
+        $this->assertSame(EligibilityResult::NOT_MET, $check->status);
+        $this->assertStringContainsString('recorded as dismissed', $check->message);
     }
 
     public function test_no_candidacy_row_leaves_the_item_self_declared(): void
@@ -135,7 +144,7 @@ class VivaEligibilityVerificationTest extends TestCase
 
     public function test_the_ae_sees_the_summary_and_acknowledging_confirms_it(): void
     {
-        $this->candidacy('msc_ft', now()->subMonths(12)->toDateString());
+        $this->candidacy(now()->subMonths(12)->toDateString(), now()->addMonths(36)->toDateString());
         $ae = $this->academicExec();
         $ae->update(['department' => 'Computing']);
 

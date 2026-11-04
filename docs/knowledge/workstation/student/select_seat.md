@@ -1,0 +1,3 @@
+To select a workstation: go to Workstation, choose a block, choose a room (only rooms matching your own gender are shown), then choose an Available seat. Press Select Seat, check the seat, block and room in the confirmation box, then press Confirm: the seat is yours at once (a success message appears on the page and you get a notice in your bell; no e-mail is sent). You can hold only one workstation at a time.
+
+You must be an Active, full-time research student with a candidacy that has not expired to select a workstation. If you are not eligible, the system will tell you and you should contact the Centre for Graduate Studies (CGS).

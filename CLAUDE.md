@@ -21,7 +21,7 @@ Six people share this repo, and **each owns exactly one folder** under
 | Folder | Owner | Modules |
 |---|---|---|
 | `Core/` | the team | shared foundation — do not edit without asking |
-| `Norhanis/` | Norhanis Erna Natasha (22006318) | Travel · Publication · Claims · RPD |
+| `Norhanis/` | Norhanis Erna Natasha (22006318) | Travel · Publication · Claims |
 | `Nureen/` | Nureen Nellysha (22006973) | Attendance · GA Extension · Supervision · Certification |
 | `Hani/` | Nur Hani Sofia (22001418) | Examiner Nomination · Conflict Detection · Re-viva |
 | `Jason/` | Yau Jia Sheng "Jason" (22003299) | Hardbound Submission · Appeal Hardbound Submission · Appointment Letters |
@@ -53,7 +53,8 @@ public function stages(?Application $application = null): array
 From that: routing, queue queries, authorisation, the progress stepper, the
 tracking page, notification emails, and sidebar links. `stages()` takes the
 application, so conditional routing is just an `if` — see `TravelWorkflow`,
-where international travel returns four stages and local travel two.
+where local travel ends with the Senior Director CGS and international travel with
+the Dean of PGR.
 
 `WorkflowEngine` is the **only** code that writes `applications.status` or
 `applications.current_stage`. Call `submit()`, `decide()` or `returnTo()`;
@@ -126,8 +127,8 @@ at it, and copy its patterns rather than inventing new ones.
 
 Password for all: `password`. The handful a walkthrough needs are in
 `README.md`; every account is in `docs/test-accounts.md`.
-`student@utp.edu.my` → `supervisor@utp.edu.my` → `chair@utp.edu.my` walks a
-full local-travel chain.
+`student@utp.edu.my` → `supervisor@utp.edu.my` → `chair@utp.edu.my` →
+`cgs@utp.edu.my` → `director@utp.edu.my` walks a full local-travel chain.
 
 ## Context
 

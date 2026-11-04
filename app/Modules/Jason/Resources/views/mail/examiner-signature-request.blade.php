@@ -4,8 +4,9 @@
 Dear {{ $examinerName }},
 
 The candidate below has completed the corrections required at their viva voce
-examination. The supervisor and the Chairman of the Viva Voce Examination have
-both confirmed this, and the form now needs your signature as examiner.
+examination, and their supervisor has confirmed it. They named you as their
+{{ strtolower($examinerRole) }}, and the form now needs your signature before
+it goes to the Chairman of the Viva Voce Examination.
 
 **Candidate:** {{ $candidate }}
 @if ($thesisTitle)

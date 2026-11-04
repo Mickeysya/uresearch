@@ -3,7 +3,6 @@
 namespace App\Modules\Jason\Mail;
 
 use App\Modules\Core\Models\Application;
-use App\Modules\Jason\Models\AppointmentExaminer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -25,7 +24,8 @@ class ExaminerSignatureRequest extends Mailable implements ShouldQueue
 
     public function __construct(
         protected Application $application,
-        protected AppointmentExaminer $examiner,
+        protected string $examinerName,
+        protected string $slot,
         protected string $url,
         protected string $candidate,
         protected string $thesisTitle,
@@ -43,7 +43,8 @@ class ExaminerSignatureRequest extends Mailable implements ShouldQueue
         return new Content(
             markdown: 'jason::mail.examiner-signature-request',
             with: [
-                'examinerName' => $this->examiner->examiner_name,
+                'examinerName' => $this->examinerName,
+                'examinerRole' => ucfirst($this->slot).' Examiner',
                 'candidate' => $this->candidate,
                 'thesisTitle' => $this->thesisTitle,
                 'url' => $this->url,

@@ -16,6 +16,9 @@
                      color: {{ $detail->isRevoked() ? 'var(--danger-fg)' : 'var(--success-fg)' }};">
             {{ $detail->isRevoked() ? 'Revoked' : 'Valid' }}
         </span>
+        &middot; <x-core::doc-link :url="route('supervision.letter.download', [$application, 'inline' => 1])"
+                                   :download="route('supervision.letter.download', $application)"
+                                   :name="'Appointment letter '.$detail->letter_reference" />
         &middot; <a href="{{ route('supervision.letter.download', $application) }}">Download</a>
     </p>
 
@@ -29,7 +32,9 @@
             @csrf
             <label for="revoked_reason-{{ $application->id }}">Revoke this letter</label>
             <textarea id="revoked_reason-{{ $application->id }}" name="revoked_reason" rows="2" required
+                      aria-describedby="revoked_reason-hint-{{ $application->id }}"
                       placeholder="Why this letter is being revoked."></textarea>
+            <p class="queue-meta" id="revoked_reason-hint-{{ $application->id }}">This reason is shown to the student and their supervisor. It is not shown on the public verification page.</p>
             <button type="submit" class="btn-reject">Revoke Letter</button>
         </form>
     @endif

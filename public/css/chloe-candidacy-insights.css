@@ -1,0 +1,395 @@
+/* Candidacy Insights: the Workstation Insights stylesheet (same tokens, cards, KPI cards, chips, segmented control, tooltip, legend), plus the candidacy additions at the end. */
+
+        /* ---- PART 1: design tokens --------------------------------- */
+        #wsi-page {
+            --wsi-blue: #004B85;
+            --wsi-blue-2: #0066B3;
+            --wsi-gold: #C88A12;
+            --wsi-orange: #F68B33;
+            --wsi-red: #C62828;
+            --wsi-green: #2E8B57;
+            --wsi-slate: #606C73;
+            
+            --wsi-blue-hover: #003A68;
+            --wsi-blue-2-hover: #00518E;
+            --wsi-gold-hover: #A6730D;
+            --wsi-orange-hover: #D66F1F;
+            --wsi-red-hover: #A31F1F;
+            --wsi-green-hover: #246E46;
+            --wsi-slate-hover: #4C555C;
+            --wsi-track: #E4E4DA;
+            --wsi-grid: #E9E9E1;
+            --wsi-text-dark: #2A2A2A;
+            --wsi-text-body: #49505C;
+            --wsi-text-grey: #656E7E;
+            --wsi-border: #E0E3EA;
+            --wsi-border-strong: #CBD1DB;
+            --wsi-surface: #FFFFFF;
+            --wsi-surface-sunken: #F8F9FB;
+            --wsi-chip-bg: #E6EEF6;
+            
+            --wsi-hover-bg: #F4F7FA;
+            --wsi-hover-border: #C9D6E3;
+            --wsi-selected-bg: #E6EEF6;
+            --wsi-tooltip-text: #1F2933;
+            --wsi-font: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 24px 160px;
+            font-family: var(--wsi-font);
+            color: var(--wsi-text-body);
+        }
+        
+        #wsi-page button, #wsi-page a, #wsi-page select, #wsi-page [tabindex] {
+            outline: none;
+        }
+        #wsi-page button:focus, #wsi-page a:focus, #wsi-page select:focus, #wsi-page [tabindex]:focus,
+        #wsi-page button:focus-visible, #wsi-page a:focus-visible, #wsi-page select:focus-visible, #wsi-page [tabindex]:focus-visible {
+            outline: none;
+            box-shadow: none;
+        }
+        #wsi-page, #wsi-page * { box-sizing: border-box; }
+        #wsi-page h1, #wsi-page h2, #wsi-page h3, #wsi-page h4 {
+            font-family: var(--wsi-font); font-weight: 600; color: var(--wsi-text-dark); margin: 0;
+        }
+        /*
+            Decorative text (value labels, axis ticks, category labels)
+            must never intercept a click meant for the bar/segment under
+            it -- found live: a percentage label painted on top of a
+            stacked-bar segment silently ate every click on that
+            segment. wireClickable() explicitly re-enables pointer
+            events on any text that IS itself the clickable mark (e.g.
+            a block/gender row label).
+        */
+        #wsi-page svg text { font-family: var(--wsi-font); letter-spacing: normal; font-variant-numeric: tabular-nums; pointer-events: none; }
+        #wsi-page svg text.wsi-mark { pointer-events: auto; }
+        #wsi-page .wsi-tabular { font-variant-numeric: tabular-nums; }
+
+        .wsi-meta { margin: -8px 0 16px; font-size: 14px; line-height: 1.5; color: var(--wsi-text-grey); font-family: var(--wsi-font); }
+        .wsi-live-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        /* The shared button style adds a top/right margin; inside this row the controls sit level with the text. */
+        .wsi-live-row .wsi-link { margin: 0; display: inline-block; }
+        .wsi-live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #2E8B57; }
+        .wsi-live-dot.wsi-live-paused { background: #9CA3AF; }
+        .wsi-live-dot.wsi-live-error { background: #C88A12; }
+        .wsi-live-note { color: #606C73; margin-top: -12px; }
+        .wsi-live-note[hidden] { display: none; }
+        .wsi-link {
+            font-family: var(--wsi-font); font-size: 13px; line-height: 1.4; font-weight: 400;
+            color: var(--wsi-blue); background: none; border: none; margin: 0; padding: 0;
+            text-decoration: underline; cursor: pointer;
+        }
+        .wsi-link:hover, .wsi-link:focus-visible { color: var(--wsi-blue-hover); }
+
+        /* ---- Filter panel (matches the CGS landing page's own select look, explicitly -- not inherited) ---- */
+        .wsi-filter-panel {
+            background: var(--wsi-surface); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            padding: 24px; margin-bottom: 24px;
+        }
+        .wsi-filter-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+        .wsi-field { display: flex; flex-direction: column; gap: 4px; min-width: 160px; flex: 1 1 180px; }
+        .wsi-field label {
+            font-family: var(--wsi-font); font-size: 12px; line-height: 1.4; font-weight: 500;
+            color: var(--wsi-text-grey); margin: 0; padding: 0; background: none; border: none;
+        }
+        .wsi-select {
+            width: 100%; margin: 0; font-family: var(--wsi-font); font-size: 14px; line-height: 1.55;
+            color: var(--wsi-text-dark); background-color: var(--wsi-surface-sunken);
+            border: 1px solid var(--wsi-border); border-radius: 6px; padding: 12px 40px 12px 12px;
+            appearance: none; -webkit-appearance: none; cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A94A6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 12px center; background-size: 16px 16px;
+        }
+        .wsi-select:hover { background-color: var(--wsi-hover-bg); border-color: var(--wsi-hover-border); }
+        .wsi-select:focus-visible { background-color: var(--wsi-selected-bg); border-color: var(--wsi-hover-border); }
+        .wsi-reset-link { align-self: center; margin: 0; padding-bottom: 12px; }
+        @media (max-width: 1099px) { .wsi-filter-row { flex-wrap: wrap; } }
+
+        /* ---- Highlight strip (Power BI's cross-highlight state) ---- */
+        
+        .wsi-strip-tip {
+            font-family: var(--wsi-font); font-size: 13px; line-height: 1.4; color: var(--wsi-text-grey);
+            margin: 0 0 16px; padding: 0; background: none; border: none;
+        }
+        
+        .wsi-strip {
+            position: sticky; top: 0; z-index: 25;
+            background: var(--wsi-surface); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            padding: 0 16px; margin-bottom: 8px; height: 44px; box-sizing: border-box;
+            display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; overflow: hidden;
+            opacity: 1; transform: translateY(0);
+        }
+        .wsi-strip[hidden] { display: none; }
+        @media (prefers-reduced-motion: no-preference) {
+            .wsi-strip { transition: opacity 150ms ease-out, transform 150ms ease-out; }
+            .wsi-strip.wsi-strip-entering { opacity: 0; transform: translateY(-6px); }
+        }
+        
+        @media (max-width: 480px) {
+            .wsi-strip { height: auto; min-height: 44px; flex-wrap: wrap; overflow: visible; padding: 8px 16px; }
+            .wsi-strip-right { width: 100%; justify-content: space-between; margin-left: 0; }
+        }
+        .wsi-chip-strip { display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto; min-width: 0; }
+        .wsi-chip {
+            display: inline-flex; align-items: center; gap: 2px; height: 32px;
+            border: 1px solid #C9D6E3; background: #E6EEF6;
+            color: var(--wsi-text-dark); border-radius: 8px; padding: 0 4px 0 12px;
+            font-family: var(--wsi-font); font-size: 13px; line-height: 1.3; max-width: 320px;
+        }
+        .wsi-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40ch; }
+        .wsi-chip-x {
+            width: 24px; height: 24px; flex-shrink: 0; border: none; background: none; cursor: pointer;
+            color: var(--wsi-text-grey); font-family: var(--wsi-font); font-size: 15px; line-height: 1;
+            border-radius: 50%; padding: 0; margin: 0 0 0 2px;
+        }
+        .wsi-chip-x:hover, .wsi-chip-x:focus-visible { background: var(--wsi-hover-bg); color: var(--wsi-text-dark); }
+        .wsi-strip-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; margin-left: auto; }
+        .wsi-summary { font-family: var(--wsi-font); font-size: 13px; line-height: 1.4; color: var(--wsi-text-body); white-space: nowrap; }
+
+        .wsi-selected-panel { background: var(--wsi-surface); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); margin-bottom: 24px; overflow: hidden; }
+        .wsi-selected-panel[hidden] { display: none; }
+        .wsi-selected-toggle {
+            width: 100%; text-align: left; display: flex; align-items: center; justify-content: space-between;
+            font-family: var(--wsi-font); font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--wsi-text-dark);
+            background: none; border: none; margin: 0; padding: 16px 24px; cursor: pointer;
+        }
+        .wsi-selected-toggle:hover, .wsi-selected-toggle:focus-visible { background: var(--wsi-hover-bg); }
+        .wsi-selected-body { padding: 0 24px 24px; }
+        .wsi-selected-body[hidden] { display: none; }
+        .wsi-selected-table { width: 100%; border-collapse: collapse; font-family: var(--wsi-font); font-size: 13px; }
+        .wsi-selected-table th { text-align: left; font-weight: 600; color: var(--wsi-text-grey); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--wsi-border); }
+        .wsi-selected-table td { padding: 8px; border-bottom: 1px solid var(--wsi-border); color: var(--wsi-text-body); }
+        
+        .wsi-forecast-table { table-layout: fixed; }
+        .wsi-forecast-table th, .wsi-forecast-table td { word-break: break-word; font-size: 11px; padding: 6px 4px; }
+        .wsi-selected-pager { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+        .wsi-page-btn {
+            font-family: var(--wsi-font); font-size: 13px; font-weight: 600; line-height: 1.2; color: #fff;
+            background: var(--wsi-blue); border: 1px solid transparent; border-radius: 6px; margin: 0; padding: 8px 16px; cursor: pointer;
+        }
+        .wsi-page-btn:disabled { background: var(--wsi-track); color: var(--wsi-text-grey); cursor: not-allowed; }
+        .wsi-page-btn:hover:not(:disabled), .wsi-page-btn:focus-visible:not(:disabled) { background: var(--wsi-blue-hover); }
+
+        /* ---- Fixed 12-column grid (PART 4) -------------------------- */
+        .wsi-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 24px; align-items: stretch; }
+        .wsi-grid > * { min-width: 0; }
+        .wsi-span-12 { grid-column: span 12; }
+        .wsi-span-7 { grid-column: span 7; }
+        .wsi-span-6 { grid-column: span 6; }
+        .wsi-span-5 { grid-column: span 5; }
+        @media (max-width: 1099px) {
+            .wsi-grid > * { grid-column: span 12 !important; }
+        }
+
+        .wsi-layer-head { grid-column: span 12; margin: 32px 0 0; }
+        .wsi-layer-head:first-child { margin-top: 0; }
+        .wsi-layer-title { font-size: 20px; font-weight: 600; color: var(--wsi-text-dark); margin: 0 0 2px; }
+        .wsi-layer-desc { font-size: 13px; color: var(--wsi-text-grey); margin: 0; font-family: var(--wsi-font); }
+
+        .wsi-card { background: var(--wsi-surface); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 24px; height: 100%; display: flex; flex-direction: column; min-width: 0; }
+        .wsi-card-title { font-size: 18px; font-weight: 600; color: var(--wsi-text-dark); margin: 0 0 2px; }
+        .wsi-card-subtitle { font-size: 13px; font-weight: 400; color: var(--wsi-slate); margin: 0 0 16px; font-family: var(--wsi-font); }
+        .wsi-card-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        
+        .wsi-card-body { flex: 1 1 auto; min-width: 0; }
+        
+        /*
+            Found live: "Which rooms are filling up?" (many rows) sits
+            next to "Male vs female rooms" (two rows) -- grid-stretching
+            the short card to match the tall one's natural height left
+            a 250px+ blank area at its bottom. Bounding the room LIST's
+            own height (not the card's padding) keeps both cards'
+            natural heights within the spec's 80px rule; every room
+            stays reachable by scrolling this one list.
+        */
+        
+        .wsi-rooms-scroll { position: relative; margin-bottom: 12px; }
+        
+        .wsi-rooms-scroll-inner {
+            max-height: 560px; overflow-y: auto;
+            scrollbar-width: thin; scrollbar-color: #9AA7B4 #EEF1F5;
+        }
+        .wsi-rooms-scroll-inner::-webkit-scrollbar { width: 10px; }
+        .wsi-rooms-scroll-inner::-webkit-scrollbar-track { background: #EEF1F5; }
+        .wsi-rooms-scroll-inner::-webkit-scrollbar-thumb { background: #9AA7B4; border-radius: 5px; }
+        .wsi-rooms-sticky-header {
+            position: sticky; top: 0; z-index: 2; height: 32px; display: flex; align-items: center;
+            background: var(--wsi-surface); font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--wsi-slate);
+            font-family: var(--wsi-font);
+        }
+        .wsi-scroll-fade {
+            position: absolute; left: 0; right: 10px; bottom: 0; height: 24px;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), #FFFFFF);
+            pointer-events: none;
+        }
+        .wsi-scroll-caption { font-size: 12px; color: var(--wsi-text-grey); margin: 0 0 12px; font-family: var(--wsi-font); }
+        
+        .wsi-hscroll {
+            overflow-x: auto; scrollbar-width: thin; scrollbar-color: #9AA7B4 #EEF1F5;
+        }
+        .wsi-hscroll::-webkit-scrollbar { height: 10px; }
+        .wsi-hscroll::-webkit-scrollbar-track { background: #EEF1F5; }
+        .wsi-hscroll::-webkit-scrollbar-thumb { background: #9AA7B4; border-radius: 5px; }
+        .wsi-empty { color: var(--wsi-text-grey); font-size: 14px; font-family: var(--wsi-font); margin: 24px 0; text-align: center; }
+        .wsi-footer-note { font-size: 12px; color: var(--wsi-text-grey); margin: 12px 0 0; font-family: var(--wsi-font); }
+        .wsi-footer-link { margin: 12px 0 0; }
+
+        /* ---- KPI row (its own internal grid, inside one span-12 cell) ---- */
+        .wsi-kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+        @media (max-width: 1099px) { .wsi-kpi-row { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 699px) { .wsi-kpi-row { grid-template-columns: 1fr; } }
+        
+        
+        .wsi-kpi-card {
+            display: block; align-items: normal; justify-content: normal; font-size: 13px; font-weight: 400;
+            min-width: 0; text-align: left; font-family: var(--wsi-font); color: var(--wsi-text-body);
+            background: var(--wsi-surface); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            margin: 0; padding: 16px 20px; border: 1px solid transparent; border-left: 4px solid var(--wsi-border-strong);
+            cursor: pointer; line-height: 1.3; outline: none;
+        }
+        .wsi-kpi-card:hover {
+            background: var(--wsi-hover-bg); border-color: var(--wsi-hover-border);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.10); color: var(--wsi-text-body);
+        }
+        .wsi-kpi-card:focus-visible, .wsi-kpi-card.wsi-selected {
+            background: var(--wsi-selected-bg); border-color: var(--wsi-hover-border); color: var(--wsi-text-body);
+        }
+        .wsi-kpi-red { border-left-color: var(--wsi-red); }
+        .wsi-kpi-gold { border-left-color: var(--wsi-gold); }
+        .wsi-kpi-orange { border-left-color: var(--wsi-orange); }
+        .wsi-kpi-blue { border-left-color: var(--wsi-blue); }
+        .wsi-kpi-value { font-size: 28px; font-weight: 700; color: var(--wsi-text-dark); line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .wsi-kpi-value-ghost { font-size: 15px; font-weight: 400; color: var(--wsi-text-grey); margin-left: 6px; }
+        .wsi-kpi-label { font-size: 13px; color: var(--wsi-text-grey); margin-top: 4px; font-family: var(--wsi-font); }
+        .wsi-kpi-view { font-size: 12px; margin-top: 8px; display: inline-block; color: var(--wsi-blue); }
+        .wsi-kpi-view:hover, .wsi-kpi-view:focus-visible { color: var(--wsi-blue-hover); }
+        .wsi-kpi-empty { grid-column: 1 / -1; text-align: center; color: var(--wsi-text-grey); font-size: 14px; padding: 24px; font-family: var(--wsi-font); }
+        .wsi-kpi-key { font-size: 12px; color: var(--wsi-text-grey); margin: 10px 0 24px; font-family: var(--wsi-font); }
+
+        
+        .wsi-tile-row { display: flex; gap: 14px; }
+        .wsi-tile {
+            display: block; align-items: normal; justify-content: normal; font-size: 12px; font-weight: 400;
+            flex: 1 1 0; min-width: 0; text-align: center; font-family: var(--wsi-font); color: var(--wsi-text-body);
+            background: var(--wsi-surface-sunken); border-radius: 10px; margin: 0; padding: 16px 6px;
+            border: 1px solid transparent; border-top: 4px solid var(--wsi-border-strong);
+            cursor: pointer; outline: none;
+        }
+        .wsi-tile:hover { background: var(--wsi-hover-bg); border-color: var(--wsi-hover-border); }
+        .wsi-tile:focus-visible, .wsi-tile.wsi-selected { background: var(--wsi-selected-bg); border-color: var(--wsi-hover-border); }
+        .wsi-tile-value { font-size: 26px; font-weight: 700; color: var(--wsi-text-dark); font-variant-numeric: tabular-nums; }
+        .wsi-tile-value-urgent { color: var(--wsi-red); }
+        .wsi-tile-ghost { display: block; font-size: 12px; font-weight: 400; color: var(--wsi-text-grey); margin-top: 2px; }
+        
+        @media (max-width: 480px) {
+            .wsi-tile-ghost { display: none; }
+            .wsi-tile-row { gap: 8px; }
+            .wsi-tile { padding: 16px 3px; }
+            .wsi-tile-label { font-size: 11px; }
+        }
+        .wsi-tile-label { font-size: 12px; color: var(--wsi-text-grey); margin-top: 4px; }
+
+        /* ---- Shared chart primitives (PART 5) ------------------------ */
+        .wsi-axis-label, .wsi-category-label { font-size: 12px; fill: var(--wsi-slate); }
+        .wsi-value-label { font-size: 13px; font-weight: 600; fill: var(--wsi-text-dark); }
+        .wsi-pill-m, .wsi-pill-f {
+            display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+            border-radius: 50%; font-size: 10px; font-weight: 700; background: #ECEEF1; color: var(--wsi-text-body); flex-shrink: 0;
+        }
+        
+        .wsi-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; table-layout: fixed; }
+        
+        .wsi-mark { cursor: pointer; outline: none; }
+        .wsi-mark:focus-visible { outline: none; }
+        #wsi-page svg .wsi-ghost-rect { transition: fill-opacity 120ms ease; }
+        #wsi-page svg .wsi-mark:hover .wsi-ghost-rect,
+        #wsi-page svg .wsi-mark:focus-visible .wsi-ghost-rect { fill-opacity: 0.3; }
+        #wsi-page svg .wsi-solid-rect { transition: fill 120ms ease; }
+        #wsi-page svg .wsi-mark:hover .wsi-solid-rect,
+        #wsi-page svg .wsi-mark:focus-visible .wsi-solid-rect { fill: var(--wsi-mark-hover-fill, inherit); }
+        #wsi-page svg text.wsi-mark { transition: fill 120ms ease; }
+        #wsi-page svg text.wsi-mark:hover, #wsi-page svg text.wsi-mark:focus-visible { fill: var(--wsi-blue-hover); }
+        .wsi-group-head { font-size: 13px; font-weight: 600; color: var(--wsi-text-grey); margin: 12px 0 6px; font-family: var(--wsi-font); }
+        .wsi-group-head:first-child { margin-top: 0; }
+        .wsi-room-link { color: var(--wsi-blue); text-decoration: underline; font-size: 13px; font-family: var(--wsi-font); }
+        .wsi-room-link:hover, .wsi-room-link:focus-visible { color: var(--wsi-blue-hover); }
+        
+        #wsi-page svg .wsi-room-link-text { fill: var(--wsi-blue); transition: fill 120ms ease; }
+        #wsi-page svg a:hover .wsi-room-link-text, #wsi-page svg a:focus-visible .wsi-room-link-text { fill: var(--wsi-blue-hover); }
+
+        
+        
+        .wsi-segctl {
+            display: inline-flex; align-items: center; box-sizing: border-box; height: 40px; margin: 0; padding: 3px;
+            background: #fff; border: 1px solid #C9D6E3; border-radius: 8px; overflow: visible;
+            vertical-align: middle; flex-shrink: 0;
+        }
+        .wsi-segctl button {
+            display: inline-flex; align-items: center; justify-content: center; align-self: auto; flex: 1 1 0;
+            box-sizing: border-box; min-width: 72px; height: 100%; min-height: 0; margin: 0; padding: 0 14px;
+            position: static; top: auto; transform: none; vertical-align: middle;
+            font-family: var(--wsi-font); font-size: 13px; font-weight: 600; line-height: 1; white-space: nowrap;
+            color: var(--wsi-text-grey); background: #fff; border: 1px solid transparent; border-radius: 6px;
+            cursor: pointer; outline: none; box-shadow: none;
+        }
+        .wsi-segctl button:hover, .wsi-segctl button:focus-visible { background: var(--wsi-hover-bg); color: var(--wsi-text-dark); }
+        .wsi-segctl button[aria-pressed="true"] { background: #004B85; color: #fff; }
+        .wsi-segctl button[aria-pressed="true"]:hover, .wsi-segctl button[aria-pressed="true"]:focus-visible { background: var(--wsi-blue-hover); color: #fff; }
+        
+        @media (max-width: 480px) {
+            .wsi-segctl { display: flex; width: 100%; }
+            .wsi-segctl button { min-width: 0; padding: 0 6px; font-size: 13px; }
+        }
+        .wsi-breadcrumb { font-size: 13px; color: var(--wsi-text-grey); margin: 0 0 8px; font-family: var(--wsi-font); }
+        .wsi-breadcrumb button { font-family: var(--wsi-font); font-size: 13px; color: var(--wsi-blue); background: none; border: none; margin: 0; padding: 0; text-decoration: underline; cursor: pointer; outline: none; }
+        .wsi-breadcrumb button:hover, .wsi-breadcrumb button:focus-visible { color: var(--wsi-blue-hover); }
+        .wsi-drill-btn {
+            font-family: var(--wsi-font); font-size: 12px; font-weight: 600; line-height: 1.2; color: var(--wsi-blue);
+            background: var(--wsi-chip-bg); border: 1px solid var(--wsi-blue); border-radius: 6px; padding: 6px 12px; cursor: pointer; margin: 8px 0 0 0; outline: none;
+        }
+        .wsi-drill-btn:hover, .wsi-drill-btn:focus-visible { background: var(--wsi-hover-border); border-color: var(--wsi-blue-hover); color: var(--wsi-blue-hover); }
+
+        
+        .wsi-tooltip {
+            position: fixed; pointer-events: none; z-index: 2147483000; max-width: 280px;
+            background: #FFFFFF; border: 1px solid #D8D8C9; border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            font-family: var(--wsi-font); font-size: 13px; line-height: 1.4;
+            padding: 10px 12px; color: var(--wsi-tooltip-text); opacity: 1; filter: none;
+        }
+        .wsi-tooltip[hidden] { display: none; }
+        .wsi-tooltip-title { font-weight: 700; color: var(--wsi-tooltip-text); opacity: 1; }
+        .wsi-tooltip-value { color: var(--wsi-tooltip-text); opacity: 1; margin-top: 2px; }
+        .wsi-tooltip-sub { color: var(--wsi-slate); opacity: 1; font-size: 12px; margin-top: 4px; }
+
+        
+        .wsi-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; box-sizing: border-box; margin: 0 0 10px; padding: 0; font-family: var(--wsi-font); }
+        .wsi-legend-caption { font-size: 12px; color: var(--wsi-text-grey); margin: 0 0 12px; font-family: var(--wsi-font); }
+        .wsi-legend-item {
+            display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--wsi-text-body);
+            background: none; border: none; padding: 2px 4px; margin: 0; border-radius: 6px; cursor: pointer; outline: none; line-height: 1.4;
+        }
+        .wsi-legend-item:not(.wsi-legend-static):hover, .wsi-legend-item:not(.wsi-legend-static):focus-visible { background: var(--wsi-hover-bg); color: var(--wsi-text-dark); }
+        .wsi-legend-item.wsi-selected { background: var(--wsi-selected-bg); color: var(--wsi-text-dark); }
+        .wsi-legend-item.wsi-ghosted { color: var(--wsi-text-grey); }
+        .wsi-legend-static { cursor: default; }
+        .wsi-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+        .wsi-swatch-line { width: 16px; height: 2px; border-radius: 1px; display: inline-block; flex-shrink: 0; }
+        .wsi-swatch-dashed { width: 16px; height: 0; border-top: 2px dashed currentColor; display: inline-block; flex-shrink: 0; }
+    
+
+/* ---- Candidacy Insights additions ---- */
+#wsi-page .wci-table-wrap { width: 100%; overflow-x: auto; }
+#wsi-page .wci-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; border: 1px solid currentColor; }
+#wsi-page .wci-badge.is-softbound { color: var(--wsi-green); } #wsi-page .wci-badge.is-in_review { color: var(--wsi-blue); }
+#wsi-page .wci-badge.is-returned { color: #8A5E0A; } #wsi-page .wci-badge.is-none { color: var(--wsi-red); }
+#wsi-page .wci-kpis-inline { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 12px; }
+#wsi-page { padding-bottom: 160px; }
+@media (max-width: 640px) { #wsi-page { padding-left: 16px; padding-right: 16px; } }
+#wsi-page input.wsi-select { background-image: none; padding-right: 12px; }
+#wci-response-tile { flex: 0 0 auto; min-width: 190px; padding: 10px 18px; text-align: center; }
+#wci-response-tile .wsi-tile-value { font-size: 28px; line-height: 1.1; }
+#wci-dismissal-tiles { display: flex; flex-wrap: wrap; gap: 12px; }
+#wci-dismissal-tiles .wsi-tile { flex: 0 0 auto; min-width: 170px; padding: 10px 18px; text-align: center; text-decoration: none; }
+#wci-dismissal-tiles .wsi-tile-value { font-size: 28px; line-height: 1.1; }

@@ -4,9 +4,11 @@
 
 ## Built
 
-- **GA Extension** — complete. Supervisor → CGS Staff → Senior Director CGS,
-  with a required supporting document enforced at validation so incomplete
-  applications never reach CGS.
+- **GA Extension** — complete. Supervisor → Non-Executive CGS (default), or
+  Supervisor → CGS Staff → Senior Director CGS (`final_approver`). Required
+  documents are enforced at validation, so incomplete applications never
+  reach CGS. The official GA Extension Form is generated from the student's
+  answers rather than uploaded; see "The GA Extension Form, generated" below.
 
 - **Attendance Record** — complete. UTrace data comes in as a CGS-uploaded
   CSV (`/attendance/upload`), not a live API — there's no UTP system access
@@ -62,6 +64,297 @@
   `DocumentStore::storeGenerated()` attaches it, so the existing download
   route and permission check apply with no extra code.
 
+## Approver rows: Documents, the preview overlay and the decision bar
+
+Every Nureen queue row (Supervision, Certification, GA Extension and
+Attendance Appeal) ends the same way: **System checks → Documents → Remarks
+→ one action row**. `Support\ApproverPanel` decides per module what goes in
+it.
+
+**Documents** (`components/documents`):
+- every attached file the viewer may open (`ApplicationDocument::visibleTo()`),
+  plus generated documents:
+  - the GA Extension Form;
+  - the draft appointment letter, for CGS at `cgs_review` (this replaced the
+    old "Preview letter" box);
+  - the draft certification letter, for the Senior Director;
+- each row has **View** (the overlay) and **Download**.
+
+**The overlay** (`components/file-preview`):
+- a native `<dialog>`, ~90% of the viewport and full screen at ≤ 640px;
+- PDFs in an `<iframe>`, JPG/PNG in an `<img>`; Word and other files say
+  "Preview not available" and offer the download (nothing is converted);
+- Esc, Close or a click outside closes it, Tab stays inside, and focus
+  returns to the View link. The iframe is kept out of the Tab order:
+  inside the browser's PDF viewer, key presses never reach the page.
+
+**Inline routes,** each with the same authorisation as its download:
+
+| Route | Serves |
+|---|---|
+| `nureen.documents.view` | attached files (`DocumentPreviewController`) |
+| `ga-extension.form-pdf.view` | the generated GA Extension Form |
+| `ga-certification.attachment.view` | the pre-filled attachment, owner only |
+| `?download=1` on `supervision.letter.preview` and `ga-certification.letter.preview` | the draft letters as downloads |
+
+Students also get View on their own GA Extension forms and on the
+certification attachment.
+
+**The decision bar** (`components/decision-bar`):
+- **Remarks** (labelled optional), then the primary action ("Approve",
+  "Endorse & issue letter" or "Approve & issue letter", with a one-line hint),
+  **Reject** beside it, and **Return to supervisor** for GA Extension at
+  `cgs_verify`. Buttons are 44px tall, stacked full width at ≤ 480px. The
+  appeal puts "Sessions to excuse if approved" above the remarks.
+- Reject or Return with no remarks is stopped in the browser: the label
+  becomes "Reason (required)", an inline message appears in a space already
+  reserved for it, and the box gets focus.
+- Every decide controller now **requires remarks on reject** (Supervision
+  already did), so that check is real. A refusal reopens its own row with
+  the message.
+
+Core's queue partial still prints its own download list and decision form,
+so a CSS rule hides both in rows wrapped in `.nureen-row`. SHARED_CHANGES §17
+proposes the Core switch, an inline `documents.view`, and the overlay in Core.
+
+## Postgraduate Handbook 2025 rules
+
+These come from cross-checking each module against UTP's Postgraduate
+Handbook 2025, the GA Terms & Conditions and the CGS onboarding briefing.
+Every number and switch is in `config('nureen.*')`. New rules **warn** in the
+approver's System checks; the one exception, which blocks, is
+`ga_extension.allowed_levels` when CGS narrows it.
+
+**Who is full-time research.** Core's `users` table doesn't say
+(SHARED_CHANGES §16 proposes the fields). `Support\StudyProfile` takes it
+from, in order:
+1. the student's latest submitted GA/GRA Certification;
+2. the student's latest submitted GA Extension;
+3. `users.programme` text such as "PhD Part-Time" (mode and level only,
+   never research/coursework).
+
+Drafts never count.
+
+**Attendance.**
+- **Scope:** `attendance.scope`, `'all'` (default, as before) or
+  `'full_time_research'`. Under the second, only full-time research students
+  are risk-evaluated, flagged or alerted (`Support\AttendanceScope`, asked
+  by the evaluator, the early warning and `AttendanceProvider`, so Core's
+  dashboards agree). Students nothing is known about follow
+  `attendance.scope_unknown`, default `'include'`. Attendance is still
+  recorded and shown for everyone; an unmonitored student's card says "Not
+  monitored".
+- **Approved annual leave:** `attendance.leave` holds 14 days a year, split
+  January 5, May 4, September 5, with no carry-over.
+  - It is stored as `attendance_records.leave_days` and counted exactly like
+    appeal-excused sessions, under `excused_sessions`.
+  - It arrives two ways, both through the same column and recount:
+    - an optional fifth sheet column, `leave_days`. A blank keeps what is
+      recorded. It goes through `AttendanceIngestor`, so the manual upload,
+      the inbox and the push API behave identically;
+    - CGS's **Approved Leave** page (`/attendance/leave`), for a period
+      already on file.
+  - Going over a semester's or the year's allowance warns CGS: after an
+    upload, on the leave page and on the At-Risk page. The days still count.
+- **Alert email:** states the consequences. The GA/GRA allowance may be
+  suspended, registration may be barred, and an international student's
+  visa renewal may not be supported. This is wording only.
+
+**GA Extension** (added to System checks):
+- **Eligibility:** full-time by research (`ga_extension.eligible`). The form
+  gained a **Programme type** (Research/Coursework) field for it.
+- **Candidacy limit:** the requested end date must not pass admission +
+  `rules.max_candidacy_years` (MSc 4, PhD 8). No allowance is paid beyond
+  candidacy.
+- **PhD Stage Gate Level 3:** either option passes. (1) A PUBLISHED Q1/Q2
+  WoS article, or (2) one ACCEPTED and one PUBLISHED WoS/ERA/Scopus article.
+  Both read Section C (each journal row now has an Accepted/Published
+  status) plus the attached proofs, and the check says which option was met
+  or what each is missing (`rules.phd_level3`).
+- **`allowed_levels`:** default `['msc', 'phd']`, as on the July 2026 form.
+  Set it to `['phd']` (`NUREEN_GA_EXTENSION_ALLOWED_LEVELS=phd`) and an MSc
+  student sees why on the form and can't submit. A draft still saves.
+
+**Supervision:**
+- **A GA changing Main Supervisor** needs PGFAC approval first, so the
+  request needs a **PGFAC Approval Memo** upload (`supervision.pgfac_memo`).
+  - "Changing" means a Main Supervisor request while another is on record.
+  - "GA" means an active `GaAppointmentRecord` of a `ga_types` type. With no
+    record at all, the form asks the student.
+  - What was known at submission is stored on `supervision_details`, and
+    the approver's new System checks panel shows it with the memo.
+- **Co-Supervisor approver:** `supervision.co_supervisor_approver`, `'chair'`
+  (default) or `'dean_pgr'` (Core's existing Dean of PGR role). It is
+  snapshotted per request like `cgs_stage`. Main Supervisor requests always
+  go to the Chair.
+
+**GA/GRA Certification:** choosing Coursework, Part-time or Full-time ODL
+shows a note on the form and a warning in the System checks. It never
+blocks, because a former GA may still need a letter
+(`ga_certification.eligible`, `GaCertificationDetail::eligibilityCheck()`).
+
+## The GA Extension Form, generated (UTP/CGS/001-A2)
+
+Students no longer fill in and upload the GA Extension Form. They enter the
+information and the system generates the official form as a PDF
+(`LetterRenderer::gaExtensionForm()`, view `letters/ga_extension_form`,
+route `ga-extension.form-pdf`). It is rendered fresh on each download, so it
+shows the progress so far.
+
+**Section A, the checklist.**
+- **Items 1–3** are the required documents: IC/passport/visa, Admission &
+  Offer letter, and the supervisor's letter.
+- **Item 4** is the stage gate proof: an acceptance, a published article, or
+  a soft bound submission. It is optional at submission, because a Level 1
+  student has none yet.
+- **Ticks:** the student column is ticked from the documents actually
+  attached. The CGS column is ticked once CGS has passed the application.
+
+**Section B.**
+- **From the profile, read-only:** Name, Student ID, Programme and
+  Supervisor. They are never read from the request.
+- **Entered by the student:** the rest, defined in
+  `config('nureen.ga_extension.applicant_fields')`. Each field is a column
+  on `ga_extension_details`.
+- **Account no. and IC/passport no.:** stored with the `encrypted` cast.
+  They are masked (`•••• 1234`) everywhere except for the CGS stage's role
+  (`GaExtensionDetail::revealsSensitiveTo()`), and that applies to the PDF
+  too. The form never shows them back; leaving one blank keeps what is on
+  file.
+- **Bank details:** sit behind `collect_bank_details`
+  (`NUREEN_GA_EXTENSION_COLLECT_BANK_DETAILS`, default true). When off,
+  they are not asked, not validated, not changed, and left blank on the PDF.
+- **Visa expiry date:** asked only when the student says they hold a visa.
+
+**Section C, publications.** An add/remove-row list stored as JSON in
+`publications`: type, authors, year, title, venue, volume, pages, DOI, ISSN,
+database, quartile and impact factor. Rows left empty are dropped. On submit,
+each remaining row needs its type, authors, year, title and venue.
+
+**Section D, the declaration.** The form's wording, timestamped in
+`declaration_accepted_at`. Required to submit, not to save a draft.
+
+**Section E, endorsements.** The name, role and date of whoever acted at the
+supervisor, CGS and Senior Director stages, read from `approval_history`.
+- A stage not reached yet, or not on this application's chain
+  (`final_approver_snapshot`), is left blank.
+- Decisions before the latest return don't count, so a returned application
+  shows only the endorsements it has now.
+
+**Section J, CGS remarks.** Filled by CGS staff on the queue at
+`cgs_verify` (route `ga-extension.cgs-remarks`); the fields are in
+`cgs_remarks_fields`.
+
+**Who can download it.**
+- The owning student, a draft included: from the draft form, and from the
+  list of their applications on the GA Extension page.
+- The supervisor it is addressed to, and anyone holding another stage's role
+  on that application's own chain.
+- Everyone else gets 403.
+
+**Rule checks** (`Support\GaExtensionRules`, numbers in
+`config('nureen.ga_extension.rules')`). These come from the form's Terms and
+Conditions and are shown on the approver's System checks panel as pass, fail
+or unknown with the reason. They warn and don't block:
+- total duration from admission within 24 months (MSc) or 42 months (PhD);
+- extension length 3–12 months;
+- start on the 1st or 16th;
+- end on the 15th or the last day of the month;
+- submitted at least one month before the start;
+- the stage gate proof for the level.
+
+The stage gate level is worked out from whole months completed since
+admission at the extension's start. It is the highest level whose `from` is
+at or below that number, so a boundary month belongs to the later level
+(MSc month 18 → Level 3).
+
+**The one hard rule** is that a backdated start is refused at submission.
+The terms say backdated appointments are "not allowed".
+
+**Older applications.** Applications submitted before this keep their
+uploaded "GA Extension Form" and combined "Acceptance Letter or Published
+Paper" (`legacy_documents`). Both still show; the combined proof still ticks
+item 4 and counts for Levels 2–3. The rules they lack data for show as
+unknown, not failed.
+
+## The GA/GRA Certification form (CGS's online form)
+
+The form follows CGS's official online form, section by section:
+
+1. **Student details:** Matric ID, Name, Department and Programme come from
+   the profile and are shown read-only. They are never read from the
+   request, so they can't be overridden. Level (Coursework/Research), Level
+   of Study (Master/PhD) and Mode of Study (Full-time/Full-time ODL/
+   Part-time) are selects; the lists live in
+   `config('nureen.ga_certification.options')`.
+2. **Application type:** Reason/Purpose (optional) and GA/GRA. The
+   appointment period is asked only while
+   `config('nureen.ga_certification.ask_period')` is true
+   (`NUREEN_GA_CERTIFICATION_ASK_PERIOD`, default true). When false, the
+   dates are hidden, not validated, not stored, and not printed on the
+   letter, which says "during the {semester} semester" instead.
+3. **GA/GRA details:** one step holding both types' fields, showing the
+   chosen type's. (One fieldset per type gave a GA applicant an empty "GRA
+   details" step, because `form-stepper` shows every `.fstep` in turn.)
+4. **Supporting details:**
+   - **MyKad/Passport number:** stored with Laravel's `encrypted` cast.
+     `GaCertificationDetail::identityFor($viewer)` shows it in full to CGS
+     staff (`User::isCgs()`) and as `•••• 1234` to everyone else. The form
+     never shows it back: "On file: •••• 1234. Leave blank to keep it."
+   - **Supporting documents:** PDF only
+     (`ga_certification.supporting_document_types`).
+   - **Download pre-filled attachment:** recreates CGS's course-owner
+     attachment (`letters/certification_attachment`, rendered by
+     `LetterRenderer::certificationAttachment()`). It is pre-filled with the
+     name, matric, programme, today's date and the first course row (for a
+     GRA, the grant code, project and leader); signature and stamp stay
+     blank. The button saves the draft first, so the PDF carries what is on
+     screen, and the page it returns to starts the download. The route
+     `ga-certification.attachment` serves the owning student only (403
+     otherwise), from a draft or a submitted request.
+5. **Approval & notification:** personal email, and the supervisor's email
+   from `users.supervisor_id`, read-only.
+6. **Agreement:** the declaration (`ga_certification.declaration`). It is
+   required to submit but not to save a draft; `declaration_accepted_at`
+   records when it was ticked.
+
+Approvers' queue rows show the department and programme, the study
+summary, the identity number (masked unless CGS), the personal email, the
+supervisor's email and when the declaration was accepted. The letter adds a
+"Level of Study" row ("PhD, Research, Full-time ODL"). The identity number
+and personal email are for CGS's records and are not printed.
+
+## Saved drafts (GA Extension, GA/GRA Certification)
+
+**Save draft** sits beside Submit on both forms. Some documents take days to
+collect, so a student can leave and resume.
+
+- **Storage:** Core's own draft support. An `applications` row with status
+  `draft` and `current_stage` NULL, plus the detail row (whose half-finished
+  columns are nullable, migration `2026_11_04_000100`). There is no new table.
+- **Saving:** `saveDraft()` creates the draft on the first save and updates
+  it after that. It checks types, lengths, file types and sizes only, never
+  "required". Files attach through `DocumentStore` immediately; a ticked
+  **Remove** box deletes a file (from the disk too). The 5-file limit counts
+  files already attached. `draft_step` records the form step.
+- **Submitting:** `store()` runs the full validation. A document type the
+  draft already has is satisfied by those files. It reuses the draft (row
+  locked, so a double-click can't submit twice), snapshots the supervisor at
+  submission, and calls `$engine->submit()`. On a Certification, files saved
+  under the other type's label take the submitted type's label.
+- **Who can act on it:** only the owning student can open, continue, submit
+  or delete it (`Support\Drafts::ownedBy()`: 403 for anyone else, 404 once
+  submitted). Delete removes the detail row, the documents and their stored
+  files.
+- **Continuing:** **My Drafts** (`/my-drafts`, sidebar link) lists drafts
+  with the last saved time, Continue and Delete. Continue pre-fills every
+  field, lists attached files, and reopens on the step last saved
+  (`partials/draft-form-script`).
+- **Never part of the workflow:** drafts are in no queue, reminder or
+  analytics.
+- **Core caveats:** Core's Track My Applications and dashboard panel still
+  list drafts on this branch; see `SHARED_CHANGES.md` §14.
+
 ## The Client Charter
 
 CGS commits to a number of working days per approval stage
@@ -101,6 +394,59 @@ implement Core's `SuppliesDecisionDates` (`Workflows\Concerns\ExpectsDecisionByC
 
 Demo data: `NureenClientCharterDemoSeeder` (matric numbers 22091001–22091024,
 on-time and overdue at every stage).
+
+## Track My Applications (Core page, this module's part)
+
+Each workflow declares its tab and icon (`public const CATEGORY` / `ICON`):
+GA Extension and Certification under `assistantships`, Supervision under
+`supervision`, Attendance Appeal under `candidacy`. Supervision and
+Certification implement Core's `DescribesApplicationProgress`
+(`Support\TrackingDescriptions`): an issued letter's real reference,
+Download letter (PDF) as the primary button, and "Needs you" until the
+student first opens it. Revoked letters say so. GA Extension says "All 4
+required documents received." when they all arrived. The three charter
+workflows implement `SuppliesOverdueStatus` through the charter trait.
+`Support\WorkingDayCalendar` now extends Core's shared calendar and adds
+`nureen.charter.holidays`. See `SHARED_CHANGES.md` §10.
+The details page ("View details"): all four workflows implement
+`DescribesApplicationDetails` (`Support\ApplicationDetailsContent`) for
+"Your application" (GA Extension: dates and reason; Certification: the GA
+course or GRA project fields, never the appointment check; Supervision:
+supervisor, role, type and justification; Attendance Appeal: period and
+sessions), reminders ("CGS Staff reminded", never a name), letter issued and
+revoked events, the issued letter with its verification link, and each
+stage's charter target. See `SHARED_CHANGES.md` §10b.
+
+**Supervisor safeguards (3 Nov 2026):**
+- **Blocked submission:** GA Extension and Certification can't be submitted
+  without a supervisor who can act (`Support\SupervisorCheck`, on the form
+  and on submit).
+- **Submission email:** whoever acts first is emailed when a request is
+  submitted, with the charter due date and a queue link
+  (`Support\SubmissionNotifier`, `Notifications\ApplicationAwaitingYou`):
+  the named supervisor for GA Extension, Certification and Supervision, and
+  every Non-Executive CGS for an Attendance Appeal.
+- **Waiting-for:** the details page names who it is waiting for
+  (`waitingFor()`).
+- **Stuck Reviews:** CGS's page at `/reviews/stuck`
+  (`Support\StuckSupervisorStages`) lists requests nobody can act on, and
+  reassigns a GA Extension or Certification to another supervisor. The
+  reassignment is recorded in approval_history as `reassigned`, with the
+  reason; it restarts the charter clock and is not counted as a decision.
+- **Revocation email:** a revoked certification emails the student and the
+  supervisor (`Notifications\CertificationRevoked`).
+
+**Every email link opens for its recipient** (`EmailLinksTest` follows each
+button as that person and expects 200):
+- **Staff:** they land on `nureen.application`
+  (`StaffApplicationController`), a read-only view of one application. It is
+  open only to staff with a part in it (`Support\StaffApplicationAccess`):
+  the named or requested supervisor, anyone who decided on it, a role on its
+  chain (Chair: own department only), and for GA Extension the Senior
+  Director.
+- **Students:** they land on their own details page.
+- **The appointment letter:** now emailed to the supervisor as their own
+  message, not a CC on the student's.
 
 ## Official letters
 
@@ -215,7 +561,16 @@ role-scoped pending that decision.
 | `AttendanceAppealTest` | the single stage being final, and that a student cannot attach another student's flagged record to their own appeal (403) |
 | `SupervisionTest` | the required document, that it lands on the private disk under a random name, and that a supervisor sees only the requests naming them |
 | `CertificationTest` | the letter being generated, attached as an `ApplicationDocument`, and actually dispatched |
-| `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday |
+| `CertificationOnlineFormTest` | GA and GRA submissions storing every online-form field; an option outside config's list rejected; profile fields (name, matric, department, programme, supervisor) not overridable through the request; the profile shown read-only; non-PDF rejected and several PDFs accepted; the declaration required to submit but not to save a draft; the identity number encrypted at rest, masked for the supervisor, full for CGS, never echoed on the form and kept when left blank; `ask_period` on (required, printed) and off (hidden, ignored, not printed, queue still renders); the attachment as a PDF for the owner only, and from a draft with the auto-download |
+| `WorkingDayCalendarTest` | weekends and configured holidays skipped; a due date landing on (or rolling past) a Friday; the charter calendar agreeing with Core's shared one for every day of 2026; both holiday lists applied |
+| `GaExtensionFormTest` | every Section B field stored; profile fields not overridable; visa date required only with a visa; declaration on submit not draft; backdated refused; account/IC encrypted at rest, masked for supervisor, student and Senior Director, full at the CGS stage, never echoed, blank keeps; bank flag both ways; publications JSON round-trip, half-filled rows on drafts but not submit, ISSN format; Section A ticks and CGS ticks after CGS passes; Section E on both chains, a rejection, and after a return; Section J at the CGS stage only; who may download (owner incl. draft, chain approvers, not other students/supervisors/Chair, not the Director on the `cgs` chain); an old application with an uploaded form still renders |
+| `GaExtensionRulesTest` | each Terms and Conditions check passing and failing for MSc and PhD; the stage gate level at every boundary month; whole months since admission; the right proof per level and the old combined proof; unknown without data; every number read from config |
+| `AttendanceHandbookTest` | `StudyProfile` from the programme text, the latest declaration and never a draft; the scope switch both ways (a part-time student flagged and alerted under `'all'`, not under `'full_time_research'`, while a full-time research student still is), `scope_unknown` both ways, and a stale flag cleared; leave counted like excused sessions under both `excused_sessions` rules and taking a student out of risk; the `leave_days` column through the ingestor, the manual upload (with and without it) and the push API/sync, a blank keeping recorded leave, and bad values rejected; CGS recording leave (and the refusals); the allowance within, over a semester and over the year, warned after recording, after an upload and on the At-Risk page; the alert's handbook consequences for student and supervisor |
+| `GaExtensionHandbookTest` | eligibility pass/fail/unknown for MSc and PhD, with an ineligible student still submitting and the warning shown; the candidacy limit inside and past it for MSc and PhD, and from config; PhD Level 3 option 1, option 2, what each is missing, proofs needed beyond the listing, conference papers and status-less rows not counting, and MSc Level 3 unchanged; `allowed_levels` both ways (the message, the form note, a draft still saving, PhD accepted); a publication's status required on submit |
+| `SupervisionHandbookTest` | GA status from records (expired, GRA, active GA); the PGFAC memo required for a GA on record changing supervisor, and for a declared GA, but not for a declared or recorded non-GA, a first Main Supervisor or a Co-Supervisor; the question shown only with no record; System checks; older requests; the Co-Supervisor approver as Chair by default and Dean of PGR when switched (the Chair refused, the Dean deciding), Main requests still to the Chair, the snapshot surviving a config change, and the automatic-mode letter naming the Dean |
+| `CertificationHandbookTest` | the eligibility check pass/fail/unknown; a part-time student still submitting with CGS warned; an eligible request passing; the form note hidden until needed and shown for a coursework draft |
+| `DocumentPreviewTest` | attached PDFs and images inline for the owner, the current approver and an earlier one; 403 for another student, a Chair and a Senior Director (as the download); Word gets "Preview not available" and never the file; another module's file 404; the GA Extension Form, the certification attachment (owner only) and the draft letters inline, with `?download=1`; each row's Documents and decision bar, and Return only for CGS; reject without remarks refused in all four modules, approve without them fine; a refused reject coming back to its own row |
+| `DraftsTest` | empty draft saves (both modules); saving again updates the same draft and keeps files; light validation only; Remove deletes the file; the 5-file limit counts attached files; an incomplete draft fails submit with the normal messages; a complete one goes to pending at the first stage as the same application, files intact; a Certification switching GA→GRA relabels its files; another student (or staff) can't open, change, submit or delete it; delete removes everything; no queue, reminder or analytics sees a draft |
 | `ClientCharterTest` | each chain's expected date (GA Extension both modes, Supervision `'automatic'`, Certification), a `null` stage never inventing a date, overdue never giving a past date, a returned application timed from its actual stage, decided/draft returning nothing |
 | `ClientCharterDisplayTest` | the student page (pending shown, decided not, overdue message only when overdue, own rows only) and the queue's overdue marker and order |
 | `StalledReminderTest` | reminders on charter breach and not before, no reminder on a weekend alone, the `stalled_days` fallback, and Supervision's escalation |
