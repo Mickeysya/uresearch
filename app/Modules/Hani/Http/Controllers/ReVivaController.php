@@ -326,8 +326,14 @@ class ReVivaController extends Controller
     {
         abort_unless($detail->application->module_type === $this->moduleKey(), 404);
         abort_unless($detail->application->student->department === $request->user()->department, 403);
-        abort_if($detail->hasOutcome(), 404);
-        abort_unless($detail->application->status === Application::STATUS_APPROVED, 404);
+
+        // A confirm from a page that is no longer current (a second tab, a
+        // double click, Back and resubmit) used to end on a bare 404 at this
+        // POST-only URL. Say what happened instead; ReVivaOutcome::record()
+        // re-checks both under a row lock.
+        if ($stale = $this->staleOutcome($detail)) {
+            return redirect()->route('reviva.outcomes.index')->with('warning', $stale);
+        }
 
         $data = $request->validate([
             'outcome_level' => ['required', 'integer', 'between:1,5'],
@@ -339,6 +345,37 @@ class ReVivaController extends Controller
         return redirect()
             ->route('reviva.outcomes.index')
             ->with('status', "Outcome recorded for {$detail->application->student->name}, round {$detail->cycle_number}: {$detail->outcomeLabel()}. The student and supervisor have been told.");
+    }
+
+    /**
+     * For a route's ->missing(): the round, application or file in the URL no
+     * longer exists (deleted, or the demo re-seeded under an open page).
+     * Back to the page the form was on, else $fallback.
+     */
+    public static function gone(string $fallback): \Closure
+    {
+        return fn () => back(302, [], route($fallback))->with('warning',
+            'That re-viva record no longer exists, so nothing was changed. It may have been removed after the page was opened (for example, the demo data was re-seeded). The page below is current.');
+    }
+
+    /** Why a confirm for $detail no longer applies, or null if it does. */
+    protected function staleOutcome(ReVivaDetail $detail): ?string
+    {
+        $who = "{$detail->application->student->name}, round {$detail->cycle_number}";
+
+        if ($detail->hasOutcome()) {
+            $by = $detail->outcome_recorded_by_id ? User::find($detail->outcome_recorded_by_id)?->name : null;
+
+            return "The outcome for {$who} was already recorded: {$detail->outcomeLabel()}"
+                .($detail->outcome_recorded_at ? ', on '.$detail->outcome_recorded_at->format('j F Y, g:i a') : '')
+                .($by ? " by {$by}" : '').'. Nothing was changed.';
+        }
+
+        if ($detail->application->status !== Application::STATUS_APPROVED) {
+            return "{$who} is not ready for an outcome: consolidation is not complete. Nothing was changed.";
+        }
+
+        return null;
     }
 
     protected function latestCycle(int $studentId): ?ReVivaDetail

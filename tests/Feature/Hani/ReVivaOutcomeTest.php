@@ -167,4 +167,63 @@ class ReVivaOutcomeTest extends TestCase
         $this->actingAs($other)->post(route('reviva.outcomes.record', $viva['round']), ['outcome_level' => 2])->assertForbidden();
         $this->assertNull($viva['round']->fresh()->outcome_level);
     }
+
+    /**
+     * The reported 404: "Confirm Outcome" from a page that is no longer
+     * current landed on /re-viva/outcomes/{id} with 404 NOT FOUND. Now it
+     * returns to Outcomes and says what happened; nothing is changed.
+     */
+    public function test_a_second_confirm_from_a_stale_page_explains_instead_of_404(): void
+    {
+        $viva = $this->roundAwaitingOutcome([2], [4, true]);
+        $remarks = 'At consolidation both examiners agreed on major corrections.';
+
+        $this->recordOutcome($viva, 3, $remarks)->assertRedirect(route('reviva.outcomes.index'))->assertSessionHas('status');
+        Notification::fake(); // only what the second confirm sends
+
+        $this->recordOutcome($viva, 2, 'Second tab.')
+            ->assertRedirect(route('reviva.outcomes.index'))
+            ->assertSessionHas('warning', fn ($w) => str_contains($w, "The outcome for {$viva['student']->name}, round 1 was already recorded: Level 3")
+                && str_contains($w, "by {$viva['ae']->name}") && str_contains($w, 'Nothing was changed.'));
+
+        $this->assertSame(3, $viva['round']->fresh()->outcome_level);
+        Notification::assertNothingSent();
+    }
+
+    public function test_a_confirm_before_consolidation_is_complete_explains_instead_of_404(): void
+    {
+        $viva = $this->roundAtReportReceived();
+
+        $this->recordOutcome($viva, 3, 'Too early.')
+            ->assertRedirect(route('reviva.outcomes.index'))
+            ->assertSessionHas('warning', fn ($w) => str_contains($w, 'not ready for an outcome'));
+        $this->assertNull($viva['round']->fresh()->outcome_level);
+    }
+
+    /** A round deleted under an open page (the demo re-seeded): every re-viva form explains instead of 404. */
+    public function test_forms_for_a_round_that_no_longer_exists_go_back_with_a_message(): void
+    {
+        $viva = $this->roundAwaitingOutcome([2], [2]);
+        $missing = fn ($w) => str_contains($w, 'That re-viva record no longer exists, so nothing was changed.');
+        $outcomes = route('reviva.outcomes.index');
+        $queue = route('reviva.queue', ['stage' => 'report_received']);
+
+        foreach ([
+            [$outcomes, route('reviva.outcomes.record', 999999), ['outcome_level' => 3, 'outcome_remarks' => 'x']],
+            [$outcomes, route('reviva.corrections.accept', 999999), []],
+            [$queue, route('reviva.decide', 999999), ['decision' => 'approve']],
+            [$queue, route('reviva.send-to-panel', 999999), []],
+            [$queue, route('reviva.evaluations.record', [999999, 'internal_main_id']), ['category' => 2]],
+        ] as [$from, $url, $data]) {
+            $this->actingAs($viva['ae'])->from($from)->post($url, $data)
+                ->assertRedirect($from)->assertSessionHas('warning', $missing);
+        }
+
+        $this->actingAs($viva['ae'])->from($queue)->get(route('reviva.staff-documents.download', 999999))
+            ->assertRedirect($queue)->assertSessionHas('warning', $missing);
+
+        $mine = route('reviva.mine');
+        $this->actingAs($viva['student'])->from($mine)->post(route('reviva.final-thesis.store', 999999))
+            ->assertRedirect($mine)->assertSessionHas('warning', $missing);
+    }
 }

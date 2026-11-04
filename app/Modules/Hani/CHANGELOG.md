@@ -1,5 +1,38 @@
 # Changelog: Hani's modules
 
+## 2026-11-04: Fix Confirm Outcome 404 on a stale page
+
+**Problem.** Clicking "Confirm Outcome" on Re-viva Outcomes (AE Applied
+Sciences, S09) landed on `/re-viva/outcomes/11` with 404 NOT FOUND. The
+access log showed the page opened at 04:10:46 and the confirm at 04:11:15.
+In between, a demo re-seed at 04:10:56 had rebuilt the re-viva rounds and
+deleted round 11. The route's model binding found no round and answered
+404 at a POST-only URL. The same bare 404 also came from two ordinary
+states: a confirm when the outcome was already recorded (a second tab, a
+double click, Back and resubmit), and a confirm before consolidation was
+complete. RegionSwap was not involved: it binds GET forms only.
+
+**Fix.**
+- `ReVivaController::recordOutcome()`: "already recorded" and "not ready
+  yet" now return to Outcomes with a message saying what happened (the
+  level, when and by whom). Nothing is changed. `ReVivaOutcome::record()`
+  still re-checks both under a row lock.
+- `ReVivaController::gone()`, used through `->missing()` on every re-viva
+  route that binds a record (decide, send to panel, re-evaluation, outcome,
+  corrections accepted, final thesis, staff-file download): a record that
+  no longer exists returns to the page the form was on, saying so.
+
+**Checked by clicking** in headless Chromium, every Prompt 3 form: Resend
+letter, Advance at each stage, both re-evaluations, Confirm Outcome (fresh,
+stale tab, deleted round), the student's final-thesis upload, Corrections
+accepted, the digital Summary of Corrections (save, check, PDF), Log round
+2 with the digital summary, Send to panel, and the staff-file downloads for
+the AE, the Senior Executive and the Non-Executive. Each lands on a 200 page
+with the expected message.
+
+**Tests.** `ReVivaOutcomeTest`: a stale second confirm, a confirm before
+consolidation, and a deleted round on each re-viva form.
+
 ## 2026-11-04: Fix examiner signed link signature
 
 **Problem.** The examiner's link in a seeded "Correction of thesis for

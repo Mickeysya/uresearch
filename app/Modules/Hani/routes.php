@@ -218,6 +218,9 @@ Route::middleware('auth')->group(function () {
     });
 
     // ---- Re-viva Monitoring --------------------------------------------
+    // ->missing(ReVivaController::gone(...)): a round, application or file
+    // that no longer exists when a form is submitted goes back to the list
+    // with a message, not a bare 404 at a POST-only URL.
     // Logged by CGS Staff, not the student: the corrected thesis reaches CGS
     // through the same channel the rest of the re-viva process is informally
     // run through today, so CGS is the one who records the formal
@@ -229,7 +232,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/re-viva/summary', [ReVivaStudentController::class, 'saveSummary'])->name('reviva.summary.save');
         Route::get('/re-viva/summary/pdf', [ReVivaStudentController::class, 'summaryPdf'])->name('reviva.summary.pdf');
         Route::post('/re-viva/{detail}/final-thesis', [ReVivaStudentController::class, 'submitFinalThesis'])
-            ->whereNumber('detail')->name('reviva.final-thesis.store');
+            ->whereNumber('detail')->name('reviva.final-thesis.store')->missing(ReVivaController::gone('reviva.mine'));
     });
 
     // Senior Executive CGS logs re-vivas (CGS practice). Non-Executive CGS is
@@ -248,20 +251,20 @@ Route::middleware('auth')->group(function () {
     // may download them; the controller narrows an AE to their department.
     Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)
         ->get('/re-viva/staff-documents/{document}', [ReVivaStaffDocumentController::class, 'download'])
-        ->name('reviva.staff-documents.download');
+        ->name('reviva.staff-documents.download')->missing(ReVivaController::gone('dashboard'));
 
     Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
         Route::get('/re-viva/queue', [ReVivaController::class, 'queue'])->name('reviva.queue');
-        Route::post('/re-viva/{application}/decide', [ReVivaController::class, 'decide'])->name('reviva.decide');
-        Route::post('/re-viva/{application}/send-to-panel', [ReVivaController::class, 'sendToPanel'])->name('reviva.send-to-panel');
+        Route::post('/re-viva/{application}/decide', [ReVivaController::class, 'decide'])->name('reviva.decide')->missing(ReVivaController::gone('reviva.queue'));
+        Route::post('/re-viva/{application}/send-to-panel', [ReVivaController::class, 'sendToPanel'])->name('reviva.send-to-panel')->missing(ReVivaController::gone('reviva.queue'));
         Route::post('/re-viva/{application}/evaluations/{seat}', [ReVivaController::class, 'recordEvaluation'])
-            ->whereIn('seat', ['internal_main_id', 'external_main_id'])->name('reviva.evaluations.record');
+            ->whereIn('seat', ['internal_main_id', 'external_main_id'])->name('reviva.evaluations.record')->missing(ReVivaController::gone('reviva.queue'));
 
         Route::get('/re-viva/outcomes', [ReVivaController::class, 'outcomesIndex'])->name('reviva.outcomes.index');
         Route::post('/re-viva/outcomes/{detail}', [ReVivaController::class, 'recordOutcome'])
-            ->name('reviva.outcomes.record');
+            ->name('reviva.outcomes.record')->missing(ReVivaController::gone('reviva.outcomes.index'));
         Route::post('/re-viva/outcomes/{detail}/accept-corrections', [ReVivaController::class, 'acceptCorrections'])
-            ->name('reviva.corrections.accept');
+            ->name('reviva.corrections.accept')->missing(ReVivaController::gone('reviva.outcomes.index'));
     });
 
 });
