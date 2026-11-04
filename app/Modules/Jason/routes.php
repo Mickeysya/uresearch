@@ -45,6 +45,10 @@ Route::middleware('auth')->group(function () {
             ->name('appointment-letter.import.store');
         Route::get('/appointment-letter/template', [AppointmentLetterController::class, 'template'])
             ->name('appointment-letter.template');
+        // A main examiner promoted after their panel's pack went out: their
+        // own appointment, through cgs_prep and the Dean like any other.
+        Route::post('/appointment-letter/promoted', [AppointmentLetterController::class, 'prepareForExaminer'])
+            ->name('appointment-letter.promoted');
 
         // Pack preparation, the Non-Executive CGS's stage. Approving out of
         // that stage happens here rather than through the generic decide()

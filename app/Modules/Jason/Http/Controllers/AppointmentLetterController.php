@@ -21,6 +21,7 @@ use App\Modules\Jason\Models\HardboundSignature;
 use App\Modules\Jason\Notifications\ExaminersAppointed;
 use App\Modules\Jason\Support\AppointmentSheet;
 use App\Modules\Jason\Support\ExaminerDirectory;
+use App\Modules\Jason\Support\ReleasedPanels;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
@@ -56,7 +57,84 @@ class AppointmentLetterController extends Controller
         return view('jason::appointment_letter.import', [
             'columns' => AppointmentSheet::TEMPLATE_HEADINGS,
             'poolAvailable' => ExaminerDirectory::available(),
+            // The direct hand-off, when the nomination chain offers it.
+            // Until the Core contract exists this is false and empty, and
+            // the spreadsheet below is the only way in.
+            'handoffLive' => ReleasedPanels::available(),
+            'released' => ReleasedPanels::all(),
+            'lettersNeeded' => ReleasedPanels::lettersNeeded(),
         ]);
+    }
+
+    /**
+     * Opens an appointment for one examiner who was promoted into a main
+     * seat after the pack for their panel had already gone out.
+     *
+     * A letter of their own, through cgs_prep and the Dean exactly like any
+     * other -- the Dean signs every appointment letter, and one issued
+     * quietly against an approval given for somebody else would not be
+     * signed by anyone. Examiners who already have a letter are never
+     * included, so this cannot resend.
+     */
+    public function prepareForExaminer(Request $request, WorkflowEngine $engine): RedirectResponse
+    {
+        $data = $request->validate([
+            'nomination_application_id' => ['required', 'integer', 'min:1'],
+            'hani_examiner_id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $seat = collect(ReleasedPanels::lettersNeeded())->first(
+            fn (array $row) => $row['nomination_application_id'] === $data['nomination_application_id']
+                && $row['hani_examiner_id'] === $data['hani_examiner_id'],
+        );
+
+        // Not on the list means either they already have a letter or they
+        // are no longer in a main seat. Both are reasons not to write one.
+        if (! $seat) {
+            return back()->with('error',
+                'That examiner no longer needs a letter. They either have one already, or they '
+                .'are no longer in a main seat on this panel.');
+        }
+
+        $previous = AppointmentDetail::where('nomination_application_id', $data['nomination_application_id'])
+            ->with('application')
+            ->first();
+
+        $student = $previous?->application?->student;
+
+        if (! $student) {
+            return back()->with('error',
+                'No candidate is on record for nomination #'.$data['nomination_application_id'].'.');
+        }
+
+        $application = DB::transaction(function () use ($request, $engine, $seat, $previous, $student) {
+            $application = Application::create([
+                'student_id' => $student->id,
+                'submitted_by_id' => $request->user()->id,
+                'module_type' => $this->moduleKey(),
+                'status' => Application::STATUS_DRAFT,
+            ]);
+
+            AppointmentDetail::create([
+                'application_id' => $application->id,
+                'nomination_application_id' => $seat['nomination_application_id'],
+                'candidate_degree' => $previous?->candidate_degree,
+                'candidate_programme' => $previous?->candidate_programme,
+                'supervisor_name' => $previous?->supervisor_name,
+                'thesis_title' => $seat['thesis_title'] ?: $previous?->thesis_title,
+            ]);
+
+            AppointmentExaminer::create(
+                ['application_id' => $application->id] + $this->examinerRow($seat)
+            );
+
+            return $engine->submit($application);
+        });
+
+        return redirect()
+            ->route('appointment-letter.queue')
+            ->with('status', "Appointment #{$application->id} opened for {$seat['examiner_name']}. "
+                .'Prepare the pack, then send it to the Dean as usual.');
     }
 
     /**
@@ -142,6 +220,7 @@ class AppointmentLetterController extends Controller
 
                 AppointmentDetail::create([
                     'application_id' => $application->id,
+                    'nomination_application_id' => $candidate['nomination_application_id'],
                     'candidate_degree' => $candidate['degree'],
                     'candidate_programme' => $candidate['programme'],
                     'supervisor_name' => $candidate['supervisor_name'],
@@ -240,6 +319,11 @@ class AppointmentLetterController extends Controller
                 'programme' => $cell('department') ?: $cell('programme') ?: null,
                 'supervisor_name' => $cell('supervisor_name') ?: $student->supervisor?->name,
                 'thesis_title' => $cell('thesis_title') ?: null,
+                // The export's "Application No.". Kept so the panel page
+                // can ask about this appointment in its own terms.
+                'nomination_application_id' => ctype_digit($cell('nomination_id'))
+                    ? (int) $cell('nomination_id')
+                    : null,
                 'examiners' => $examiners,
             ];
         }
@@ -286,13 +370,30 @@ class AppointmentLetterController extends Controller
         // The exact path first: the nomination's own row names its four
         // examiners by id, so two people with the same name cannot be
         // confused for one another.
-        if ($panel = ExaminerDirectory::panelForNomination($cell('nomination_id'))) {
-            return array_map(fn (array $e) => $this->examinerRow($e), $panel);
+        //
+        // Only the two mains are appointed. A backup is the panel's reserve,
+        // named in case a main declines; appointing one who is never called
+        // on commits them to a thesis nobody will send and puts an
+        // honorarium on a letter the Dean has signed. If a main does decline,
+        // the promoted backup is appointed then, in their own letter.
+        $panel = ExaminerDirectory::panelForNomination($cell('nomination_id'));
+
+        $mains = array_values(array_filter(
+            $panel,
+            fn (array $e) => $e['examiner_role'] === AppointmentExaminer::ROLE_MAIN,
+        ));
+
+        if ($mains !== []) {
+            return array_map(fn (array $e) => $this->examinerRow($e), $mains);
         }
 
         $examiners = [];
 
         foreach (AppointmentSheet::SLOTS as [$nameKey, $detailKey, $type, $role]) {
+            if ($role !== AppointmentExaminer::ROLE_MAIN) {
+                continue;
+            }
+
             $name = $cell($nameKey);
 
             if ($name === '') {
@@ -332,6 +433,8 @@ class AppointmentLetterController extends Controller
         $department = $examiner['examiner_department'] ?? '';
 
         return [
+            'hani_examiner_id' => $examiner['hani_examiner_id'] ?? null,
+            'email_problem' => $examiner['email_problem'] ?? null,
             'examiner_type' => $examiner['examiner_type'],
             'examiner_role' => $examiner['examiner_role'],
             'examiner_name' => $examiner['examiner_name'],
@@ -857,6 +960,15 @@ class AppointmentLetterController extends Controller
                 ->all();
 
             if ($files === []) {
+                continue;
+            }
+
+            // No usable address. The appointment stands and the documents
+            // are archived -- CGS sends this one by post, or fixes the
+            // address in the Examiner Pool and resends from the issued
+            // list. Sending anyway would bounce, and a bounce is recorded
+            // nowhere the officer looks.
+            if ($examiner->email_problem || trim((string) $examiner->examiner_email) === '') {
                 continue;
             }
 

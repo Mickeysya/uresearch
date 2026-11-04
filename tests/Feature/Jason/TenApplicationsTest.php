@@ -402,7 +402,8 @@ class TenApplicationsTest extends TestCase
             $detail = AppointmentDetail::where('application_id', $application->id)->firstOrFail();
             $examiners = AppointmentExaminer::where('application_id', $application->id)->get();
 
-            $this->assertCount(4, $examiners, "Candidate {$n} should carry four examiners.");
+            // The two mains only: a backup is appointed only if a main declines.
+            $this->assertCount(2, $examiners, "Candidate {$n} should carry its two main examiners.");
 
             $payload = [
                 'candidate_degree' => 'Master of Science',
@@ -443,8 +444,8 @@ class TenApplicationsTest extends TestCase
             $letters = $application->documents()->where('doc_type', 'Appointment Letter')->count();
             $reports = $application->documents()->where('doc_type', 'Thesis Evaluation Report')->count();
 
-            $this->assertSame(4, $letters, "Candidate {$n} should have four letters.");
-            $this->assertSame(4, $reports, "Candidate {$n} should have four evaluation reports.");
+            $this->assertSame(2, $letters, "Candidate {$n} should have two letters.");
+            $this->assertSame(2, $reports, "Candidate {$n} should have two evaluation reports.");
 
             // Case 10: the Dean sends the pack back to CGS.
             if ($n === 10) {
@@ -453,7 +454,7 @@ class TenApplicationsTest extends TestCase
                 ]);
 
                 $this->assertSame(Application::STATUS_REJECTED, $application->fresh()->status);
-                $this->note($ref, 'returned by the Dean, 8 documents prepared');
+                $this->note($ref, 'returned by the Dean, 4 documents prepared');
                 $returned++;
 
                 continue;
@@ -465,8 +466,8 @@ class TenApplicationsTest extends TestCase
             $this->assertSame(Application::STATUS_APPROVED, $application->fresh()->status);
 
             $this->note($ref, $n === 1
-                ? 'approved, 8 documents (Dean refused once with no signature)'
-                : 'approved, 8 documents signed by the Dean');
+                ? 'approved, 4 documents (Dean refused once with no signature)'
+                : 'approved, 4 documents signed by the Dean');
             $approved++;
         }
 

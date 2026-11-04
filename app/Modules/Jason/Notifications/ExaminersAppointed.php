@@ -3,10 +3,12 @@
 namespace App\Modules\Jason\Notifications;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Support\Role;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Route;
 
 /**
  * Tells everyone the appointment concerns that the Dean has approved the
@@ -71,9 +73,36 @@ class ExaminersAppointed extends Notification implements ShouldQueue
         // would be sent to a 403.
         if ($this->isCandidate($notifiable)) {
             $mail->action('View the appointment documents', route('applications.show', $this->application));
+        } elseif ($this->isAcademicExec($notifiable)) {
+            // The appointment is the department's cue to schedule the viva,
+            // so the Academic Executive is sent where that is arranged
+            // rather than to a page they cannot open.
+            $mail->line('The department can now arrange the viva for this candidate.')
+                ->action('Go to viva scheduling', $this->schedulingUrl());
         }
 
         return $mail->salutation('Centre for Graduate Studies, Universiti Teknologi PETRONAS');
+    }
+
+    protected function isAcademicExec(object $notifiable): bool
+    {
+        return ($notifiable->role ?? null) === Role::ACADEMIC_EXEC;
+    }
+
+    /**
+     * Where the viva is scheduled, if that page exists.
+     *
+     * It belongs to the module that owns the viva, which may not be
+     * installed in every checkout, so the route is asked for by name and
+     * the dashboard is the fallback. Deliberately a route that takes no
+     * id: the per-examiner viva pages are keyed by that module's own
+     * records, which this one has no id for.
+     */
+    protected function schedulingUrl(): string
+    {
+        return Route::has('viva.schedule.index')
+            ? route('viva.schedule.index')
+            : route('dashboard');
     }
 
     protected function isCandidate(object $notifiable): bool

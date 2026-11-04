@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class AppointmentDetail extends Model
 {
     protected $fillable = [
-        'application_id', 'candidate_degree', 'candidate_programme',
+        'application_id', 'nomination_application_id', 'candidate_degree', 'candidate_programme',
         'supervisor_name', 'thesis_title', 'letter_prepared_at',
     ];
 

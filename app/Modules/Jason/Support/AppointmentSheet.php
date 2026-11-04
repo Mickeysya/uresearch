@@ -32,7 +32,13 @@ final class AppointmentSheet
      * aliases are what the heading may actually say.
      */
     public const COLUMNS = [
-        'nomination_id' => ['application', 'application no', 'application id', 'nomination'],
+        // "application no." carries the full stop the nomination export's
+        // own heading ends with. normalise() strips it, so the alias is
+        // belt and braces: the heading matches even if that ever changes.
+        'nomination_id' => [
+            'application', 'application no', 'application no.', 'application id',
+            'application number', 'nomination',
+        ],
         'faculty' => ['faculty'],
         'department' => ['department', 'dept'],
         'candidate' => ['candidate', 'candidate name', 'student', 'name'],
@@ -62,9 +68,10 @@ final class AppointmentSheet
     /**
      * The four panel slots, as [name column, detail column, kind, role].
      *
-     * Main and backup both receive an appointment letter and a thesis
-     * evaluation report: CGS appoints the full panel, and a backup who is
-     * never called on simply never returns a report.
+     * All four are read from the list, because the list is what the Dean
+     * approved -- but only the two mains are appointed. A backup is the
+     * reserve, named in case a main declines, and is appointed only if that
+     * happens. See AppointmentLetterController::readPanel().
      */
     public const SLOTS = [
         ['internal_main', 'internal_main_dept', 'internal', 'main'],
@@ -110,12 +117,18 @@ final class AppointmentSheet
         return $seen;
     }
 
-    /** Lower-cased, trimmed, single-spaced, without a trailing colon or asterisk. */
+    /**
+     * Lower-cased, trimmed, single-spaced, without trailing punctuation.
+     *
+     * The full stop matters: the nomination export heads its key column
+     * "Application No.", and without stripping it the heading matched
+     * nothing, so every row fell back to matching examiners by name.
+     */
     public static function normalise(mixed $value): string
     {
         $value = preg_replace('/\s+/', ' ', trim((string) $value));
 
-        return mb_strtolower(rtrim($value, " :*"));
+        return mb_strtolower(rtrim($value, " :*."));
     }
 
     /**
