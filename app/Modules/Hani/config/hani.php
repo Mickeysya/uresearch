@@ -366,6 +366,45 @@ return [
         'softbound_nudge_days' => 14,
     ],
 
+    'sla' => [
+        // When `hani:sla-reminders` runs each day. Provisional.
+        'daily_at' => '08:15',
+
+        // How long an application may wait at each stage before its
+        // approver is reminded (first figure) and reminded again with the
+        // Senior Executive CGS copied (second). Counted from the decision
+        // that brought it to the stage. working_days: Monday to Friday less
+        // hani.scheduling.public_holidays. All Provisional: CGS has not set
+        // service levels for these stages.
+        'stages' => [
+            'examiner_nomination' => [
+                'academic_exec' => ['days' => [5, 10], 'working_days' => true],
+                'cgs_compile' => ['days' => [5, 10], 'working_days' => true],
+                'senior_director' => ['days' => [5, 10], 'working_days' => true],
+                'dean' => ['days' => [5, 10], 'working_days' => true],
+                'cgs_final' => ['days' => [3, 6], 'working_days' => true],
+                'cgs_release' => ['days' => [3, 6], 'working_days' => true],
+            ],
+            'viva_voce' => [
+                'notice_received' => ['days' => [5, 10], 'working_days' => true],
+            ],
+            'viva_softbound' => [
+                'softbound_check' => ['days' => [5, 10], 'working_days' => true],
+            ],
+            're_viva' => [
+                'report_sent' => ['days' => [5, 10], 'working_days' => true],
+                'report_received' => ['days' => [5, 10], 'working_days' => true],
+                'consolidation_scheduled' => ['days' => [10, 15], 'working_days' => true],
+            ],
+        ],
+
+        // Stages another command already chases, with the reason. Never
+        // reminded by `hani:sla-reminders`, and left out of "overdue now".
+        'skip' => [
+            're_viva.under_panel_review' => 're-viva:monitor already reminds the AE at 20 working days and tells the Senior Executive at 25 (hani.reviva.panel_*_working_days).',
+        ],
+    ],
+
     'sweep' => [
         // When `examiners:sweep` runs each day. Provisional.
         'daily_at' => '07:30',

@@ -5,6 +5,7 @@ namespace App\Modules\Hani;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Hani\Console\ExaminersSweep;
 use App\Modules\Hani\Console\ReVivaMonitor;
+use App\Modules\Hani\Console\SlaReminders;
 use App\Modules\Hani\Console\VivaReminders;
 use App\Modules\Hani\Support\Matching\ExaminerMatcher;
 use App\Modules\Hani\Support\Matching\TfIdfMatcher;
@@ -64,7 +65,7 @@ class ModuleProvider extends ServiceProvider
     public function boot(ModuleRegistry $registry): void
     {
         if ($this->app->runningInConsole()) {
-            $this->commands([ExaminersSweep::class, VivaReminders::class, ReVivaMonitor::class]);
+            $this->commands([ExaminersSweep::class, VivaReminders::class, ReVivaMonitor::class, SlaReminders::class]);
         }
 
         // Scheduled from here, not routes/console.php (a shared file): the
@@ -83,6 +84,10 @@ class ModuleProvider extends ServiceProvider
 
             $schedule->command('re-viva:monitor')
                 ->dailyAt((string) config('hani.reviva.monitor_daily_at', '08:00'))
+                ->withoutOverlapping();
+
+            $schedule->command('hani:sla-reminders')
+                ->dailyAt((string) config('hani.sla.daily_at', '08:15'))
                 ->withoutOverlapping();
         });
 
