@@ -115,6 +115,23 @@ class ReleasedPanelHandoffTest extends TestCase
         return $application;
     }
 
+    /**
+     * Takes the hand-off away for this test.
+     *
+     * The nomination chain's own test brings the Core interface into
+     * existence with eval() to prove its binding works, and interfaces
+     * outlive the test that declared them -- so from that point in the
+     * process onwards the chain really is bound, and this module really
+     * does read it. "Nothing is bound" is therefore true only when this
+     * file runs alone. The tests below are about the fallback, so they
+     * remove the binding rather than assume its absence, and then say the
+     * same thing whichever order the suite runs in.
+     */
+    protected function withoutHandoff(): void
+    {
+        unset($this->app[ReleasedPanels::CONTRACT]);
+    }
+
     /** A stand-in for the nomination chain, in the agreed shape. */
     protected function bindFakeChain(array $panels): void
     {
@@ -163,8 +180,9 @@ class ReleasedPanelHandoffTest extends TestCase
      */
     public function test_the_page_works_and_falls_back_when_the_handoff_is_not_bound(): void
     {
-        $this->assertFalse(ReleasedPanels::available(),
-            'Nothing should be bound to the contract in a plain test.');
+        $this->withoutHandoff();
+
+        $this->assertFalse(ReleasedPanels::available());
 
         $this->assertSame([], ReleasedPanels::all());
 
@@ -184,8 +202,10 @@ class ReleasedPanelHandoffTest extends TestCase
     {
         $this->assertSame('App\Modules\Core\Contracts\SuppliesReleasedExaminers', ReleasedPanels::CONTRACT);
 
-        // Whether Core has the file yet or not, nothing is bound by default
-        // and nothing here fails because of it.
+        // Whether Core has the file yet or not, with nothing bound there is
+        // nothing to read and nothing here fails because of it.
+        $this->withoutHandoff();
+
         $this->assertFalse(ReleasedPanels::available());
         $this->assertSame([], ReleasedPanels::all());
     }
@@ -363,6 +383,8 @@ class ReleasedPanelHandoffTest extends TestCase
      */
     public function test_a_promotion_is_still_spotted_without_the_contract(): void
     {
+        $this->withoutHandoff();
+
         $student = $this->candidate();
 
         // The nomination's own application: examiner_nominations has a
