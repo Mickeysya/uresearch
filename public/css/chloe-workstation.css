@@ -227,7 +227,22 @@
 
 /* ---- Terms -------------------------------------------------------------- */
 
-.wst-column { width: 100%; max-width: 760px; }
+.wst-column { width: 100%; max-width: 1240px; }
+
+/* Wide screens: a summary panel that stays put on the left, the terms on
+   the right at a readable measure. Narrow: they stack. */
+.wst-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+.wst-layout > .card { max-width: none; width: 100%; margin: 0; }
+.wst-aside { position: sticky; top: var(--space-6); }
+.wst-aside .wst-head { flex-direction: column; margin-bottom: var(--space-5); }
+.wst-aside .wst-keypoints { grid-template-columns: 1fr; margin-bottom: 0; }
+.wst-main .wst-list { max-width: 78ch; }
+
+@media (max-width: 960px) {
+    .wst-layout { grid-template-columns: minmax(0, 1fr); }
+    .wst-aside { position: static; }
+    .wst-aside .wst-keypoints { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+}
 
 .wst-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-6); }
 .wst-head p { margin: var(--space-1) 0 0; }

@@ -10,7 +10,7 @@ use Tests\TestCase;
  *
  * Every signed-in screen opens with `x-core::page-header` inside a
  * `.card-container-inline`, which is the page shell: full width, fluid at
- * clamp(880px, 92vw, 1320px). Before this, a screen declared its own heading
+ * clamp(880px, 92vw, 1600px). Before this, a screen declared its own heading
  * inside its own card and there were five different page widths, so two tabs
  * in a row looked like two different products.
  *
@@ -165,7 +165,7 @@ class PageShellTest extends TestCase
      *
      * The release is `.page-shell:has(> .sdash)` in layout.css, so what makes
      * a dashboard full width is having `.sdash` as its root. A dashboard that
-     * loses that class silently goes back to being capped at 1320px, which is
+     * loses that class silently goes back to being capped at --page-max, which is
      * a third of a monitor thrown away and nothing in the page to explain it.
      */
     public function test_every_dashboard_roots_in_sdash_so_it_gets_the_full_screen(): void

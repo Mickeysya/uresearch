@@ -74,8 +74,21 @@
 .sdash-admin .sdash-card-body  { padding: 4px 12px clamp(8px, 1.2vh, 14px); gap: clamp(4px, 0.8vh, 8px); }
 .sdash-admin .sdash-row        { padding: clamp(5px, 0.9vh, 9px) 8px clamp(5px, 0.9vh, 9px) 10px; }
 
-.adm-row-top    { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
-.adm-row-bottom { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+/* Both rows on the same two equal columns, so the panels line up in a
+   grid instead of the bottom pair being offset from the top pair. */
+.adm-row-top,
+.adm-row-bottom { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+/* One quiet line where a chart has nothing to draw yet. */
+.adm-mix-empty {
+    margin: auto 0;
+    padding: var(--space-6) var(--space-4);
+    border: 1px dashed var(--border-grey);
+    border-radius: var(--radius-md);
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+}
 
 /* Activity rows are informational, not links, so they do not lift on hover. */
 .adm-activity { cursor: default; }

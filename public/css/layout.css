@@ -902,10 +902,17 @@ button[value="rejected"]:hover {
    with one submit button.
    ============================================================ */
 
-/* Nothing to do here any more: .card-container-inline IS the page shell
-   now, at --page-max and fluid, and a .card inside it already fills it.
-   The class is still added by the script so a module can hook it. */
-.card-container-inline.is-wizard-container { }
+/* A wizard is narrower than the page: rail (232px) + padding + the 46rem
+   field column comes to ~1040px, so at the full --page-max the right half
+   of the card was empty. The page header lives in the same container, so
+   the title and "Step 1 of 3" narrow with the card instead of drifting to
+   the far right. :has() applies it before the script runs (no jump on
+   load); the class covers a browser without :has(). */
+.card-container-inline:has(> .card form[data-stepper]),
+.card-container-inline.is-wizard-container {
+    max-width: 1080px;
+    margin-inline: auto;
+}
 
 /* The wizard is a page like any other page: it fills the shell, which is
    already capped at --page-max and fluid. It used to carry its own 880px,
@@ -2145,9 +2152,10 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
    looked like two products.
 
    One shape now, and it is fluid rather than a set of laptop-era
-   numbers: --page-max is clamp(880px, 92vw, 1320px), so the page grows
-   with the viewport and stops before a line of text gets too long to
-   track back.
+   numbers: --page-max is clamp(880px, 92vw, 1600px), so the page grows
+   with the viewport and stops before a table row gets too long to scan.
+   (1320px until 2026-11-05: it left a third of a 1920px monitor empty.)
+   Prose and form fields keep their own, narrower measure inside it.
 
    Done here rather than in fifty Blade files because every card screen
    already wraps itself in .card-container-inline. Changing what that

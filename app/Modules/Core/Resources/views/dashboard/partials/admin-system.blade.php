@@ -46,6 +46,7 @@
         <div class="adm-mix">
             <span class="adm-mix-title">Application Overview</span>
 
+            @if ($total > 0)
             <div class="adm-mix-body">
                 <div class="chart-donut-wrap adm-donut-wrap">
                     @if ($total > 0)
@@ -78,6 +79,11 @@
                     @endforelse
                 </ul>
             </div>
+            @else
+                {{-- An empty ring and an italic "no applications" took half the
+                     panel to say nothing. One line says it. --}}
+                <p class="adm-mix-empty">No applications filed yet. Once they are, this shows the split by module.</p>
+            @endif
         </div>
 
     </div>

@@ -15,7 +15,7 @@
 
     $cards = [
         ['tone'=>'blue',   'panel'=>'users',       'icon'=>'people',   'label'=>'Total Students',
-         'value'=>number_format($totalStudents['count']), 'delta'=>$totalStudents['delta'], 'note'=>'vs last month'],
+         'value'=>number_format($totalStudents['count']), 'delta'=>$totalStudents['delta'], 'note'=>$totalStudents['delta'] === null ? 'student accounts' : 'vs last month'],
         ['tone'=>'green',  'panel'=>'users',       'icon'=>'book',     'label'=>'Active Courses',
          'value'=>number_format($programmes['count']),    'delta'=>null,  'note'=>'distinct programmes · no course model'],
         ['tone'=>'purple', 'panel'=>'users',       'icon'=>'building', 'label'=>'Faculty Members',
@@ -23,7 +23,7 @@
         ['tone'=>'orange', 'panel'=>'attendance',  'icon'=>'trend',    'label'=>'Avg. Attendance',
          'value'=>$pct($averageAttendance) ?? '—',        'delta'=>null,  'note'=>$averageAttendance === null ? 'no data yet' : 'across all students'],
         ['tone'=>'red',    'panel'=>'applications','icon'=>'folder',   'label'=>'Active Applications',
-         'value'=>number_format($activeApplications['count']), 'delta'=>$activeApplications['delta'], 'note'=>'vs last month'],
+         'value'=>number_format($activeApplications['count']), 'delta'=>$activeApplications['delta'], 'note'=>$activeApplications['delta'] === null ? 'in progress' : 'vs last month'],
     ];
 @endphp
 

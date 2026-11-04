@@ -347,19 +347,22 @@
    "nothing here yet" panel instead of a short message stranded at the
    bottom of a card that stretched to match its taller row-mates (the
    Today card, almost always the tallest of the four). */
+/* A card with nothing to show yet says so in one quiet line at the top,
+   not as a large centred icon and paragraph that weighs as much as a card
+   with real figures in it. */
 .sdash-top-empty {
-    margin: auto 0;
+    margin: 4px 0 0;
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
-    text-align: center;
-    padding: 12px 6px;
+    text-align: left;
+    padding: 0;
 }
 
 .sdash-top-empty-icon {
-    width: 40px;
-    height: 40px;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -367,15 +370,19 @@
     color: var(--text-grey);
 }
 
-.sdash-top-empty-icon svg { width: 19px; height: 19px; }
+.sdash-top-empty-icon svg { width: 15px; height: 15px; }
 
 .sdash-top-empty p {
-    margin: 0;
-    max-width: 220px;
+    margin: 4px 0 0;
     font-size: 12.5px;
     line-height: 1.45;
     color: var(--text-grey);
 }
+
+/* A smaller dial: the figure is the point, not the ring. */
+.sdash-attendance .chart-gauge-wrap.chart-gauge-circle { width: clamp(108px, 13vh, 140px); }
+.sdash-attendance .chart-gauge-value .sdash-gauge-number { font-size: clamp(18px, 1.5vw, 24px); }
+.sdash-attendance .chart-gauge-value .sdash-gauge-caption { font-size: 9.5px; }
 
 /* ---- the Today card ---- */
 
@@ -490,48 +497,100 @@
 
 .sdash-today-footer:hover { text-decoration: underline; }
 
-/* ---- the "Start a new application" grid ---- */
+/* ---- the "Start a new application" grid ----
+   Pages of eight tiles, 4 x 2, in a horizontal scroll-snap track; the
+   arrows in the card head step one page. Same tile look as the CGS
+   "Quick Shortcuts", sized for this panel rather than for a pinned screen. */
 
-.sdash-quicklinks {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-}
+.sdash-ql-head-actions { display: flex; align-items: center; gap: var(--space-3); }
 
-.sdash-quicklink {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid var(--border-grey);
-    border-radius: 9px;
-    text-decoration: none;
-    color: var(--text-dark);
-    min-width: 0;
-    transition: border-color 0.15s, background-color 0.15s;
-}
+.sdash-ql-nav { display: flex; align-items: center; gap: var(--space-1); }
 
-.sdash-quicklink:hover { border-color: var(--navy); background: var(--surface-sunken); }
-
-.sdash-quicklink-icon {
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
+.sdash-ql-arrow {
     display: grid;
     place-items: center;
-    flex-shrink: 0;
-    background: var(--surface-hover);
+    width: 32px;
+    height: 32px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-full);
+    background: var(--surface);
     color: var(--navy);
+    box-shadow: none;
+}
+.sdash-ql-arrow:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--navy); box-shadow: none; }
+.sdash-ql-arrow:disabled { opacity: 0.4; cursor: default; }
+.sdash-ql-arrow svg { width: 16px; height: 16px; }
+.sdash-ql-arrow.is-prev svg { transform: rotate(180deg); }
+
+.sdash-ql-count {
+    min-width: 3.2em;
+    line-height: 32px;
+    text-align: center;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semi);
+    color: var(--text-grey);
+    font-variant-numeric: tabular-nums;
 }
 
-.sdash-quicklink-icon svg { width: 15px; height: 15px; }
+.sdash-ql-track {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 100%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    /* The card shares a row with Attendance Overview and is stretched to
+       its height; the tiles grow into that instead of leaving a gap. */
+    flex: 1 1 auto;
+}
+.sdash-ql-track::-webkit-scrollbar { display: none; }
 
-.sdash-quicklink-label {
-    font-size: 12.5px;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.sdash-ql-page {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    scroll-snap-align: start;
+    padding: 2px; /* room for the hover lift and focus ring inside the clip */
+}
+
+.sdash-ql-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: 84px;
+    padding: var(--space-3) var(--space-2);
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text-dark);
+    text-align: center;
+    text-decoration: none;
+    min-width: 0;
+    transition: border-color var(--duration-fast) var(--ease),
+                background-color var(--duration-fast) var(--ease),
+                transform var(--duration-fast) var(--ease);
+}
+.sdash-ql-tile:hover { border-color: var(--navy); background: var(--surface-sunken); transform: translateY(-2px); }
+
+.sdash-ql-icon { display: grid; place-items: center; width: 26px; height: 26px; color: var(--navy); }
+.sdash-ql-icon svg { width: 100%; height: 100%; }
+
+.sdash-ql-label {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    line-height: var(--leading-tight);
+    overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sdash-ql-tile { transition: none; }
+    .sdash-ql-tile:hover { transform: none; }
 }
 
 /* ---- the four panels ---- */
@@ -1012,10 +1071,9 @@
     /* One column at phone width, same as the panel grid above it. */
     .sdash-top { grid-template-columns: minmax(0, 1fr); }
 
-    /* Two columns of quick-link buttons get too narrow to read their
-       labels below ~360px of actual card width (phone minus page gutters
-       minus card padding) -- one column keeps every label on one line. */
-    .sdash-quicklinks { grid-template-columns: minmax(0, 1fr); }
+    /* Four tiles across are too narrow to read on a phone: two across,
+       four down, still eight to a page. */
+    .sdash-ql-page { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); }
 }
 
 

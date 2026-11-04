@@ -100,7 +100,7 @@
                     @endif
                 </div>
             @else
-                <p class="sdash-stat-grid-empty">Nothing uploaded yet, so you start at {{ rtrim(rtrim(number_format($pct, 1), '0'), '.') }}%.</p>
+                <p class="sdash-stat-grid-empty">Nothing has been uploaded yet, so you start at {{ rtrim(rtrim(number_format($pct, 1), '0'), '.') }}%.</p>
             @endif
         </div>
     </div>
@@ -122,17 +122,16 @@
         </div>
     @endif
 
-    <footer class="sdash-note tone-{{ $tone }}">
-        <span class="sdash-note-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'info'])</span>
-        @if (! $attendance)
-            <span>Nothing has been uploaded yet, so you start at 100%.</span>
-        @elseif ($attendance->at_risk)
+    {{-- Only when it adds something: the at-risk appeal link. "Nothing
+         uploaded yet" is already said beside the dial, and "good standing"
+         is what the Good chip already says. --}}
+    @if ($attendance && $attendance->at_risk)
+        <footer class="sdash-note tone-{{ $tone }}">
+            <span class="sdash-note-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'info'])</span>
             <span>You're flagged as <strong>at-risk</strong>. Think this is wrong?</span>
             <a href="{{ route('attendance-appeal.create') }}" class="sdash-note-cta">File an appeal</a>
-        @else
-            <span>You are in good standing. Keep it up!</span>
-        @endif
-    </footer>
+        </footer>
+    @endif
 </section>
 
 @push('scripts')

@@ -282,8 +282,10 @@ Every screen is the same shape and the same width. Wrap the page in
 
 **The width is the layout's job, not yours.** `layouts/app.blade.php` wraps
 every screen in `.page-shell`, which is `max-width: var(--page-max)` —
-`clamp(880px, 92vw, 1320px)`, so it grows with the viewport instead of holding
-a laptop-era number. There used to be five page widths (480, 680, 880,
+`clamp(880px, 92vw, 1600px)`, so it grows with the viewport instead of holding
+a laptop-era number. A stepper form (`form[data-stepper]`) is the exception: its
+page narrows to 1080px, header included, because its fields stop at 46rem and a
+wider card is only empty space. There used to be five page widths (480, 680, 880,
 `--page-max`, and whatever the dashboard grid came to), and then a sixth
 problem on top: a queue page wrapped itself in nothing and so ran the full
 width of the content area while every card page sat centred. Putting the cap
@@ -304,7 +306,7 @@ your dashboard in `.sdash` and it fills the screen with no view change.
 Everything else stays capped.
 
 **The page is full width; the text inside it is not.** A subtitle caps at
-68ch and a form's own fields cap at 46rem, because a 1320px line is
+68ch and a form's own fields cap at 46rem, because a 1600px line is
 unreadable however wide the monitor is. If your screen has a small object in
 it (an upload, a signature), put it in its own column rather than stretching
 it.
@@ -585,6 +587,12 @@ Do not commit `.env`, `vendor/`, `node_modules/`, or anything under
   now, so it stays reviewable. To override a rule she wrote, append a new one
   — and scope it with at least two classes, because `uresearch.css` contains
   broad element rules like `.sidebar a` (0,1,1) that outrank a single class.
+- **No new inline `style=""`.** Put it in a class instead: in a Core sheet if
+  it is shared, otherwise in your own module's sheet (`public/css/<owner>-<module>.css`,
+  linked from your view, as `chloe-workstation.css` is). When you are already
+  editing a line that has one, move it out. There are 500-odd left; they are
+  where layout bugs hide — a `margin-top: -8px` hint pulled itself on top of
+  the select above it. No big sweep, just do not add more.
 - The sheets load in a fixed order, listed once in
   `core::partials.stylesheets` and included by both layouts. Do not reorder
   them; the cascade depends on it. Adding a sheet is a one-line edit there.

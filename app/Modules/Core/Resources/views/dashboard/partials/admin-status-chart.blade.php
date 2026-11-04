@@ -27,13 +27,19 @@
     </header>
 
     <div class="sdash-card-body adm-chart-body">
-        <div class="chart-bars-wrap">
-            <canvas id="{{ $chartId }}" role="img"
-                    aria-label="Applications by status: {{ $byStatus->map(fn ($b) => $b['label'].' '.$b['count'])->implode(', ') }}"></canvas>
-        </div>
+        @if ($byStatus->sum('count') > 0)
+            <div class="chart-bars-wrap">
+                <canvas id="{{ $chartId }}" role="img"
+                        aria-label="Applications by status: {{ $byStatus->map(fn ($b) => $b['label'].' '.$b['count'])->implode(', ') }}"></canvas>
+            </div>
+        @else
+            {{-- Five zero-height bars on an empty axis read as a broken chart. --}}
+            <p class="adm-mix-empty">No applications filed yet. Draft, in-review, approved and rejected counts appear here as they come in.</p>
+        @endif
     </div>
 </section>
 
+@if ($byStatus->sum('count') > 0)
 @push('scripts')
     <script @cspNonce>
         (function () {
@@ -70,7 +76,14 @@
                                 // stays readable as the panel narrows.
                                 callback: function (value) {
                                     var label = this.getLabelForValue(value);
-                                    return label.length > 12 ? label.split(' ') : label;
+                                    // Two lines at most, split at the space nearest the middle --
+                                    // one word per line made "Awaiting First Action" three rows.
+                                    if (label.length <= 12 || label.indexOf(' ') < 0) return label;
+                                    var mid = label.length / 2, cut = -1;
+                                    for (var i = 0; i < label.length; i++) {
+                                        if (label[i] === ' ' && (cut < 0 || Math.abs(i - mid) < Math.abs(cut - mid))) cut = i;
+                                    }
+                                    return [label.slice(0, cut), label.slice(cut + 1)];
                                 },
                             },
                         },
@@ -110,3 +123,4 @@
         })();
     </script>
 @endpush
+@endif

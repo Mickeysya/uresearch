@@ -186,7 +186,7 @@
     /* Page width, fluid. A wide page fills a 1600px monitor instead of
        stopping at whatever number was picked on a laptop, and never gets
        wider than a seven-column table stays readable. */
-    --page-max: clamp(880px, 92vw, 1320px);
+    --page-max: clamp(880px, 92vw, 1600px);
 
     /* Radius. Controls, cards, and fully round. Three, not sixteen. */
     --radius-sm:   6px;

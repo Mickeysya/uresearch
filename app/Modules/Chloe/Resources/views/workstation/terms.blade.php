@@ -25,7 +25,8 @@
         <a href="{{ $homeUrl }}"><button type="button">Home</button></a>
     </x-core::page-header>
 
-    <div class="card card-wide" style="max-width: none;">
+    <div class="wst-layout">
+    <aside class="card card-wide wst-aside">
         <div class="wst-head">
             <div>
                 <h2 class="ws-section-title">Terms and conditions</h2>
@@ -55,6 +56,9 @@
             <div><dt>On termination</dt><dd>Vacate within 5 working days</dd></div>
         </dl>
 
+    </aside>
+
+    <div class="card card-wide wst-main">
         <ol class="wst-list">
             <li>Any loan requisition of postgraduate workstation located at Block J &amp; Block N shall be made by students through Centre for Graduate Studies (CGS) of Universiti Teknologi PETRONAS (UTP).</li>
             <li>The workstation loan requisition is subjected to the availability of the workstation and endorsement of the student's supervisor.</li>
@@ -95,6 +99,7 @@
             Centre For Graduate Studies 2022<br>
             First Edition 2022
         </p>
+    </div>
     </div>
     </div>
 </div>
