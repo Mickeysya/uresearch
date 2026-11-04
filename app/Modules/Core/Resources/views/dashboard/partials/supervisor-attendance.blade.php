@@ -34,7 +34,7 @@
          fixed amount of content, so the panel is sized to hold them rather
          than given a scrollbar. The ring takes whatever height is left after
          the legend and shrinks with the panel. --}}
-    <div class="sdash-card-body approver-fit">
+    <div class="sdash-card-body approver-fit sup-attendance-body">
         @if ($total === 0)
             <div class="empty-state"><p>No candidates to report on.</p></div>
         @else

@@ -69,6 +69,7 @@
          replacing it. --}}
 
     @include('core::partials.tooltips')
+    @include('core::partials.back-link')
     @stack('scripts')
 </body>
 </html>

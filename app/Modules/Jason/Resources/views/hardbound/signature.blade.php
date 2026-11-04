@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'My Signature')
+@section('title', 'Hardbound Signature')
 
 @section('content')
 
@@ -70,7 +70,7 @@
 
 <div class="card-container-inline">
     <x-core::page-header
-        title="My Signature"
+        title="Hardbound Signature"
         subtitle="When you approve a Hardbound Submission as Supervisor or as Chairman of the Viva Voce Examination, this image is stamped into your block on the Confirmation of Correction to Thesis (UTP/CGS/017A) together with that day's date." />
 
     <div class="card card-wide">

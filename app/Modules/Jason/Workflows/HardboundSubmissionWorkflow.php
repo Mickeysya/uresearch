@@ -140,7 +140,10 @@ class HardboundSubmissionWorkflow implements WorkflowModule, DecidesOneAtATime, 
         }
 
         return $this->signs($user)
-            ? [['label' => 'My Signature', 'route' => 'hardbound.signature']]
+            // Not "My Signature": Chloe's Study Candidacy module has its own
+            // page by that name, stored separately, and a supervisor or Chair
+            // saw two identical sidebar entries leading to different pages.
+            ? [['label' => 'Hardbound Signature', 'route' => 'hardbound.signature']]
             : [];
     }
 

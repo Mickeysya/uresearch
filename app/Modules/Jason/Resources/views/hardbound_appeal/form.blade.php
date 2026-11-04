@@ -51,7 +51,7 @@
                 <div class="message-error">
                     <b>You need a signature on file before you can file an appeal.</b> The memo is
                     signed with the image you upload at
-                    <a href="{{ route('hardbound.signature') }}"><b>My Signature</b></a>, under your
+                    <a href="{{ route('hardbound.signature') }}"><b>Hardbound Signature</b></a>, under your
                     name and student ID, the same way your supervisor signs theirs. It goes to the
                     Dean, so it cannot leave over a blank signature line.
                 </div>

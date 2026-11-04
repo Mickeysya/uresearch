@@ -84,10 +84,10 @@
             <div class="sdash-stat-value">{{ $card['value'] }}{{ $card['suffix'] ?? '' }}</div>
             <div class="sdash-stat-note">{{ $card['note'] }}</div>
 
+            {{-- A button only where it goes somewhere: a flat "All clear" pill looked
+                 clickable and repeated the note above it. --}}
             @if ($card['url'])
                 <a href="{{ $card['url'] }}" class="sdash-pill pill-{{ $card['pillTone'] }}">{{ $card['pill'] }}</a>
-            @else
-                <span class="sdash-pill pill-{{ $card['pillTone'] }}">{{ $card['pill'] }}</span>
             @endif
         </div>
     @endforeach

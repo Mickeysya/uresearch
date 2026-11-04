@@ -2674,6 +2674,21 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
    100% of this box, so sizing the box is all that is needed. */
 .sup-donut { flex: 1 1 auto; min-height: 110px; }
 
+/* Ring and legend side by side. Stacked, the fourth legend row ("No data")
+   fell below the panel's fixed height and was clipped -- and that is the
+   row that explains the grey part of the ring. */
+.approver-panel .sdash-card-body.sup-attendance-body { flex-direction: row; align-items: center; gap: var(--space-5); }
+.sup-attendance-body .sup-donut { flex: 0 0 auto; width: clamp(120px, 42%, 170px); min-height: 0; aspect-ratio: 1 / 1; }
+.sup-attendance-body .sup-donut-legend { flex: 1 1 auto; margin: 0; gap: var(--space-2); }
+.sup-attendance-body .sup-donut-legend li { font-size: var(--text-sm); }
+
+/* Approver stat cards lost their flat "All clear" pills; keep each figure
+   under its label instead of letting space-between drop it to the foot. */
+.approver-stats .sdash-stat,
+.chair-stats .sdash-stat { justify-content: flex-start; }
+.approver-stats .sdash-stat > .sdash-pill,
+.chair-stats .sdash-stat > .sdash-pill { margin-top: auto; }
+
 .sup-donut-legend { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); flex-shrink: 0; }
 .sup-donut-legend li { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-xs); }
 .sup-donut-label { flex: 1 1 auto; min-width: 0; color: var(--text-grey); }

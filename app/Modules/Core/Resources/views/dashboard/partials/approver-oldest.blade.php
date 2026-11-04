@@ -14,8 +14,11 @@
     @if (isset($unavailable['oldest']))
         @include('core::dashboard.partials.skeleton', ['type' => 'rows', 'rows' => 4])
     @elseif ($oldest->isEmpty())
-        <div class="empty-state">
-            <p>Nothing is waiting on you.</p>
+        {{-- A dashed box the size of the panel said nothing louder than
+             anything else on the screen. --}}
+        <div class="sdash-card-body cgs-clear">
+            <span class="cgs-clear-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'check'])</span>
+            <p><b>All caught up.</b><br>Nothing is waiting on you.</p>
         </div>
     @else
         <ul class="approver-feed approver-scroll">

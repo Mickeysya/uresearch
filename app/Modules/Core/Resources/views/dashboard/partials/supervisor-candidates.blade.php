@@ -51,7 +51,7 @@
                             {{ rtrim(rtrim(number_format($reading->percentage, 1), '0'), '.') }}%
                         </span>
                     @else
-                        <span class="cand-attendance tone-none">no data</span>
+                        <span class="cand-attendance tone-none" data-tip="No attendance has been uploaded for this student yet">Not recorded</span>
                     @endif
                 </li>
             @endforeach

@@ -36,6 +36,23 @@
     `back` or not); pass `:back-history="false"` when `back` is always the
     right target and there is no history-preserving case to prefer.
 --}}
+@php
+    // A DETAIL page with no `back` of its own still gets one. Approvers open
+    // a travel request, a staff application or an examiner record from a
+    // queue, a dashboard or an email, and those pages left them with nothing
+    // to click but the sidebar. Detail = a route named *.show / *.review /
+    // *.read / *.memo. The target is the page they came from when that was
+    // this site, else the dashboard; data-browser-back (handled once, in
+    // core::partials.back-link) prefers real history so a filtered queue
+    // comes back as it was left.
+    if (! $back && auth()->check() && preg_match('/\.(show|review|read|memo)$/', (string) request()->route()?->getName())) {
+        $previous = url()->previous();
+        $sameSite = str_starts_with($previous, url('/')) && $previous !== url()->current();
+        $back = $sameSite ? $previous : route('dashboard');
+        $backHistory = true;
+    }
+@endphp
+
 <header {{ $attributes->merge(['class' => 'page-header']) }}>
     <div class="page-header-text">
         @if ($back)
