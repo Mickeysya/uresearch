@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hani\Notifications;
 
+use App\Modules\Hani\Models\ReVivaLetterSend;
 use App\Modules\Hani\Models\ReVivaStaffDocument;
 use App\Modules\Hani\Support\ReVivaLetters;
 use Illuminate\Bus\Queueable;
@@ -15,13 +16,14 @@ use Illuminate\Support\Facades\Storage;
  * signed link to the corrected thesis and the Summary of Corrections.
  *
  * Examiners are not users: sent on demand (Notification::route('mail')),
- * mail only.
+ * mail only. $send: the log row (ReVivaLetterSend); a resend says so, and
+ * the row gets the date the link in this email works until.
  */
 class ReVivaCorrectionLetter extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(public ReVivaStaffDocument $letter)
+    public function __construct(public ReVivaStaffDocument $letter, public ?ReVivaLetterSend $send = null)
     {
         $this->afterCommit();
     }
@@ -39,10 +41,18 @@ class ReVivaCorrectionLetter extends Notification implements ShouldQueue
         $sentAt = $detail->sent_to_panel_at ?? now();
         // Counted from now, when the email is built, not from $sentAt.
         $expires = ReVivaLetters::panelLinkExpiry($detail);
+        $resent = $this->send?->kind === ReVivaLetterSend::RESEND;
+        $this->send?->update(['link_expires_at' => $expires]);
 
-        return (new MailMessage)
-            ->subject('Correction of thesis for re-evaluation: '.$student->name)
-            ->greeting('Dear '.$examiner->name.',')
+        $mail = (new MailMessage)
+            ->subject(($resent ? 'Resent: ' : '').'Correction of thesis for re-evaluation: '.$student->name)
+            ->greeting('Dear '.$examiner->name.',');
+
+        if ($resent) {
+            $mail->line('The Centre for Graduate Studies is sending this letter again, with a new link to the documents. Please use the link in this email; an earlier one may have expired.');
+        }
+
+        return $mail
             ->line('Please find attached the Centre for Graduate Studies\' letter on the corrected thesis of '.$student->name.'.')
             ->line('The corrected thesis and the Summary of Corrections are available through the button below. No login is needed. The link works until '.$expires->format('j F Y').'.')
             ->action('Open the corrected thesis', ReVivaLetters::panelLink($detail, $examiner, $expires))

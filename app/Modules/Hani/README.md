@@ -230,7 +230,10 @@ Settings in `config/hani.php` under `reviva`; unconfirmed values are marked
   Flagged emails are skipped and named. The stage completes in the same
   action.
 - **Stage 2.** Working days (`Support/WorkingDays`, the public-holiday list)
-  with the panel; 20 → AE reminded, 25 → Senior Executive told.
+  with the panel; 20 → AE reminded, 25 → Senior Executive told. "Resend
+  letter" (AE of the department, Senior Executive) emails an examiner the
+  same letter with a fresh link; every send is logged in
+  `re_viva_letter_sends` and shown as "last sent" per examiner.
 - **Stage 3.** Each main examiner's UTP/CGS/024: category 1–4, "viva again"
   for a fail, signed form (staff-only), optional ratings. Both are needed.
   `ExaminerDivergence::betweenReEvaluations` flags disagreement.

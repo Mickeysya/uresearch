@@ -10,7 +10,7 @@
 
     <div class="card card-wide">
         <p>The link to the corrected thesis worked until {{ $expired->format('j F Y') }}, so the documents can no longer be opened from it.</p>
-        <p>Please ask the Centre for Graduate Studies for a new link:</p>
+        <p>Please ask the Centre for Graduate Studies to resend your letter. The new email carries a fresh link to the same documents:</p>
 
         <ul class="doc-list">
             @foreach ($contacts as $contact)

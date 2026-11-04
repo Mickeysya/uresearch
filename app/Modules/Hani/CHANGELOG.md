@@ -1,5 +1,38 @@
 # Changelog: Hani's modules
 
+## 2026-11-04: Resend letter
+
+**Why.** An examiner's link works for 35 days, and the panel is escalated at
+25 working days, about when the link runs out. A late examiner landed on
+the expired-link page with no way for CGS to send a new link.
+
+**What.**
+- "Resend letter" beside each correction letter while the round is Under
+  Panel Review, for the AE of the student's department (queue) and the
+  Senior Executive (Re-viva Cycles). It emails the same stored letter, with
+  a fresh link for `link_days` from now. The subject starts "Resent:".
+  `ReVivaLetters::resend()` and `resendBlock()` hold the rules, re-checked
+  under a row lock. Refused: the Non-Executive and other departments (403),
+  any other stage, and an examiner who no longer holds the seat.
+- A flagged email is not resent, and the AE sees the usual reason.
+- `re_viva_letter_sends` (migration `2026_11_06_000800`) logs every send,
+  first and resend: who, when, emailed or refused and why, and the date the
+  link works until. The email writes that date when it is built in the
+  queue worker. Existing letters are backfilled as first sends. The
+  activity log records each resend too.
+- "last sent {date} by {name} (resent); link works until {date}" per
+  examiner, on the AE's queue, Cycles and Outcomes. The Non-Executive sees
+  it without the button.
+- The expired-link page now tells the examiner to ask CGS to resend the
+  letter.
+
+**Tests.** `ReVivaResendTest` (6). The click-through in Chromium resent a
+letter as the AE and as the Senior Executive, and opened the resent email's
+link logged out.
+
+**After pulling.** Migrate, and restart the queue worker: the letter
+notification's constructor changed.
+
 ## 2026-11-04: Fix Confirm Outcome 404 on a stale page
 
 **Problem.** Clicking "Confirm Outcome" on Re-viva Outcomes (AE Applied

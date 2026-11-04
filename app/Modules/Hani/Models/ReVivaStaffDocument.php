@@ -5,6 +5,8 @@ namespace App\Modules\Hani\Models;
 use App\Modules\Core\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * A staff-only re-viva file: never in DocumentStore, never shown to the
@@ -47,6 +49,18 @@ class ReVivaStaffDocument extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_id');
+    }
+
+    /** A letter's emails and refusals, first send and resends (ReVivaLetters). */
+    public function sends(): HasMany
+    {
+        return $this->hasMany(ReVivaLetterSend::class, 're_viva_staff_document_id');
+    }
+
+    /** The latest send that reached the examiner: "last sent". */
+    public function lastSent(): HasOne
+    {
+        return $this->hasOne(ReVivaLetterSend::class, 're_viva_staff_document_id')->ofMany(['id' => 'max'], fn ($q) => $q->where('emailed', true));
     }
 
     public function kindLabel(): string

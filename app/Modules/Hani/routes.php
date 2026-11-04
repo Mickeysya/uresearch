@@ -253,6 +253,12 @@ Route::middleware('auth')->group(function () {
         ->get('/re-viva/staff-documents/{document}', [ReVivaStaffDocumentController::class, 'download'])
         ->name('reviva.staff-documents.download')->missing(ReVivaController::gone('dashboard'));
 
+    // "Resend letter": the same letter with a fresh link, while the round is
+    // Under Panel Review. Not the Non-Executive (read-only).
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS)
+        ->post('/re-viva/staff-documents/{document}/resend', [ReVivaStaffDocumentController::class, 'resend'])
+        ->name('reviva.letters.resend')->missing(ReVivaController::gone('dashboard'));
+
     Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
         Route::get('/re-viva/queue', [ReVivaController::class, 'queue'])->name('reviva.queue');
         Route::post('/re-viva/{application}/decide', [ReVivaController::class, 'decide'])->name('reviva.decide')->missing(ReVivaController::gone('reviva.queue'));

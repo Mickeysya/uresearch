@@ -218,7 +218,7 @@ the module key are unchanged; everything else is module-side state.
 | # | Stage key | What happens |
 |---|---|---|
 | 1 | `report_sent` | **Send to panel**: one "Correction of Master's/Doctoral Thesis" letter (Dompdf) per current main examiner, stored staff-only, emailed with a signed link to the corrected thesis and the Summary of Corrections (works for `hani.reviva.link_days` from when the email is built; tampered → 403, expired → 410 page with the CGS contacts); flagged emails skipped with the reason; the stage completes in the same action. A plain Approve is refused. |
-| 2 | `under_panel_review` | The card counts working days with the panel. `re-viva:monitor`: 20 working days → AE reminded; 25 → Senior Exec told (once each). |
+| 2 | `under_panel_review` | The card counts working days with the panel. `re-viva:monitor`: 20 working days → AE reminded; 25 → Senior Exec told (once each). **Resend letter** (AE of the department or Senior Exec): the same letter, a fresh 35-day link, logged; flagged emails refused with the reason; "last sent" shown per examiner. |
 | 3 | `report_received` | AE records each main examiner's UTP/CGS/024: category 1–4, "viva again" for a fail, signed form (staff-only), optional ratings. Completes only with both. |
 | 4 | `consolidation_scheduled` | Divergence alert when the two reports map to different levels. |
 

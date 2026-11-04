@@ -5,8 +5,10 @@ namespace App\Modules\Hani\Support;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ReVivaDetail;
+use App\Modules\Hani\Models\ReVivaLetterSend;
 use App\Modules\Hani\Models\ReVivaStaffDocument;
 use App\Modules\Hani\Notifications\ReVivaCorrectionLetter;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -33,6 +35,9 @@ use Illuminate\Validation\ValidationException;
 class ReVivaLetters
 {
     public const STAGE = 'report_sent';
+
+    /** Where a letter may be resent (resend). */
+    public const PANEL_STAGE = 'under_panel_review';
 
     public function __construct(protected WorkflowEngine $engine) {}
 
@@ -73,7 +78,7 @@ class ReVivaLetters
             return $letters;
         });
 
-        return $this->email($letters);
+        return $this->email($letters, $actor);
     }
 
     /** The signed, expiring link an examiner opens without logging in. */
@@ -184,38 +189,116 @@ class ReVivaLetters
 
     /**
      * Email each letter, after the commit. A mail failure never undoes the
-     * stage: the AE sees who was not reached and can resend by hand.
+     * stage: the AE sees who was not reached and can use "Resend letter".
      *
      * @param  array<int, ReVivaStaffDocument>  $letters
      */
-    protected function email(array $letters): array
+    protected function email(array $letters, User $actor): array
     {
         $emailed = [];
         $skipped = [];
 
         foreach ($letters as $letter) {
-            $examiner = $letter->examiner;
-
-            if (! $examiner || $examiner->emailNeedsUpdating()) {
-                $reason = $examiner?->emailProblem() ?? 'The examiner is no longer on record.';
-                $letter->update(['email_skipped_reason' => $reason]);
-                $skipped[] = $reason.' Their letter was generated; send it once the email is updated.';
-
-                continue;
-            }
-
-            try {
-                Notification::route('mail', [$examiner->usableEmail() => $examiner->name])
-                    ->notify(new ReVivaCorrectionLetter($letter));
-                $letter->update(['emailed_at' => now()]);
-                $emailed[] = $examiner->name;
-            } catch (\Throwable $e) {
-                report($e);
-                $letter->update(['email_skipped_reason' => 'The email could not be sent.']);
-                $skipped[] = "The email to {$examiner->name} could not be sent. Their letter was generated; send it by hand.";
-            }
+            [$name, $problem] = $this->deliver($letter, $actor, ReVivaLetterSend::FIRST);
+            $name ? $emailed[] = $name : $skipped[] = $problem.' Their letter was generated; use "Resend letter" once the email is updated.';
         }
 
         return ['letters' => $letters, 'emailed' => $emailed, 'skipped' => $skipped];
+    }
+
+    /**
+     * "Resend letter": the same stored letter to the same examiner, in a new
+     * email whose link works for link_days from now (panelLinkExpiry). Only
+     * while the round is Under Panel Review, and only to an examiner who
+     * still holds the seat. A flagged email is refused with the usual reason.
+     *
+     * @return array{emailed: ?string, skipped: ?string}
+     */
+    public function resend(ReVivaStaffDocument $letter, User $actor): array
+    {
+        $letter = DB::transaction(function () use ($letter, $actor) {
+            ReVivaDetail::whereKey($letter->re_viva_detail_id)->lockForUpdate()->firstOrFail();
+            $letter = $letter->fresh(['detail.application.student', 'examiner']);
+
+            if ($reason = self::resendBlock($letter, $actor)) {
+                throw ValidationException::withMessages(['resend' => $reason]);
+            }
+
+            return $letter;
+        });
+
+        [$name, $problem] = $this->deliver($letter, $actor, ReVivaLetterSend::RESEND);
+
+        activity('re_viva')->causedBy($actor)->performedOn($letter->detail->application)
+            ->withProperties(['action' => 'letter_resent', 'letter_id' => $letter->id, 'examiner_id' => $letter->examiner_id, 'emailed' => $name !== null])
+            ->log($name ? 'Re-viva correction letter resent' : 'Re-viva correction letter resend refused');
+
+        return ['emailed' => $name, 'skipped' => $problem ? $problem.' The letter was not resent; update the examiner\'s email first.' : null];
+    }
+
+    /**
+     * Why $user may not resend $letter now, or null if they may: the AE of the
+     * student's department or the Senior Executive, a letter to a current
+     * main examiner, a round Under Panel Review.
+     */
+    public static function resendBlock(ReVivaStaffDocument $letter, User $user): ?string
+    {
+        $application = $letter->detail?->application;
+
+        if ($letter->kind !== ReVivaStaffDocument::LETTER || ! $application) {
+            return 'Only a correction letter can be resent.';
+        }
+        if (! ($user->role === Role::SENIOR_EXEC_CGS || ($user->role === Role::ACADEMIC_EXEC && $user->department === $application->student?->department))) {
+            return 'Only the Academic Executive of the student\'s department or the Senior Executive can resend a letter.';
+        }
+        if ($application->status !== Application::STATUS_PENDING || $application->current_stage !== self::PANEL_STAGE) {
+            return 'Letters can be resent only while the round is Under Panel Review.';
+        }
+        if (! collect($letter->detail->currentMains())->contains(fn (Examiner $e) => $e->id === $letter->examiner_id)) {
+            return ($letter->examiner?->name ?? 'This examiner').' no longer holds a main seat on the panel, so the letter cannot be resent.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Email one letter and log it, sent or refused.
+     *
+     * @return array{0: ?string, 1: ?string} the examiner's name when emailed, else the reason
+     */
+    protected function deliver(ReVivaStaffDocument $letter, User $actor, string $kind): array
+    {
+        $examiner = $letter->examiner;
+        $log = fn (bool $emailed, ?string $reason) => ReVivaLetterSend::create([
+            're_viva_staff_document_id' => $letter->id,
+            'sent_by_id' => $actor->id,
+            'kind' => $kind,
+            'emailed' => $emailed,
+            'skipped_reason' => $reason,
+            // link_expires_at: written by the email when it is built.
+        ]);
+
+        if (! $examiner || $examiner->emailNeedsUpdating()) {
+            $reason = $examiner?->emailProblem() ?? 'The examiner is no longer on record.';
+            $letter->update(['email_skipped_reason' => $reason]);
+            $log(false, $reason);
+
+            return [null, $reason];
+        }
+
+        try {
+            $send = $log(true, null);
+            Notification::route('mail', [$examiner->usableEmail() => $examiner->name])
+                ->notify(new ReVivaCorrectionLetter($letter, $send));
+            $letter->update(['emailed_at' => $letter->emailed_at ?? now(), 'email_skipped_reason' => null]);
+
+            return [$examiner->name, null];
+        } catch (\Throwable $e) {
+            report($e);
+            $letter->update(['email_skipped_reason' => 'The email could not be sent.']);
+            isset($send) ? $send->update(['emailed' => false, 'skipped_reason' => 'The email could not be sent.']) : $log(false, 'The email could not be sent.');
+
+            return [null, "The email to {$examiner->name} could not be sent."];
+        }
     }
 }
