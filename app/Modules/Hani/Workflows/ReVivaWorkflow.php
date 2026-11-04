@@ -106,6 +106,10 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
             Role::ACADEMIC_EXEC => [
                 ['label' => 'Re-viva Outcomes', 'route' => 'reviva.outcomes.index'],
             ],
+            // Only once they have a round: most students never do.
+            Role::STUDENT => Application::where('module_type', $this->key())->where('student_id', $user->id)->exists()
+                ? [['label' => 'My Re-viva', 'route' => 'reviva.mine']]
+                : [],
             default => [],
         };
     }
@@ -133,6 +137,7 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
             // A round with a final outcome has stopped running; levels 1-3
             // still have the final thesis due (correction_deadline).
             ->where(fn ($q) => $q->whereNull('outcome_level')->orWhereIn('outcome_level', ReVivaDetail::OUTCOME_CORRECTIONS))
+            ->whereNull('corrections_accepted_at')
             ->get();
 
         $events = [];

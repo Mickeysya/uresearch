@@ -13,6 +13,7 @@ use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\ReVivaCyclesController;
 use App\Modules\Hani\Http\Controllers\ReVivaPanelLinkController;
 use App\Modules\Hani\Http\Controllers\ReVivaStaffDocumentController;
+use App\Modules\Hani\Http\Controllers\ReVivaStudentController;
 use App\Modules\Hani\Http\Controllers\VivaController;
 use App\Modules\Hani\Http\Controllers\VivaExaminerController;
 use App\Modules\Hani\Http\Controllers\VivaResultController;
@@ -219,6 +220,13 @@ Route::middleware('auth')->group(function () {
     // through the same channel the rest of the re-viva process is informally
     // run through today, so CGS is the one who records the formal
     // resubmission timestamp -- not a self-service student upload.
+    // The student's own rounds: outcome level, deadline, final thesis upload.
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::get('/re-viva/mine', [ReVivaStudentController::class, 'mine'])->name('reviva.mine');
+        Route::post('/re-viva/{detail}/final-thesis', [ReVivaStudentController::class, 'submitFinalThesis'])
+            ->whereNumber('detail')->name('reviva.final-thesis.store');
+    });
+
     // Senior Executive CGS logs re-vivas (CGS practice). Non-Executive CGS is
     // read-only in re-viva since Prompt 3: Re-viva Cycles, no actions.
     Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
@@ -247,6 +255,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/re-viva/outcomes', [ReVivaController::class, 'outcomesIndex'])->name('reviva.outcomes.index');
         Route::post('/re-viva/outcomes/{detail}', [ReVivaController::class, 'recordOutcome'])
             ->name('reviva.outcomes.record');
+        Route::post('/re-viva/outcomes/{detail}/accept-corrections', [ReVivaController::class, 'acceptCorrections'])
+            ->name('reviva.corrections.accept');
     });
 
 });

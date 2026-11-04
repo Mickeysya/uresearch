@@ -62,5 +62,46 @@
             <div class="empty-state">No consolidated rounds awaiting an outcome.</div>
         @endforelse
     </div>
+
+    <div class="card card-wide">
+        <h3>Final thesis (levels 1 to 3) ({{ $finalTheses->count() }})</h3>
+        <p class="fstep-hint">Accepting the corrections generates the Confirmation of Correction, pre-filled for examiners 1 and 2 and the chairman to sign.</p>
+        @error('corrections') <p class="field-error">{{ $message }}</p> @enderror
+        @if ($finalTheses->isEmpty())
+            <p class="fstep-hint">None.</p>
+        @else
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>Student</th><th>Outcome</th><th>Final thesis</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach ($finalTheses as $d)
+                            @php($final = $d->application->documents->where('doc_type', \App\Modules\Hani\Support\ReVivaCorrections::DOC_FINAL)->last())
+                            <tr>
+                                <td>{{ $d->application->student->name }}<br><span class="fstep-hint">Round {{ $d->cycle_number }}</span></td>
+                                <td>{{ $d->outcomeLabel() }}<br>Due {{ $d->correction_deadline?->format('j M Y') }}
+                                    @if ($d->finalThesisOverdue()) <span class="status-badge rejected">Overdue</span> @endif</td>
+                                <td>
+                                    @if ($final)
+                                        <a href="{{ route('documents.show', $final) }}">{{ $final->original_name }}</a><br>
+                                        <span class="fstep-hint">Submitted {{ $d->final_thesis_submitted_at?->format('j M Y') }}</span>
+                                    @else
+                                        <span class="fstep-hint">Not submitted yet</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if ($d->final_thesis_submitted_at)
+                                        <form method="POST" action="{{ route('reviva.corrections.accept', $d) }}">
+                                            @csrf
+                                            <button type="submit">Corrections accepted</button>
+                                        </form>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
 </div>
 @endsection

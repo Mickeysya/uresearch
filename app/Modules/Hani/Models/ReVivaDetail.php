@@ -27,6 +27,7 @@ class ReVivaDetail extends Model
         'viva_result_date', 'logged_outside_window', 'sent_to_panel_at', 'sent_to_panel_by_id',
         'correction_deadline', 'hardbound_deadline',
         'outcome_level', 'outcome_remarks', 'suggested_level', 'outcome_recorded_at', 'outcome_recorded_by_id',
+        'final_thesis_submitted_at', 'corrections_accepted_at', 'corrections_accepted_by_id',
     ];
 
     protected function casts(): array
@@ -43,6 +44,8 @@ class ReVivaDetail extends Model
             'outcome_level' => 'integer',
             'suggested_level' => 'integer',
             'outcome_recorded_at' => 'datetime',
+            'final_thesis_submitted_at' => 'datetime',
+            'corrections_accepted_at' => 'datetime',
         ];
     }
 
@@ -172,5 +175,12 @@ class ReVivaDetail extends Model
     public function needsFinalThesis(): bool
     {
         return in_array($this->outcome_level, self::OUTCOME_CORRECTIONS, true);
+    }
+
+    /** Levels 1-3, final thesis not accepted yet, past its deadline. */
+    public function finalThesisOverdue(): bool
+    {
+        return $this->needsFinalThesis() && $this->corrections_accepted_at === null
+            && $this->correction_deadline !== null && $this->correction_deadline->lt(today());
     }
 }

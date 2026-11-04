@@ -153,6 +153,7 @@ final class ModuleTracker
             $tracker['now'] = match (true) {
                 $level === ReVivaDetail::OUTCOME_DISMISSED => 'Level 5: dismissed. This is the final outcome; there is no further action.',
                 $level === ReVivaDetail::OUTCOME_LOOP_BACK => 'Level 4: another round is needed. CGS logs re-viva round '.($detail->cycle_number + 1).' when the corrected thesis arrives.',
+                $detail->corrections_accepted_at !== null => 'Level '.$level.': final thesis accepted on '.$detail->corrections_accepted_at->format('j M Y').'. The re-viva is complete.',
                 default => 'Level '.$level.': passed with corrections'.($detail->correction_deadline ? ', due by '.$detail->correction_deadline->format('j M Y') : '').'.',
             };
         }

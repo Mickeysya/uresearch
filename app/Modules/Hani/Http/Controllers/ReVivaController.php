@@ -16,6 +16,7 @@ use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaExaminerProgress;
 use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Support\ReVivaLetters;
+use App\Modules\Hani\Support\ReVivaCorrections;
 use App\Modules\Hani\Support\ReVivaOutcome;
 use App\Modules\Hani\Support\ReVivaWindow;
 use App\Modules\Hani\Support\VivaProgress;
@@ -339,7 +340,28 @@ class ReVivaController extends Controller
 
         $suggestions = $details->mapWithKeys(fn (ReVivaDetail $d) => [$d->id => ReVivaOutcome::suggest($d)]);
 
-        return view('hani::re_viva.outcomes', ['details' => $details, 'suggestions' => $suggestions]);
+        // Levels 1-3 still waiting for the final thesis or its acceptance.
+        $finalTheses = ReVivaDetail::with(['application.student', 'application.documents', 'staffDocuments.examiner'])
+            ->whereIn('outcome_level', ReVivaDetail::OUTCOME_CORRECTIONS)
+            ->whereNull('corrections_accepted_at')
+            ->whereHas('application', fn ($q) => $q->where('module_type', $this->moduleKey())
+                ->whereHas('student', fn ($s) => $s->where('department', $request->user()->department)))
+            ->orderBy('correction_deadline')
+            ->get();
+
+        return view('hani::re_viva.outcomes', ['details' => $details, 'suggestions' => $suggestions, 'finalTheses' => $finalTheses]);
+    }
+
+    /** Levels 1-3: accept the final thesis and generate the Confirmation of Correction. */
+    public function acceptCorrections(Request $request, ReVivaDetail $detail, ReVivaCorrections $corrections)
+    {
+        abort_unless($detail->application->module_type === $this->moduleKey(), 404);
+        abort_unless($detail->application->student->department === $request->user()->department, 403);
+
+        $corrections->accept($detail, $request->user());
+
+        return redirect()->route('reviva.outcomes.index')->with('status',
+            "Corrections accepted for {$detail->application->student->name}. The Confirmation of Correction is ready for the examiners' and chairman's signatures.");
     }
 
     public function recordOutcome(Request $request, ReVivaDetail $detail, ReVivaOutcome $outcomes)
