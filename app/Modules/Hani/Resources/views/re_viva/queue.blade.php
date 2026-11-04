@@ -51,6 +51,15 @@
                     </ul>
                 @endif
 
+                @if ($detail?->sent_to_panel_at && $stage->key === 'under_panel_review')
+                    @php($panelDays = \App\Modules\Hani\Support\WorkingDays::between($detail->sent_to_panel_at, today()))
+                    <p>With the panel for <b>{{ $panelDays }}</b> of {{ config('hani.reviva.review_working_days') }} working days
+                        (sent {{ $detail->sent_to_panel_at->format('j M Y') }}, reports due {{ \App\Modules\Hani\Support\ReVivaLetters::reviewDue($detail->sent_to_panel_at)->format('j M Y') }})
+                        @if ($panelDays >= config('hani.reviva.panel_escalate_working_days')) <span class="status-badge rejected">Escalated to the Senior Executive</span>
+                        @elseif ($panelDays >= config('hani.reviva.panel_chase_working_days')) <span class="status-badge returned">Chase the panel</span> @endif
+                    </p>
+                @endif
+
                 @if ($detail)
                     @include('hani::re_viva._staff_documents', ['detail' => $detail])
                 @endif

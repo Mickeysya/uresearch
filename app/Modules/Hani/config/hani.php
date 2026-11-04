@@ -298,6 +298,15 @@ return [
         // twenty (20) working days". The letter prints the date this falls on.
         'review_working_days' => 20,
 
+        // Stage 2, Under Panel Review, counted in working days from the
+        // letters: remind the AE to chase the panel, then tell the Senior
+        // Executive. Provisional (20 is the letter's limit; 25 is ours).
+        'panel_chase_working_days' => 20,
+        'panel_escalate_working_days' => 25,
+
+        // When `re-viva:monitor` runs each day. Provisional.
+        'monitor_daily_at' => '08:00',
+
         // How long the examiner's signed link to the corrected thesis and the
         // Summary of Corrections works. Provisional: the 20 working days plus
         // slack for a late report.

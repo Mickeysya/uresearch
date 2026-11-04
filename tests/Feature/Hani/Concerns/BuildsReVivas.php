@@ -52,6 +52,33 @@ trait BuildsReVivas
         ]);
     }
 
+    /** A category-4 viva (1 Mar 2027) and round 1 logged inside its window on 1 Oct 2027: at stage 1. */
+    protected function roundAtStageOne(string $matric = '22001001'): array
+    {
+        \Carbon\Carbon::setTestNow('2027-03-15 09:00');
+        $viva = $this->categoryFourViva($matric);
+        \Carbon\Carbon::setTestNow('2027-10-01 09:00');
+        $this->logReViva($viva['student'])->assertSessionHasNoErrors();
+        $viva['round'] = $this->latestRound($viva['student']);
+
+        return $viva;
+    }
+
+    protected function sendToPanel(array $viva)
+    {
+        return $this->actingAs($viva['ae'])->post(route('reviva.send-to-panel', $viva['round']->application_id));
+    }
+
+    /** Letters sent on Fri 1 Oct 2027: Under Panel Review. */
+    protected function roundUnderPanelReview(string $matric = '22001001'): array
+    {
+        $viva = $this->roundAtStageOne($matric);
+        $this->sendToPanel($viva)->assertSessionHasNoErrors();
+        $viva['round']->refresh();
+
+        return $viva;
+    }
+
     protected function latestRound(User $student): ?ReVivaDetail
     {
         return ReVivaDetail::whereHas('application', fn ($q) => $q->where('student_id', $student->id)->where('module_type', 're_viva'))

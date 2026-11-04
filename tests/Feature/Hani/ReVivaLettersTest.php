@@ -48,21 +48,9 @@ class ReVivaLettersTest extends TestCase
         parent::tearDown();
     }
 
-    /** A category-4 viva and round 1 logged inside its window: at stage 1, Report Sent. */
-    protected function roundAtStageOne(string $matric = '22001001'): array
-    {
-        Carbon::setTestNow('2027-03-15 09:00');
-        $viva = $this->categoryFourViva($matric);
-        Carbon::setTestNow('2027-10-01 09:00');
-        $this->logReViva($viva['student'])->assertSessionHasNoErrors();
-        $viva['round'] = $this->latestRound($viva['student']);
-
-        return $viva;
-    }
-
     protected function send(array $viva)
     {
-        return $this->actingAs($viva['ae'])->post(route('reviva.send-to-panel', $viva['round']->application_id));
+        return $this->sendToPanel($viva);
     }
 
     public function test_send_to_panel_writes_a_letter_per_current_main_stores_it_staff_only_and_completes_stage_one(): void
