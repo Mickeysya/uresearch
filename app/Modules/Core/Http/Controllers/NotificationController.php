@@ -68,12 +68,25 @@ class NotificationController extends Controller
     /**
      * Where following a notification should land.
      *
-     * The tracking page is students-only (`role:student` on the route), so an
-     * approver following their own notification would hit a 403. They stay on
-     * the feed instead — the row is still marked read either way.
+     * A notification can name its own destination via `action_url` in its
+     * toArray() — e.g. "go edit this specific thing" — which wins over the
+     * generic fallback below. Added 2026-10-11 because the fallback (always
+     * the generic tracking page) left a student with no way to reach the
+     * actual action a notification was asking for, such as a correction
+     * edit form; it's additive, since no notification before this one set
+     * `action_url`, so every other notification's behaviour is unchanged.
+     *
+     * The tracking page fallback is students-only (`role:student` on the
+     * route), so an approver following their own notification would hit a
+     * 403. They stay on the feed instead — the row is still marked read
+     * either way.
      */
     protected function destinationFor(Request $request, $row): string
     {
+        if (! empty($row->data['action_url'])) {
+            return $row->data['action_url'];
+        }
+
         $applicationId = $row->data['application_id'] ?? null;
 
         if ($applicationId && $request->user()->isStudent()) {

@@ -57,6 +57,38 @@ services:
       redis:
         condition: service_started
 
+  # Drives every $schedule->command(...) registered across every module's
+  # ModuleProvider (e.g. Haziq's stage-gate:evaluate, dailyAt('07:30')) --
+  # without this, those jobs are correctly registered but nothing ever
+  # actually calls Laravel's scheduler, so they silently never run.
+  # Same pattern as `queue` above: a dedicated long-running container
+  # instead of relying on host cron, which nobody's machine has configured
+  # for this project.
+  scheduler:
+    build:
+      context: ./vendor/laravel/sail/runtimes/8.3
+      dockerfile: Dockerfile
+      args:
+        WWWGROUP: '${WWWGROUP:-1000}'
+    image: sail-8.3/app
+    container_name: uresearch-scheduler
+    restart: unless-stopped
+    command: php artisan schedule:work
+    environment:
+      WWWUSER: '${WWWUSER:-1000}'
+      LARAVEL_SAIL: 1
+      DB_HOST: mysql
+      MAIL_HOST: mailpit
+      REDIS_HOST: redis
+      QUEUE_CONNECTION: redis
+    volumes:
+      - '.:/var/www/html'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   mysql:
     image: mysql:8.4
     container_name: uresearch-mysql

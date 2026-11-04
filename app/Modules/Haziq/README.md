@@ -1,26 +1,38 @@
 # Abdul Haziq bin Abdul Farouk (22007428)
 
-GRA Application · GA Application · Stage Gate Monitoring · Allowance Eligibility
+GRA Application (+ Extension) · GA Application · Stage Gate Monitoring · Allowance Eligibility
 
-Full scope in `docs/scope/haziq.md`.
+Full scope in `docs/scope/haziq.md`. Built 2026-09-21 — see `TODO.md`'s Haziq
+section for exactly what's done, what's deliberately scoped down (TA hours,
+the AI chatbot), and what's still open (no automated tests, the
+`stage_gate_termination_triggers` hand-off has no consumer yet, Stage 1 isn't
+wired to Norhanis' RPD module because it doesn't exist yet).
 
-## Read this before you start
+**Built to the interim report's logic, not the official UTP forms.** A GRA
+requisition/extension form and the Stage Gate infopack surfaced during
+design describe a different 3-party approval chain and a forfeit-only (not
+terminate) consequence for every stage. Both were reviewed and deliberately
+set aside in favour of the report — see git log if reconciling with CGS
+later changes that decision.
 
-Three things about this scope do not fit the usual module pattern, and all
-three are worth settling with the team first — see `TODO.md`:
+## How this module differs from the standard pattern
 
-1. **GRA/GA overlaps with modules Nureen has already built.** `ga_extension`
-   and `ga_certification` exist and work. Agree ownership before writing a
-   competing chain.
-2. **Stage Gate monitoring is not a `WorkflowModule`.** The engine models a
-   chain of approvals that terminates. A stage gate is a recurring deadline
-   check with suspend / recover / terminate outcomes against an already
-   approved record — closer to Nureen's `supervision:remind-stalled` command
-   or Attendance's non-workflow half than to a chain.
-3. **Your chains name roles the portal does not have** (`GRS Exec`,
-   `Research Centre`). Adding one is a single line in
-   `App\Modules\Core\Support\Role` — but map onto the existing roles first
-   where they genuinely mean the same person.
+1. **GRA Extension reuses `gra_application`**, not a second `module_type` —
+   `application_type = 'extension'` + `parent_application_id` on
+   `gra_application_details`. GA extension stays entirely Nureen's
+   `ga_extension`; this module never touches it.
+2. **Stage Gate monitoring is not a `WorkflowModule`.** It's its own tables
+   (`stage_gate_rules`, `stage_gates`) plus a daily scheduled command,
+   `Support\StageGateEngine` — the single writer of a Stage Gate's status
+   columns, the same discipline `WorkflowEngine` enforces for `applications`.
+3. **`Research Centre` is a role Core doesn't know about**, declared as a
+   plain string in `Support\Roles::RESEARCH_CENTRE` rather than added to
+   `Core\Support\Role` — that class is VARCHAR-backed by design specifically
+   so a module never has to edit it just to use a role only that module needs.
+4. **This module never decides candidature/enrolment status.** A Stage 2+
+   grace expiry raises a `stage_gate_termination_triggers` row and notifies
+   Admin; it does not terminate anything itself. See that migration's
+   docblock for why.
 
 ## Haziq's module folder
 

@@ -8,6 +8,7 @@ use App\Modules\Core\Contracts\SuppliesAttendance;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\Concerns\BuildsPanels;
 use App\Modules\Core\Services\Concerns\ReadsAttendance;
+use App\Modules\Core\Services\Concerns\ReadsPostgraduateProgress;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +43,9 @@ class AdminDashboard
 
     /** attendanceSource() — the module supplying attendance, or null. */
     use ReadsAttendance;
+
+    /** postgraduateProgressSource() — the module supplying candidature figures, or null. */
+    use ReadsPostgraduateProgress;
 
     /* ---------------------------------------------------------------
      | The five headline figures
@@ -112,6 +116,39 @@ class AdminDashboard
                 ->when($to, fn ($q) => $q->where('submitted_at', '<', $to))
                 ->count()
         ), $this->noTrend());
+    }
+
+    /**
+     * Appointments with an active vs terminated candidature right now —
+     * see Core\Contracts\SuppliesPostgraduateProgress. No trend: these
+     * are a current snapshot, not a count with a meaningful month-ago
+     * comparison.
+     *
+     * @return array{count: int, delta: ?float}
+     */
+    public function activeCandidatures(): array
+    {
+        return $this->postgraduateCount(fn ($source) => $source->activeCandidatureCount());
+    }
+
+    /** @return array{count: int, delta: ?float} */
+    public function terminatedCandidatures(): array
+    {
+        return $this->postgraduateCount(fn ($source) => $source->terminatedCandidatureCount());
+    }
+
+    /** @return array{count: int, delta: ?float} */
+    protected function postgraduateCount(callable $read): array
+    {
+        $source = $this->postgraduateProgressSource();
+
+        if (! $source) {
+            $this->markUnavailable('postgraduate');
+
+            return $this->noTrend();
+        }
+
+        return $this->safely('postgraduate', fn () => ['count' => $read($source), 'delta' => null], $this->noTrend());
     }
 
     /* ---------------------------------------------------------------

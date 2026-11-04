@@ -8,6 +8,7 @@ use App\Modules\Core\Contracts\SuppliesAttendance;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\Concerns\BuildsPanels;
 use App\Modules\Core\Services\Concerns\ReadsAttendance;
+use App\Modules\Core\Services\Concerns\ReadsPostgraduateProgress;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Collection;
 
@@ -30,6 +31,9 @@ class CgsDashboard
 
     /** attendanceSource() — the module supplying attendance, or null. */
     use ReadsAttendance;
+
+    /** postgraduateProgressSource() — the module supplying Stage Gate/Allowance figures, or null. */
+    use ReadsPostgraduateProgress;
 
     public function __construct(protected User $staff) {}
 
@@ -81,6 +85,47 @@ class CgsDashboard
                 ->when($to, fn ($q) => $q->where('created_at', '<', $to))
                 ->count()
         ), $this->noTrend());
+    }
+
+    /**
+     * How many Stage Gates are past deadline right now, portal-wide — see
+     * Core\Contracts\SuppliesPostgraduateProgress. No trend: a single
+     * daily-evaluated snapshot, not a count with a meaningful month-ago
+     * comparison the way applications/students have.
+     *
+     * @return array{count: int, delta: ?float}
+     */
+    public function stageGateBottleneck(): array
+    {
+        $source = $this->postgraduateProgressSource();
+
+        if (! $source) {
+            $this->markUnavailable('postgraduate');
+
+            return $this->noTrend();
+        }
+
+        return $this->safely('postgraduate', fn () => ['count' => $source->stageGateBottleneckCount(), 'delta' => null], $this->noTrend());
+    }
+
+    /**
+     * How many students are currently flagged 3+ months accruing
+     * allowance — same threshold the Allowance page's own anomaly chart
+     * uses.
+     *
+     * @return array{count: int, delta: ?float}
+     */
+    public function allowanceAnomalies(): array
+    {
+        $source = $this->postgraduateProgressSource();
+
+        if (! $source) {
+            $this->markUnavailable('postgraduate');
+
+            return $this->noTrend();
+        }
+
+        return $this->safely('postgraduate', fn () => ['count' => $source->allowanceAnomalyCount(), 'delta' => null], $this->noTrend());
     }
 
     /* ---------------------------------------------------------------

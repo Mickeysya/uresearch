@@ -96,7 +96,7 @@ docker compose pull --quiet mysql phpmyadmin mailpit
 say "Building the application image"
 ./vendor/bin/sail build
 
-say "Starting the application, queue worker, MySQL, phpMyAdmin and Mailpit"
+say "Starting the application, queue worker, scheduler, MySQL, phpMyAdmin and Mailpit"
 start_stack() {
     ./vendor/bin/sail up -d --wait --wait-timeout 180 2>&1 | tail -5 &&
     # Compose doesn't always recreate laravel.test/queue when only .env changed

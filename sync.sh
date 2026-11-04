@@ -258,6 +258,24 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+say "Scheduler"
+# ---------------------------------------------------------------------------
+# Drives every $schedule->command(...) across every module's ModuleProvider
+# (Haziq's stage-gate:evaluate among them) — without this container running,
+# those jobs are correctly registered but nothing ever actually calls them.
+if [ "$CHECK_ONLY" -eq 1 ]; then
+    note "restart the scheduler so it picks up pulled code"
+    warn "would restart the scheduler"
+else
+    if docker compose ps --status running 2>/dev/null | grep -q uresearch-scheduler; then
+        docker restart uresearch-scheduler >/dev/null 2>&1 && ok "scheduler restarted"
+    else
+        warn "scheduler is not running — scheduled jobs (e.g. stage-gate:evaluate) will not fire on their own"
+        info "start it with: ./vendor/bin/sail up -d scheduler"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 if [ "$CHECK_ONLY" -eq 1 ]; then
     printf '\n\033[1;34m==>\033[0m Summary\n'
     if [ ${#WOULD[@]} -eq 0 ]; then

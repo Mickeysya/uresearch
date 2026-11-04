@@ -1,12 +1,17 @@
 {{--
     The student-only section of the sidebar: a fixed "Track My Applications"
-    link plus two trees. Attendance is fixed (every student has one); My
-    Application is driven by ModuleRegistry::submittable(), same as the
-    "New Application" section it replaces, so a new module's create form
-    appears here on its own -- nothing to edit when Norhanis, Hani, Jason or
-    Chloe ships one.
+    link, two trees, and whatever a module declares via ProvidesLinks for
+    this student (e.g. "My GRA Application" once one exists, or a module's
+    own status/extension screen) -- same $extraLinks a non-admin approver
+    already gets below, via ModuleRegistry::linksFor(), just rendered with
+    the guarded "nothing to show" default every module gets until it
+    actually returns something for Role::STUDENT. Attendance is fixed
+    (every student has one); My Application is driven by
+    ModuleRegistry::submittable(), same as the "New Application" section it
+    replaces, so a new module's create form appears here on its own --
+    nothing to edit when Norhanis, Hani, Jason or Chloe ships one.
 
-    Expects: $submittable, $myApplicationOpen
+    Expects: $submittable, $myApplicationOpen, $extraLinks
 --}}
 <a href="{{ route('applications.index') }}" class="nav-item @if(request()->routeIs('applications.*')) active @endif" title="Track My Applications">
     <span class="nav-icon">
@@ -53,3 +58,11 @@
         </div>
     </div>
 </div>
+
+@if (! empty($extraLinks))
+    @foreach ($extraLinks as $link)
+        <a href="{{ route($link['route'], $link['params'] ?? []) }}" class="nav-item nav-item-flat @if(request()->routeIs($link['route'])) active @endif" title="{{ $link['label'] }}">
+            <span class="nav-label">{{ $link['label'] }}</span>
+        </a>
+    @endforeach
+@endif

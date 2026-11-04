@@ -14,18 +14,38 @@
         Users and Roles.
 
     Oversight sections (Students, Applications, Attendance Monitoring) are
-    read-only: `queuesForRole('admin')` is empty by design, so the admin never
-    acts on an application. Acting on one is CGS's job.
+    read-only: `queuesForRole('admin')` used to be empty for every module, so
+    the admin never acted on an application and this file never rendered
+    $queues/$extraLinks at all. That stopped being universally true the
+    moment a module gives Admin a real stage in its chain (Haziq's GRA
+    Application does, 2026-10-11) — the "Pending My Action" block below
+    renders exactly the same way sidebar-approver-nav.blade.php always has,
+    and stays empty (so invisible) for every module that doesn't.
 
     Users and Roles, System Settings and Audit Logs are the administrator's
     actual scope, per technical.md and jason.md §5.5.
+
+    Expects: $queues, $extraLinks (both default to [] if omitted)
 --}}
 @php
+    $queues ??= [];
+    $extraLinks ??= [];
     $applicationsOpen = request()->routeIs('admin.applications.*');
     $attendanceOpen = request()->routeIs('admin.attendance.*');
     $reportsOpen = request()->routeIs('admin.reports.*');
     $status = request()->query('status');
 @endphp
+
+{{-- ---- Pending My Action (only appears once a module gives Admin a stage) --}}
+@if (! empty($queues))
+    <div class="nav-section-label"><span class="nav-label">Pending My Action</span></div>
+    @foreach ($queues as $queue)
+        <a href="{{ route($queue['module']->queueRoute(), ['stage' => $queue['stage']->key]) }}"
+           class="nav-item nav-item-flat" title="{{ $queue['module']->label() }}">
+            <span class="nav-label">{{ $queue['module']->label() }}</span>
+        </a>
+    @endforeach
+@endif
 
 <a href="{{ route('admin.students.index') }}" class="nav-item @if(request()->routeIs('admin.students.*')) active @endif" title="Students">
     <span class="nav-icon">
@@ -96,6 +116,17 @@
         </div>
     </div>
 </div>
+
+{{-- ---- Actions a module declared via ProvidesLinks (empty for every
+     module that doesn't give Admin one) --------------------------------- --}}
+@if (! empty($extraLinks))
+    <div class="nav-section-label"><span class="nav-label">Actions</span></div>
+    @foreach ($extraLinks as $link)
+        <a href="{{ route($link['route'], $link['params'] ?? []) }}" class="nav-item nav-item-flat" title="{{ $link['label'] }}">
+            <span class="nav-label">{{ $link['label'] }}</span>
+        </a>
+    @endforeach
+@endif
 
 {{-- ---- The administrator's own scope ------------------------------------ --}}
 <div class="nav-section-label"><span class="nav-label">Administration</span></div>

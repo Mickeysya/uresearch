@@ -25,6 +25,7 @@
             <div class="sdash-col sdash-col-right">
                 @include('core::dashboard.partials.attendance-overview')
                 @include('core::dashboard.partials.upcoming-tasks')
+                @include('core::dashboard.partials.postgrad-progress')
             </div>
         </div>
     </div>
