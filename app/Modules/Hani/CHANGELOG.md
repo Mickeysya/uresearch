@@ -1,5 +1,38 @@
 # Changelog: Hani's modules
 
+## 2026-11-04: Fix examiner signed link signature
+
+**Problem.** The examiner's link in a seeded "Correction of thesis for
+re-evaluation" email (S10, Kavitha) gave "403 Invalid signature" logged
+out. The signature was correct. The link had expired before it arrived:
+its 35 days counted from `sent_to_panel_at`, which the demo seeder backdates
+to 19 September, so it expired on 24 October. Laravel's `signed` middleware
+reports an expired link as an invalid signature. S09's seeded link would
+have died the same way on 9 November.
+
+**Fix.**
+- `ReVivaLetters::panelLinkExpiry()`: a link works for `link_days` from when
+  it is made, which is when the queue worker builds the email. The send date
+  is only the earliest start. The reply-by date still counts from the send.
+- `ReVivaCorrectionLetter` uses it for both the link and the date the email
+  states.
+- The letter PDF no longer prints a link expiry date (it is rendered at the
+  send, and could contradict the email). It points to the email instead.
+- `Http/Middleware/ValidPanelLink` replaces `signed` on the two panel routes:
+  a wrong or tampered signature is still 403; a correct but expired link is
+  410, with a page giving the date and the CGS contacts.
+
+**Tests.** Added `ReVivaLettersTest::test_the_emailed_link_works_from_when_the_email_is_built_not_from_a_backdated_send`
+and `HaniDemoSeederTest::test_the_seeded_examiner_emails_carry_links_that_open_logged_out`.
+Both fail on the old rule. The expiry assertions in the existing link test
+now expect 410.
+
+**Walkthrough.** The walkthrough's new first step opens the four seeded
+emails' links from the Mailpit HTML in a logged-out Chromium. All four open.
+
+**After pulling.** Restart the queue worker (`php artisan queue:restart`)
+and re-seed. Emails already in Mailpit carry the old, expired links.
+
 ## 2026-11-04: Re-viva Monitoring: automation and intelligence (Prompt 3)
 
 Branch `feature/hani-automation`. Commits: `7bf4d94` to `14d9b62`, plus

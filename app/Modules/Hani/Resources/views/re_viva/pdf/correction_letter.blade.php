@@ -7,7 +7,7 @@
     Signatory, address and return contacts come from hani.reviva.letter.
 
     Data: $reference, $date, $examiner, $examinerPlace, $student, $degreeWord,
-    $degreeName, $programme, $thesisTitle, $workingDays, $dueDate, $linkExpires,
+    $degreeName, $programme, $thesisTitle, $workingDays, $dueDate,
     $letter (config), $round
 --}}
 <!DOCTYPE html>
@@ -73,7 +73,7 @@
 
     <p>Thank you for examining the above candidate's thesis. The candidate has now corrected the thesis in response to the examiners' comments. We would be grateful if you could evaluate the corrected thesis against the enclosed Summary of Corrections, which sets out each comment, the action taken and the pages updated.</p>
 
-    <p>The corrected thesis and the Summary of Corrections are available through the secure link sent with this letter, which works until {{ $linkExpires->format('j F Y') }}.</p>
+    <p>The corrected thesis and the Summary of Corrections are available through the secure link in the email that brought this letter; the email gives the date the link works until.</p>
 
     <p class="emphasis">Please note that examiners are given a maximum of {{ $workingDaysWords }} ({{ $workingDays }}) working days to complete the evaluation, that is by {{ $dueDate->format('j F Y') }}.</p>
 

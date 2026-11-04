@@ -223,8 +223,12 @@ Settings in `config/hani.php` under `reviva`; unconfirmed values are marked
   of Master's/Doctoral Thesis" letter per current main examiner
   (`Resources/views/re_viva/pdf/correction_letter.blade.php`, styles in one
   block), stored staff-only, emailed with a signed link (no login, expiring,
-  throttled) to the corrected thesis and Summary of Corrections. Flagged
-  emails are skipped and named. The stage completes in the same action.
+  throttled) to the corrected thesis and Summary of Corrections. The link
+  works for `hani.reviva.link_days` from when the email is built, not from a
+  backdated send. `Http/Middleware/ValidPanelLink` answers a tampered link
+  with 403 and an expired one with a 410 page giving the CGS contacts.
+  Flagged emails are skipped and named. The stage completes in the same
+  action.
 - **Stage 2.** Working days (`Support/WorkingDays`, the public-holiday list)
   with the panel; 20 → AE reminded, 25 → Senior Executive told.
 - **Stage 3.** Each main examiner's UTP/CGS/024: category 1–4, "viva again"

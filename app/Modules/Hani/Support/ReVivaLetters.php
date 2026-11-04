@@ -77,12 +77,24 @@ class ReVivaLetters
     }
 
     /** The signed, expiring link an examiner opens without logging in. */
-    public static function panelLink(ReVivaDetail $detail, Examiner $examiner, ?Carbon $sentAt = null): string
+    public static function panelLink(ReVivaDetail $detail, Examiner $examiner, ?Carbon $expires = null): string
     {
-        return URL::temporarySignedRoute('reviva.panel.documents', self::linkExpiry($sentAt ?? $detail->sent_to_panel_at ?? now()), [
+        return URL::temporarySignedRoute('reviva.panel.documents', $expires ?? self::panelLinkExpiry($detail), [
             'detail' => $detail->id,
             'examiner' => $examiner->id,
         ]);
+    }
+
+    /**
+     * A link works for link_days from when it is made, which is when the
+     * email is built in the queue worker, on the real clock. The recorded
+     * send date is only the earliest start. The demo seeder records sends
+     * weeks in the past; a link counted from that date arrived already
+     * expired, and Laravel reported it as "Invalid signature".
+     */
+    public static function panelLinkExpiry(ReVivaDetail $detail): Carbon
+    {
+        return self::linkExpiry(now()->max($detail->sent_to_panel_at ?? now()));
     }
 
     public static function linkExpiry(\DateTimeInterface $sentAt): Carbon
@@ -133,7 +145,6 @@ class ReVivaLetters
             'workingDays' => $days,
             'workingDaysWords' => self::words($days),
             'dueDate' => self::reviewDue($sentAt),
-            'linkExpires' => self::linkExpiry($sentAt),
             'letter' => (array) config('hani.reviva.letter'),
             'round' => $detail->cycle_number,
         ];

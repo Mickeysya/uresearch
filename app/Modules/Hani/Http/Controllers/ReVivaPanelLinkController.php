@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\URL;
  * The examiner's link from their correction letter: the corrected thesis and
  * the Summary of Corrections, with no login.
  *
- * The `signed` middleware is the credential: Laravel refuses a tampered or
- * expired URL before this runs. This then re-checks that the examiner was
+ * The signature is the credential: ValidPanelLink refuses a tampered URL
+ * (403) or an expired one (410) before this runs. This then re-checks that the examiner was
  * sent a letter for this round and still holds a main seat (a declined
  * examiner's link stops working), and that only those two documents of this
  * round's application are served. Every download is logged.

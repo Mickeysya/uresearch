@@ -4,6 +4,7 @@ namespace Tests\Feature\Hani;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
+use App\Modules\Hani\Http\Middleware\ValidPanelLink;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ReVivaDetail;
 use App\Modules\Hani\Models\ReVivaStaffDocument;
@@ -177,13 +178,64 @@ class ReVivaLettersTest extends TestCase
         $backup = Examiner::find($viva['panel']->external_backup_id);
         $this->get(ReVivaLetters::panelLink($round, $backup))->assertForbidden();
 
-        // Expired.
+        // Expired: told apart from a bad signature (410, not 403), with the
+        // date and the CGS contacts. Still 403 when tampered as well.
+        $download = html_entity_decode($m[1][0]);
         Carbon::setTestNow(now()->addDays((int) config('hani.reviva.link_days') + 2));
-        $this->get($link)->assertForbidden();
+        $this->get($link)->assertStatus(410)
+            ->assertSee('This link has expired')
+            ->assertSee(ReVivaLetters::linkExpiry($round->sent_to_panel_at)->format('j F Y'))
+            ->assertSee('waheeda.cgs@example.com')
+            ->assertDontSee($viva['student']->name);
+        $this->get($download)->assertStatus(410);
+        $this->get(str_replace("/{$examiner->id}?", "/{$other->id}?", $link))->assertForbidden();
 
-        $routes = Route::getRoutes()->getByName('reviva.panel.documents')->gatherMiddleware();
-        $this->assertContains('signed', $routes);
-        $this->assertContains('throttle:30,1', $routes);
+        foreach (['reviva.panel.documents', 'reviva.panel.download'] as $name) {
+            $middleware = Route::getRoutes()->getByName($name)->gatherMiddleware();
+            $this->assertContains(ValidPanelLink::class, $middleware);
+            $this->assertContains('throttle:30,1', $middleware);
+        }
+    }
+
+    /**
+     * The bug from the seeded demo: a round sent to the panel weeks before
+     * the email is actually built (the seeder backdates the send; the queue
+     * worker builds the email on the real clock) must still email a link
+     * that opens. Counted from the send, it arrived already expired.
+     */
+    public function test_the_emailed_link_works_from_when_the_email_is_built_not_from_a_backdated_send(): void
+    {
+        $viva = $this->roundAtStageOne();
+        $this->send($viva)->assertSessionHasNoErrors();
+        $round = $viva['round']->fresh();
+        $examiner = Examiner::find($viva['panel']->external_main_id);
+
+        // The worker gets to the email 46 days after the recorded send.
+        Carbon::setTestNow('2027-11-16 09:00');
+        $mail = null;
+        Notification::assertSentOnDemand(ReVivaCorrectionLetter::class, function ($notification, $channels, $notifiable) use ($examiner, &$mail) {
+            if (! array_key_exists($examiner->email, $notifiable->routes['mail'])) {
+                return false;
+            }
+            $mail = $notification->toMail($notifiable);
+
+            return true;
+        });
+
+        $this->assertStringContainsString('The link works until 21 December 2027.', implode(' ', $mail->introLines));
+        // The reply-by date still counts from the send, as the letter says.
+        $this->assertStringContainsString('by 1 November 2027', implode(' ', $mail->outroLines));
+
+        $this->get($mail->actionUrl)->assertOk()->assertSee($viva['student']->name);
+
+        // And for the full link_days from then.
+        Carbon::setTestNow('2027-12-21 23:00');
+        $this->get($mail->actionUrl)->assertOk();
+        Carbon::setTestNow('2027-12-22 00:01');
+        $this->get($mail->actionUrl)->assertStatus(410);
+
+        // A link made at the moment of sending still counts from the send.
+        $this->assertSame('2027-11-05', ReVivaLetters::linkExpiry($round->sent_to_panel_at)->toDateString());
     }
 
     public function test_letters_are_staff_only_and_the_non_executive_may_download_them(): void

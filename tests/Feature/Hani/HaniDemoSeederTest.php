@@ -171,4 +171,37 @@ class HaniDemoSeederTest extends TestCase
 
         $this->assertSame(2, \App\Modules\Hani\Models\ReVivaDetail::count(), 'rebuilt, not duplicated');
     }
+
+    /**
+     * The seeder records S09's and S10's sends weeks in the past, but the
+     * emails are built after the commit, on the real clock (as the queue
+     * worker builds them). Every seeded examiner link must open logged out
+     * on the day of seeding and for link_days after. Kavitha's (S10) link
+     * was reported as "403 Invalid signature": it had expired on arrival.
+     */
+    public function test_the_seeded_examiner_emails_carry_links_that_open_logged_out(): void
+    {
+        Carbon::setTestNow('2026-11-04 09:00');
+        $this->seed(HaniDemoSeeder::class);
+
+        $mails = [];
+        Notification::assertSentOnDemand(\App\Modules\Hani\Notifications\ReVivaCorrectionLetter::class, function ($notification, $channels, $notifiable) use (&$mails) {
+            $mails[] = $notification->toMail($notifiable);
+
+            return true;
+        });
+        $this->assertCount(4, $mails, 'two letters each for S09 and S10');
+
+        $this->assertGuest();
+        foreach ($mails as $mail) {
+            $this->get($mail->actionUrl)->assertOk();
+        }
+
+        Carbon::setTestNow('2026-12-09 20:00');
+        foreach ($mails as $mail) {
+            $this->get($mail->actionUrl)->assertOk();
+        }
+
+        Carbon::setTestNow();
+    }
 }
