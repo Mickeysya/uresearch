@@ -9,6 +9,7 @@ use App\Modules\Norhanis\Models\ClaimsDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Feature\Norhanis\Concerns\HasApprovedPublication;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
@@ -23,6 +24,7 @@ use Tests\TestCase;
  */
 class ClaimsTest extends TestCase
 {
+    use HasApprovedPublication;
     use MakesUsers;
     use RefreshDatabase;
 
@@ -44,13 +46,17 @@ class ClaimsTest extends TestCase
         ], $overrides);
     }
 
+    /** File a valid claim as $student, linked to a publication of their own. */
     protected function submitAs(User $student, array $overrides = []): Application
     {
-        $this->actingAs($student)
-            ->post(route('claims.store'), $this->claim($overrides))
-            ->assertRedirect();
+        $publication = $this->approvedPublication($student);
 
-        return Application::sole();
+        $this->actingAs($student)
+            ->post(route('claims.store'), $this->claim($overrides + ['publication_application_id' => $publication->id]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        return Application::where('module_type', 'claims_student')->sole();
     }
 
     public function test_a_missing_required_attachment_is_refused(): void
@@ -114,12 +120,10 @@ class ClaimsTest extends TestCase
         Storage::fake('local');
 
         // No passport, no error, and none stored.
-        $this->actingAs($this->student())
-            ->post(route('claims.store'), $this->claim())
-            ->assertSessionHasNoErrors();
+        $application = $this->submitAs($this->student());
 
         $this->assertFalse(
-            Application::sole()->documents()->where('doc_type', 'Passport')->exists()
+            $application->documents()->where('doc_type', 'Passport')->exists()
         );
     }
 
@@ -163,5 +167,67 @@ class ClaimsTest extends TestCase
                 ->get(route('documents.show', $document))
                 ->assertOk();
         }
+    }
+
+    // ---- Linked to an approved publication -------------------------------
+
+    public function test_the_form_offers_only_the_students_own_approved_publications(): void
+    {
+        $student = $this->student();
+        $mine = $this->approvedPublication($student);
+        $pending = $this->approvedPublication($student, Application::STATUS_PENDING);
+        $theirs = $this->approvedPublication($this->student('22009999', 'other-student@test.my'));
+
+        $this->actingAs($student)->get(route('claims.create'))
+            ->assertOk()
+            ->assertSee('value="'.$mine->id.'"', false)
+            ->assertDontSee('value="'.$pending->id.'"', false)
+            ->assertDontSee('value="'.$theirs->id.'"', false);
+    }
+
+    public function test_with_no_approved_publication_there_is_nothing_to_claim_for(): void
+    {
+        $student = $this->student();
+        $this->approvedPublication($student, Application::STATUS_PENDING);
+
+        $this->actingAs($student)->get(route('claims.create'))
+            ->assertOk()
+            ->assertSee('You have no approved publication yet')
+            ->assertDontSee('name="total_claims"', false);
+    }
+
+    public function test_a_claim_must_name_one_of_the_students_own_approved_publications(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $pending = $this->approvedPublication($student, Application::STATUS_PENDING);
+        $theirs = $this->approvedPublication($this->student('22009999', 'other-student@test.my'));
+
+        foreach ([null, $pending->id, $theirs->id] as $publication) {
+            $this->actingAs($student)
+                ->post(route('claims.store'), $this->claim(['publication_application_id' => $publication]))
+                ->assertSessionHasErrors('publication_application_id');
+        }
+
+        $this->assertSame(0, ClaimsDetail::count());
+    }
+
+    public function test_the_approver_sees_the_publication_the_claim_is_for(): void
+    {
+        Storage::fake('local');
+
+        $supervisor = $this->supervisor();
+        $application = $this->submitAs($this->student(attributes: ['supervisor_id' => $supervisor->id]));
+
+        $this->assertSame(
+            Application::where('module_type', 'publication')->value('id'),
+            ClaimsDetail::where('application_id', $application->id)->value('publication_application_id'),
+        );
+
+        $this->actingAs($supervisor)->get(route('claims.queue'))
+            ->assertOk()
+            ->assertSee('Reservoir Simulation with Graph Networks')
+            ->assertSee('MYR 2,500.00');
     }
 }

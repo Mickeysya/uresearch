@@ -8,8 +8,11 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Support\ApproverNotifier;
+use App\Modules\Core\Models\User;
 use App\Modules\Norhanis\Models\ClaimsDetail;
+use App\Modules\Norhanis\Models\PublicationDetail;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 
 class ClaimsController extends Controller
@@ -39,14 +42,37 @@ class ClaimsController extends Controller
         return 'claims_student';
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return view('norhanis::claims.form');
+        return view('norhanis::claims.form', [
+            'publications' => $this->approvedPublications($request->user()),
+        ]);
+    }
+
+    /**
+     * The student's own approved publications, newest first: the only ones
+     * a claim may be linked to. Scoped here, and the same list validates
+     * store(), so a claim can never name someone else's publication or one
+     * still in approval.
+     *
+     * @return \Illuminate\Support\Collection<int, PublicationDetail>
+     */
+    protected function approvedPublications(User $student)
+    {
+        return PublicationDetail::query()
+            ->whereIn('application_id', Application::query()
+                ->where('module_type', 'publication')
+                ->where('student_id', $student->id)
+                ->where('status', Application::STATUS_APPROVED)
+                ->select('id'))
+            ->latest('application_id')
+            ->get();
     }
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents, ApproverNotifier $notifier)
     {
         $data = $request->validate([
+            'publication_application_id' => ['required', Rule::in($this->approvedPublications($request->user())->pluck('application_id'))],
             'bank_name' => ['required', 'string', 'max:100'],
             'bank_account_no' => ['required', 'string', 'max:30'],
 
@@ -64,6 +90,9 @@ class ClaimsController extends Controller
             // international students it applies to them; nothing here reads
             // an international flag back to enforce it.
             'passport' => [...self::FILE_RULES, 'nullable'],
+        ], [
+            'publication_application_id.required' => 'Choose the publication this claim is for.',
+            'publication_application_id.in' => 'Choose one of your own approved publications.',
         ]);
 
         $application = DB::transaction(function () use ($request, $data, $engine, $documents) {
@@ -82,6 +111,7 @@ class ClaimsController extends Controller
             // claim form is checked against its receipt.
             ClaimsDetail::create([
                 'application_id' => $application->id,
+                'publication_application_id' => $data['publication_application_id'],
                 'bank_name' => $data['bank_name'],
                 'bank_account_no' => $data['bank_account_no'],
                 'total_claims' => $data['total_claims'],
@@ -108,7 +138,8 @@ class ClaimsController extends Controller
     {
         $queue = $this->queueFor($request, $engine, ['documents']);
 
-        $details = ClaimsDetail::whereIn('application_id', $queue['applications']->pluck('id'))
+        $details = ClaimsDetail::with('publication')
+            ->whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()
             ->keyBy('application_id');
 

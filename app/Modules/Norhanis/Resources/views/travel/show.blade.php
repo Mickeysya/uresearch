@@ -19,6 +19,7 @@
 
         <x-core::stepper :application="$application" />
         @include('norhanis::partials.stage-estimate')
+        @include('norhanis::travel._urgency')
 
         @if ($rejection = $application->rejection())
             <div class="rejection-note">

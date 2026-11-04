@@ -8,11 +8,31 @@
         title="Student Claims Application" />
 
     <div class="card card-wide">
+        {{-- A claim pays for a publication CGS has already approved, so with
+             none there is nothing to claim for. See ClaimsController::create(). --}}
+        @if ($publications->isEmpty())
+            <p class="message-info">You have no approved publication yet. A claim must be for a
+               publication application that has been approved, so you can claim once yours is.</p>
+            <p><a href="{{ route('publication.create') }}">Apply for publication funding</a></p>
+        @else
         <form method="POST" action="{{ route('claims.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
             @csrf
 
             <fieldset class="fstep" data-label="Claim details">
-            <p class="fstep-hint">Journal publication claims only. Enter the amount you are claiming and where it should be paid.</p>
+            <p class="fstep-hint">Journal publication claims only. Choose the approved publication you are claiming for, then enter the amount and where it should be paid.</p>
+
+            <label for="publication_application_id">Publication</label>
+            <select name="publication_application_id" id="publication_application_id" required
+                    class="@error('publication_application_id') is-invalid @enderror">
+                <option value="">-- Select an approved publication --</option>
+                @foreach ($publications as $publication)
+                    <option value="{{ $publication->application_id }}" @selected((string) old('publication_application_id') === (string) $publication->application_id)>
+                        #{{ $publication->application_id }} · {{ $publication->title_of_paper }} ({{ $publication->title_of_conference_journal }})
+                        · {{ $publication->currency_type }} {{ number_format((float) $publication->conference_journal_fee, 2) }}
+                    </option>
+                @endforeach
+            </select>
+            @error('publication_application_id') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="total_claims">Total Claim (RM)</label>
             <input type="number" step="0.01" min="0.01" max="50000" name="total_claims" id="total_claims" required
@@ -64,6 +84,7 @@
 
             <button type="submit">Submit Application</button>
         </form>
+        @endif
     </div>
 </div>
 

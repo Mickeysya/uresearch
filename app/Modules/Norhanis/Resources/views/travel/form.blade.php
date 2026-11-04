@@ -47,6 +47,9 @@
                    value="{{ old('travel_start_date') }}"
                    class="@error('travel_start_date') is-invalid @enderror">
             @error('travel_start_date') <p class="field-error">{{ $message }}</p> @enderror
+            {{-- Filled in by the script below once both the start date and
+                 Local / International are chosen. See TravelController::create(). --}}
+            <p class="message-warning" id="lead-time-warning" hidden></p>
 
             <label for="travel_end_date">End Date</label>
             <input type="date" name="travel_end_date" id="travel_end_date" required
@@ -227,6 +230,33 @@
         });
 
         refreshRemoveButtons();
+
+        // Lead time: warn when the trip starts before approval is expected.
+        // Dates are compared as YYYY-MM-DD strings, which sort correctly.
+        const leadTimes = @json($leadTimes);
+        const start = document.getElementById('travel_start_date');
+        const scope = document.getElementById('is_international');
+        const warning = document.getElementById('lead-time-warning');
+
+        function formatDate(iso) {
+            return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        function syncLeadTime() {
+            const lead = leadTimes[scope.value === '1' ? 'international' : 'local'];
+            const late = scope.value !== '' && start.value !== '' && start.value <= lead.expected;
+
+            warning.hidden = ! late;
+            if (late) {
+                warning.textContent = 'Approval usually takes about ' + lead.days + ' working days, so a decision is expected around '
+                    + formatDate(lead.expected) + '. Your trip starts ' + formatDate(start.value)
+                    + ', so it may not be approved in time. You can still submit.';
+            }
+        }
+
+        start.addEventListener('change', syncLeadTime);
+        scope.addEventListener('change', syncLeadTime);
+        syncLeadTime();
     })();
 </script>
 

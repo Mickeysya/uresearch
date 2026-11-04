@@ -8,6 +8,7 @@ use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 use App\Modules\Norhanis\Models\TravelDetail;
 use App\Modules\Norhanis\Support\StageDurations;
+use App\Modules\Norhanis\Workflows\TravelWorkflow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\Support\MakesUsers;
@@ -140,6 +141,52 @@ class StageDurationsTest extends TestCase
             ->assertSee('Expected final decision');
     }
 
+    public function test_a_route_takes_the_sum_of_its_stages(): void
+    {
+        $durations = app(StageDurations::class);
+
+        // Supervisor 1 + Chair 1 + Non-Exec CGS 1 + the final approver 1.
+        foreach (app(TravelWorkflow::class)->routes() as $stages) {
+            $this->assertSame(4.0, $durations->routeDays('travel', $stages));
+        }
+
+        // The form carries the expected date for the script's warning: four
+        // working days from Friday noon is Thursday 12 Nov.
+        $this->actingAs($this->student())->get(route('travel.create'))
+            ->assertOk()
+            ->assertSee('id="lead-time-warning"', false)
+            ->assertSee('"expected":"2026-11-12"', false);
+    }
+
+    public function test_a_trip_departing_before_its_expected_decision_is_marked_urgent(): void
+    {
+        $student = $this->student();
+        $supervisor = $this->supervisor();
+        $student->forceFill(['supervisor_id' => $supervisor->id])->save();
+
+        // Monday 9 Nov, before the decision expected on Thursday 12 Nov.
+        $soon = $this->localTravel($student, startsIn: 3);
+
+        $this->actingAs($supervisor)->get(route('travel.queue'))
+            ->assertOk()
+            ->assertSee('departs in 3 days');
+
+        $this->actingAs($student)->get(route('travel.show', $soon))
+            ->assertSee('Urgent');
+    }
+
+    public function test_a_trip_with_time_to_spare_is_not_urgent(): void
+    {
+        $student = $this->student();
+        $supervisor = $this->supervisor();
+        $student->forceFill(['supervisor_id' => $supervisor->id])->save();
+        $this->localTravel($student);
+
+        $this->actingAs($supervisor)->get(route('travel.queue'))
+            ->assertOk()
+            ->assertDontSee('Urgent');
+    }
+
     protected function claim(User $student): Application
     {
         $application = Application::create([
@@ -158,7 +205,7 @@ class StageDurationsTest extends TestCase
         return app(WorkflowEngine::class)->submit($application);
     }
 
-    protected function localTravel(User $student): Application
+    protected function localTravel(User $student, int $startsIn = 10): Application
     {
         $application = Application::create([
             'student_id' => $student->id,
@@ -169,8 +216,8 @@ class StageDurationsTest extends TestCase
         TravelDetail::create([
             'application_id' => $application->id,
             'type_of_request' => 'data_collection',
-            'travel_start_date' => now()->addDays(10),
-            'travel_end_date' => now()->addDays(12),
+            'travel_start_date' => now()->addDays($startsIn),
+            'travel_end_date' => now()->addDays($startsIn + 2),
             'duration_days' => 3,
             'reason_for_travel' => 'Fieldwork',
             'destination_address' => 'Kuala Lumpur',

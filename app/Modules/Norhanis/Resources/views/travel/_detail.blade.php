@@ -2,6 +2,7 @@
 @php($detail = $details[$application->id] ?? null)
 
 @if ($detail)
+    @include('norhanis::travel._urgency')
     <p>Reason for Travelling: {{ $detail->reason_for_travel }}</p>
     <p>Destination While Travelling: {{ $detail->destination_address }}</p>
     @if ($detail->cost_centre) <p>Cost Centre: {{ $detail->cost_centre }}</p> @endif
