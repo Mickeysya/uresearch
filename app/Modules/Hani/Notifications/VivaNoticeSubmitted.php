@@ -24,7 +24,9 @@ class VivaNoticeSubmitted extends Notification implements ShouldQueue
     public function __construct(
         protected Application $application,
         protected VivaDetail $detail,
-    ) {}
+    ) {
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {

@@ -1,5 +1,7 @@
 {
   "_note": "Fictional demo data for HaniDemoSeeder. Do not use real people's data.",
+  "dates_relative_to": "2026-11-03",
+  "_dates_note": "Every date below is written as if today were dates_relative_to. HaniDemoSeeder moves each one by the days between that date and the day it runs, so On Gap examiners stay On Gap and nothing drifts.",
   "departments": [
     {
       "name": "Computer and Information Sciences",
@@ -1265,7 +1267,7 @@
   ],
   "scenario_notes": [
     "All people, emails and theses are fictional. Emails use example.com / example.org so the demo never contacts anyone real.",
-    "Dates are relative to the seeding date where the seeder supports it (e.g. viva in 7 days); fixed dates below are examples.",
+    "All dates are relative to the day the seeder runs (see dates_relative_to).",
     "On Gap examiners: Rajesh a/l Subramaniam and Aisyah Humaira binti Rahman. Unavailable: Zulkifli bin Hassan (retired).",
     "Fuzzy duplicate pair: 'Prof Dr Hassan bin Omar' and 'Hassan Omar, PhD' (same person, different spelling and email).",
     "Conflict-of-interest cases: Noor Azlina binti Mansor (adjunct at UTP), Muhammad Iqbal bin Rashid (former UTP staff < 5 years), Azman bin Yahya (external but institution is UTP), Priya a/p Ramasamy (co-authored with supervisor SV1)."

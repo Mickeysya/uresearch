@@ -58,6 +58,7 @@ class ExaminerDashboard
             'stages' => $this->stages($department),
             'poolKeywords' => $this->poolKeywords($pool),
             'gaps' => $this->gaps($department),
+            'emails' => $this->emails($pool),
         ];
 
         return $data + ['chartData' => $this->chartData($data)];
@@ -88,6 +89,17 @@ class ExaminerDashboard
     }
 
     /** @return array<string, int> */
+    /** Email upkeep among active examiners: missing or invalid, and not confirmed lately. */
+    protected function emails(Collection $pool): array
+    {
+        $active = $pool->where('is_active', true);
+
+        return [
+            'problem' => $active->filter(fn (Examiner $e) => $e->emailNeedsUpdating())->count(),
+            'stale' => $active->filter(fn (Examiner $e) => $e->emailStale())->count(),
+        ];
+    }
+
     protected function states(Collection $pool): array
     {
         $counts = array_fill_keys(array_keys(self::STATES), 0);

@@ -52,8 +52,8 @@ class PanelSeatChanged extends Notification implements ShouldQueue
             $mail->line("{$this->replacing->name} declined. {$this->examiner->name} has taken the seat.");
         }
 
-        $mail->line($this->examiner->needsEmail()
-            ? 'No email is on record for '.$this->examiner->name.' yet. Please obtain one before sending the letter.'
+        $mail->line($this->examiner->emailNeedsUpdating()
+            ? $this->examiner->emailProblem().' Please obtain a current one before sending the letter.'
             : 'Email: '.$this->examiner->email);
 
         return $mail->action('Open the Examiner Report', route('examiner-nomination.report'));

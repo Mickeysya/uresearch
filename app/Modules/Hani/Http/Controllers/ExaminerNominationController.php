@@ -16,6 +16,7 @@ use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Notifications\ExaminersReleased;
 use App\Modules\Hani\Notifications\NominationsNeedCompileReview;
 use App\Modules\Hani\Support\ConflictOfInterest;
+use App\Modules\Hani\Support\ExaminerContact;
 use App\Modules\Hani\Support\CrossDepartmentClashes;
 use App\Modules\Hani\Support\Departments;
 use App\Modules\Hani\Support\DuplicateDetector;
@@ -54,6 +55,9 @@ class ExaminerNominationController extends Controller
         Role::DEAN_PGR, Role::NON_EXEC_CGS,
     ];
 
+    /** The examiner's CV, offered with a proposed email. PDF only. */
+    protected const CV_MAX_KB = 5120;
+
     protected function moduleKey(): string
     {
         return 'examiner_nomination';
@@ -84,7 +88,17 @@ class ExaminerNominationController extends Controller
             'external_main_id' => ['required', 'exists:examiners,id'],
             'external_backup_id' => ['nullable', 'different:external_main_id', 'exists:examiners,id'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            // An examiner with no working email: the supervisor may give the
+            // current one, and their CV. Proposed to CGS, never written to
+            // the pool directly (Support\ExaminerContact::propose()).
+            'proposed_email' => ['nullable', 'array'],
+            'proposed_email.*' => ['nullable', 'email', 'max:150'],
+            'proposed_cv' => ['nullable', 'array'],
+            'proposed_cv.*' => ['nullable', 'file', 'mimes:pdf', 'max:'.self::CV_MAX_KB],
         ], [
+            'proposed_email.*.email' => 'Enter a valid email address for the examiner.',
+            'proposed_cv.*.mimes' => 'The CV must be a PDF.',
+            'proposed_cv.*.max' => 'The CV must be '.(self::CV_MAX_KB / 1024).' MB or smaller.',
             'student_id.exists' => 'You may only nominate examiners for your own candidates.',
             'internal_backup_id.different' => 'The internal backup must differ from the internal main examiner.',
             'external_backup_id.different' => 'The external backup must differ from the external main examiner.',
@@ -156,6 +170,25 @@ class ExaminerNominationController extends Controller
             }
         }
 
+        // A proposed email must be new: not the dead address, not someone else's.
+        foreach ($slots as $slot) {
+            $proposed = mb_strtolower(trim((string) ($data['proposed_email'][$slot] ?? '')));
+
+            if ($proposed === '' || empty($data[$slot])) {
+                continue;
+            }
+
+            $examiner = Examiner::findOrFail($data[$slot]);
+
+            if ($examiner->emailInvalid() && $proposed === mb_strtolower((string) $examiner->email)) {
+                throw ValidationException::withMessages(["proposed_email.{$slot}" => 'That is the address reported not working. Please give the examiner\'s current email.']);
+            }
+
+            if (Examiner::where('email', $proposed)->where('id', '!=', $examiner->id)->exists()) {
+                throw ValidationException::withMessages(["proposed_email.{$slot}" => 'Another examiner in the pool already has this email.']);
+            }
+        }
+
         // The same person cannot hold two seats on one panel, whichever two.
         $picked = array_filter(array_map(fn ($slot) => $data[$slot] ?? null, $slots));
 
@@ -189,6 +222,18 @@ class ExaminerNominationController extends Controller
                         'nomination_id' => $nomination->id, 'seat' => $slot, 'examiner_id' => $data[$slot],
                         'event' => 'nominated', 'actor_id' => $request->user()->id,
                     ]);
+                }
+            }
+
+            // Emails for examiners the pool cannot reach. propose() ignores
+            // an examiner whose email works: a valid address is never
+            // replaced from here.
+            foreach ($slots as $slot) {
+                if (! empty($data[$slot]) && filled($data['proposed_email'][$slot] ?? null)) {
+                    app(ExaminerContact::class)->propose(
+                        Examiner::findOrFail($data[$slot]), $data['proposed_email'][$slot], $request->user(),
+                        $nomination, $request->file("proposed_cv.{$slot}"),
+                    );
                 }
             }
 

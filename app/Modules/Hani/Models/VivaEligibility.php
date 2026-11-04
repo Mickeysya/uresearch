@@ -19,18 +19,34 @@ class VivaEligibility extends Model
         'student_id',
         'research_methodology_passed', 'publication_accepted', 'rcs_passed',
         'registered_current_semester', 'no_outstanding_fees', 'within_candidacy_period',
+        'system_checks', 'system_checked_at', 'verified_by_id', 'verified_at',
     ];
 
     protected function casts(): array
     {
         return array_fill_keys(VivaChecklist::COLUMNS, 'boolean') + [
             'verified_at' => 'datetime',
+            'system_checks' => 'array',
+            'system_checked_at' => 'datetime',
         ];
     }
 
     public function student(): BelongsTo
     {
         return $this->belongsTo(User::class, 'student_id');
+    }
+
+    /**
+     * The snapshot taken when the notice was filed, as results.
+     *
+     * @return array<string, \App\Modules\Hani\Support\Eligibility\EligibilityResult>
+     */
+    public function systemResults(): array
+    {
+        return array_map(
+            fn ($data) => \App\Modules\Hani\Support\Eligibility\EligibilityResult::fromArray($data),
+            $this->system_checks ?? [],
+        );
     }
 
     public function verifiedBy(): BelongsTo

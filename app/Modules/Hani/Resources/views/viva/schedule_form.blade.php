@@ -14,15 +14,50 @@
     <div class="card card-wide">
         <h3>Panel</h3>
         <p>Internal examiner: <b>{{ $panel?->internalMain?->name ?? 'Not recorded' }}</b>
-           @if ($panel?->internalMain) ({{ $panel->internalMain->email }}) @endif</p>
+           @if ($panel?->internalMain) ({{ $panel->internalMain->email ?? 'no email' }}) @include('hani::examiner_admin._email_badge', ['examiner' => $panel->internalMain]) @endif</p>
         <p>External examiner: <b>{{ $panel?->externalMain?->name ?? 'Not recorded' }}</b>
-           @if ($panel?->externalMain) ({{ $panel->externalMain->email }}) @endif</p>
+           @if ($panel?->externalMain) ({{ $panel->externalMain->email ?? 'no email' }}) @include('hani::examiner_admin._email_badge', ['examiner' => $panel->externalMain]) @endif</p>
+        @foreach ($recipients['skipped'] as $why)
+            <p class="message-warning">{{ $why }} The invitation will not be emailed to them; send the calendar file once CGS has updated the address.</p>
+        @endforeach
         <p>Supervisor: <b>{{ $student->supervisor?->name ?? 'Not recorded' }}</b></p>
+        <p><a href="{{ route('viva.examiners.show', $progress->notice) }}">Examiner progress</a>: letters, acceptance, thesis and reports.</p>
+
+        @if ($divergence)
+            <p class="{{ $divergence['level'] === 'major' ? 'message-error' : 'message-warning' }}">
+                <b>Examiner reports {{ $divergence['level'] === 'major' ? 'diverge sharply' : 'differ' }}:</b> {{ $divergence['text'] }}.
+                The chairman's invitation will ask the panel to discuss the reports at the pre-viva meeting.
+            </p>
+        @endif
 
         @if ($detail->isScheduled())
             <p class="message-warning">
                 Currently {{ $detail->viva_at->format('j M Y, g:i a') }} at {{ $detail->venue }}.
                 Saving sends everyone an updated invitation.
+            </p>
+        @endif
+
+        @if (session('scheduleWarnings'))
+            <div class="message-warning" role="alert">
+                <p><b>Check this slot before scheduling:</b></p>
+                <ul>
+                    @foreach (session('scheduleWarnings') as $warning)
+                        <li>{{ $warning }}</li>
+                    @endforeach
+                </ul>
+                <p>Pick a suggested slot below, or tick "Schedule anyway" to keep this one.</p>
+            </div>
+        @endif
+
+        @if ($suggestions)
+            <p><b>Next free weekday slots</b>
+                <span class="fstep-hint">(no clash with the examiners, chairman, supervisor or venue; weekends and public holidays skipped)</span></p>
+            <p id="slot-suggestions">
+                @foreach ($suggestions as $slot)
+                    <button type="button" class="btn-secondary" data-slot-date="{{ $slot->toDateString() }}" data-slot-time="{{ $slot->format('H:i') }}">
+                        {{ $slot->format('D j M Y, g:i a') }}
+                    </button>
+                @endforeach
             </p>
         @endif
 
@@ -77,8 +112,27 @@
                 the chairman and the co-supervisor if given.
             </p>
 
+            @if (session('scheduleWarnings'))
+                <div class="checkbox-row">
+                    <input type="checkbox" name="override_warnings" id="override_warnings" value="1">
+                    <label for="override_warnings">Schedule anyway: I have checked the warnings above.</label>
+                </div>
+            @endif
+
             <button type="submit">{{ $detail->isScheduled() ? 'Reschedule and Notify' : 'Schedule and Notify' }}</button>
         </form>
     </div>
 </div>
+@push('scripts')
+    <script @cspNonce>
+        // A suggested slot fills in the date and time; the AE still saves.
+        document.querySelectorAll('[data-slot-date]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('viva_date').value = button.dataset.slotDate;
+                document.getElementById('viva_time').value = button.dataset.slotTime;
+                document.getElementById('viva_date').focus();
+            });
+        });
+    </script>
+@endpush
 @endsection

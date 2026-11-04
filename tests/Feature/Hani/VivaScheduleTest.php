@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Hani;
 
+use Tests\Feature\Hani\Concerns\FilesVivaNotices;
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -27,6 +28,7 @@ use Tests\TestCase;
  */
 class VivaScheduleTest extends TestCase
 {
+    use FilesVivaNotices;
     use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
@@ -58,11 +60,7 @@ class VivaScheduleTest extends TestCase
             'no_outstanding_fees', 'within_candidacy_period',
         ], true));
 
-        $this->actingAs($this->student)->post(route('viva.notice.store'), [
-            'thesis_title' => 'Constraint-based examiner matching',
-            'expected_softbound_date' => now()->addMonths(4)->toDateString(),
-            'publication_proof' => UploadedFile::fake()->create('accepted.pdf', 100, 'application/pdf'),
-        ]);
+        $this->actingAs($this->student)->post(route('viva.notice.store'), $this->noticeFields());
         $this->notice = Application::where('module_type', 'viva_voce')->sole();
         $this->actingAs($this->ae)->post(route('viva.decide', $this->notice), ['decision' => 'approve']);
 
@@ -114,6 +112,8 @@ class VivaScheduleTest extends TestCase
             'venue' => 'Chancellor Hall, Block 2',
             'chair_name' => 'Prof. Chair',
             'chair_email' => 'chair@test.my',
+            // These tests are about invitations, not the clash checks (VivaSchedulingAssistTest).
+            'override_warnings' => 1,
         ]);
     }
 

@@ -89,6 +89,26 @@
   opens the door for CGS to log the next cycle, which links back to the
   prior one via `re_viva_details.previous_cycle_id`.
 
+## Examiner emails (who keeps them current)
+
+- **Non-Executive CGS** reads the pool and may change an examiner's email,
+  and nothing else. A reason is required.
+- **The Senior Executive** edits everything on the full form.
+- **Every change is logged** in `examiner_contact_history`, shown on the
+  examiner page (`/examiners/{id}`), whether it came from the form, the
+  email-only edit, an import or a confirmed proposal.
+- **Report email not working:** the AE (own department, or its students'
+  panels), Non-Exec or the Senior Exec. The email is flagged Invalid, CGS is
+  notified, and invitations, panel reminders and the appointment-letter feed
+  skip the examiner until a new email is saved.
+- **Freshness:** `email_confirmed_at` is set on add, change or "Confirm email
+  still valid". The pool's Email filter and the dashboard tiles list missing
+  or invalid emails, and emails not confirmed in
+  `hani.examiner_contact.stale_months` (12, provisional).
+- **At nomination:** a supervisor picking an examiner with no working email
+  can give the current one and a CV. CGS confirms it from "Proposed emails
+  to confirm" in the pool. A working email is never replaced automatically.
+
 ## Examiner suggestions (how the matching works)
 
 The nomination form lists **Suggested examiners** for each seat type, top 5,
@@ -155,6 +175,42 @@ Bind it in `ModuleProvider::register()` instead of `TfIdfMatcher`. Keep the
 explanation: report the expertise keywords closest to the thesis, so a score
 is never shown without its reason.
 
+## Viva Voce: what the system checks and chases
+
+All settings are in `config/hani.php`. Values CGS has not confirmed are marked
+"Provisional" there.
+
+- **One page:** the eligibility checklist and the Notice of Thesis
+  Submission are on `/viva/eligibility`. The abstract and keywords are the
+  examiner suggestions' query document.
+- **Candidacy period:** checked by the system from the candidature start
+  date (`Support/Eligibility/CandidacyPeriodSource`, read-only). The other
+  items are self-declared because no data source exists for them.
+- **Softbound System checks:**
+  - `Support/SimilaritySource` reads the ULearn Turnitin report.
+  - `Support/Pdf/PdfReader` is the built-in reader; smalot is used if
+    installed.
+  - `Jobs/RunSoftboundChecks` checks both PDFs. The AE sees Pass /
+    Warning / Not checked, each with its evidence.
+- **Examiner progress:** `/viva/{notice}/examiners` (AE, Senior Exec).
+  - A rejection promotes the backup.
+  - Reports are stored privately, never in `DocumentStore`.
+  - Diverging categories are flagged before the viva.
+- **Scheduling:** clash, weekend and public-holiday warnings
+  (`Support/VivaSlotFinder`), with the next free weekday slots.
+- **Step 5:** `/viva/results` (AE) records the chairman's report and the
+  category, sets the deadline, and closes the examiners' evaluation (or
+  holds them for a re-viva). Students upload corrections at
+  `/viva/corrections`.
+- **`viva:reminders`:** runs daily from the module, sends each reminder
+  once, and has `--dry-run`. It covers:
+  - examiners who have not replied
+  - overdue reports
+  - the 7-day and 1-day panel reminders, with the calendar file
+  - the softbound deadline
+  - the corrections deadlines
+  - the category 4 window closing
+
 ## Examiner Report export layout (for Jason's appointment letters)
 
 `/examiner-nomination/report/export?format=xlsx|csv`. There is one row per
@@ -163,7 +219,7 @@ candidate, one sheet, and the same columns in both formats
 
 | # | Column | Notes |
 |---|---|---|
-| 1 | **Application No.** | `applications.id` = `examiner_nominations.application_id`. Jason's import matches on this to read the seat ids exactly. |
+| 1 | **Application No.** | `applications.id` = `examiner_nominations.application_id`. The key for reading the seat ids exactly. Jason's import does not recognise this heading yet (its aliases lack the full stop); he is adding an `application no.` alias on his side. Until then it falls back to matching by name. |
 | 2–6 | Faculty, Department, Candidate, Matric No, Programme | the candidate |
 | 7–8 | Thesis Title, Supervisor | |
 | 9–11 | Internal Main, Internal Main Dept, Internal Backup | the **current** panel, after any decline |
@@ -191,9 +247,57 @@ follow-up, not currently tracked as required:
 - Automated reminders as correction/hardbound deadlines approach — `TODO.md`'s
   cross-cutting section notes scheduled commands are still a gap generally.
 
+## Demo data (`HaniDemoSeeder`)
+
+Fictional, on demand only, never called from `DatabaseSeeder`:
+
+```bash
+docker exec uresearch-app php artisan db:seed --class="App\Modules\Hani\Database\Seeders\HaniDemoSeeder"
+```
+
+Run it after `migrate`, and again whenever the demo should look fresh.
+**Every date is relative to the day it runs:**
+- The dataset's dates (`Database/demo/hani_demo_dataset.json`) are written
+  as of `dates_relative_to` and moved to today, so the On Gap examiners stay
+  On Gap.
+- Each run rebuilds the demo students' viva, softbound and nomination
+  records from scratch, so S07's viva is always 7 days away.
+- Running it twice gives the same picture.
+- It never changes the shared test accounts or any other module's records.
+
+**Accounts.** The demo students and supervisors are `@example.com`, with
+password `password`, like the test accounts. Their approvers are the shared
+test accounts:
+- the candidate's department AE, for example `ae@utp.edu.my` for Computing
+  and `ae.petroleum@utp.edu.my` for Petroleum Engineering
+- `seniorexec@`, `director@` and `dean@`
+
+| Student | Email | Programme / department | Stage |
+|---|---|---|---|
+| S01 Aiman Hakim | `aiman.roslan@example.com` | MSc FT, Computing | Not started: the full live walkthrough (MSc) |
+| S02 Nurin Batrisyia | `nurin.azlan@example.com` | PhD FT, Petroleum Eng. | Notice waiting for the AE: the live walkthrough (PhD) |
+| S03 Harith Iskandar | `harith.z@example.com` | MSc PT, Chemical Eng. | Nomination at CGS compile; clash on Firdaus Kamarudin with S04 |
+| S04 Siti Khadijah | `khadijah.mazlan@example.com` | PhD FT, Civil & Env. Eng. | Nomination at the Senior Director; "Hassan bin Omar" vs S10's "Hassan Omar, PhD" duplicate |
+| S05 Amirah Sofea | `amirah.kamal@example.com` | MSc FT, Management | Released; softbound returned (Turnitin receipt 45 days old: System checks warn) |
+| S06 Lee Jia Hui | `lee.jiahui@example.com` | PhD PT, Mechanical Eng. | Ready to schedule; examiner reports diverge (Internal 2, External 4: major) |
+| S07 Muhammad Danish | `danish.faisal@example.com` | MSc FT, Electrical & Electronics Eng. | Viva in 7 days: `php artisan viva:reminders` sends the 7-day reminder |
+| S08 Tan Yi Xuan | `tan.yixuan@example.com` | MSc FT, Computing | Viva 14 days ago, result category 2; uploads corrections, then the AE accepts |
+| S09 Nur Aleesya | `aleesya.hisham@example.com` | PhD FT, Applied Sciences | Viva 14 days ago, result category 4; examiners held, Senior Exec asked to log a re-viva |
+| S10 Kavitha Selvaraj | `kavitha.selvaraj@example.com` | MSc PT, Chemical Eng. | Released nomination (the duplicate partner); its re-viva rounds come in Prompt 3 |
+
+The dataset says S03's clash partner is S10. Both are in Chemical
+Engineering, though, and a clash is by definition across departments, so
+the clash is with S04 instead. Every chain runs through `WorkflowEngine`;
+only Hani's own tables are written directly.
+
 ## Tests
 
-`tests/Feature/Hani/` — 24 cases.
+`tests/Feature/Hani/`: 173 tests. Examiner email upkeep is covered by
+`ExaminerContactTest`. The viva files added in Prompt 2:
+`VivaBulkSafetyTest`, `VivaEligibilityVerificationTest`,
+`VivaSoftboundChecksTest`, `VivaExaminerProgressTest`,
+`VivaSchedulingAssistTest`, `VivaResultTest`; fixtures are in
+`tests/Feature/Hani/Concerns/` (`BuildsVivas`, `FilesVivaNotices`).
 
 | File | Guards |
 |---|---|
@@ -201,7 +305,8 @@ follow-up, not currently tracked as required:
 | `ExaminerPoolTest` | the internal/external split: which columns each list shows, tab-scoped counts, the derived student column, the external-field strip on an internal save, `institution` being required for an external examiner, and the add form's stepper contract (two steps, external block disabled for an internal examiner) |
 | `ReVivaTest` | the four-stage stepper and the level-based outcome |
 
-Run them with `./vendor/bin/sail artisan test --filter=Hani`.
+Run them with `docker exec uresearch-app php artisan test tests/Feature/Hani`
+(the path, not `--filter=Hani`, which also matches Norhanis's tests).
 
 ## Layout
 

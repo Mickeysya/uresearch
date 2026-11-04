@@ -74,12 +74,22 @@
                 <p class="fstep-hint">From your notice. Update it if the title has changed.</p>
                 @error('thesis_title') <p class="field-error">{{ $message }}</p> @enderror
 
+                <div class="message-info" id="turnitin-guidance">
+                    <p><b>Your Turnitin report.</b> Download it from
+                        <a href="{{ $ulearnUrl }}" target="_blank" rel="noopener noreferrer">ULearn</a>:
+                        open your thesis submission and download the <b>full similarity report</b> as a PDF
+                        (the Originality Report, with the similarity index and the list of primary sources).
+                        The Digital Receipt on its own is not enough.</p>
+                    <p>Upload it below first: UResearch reads the similarity index from it and fills it in for you to confirm.</p>
+                </div>
+
                 <label for="similarity_percent">Turnitin Similarity Index (%)</label>
                 <input type="number" name="similarity_percent" id="similarity_percent" required
                        min="0" max="{{ $similarityMax }}" step="0.01"
                        value="{{ old('similarity_percent') }}"
                        class="@error('similarity_percent') is-invalid @enderror">
                 <p class="fstep-hint">From your Turnitin report. {{ $similarityMax }}% or below.</p>
+                <p class="fstep-hint" id="similarity-read" aria-live="polite" hidden></p>
                 @error('similarity_percent') <p class="field-error">{{ $message }}</p> @enderror
 
                 <label for="word_count">Word Count</label>
@@ -146,4 +156,59 @@
 </div>
 
 @include('core::partials.form-stepper')
+
+@push('scripts')
+    <script @cspNonce>
+        // Reads the chosen Turnitin report on the server and fills in the
+        // similarity index for the student to confirm. A convenience only:
+        // VivaSoftboundController::store() reads the stored report again and
+        // enforces the limit itself.
+        (function () {
+            var input = document.getElementById('turnitin_report');
+            var field = document.getElementById('similarity_percent');
+            var note = document.getElementById('similarity-read');
+            if (!input || !field || !note) return;
+
+            function say(text, warn) {
+                note.hidden = false;
+                note.textContent = text;
+                note.className = warn ? 'field-error' : 'fstep-hint';
+            }
+
+            input.addEventListener('change', function () {
+                var file = input.files[0];
+                if (!file) { note.hidden = true; return; }
+
+                say('Reading your Turnitin report…', false);
+
+                var body = new FormData();
+                body.append('turnitin_report', file);
+                body.append('_token', document.querySelector('input[name="_token"]').value);
+
+                fetch(@json(route('viva.softbound.similarity-preview')), {
+                    method: 'POST', body: body, credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                }).then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+                  .then(function (data) {
+                      if (!data.ok) {
+                          say('Not checked automatically: ' + data.message + ' Type the similarity index from your report; it will be marked as self-declared.', false);
+                          return;
+                      }
+                      field.value = data.index;
+                      var parts = [];
+                      if (data.internet !== null) parts.push('internet sources ' + data.internet + '%');
+                      if (data.publications !== null) parts.push('publications ' + data.publications + '%');
+                      if (data.student_papers !== null) parts.push('student papers ' + data.student_papers + '%');
+                      say((data.simulated ? 'Simulated reading: ' : 'Read from your report: ') + data.index + '% similarity index'
+                          + (parts.length ? ' (' + parts.join(', ') + ')' : '') + '. Check that this matches your report.'
+                          + (data.over_limit ? ' This is above the {{ $similarityMax }}% limit, so the submission will be refused.' : ''),
+                          data.over_limit);
+                  })
+                  .catch(function () {
+                      say('Not checked automatically: the report could not be read just now. Type the similarity index from your report.', false);
+                  });
+            });
+        })();
+    </script>
+@endpush
 @endsection

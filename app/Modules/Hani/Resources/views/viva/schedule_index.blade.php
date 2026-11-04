@@ -20,9 +20,11 @@
                         @foreach ($ready as $p)
                             <tr>
                                 <td>{{ $p->notice->student->name }}<br><span class="fstep-hint">{{ $p->notice->student->matric_no }}</span></td>
-                                <td>{{ $p->detail?->thesis_title }}</td>
+                                <td>{{ $p->detail?->thesis_title }}
+                                    @include('hani::viva._divergence', ['divergence' => $divergence[$p->notice->id] ?? null])</td>
                                 <td>{{ $p->notice->submitted_at->format('j M Y') }}</td>
-                                <td><a href="{{ route('viva.schedule.edit', $p->notice) }}" class="btn">Set Date</a></td>
+                                <td><a href="{{ route('viva.schedule.edit', $p->notice) }}" class="btn">Set Date</a>
+                                    <a href="{{ route('viva.examiners.show', $p->notice) }}">Examiner progress</a></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -42,11 +44,13 @@
                     <tbody>
                         @foreach ($scheduled as $p)
                             <tr>
-                                <td>{{ $p->notice->student->name }}</td>
+                                <td>{{ $p->notice->student->name }}
+                                    @include('hani::viva._divergence', ['divergence' => $divergence[$p->notice->id] ?? null])</td>
                                 <td>{{ $p->detail->viva_at->format('j M Y, g:i a') }}</td>
                                 <td>{{ $p->detail->venue }}</td>
                                 <td>{{ $p->detail->chair_name }}</td>
-                                <td><a href="{{ route('viva.schedule.edit', $p->notice) }}" class="btn-secondary">Reschedule</a></td>
+                                <td><a href="{{ route('viva.schedule.edit', $p->notice) }}" class="btn-secondary">Reschedule</a>
+                                    <a href="{{ route('viva.examiners.show', $p->notice) }}">Examiner progress</a></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -67,7 +71,10 @@
                         @foreach ($waiting as $p)
                             <tr>
                                 <td>{{ $p->notice->student->name }}</td>
-                                <td>{{ implode('; ', $p->waitingFor()) }}</td>
+                                <td>{{ implode('; ', $p->waitingFor()) }}
+                                    @if ($p->nomination?->status === \App\Modules\Core\Models\Application::STATUS_APPROVED)
+                                        &middot; <a href="{{ route('viva.examiners.show', $p->notice) }}">Examiner progress</a>
+                                    @endif</td>
                             </tr>
                         @endforeach
                     </tbody>

@@ -7,7 +7,10 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaSoftboundDetail;
 use App\Modules\Hani\Notifications\VivaScheduled;
+use App\Modules\Hani\Support\ExaminerDivergence;
 use App\Modules\Hani\Support\VivaInvite;
+use App\Modules\Hani\Support\VivaSlotFinder;
+use Carbon\Carbon;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,6 +47,7 @@ class VivaScheduleController extends Controller
             'ready' => $groups->get('ready', collect()),
             'scheduled' => $groups->get('scheduled', collect())->sortBy(fn ($p) => $p->detail->viva_at),
             'waiting' => $groups->get('waiting', collect()),
+            'divergence' => ExaminerDivergence::forNotices($notices->pluck('id')),
         ]);
     }
 
@@ -65,6 +69,9 @@ class VivaScheduleController extends Controller
             'panel' => $progress->panel(),
             'detail' => $progress->detail,
             'recipients' => VivaInvite::recipients($application, $progress->detail, $progress->panel()),
+            'divergence' => ExaminerDivergence::forNotices([$application->id])[$application->id] ?? null,
+            'suggestions' => session('slotSuggestions') ?? (new VivaSlotFinder($application))
+                ->suggestions(now()->addDay(), $progress->detail->venue, $progress->detail->chair_email),
         ]);
     }
 
@@ -87,11 +94,23 @@ class VivaScheduleController extends Controller
             'chair_email' => ['required', 'email', 'max:150'],
             'co_supervisor_name' => ['nullable', 'string', 'max:150', 'required_with:co_supervisor_email'],
             'co_supervisor_email' => ['nullable', 'email', 'max:150', 'required_with:co_supervisor_name'],
+            'override_warnings' => ['nullable', 'boolean'],
         ], [
             'viva_date.after_or_equal' => 'The viva date cannot be in the past.',
             'co_supervisor_name.required_with' => 'Give the co-supervisor\'s name as well as their email.',
             'co_supervisor_email.required_with' => 'Give the co-supervisor\'s email so they receive the invitation.',
         ]);
+
+        // Clashes, weekends and holidays: warned, and the AE decides.
+        $start = Carbon::parse($data['viva_date'].' '.$data['viva_time']);
+        $finder = new VivaSlotFinder($application);
+        $warnings = $finder->warnings($start, $data['venue'], $data['chair_email']);
+
+        if ($warnings && ! $request->boolean('override_warnings')) {
+            return back()->withInput()
+                ->with('scheduleWarnings', $warnings)
+                ->with('slotSuggestions', $finder->suggestions($start->copy()->startOfDay(), $data['venue'], $data['chair_email']));
+        }
 
         $detail = $progress->detail;
         $rescheduled = $detail->isScheduled();
@@ -110,21 +129,32 @@ class VivaScheduleController extends Controller
         activity('viva')
             ->causedBy($request->user())
             ->performedOn($application)
-            ->withProperties(['action' => $rescheduled ? 'rescheduled' : 'scheduled', 'viva_at' => (string) $detail->viva_at])
+            ->withProperties(['action' => $rescheduled ? 'rescheduled' : 'scheduled', 'viva_at' => (string) $detail->viva_at]
+                + ($warnings ? ['overridden_warnings' => $warnings] : []))
             ->log($rescheduled ? 'Viva rescheduled' : 'Viva scheduled');
 
-        $sent = $this->sendInvites($application, $detail, $progress, $rescheduled);
+        [$sent, $skipped] = $this->sendInvites($application, $detail, $progress, $rescheduled);
 
-        return redirect()->route('viva.schedule.index')->with('status',
+        $redirect = redirect()->route('viva.schedule.index')->with('status',
             ($rescheduled ? 'Viva rescheduled' : 'Viva scheduled').' for '.$application->student->name
             .' on '.$detail->viva_at->format('j M Y, g:i a').'. Invitation sent to '.$sent.' '.str('recipient')->plural($sent).'.');
+
+        // Said plainly, so the AE knows to send it by hand once CGS has the address.
+        return $skipped
+            ? $redirect->with('warning', 'Invitation not emailed to an examiner: '.implode(' ', $skipped).' CGS has the examiner pool; send the calendar file once the email is updated.')
+            : $redirect;
     }
 
-    /** Best effort, after the save: the date stands even if the mail server is down. */
-    protected function sendInvites(Application $notice, VivaDetail $detail, VivaProgress $progress, bool $rescheduled): int
+    /**
+     * Best effort, after the save: the date stands even if the mail server is down.
+     *
+     * @return array{0: int, 1: array<int, string>} sent count, and why any examiner was skipped
+     */
+    protected function sendInvites(Application $notice, VivaDetail $detail, VivaProgress $progress, bool $rescheduled): array
     {
         $recipients = VivaInvite::recipients($notice, $detail, $progress->panel());
-        $notification = new VivaScheduled($notice, $detail, $rescheduled);
+        $discuss = isset(ExaminerDivergence::forNotices([$notice->id])[$notice->id]);
+        $notification = new VivaScheduled($notice, $detail, $rescheduled, $discuss);
 
         try {
             Notification::send($recipients['users'], $notification);
@@ -136,7 +166,7 @@ class VivaScheduleController extends Controller
             report($e);
         }
 
-        return count($recipients['users']) + count($recipients['emails']);
+        return [count($recipients['users']) + count($recipients['emails']), $recipients['skipped']];
     }
 
     /** The viva record behind a notice, scoped to the AE's own department. */

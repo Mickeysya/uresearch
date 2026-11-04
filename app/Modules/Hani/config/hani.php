@@ -110,6 +110,192 @@ return [
         ],
     ],
 
+    'eligibility' => [
+        // Items the system checks itself instead of taking the student's
+        // tick (Support\Eligibility\EligibilitySource). The rest stay
+        // self-declared: RCS results, registration and fees are stored nowhere
+        // in UResearch.
+        'sources' => [
+            \App\Modules\Hani\Support\Eligibility\CandidacyPeriodSource::class,
+        ],
+
+        // Maximum candidacy, in months from the candidature start date.
+        // Provisional: from the Handbook as described to us, not re-confirmed
+        // with CGS.
+        'candidacy_months' => [
+            'MSC' => ['full_time' => 48, 'part_time' => 72],
+            'PHD' => ['full_time' => 96, 'part_time' => 120],
+        ],
+    ],
+
+    'notice' => [
+        // The abstract and keywords on the Notice of Thesis Submission, which
+        // feed the examiner suggestions. Provisional: our own bounds, not a
+        // Handbook figure.
+        'abstract_min_words' => 100,
+        'abstract_max_words' => 500,
+        'keywords_min' => 3,
+        'keywords_max' => 8,
+    ],
+
+    'similarity' => [
+        // Where the similarity figures come from (Support\Similarity):
+        // uploaded (read the student's Turnitin report PDF) | turnitin_api
+        // (stub, needs a UTP licence) | simulated (demo figures, labelled).
+        'source' => 'uploaded',
+
+        // Where students get the report. CONFIRMED: students download it
+        // from ULearn. The address itself is provisional.
+        'ulearn_url' => 'https://ulearn.utp.edu.my',
+
+        // Flag any single primary source above this percentage. Provisional.
+        'single_source_warn' => 5,
+
+        // Flag a declared figure this many percentage points away from the
+        // one read from the report. Provisional.
+        'mismatch_points' => 1.0,
+
+        // Flag a report older than this, when a Digital Receipt gives its
+        // date. Provisional.
+        'max_report_age_days' => 30,
+
+        // TurnitinApiSource, once UTP licenses it. Keys proposed for
+        // .env.example in SHARED_CHANGES.md.
+        'turnitin_api' => [
+            'key' => env('TURNITIN_API_KEY'),
+            'url' => env('TURNITIN_API_URL'),
+        ],
+    ],
+
+    'softbound_checks' => [
+        // The PDF's word count is approximate (front matter, references and
+        // tables count too), so only a gap bigger than this share of the
+        // declared count is flagged. Provisional.
+        'word_tolerance' => 0.15,
+
+        // How much of the notice title's words must appear on the thesis's
+        // first pages (or in the report title). Provisional.
+        'title_overlap' => 0.8,
+
+        // How many opening pages are searched for the title.
+        'title_pages' => 2,
+    ],
+
+    'examiner_progress' => [
+        // Chase the AE when a letter went out this many days ago and the
+        // examiner has neither accepted nor rejected. Provisional.
+        'ack_chase_days' => 14,
+
+        // The examiner's report is due this many weeks after they
+        // acknowledge receipt of the THESIS. CONFIRMED (4 Master / 6 PhD).
+        'report_weeks' => ['MSC' => 4, 'PHD' => 6],
+
+        // Optional 1-5 ratings on the examiner's report form. Provisional
+        // wording: CGS's form has 8 general criteria and 12 thesis sections;
+        // these names are our paraphrase until we have the form itself.
+        'criteria' => [
+            'originality' => 'Originality',
+            'contribution' => 'Contribution to knowledge',
+            'literature' => 'Grasp of the literature',
+            'methodology' => 'Soundness of the methodology',
+            'analysis' => 'Analysis and interpretation',
+            'presentation' => 'Organisation and presentation',
+            'language' => 'Language and style',
+            'publication' => 'Publication potential',
+        ],
+        'sections' => [
+            'title' => 'Title', 'abstract' => 'Abstract', 'introduction' => 'Introduction',
+            'literature_review' => 'Literature review', 'methodology' => 'Methodology',
+            'results' => 'Results', 'discussion' => 'Discussion', 'conclusion' => 'Conclusion',
+            'recommendations' => 'Recommendations', 'references' => 'References',
+            'appendices' => 'Appendices', 'overall' => 'Overall presentation',
+        ],
+    ],
+
+    'scheduling' => [
+        // Two vivas closer than this (in hours) that share an examiner, the
+        // chairman, the supervisor or the venue are a clash. Matches the
+        // 2-hour calendar event. Provisional.
+        'clash_hours' => 2,
+
+        // Start times offered as free slots, and how far ahead to look.
+        // Provisional.
+        'slot_times' => ['09:00', '14:00'],
+        'suggestions' => 3,
+        'lookahead_days' => 60,
+
+        // Malaysian public holidays (federal, plus Perak, where UTP is).
+        // PROVISIONAL: Islamic, Chinese and Hindu dates follow the published
+        // calendars as we understand them and can move by a day; check them
+        // against the official gazette each year.
+        'public_holidays' => [
+            '2026-01-01' => 'New Year\'s Day',
+            '2026-02-01' => 'Thaipusam',
+            '2026-02-17' => 'Chinese New Year',
+            '2026-02-18' => 'Chinese New Year (second day)',
+            '2026-03-07' => 'Nuzul Al-Quran',
+            '2026-03-21' => 'Hari Raya Aidilfitri',
+            '2026-03-22' => 'Hari Raya Aidilfitri (second day)',
+            '2026-05-01' => 'Labour Day',
+            '2026-05-27' => 'Hari Raya Haji',
+            '2026-05-31' => 'Wesak Day',
+            '2026-06-01' => 'Birthday of the Yang di-Pertuan Agong',
+            '2026-06-17' => 'Awal Muharram',
+            '2026-08-26' => 'Maulidur Rasul',
+            '2026-08-31' => 'National Day',
+            '2026-09-16' => 'Malaysia Day',
+            '2026-11-06' => 'Birthday of the Sultan of Perak',
+            '2026-11-08' => 'Deepavali',
+            '2026-12-25' => 'Christmas Day',
+            '2027-01-01' => 'New Year\'s Day',
+            '2027-01-22' => 'Thaipusam',
+            '2027-02-06' => 'Chinese New Year',
+            '2027-02-07' => 'Chinese New Year (second day)',
+            '2027-02-24' => 'Nuzul Al-Quran',
+            '2027-03-10' => 'Hari Raya Aidilfitri',
+            '2027-03-11' => 'Hari Raya Aidilfitri (second day)',
+            '2027-05-01' => 'Labour Day',
+            '2027-05-17' => 'Hari Raya Haji',
+            '2027-05-20' => 'Wesak Day',
+            '2027-06-06' => 'Awal Muharram',
+            '2027-06-07' => 'Birthday of the Yang di-Pertuan Agong',
+            '2027-08-15' => 'Maulidur Rasul',
+            '2027-08-31' => 'National Day',
+            '2027-09-16' => 'Malaysia Day',
+            '2027-10-28' => 'Deepavali',
+            '2027-11-05' => 'Birthday of the Sultan of Perak',
+            '2027-12-25' => 'Christmas Day',
+        ],
+    ],
+
+    'result' => [
+        // Months from the viva date to the corrected final thesis, by
+        // result category. Provisional (from the AE's guideline as described).
+        'correction_months' => [1 => 1, 2 => 3, 3 => 6],
+
+        // Category 4: the re-examination window, in months from the viva.
+        // Provisional.
+        'resubmission_opens_months' => 6,
+        'resubmission_closes_months' => 12,
+
+        // Remind the student this many days before the corrections are due.
+        // Provisional.
+        'reminder_days' => [30, 7],
+    ],
+
+    'reminders' => [
+        // When `viva:reminders` runs each day. Provisional.
+        'daily_at' => '07:45',
+
+        // Panel reminders (with the calendar file) this many days before
+        // the viva. Provisional.
+        'panel_days' => [7, 1],
+
+        // Nudge the student once when the expected softbound date is this
+        // close and nothing is filed. Provisional.
+        'softbound_nudge_days' => 14,
+    ],
+
     'sweep' => [
         // When `examiners:sweep` runs each day. Provisional.
         'daily_at' => '07:30',
@@ -128,6 +314,13 @@ return [
         // many examiners covering a topic counts as a gap. Provisional.
         'gap_topics' => 8,
         'gap_threshold' => 2,
+    ],
+
+    'examiner_contact' => [
+        // An email nobody has added, changed or confirmed for this many
+        // months is listed as "not confirmed" in the pool and on the
+        // dashboard. A prompt to check it, not a block. Provisional.
+        'stale_months' => 12,
     ],
 
     'import' => [

@@ -93,6 +93,11 @@
     .examiner-duplicate .btn-link { background: none; border: none; padding: 0; margin: 0 0 0 4px; color: inherit; text-decoration: underline; font-size: inherit; cursor: pointer; }
     .examiner-reason { display: block; font-size: var(--text-2xs); color: var(--text-grey); margin-top: 2px; max-width: 220px; }
 
+    .exam-proposals {
+        background: var(--surface); border: 1px solid var(--border-subtle);
+        border-radius: 12px; padding: 4px 16px 16px; overflow-x: auto; margin-bottom: 18px;
+    }
+
     .examiner-pagination { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
     .examiner-pagination a, .examiner-pagination span {
         padding: 6px 11px; border-radius: 8px; font-size: var(--text-sm); border: 1px solid var(--border-grey);
@@ -173,18 +178,58 @@
 @php
     $isExternal = $type === \App\Modules\Hani\Models\Examiner::TYPE_EXTERNAL;
     $isInternal = $type === \App\Modules\Hani\Models\Examiner::TYPE_INTERNAL;
+    // Non-Executive CGS reads the pool and keeps emails current; only the
+    // Senior Executive adds, imports, edits or marks examiners unavailable.
+    $canManage = auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS;
 @endphp
 
 <div class="card-container-inline">
     <x-core::page-header
         title="Examiner Pool"
         subtitle="{{ $examiners->total() }} {{ Str::plural('examiner', $examiners->total()) }} on record. State is derived, so anyone on gap becomes available again on their own.">
-        <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
-        <a href="{{ route('examiner-import.create') }}" class="btn-secondary">Import from Excel</a>
-        @if ($openReviewItems)
-            <a href="{{ route('examiner-import.review') }}" class="btn-secondary">Review list ({{ $openReviewItems }})</a>
+        @if ($canManage)
+            <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
+            <a href="{{ route('examiner-import.create') }}" class="btn-secondary">Import from Excel</a>
+            @if ($openReviewItems)
+                <a href="{{ route('examiner-import.review') }}" class="btn-secondary">Review list ({{ $openReviewItems }})</a>
+            @endif
         @endif
     </x-core::page-header>
+
+    @if ($proposals->isNotEmpty())
+        {{-- Not a RegionSwap region (its own class, not .exam-table-wrap, which
+             RegionSwap swaps by its first match), so it is left alone by tab and
+             filter swaps and its links and forms are ordinary navigations. --}}
+        <div class="exam-proposals" id="proposed-emails">
+            <h3 style="margin: 12px 0 4px;">Proposed emails to confirm ({{ $proposals->count() }})</h3>
+            <p class="exam-tab-note" style="margin: 0 0 8px;">Given by supervisors at nomination for examiners whose email was missing or reported not working. Confirming makes it the examiner's email and logs it; nothing changes until then.</p>
+            @error('proposal') <p class="message-error">{{ $message }}</p> @enderror
+            <table class="data-table exam-table">
+                <thead><tr><th>Examiner</th><th>Email now</th><th>Proposed email</th><th>From</th><th>CV</th><th></th></tr></thead>
+                <tbody>
+                    @foreach ($proposals as $proposal)
+                        <tr>
+                            <td><a href="{{ route('examiner-admin.show', $proposal->examiner) }}" data-region-swap-ignore>{{ $proposal->examiner->name }}</a></td>
+                            <td>{{ $proposal->examiner->email ?? 'None' }} @include('hani::examiner_admin._email_badge', ['examiner' => $proposal->examiner])</td>
+                            <td><b>{{ $proposal->proposed_email }}</b></td>
+                            <td>{{ $proposal->proposedBy?->name ?? 'Unknown' }}@if ($proposal->nomination), nomination #{{ $proposal->nomination->application_id }}@endif<span class="examiner-reason">{{ $proposal->created_at->format('j M Y') }}</span></td>
+                            <td>@if ($proposal->cv_path)<a href="{{ route('examiner-admin.proposal.cv', $proposal) }}" data-region-swap-ignore>Download CV</a>@else None @endif</td>
+                            <td>
+                                <form method="POST" action="{{ route('examiner-admin.proposal.confirm', $proposal) }}" style="display: inline;">
+                                    @csrf
+                                    <button type="submit" @disabled(! $proposal->examiner->emailNeedsUpdating()) title="{{ $proposal->examiner->emailNeedsUpdating() ? '' : 'The examiner already has a working email' }}">Confirm</button>
+                                </form>
+                                <form method="POST" action="{{ route('examiner-admin.proposal.dismiss', $proposal) }}" style="display: inline;">
+                                    @csrf
+                                    <button type="submit" class="btn-secondary">Dismiss</button>
+                                </form>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
 
     <nav class="exam-tabs" aria-label="Examiner lists">
         @foreach ([
@@ -269,6 +314,14 @@
                     @endforeach
                 </select>
             </div>
+            <div class="field">
+                <label for="f-email">Email</label>
+                <select name="email" id="f-email" data-autosubmit>
+                    <option value="">All emails</option>
+                    <option value="problem" @selected(($filters['email'] ?? null) === 'problem')>Missing or invalid emails</option>
+                    <option value="stale" @selected(($filters['email'] ?? null) === 'stale')>Emails not confirmed in {{ config('hani.examiner_contact.stale_months') }} months</option>
+                </select>
+            </div>
             <div class="field search-field">
                 <label for="f-search">Search</label>
                 <input type="text" name="search" id="f-search" placeholder="Search by name, department..."
@@ -322,22 +375,28 @@
                             <div class="examiner-name-cell">
                                 <span class="examiner-avatar">{{ strtoupper($initials) }}</span>
                                 <span>
-                                    {{ $examiner->name }}
+                                    <a href="{{ route('examiner-admin.show', $examiner) }}" data-region-swap-ignore>{{ $examiner->name }}</a>
                                     {{-- CGS's pool file has no email column; nothing that
                                          writes to an examiner will reach this one yet. --}}
-                                    @if ($examiner->needsEmail())
+                                    @if ($examiner->emailInvalid())
+                                        <span class="examiner-state-badge tone-critical">Email needs updating</span>
+                                    @elseif ($examiner->needsEmail())
                                         <span class="examiner-state-badge tone-warn">Email needed</span>
+                                    @elseif ($examiner->emailStale())
+                                        <span class="examiner-state-badge tone-info">Email not confirmed</span>
                                     @endif
                                     {{-- Support\DuplicateDetector: flagged, never blocked. --}}
                                     @foreach ($duplicates[$examiner->id] ?? [] as $dup)
                                         <span class="examiner-duplicate">
                                             Possible duplicate of {{ $dup['other']->name }} ({{ $dup['score'] }}% similar)
-                                            <form method="POST" action="{{ route('examiner-admin.dismiss-duplicate') }}">
-                                                @csrf
-                                                <input type="hidden" name="examiner_id" value="{{ $examiner->id }}">
-                                                <input type="hidden" name="other_id" value="{{ $dup['other']->id }}">
-                                                <button type="submit" class="btn-link">Not the same person</button>
-                                            </form>
+                                            @if ($canManage)
+                                                <form method="POST" action="{{ route('examiner-admin.dismiss-duplicate') }}">
+                                                    @csrf
+                                                    <input type="hidden" name="examiner_id" value="{{ $examiner->id }}">
+                                                    <input type="hidden" name="other_id" value="{{ $dup['other']->id }}">
+                                                    <button type="submit" class="btn-link">Not the same person</button>
+                                                </form>
+                                            @endif
                                         </span>
                                     @endforeach
                                 </span>
@@ -387,7 +446,10 @@
                             @endif
                         </td>
                         <td>
-                            <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary">Edit</a>
+                            @if (! $canManage)
+                                <a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Update email</a>
+                            @else
+                            <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Edit</a>
                             @if ($examiner->is_active)
                                 <button type="button" class="btn-reject"
                                         data-unavailable="{{ $examiner->id }}"
@@ -399,6 +461,7 @@
                                     @csrf
                                     <button type="submit">Reactivate</button>
                                 </form>
+                            @endif
                             @endif
                         </td>
                     </tr>
@@ -438,6 +501,7 @@
     </div>
 </div>
 
+@if ($canManage)
 <dialog id="unavailable-modal" class="reason-modal">
     <div class="card">
         <div class="reason-modal-head">
@@ -460,6 +524,7 @@
         </form>
     </div>
 </dialog>
+@endif
 
 @include('core::partials.region-swap')
 
@@ -483,7 +548,12 @@
         document.querySelectorAll('[data-close-modal]').forEach(function (button) {
             button.addEventListener('click', function () { modal.close(); });
         });
+        // Non-Executive CGS gets no modal and no "Mark Unavailable" buttons.
 
+        // Links in these regions that leave the pool (an examiner's page,
+        // Edit, Update email) carry data-region-swap-ignore, so they are
+        // real navigations; without it RegionSwap fetches the page, finds
+        // none of these regions in it, and only changes the address bar.
         RegionSwap({
             selectors: [
                 '.page-header p',

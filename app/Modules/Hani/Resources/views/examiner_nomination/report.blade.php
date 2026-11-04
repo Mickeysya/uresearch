@@ -124,6 +124,7 @@
                                         <td>
                                             @if ($nomination->$main)
                                                 {{ $nomination->$main->name }}
+                                                @include('hani::examiner_admin._email_badge', ['examiner' => $nomination->$main])
                                                 @include('hani::examiner_nomination._coi', ['flags' => $coiFlags[$application?->id][$nomination->$main->id] ?? []])
                                                 @if ($clashes->has($nomination->$main->id))
                                                     <span class="rep-clash"
@@ -139,6 +140,7 @@
                                                 backup:
                                                 @if ($nomination->$backup)
                                                     {{ $nomination->$backup->name }}
+                                                    @include('hani::examiner_admin._email_badge', ['examiner' => $nomination->$backup])
                                                     @include('hani::examiner_nomination._coi', ['flags' => $coiFlags[$application?->id][$nomination->$backup->id] ?? []])
                                                     @if ($clashes->has($nomination->$backup->id))
                                                         <span class="rep-clash">also elsewhere</span>

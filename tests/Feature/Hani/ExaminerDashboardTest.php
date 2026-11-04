@@ -76,9 +76,12 @@ class ExaminerDashboardTest extends TestCase
 
     public function test_nobody_else_sees_it(): void
     {
-        foreach ([$this->cgs(), $this->student('22000099', 'x@test.my'), $this->supervisor()] as $user) {
+        foreach ([$this->student('22000099', 'x@test.my'), $this->supervisor()] as $user) {
             $this->actingAs($user)->get(route('examiner-dashboard'))->assertForbidden();
         }
+
+        // Non-Executive CGS sees it since 2026-11-03, for the email tiles.
+        $this->actingAs($this->cgs())->get(route('examiner-dashboard'))->assertOk();
     }
 
     public function test_nominations_are_counted_by_stage(): void

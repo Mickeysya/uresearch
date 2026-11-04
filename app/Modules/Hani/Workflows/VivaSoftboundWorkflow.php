@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hani\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
@@ -22,8 +23,11 @@ use App\Modules\Hani\Models\VivaSoftboundDetail;
  * Reject means "returned to the student": that attempt closes, the notice
  * stays open, and the student files a fresh attempt. See
  * VivaSoftboundController::decide().
+ *
+ * DecidesOneAtATime: a return needs a reason and sends the "returned" email,
+ * neither of which Core's bulk decide would do.
  */
-class VivaSoftboundWorkflow implements WorkflowModule
+class VivaSoftboundWorkflow implements WorkflowModule, DecidesOneAtATime
 {
     public function key(): string
     {

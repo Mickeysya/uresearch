@@ -52,7 +52,7 @@ class VivaSoftboundDetail extends Model
         'application_id', 'viva_application_id',
         'field_of_study', 'contact_number', 'personal_email',
         'session', 'year', 'thesis_title',
-        'similarity_percent', 'word_count',
+        'similarity_percent', 'similarity_source', 'similarity_extracted', 'word_count',
         'co_supervisor_email', 'declaration_accepted',
     ];
 
@@ -60,6 +60,7 @@ class VivaSoftboundDetail extends Model
     {
         return [
             'similarity_percent' => 'decimal:2',
+            'similarity_extracted' => 'decimal:2',
             'year' => 'integer',
             'declaration_accepted' => 'boolean',
         ];

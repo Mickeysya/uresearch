@@ -31,7 +31,9 @@ class VivaAwaitingAcademicExec extends Notification implements ShouldQueue
         protected string $what,
         protected string $queueRoute,
         protected bool $resubmitted = false,
-    ) {}
+    ) {
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {

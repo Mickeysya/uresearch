@@ -126,7 +126,14 @@ class ExaminersSweep extends Command
                 ->latest('viva_at')
                 ->value('viva_at');
 
-            if ($vivaAt && \Carbon\Carbon::parse($vivaAt)->isPast()) {
+            // A viva whose result is category 4 (re-examination): the mains
+            // are held on purpose for the re-viva, so say nothing.
+            $reexamination = VivaDetail::whereHas('application', fn ($q) => $q->where('student_id', $nomination->application->student_id)
+                ->where('module_type', 'viva_voce'))
+                ->where('result_category', VivaDetail::REEXAMINATION)
+                ->exists();
+
+            if ($vivaAt && ! $reexamination && \Carbon\Carbon::parse($vivaAt)->isPast()) {
                 $out[] = [$nomination, \Carbon\Carbon::parse($vivaAt)];
             }
         }

@@ -111,7 +111,20 @@ until someone binds or reads it.
 Until it exists, Jason's module can keep importing the Examiner Report export.
 That export's **"Application No."** column is the key to
 `examiner_nominations.application_id` (see Hani's README, "Examiner Report
-export layout").
+export layout"). Jason's importer does not recognise that heading yet: it
+normalises headings without stripping the trailing full stop, and its
+aliases are `application`, `application no`, `application id` and
+`nomination`. Until he adds `application no.` as an alias (on his side), a
+real export falls back to matching examiners by name. The heading here
+stays as it is.
+
+**Flagged emails in the raw column.** When an email is reported as not
+working, the old address stays in `examiners.email` and `email_status`
+becomes `'invalid'` (with `email_flagged_at`). This contract already hands
+over `email = null` plus `email_problem` for those. Anything that reads the
+`examiners` table directly instead (such as Jason's `ExaminerDirectory`)
+must check `email_status` and must not send to an address marked
+`'invalid'`. A null `email` means CGS has no address yet.
 
 ### File: `app/Modules/Core/Contracts/SuppliesReleasedExaminers.php` (new)
 
@@ -134,16 +147,23 @@ namespace App\Modules\Core\Contracts;
  *     'supervisor' => ['name', 'email'],
  *     'thesis_title'   => string,
  *     'examiners' => [
- *       'internal_main'   => ['name', 'email', 'department', 'faculty'],
- *       'internal_backup' => ['name', 'email', 'department', 'faculty'] | null,
- *       'external_main'   => ['name', 'email', 'institution', 'department'],
- *       'external_backup' => ['name', 'email', 'institution', 'department'] | null,
+ *       'internal_main'   => ['id', 'name', 'email', 'email_problem', 'department', 'faculty'],
+ *       'internal_backup' => ['id', 'name', 'email', 'email_problem', 'department', 'faculty'] | null,
+ *       'external_main'   => ['id', 'name', 'email', 'email_problem', 'institution', 'department'],
+ *       'external_backup' => ['id', 'name', 'email', 'email_problem', 'institution', 'department'] | null,
  *     ],
  *   ]
  *
+ * Each seat's 'id' is the examiner's examiners.id (added 2026-11-04). Keep
+ * it with the letter you send: together with 'application_id' it is the key
+ * SuppliesAppointmentDispatch::packSentAt() is asked with, and it is how a
+ * promoted backup is told apart from an examiner who already has a letter.
+ *
  * Always the CURRENT panel: after a decline, the promoted backup is in the
- * main seat. An examiner's email may be null (CGS's pool file has none);
- * skip and flag them rather than send.
+ * main seat. An examiner's email may be null: CGS has none yet, or the one
+ * on record was reported not working. Then 'email_problem' says which, as
+ * a sentence to show; skip and flag them rather than send. (email_problem
+ * added 2026-11-03; null when the email is fine.)
  */
 interface SuppliesReleasedExaminers
 {
@@ -166,6 +186,23 @@ panel page is where a decline is recorded. It is far easier to act on when
 it shows whether each main examiner's appointment pack has actually gone out.
 Jason's module already records that in `appointment_examiners.pack_sent_at`.
 
+**The key is Hani's ids, not Jason's.** Hani calls
+`packSentAt($nomination->application_id, $nomination->internal_main_id)`
+(`PanelController::lettersSent()`, `Support\ExaminerProgress`):
+- `$applicationId` is the **examiner nomination's** `applications.id`, the
+  same value as the export's "Application No." and the panel's
+  `'application_id'`. It is not the id of Jason's own `appointment_letter`
+  application.
+- `$examinerId` is **`examiners.id`**, the seat's `'id'` in item 3. It is not
+  `appointment_examiners.id` or `pool_examiner_id`.
+
+Jason's rows do not store either id today, so his implementation has to keep
+them in his own tables when a panel is imported or read. It returns the
+**latest non-null `pack_sent_at`** across every appointment-letter row for
+that examiner and nomination (there can be more than one, e.g. a resend or a
+letter issued later for a promoted backup), and null when none was accepted
+by the mail transport.
+
 **Impact.** Additive.
 - **Jason:** implements and binds it in his own `ModuleProvider`.
 - **Hani:** reads it only if it is bound
@@ -186,7 +223,11 @@ namespace App\Modules\Core\Contracts;
  */
 interface SuppliesAppointmentDispatch
 {
-    /** Null when nothing has been sent to this examiner for this application. */
+    /**
+     * Keyed by the NOMINATION's applications.id and the examiner's
+     * examiners.id. The latest non-null pack_sent_at for that pair; null
+     * when nothing has been sent.
+     */
     public function packSentAt(int $applicationId, int $examinerId): ?\DateTimeInterface;
 }
 ```
@@ -281,7 +322,31 @@ Hani's `examiner_nomination/queue.blade.php` would then pass
   - the `examiners:sweep` daily command
   - the examiner availability dashboard
   - `HaniDemoSeeder` (on demand)
-- **Test count:** Hani's own folder is now 126 tests
+- **Viva automation (Prompt 2):**
+  - one-page eligibility and notice, with abstract and keywords
+  - candidacy period checked by the system
+  - softbound System checks, with the Turnitin report read by a built-in
+    PDF reader
+  - examiner progress, with rejection promoting the backup, and the
+    divergence alert
+  - scheduling clash, weekend and holiday warnings, with suggested slots
+  - `viva:reminders` (daily, scheduled from the module)
+  - step 5: result and corrections, Viva Results page
+  - the Senior Executive can log re-vivas
+  - both viva workflows decide one at a time
+
+  The module's "Not built: step 5" line and known limitation 1 (bulk
+  actions) can be removed.
+- **Examiner email upkeep (Prompt 1 follow-up):**
+  - Non-Executive CGS reads the pool and may edit an examiner's email only
+  - contact history on a new examiner page
+  - "Report email not working", which blocks sends until the email is
+    updated
+  - "Confirm email still valid"
+  - freshness filter and dashboard tiles
+  - emails proposed at nomination and confirmed by CGS
+  - Non-Exec can open the examiner dashboard
+- **Test count:** Hani's own folder is now 173 tests
   (`php artisan test tests/Feature/Hani`).
 
 ---
@@ -317,4 +382,175 @@ again, as phpunit.xml already intends. Hani's and Nureen's per-folder traits
 
 ```xml
 <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+```
+
+---
+
+## 8. New Core contract: `SuppliesCandidature`
+
+**Status:** proposed, not applied.
+
+**Reason.** "Within candidacy period" is now checked by the system before
+a student files the Notice of Thesis Submission. The candidature start date
+and programme type live in Norhanis's RPD masterlist (`candidacies`). With no
+contract, Hani's `Support/Eligibility/CandidacyPeriodSource` reads that table
+directly:
+- read-only
+- guarded with `Schema::hasTable()` / `hasColumns()`
+- never importing her classes
+
+If she renames a column, the check quietly falls back to "Self-declared"
+instead of breaking. A contract makes the dependency explicit.
+
+**Impact.** Additive.
+- **Norhanis:** implements and binds it, from `candidacies`.
+- **Hani:** prefers it when bound and keeps the guarded lookup as the
+  fallback. No change for anyone else.
+
+### File: `app/Modules/Core/Contracts/SuppliesCandidature.php` (new)
+
+```php
+<?php
+
+namespace App\Modules\Core\Contracts;
+
+/**
+ * A student's candidature, for modules that need the clock without owning
+ * it. Implemented by the module that keeps the RPD masterlist (Norhanis).
+ */
+interface SuppliesCandidature
+{
+    /**
+     * Null when the student has no candidacy record.
+     *
+     * @return array{start_date: \DateTimeInterface, programme_type: string, status: string}|null
+     *         programme_type: msc_ft | msc_pt | phd_ft | phd_pt
+     */
+    public function candidatureFor(int $studentId): ?array;
+}
+```
+
+---
+
+## 9. `smalot/pdfparser` in `composer.json` (optional)
+
+**Status:** optional, not needed. The team has decided not to add it for
+now.
+
+**Reason.** The softbound checks read the student's Turnitin report and
+thesis PDFs. Hani's module has its own small reader
+(`Support/Pdf/BasicPdfText`), which handles:
+- Flate-compressed streams and object streams
+- standard fonts
+- ToUnicode maps
+
+It reads the fictional fixtures reliably. Some real PDFs it cannot read, for
+example CID fonts with no ToUnicode map, unusual filters or scanned pages.
+For those the panel shows "Not checked automatically", and the student's
+declared figure is used. `smalot/pdfparser` handles more of these edge cases.
+
+**Impact.** One dependency, pure PHP, no extension. `Support/Pdf/PdfReader`
+detects it with `class_exists()` and uses it automatically. No code change
+is needed in any module.
+
+### File: `composer.json`
+
+```json
+"require": {
+    "smalot/pdfparser": "^2.11"
+}
+```
+
+---
+
+## 10. Turnitin API keys in `.env.example` (for later)
+
+**Status:** proposed, not needed until UTP licenses API access.
+
+**Reason.** `Support/Similarity/TurnitinApiSource` is a documented stub. It
+reads these two keys through `config('hani.similarity.turnitin_api.*')`, and
+switching to it is `hani.similarity.source = 'turnitin_api'`.
+
+**Impact.** None. They are empty placeholders, and nothing reads them unless
+that source is selected.
+
+### File: `.env.example`
+
+```dotenv
+# Hani, viva softbound checks: Turnitin Core API, only with a UTP licence.
+TURNITIN_API_KEY=
+TURNITIN_API_URL=
+```
+
+---
+
+## 11. `viva:reminders` in `routes/console.php` (optional alternative)
+
+**Status:** not needed. Like `examiners:sweep` (item 2), the command
+schedules itself from `Hani\ModuleProvider::boot()` through the scheduler
+hook. This entry is for the team in case they would rather keep every
+schedule visible in one file.
+
+**Reason.** It sends the viva's daily reminders:
+- examiners who have not replied to the appointment letter
+- examiner reports that are overdue
+- the 7-day and 1-day panel reminders
+- softbound and corrections deadlines
+
+Each reminder is sent once (log table with a unique key, written before
+sending), and the command has `--dry-run`.
+
+**Impact.** None on other modules. If this line is added, **remove the
+`viva:reminders` entry from the `callAfterResolving` block in
+`Hani\ModuleProvider`**.
+
+### File: `routes/console.php`
+
+```php
+// Hani: viva reminders (examiner replies and reports, panel reminders,
+// softbound and corrections deadlines). See App\Modules\Hani\Console\VivaReminders.
+Schedule::command('viva:reminders')->dailyAt('07:45')->withoutOverlapping();
+```
+
+---
+
+## 12. A staff-only flag for `DocumentStore` documents
+
+**Status:** proposed, not applied.
+
+**Reason.** `ApplicationDocument::visibleTo()` shows a student every
+document on an application they own, so anything stored through
+`DocumentStore` on a student's application is visible to that student.
+Examiner reports must never be shown to the candidate. For now, Hani stores
+them on the private disk under `hani/examiner-reports/`:
+- with random names
+- outside `DocumentStore`
+- downloaded through an AE- and Senior-Exec-only route
+- logged with `activity('document')`, the same way `DocumentStore` logs
+
+Since 2026-11-03 the same applies to the examiner CV a supervisor may attach
+when proposing an examiner's email at nomination (`hani/examiner-cvs/`,
+CGS-only download): on the nomination it would be visible to the
+candidate.
+
+A flag would let both move into `DocumentStore` and the Documents page.
+
+**Impact.** One nullable boolean column on `application_documents`
+(defaults to `false`). That is a shared table, so this needs the team's
+agreement. A small change to `visibleTo()` / `scopeVisibleTo()`.
+Backward compatible: every existing document stays visible exactly as
+today.
+
+### Sketch
+
+```php
+// migration (Core)
+$table->boolean('staff_only')->default(false)->after('doc_type');
+
+// ApplicationDocument::visibleTo()
+if ($this->staff_only && $application->student_id === $user->id) {
+    return false;
+}
+
+// DocumentStore::attach(..., bool $staffOnly = false)
 ```

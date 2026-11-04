@@ -135,7 +135,12 @@ class ExaminerSuggestions
                 ])),
                 'days_since_last' => $sinceLast,
                 'recent_examinations' => $recentCount,
-                'flags' => $this->flagger ? ($this->flagger)($examiner, $student) : [],
+                // A reported email rides on the flags list, which the form
+                // already renders, as a warning ("Check: ...").
+                'flags' => array_merge(
+                    $this->flagger ? ($this->flagger)($examiner, $student) : [],
+                    $examiner->emailInvalid() ? [['level' => 'warning', 'message' => 'Email needs updating: reported not working.']] : [],
+                ),
                 'needs_email' => $examiner->needsEmail(),
                 '_rank' => $rank,
             ];

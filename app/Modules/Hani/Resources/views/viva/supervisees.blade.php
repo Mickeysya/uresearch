@@ -15,7 +15,7 @@
             <div class="table-scroll">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Student</th><th>Notice</th><th>Examiner Nomination</th><th>Softbound</th><th>Viva</th></tr>
+                        <tr><th>Student</th><th>Notice</th><th>Examiner Nomination</th><th>Softbound</th><th>Viva</th><th>Result</th></tr>
                     </thead>
                     <tbody>
                         @foreach ($progress as $p)
@@ -30,6 +30,20 @@
                                         <span class="fstep-hint">{{ $p->detail->venue }}</span>
                                     @else
                                         Not scheduled
+                                    @endif
+                                </td>
+                                <td>
+                                    @if ($p->detail?->hasResult())
+                                        {{ $p->detail->resultLabel() }}
+                                        @if ($p->detail->corrections_accepted_at)
+                                            <br><span class="fstep-hint">Corrections accepted</span>
+                                        @elseif ($p->detail->corrections_due_at)
+                                            <br><span class="fstep-hint">Corrections due {{ $p->detail->corrections_due_at->format('j M Y') }}</span>
+                                        @elseif ($p->detail->resubmission_opens_at)
+                                            <br><span class="fstep-hint">Resubmit {{ $p->detail->resubmission_opens_at->format('j M Y') }} to {{ $p->detail->resubmission_closes_at->format('j M Y') }}</span>
+                                        @endif
+                                    @else
+                                        Not recorded
                                     @endif
                                 </td>
                             </tr>

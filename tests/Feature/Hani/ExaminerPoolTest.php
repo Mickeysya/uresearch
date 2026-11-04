@@ -263,10 +263,15 @@ class ExaminerPoolTest extends TestCase
     {
         $examiner = $this->internal();
 
-        // Non-Executive CGS reads the released list elsewhere; the pool is not theirs.
+        // Non-Executive CGS reads the pool and keeps emails current
+        // (ExaminerContactTest); adding, editing and marking unavailable stay
+        // with the Senior Executive.
         $nonExec = $this->cgs();
-        $this->actingAs($nonExec)->get(route('examiner-admin.index'))->assertForbidden();
+        $this->actingAs($nonExec)->get(route('examiner-admin.index'))->assertOk()->assertDontSee('Add an examiner')->assertDontSee('data-unavailable=', false)->assertDontSee('unavailable-modal"', false);
         $this->actingAs($nonExec)->get(route('examiner-admin.create'))->assertForbidden();
+        $this->actingAs($nonExec)->get(route('examiner-admin.edit', $examiner))->assertForbidden();
+        $this->actingAs($nonExec)->put(route('examiner-admin.update', $examiner), [])->assertForbidden();
+        $this->actingAs($this->academicExec())->get(route('examiner-admin.index'))->assertForbidden();
         $this->actingAs($nonExec)->post(route('examiner-admin.store'), [])->assertForbidden();
         $this->actingAs($nonExec)->post(route('examiner-admin.toggle-active', $examiner))->assertForbidden();
 

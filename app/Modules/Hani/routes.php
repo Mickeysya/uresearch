@@ -4,12 +4,15 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Http\Controllers\ConflictDetectionController;
 use App\Modules\Hani\Http\Controllers\ExaminerDashboardController;
 use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
+use App\Modules\Hani\Http\Controllers\ExaminerContactController;
 use App\Modules\Hani\Http\Controllers\ExaminerImportController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
 use App\Modules\Hani\Http\Controllers\ExaminerSuggestionController;
 use App\Modules\Hani\Http\Controllers\PanelController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\VivaController;
+use App\Modules\Hani\Http\Controllers\VivaExaminerController;
+use App\Modules\Hani\Http\Controllers\VivaResultController;
 use App\Modules\Hani\Http\Controllers\VivaScheduleController;
 use App\Modules\Hani\Http\Controllers\VivaSoftboundController;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +37,14 @@ Route::middleware('auth')->group(function () {
         // VivaProgress::softboundBlockReason() says why not otherwise.
         Route::get('/viva/softbound', [VivaSoftboundController::class, 'create'])->name('viva.softbound.create');
         Route::post('/viva/softbound', [VivaSoftboundController::class, 'store'])->name('viva.softbound.store');
+        // Reads the chosen Turnitin report to pre-fill the similarity index. Stores nothing.
+        // Step 5: the corrected final thesis (result categories 1-3).
+        Route::get('/viva/corrections', [VivaResultController::class, 'corrections'])->name('viva.corrections.create');
+        Route::post('/viva/corrections', [VivaResultController::class, 'submitCorrections'])->name('viva.corrections.store');
+
+        Route::post('/viva/softbound/similarity-preview', [VivaSoftboundController::class, 'similarityPreview'])
+            ->middleware('throttle:20,1')
+            ->name('viva.softbound.similarity-preview');
     });
 
     Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
@@ -48,6 +59,19 @@ Route::middleware('auth')->group(function () {
         Route::get('/viva/scheduling', [VivaScheduleController::class, 'index'])->name('viva.schedule.index');
         Route::get('/viva/{application}/schedule', [VivaScheduleController::class, 'edit'])->name('viva.schedule.edit');
         Route::post('/viva/{application}/schedule', [VivaScheduleController::class, 'update'])->name('viva.schedule.update');
+
+        // Step 5: result and corrections. Module-side state, not a stage.
+        Route::get('/viva/results', [VivaResultController::class, 'index'])->name('viva.results.index');
+        Route::post('/viva/{application}/result', [VivaResultController::class, 'record'])->name('viva.results.record');
+        Route::post('/viva/{application}/corrections/accept', [VivaResultController::class, 'accept'])->name('viva.results.accept');
+    });
+
+    // Examiner progress per viva: letter, acceptance, thesis, report. The
+    // candidate's own AE or the Senior Executive (the controller checks).
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS)->group(function () {
+        Route::get('/viva/{application}/examiners', [VivaExaminerController::class, 'show'])->name('viva.examiners.show');
+        Route::post('/viva/{application}/examiners/{row}', [VivaExaminerController::class, 'update'])->name('viva.examiners.update');
+        Route::get('/viva/{application}/examiners/{row}/report', [VivaExaminerController::class, 'report'])->name('viva.examiners.report');
     });
 
     // Supervisor: their own candidates' vivas, read only.
@@ -133,14 +157,31 @@ Route::middleware('auth')->group(function () {
     // ---- Examiner availability dashboard --------------------------------
     // The AE sees their own department (the dashboard scopes itself).
     Route::middleware('role:'.implode(',', [
-        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR,
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR, Role::NON_EXEC_CGS,
     ]))->get('/examiner-dashboard', ExaminerDashboardController::class)->name('examiner-dashboard');
 
     // ---- Examiner pool admin -------------------------------------------
     // Senior Executive CGS (Puan Waheeda) since 2026-11-03. Non-Executive CGS
-    // has no write access to the pool.
-    Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
+    // (Encik Syahmi, who sends the letters) reads the pool and may keep an
+    // examiner's EMAIL current, nothing else (2026-11-03).
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
+        Route::get('/examiners/{examiner}/email', [ExaminerContactController::class, 'editEmail'])->whereNumber('examiner')->name('examiner-admin.email.edit');
+        Route::put('/examiners/{examiner}/email', [ExaminerContactController::class, 'updateEmail'])->whereNumber('examiner')->name('examiner-admin.email.update');
+        Route::post('/examiners/{examiner}/confirm-email', [ExaminerContactController::class, 'confirmEmail'])->whereNumber('examiner')->name('examiner-admin.email.confirm');
+        Route::post('/examiners/proposed-emails/{proposal}/confirm', [ExaminerContactController::class, 'confirmProposal'])->name('examiner-admin.proposal.confirm');
+        Route::post('/examiners/proposed-emails/{proposal}/dismiss', [ExaminerContactController::class, 'dismissProposal'])->name('examiner-admin.proposal.dismiss');
+        Route::get('/examiners/proposed-emails/{proposal}/cv', [ExaminerContactController::class, 'proposalCv'])->name('examiner-admin.proposal.cv');
+    });
+
+    // The examiner page and "Email not working". The controller narrows an
+    // AE to examiners in their own department or on its students' panels.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS.','.Role::ACADEMIC_EXEC)->group(function () {
+        Route::get('/examiners/{examiner}', [ExaminerContactController::class, 'show'])->whereNumber('examiner')->name('examiner-admin.show');
+        Route::post('/examiners/{examiner}/report-email', [ExaminerContactController::class, 'reportEmail'])->whereNumber('examiner')->name('examiner-admin.report-email');
+    });
+
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
         Route::get('/examiners/new', [ExaminerAdminController::class, 'create'])->name('examiner-admin.create');
         Route::post('/examiners', [ExaminerAdminController::class, 'store'])->name('examiner-admin.store');
         Route::post('/examiners/{examiner}/toggle-active', [ExaminerAdminController::class, 'toggleActive'])
@@ -165,7 +206,9 @@ Route::middleware('auth')->group(function () {
     // through the same channel the rest of the re-viva process is informally
     // run through today, so CGS is the one who records the formal
     // resubmission timestamp -- not a self-service student upload.
-    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
+    // Senior Executive CGS logs re-vivas (CGS practice); Non-Executive keeps
+    // access until Prompt 3 makes them read-only.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/re-viva/new', [ReVivaController::class, 'create'])->name('reviva.create');
         Route::post('/re-viva', [ReVivaController::class, 'store'])->name('reviva.store');
     });

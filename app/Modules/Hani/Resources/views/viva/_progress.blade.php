@@ -45,8 +45,32 @@
                 @endif
             </td>
         </tr>
+        @if ($detail?->hasResult())
+            @php $vivaReport = $notice->documents()->where('doc_type', 'Viva Report')->latest('id')->first(); @endphp
+            <tr>
+                <th scope="row">Result</th>
+                <td>
+                    <b>Category {{ $detail->resultLabel() }}</b>
+                    @if ($vivaReport) &middot; <a href="{{ route('documents.show', $vivaReport) }}">Chairman's viva report</a> @endif
+                    @if ($detail->corrections_accepted_at)
+                        <br>Corrections accepted on {{ $detail->corrections_accepted_at->format('j M Y') }}. Your viva is complete.
+                    @elseif ($detail->needsCorrections())
+                        <br>Corrected final thesis due by <b>{{ $detail->corrections_due_at->format('j M Y') }}</b>
+                        @if ($detail->corrections_submitted_at) (submitted {{ $detail->corrections_submitted_at->format('j M Y') }}, being checked) @endif
+                    @elseif ($detail->resubmission_opens_at)
+                        <br>Resubmit for re-examination between {{ $detail->resubmission_opens_at->format('j M Y') }} and {{ $detail->resubmission_closes_at->format('j M Y') }}.
+                    @endif
+                </td>
+            </tr>
+        @endif
     </tbody>
 </table>
+
+@if ($detail?->needsCorrections() && ! $detail->corrections_accepted_at)
+    <p><a href="{{ route('viva.corrections.create') }}" class="btn">
+        {{ $detail->corrections_submitted_at ? 'Upload a Newer Corrected Thesis' : 'Upload Corrected Final Thesis' }}
+    </a></p>
+@endif
 
 @if ($returnReason)
     <p class="message-warning">Your Academic Executive returned your softbound thesis: {{ $returnReason }}</p>

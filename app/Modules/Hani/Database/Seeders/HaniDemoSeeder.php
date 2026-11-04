@@ -2,8 +2,10 @@
 
 namespace App\Modules\Hani\Database\Seeders;
 
+use App\Modules\Hani\Database\Seeders\Concerns\SeedsVivaScenarios;
 use App\Modules\Hani\Support\Import\PoolImporter;
 use App\Modules\Hani\Support\Import\TemplateLayoutReader;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use RuntimeException;
 
@@ -24,14 +26,22 @@ use RuntimeException;
  * aliases, internal rows stripped of the external record, duplicate flags --
  * and running it again changes nothing.
  *
- * STRUCTURE FOR LATER PROMPTS: run() walks steps(). Part 1 is the examiner
- * pool. Prompts 2-4 add their own step methods (supervisors and students,
- * viva notices, nominations, re-viva cases) from the same dataset's
- * `supervisors`, `students` and `scenario_notes`, each idempotent the same
- * way.
+ * STRUCTURE: run() walks steps().
+ *   Part 1 (examinerPool): the pool, through the import.
+ *   Part 2 (people, vivaScenarios; Concerns\SeedsVivaScenarios): the demo
+ *   supervisors and students, each put at their stated viva stage through
+ *   the real WorkflowEngine.
+ * Prompt 3 adds the re-viva cases the same way.
+ *
+ * EVERY DATE IS RELATIVE TO THE DAY IT RUNS: the dataset's dates are moved
+ * by shift(), and each scenario is rebuilt from scratch on every run (the
+ * demo students' own viva records only), so a viva "in 7 days" is always 7
+ * days away. Running it twice gives the same picture.
  */
 class HaniDemoSeeder extends Seeder
 {
+    use SeedsVivaScenarios;
+
     public const DATASET = __DIR__.'/../demo/hani_demo_dataset.json';
 
     /** JSON field => template field, for TemplateLayoutReader::record(). */
@@ -58,12 +68,15 @@ class HaniDemoSeeder extends Seeder
         'former_utp_until' => 'former_utp_until',
     ];
 
+    /** Examiner fields that are dates, moved with the run day (see shift()). */
+    protected const DATE_FIELDS = ['first_examination_date', 'last_examination_date', 'former_utp_until'];
+
     protected ?array $dataset = null;
 
     /** @return array<int, string> the step methods run() calls, in order */
     protected function steps(): array
     {
-        return ['examinerPool'];
+        return ['examinerPool', 'people', 'vivaScenarios'];
     }
 
     public function run(): void
@@ -86,7 +99,8 @@ class HaniDemoSeeder extends Seeder
 
             foreach (self::EXAMINER_FIELDS as $from => $to) {
                 $value = $examiner[$from] ?? null;
-                $record[$to] = $value === '' ? null : $value;
+                $value = $value === '' ? null : $value;
+                $record[$to] = in_array($from, self::DATE_FIELDS, true) ? $this->shift($value) : $value;
             }
 
             $rows[] = $reader->record($record, 'hani_demo_dataset.json, examiners['.$i.']');
@@ -117,6 +131,22 @@ class HaniDemoSeeder extends Seeder
             $summary[PoolImporter::UNCHANGED],
             $summary[PoolImporter::REJECTED],
         ));
+    }
+
+    /**
+     * A dataset date, moved by the days between the dataset's
+     * dates_relative_to and today, so the demo looks the same whichever day
+     * it is seeded (On Gap examiners stay On Gap).
+     */
+    protected function shift(?string $date): ?string
+    {
+        if ($date === null) {
+            return null;
+        }
+
+        $anchor = Carbon::parse($this->dataset()['dates_relative_to'] ?? today()->toDateString())->startOfDay();
+
+        return Carbon::parse($date)->addDays((int) $anchor->diffInDays(today(), false))->toDateString();
     }
 
     /** The dataset, read once. */

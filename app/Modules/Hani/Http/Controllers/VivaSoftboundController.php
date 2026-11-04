@@ -7,12 +7,17 @@ use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Hani\Jobs\RunSoftboundChecks;
+use App\Modules\Hani\Models\VivaSoftboundCheck;
 use App\Modules\Hani\Models\VivaSoftboundDetail;
 use App\Modules\Hani\Notifications\VivaAwaitingAcademicExec;
 use App\Modules\Hani\Notifications\VivaSoftboundReturned;
 use App\Modules\Hani\Notifications\VivaSoftboundSubmitted;
 use App\Modules\Hani\Support\ModuleTracker;
+use App\Modules\Hani\Support\Similarity\SimilaritySource;
+use App\Modules\Hani\Support\SoftboundChecks;
 use App\Modules\Hani\Support\VivaProgress;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -53,10 +58,43 @@ class VivaSoftboundController extends Controller
             'wordLimit' => VivaSoftboundDetail::wordLimitFor($level),
             'similarityMax' => VivaSoftboundDetail::SIMILARITY_MAX,
             'returnReason' => $progress->softboundReturnReason(),
+            'ulearnUrl' => config('hani.similarity.ulearn_url'),
         ]);
     }
 
-    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents): RedirectResponse
+    /**
+     * Reads the Turnitin report the student has just chosen, before they
+     * submit, so the form can fill in the similarity index for them to
+     * confirm. The file is read in memory and never stored; the real reading
+     * happens again on submit, from the stored file.
+     */
+    public function similarityPreview(Request $request, SimilaritySource $source): JsonResponse
+    {
+        abort_if(VivaProgress::for($request->user())->softboundBlockReason() !== null, 403);
+
+        $request->validate([
+            'turnitin_report' => ['required', 'file', 'mimes:pdf', 'max:'.VivaSoftboundDetail::UPLOADS['turnitin_report'][1]],
+        ]);
+
+        $reading = $source->read((string) file_get_contents($request->file('turnitin_report')->getRealPath()));
+
+        return response()->json($reading->ok ? [
+            'ok' => true,
+            'simulated' => $reading->source === 'simulated',
+            'index' => $reading->index,
+            'internet' => $reading->internet,
+            'publications' => $reading->publications,
+            'student_papers' => $reading->studentPapers,
+            'title' => $reading->title,
+            'sources' => array_map(fn ($s) => "{$s['rank']}. {$s['source']} ({$s['type']}) {$s['percent']}", $reading->sources),
+            'over_limit' => $reading->index > VivaSoftboundDetail::SIMILARITY_MAX,
+        ] : [
+            'ok' => false,
+            'message' => $reading->failure,
+        ]);
+    }
+
+    public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents, SimilaritySource $source): RedirectResponse
     {
         $student = $request->user();
         $progress = VivaProgress::for($student);
@@ -108,7 +146,19 @@ class VivaSoftboundController extends Controller
 
         $data = $request->validate($rules, $messages);
 
-        [$application, $detail] = DB::transaction(function () use ($request, $student, $notice, $data, $uploads, $engine, $documents) {
+        // Read the report the student uploaded. If it can be read, its index
+        // is held to the same limit as the declared one; if not, the declared
+        // figure stands and is marked self-declared.
+        $reading = $source->read((string) file_get_contents($request->file('turnitin_report')->getRealPath()));
+
+        if ($reading->ok && $reading->index > VivaSoftboundDetail::SIMILARITY_MAX) {
+            return back()->withInput()->withErrors([
+                'similarity_percent' => 'Your Turnitin report shows a similarity index of '.SoftboundChecks::pc($reading->index)
+                    .'%, above the '.VivaSoftboundDetail::SIMILARITY_MAX.'% limit. Revise the thesis and generate a new report before submitting.',
+            ]);
+        }
+
+        [$application, $detail] = DB::transaction(function () use ($request, $student, $notice, $data, $uploads, $engine, $documents, $reading) {
             $application = Application::create([
                 'student_id' => $student->id,
                 'module_type' => $this->moduleKey(),
@@ -120,6 +170,12 @@ class VivaSoftboundController extends Controller
                 'viva_application_id' => $notice->id,
                 'declaration_accepted' => true,
                 'co_supervisor_email' => $data['co_supervisor_email'] ?? null,
+                'similarity_source' => match (true) {
+                    ! $reading->ok => 'self_declared',
+                    $reading->source === 'simulated' => 'simulated',
+                    default => 'extracted',
+                },
+                'similarity_extracted' => $reading->ok ? $reading->index : null,
             ] + Arr::only($data, [
                 'field_of_study', 'contact_number', 'personal_email', 'session', 'year',
                 'thesis_title', 'similarity_percent', 'word_count',
@@ -129,8 +185,17 @@ class VivaSoftboundController extends Controller
                 $documents->attach($application, $request->file($field), $label);
             }
 
+            VivaSoftboundCheck::create([
+                'application_id' => $application->id,
+                'status' => VivaSoftboundCheck::QUEUED,
+                'similarity' => $reading->toArray(),
+            ]);
+
             return [$engine->submit($application), $detail];
         });
+
+        // The thesis checks (up to 50 MB of PDF) run on the queue.
+        RunSoftboundChecks::dispatch($application->id);
 
         // After the commit and best effort; see WorkflowEngine::notifyStudent().
         try {
@@ -158,8 +223,13 @@ class VivaSoftboundController extends Controller
 
         $nominations = VivaProgress::nominationsFor($queue['applications']->pluck('student_id'));
 
+        $checks = VivaSoftboundCheck::whereIn('application_id', $queue['applications']->pluck('id'))
+            ->get()
+            ->keyBy('application_id');
+
         return view('hani::viva.softbound_queue', $queue + [
             'details' => $details,
+            'checks' => $checks,
             'nominations' => $nominations,
         ]);
     }

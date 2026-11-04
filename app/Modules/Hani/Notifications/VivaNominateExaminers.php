@@ -24,7 +24,9 @@ class VivaNominateExaminers extends Notification implements ShouldQueue
         protected Application $notice,
         protected string $thesisTitle,
         protected string $academicExecName,
-    ) {}
+    ) {
+        $this->afterCommit();
+    }
 
     public function via(object $notifiable): array
     {
