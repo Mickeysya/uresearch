@@ -110,14 +110,14 @@ class PortalController extends Controller
 
     public function signature(Request $request)
     {
-        $profile = CandidacyStaffDirectory::profileForUser($request->user());
-
+        // There is one signature page now, Core's "My Signatures", with this
+        // module's signature as its "candidacy" section. The validated return
+        // path rides along, so Back and an upload there still come back to the
+        // appeal or queue the user left; reflash() keeps any message.
         $return = CandidacyReturnPath::validate($request->query('return'));
+        $request->session()->reflash();
 
-        return view('chloe::candidacy.wca.portal.signature', [
-            'profile' => $profile, 'user' => $request->user(), 'required' => $this->signatureRequired($request->user()),
-            'return' => $return, 'back' => $return ?? route('candidacy.portal.queue', [], false),
-        ]);
+        return redirect()->to(route('signatures.index', array_filter(['return' => $return])).'#candidacy');
     }
 
     public function signatureStore(Request $request)
@@ -157,10 +157,6 @@ class PortalController extends Controller
         return CandidacyReturnPath::validate($request->input('return')) ?? route('candidacy.signature.show', [], false);
     }
 
-    protected function signatureRequired(User $user): bool
-    {
-        return in_array($user->role, [Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], true);
-    }
 
     protected function ensureProfile(User $user): CandidacyStaffProfile
     {

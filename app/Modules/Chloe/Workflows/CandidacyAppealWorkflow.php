@@ -6,6 +6,9 @@ use App\Modules\Chloe\Models\CandidacyAppealDetail;
 use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesApplicationDetail;
+use App\Modules\Core\Contracts\SuppliesSignature;
+use App\Modules\Chloe\Support\CandidacyStaffDirectory;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
@@ -21,7 +24,7 @@ use App\Modules\Core\Support\Stage;
  * and `dean`/`dean_pgr` pairing already listed in docs/module-keys.md's
  * stage-key table, put there for exactly this chain.
  */
-class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesApplicationDetail, ProvidesLinks
+class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesApplicationDetail, ProvidesLinks, SuppliesSignature
 {
     public function key(): string
     {
@@ -73,11 +76,41 @@ class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime, Supp
             $links[] = ['label' => 'Dismissal Upload', 'route' => 'candidacy.cgs.dismissal-upload'];
         }
 
-        if (in_array($user->role, array_unique(array_merge([Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], (array) config('candidacy.cgs_roles'))), true)) {
-            $links[] = ['label' => 'My Signature', 'route' => 'candidacy.signature.show'];
-        }
+        // No "My Signature" link here any more: Core's single "My Signatures"
+        // page shows this module's signature as one section -- signatureFor().
 
         return $links;
+    }
+
+    /**
+     * This module's section on Core's "My Signatures" page: the same people
+     * the candidacy.signature routes serve. Required for the Supervisor,
+     * Chair and Dean (CandidacyAppealService refuses their approval without
+     * one); optional for
+     * CGS, whose stamp is text-only without one.
+     */
+    public function signatureFor(User $user): ?array
+    {
+        $signers = array_unique(array_merge([Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], (array) config('candidacy.cgs_roles')));
+
+        if (! in_array($user->role, $signers, true)) {
+            return null;
+        }
+
+        $profile = CandidacyStaffDirectory::profileForUser($user);
+        $onFile = $profile?->hasSignature() ?? false;
+
+        return [
+            'key' => 'candidacy',
+            'title' => 'Study Candidacy Appeals',
+            'usedFor' => 'Stamped onto every Study Candidacy Appeal you approve. Appeals you already approved keep the copy you had at the time.',
+            'required' => in_array($user->role, [Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], true),
+            'imageUrl' => $onFile ? route('candidacy.signature.image') : null,
+            'updatedAt' => $onFile ? $profile->signature_updated_at : null,
+            'storeRoute' => 'candidacy.signature.store',
+            'destroyRoute' => 'candidacy.signature.destroy',
+            'hint' => 'PNG or JPG, at most 1 MB and at least 200 x 60 pixels. A white or transparent background works best.',
+        ];
     }
 
     public function createRoute(): ?string

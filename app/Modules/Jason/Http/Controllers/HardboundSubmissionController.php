@@ -17,6 +17,7 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
 use App\Modules\Jason\Notifications\HardboundSubmissionRejected;
 use App\Modules\Jason\Support\ExaminerDirectory;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Modules\Core\Support\SafeReturnPath;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -152,9 +153,13 @@ class HardboundSubmissionController extends Controller
      */
     public function signature(Request $request)
     {
-        return view('jason::hardbound.signature', [
-            'signature' => HardboundSignature::forUser($request->user()->id),
-        ]);
+        // There is one signature page now, Core's "My Signatures", with this
+        // module's signature as its "hardbound" section. Every link and
+        // redirect that still names hardbound.signature lands there. reflash()
+        // carries a "Upload your signature first" message across the hop.
+        $request->session()->reflash();
+
+        return redirect()->to(route('signatures.index').'#hardbound');
     }
 
     public function storeSignature(Request $request): RedirectResponse
@@ -181,8 +186,17 @@ class HardboundSubmissionController extends Controller
             Storage::disk('local')->delete($existing->path);
         }
 
-        return redirect()->route('hardbound.signature')
-            ->with('status', 'Signature saved. It will be stamped onto every Confirmation you approve from now on.');
+        // Back to where the upload came from -- My Signatures, or the page the
+        // user was on before it. SafeReturnPath only accepts a relative path on
+        // this site, so this cannot be an open redirect.
+        $return = SafeReturnPath::validate($request->input('return'));
+        $back = match (true) {
+            $return === '/signatures' => redirect()->to(route('signatures.index').'#hardbound'),
+            $return !== null => redirect()->to($return),
+            default => redirect()->route('hardbound.signature'),
+        };
+
+        return $back->with('status', 'Signature saved. It will be stamped onto every Confirmation you approve from now on.');
     }
 
     /** The signature image, shown back to its owner only. */

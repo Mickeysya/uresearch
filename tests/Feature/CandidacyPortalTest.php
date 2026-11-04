@@ -205,7 +205,9 @@ class CandidacyPortalTest extends TestCase
     {
         $profile = $this->profile($this->lecturer);
 
-        $this->actingAs($this->lecturer)->get(route('candidacy.signature.show'))->assertOk()->assertSee('Your signature on file');
+        // The old page forwards to this module's section of Core's "My Signatures".
+        $this->actingAs($this->lecturer)->get(route('candidacy.signature.show'))->assertRedirect(route('signatures.index').'#candidacy');
+        $this->actingAs($this->lecturer)->get(route('signatures.index'))->assertOk()->assertSee('Study Candidacy Appeals')->assertSee('On file');
         $this->actingAs($this->lecturer)->post(route('candidacy.signature.store'), ['signature' => UploadedFile::fake()->image('s.png', 800, 300)])->assertRedirect(route('candidacy.signature.show'));
         $first = $profile->fresh()->signature_path;
         $this->actingAs($this->lecturer)->get(route('candidacy.signature.image'))->assertOk()->assertHeader('content-type', 'image/png');
@@ -231,7 +233,7 @@ class CandidacyPortalTest extends TestCase
 
     public function test_a_cgs_user_without_a_profile_can_upload_an_optional_signature(): void
     {
-        $this->actingAs($this->cgsUser)->get(route('candidacy.signature.show'))->assertSee('optional');
+        $this->actingAs($this->cgsUser)->followingRedirects()->get(route('candidacy.signature.show'))->assertSee('Study Candidacy Appeals')->assertSee('Optional');
         $this->actingAs($this->cgsUser)->post(route('candidacy.signature.store'), ['signature' => UploadedFile::fake()->image('s.png', 400, 150)])->assertRedirect();
 
         $this->assertTrue(CandidacyStaffProfile::where('user_id', $this->cgsUser->id)->first()->hasSignature());
@@ -242,7 +244,7 @@ class CandidacyPortalTest extends TestCase
     public function test_portal_pages_are_no_store_wca_prefixed_and_free_of_inline_styles_and_handlers(): void
     {
         $appeal = $this->submitted();
-        $pages = [route('candidacy.portal.queue'), route('candidacy.portal.queue', ['tab' => 'ongoing']), route('candidacy.portal.queue', ['tab' => 'history']), route('candidacy.portal.region'), route('candidacy.appeals.show', $appeal), route('candidacy.appeals.region', $appeal), route('candidacy.signature.show'), route('candidacy.portal.live.version')];
+        $pages = [route('candidacy.portal.queue'), route('candidacy.portal.queue', ['tab' => 'ongoing']), route('candidacy.portal.queue', ['tab' => 'history']), route('candidacy.portal.region'), route('candidacy.appeals.show', $appeal), route('candidacy.appeals.region', $appeal), route('candidacy.portal.live.version')]; // candidacy.signature.show now redirects to Core's My Signatures
 
         foreach ($pages as $url) {
             $response = $this->actingAs($this->lecturer)->get($url)->assertOk();
@@ -278,7 +280,11 @@ class CandidacyPortalTest extends TestCase
         $workflow = new \App\Modules\Chloe\Workflows\CandidacyAppealWorkflow;
 
         $this->assertSame('candidacy.portal.queue', $workflow->queueRoute());
-        $this->assertContains('candidacy.signature.show', array_column($workflow->links($this->lecturer), 'route'));
+        // The signature is no longer a sidebar link of this module's own: it is a
+        // section on Core's single "My Signatures" page (SuppliesSignature).
+        $this->assertNotContains('candidacy.signature.show', array_column($workflow->links($this->lecturer), 'route'));
+        $this->assertSame('candidacy.signature.store', $workflow->signatureFor($this->lecturer)['storeRoute']);
+        $this->assertNull($workflow->signatureFor($this->student));
         $this->assertSame([], $workflow->links($this->student));
         $this->assertContains('candidacy.portal.queue', array_column($workflow->links($this->user(Role::MANAGER_CGS, ['email' => 'm9@test.my'])), 'route'));
     }

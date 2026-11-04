@@ -11,7 +11,9 @@ use Illuminate\Http\Request;
  */
 final class CandidacyReturnPath
 {
-    private const ALLOWED_PREFIXES = ['/candidacy', '/cgs/candidacy'];
+    // '/signatures' is Core's "My Signatures" page, which carries this
+    // module's upload and remove forms as one of its sections.
+    private const ALLOWED_PREFIXES = ['/candidacy', '/cgs/candidacy', '/signatures'];
 
     /** @return string a safe relative path (with its query string), or null when the value is not acceptable */
     public static function validate(?string $value): ?string

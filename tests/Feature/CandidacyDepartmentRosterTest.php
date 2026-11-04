@@ -288,8 +288,11 @@ class CandidacyDepartmentRosterTest extends TestCase
         $this->assertCount(1, $pages);
         $this->assertSame('candidacy.signature.show', $pages->first()->getName());
 
-        $labels = array_column((new \App\Modules\Chloe\Workflows\CandidacyAppealWorkflow)->links($this->lecturer), 'label');
-        $this->assertContains('My Signature', $labels);
+        // One entry point for every signature a person keeps: Core's "My Signatures",
+        // which shows this module's signature as a section of its own.
+        $labels = array_column(app(\App\Modules\Core\Services\ModuleRegistry::class)->linksFor($this->lecturer), 'label');
+        $this->assertContains('My Signatures', $labels);
+        $this->assertNotContains('My Signature', $labels);
         $this->assertNotContains('My Appeal Signature', $labels);
     }
 
@@ -324,13 +327,20 @@ class CandidacyDepartmentRosterTest extends TestCase
     public function test_the_signature_page_carries_the_return_path_in_its_forms_and_back_link(): void
     {
         $back = '/candidacy/portal?tab=history';
-        $html = html_entity_decode($this->actingAs($this->lecturer)->get(route('candidacy.signature.show', ['return' => $back]))->getContent());
 
+        // The old page forwards to Core's "My Signatures" with the return path intact...
+        $this->actingAs($this->lecturer)->get(route('candidacy.signature.show', ['return' => $back]))
+            ->assertRedirect(route('signatures.index', ['return' => $back]).'#candidacy');
+
+        // ...which puts it in the upload forms and the Back link.
+        $html = html_entity_decode($this->actingAs($this->lecturer)->get(route('signatures.index', ['return' => $back]))->getContent());
         $this->assertStringContainsString('name="return" value="'.$back.'"', $html);
         $this->assertMatchesRegularExpression('~<a href="'.preg_quote($back, '~').'" class="page-header-back~', $html);
 
-        $evil = html_entity_decode($this->actingAs($this->lecturer)->get(route('candidacy.signature.show', ['return' => 'https://evil.example/']))->getContent());
+        // An outside address is dropped at both steps.
+        $this->actingAs($this->lecturer)->get(route('candidacy.signature.show', ['return' => 'https://evil.example/']))
+            ->assertRedirect(route('signatures.index').'#candidacy');
+        $evil = html_entity_decode($this->actingAs($this->lecturer)->get(route('signatures.index', ['return' => 'https://evil.example/']))->getContent());
         $this->assertStringNotContainsString('evil.example', $evil);
-        $this->assertStringNotContainsString('name="return"', $evil);
     }
 }

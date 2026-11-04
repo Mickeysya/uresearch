@@ -159,7 +159,9 @@ class FormsTest extends TestCase
     public function test_the_signature_preview_stays_inside_the_content_security_policy(): void
     {
         $html = $this->actingAs($this->chair())
-            ->get(route('hardbound.signature'))
+            // hardbound.signature now forwards to Core's "My Signatures", which
+            // carries the preview.
+            ->get(route('signatures.index'))
             ->assertOk()
             ->getContent();
 

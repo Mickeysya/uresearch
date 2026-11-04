@@ -5,6 +5,7 @@ namespace App\Modules\Jason\Workflows;
 use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesDashboardAlerts;
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\SuppliesSignature;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -37,7 +38,7 @@ use App\Modules\Jason\Models\HardboundSubmissionDetail;
  * to an engine change. There is no separate "rejected outright" ending: the
  * student may either resubmit or take it to Appeal Hardbound Submission.
  */
-class HardboundSubmissionWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLinks, ProvidesDashboardAlerts
+class HardboundSubmissionWorkflow implements WorkflowModule, DecidesOneAtATime, ProvidesLinks, ProvidesDashboardAlerts, SuppliesSignature
 {
     public function key(): string
     {
@@ -139,12 +140,48 @@ class HardboundSubmissionWorkflow implements WorkflowModule, DecidesOneAtATime, 
                 ->all();
         }
 
-        return $this->signs($user)
-            // Not "My Signature": Chloe's Study Candidacy module has its own
-            // page by that name, stored separately, and a supervisor or Chair
-            // saw two identical sidebar entries leading to different pages.
-            ? [['label' => 'Hardbound Signature', 'route' => 'hardbound.signature']]
-            : [];
+        // No signature link here any more: Core's single "My Signatures" page
+        // shows this module's signature as one section -- see signatureFor().
+        return [];
+    }
+
+    /**
+     * This module's section on Core's "My Signatures" page. Same audience as
+     * the hardbound.signature routes: the candidate (who signs their own
+     * extension memo) and every role that stamps a Confirmation or, as Dean,
+     * the appointment letters.
+     */
+    public function signatureFor(User $user): ?array
+    {
+        $usedFor = match ($user->role) {
+            Role::STUDENT => 'Signed onto your Appeal for Extension of Hardbound Thesis Submission memo. You need it before you can file that appeal.',
+            Role::DEAN_PGR => 'Stamped onto every examiner appointment letter you approve, and onto the hardbound memos that reach you.',
+            Role::SUPERVISOR, Role::CHAIR => 'Stamped, with the date, onto the Confirmation of Correction to Thesis (UTP/CGS/017A) when you approve a Hardbound Submission, and onto hardbound extension memos you endorse.',
+            Role::NON_EXEC_CGS => 'Not needed to accept a Hardbound Submission: CGS has no signature block on the Confirmation of Correction. Upload one only if you are asked to sign a hardbound document.',
+            default => null,
+        };
+
+        if ($usedFor === null) {
+            return null;
+        }
+
+        $signature = HardboundSignature::forUser($user->id);
+
+        return [
+            'key' => 'hardbound',
+            'title' => 'Hardbound Thesis & Appointment Letters',
+            'usedFor' => $usedFor,
+            // Blocks an approval exactly where the controllers block one: the
+            // Supervisor and Chairman (HardboundSubmissionController's
+            // SIGNING_STAGES) and the Dean (AppointmentLetterController).
+            // A student only needs it if they appeal.
+            'required' => in_array($user->role, [Role::SUPERVISOR, Role::CHAIR, Role::DEAN_PGR], true),
+            'imageUrl' => $signature ? route('hardbound.signature.image') : null,
+            'updatedAt' => $signature?->updated_at,
+            'storeRoute' => 'hardbound.signature.store',
+            'destroyRoute' => null,
+            'hint' => 'PNG or JPG, under '.(HardboundSignature::MAX_KB / 1024).' MB. Sign on white paper and crop close to the ink.',
+        ];
     }
 
     /** Does this role stamp a signature onto the Confirmation? */

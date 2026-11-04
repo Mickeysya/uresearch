@@ -26,6 +26,7 @@
     $icons = [
         'examiner' => 'people',
         'appointment-letter' => 'people',
+        'signatures' => 'pencil',
         'hardbound.signature' => 'pencil',
         'documents' => 'folder',
         'calendar' => 'calendar',

@@ -2700,3 +2700,98 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
    still shown, greyed out, and not clickable. */
 .doc-link-disabled { color: var(--text-grey); cursor: not-allowed; opacity: .55; text-decoration: none; }
 .doc-link-disabled:is(.btn, .btn-secondary, .wca-btn) { background: var(--surface-sunken); border-color: var(--border-subtle); box-shadow: none; }
+
+/* ============================================================
+   My Signatures (core::signatures.index) -- one section per module
+   that stamps a signature, see Contracts\SuppliesSignature.
+   Full width on purpose: this is a desktop web page, and a 68ch cap
+   left two thirds of each card empty.
+   ============================================================ */
+.sig-page .page-header p { max-width: none; }
+
+.sig-summary {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--warning-border);
+    background: var(--warning-bg);
+    color: var(--warning-fg);
+    font-size: var(--text-sm);
+}
+.sig-summary.is-done { border-color: var(--success-border); background: var(--success-bg); color: var(--success-fg); }
+.sig-summary a { color: inherit; font-weight: var(--weight-semi); }
+.sig-summary-icon { display: grid; place-items: center; width: 18px; height: 18px; }
+.sig-summary-icon svg { width: 18px; height: 18px; }
+
+.sig-list { display: grid; gap: var(--space-5); }
+.card-container-inline > .sig-list > .sig-card { margin: 0; max-width: none; width: 100%; padding: var(--space-6) var(--space-8); scroll-margin-top: var(--space-6); }
+.sig-card:target { box-shadow: 0 0 0 2px var(--navy), var(--shadow-md); }
+
+.sig-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.sig-head h3 { margin: 0; font-size: var(--text-lg); color: var(--text-dark); }
+.sig-badges { display: flex; gap: var(--space-2); }
+.sig-used-for { margin: var(--space-2) 0 0; color: var(--text-grey); font-size: var(--text-sm); line-height: var(--leading-normal); }
+
+.sig-body {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(0, 1.4fr);
+    gap: var(--space-6);
+    margin: var(--space-5) 0 0;
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.sig-preview { margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.sig-preview img,
+.sig-preview-empty {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    aspect-ratio: 3 / 1;
+    object-fit: contain;
+    padding: var(--space-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: #fff;   /* a signature is ink on white paper, in either theme */
+}
+.sig-preview-empty { border-style: dashed; background: var(--surface-sunken); color: var(--text-grey); font-size: var(--text-sm); }
+.sig-preview [hidden] { display: none; }
+.sig-preview figcaption { font-size: var(--text-xs); color: var(--text-grey); }
+.sig-card.is-pending .sig-preview img { border-color: var(--navy); border-style: dashed; }
+.sig-card.is-pending .sig-preview figcaption { color: var(--navy); font-weight: var(--weight-semi); }
+
+.sig-upload { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.sig-drop {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin: 0;
+    padding: var(--space-5);
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+    cursor: pointer;
+    transition: border-color var(--duration-fast) var(--ease), background-color var(--duration-fast) var(--ease);
+}
+.sig-drop:hover, .sig-drop.is-over { border-color: var(--navy); background: var(--surface-hover); }
+.sig-drop:focus-within { outline: 2px solid var(--navy); outline-offset: 2px; }
+/* The real input covers the whole box, so a click or a dropped file lands on it. */
+.sig-drop input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.sig-drop-icon { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; background: var(--accent-subtle); color: var(--navy); }
+.sig-drop-icon svg { width: 20px; height: 20px; }
+.sig-drop-text { display: flex; flex-direction: column; min-width: 0; font-size: var(--text-sm); color: var(--text-grey); }
+.sig-drop-text b { color: var(--text-dark); font-weight: var(--weight-semi); overflow-wrap: anywhere; }
+
+.sig-buttons { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-2); }
+.sig-buttons button { margin: 0; }
+.sig-buttons button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+@media (max-width: 860px) {
+    .sig-body { grid-template-columns: 1fr; }
+    .card-container-inline > .sig-list > .sig-card { padding: var(--space-5); }
+}

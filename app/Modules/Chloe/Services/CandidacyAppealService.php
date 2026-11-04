@@ -266,7 +266,7 @@ class CandidacyAppealService
             $profile = $this->profileFor($actor, $appeal, $stage);
 
             if (in_array($action, ['approve'], true) && in_array($stage, config('candidacy.signature_required_stages'), true) && ! $profile?->hasSignature()) {
-                throw ValidationException::withMessages(['signature' => 'Upload your signature under My Signature before approving.']);
+                throw ValidationException::withMessages(['signature' => 'Upload your signature under My Signatures before approving.']);
             }
 
             $now = now();

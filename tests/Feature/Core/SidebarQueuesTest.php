@@ -104,7 +104,8 @@ class SidebarQueuesTest extends TestCase
         $panel = substr($html, strpos($html, 'title="Actions"'));
         $panel = substr($panel, 0, strpos($panel, 'nav-divider'));
 
-        $groups = $actions->groupBy(fn ($l) => $l['module']->key());
+        // Same key the CGS nav groups by: a Core link (My Signatures) has no module.
+        $groups = $actions->groupBy(fn ($l) => isset($l['module']) ? $l['module']->key() : $l['route']);
 
         $this->assertSame(
             $groups->filter(fn ($g) => $g->count() > 1)->count(),

@@ -12,6 +12,7 @@ use App\Modules\Core\Http\Controllers\NotificationController;
 use App\Modules\Core\Http\Controllers\PageController;
 use App\Modules\Core\Http\Controllers\ProfileController;
 use App\Modules\Core\Http\Controllers\QueueController;
+use App\Modules\Core\Http\Controllers\SignatureController;
 use App\Modules\Core\Http\Controllers\UserAdminController;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\Route;
@@ -62,6 +63,9 @@ Route::middleware('auth')->group(function () {
     // The signed-in user's own record. Contact details and password are
     // separate routes on purpose — see ProfileController.
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    // Every signature image this person keeps, one section per module that
+    // stamps one -- see Contracts\SuppliesSignature.
+    Route::get('/signatures', SignatureController::class)->name('signatures.index');
     Route::patch('/profile/contact', [ProfileController::class, 'updateContact'])->name('profile.contact');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
     // Gated to the roles the sidebar actually offers it to. Everything the

@@ -7,7 +7,7 @@
 @section('content')
     <div class="card-container-inline wca-page" data-doc-title="Study Candidacy Approval Portal">
         <x-core::page-header title="Study Candidacy Approval Portal">
-            <a href="{{ route('candidacy.signature.show', ['return' => $returnTo]) }}"><button type="button" class="btn-secondary">My Signature</button></a>
+            <a href="{{ route('candidacy.signature.show', ['return' => $returnTo]) }}"><button type="button" class="btn-secondary">My Signatures</button></a>
             @if (\App\Modules\Chloe\Support\CandidacyHeaderLinks::home() !== route('candidacy.portal.queue'))
                 <a href="{{ \App\Modules\Chloe\Support\CandidacyHeaderLinks::home() }}"><button type="button">Home</button></a>
             @endif

@@ -5,6 +5,7 @@ namespace App\Modules\Core\Services;
 use App\Modules\Core\Contracts\ProvidesDashboardAlerts;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
+use App\Modules\Core\Contracts\SuppliesSignature;
 use App\Modules\Core\Contracts\WorkflowModule;
 use InvalidArgumentException;
 
@@ -121,7 +122,9 @@ class ModuleRegistry
      * already looping over exactly that. A link that names its own `module`
      * keeps it.
      *
-     * @return array<int, array{label: string, route: string, params?: array, module: WorkflowModule}>
+     * Plus Core's own "My Signatures" link, which carries no `module`.
+     *
+     * @return array<int, array{label: string, route: string, params?: array, module?: WorkflowModule}>
      */
     public function linksFor(\App\Modules\Core\Models\User $user): array
     {
@@ -135,7 +138,32 @@ class ModuleRegistry
             }
         }
 
+        // One entry for every signature this person keeps, whichever modules
+        // they belong to -- see SuppliesSignature. No `module`: it is Core's.
+        if ($this->signaturesFor($user) !== []) {
+            $links[] = ['label' => 'My Signatures', 'route' => 'signatures.index'];
+        }
+
         return $links;
+    }
+
+    /**
+     * Every signature this user keeps, one section per module, for the
+     * "My Signatures" page. A module that stamps nothing implements nothing.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function signaturesFor(\App\Modules\Core\Models\User $user): array
+    {
+        $signatures = [];
+
+        foreach ($this->modules as $module) {
+            if ($module instanceof SuppliesSignature && ($signature = $module->signatureFor($user))) {
+                $signatures[] = $signature + ['module' => $module->label()];
+            }
+        }
+
+        return $signatures;
     }
 
     /**
