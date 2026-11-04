@@ -60,10 +60,40 @@
     min-height: 0;
 }
 
-/* Donut | Pending Actions | Attendance Alerts */
-.cgs-row-top    { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.1fr) minmax(0, 1fr); }
-/* Recent Activities | Quick Shortcuts */
-.cgs-row-bottom { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+/* One three-column grid for both rows, so every panel edge lines up:
+   Workload | Pending Actions | Attendance Alerts on top, then Recent
+   Activities across the first two columns and Quick Shortcuts under
+   Attendance Alerts. Uneven fractions on each row used to leave the bottom
+   pair's seam a few dozen pixels off the top row's. */
+.cgs-row-top,
+.cgs-row-bottom { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cgs-row-bottom > :first-child { grid-column: span 2; }
+
+/* Not every CGS stat card has a button any more, so space-between would
+   drop the figure to the bottom of the buttonless ones. Figures stay under
+   their labels; a button, where there is one, sits at the foot. */
+.sdash-cgs .sdash-stat { justify-content: flex-start; }
+.sdash-cgs .sdash-stat > .sdash-pill { margin-top: auto; }
+
+/* Queues clear: one centred line instead of an empty ring. */
+.cgs-clear {
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    text-align: center;
+}
+.cgs-clear-icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--success-bg);
+    color: var(--success-fg);
+}
+.cgs-clear-icon svg { width: 20px; height: 20px; }
+.cgs-clear p { margin: 0; font-size: var(--text-sm); color: var(--text-grey); line-height: 1.5; }
+.cgs-clear b { color: var(--text-dark); }
 
 /* ---- stat card figure + delta ---- */
 
@@ -277,13 +307,10 @@
    legible below 1100px, so the grid stacks to one column.
    -------------------------------------------------------------------*/
 
-@media (max-width: 1400px) {
-    .cgs-row-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
-}
-
 @media (max-width: 1100px) {
     .cgs-row-top,
     .cgs-row-bottom { grid-template-columns: minmax(0, 1fr); }
+    .cgs-row-bottom > :first-child { grid-column: auto; }
 
     .sdash-cgs .sdash-card { min-height: 200px; }
     .cgs-workload-body { flex-direction: column; }

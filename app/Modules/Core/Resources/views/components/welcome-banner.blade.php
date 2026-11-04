@@ -67,7 +67,11 @@
         ->trim()
         ->explode(' ')
         ->reject(fn (string $part) => $part === '')
-        ->skipWhile(fn (string $part) => in_array(mb_strtolower($part), $titles, true))
+        // ...and initials or the short forms of Muhammad, so "M Syahmi Ifwat"
+        // or "Mohd Hafiz" is greeted by the name actually used, not "M".
+        ->skipWhile(fn (string $part) => in_array(mb_strtolower($part), $titles, true)
+            || mb_strlen(rtrim($part, '.')) === 1
+            || in_array(mb_strtolower(rtrim($part, '.')), ['md', 'mohd', 'muhd', 'mhd'], true))
         ->first()
         ?? \Illuminate\Support\Str::of((string) (auth()->user()?->name ?? ''))->trim()->explode(' ')->first();
 

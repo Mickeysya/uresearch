@@ -26,6 +26,7 @@
         <h3>Workload Overview</h3>
     </header>
 
+    @if ($total > 0)
     <div class="sdash-card-body cgs-workload-body">
         <div class="chart-donut-wrap">
             @if ($total > 0)
@@ -55,16 +56,20 @@
         </ul>
     </div>
 
-    <footer class="sdash-note {{ $total > 0 ? '' : 'tone-good' }}">
+    <footer class="sdash-note">
         <span class="sdash-note-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'info'])</span>
         <span>
-            @if ($total > 0)
-                You have {{ $total }} {{ Str::plural('application', $total) }} pending your action.
-            @else
-                Your queues are clear.
-            @endif
+            You have {{ $total }} {{ Str::plural('application', $total) }} pending your action.
         </span>
     </footer>
+    @else
+        {{-- An empty ring, an italic line and a footer all said "nothing
+             waiting". One centred line says it. --}}
+        <div class="sdash-card-body cgs-clear">
+            <span class="cgs-clear-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'check'])</span>
+            <p><b>Your queues are clear.</b><br>Nothing is waiting on you.</p>
+        </div>
+    @endif
 </section>
 
 @if ($total > 0)

@@ -46,12 +46,17 @@
                     </span>
                 @endif
             </div>
-            <div class="sdash-stat-note">{{ $card['figure']['delta'] !== null ? 'vs last month' : 'no prior month yet' }}</div>
+            {{-- "no prior month yet" under all five figures was noise; the note
+                 only appears beside a real month-on-month change. --}}
+            @if ($card['figure']['delta'] !== null)
+                <div class="sdash-stat-note">vs last month</div>
+            @endif
 
+            {{-- A button only where there is somewhere to go. Pending, Approved
+                 and Rejected used to render a button-shaped <span> that did
+                 nothing when clicked. --}}
             @if ($card['route'])
                 <a href="{{ route($card['route']) }}" class="sdash-pill pill-{{ $card['pillTone'] }}">{{ $card['pill'] }}</a>
-            @else
-                <span class="sdash-pill pill-{{ $card['pillTone'] }}">{{ $card['pill'] }}</span>
             @endif
         </div>
     @endforeach
