@@ -593,6 +593,10 @@ Do not commit `.env`, `vendor/`, `node_modules/`, or anything under
   editing a line that has one, move it out. There are 500-odd left; they are
   where layout bugs hide — a `margin-top: -8px` hint pulled itself on top of
   the select above it. No big sweep, just do not add more.
+- **Tooltips: `data-tip="..."`.** Any element with `data-tip` (or an old
+  `title`) gets the portal's tooltip on hover and keyboard focus, from
+  `core::partials.tooltips`, which both layouts include. An icon-only button
+  needs only its `aria-label`; that becomes its tooltip. Do not build your own.
 - The sheets load in a fixed order, listed once in
   `core::partials.stylesheets` and included by both layouts. Do not reorder
   them; the cascade depends on it. Adding a sheet is a one-line edit there.

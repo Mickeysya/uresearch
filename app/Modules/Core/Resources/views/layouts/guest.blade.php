@@ -18,6 +18,7 @@
     </div>
 
     @yield('content')
+    @include('core::partials.tooltips')
     @stack('scripts')
 </body>
 </html>

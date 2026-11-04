@@ -92,7 +92,9 @@ class StudentDashboard
         $parts = [now()->format('l, j F Y')];
 
         if ($months = $this->candidacyCard()['monthsIn'] ?? null) {
-            $parts[] = "Month {$months}";
+            // "Month 25" on its own read as a date or a code; it is the
+            // student's 25th month since their programme started.
+            $parts[] = "Month {$months} of study";
         }
 
         $due = $this->dueTodayCount();

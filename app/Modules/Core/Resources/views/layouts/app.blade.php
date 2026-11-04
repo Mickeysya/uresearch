@@ -68,6 +68,7 @@
          see the partial for why it enhances the native input rather than
          replacing it. --}}
 
+    @include('core::partials.tooltips')
     @stack('scripts')
 </body>
 </html>

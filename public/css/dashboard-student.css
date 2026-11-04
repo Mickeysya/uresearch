@@ -347,22 +347,22 @@
    "nothing here yet" panel instead of a short message stranded at the
    bottom of a card that stretched to match its taller row-mates (the
    Today card, almost always the tallest of the four). */
-/* A card with nothing to show yet says so in one quiet line at the top,
-   not as a large centred icon and paragraph that weighs as much as a card
-   with real figures in it. */
+/* A card with nothing to show yet: centred in the space the row gives it,
+   but small and grey, so it never outweighs a card with real figures. */
 .sdash-top-empty {
-    margin: 4px 0 0;
+    margin: auto 0;
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    text-align: left;
-    padding: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+    padding: 8px 6px;
 }
 
 .sdash-top-empty-icon {
     flex-shrink: 0;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -370,10 +370,11 @@
     color: var(--text-grey);
 }
 
-.sdash-top-empty-icon svg { width: 15px; height: 15px; }
+.sdash-top-empty-icon svg { width: 16px; height: 16px; }
 
 .sdash-top-empty p {
-    margin: 4px 0 0;
+    margin: 0;
+    max-width: 240px;
     font-size: 12.5px;
     line-height: 1.45;
     color: var(--text-grey);
