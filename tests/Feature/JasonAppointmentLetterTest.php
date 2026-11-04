@@ -154,10 +154,12 @@ class JasonAppointmentLetterTest extends TestCase
 
             $panel = AppointmentExaminer::where('application_id', $application->id)->get();
 
-            // Main and backup, both sides, all appointed.
-            $this->assertSame(4, $panel->count());
+            // The two mains, one each side. The backups the list names are
+            // the panel's reserve: they are appointed only if a main
+            // declines, and then in their own letter.
+            $this->assertSame(2, $panel->count());
             $this->assertEqualsCanonicalizing(
-                ['internal main', 'internal backup', 'external main', 'external backup'],
+                ['internal main', 'external main'],
                 $panel->map(fn ($e) => $e->examiner_type.' '.$e->examiner_role)->all(),
             );
         }

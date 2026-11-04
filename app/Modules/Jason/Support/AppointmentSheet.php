@@ -68,9 +68,10 @@ final class AppointmentSheet
     /**
      * The four panel slots, as [name column, detail column, kind, role].
      *
-     * Main and backup both receive an appointment letter and a thesis
-     * evaluation report: CGS appoints the full panel, and a backup who is
-     * never called on simply never returns a report.
+     * All four are read from the list, because the list is what the Dean
+     * approved -- but only the two mains are appointed. A backup is the
+     * reserve, named in case a main declines, and is appointed only if that
+     * happens. See AppointmentLetterController::readPanel().
      */
     public const SLOTS = [
         ['internal_main', 'internal_main_dept', 'internal', 'main'],

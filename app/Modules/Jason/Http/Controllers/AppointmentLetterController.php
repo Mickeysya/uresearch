@@ -286,13 +286,30 @@ class AppointmentLetterController extends Controller
         // The exact path first: the nomination's own row names its four
         // examiners by id, so two people with the same name cannot be
         // confused for one another.
-        if ($panel = ExaminerDirectory::panelForNomination($cell('nomination_id'))) {
-            return array_map(fn (array $e) => $this->examinerRow($e), $panel);
+        //
+        // Only the two mains are appointed. A backup is the panel's reserve,
+        // named in case a main declines; appointing one who is never called
+        // on commits them to a thesis nobody will send and puts an
+        // honorarium on a letter the Dean has signed. If a main does decline,
+        // the promoted backup is appointed then, in their own letter.
+        $panel = ExaminerDirectory::panelForNomination($cell('nomination_id'));
+
+        $mains = array_values(array_filter(
+            $panel,
+            fn (array $e) => $e['examiner_role'] === AppointmentExaminer::ROLE_MAIN,
+        ));
+
+        if ($mains !== []) {
+            return array_map(fn (array $e) => $this->examinerRow($e), $mains);
         }
 
         $examiners = [];
 
         foreach (AppointmentSheet::SLOTS as [$nameKey, $detailKey, $type, $role]) {
+            if ($role !== AppointmentExaminer::ROLE_MAIN) {
+                continue;
+            }
+
             $name = $cell($nameKey);
 
             if ($name === '') {
