@@ -199,7 +199,7 @@
         {{-- Pool utilisation --}}
         <section class="pa-card" id="utilisation">
             <h3>Examiner pool utilisation</h3>
-            <p class="pa-source">Computed from examiner seat history: active examiners{{ $department ? ' in '.$department : '' }} holding a main seat on a released panel at any point in each month (from release or promotion until the evaluation is complete, they are freed or they decline), as a share of the active pool that month, over {{ $period }}.</p>
+            <p class="pa-source">Computed from examiner seat history: active examiners{{ $department ? ' in '.$department : '' }} holding a main seat on a released panel at any point in each month (from release or promotion until the evaluation is complete, they are freed or they decline), as a share of today's active pool (when an examiner joined the pool is not recorded), over {{ $period }}.</p>
             <div class="pa-chart"><canvas id="pa-utilisation" role="img" aria-label="Pool utilisation by month: @foreach ($utilisation as $m){{ $m['label'] }} {{ $m['percent'] }}%@if (! $loop->last), @endif @endforeach"></canvas></div>
             <table class="data-table" style="margin-top: 10px;">
                 <thead><tr><th>Month</th><th>Holding a seat</th><th>Pool</th><th>Utilisation</th></tr></thead>

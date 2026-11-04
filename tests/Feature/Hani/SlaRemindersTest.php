@@ -218,7 +218,7 @@ class SlaRemindersTest extends TestCase
 
         $this->runAt('2027-11-08 09:00', ['--dry-run' => true])
             ->expectsOutputToContain('would send sla_1 for Notice of Thesis Submission')
-            ->expectsOutputToContain('Dry run: 1 SLA reminder(s) would be sent.')
+            ->expectsOutputToContain('Dry run: 1 SLA reminder(s) would be sent; 0 already sent.')
             ->assertSuccessful();
 
         Notification::assertNothingSent();

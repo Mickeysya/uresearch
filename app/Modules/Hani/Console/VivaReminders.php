@@ -69,6 +69,13 @@ class VivaReminders extends Command
             $who = count($users) + count($emails);
 
             if ($dryRun) {
+                // As a real run would: one already logged is skipped.
+                if (VivaReminderLog::where(['viva_application_id' => $notice->id, 'kind' => $kind, 'reference' => $reference])->exists()) {
+                    $skipped++;
+
+                    continue;
+                }
+
                 $this->line(sprintf('  would send %s for viva #%d (%s) to %d recipient(s)', $kind, $notice->id, $notice->student?->name, $who));
                 $sent++;
 
@@ -108,7 +115,7 @@ class VivaReminders extends Command
         }
 
         $this->info($dryRun
-            ? "Dry run: {$sent} viva reminder(s) would be sent."
+            ? "Dry run: {$sent} viva reminder(s) would be sent; {$skipped} already sent."
             : "Sent {$sent} viva reminder(s); {$skipped} already sent.");
 
         return self::SUCCESS;

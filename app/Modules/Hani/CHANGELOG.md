@@ -1,5 +1,124 @@
 # Changelog: Hani's modules
 
+## 2026-11-04: Across the modules, and wrap-up (Prompt 4)
+
+Branch `feature/hani-automation`. Commits: `5b1683d` (a), `43076e6` (b),
+`cdaf8f5` (c), `90a3eb6` (d), and the verification commit (e).
+
+### Problem
+
+- **Nothing chased a stage that simply waited.** The viva and re-viva
+  reminders cover examiners and deadlines, but a nomination sitting at CGS
+  compile, a notice nobody acknowledged or a softbound nobody checked waited
+  silently.
+- **Nobody could see where the time goes.** `approval_history` records every
+  decision, but no screen turned it into stage times, bottlenecks or
+  turnaround, so "the chain is slow" could not be answered with a figure.
+- **The demo had no history.** Ten live scenarios cannot make analytics
+  meaningful.
+- **The documentation had drifted:** SHARED_CHANGES.md had grown to 13
+  numbered items, and the behaviour doc predated Prompt 2.
+
+### Decisions
+
+- **One reading of "overdue".** `Support/StageSla` is used by both the
+  reminders and the analytics page, so the two never disagree.
+- **Never two reminders for one wait.** Stages another command already chases
+  are in `hani.sla.skip` (re-viva panel review, `re-viva:monitor`), and a
+  test fails if any skipped stage gets an SLA limit.
+- **The limits are Provisional.** CGS has set no service levels for these
+  stages; 5 and 10 working days is our default.
+- **Analytics read existing records only.** Stage times come from
+  consecutive `approval_history` rows; nothing new is recorded to feed them.
+  Every chart says what it is computed from and over which period. Same
+  scoping as the Examiner Dashboard; Non-Exec reads everything, read-only.
+- **History through the real engine.** The 24 fictional cases run
+  `WorkflowEngine` and Hani's services with the clock set to each moment,
+  so the durations are honest and `status` / `current_stage` are never
+  written. No email, and the pool's state is restored, so the live
+  scenarios are unaffected.
+
+### What changed
+
+| Item | What it does |
+|---|---|
+| a. SLA reminders | `hani:sla-reminders` (08:15, `--dry-run`): the current approver at the first threshold, the Senior Exec copied at the second; once per threshold per visit (`hani_sla_reminder_logs`); a returned list starts a fresh clock |
+| b. Process Analytics | `/process-analytics`: days per stage per module (average, median, share), slowest stage, overdue now, viva pipeline, re-viva rounds and outcomes, report turnaround (MSc vs PhD), pool utilisation by month; 3/6/12 months; xlsx (one sheet per table) and csv; Chart.js with token colours (dark mode); linked from the dashboard and the sidebar |
+| c. Demo history | `Concerns/SeedsHistoricalCases`: H01–H24, completed between 5 and ~330 days ago, five lists sent back, four softbounds returned, four re-vivas to an outcome; idempotent |
+| d. Tidy up | SHARED_CHANGES.md one section per target file; README rewritten (features at a glance, how each intelligent feature explains itself, commands, config, demo); behaviour doc rewritten for Prompts 1–4 |
+| e. Verification | full suite, re-seed, Chromium journey, every command dry-run; the fixes below |
+
+Bugs found and fixed along the way:
+- **Finished panels reopened** (c). Pending Evaluation, `examiners:sweep`
+  and the cross-department clash check decided "open" from the examiners'
+  current `assigned_until`. A panel examined months ago reappeared as soon
+  as one of its examiners joined a later panel: listed as pending, swept
+  for an "evaluation overdue" reminder, and flagged as a clash. All three now
+  share `ExaminerNomination::evaluationOpen()`, read from the panel's own
+  seat history. `EvaluationOverTest` fails without it.
+- **Dry runs over-reported** (e). `viva:reminders`, `re-viva:monitor` and
+  `examiners:sweep --dry-run` listed every reminder due, including ones
+  already sent, as "would send". They now skip what is logged and say "N
+  already sent", as a real run does.
+- **Invented waits in the live demo** (e). The seeder backdated S03–S10's
+  notices and nominations but decided them "now", so analytics showed
+  40–180-day waits ("Notice: 55.9 days average, median 5"). Notices are now
+  acknowledged two days after filing, and chains move every four days.
+- **Utilisation against an empty pool** (e). The monthly pool counted
+  examiners by `created_at`, which is the import date, so earlier months
+  showed "16 holding a seat of 0". It is now today's active pool, and the
+  caption says so.
+
+New table: `hani_sla_reminder_logs`. No shared file or shared table was
+changed.
+
+### Verification
+
+- `php artisan test tests/Feature/Hani`: 250 passed. Full suite:
+  1897 passed (34,211 assertions).
+- `./sync.sh` (one migration, worker restarted), then re-seeded from a clean
+  run.
+- **Headless Chromium, one journey across every account**: 172 checks, 71
+  clicks, all passed, no JavaScript errors.
+  1. S01 files eligibility and notice; `ae@` acknowledges.
+  2. `nurul.aziz@` nominates with suggestions ("matched on", load shown).
+  3. `ae@` → `seniorexec@` → `director@` → `dean@` → `seniorexec@`
+     "Finalise and release". `cgs@` gets the Mailpit email and the in-app
+     notice.
+  4. Softbound: the Turnitin report is read in the browser (12%), and System
+     checks finish on the worker. Verified.
+  5. Examiner progress, categories 3 and 4: major divergence. Scheduled on a
+     suggested slot.
+  6. Result category 4: the student sees the category, not the examiners'.
+     The viva date was moved to yesterday in Hani's own `viva_details` row,
+     since a result needs a held viva.
+  7. `seniorexec@` logs the re-viva; it is early for the window, so it is
+     warned, not blocked.
+  8. `ae@` sends to panel. The link from the real Mailpit email opens logged
+     out and the document downloads.
+  9. Re-evaluations 2 and 2, suggested Level 2, confirmed. The student sees
+     the level only.
+  10. `cgs@`: Cycles, Report, Analytics and Dashboard return 200 with no
+      action forms; 403 on logging.
+  11. Dashboard and analytics as `seniorexec@` and `ae@`, light and dark:
+      every chart drawn, every period filter, both downloads, the theme
+      toggle and Back.
+- **A test-script mistake, corrected.** On the first run the script clicked
+  the first decide form on the AE's re-viva queue. That was application #3,
+  a `student@utp.edu.my` round created on 11 October, which it advanced from
+  Under Panel Review to Report Received (and the student was emailed). It
+  was returned through `WorkflowEngine::returnTo()` with a remark saying
+  why, and the script now targets the journey's own records by id.
+- **Every command with `--dry-run`** after the final re-seed:
+
+  ```
+  examiners:sweep     Dry run: 0 reminder(s) would be sent (0 already sent); 0 stale import preview(s) would be purged.
+  viva:reminders      would send panel_7d (S07, 5 recipients), softbound_overdue (S05, 1); 2 would be sent, 0 already sent.
+  re-viva:monitor     Dry run: 0 re-viva reminder(s) would be sent; 1 already sent.   (S09's chase, sent by the seeder)
+  hani:sla-reminders  sla_2 for student2's re-viva #1 (Report Received, 25 working days), S03 (CGS Compilation, 18), S04 (Senior Director, 16)
+  ```
+- Re-seeded at the end, so the demo starts as the README describes.
+
 ## 2026-11-04: Merge of origin/feature/hani-automation (= develop 0a23bad)
 
 **What came in that touches Hani.**

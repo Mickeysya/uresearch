@@ -513,8 +513,8 @@ test accounts:
 |---|---|---|---|
 | S01 Aiman Hakim | `aiman.roslan@example.com` | MSc FT, Computing | Not started: the full live walkthrough (MSc) |
 | S02 Nurin Batrisyia | `nurin.azlan@example.com` | PhD FT, Petroleum Eng. | Notice waiting for the AE: the live walkthrough (PhD) |
-| S03 Harith Iskandar | `harith.z@example.com` | MSc PT, Chemical Eng. | Nomination at CGS compile; clash on Firdaus Kamarudin with S04 |
-| S04 Siti Khadijah | `khadijah.mazlan@example.com` | PhD FT, Civil & Env. Eng. | Nomination at the Senior Director; "Hassan bin Omar" vs S10's "Hassan Omar, PhD" duplicate |
+| S03 Harith Iskandar | `harith.z@example.com` | MSc PT, Chemical Eng. | Nomination at CGS compile for about 18 working days; clash on Firdaus Kamarudin with S04; `hani:sla-reminders` sends the Senior Exec its second reminder |
+| S04 Siti Khadijah | `khadijah.mazlan@example.com` | PhD FT, Civil & Env. Eng. | Nomination at the Senior Director for about 16 working days (SLA reminder); "Hassan bin Omar" vs S10's "Hassan Omar, PhD" duplicate |
 | S05 Amirah Sofea | `amirah.kamal@example.com` | MSc FT, Management | Released; softbound returned (Turnitin receipt 45 days old: System checks warn) |
 | S06 Lee Jia Hui | `lee.jiahui@example.com` | PhD PT, Mechanical Eng. | Ready to schedule; examiner reports diverge (Internal 2, External 4: major) |
 | S07 Muhammad Danish | `danish.faisal@example.com` | MSc FT, Electrical & Electronics Eng. | Viva in 7 days: `php artisan viva:reminders` sends the 7-day reminder |
@@ -531,7 +531,9 @@ Dean), softbound (H05, H11, H17 and H23 returned once), both examiner
 reports (PhD slower, some late), viva, result and corrections accepted. H04,
 H10, H16 and H22 are category 4 and go through a re-viva round to an outcome
 (levels 2, 3, 1 and 5). Durations are varied but fixed per case, so the picture is the
-same every run relative to today. This step sends no email and puts every
+same every run relative to today. The live scenarios' decisions are spread
+the same way (a notice acknowledged two days after filing, the chain moving
+every four days), so no wait is invented. This step sends no email and puts every
 examiner's `assigned_until` and `last_examination_date` back afterwards, so
 the live scenarios above see the same pool.
 

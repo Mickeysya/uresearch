@@ -267,9 +267,11 @@ trait SeedsVivaScenarios
         $this->backdate($notice, $filedDaysAgo);
 
         if ($acknowledge) {
+            // Acknowledged two days after filing, not today: approval_history
+            // feeds Process Analytics, and a 150-day "wait" would be invented.
             $ae = $this->academicExecFor($student);
-            $engine->decide($notice, $ae, 'approve');
-            VivaEligibility::where('student_id', $student->id)->update(['verified_by_id' => $ae->id, 'verified_at' => now()]);
+            $this->at(now()->subDays(max(0, $filedDaysAgo - 2)), fn () => $engine->decide($notice, $ae, 'approve'));
+            VivaEligibility::where('student_id', $student->id)->update(['verified_by_id' => $ae->id, 'verified_at' => now()->subDays(max(0, $filedDaysAgo - 2))]);
         }
 
         return $notice;
@@ -312,8 +314,16 @@ trait SeedsVivaScenarios
             'cgs_release' => fn () => $this->desk(Role::SENIOR_EXEC_CGS, 'Puan Waheeda (demo)'),
         ];
 
+        // Filed 30 days ago; each stage decided four days after the last
+        // (Finalise and release the same afternoon), so the stage times in
+        // Process Analytics are believable. A list left waiting at its target
+        // stage has waited since its last decision, as the SLA reminders see it.
+        $step = 0;
         while ($application->status === Application::STATUS_PENDING && $application->current_stage !== $target) {
-            $engine->decide($application, $desks[$application->current_stage](), 'approve');
+            $stage = $application->current_stage;
+            $step += $stage === 'cgs_release' ? 0 : 1;
+            $this->at(now()->subDays(30 - 4 * $step)->setTime(10, 0)->addMinutes($stage === 'cgs_release' ? 30 : 0),
+                fn () => $engine->decide($application, $desks[$stage](), 'approve'));
             $application->refresh();
         }
 

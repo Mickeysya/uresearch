@@ -64,7 +64,9 @@ class SlaReminders extends Command
             $unit = $row['working_days'] ? 'working days' : 'days';
 
             if ($dryRun) {
-                if (! $this->alreadyLogged($application, $row, $level)) {
+                if ($this->alreadyLogged($application, $row, $level)) {
+                    $skipped++;
+                } else {
                     $this->line(sprintf(
                         '  would send sla_%d for %s #%d (%s) at %s: %d %s, limit %d, to %d recipient(s)',
                         $level, $application->module()->label(), $application->id, $application->student?->name,
@@ -98,7 +100,7 @@ class SlaReminders extends Command
         }
 
         $this->info($dryRun
-            ? "Dry run: {$sent} SLA reminder(s) would be sent."
+            ? "Dry run: {$sent} SLA reminder(s) would be sent; {$skipped} already sent."
             : "Sent {$sent} SLA reminder(s); {$skipped} already sent.");
 
         return self::SUCCESS;

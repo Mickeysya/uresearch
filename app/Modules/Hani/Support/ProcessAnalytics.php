@@ -31,7 +31,7 @@ use Illuminate\Support\Collection;
  *                   received, MSc against PhD, against the report limit
  *   utilisation     examiner_seat_history: examiners holding a main seat on
  *                   a released panel at any point in the month, as a share
- *                   of the active pool
+ *                   of today's active pool
  *
  * Scoped like the Examiner Dashboard: an Academic Executive sees their own
  * department's candidates and examiners; everyone else allowed in (CGS, the
@@ -380,7 +380,9 @@ class ProcessAnalytics
             $busy = collect($holdings)
                 ->filter(fn ($h) => isset($poolIds[$h['examiner']]) && $h['from']->lte($end) && ($h['to'] === null || $h['to']->gte($start)))
                 ->pluck('examiner')->unique()->count();
-            $size = $pool->filter(fn ($e) => $e->created_at === null || $e->created_at->lte($end))->count();
+            // The active pool as it stands: examiners' created_at is when
+            // they were entered or imported, not when they joined the pool.
+            $size = $pool->count();
 
             $months[] = [
                 'month' => $start->format('Y-m'),

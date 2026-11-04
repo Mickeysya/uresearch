@@ -246,6 +246,15 @@ class HaniDemoSeederTest extends TestCase
         $this->assertGreaterThanOrEqual(3, $year['reviva']['decided']);
         $this->assertNotNull($year['slowest']['overall']);
 
+        // No invented waits: the live scenarios' notices are acknowledged
+        // days after filing, and their chains move every few days.
+        $this->assertLessThan(10, $year['stages']['viva_voce']['stages'][0]['average']);
+        $this->assertLessThan(15, collect($year['stages']['examiner_nomination']['stages'])->max('average'));
+        foreach ($year['utilisation'] as $month) {
+            $this->assertLessThanOrEqual(100, $month['percent']);
+            $this->assertGreaterThan(0, $month['pool']);
+        }
+
         Carbon::setTestNow();
     }
 

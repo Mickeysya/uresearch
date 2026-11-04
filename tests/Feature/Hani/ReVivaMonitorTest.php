@@ -107,6 +107,15 @@ class ReVivaMonitorTest extends TestCase
         Notification::assertSentTimes(ReVivaUpdate::class, 0);
         $this->assertSame(0, ReVivaReminderLog::count());
 
+        // After a real run, a dry run says what a real run would now do:
+        // the chase is "already sent" (Prompt 4: it used to repeat
+        // "would send" for reminders already logged).
+        $this->artisan('re-viva:monitor')->assertSuccessful();
+        $this->artisan('re-viva:monitor', ['--dry-run' => true])
+            ->doesntExpectOutputToContain('would send panel_chase')
+            ->expectsOutputToContain('already sent.')
+            ->assertSuccessful();
+
         $commands = collect(app(Schedule::class)->events())->map(fn ($e) => $e->command)->implode(' ');
         $this->assertStringContainsString('re-viva:monitor', $commands);
     }

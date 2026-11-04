@@ -61,6 +61,17 @@ class ReVivaMonitor extends Command
             $users = collect($users)->filter()->unique('id');
 
             if ($dryRun) {
+                // A dry run reports what a real run would do, so one already
+                // logged is "already sent", not "would send".
+                $logged = $subject instanceof ReVivaDetail
+                    ? ReVivaReminderLog::where(['re_viva_detail_id' => $subject->id, 'kind' => $kind, 'reference' => $reference])->exists()
+                    : VivaReminderLog::where(['viva_application_id' => $subject->id, 'kind' => 'reviva_'.$kind, 'reference' => $reference])->exists();
+                if ($logged) {
+                    $skipped++;
+
+                    continue;
+                }
+
                 $application = $subject instanceof ReVivaDetail ? $subject->application : $subject;
                 $this->line(sprintf('  would send %s for %s #%d (%s) to %d recipient(s)', $kind, $application->module_type, $application->id, $application->student?->name, $users->count()));
                 $sent++;
@@ -96,7 +107,7 @@ class ReVivaMonitor extends Command
         }
 
         $this->info($dryRun
-            ? "Dry run: {$sent} re-viva reminder(s) would be sent."
+            ? "Dry run: {$sent} re-viva reminder(s) would be sent; {$skipped} already sent."
             : "Sent {$sent} re-viva reminder(s); {$skipped} already sent.");
 
         return self::SUCCESS;

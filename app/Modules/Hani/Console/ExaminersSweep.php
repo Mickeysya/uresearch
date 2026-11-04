@@ -59,6 +59,13 @@ class ExaminersSweep extends Command
                 ->get();
 
             if ($dryRun) {
+                // As a real run would: one already logged is skipped.
+                if (ExaminerReminderLog::where(['nomination_id' => $nomination->id, 'kind' => self::KIND_OVERDUE, 'sequence' => $sequence])->exists()) {
+                    $skipped++;
+
+                    continue;
+                }
+
                 $this->line(sprintf('  would remind %d Academic Executive(s) about #%d (%s), viva %s, reminder %d',
                     $recipients->count(), $nomination->application_id, $student?->name, $vivaAt->format('Y-m-d'), $sequence + 1));
                 $sent++;
@@ -97,7 +104,7 @@ class ExaminersSweep extends Command
         }
 
         $this->info($dryRun
-            ? "Dry run: {$sent} reminder(s) would be sent; {$stale} stale import preview(s) would be purged."
+            ? "Dry run: {$sent} reminder(s) would be sent ({$skipped} already sent); {$stale} stale import preview(s) would be purged."
             : "Sent {$sent} evaluation reminder(s); {$skipped} already sent; purged {$stale} stale import preview(s).");
 
         return self::SUCCESS;
