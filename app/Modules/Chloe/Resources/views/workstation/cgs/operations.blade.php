@@ -24,6 +24,8 @@
 @section('content')
     @include('chloe::workstation._assistant-widget')
 
+<link rel="stylesheet" href="{{ asset('css/chloe-workstation.css') }}">
+
 {{-- Scoped to this page -- nothing here touches a Core/shared stylesheet.
      The block grid below is the same fixed 4-column layout the student
      Home page uses (see workstation/select.blade.php's own note on why
@@ -77,44 +79,8 @@
     .cgs-export-row button { margin: 0; }
     .cgs-export-row .btn-secondary { background: white; color: var(--navy); border: 1px solid var(--navy); }
 
-    .ws-block-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        justify-items: stretch;
-        gap: 24px;
-        width: 100%;
-    }
-    @media (max-width: 1099px) { .ws-block-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-    @media (max-width: 799px) { .ws-block-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 519px) { .ws-block-grid { grid-template-columns: repeat(1, minmax(0, 1fr)); } }
 
-    .ws-block-card { width: 100%; max-width: none; margin: 0; padding: 0; overflow: hidden; text-decoration: none; color: inherit; display: flex; flex-direction: column; }
-    .ws-block-image { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--surface-sunken, #eef1f6); }
-    .ws-block-body { height: 120px; padding: 18px; text-align: center; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-
-    .cgs-seat-list { display: flex; flex-direction: column; gap: 16px; margin-top: 12px; }
-
-    .cgs-seat-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        min-height: 178px;
-        border-radius: 20px;
-        background: var(--surface-sunken, #F8F9FB);
-        padding: 14px 20px;
-        gap: 16px;
-    }
-    .cgs-seat-image { width: 204px; height: 153px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #fff; }
-    .cgs-seat-text { flex: 1 1 160px; min-width: 0; }
-    .cgs-seat-title { font-weight: 700; font-size: 17px; }
-    .cgs-seat-sub { color: var(--text-grey); font-size: 13px; margin-top: 2px; }
-    .cgs-seat-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-    .cgs-seat-sub-label { margin-top: 8px; font-size: 12px; color: var(--text-grey); text-transform: uppercase; letter-spacing: .03em; font-weight: 600; }
-    .cgs-seat-lines { margin-top: 4px; min-width: 0; max-width: 360px; }
-    .cgs-seat-line { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .cgs-seat-line:nth-child(2), .cgs-seat-line:nth-child(3) { font-size: 13px; font-weight: 400; color: var(--text-grey); margin-top: 2px; }
-    .cgs-seat-button { flex-shrink: 0; }
-    .cgs-seat-button button { width: 132px; height: 50px; margin: 0; padding: 0; }
+    /* Seat tiles (.cgs-seat-list / .cgs-seat-card): public/css/chloe-workstation.css. */
 
     .cgs-pagination { display: flex; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
     .cgs-pagination a, .cgs-pagination span { padding: 6px 11px; border-radius: 8px; font-size: 13px; border: 1px solid var(--border-grey); text-decoration: none; color: var(--navy); }
@@ -243,15 +209,19 @@
 <div class="card-container-inline">
     <div class="card card-wide" @if ($mode === 'results') data-live-region @endif>
         @if ($mode === 'browse')
-            <h3>Blocks</h3>
-            <p style="color: var(--text-grey); font-size: 13px;">Click a block to see its rooms.</p>
-            <div class="card-divider"></div>
+            <h2 class="ws-section-title">Blocks</h2>
+            <p class="ws-section-sub">Choose a block to see its rooms and seats.</p>
 
-            <div class="ws-block-grid">
+            <div class="ws-card-grid">
                 @foreach ($blocks as $block)
-                    <a href="{{ route('workstation.cgs.block', $block->code) }}" class="card ws-block-card">
-                        <img src="{{ $block->photoUrl() }}" alt="{{ $block->name }}" loading="lazy" class="ws-block-image">
-                        <div class="ws-block-body"><b style="font-size:15px;">{{ $block->name }}</b></div>
+                    <a href="{{ route('workstation.cgs.block', $block->code) }}" class="ws-photo-card">
+                        <img src="{{ $block->photoUrl() }}" alt="{{ $block->name }}" loading="lazy">
+                        <div class="ws-photo-body">
+                            <div class="ws-photo-head">
+                                <span class="ws-photo-name">{{ $block->name }}</span>
+                                <span class="ws-photo-cta" aria-hidden="true">View rooms &rarr;</span>
+                            </div>
+                        </div>
                     </a>
                 @endforeach
             </div>
