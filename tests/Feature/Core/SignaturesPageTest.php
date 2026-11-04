@@ -49,6 +49,28 @@ class SignaturesPageTest extends TestCase
         $this->get(route('signatures.index'))->assertSee('On file');
     }
 
+    /**
+     * Approving without a signature bounces to hardbound.signature with a
+     * flashed reason; that page now forwards here, and the reason must
+     * survive the extra hop.
+     */
+    public function test_the_old_pages_forward_here_and_keep_their_message(): void
+    {
+        $chair = $this->chair();
+
+        $this->actingAs($chair)
+            ->from(route('dashboard'))
+            ->get(route('hardbound.signature'))
+            ->assertRedirect(route('signatures.index').'#hardbound');
+
+        $this->actingAs($chair)
+            ->withSession(['error' => 'Upload your signature first.', '_flash' => ['old' => [], 'new' => ['error']]])
+            ->followingRedirects()
+            ->get(route('hardbound.signature'))
+            ->assertSee('My Signatures')
+            ->assertSee('Upload your signature first.');
+    }
+
     public function test_a_student_sees_only_the_signature_they_can_use(): void
     {
         $this->actingAs($this->student())

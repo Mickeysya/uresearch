@@ -105,7 +105,7 @@
                         <dt>Block</dt><dd>{{ $workstationLocation->block }}</dd>
                         <dt>Room</dt><dd>{{ $workstationLocation->room_code }}</dd>
                     </dl>
-                    <p class="modal-note">The seat is yours as soon as you confirm. By confirming you accept the <a href="{{ route('workstation.terms') }}" target="_blank" rel="noopener">Postgraduate Workstation Term of Use</a>.</p>
+                    <p class="modal-note">The seat is yours as soon as you confirm. By confirming you accept the <a href="{{ route('workstation.terms') }}">Postgraduate Workstation Term of Use</a>.</p>
                     <div class="modal-actions">
                         <button type="button" class="btn-secondary" data-close-modal>Cancel</button>
                         <button type="button" id="select-seat-confirm">Confirm</button>

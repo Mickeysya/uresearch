@@ -2,7 +2,8 @@
     "← Back" links marked data-browser-back (x-core::page-header) go back in
     real browser history when the previous page was on this site, so a
     filtered or paged queue comes back exactly as it was left. Otherwise the
-    link just follows its href. Included once from both layouts.
+    link just follows its href. Included from the signed-in layout only: the
+    automatic Back link (x-core::page-header) is never drawn for a guest.
 
     A page that already wires its own handler (several of Chloe's do) wins:
     that handler runs on the link itself and calls preventDefault(), and this

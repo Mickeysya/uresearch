@@ -236,7 +236,7 @@
 .wst-aside { position: sticky; top: var(--space-6); }
 .wst-aside .wst-head { flex-direction: column; margin-bottom: var(--space-5); }
 .wst-aside .wst-keypoints { grid-template-columns: 1fr; margin-bottom: 0; }
-.wst-main .wst-list { max-width: 78ch; }
+.wst-main .wst-list { max-width: none; }  /* fills the card: a 78ch cap left its right third empty */
 
 @media (max-width: 960px) {
     .wst-layout { grid-template-columns: minmax(0, 1fr); }
