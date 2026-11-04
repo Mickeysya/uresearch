@@ -5,63 +5,7 @@
 @section('content')
     @include('chloe::workstation._assistant-widget')
 
-{{-- Scoped to this page -- nothing here touches a Core/shared stylesheet.
-     This is the same view for every block (the block code is just a route
-     parameter), so these rules apply identically whichever block a student
-     is browsing. A fixed `repeat(4, 1fr)` grid, not auto-fit/flex-grow: a
-     lone card in a short last row must stay the same size as the rest and
-     sit at the left, not stretch to fill the row -- which is exactly what
-     auto-fit and flex-grow both do, so neither works here. --}}
-<style>
-    .ws-room-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        justify-items: stretch;
-        gap: 24px;
-        width: 100%;
-        margin-top: 12px;
-        max-height: 1180px;
-        overflow-y: auto;
-    }
-
-    @media (max-width: 1099px) {
-        .ws-room-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    }
-
-    @media (max-width: 799px) {
-        .ws-room-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-
-    @media (max-width: 519px) {
-        .ws-room-grid { grid-template-columns: repeat(1, minmax(0, 1fr)); }
-    }
-
-    .ws-room-card {
-        width: 100%;
-        max-width: none;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        text-decoration: none;
-        color: inherit;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .ws-room-image {
-        width: 100%;
-        aspect-ratio: 4 / 3;
-        object-fit: cover;
-        display: block;
-        background: var(--surface-sunken, #eef1f6);
-    }
-
-    .ws-room-body {
-        height: 120px;
-        padding: 18px;
-        overflow: hidden;
-    }
-</style>
+<link rel="stylesheet" href="{{ asset('css/chloe-workstation.css') }}">
 
 <div class="card-container-inline">
     {{-- Back's target is identical to Home's here (this block's only
@@ -78,24 +22,36 @@
          here previously fought that and left the panel short. --}}
     <div class="card card-wide">
         @if ($activeRequest)
-            <div class="empty-state">
-                You already hold Seat {{ $activeRequest->workstation->seat_code }} in {{ $activeRequest->workstation->location->name }}.
-                Release it from the <a href="{{ route('workstation.select') }}">Home</a> screen before selecting another.
+            <div class="ws-notice" role="status">
+                <span>
+                    You already hold Seat {{ $activeRequest->workstation->seat_code }} in {{ $activeRequest->workstation->location->name }}.
+                    Release it from the <a href="{{ route('workstation.select') }}">Home</a> screen before selecting another.
+                </span>
             </div>
         @endif
 
-        <div class="ws-room-grid">
+        <h2 class="ws-section-title">Rooms in Block {{ $block }}</h2>
+        <p class="ws-section-sub">Showing the rooms open to you. Choose one to pick a seat.</p>
+
+        <div class="ws-card-grid">
             @foreach ($rooms as $room)
-                <a href="{{ route('workstation.seats', $room) }}" class="card ws-room-card">
-                    <img src="{{ $room->photoUrl() }}" alt="{{ $room->name }}" loading="lazy" class="ws-room-image">
-                    <div class="ws-room-body">
-                        <b>{{ $room->name }}</b>
-                        <div style="margin-top:6px;">
-                            <span class="status-badge {{ $room->gender === 'female' ? 'rejected' : 'pending' }}">{{ $room->genderLabel() }}</span>
+                @php
+                    $total = max(1, (int) $room->workstations_count);
+                    $free = (int) $room->available_count;
+                    $percent = (int) round($free / $total * 100);
+                    $tone = $free === 0 ? 'is-empty' : ($percent < 20 ? 'is-low' : '');
+                @endphp
+                <a href="{{ route('workstation.seats', $room) }}" class="ws-photo-card">
+                    <img src="{{ $room->photoUrl() }}" alt="{{ $room->name }}" loading="lazy">
+                    <div class="ws-photo-body">
+                        <div class="ws-photo-head">
+                            <span class="ws-photo-name">{{ $room->name }}</span>
+                            <span class="ws-chip">{{ $room->genderLabel() }}</span>
                         </div>
-                        <p style="color: var(--text-grey); font-size: 13px; margin-top:6px;">
-                            {{ $room->available_count }} of {{ $room->workstations_count }} seats available
-                        </p>
+                        <div class="ws-meter-label">
+                            <span><b>{{ $room->available_count }}</b> of {{ $room->workstations_count }} seats available</span>
+                        </div>
+                        <div class="ws-meter {{ $tone }}" role="presentation"><span style="width: {{ $percent }}%"></span></div>
                     </div>
                 </a>
             @endforeach

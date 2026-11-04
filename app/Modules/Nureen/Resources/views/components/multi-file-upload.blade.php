@@ -106,9 +106,9 @@
     <p data-doc-upload-error hidden></p>
 
     @if ($hint)
-        <p class="queue-meta" style="margin-top: -8px;">{{ $hint }}</p>
+        <p class="field-hint">{{ $hint }}</p>
     @endif
-    <p class="queue-meta" style="margin-top: -8px;">
+    <p class="field-hint">
         {{ count($allowed) === 1 ? strtoupper($allowed[0]).' only' : strtoupper(implode(', ', array_slice($allowed, 0, -1))).' or '.strtoupper(last($allowed)) }}. Up to {{ $maxFiles }} files, {{ $maxFileKb / 1024 }}&nbsp;MB
         each, {{ $maxTotalKb / 1024 }}&nbsp;MB total.
     </p>

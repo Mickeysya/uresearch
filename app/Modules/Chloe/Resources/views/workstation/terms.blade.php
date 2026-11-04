@@ -16,10 +16,8 @@
     right. Back/Home targets per visitor: Support\WorkstationHeaderLinks. The title replaces the two
     headings the card used to carry ("Postgraduate Workstation" / "Term of Use").
 --}}
-{{-- Page-scoped: the header sits in a column the same width as the (unchanged) 680px card, so the two line up. --}}
-<style>
-    .wst-column { width: 100%; max-width: 680px; }
-</style>
+{{-- The header and the card share .wst-column (chloe-workstation.css), so the two line up. --}}
+<link rel="stylesheet" href="{{ asset('css/chloe-workstation.css') }}">
 
 <div class="card-container">
     <div class="wst-column">
@@ -27,9 +25,37 @@
         <a href="{{ $homeUrl }}"><button type="button">Home</button></a>
     </x-core::page-header>
 
-    <div class="card card-wide">
+    <div class="card card-wide" style="max-width: none;">
+        <div class="wst-head">
+            <div>
+                <h2 class="ws-section-title">Terms and conditions</h2>
+                <p class="ws-muted">Centre for Graduate Studies, Universiti Teknologi PETRONAS · First Edition 2022</p>
+                {{--
+                    Shown only while no real PDF is found in
+                    WorkstationTermsController::ORIGINAL_PDF_DIRECTORY -- the
+                    moment one is placed there (either filename spelling, or any
+                    .pdf whose name contains "Term of Use"), downloadPdf() serves
+                    it directly and this line stops rendering on its own.
+                --}}
+                @unless ($hasOriginalPdf)
+                    <p class="ws-muted" style="font-size: var(--text-xs);">PDF generated from the text of the Term of Use (First Edition).</p>
+                @endunless
+            </div>
+            <div class="wst-actions">
+                <x-core::doc-link :url="route('workstation.terms.pdf', ['inline' => 1])" :download="route('workstation.terms.pdf')"
+                                  name="Postgraduate Workstation - Term of Use (First Edition).pdf"><button type="button" class="btn-secondary">View PDF</button></x-core::doc-link>
+                <a href="{{ route('workstation.terms.pdf') }}"><button type="button">Download PDF</button></a>
+            </div>
+        </div>
 
-        <ol style="line-height: 1.6;">
+        {{-- At a glance: verbatim facts from terms 9, 12 and 14 below, not new terms. --}}
+        <dl class="wst-keypoints">
+            <div><dt>Access hours</dt><dd>Mon &ndash; Fri, 7.00 am &ndash; 6.00 pm</dd></div>
+            <div><dt>Use</dt><dd>Research and study only</dd></div>
+            <div><dt>On termination</dt><dd>Vacate within 5 working days</dd></div>
+        </dl>
+
+        <ol class="wst-list">
             <li>Any loan requisition of postgraduate workstation located at Block J &amp; Block N shall be made by students through Centre for Graduate Studies (CGS) of Universiti Teknologi PETRONAS (UTP).</li>
             <li>The workstation loan requisition is subjected to the availability of the workstation and endorsement of the student's supervisor.</li>
             <li>Students are required to acknowledge CGS on acceptance.</li>
@@ -47,7 +73,7 @@
             <li>Only approved occupants entitled to use the workstation and its facilities. Any belongings stationed on the unauthorized workstation/area will be confiscated without prior notice.</li>
             <li>
                 The loan will be automatically terminated if the student has been put under/placed in any of the reasons as per stated below. The occupants to vacate the area within five (5) working days upon receiving notice from university.
-                <ol type="a" style="margin-top: 8px;">
+                <ol type="a" class="wst-reasons">
                     <li>Deferment</li>
                     <li>Change Programme to Coursework</li>
                     <li>Change Programme Mode to Part-Time</li>
@@ -64,29 +90,11 @@
             <li>CGS also has the authority to change or amend any of the terms and conditions listed above deemed necessary without any prior notice.</li>
         </ol>
 
-        <p style="color: var(--text-grey); font-size: 13px; margin-top: 24px;">
+        <p class="wst-colophon">
             Universiti Teknologi PETRONAS<br>
             Centre For Graduate Studies 2022<br>
             First Edition 2022
         </p>
-
-        <div class="card-divider"></div>
-
-        <x-core::doc-link :url="route('workstation.terms.pdf', ['inline' => 1])" :download="route('workstation.terms.pdf')"
-                          name="Postgraduate Workstation - Term of Use (First Edition).pdf"><button type="button">View PDF</button></x-core::doc-link>
-        <a href="{{ route('workstation.terms.pdf') }}"><button type="button">Download PDF</button></a>
-        {{--
-            Shown only while no real PDF is found in
-            WorkstationTermsController::ORIGINAL_PDF_DIRECTORY -- the
-            moment one is placed there (either filename spelling, or any
-            .pdf whose name contains "Term of Use"), downloadPdf() serves
-            it directly and this line stops rendering on its own.
-        --}}
-        @unless ($hasOriginalPdf)
-            <p style="color: var(--text-grey); font-size: 12px; margin-top: 6px;">
-                Generated from the text of the Term of Use (First Edition).
-            </p>
-        @endunless
     </div>
     </div>
 </div>

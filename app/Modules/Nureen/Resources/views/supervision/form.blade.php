@@ -23,7 +23,7 @@
                 <option value="co_supervisor" @selected(old('appointment_role') == 'co_supervisor')>Co-Supervisor</option>
             </select>
             @if ($currentSupervisorId)
-                <p class="queue-meta" style="margin-top: -8px;">
+                <p class="field-hint">
                     A Main Supervisor appointment replaces your current supervisor{{ $currentSupervisor ? ', '.$currentSupervisor->name.',' : '' }} once approved.
                 </p>
             @endif
@@ -53,7 +53,7 @@
             <label for="justification">Justification</label>
             <textarea name="justification" id="justification" rows="4" required
                       class="@error('justification') is-invalid @enderror">{{ old('justification') }}</textarea>
-            <p class="queue-meta" style="margin-top: -8px;">
+            <p class="field-hint">
                 Briefly explain why you are requesting this supervisor, e.g. shared
                 research interest or a prior working relationship.
             </p>

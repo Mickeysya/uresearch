@@ -1171,6 +1171,13 @@ button[value="rejected"]:hover {
     max-width: 46rem;
 }
 
+/* A textarea is inline-block by default, so it sits on a text baseline and
+   leaves a descender's worth of gap under it -- which pushed its hint
+   visibly further away than an input's or a select's. */
+.card.is-wizard .fstep > textarea {
+    display: block;
+}
+
 .card.is-wizard .fstep > .checkbox-row {
     margin-top: var(--space-8);
 }

@@ -248,7 +248,18 @@
 
             body.appendChild(rail);
             body.appendChild(pane);
-            pane.appendChild(form);
+
+            // Everything else the card held -- an intro paragraph, a
+            // "you need a signature first" warning, a list of earlier
+            // filings -- moves into the pane with the form, in its original
+            // order. Left behind, it sat in a card with no padding, flush
+            // against the edge and clipped by its rounded corner.
+            Array.prototype.slice.call(card.children).forEach(function (child) {
+                if (child === body || child.classList.contains('wizard-head')) return;
+                pane.appendChild(child);
+            });
+
+            if (! pane.contains(form)) pane.appendChild(form);
 
             /* ---- navigation ------------------------------------------
                The form's own submit button is MOVED here rather than
