@@ -5,7 +5,9 @@ namespace App\Modules\Hani\Models;
 use App\Modules\Core\Models\Application;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Modules\Hani\Support\VivaProgress;
 
 /**
  * One re-viva cycle. See the 5-level outcome scale in Hani's TODO entry:
@@ -22,7 +24,7 @@ class ReVivaDetail extends Model
     protected $fillable = [
         'application_id', 'cycle_number', 'previous_cycle_id', 'viva_application_id',
         'resubmission_at', 'resubmission_opens_at', 'resubmission_closes_at',
-        'viva_result_date', 'logged_outside_window',
+        'viva_result_date', 'logged_outside_window', 'sent_to_panel_at', 'sent_to_panel_by_id',
         'correction_deadline', 'hardbound_deadline',
         'outcome_level', 'outcome_remarks',
     ];
@@ -35,6 +37,7 @@ class ReVivaDetail extends Model
             'resubmission_closes_at' => 'date',
             'viva_result_date' => 'date',
             'logged_outside_window' => 'boolean',
+            'sent_to_panel_at' => 'datetime',
             'correction_deadline' => 'date',
             'hardbound_deadline' => 'date',
         ];
@@ -48,6 +51,38 @@ class ReVivaDetail extends Model
     public function previousCycle(): BelongsTo
     {
         return $this->belongsTo(self::class, 'previous_cycle_id');
+    }
+
+    public function staffDocuments(): HasMany
+    {
+        return $this->hasMany(ReVivaStaffDocument::class);
+    }
+
+    /**
+     * The released panel of the linked viva, with its CURRENT main examiners
+     * (the seat columns are updated in place after a decline). Null for a
+     * legacy round with no viva in UResearch.
+     */
+    public function panel(): ?ExaminerNomination
+    {
+        $notice = $this->vivaNotice;
+
+        return $notice ? VivaProgress::forNotices(collect([$notice]))->first()?->panel() : null;
+    }
+
+    /**
+     * The current main examiners, keyed by seat.
+     *
+     * @return array<string, Examiner>
+     */
+    public function currentMains(): array
+    {
+        $panel = $this->panel();
+
+        return array_filter([
+            'internal_main_id' => $panel?->internalMain,
+            'external_main_id' => $panel?->externalMain,
+        ]);
     }
 
     /** The viva_voce notice whose category-4 result this round re-examines. */

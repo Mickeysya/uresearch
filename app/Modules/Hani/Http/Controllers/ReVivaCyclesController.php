@@ -29,7 +29,7 @@ class ReVivaCyclesController extends Controller
 
     public function index(Request $request)
     {
-        $details = ReVivaDetail::with(['application.student', 'nextCycle'])
+        $details = ReVivaDetail::with(['application.student', 'nextCycle', 'staffDocuments.examiner'])
             ->whereHas('application', fn ($q) => $q->where('module_type', 're_viva'))
             ->latest('resubmission_at')
             ->get();

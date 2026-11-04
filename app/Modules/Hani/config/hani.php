@@ -293,6 +293,31 @@ return [
         // most this many months later; the outcome releases them sooner.
         // Provisional (the original 12-month hardbound horizon).
         'hold_months' => 12,
+
+        // CONFIRMED (the real letter): "examiners are given a maximum of
+        // twenty (20) working days". The letter prints the date this falls on.
+        'review_working_days' => 20,
+
+        // How long the examiner's signed link to the corrected thesis and the
+        // Summary of Corrections works. Provisional: the 20 working days plus
+        // slack for a late report.
+        'link_days' => 35,
+
+        // The "Correction of Master's/Doctoral Thesis" letter
+        // (Resources/views/re_viva/pdf/correction_letter.blade.php).
+        // PROVISIONAL: fictional names and example.com addresses for the FYP.
+        // Replace with the real signatory and CGS contacts before go-live.
+        'letter' => [
+            'reference_prefix' => 'UTP/PGS/AD/',
+            'institution' => 'Universiti Teknologi PETRONAS',
+            'address' => ['32610 Seri Iskandar', 'Perak Darul Ridzuan, Malaysia'],
+            'signatory_name' => 'Professor Dr. Example Signatory',
+            'signatory_title' => 'Dean, Postgraduate & Research',
+            'return_contacts' => [
+                ['name' => 'Puan Waheeda', 'role' => 'Senior Executive, Centre for Graduate Studies', 'email' => 'waheeda.cgs@example.com', 'phone' => '+60 5-000 0001'],
+                ['name' => 'Encik Syahmi', 'role' => 'Executive, Centre for Graduate Studies', 'email' => 'syahmi.cgs@example.com', 'phone' => '+60 5-000 0002'],
+            ],
+        ],
     ],
 
     'reminders' => [

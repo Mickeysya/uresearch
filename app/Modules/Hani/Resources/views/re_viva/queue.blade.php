@@ -51,17 +51,50 @@
                     </ul>
                 @endif
 
-                {{-- Advance only: this stepper has no meaningful "reject" step,
-                     so unlike core::decision-form only one button is offered. --}}
-                <form method="POST" action="{{ route('reviva.decide', $application) }}">
-                    @csrf
-                    <input type="hidden" name="decision" value="approve">
+                @if ($detail)
+                    @include('hani::re_viva._staff_documents', ['detail' => $detail])
+                @endif
 
-                    <label for="remarks-{{ $application->id }}">Remarks <span style="color: var(--text-grey)">(optional)</span></label>
-                    <textarea id="remarks-{{ $application->id }}" name="remarks" rows="2"></textarea>
+                @if ($stage->key === 'report_sent')
+                    {{-- Stage 1: one action generates, stores and emails the letters and completes the step. --}}
+                    @php($panel = $mains[$application->id] ?? [])
+                    <h4>Correction letters</h4>
+                    @if ($panel === [])
+                        <p class="message-warning">No released panel with main examiners is linked to this round, so no letters can be generated.</p>
+                    @else
+                        <p class="fstep-hint">One "Correction of {{ ($detail?->vivaDetail()?->programme_level === 'PHD') ? 'Doctoral' : 'Master\'s' }} Thesis" letter per current main examiner, with a secure link to the corrected thesis and the Summary of Corrections. The panel has {{ config('hani.reviva.review_working_days') }} working days.</p>
+                        <ul>
+                            @foreach ($panel as $seat => $examiner)
+                                <li>
+                                    {{ \App\Modules\Hani\Models\VivaExaminerProgress::SEATS[$seat] }}: {{ $examiner->name }}
+                                    @if ($examiner->emailNeedsUpdating())
+                                        <span class="status-badge rejected">Email needs updating</span>
+                                        <span class="fstep-hint">{{ $examiner->emailProblem() }} The letter is generated but not emailed.</span>
+                                    @else
+                                        <span class="fstep-hint">({{ $examiner->email }})</span>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ul>
+                        <form method="POST" action="{{ route('reviva.send-to-panel', $application) }}">
+                            @csrf
+                            <button type="submit">Send to panel</button>
+                        </form>
+                    @endif
+                    @error('send') <p class="field-error">{{ $message }}</p> @enderror
+                @else
+                    {{-- Advance only: this stepper has no meaningful "reject" step,
+                         so unlike core::decision-form only one button is offered. --}}
+                    <form method="POST" action="{{ route('reviva.decide', $application) }}">
+                        @csrf
+                        <input type="hidden" name="decision" value="approve">
 
-                    <button type="submit">Advance to Next Step</button>
-                </form>
+                        <label for="remarks-{{ $application->id }}">Remarks <span style="color: var(--text-grey)">(optional, the student sees them)</span></label>
+                        <textarea id="remarks-{{ $application->id }}" name="remarks" rows="2"></textarea>
+
+                        <button type="submit">Advance to Next Step</button>
+                    </form>
+                @endif
             </div>
         @empty
             <div class="empty-state">Nothing at this step right now.</div>

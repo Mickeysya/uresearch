@@ -12,17 +12,22 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\ReVivaDetail;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Support\PanelSeats;
+use App\Modules\Hani\Support\ReVivaLetters;
 use App\Modules\Hani\Support\ReVivaWindow;
 use App\Modules\Hani\Support\VivaProgress;
 use Illuminate\Support\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ReVivaController extends Controller
 {
-    use ApprovesApplications;
+    use ApprovesApplications {
+        decide as decideThroughEngine;
+    }
 
     /** doc_type of the two uploads at logging. Stored in rows: do not rename. */
     public const DOC_THESIS = 'Re-corrected Thesis';
@@ -174,13 +179,54 @@ class ReVivaController extends Controller
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
-        $queue = $this->queueFor($request, $engine, ['documents']);
+        $queue = $this->queueFor($request, $engine, ['documents', 'student']);
 
-        $details = ReVivaDetail::whereIn('application_id', $queue['applications']->pluck('id'))
+        $details = ReVivaDetail::with('staffDocuments.examiner')
+            ->whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()
+            ->each(fn (ReVivaDetail $d) => $d->setRelation('application', $queue['applications']->firstWhere('id', $d->application_id)))
             ->keyBy('application_id');
 
-        return view('hani::re_viva.queue', $queue + ['details' => $details]);
+        // Stage 1: who the letters will go to, and whose email is a problem.
+        $mains = $queue['stage']->key === ReVivaLetters::STAGE
+            ? $details->map(fn (ReVivaDetail $d) => $d->currentMains())
+            : collect();
+
+        return view('hani::re_viva.queue', $queue + ['details' => $details, 'mains' => $mains]);
+    }
+
+    /**
+     * Stage 1 in one action: letters per current main examiner, stored
+     * staff-only, stage completed through the engine, then emailed.
+     */
+    public function sendToPanel(Request $request, Application $application, ReVivaLetters $letters)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($application->student->department === $request->user()->department, 403);
+
+        $result = $letters->send($application, $request->user());
+
+        $redirect = back()->with('status', count($result['letters']).' correction '.Str::plural('letter', count($result['letters']))
+            .' generated and stored. '.($result['emailed'] ? 'Emailed to '.implode(' and ', $result['emailed']).'. ' : '')
+            .'The round is now Under Panel Review.');
+
+        return $result['skipped'] ? $redirect->with('warning', implode(' ', $result['skipped'])) : $redirect;
+    }
+
+    /**
+     * The generic decision, refused where the stage needs more than a click:
+     * stage 1 sends the letters (sendToPanel). ReVivaWorkflow implements
+     * DecidesOneAtATime, so Core's bulk decide cannot skip this either.
+     */
+    public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        if ($application->status === Application::STATUS_PENDING && $application->current_stage === ReVivaLetters::STAGE) {
+            return back()->with('error', 'Use "Send to panel": it generates and sends the correction letters and completes this step.');
+        }
+
+        return $this->decideThroughEngine($request, $application, $engine);
     }
 
     /** Applications that finished the stepper but have no outcome recorded yet. */

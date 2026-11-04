@@ -11,6 +11,8 @@ use App\Modules\Hani\Http\Controllers\ExaminerSuggestionController;
 use App\Modules\Hani\Http\Controllers\PanelController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\ReVivaCyclesController;
+use App\Modules\Hani\Http\Controllers\ReVivaPanelLinkController;
+use App\Modules\Hani\Http\Controllers\ReVivaStaffDocumentController;
 use App\Modules\Hani\Http\Controllers\VivaController;
 use App\Modules\Hani\Http\Controllers\VivaExaminerController;
 use App\Modules\Hani\Http\Controllers\VivaResultController;
@@ -22,6 +24,16 @@ use Illuminate\Support\Facades\Route;
 | Nur Hani Sofia (22001418)
 | Viva Voce · Examiner Nomination · Conflict Detection · Re-viva Monitoring
 */
+
+// The examiner's link from a re-viva correction letter, outside `auth`:
+// examiners have no account. `signed` refuses a tampered or expired URL
+// before the controller runs; the controller re-checks the seat.
+Route::middleware(['signed', 'throttle:30,1'])->group(function () {
+    Route::get('/re-viva/panel/{detail}/{examiner}', [ReVivaPanelLinkController::class, 'documents'])
+        ->whereNumber(['detail', 'examiner'])->name('reviva.panel.documents');
+    Route::get('/re-viva/panel/{detail}/{examiner}/documents/{document}', [ReVivaPanelLinkController::class, 'download'])
+        ->whereNumber(['detail', 'examiner', 'document'])->name('reviva.panel.download');
+});
 
 Route::middleware('auth')->group(function () {
 
@@ -218,9 +230,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/re-viva/cycles', [ReVivaCyclesController::class, 'index'])->name('reviva.cycles.index');
     });
 
+    // Staff-only re-viva files (letters, UTP/CGS/024, Confirmation of
+    // Correction). The Non-Executive is a return contact on the letter, so
+    // may download them; the controller narrows an AE to their department.
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)
+        ->get('/re-viva/staff-documents/{document}', [ReVivaStaffDocumentController::class, 'download'])
+        ->name('reviva.staff-documents.download');
+
     Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
         Route::get('/re-viva/queue', [ReVivaController::class, 'queue'])->name('reviva.queue');
         Route::post('/re-viva/{application}/decide', [ReVivaController::class, 'decide'])->name('reviva.decide');
+        Route::post('/re-viva/{application}/send-to-panel', [ReVivaController::class, 'sendToPanel'])->name('reviva.send-to-panel');
 
         Route::get('/re-viva/outcomes', [ReVivaController::class, 'outcomesIndex'])->name('reviva.outcomes.index');
         Route::post('/re-viva/outcomes/{detail}', [ReVivaController::class, 'recordOutcome'])

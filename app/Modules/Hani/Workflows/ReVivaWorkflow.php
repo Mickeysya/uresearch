@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hani\Workflows;
 
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
@@ -29,13 +30,17 @@ use Carbon\CarbonInterface;
  * student's re-corrected thesis reaches them, linked to the previous cycle
  * by ReVivaDetail::previous_cycle_id. See ReVivaController::create().
  *
+ * DecidesOneAtATime (Prompt 3): stage 1 sends the correction letters and
+ * stage 3 needs both re-evaluations, so Core's bulk decide must not skip
+ * ReVivaController::decide().
+ *
  * Logged by CGS Staff, not filed by the student -- so unlike every other
  * module, createRoute() is null (it never belongs in a student's "New
  * Application" list) and the create screen is reached instead via the
  * CGS-only link below, the same mechanism the Examiner Pool admin screen
  * uses to appear for that role.
  */
-class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
+class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime
 {
     public function key(): string
     {

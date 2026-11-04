@@ -52,6 +52,10 @@
                                             'tracker' => \App\Modules\Hani\Support\ModuleTracker::reviva($detail),
                                             'compact' => true,
                                         ])
+                                        @if ($detail->sent_to_panel_at)
+                                            <p class="fstep-hint">Sent to panel {{ $detail->sent_to_panel_at->format('j M Y') }}; reports due {{ \App\Modules\Hani\Support\ReVivaLetters::reviewDue($detail->sent_to_panel_at)->format('j M Y') }}.</p>
+                                        @endif
+                                        @include('hani::re_viva._staff_documents', ['detail' => $detail])
                                     </td>
                                     <td>
                                         Resubmitted {{ $detail->resubmission_at->format('j M Y') }}
