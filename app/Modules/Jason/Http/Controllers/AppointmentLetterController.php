@@ -21,6 +21,7 @@ use App\Modules\Jason\Models\HardboundSignature;
 use App\Modules\Jason\Notifications\ExaminersAppointed;
 use App\Modules\Jason\Support\AppointmentSheet;
 use App\Modules\Jason\Support\ExaminerDirectory;
+use App\Modules\Jason\Support\ReleasedPanels;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\RedirectResponse;
@@ -56,7 +57,84 @@ class AppointmentLetterController extends Controller
         return view('jason::appointment_letter.import', [
             'columns' => AppointmentSheet::TEMPLATE_HEADINGS,
             'poolAvailable' => ExaminerDirectory::available(),
+            // The direct hand-off, when the nomination chain offers it.
+            // Until the Core contract exists this is false and empty, and
+            // the spreadsheet below is the only way in.
+            'handoffLive' => ReleasedPanels::available(),
+            'released' => ReleasedPanels::all(),
+            'lettersNeeded' => ReleasedPanels::lettersNeeded(),
         ]);
+    }
+
+    /**
+     * Opens an appointment for one examiner who was promoted into a main
+     * seat after the pack for their panel had already gone out.
+     *
+     * A letter of their own, through cgs_prep and the Dean exactly like any
+     * other -- the Dean signs every appointment letter, and one issued
+     * quietly against an approval given for somebody else would not be
+     * signed by anyone. Examiners who already have a letter are never
+     * included, so this cannot resend.
+     */
+    public function prepareForExaminer(Request $request, WorkflowEngine $engine): RedirectResponse
+    {
+        $data = $request->validate([
+            'nomination_application_id' => ['required', 'integer', 'min:1'],
+            'hani_examiner_id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $seat = collect(ReleasedPanels::lettersNeeded())->first(
+            fn (array $row) => $row['nomination_application_id'] === $data['nomination_application_id']
+                && $row['hani_examiner_id'] === $data['hani_examiner_id'],
+        );
+
+        // Not on the list means either they already have a letter or they
+        // are no longer in a main seat. Both are reasons not to write one.
+        if (! $seat) {
+            return back()->with('error',
+                'That examiner no longer needs a letter. They either have one already, or they '
+                .'are no longer in a main seat on this panel.');
+        }
+
+        $previous = AppointmentDetail::where('nomination_application_id', $data['nomination_application_id'])
+            ->with('application')
+            ->first();
+
+        $student = $previous?->application?->student;
+
+        if (! $student) {
+            return back()->with('error',
+                'No candidate is on record for nomination #'.$data['nomination_application_id'].'.');
+        }
+
+        $application = DB::transaction(function () use ($request, $engine, $seat, $previous, $student) {
+            $application = Application::create([
+                'student_id' => $student->id,
+                'submitted_by_id' => $request->user()->id,
+                'module_type' => $this->moduleKey(),
+                'status' => Application::STATUS_DRAFT,
+            ]);
+
+            AppointmentDetail::create([
+                'application_id' => $application->id,
+                'nomination_application_id' => $seat['nomination_application_id'],
+                'candidate_degree' => $previous?->candidate_degree,
+                'candidate_programme' => $previous?->candidate_programme,
+                'supervisor_name' => $previous?->supervisor_name,
+                'thesis_title' => $seat['thesis_title'] ?: $previous?->thesis_title,
+            ]);
+
+            AppointmentExaminer::create(
+                ['application_id' => $application->id] + $this->examinerRow($seat)
+            );
+
+            return $engine->submit($application);
+        });
+
+        return redirect()
+            ->route('appointment-letter.queue')
+            ->with('status', "Appointment #{$application->id} opened for {$seat['examiner_name']}. "
+                .'Prepare the pack, then send it to the Dean as usual.');
     }
 
     /**
