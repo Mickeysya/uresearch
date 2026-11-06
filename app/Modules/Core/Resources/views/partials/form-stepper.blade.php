@@ -12,7 +12,7 @@
         </form>
         @include('core::partials.form-stepper')
 
-    Everything else -- the layout, the progress rail, Back/Continue, the
+    Everything else -- the layout, the step bar, Back/Continue, the
     review step, moving your submit button and your heading -- is built here.
 
     WHY CLIENT-SIDE. The form still POSTs once, to the same route, with the
@@ -168,67 +168,67 @@
             steps.push(review);
 
             /* ---- layout ----------------------------------------------
-               The form starts life inside a .card with the page heading
-               above it. That is the right shape for a short form and the
-               wrong one for a wizard: the heading repeats what the rail
-               already says, and a 680px card wastes most of a desktop
-               screen on a form with two columns' worth of fields.
+               Step bar across the top of the card, the step underneath
+               (2026-11-06). It used to be a 232px rail down the left --
+               a second sidebar beside the app's own, which is also why the
+               page was capped at 1080px and centred: the rail plus a 46rem
+               field column left the rest of a full-width card empty.
 
-               So the card is re-cast here: the heading moves into a band
-               at the top with the step counter beside it, the rail
-               becomes a left-hand column, and the step content gets the
-               rest. Done in script rather than in nine Blade files
-               because the markup contract stays `data-stepper` + .fstep
-               -- a module that adopts the wizard gets the new layout
-               without editing its view.
+               Each step is now two columns, the way the freed width is
+               used: its name and opening hint on the left, its fields on
+               the right (one column on a narrow card, by container query).
+               Done in script so the markup contract stays `data-stepper` +
+               .fstep -- no module's view changes.
                --------------------------------------------------------- */
             var card = form.closest('.card') || form.parentElement;
             card.classList.add('is-wizard');
-
-            var container = card.closest('.card-container-inline');
-            if (container) container.classList.add('is-wizard-container');
 
             var heading = card.querySelector('h2');
             var divider = card.querySelector('.card-divider');
             if (divider) divider.remove();
 
-            var counter = document.createElement('p');
-            counter.className = 'wizard-counter';
+            // A step's own leading .fstep-hint describes the whole step, so
+            // it moves beside the step's name; everything else goes into the
+            // fields column in its original order. The controls stay inside
+            // their fieldset, so nothing about what is submitted changes.
+            steps.forEach(function (step, i) {
+                var aside = document.createElement('div');
+                aside.className = 'fstep-aside';
 
-            // Most screens now open with the x-core::page-header component,
-            // which puts the title OUTSIDE the card. There is then nothing
-            // for a head band to hold but the counter, and an empty band
-            // above the rail is exactly the wasted strip the band was added
-            // to remove. So the counter joins the page header instead, and
-            // the band is only built for a card that still carries its own
-            // heading.
-            //
-            // Written without the angle brackets on purpose: Blade compiles
-            // component tags anywhere in the file, script blocks included,
-            // so naming one in a comment invokes it and the view stops
-            // compiling.
-            var pageHeader = document.querySelector('.page-header');
+                var title = document.createElement('h3');
+                title.className = 'fstep-title';
+                title.textContent = step.dataset.label || ('Step ' + (i + 1));
+                aside.appendChild(title);
 
+                var lead = step.firstElementChild;
+                if (lead && lead.classList.contains('fstep-hint')) aside.appendChild(lead);
+
+                var fields = document.createElement('div');
+                fields.className = 'fstep-fields';
+                while (step.firstChild) fields.appendChild(step.firstChild);
+
+                step.appendChild(aside);
+                step.appendChild(fields);
+            });
+
+            // A card that still carries its own h2 keeps it in a head band.
+            // Most screens open with the page-header component instead, which
+            // holds the title outside the card; the step bar says where you
+            // are, so there is no separate "Step 1 of 3" counter any more.
+            var head = null;
             if (heading) {
-                var head = document.createElement('div');
+                head = document.createElement('div');
                 head.className = 'wizard-head';
                 head.appendChild(heading);
-                head.appendChild(counter);
                 card.insertBefore(head, card.firstChild);
-            } else if (pageHeader) {
-                counter.className = 'page-header-counter';
-                pageHeader.appendChild(counter);
-            } else {
-                var bare = document.createElement('div');
-                bare.className = 'wizard-head';
-                bare.appendChild(counter);
-                card.insertBefore(bare, card.firstChild);
             }
 
-            // Rail and content live side by side below the head.
-            var body = document.createElement('div');
-            body.className = 'wizard-body';
-            card.appendChild(body);
+            // The step bar. Each step is a button, so a finished one can be
+            // reached from the keyboard; unvisited ones are disabled. The
+            // ol.form-steps > li.is-current contract is read by other
+            // modules' scripts (Nureen's drafts) -- keep it.
+            var band = document.createElement('div');
+            band.className = 'wizard-steps';
 
             var rail = document.createElement('ol');
             rail.className = 'form-steps';
@@ -237,29 +237,47 @@
             steps.forEach(function (step, i) {
                 var li = document.createElement('li');
                 li.className = 'form-step';
-                li.innerHTML = '<span class="form-step-dot">' + (i + 1) + '</span>'
-                    + '<span class="form-step-label"></span>';
-                li.querySelector('.form-step-label').textContent = step.dataset.label || ('Step ' + (i + 1));
+
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'form-step-btn';
+                // The number says how many steps are left at a glance; it
+                // turns into a tick once the step is done (CSS).
+                btn.innerHTML = '<span class="form-step-bar"><span class="form-step-fill"></span></span>'
+                    + '<span class="form-step-label"><span class="form-step-num" aria-hidden="true"><span>' + (i + 1) + '</span></span>'
+                    + '<span class="form-step-name"></span></span>';
+                btn.querySelector('.form-step-name').textContent = step.dataset.label || ('Step ' + (i + 1));
+                btn.setAttribute('aria-label', 'Step ' + (i + 1) + ' of ' + steps.length + ': ' + (step.dataset.label || ''));
+
+                li.appendChild(btn);
                 rail.appendChild(li);
             });
+
+            // Below ~640px the labels cannot all fit, so they hide and this
+            // one line says where you are instead.
+            var summary = document.createElement('p');
+            summary.className = 'form-steps-summary';
+            summary.setAttribute('aria-live', 'polite');
+
+            band.appendChild(rail);
+            band.appendChild(summary);
 
             var pane = document.createElement('div');
             pane.className = 'wizard-pane';
 
-            body.appendChild(rail);
-            body.appendChild(pane);
-
             // Everything else the card held -- an intro paragraph, a
             // "you need a signature first" warning, a list of earlier
             // filings -- moves into the pane with the form, in its original
-            // order. Left behind, it sat in a card with no padding, flush
-            // against the edge and clipped by its rounded corner.
+            // order.
             Array.prototype.slice.call(card.children).forEach(function (child) {
-                if (child === body || child.classList.contains('wizard-head')) return;
+                if (child === head) return;
                 pane.appendChild(child);
             });
 
             if (! pane.contains(form)) pane.appendChild(form);
+
+            card.appendChild(band);
+            card.appendChild(pane);
 
             /* ---- navigation ------------------------------------------
                The form's own submit button is MOVED here rather than
@@ -310,8 +328,12 @@
                 }
 
                 Array.prototype.forEach.call(rail.children, function (li, n) {
+                    var btn = li.firstElementChild;
                     li.classList.toggle('is-current', n === index);
                     li.classList.toggle('is-done', n < index);
+                    btn.disabled = n >= index;
+                    if (n === index) btn.setAttribute('aria-current', 'step');
+                    else btn.removeAttribute('aria-current');
                 });
 
                 var last = index === steps.length - 1;
@@ -319,7 +341,8 @@
                 next.hidden = last;
                 if (submit) submit.hidden = ! last;
 
-                counter.textContent = 'Step ' + (index + 1) + ' of ' + steps.length;
+                summary.textContent = 'Step ' + (index + 1) + ' of ' + steps.length
+                    + ' · ' + (steps[index].dataset.label || '');
 
                 if (last) buildReview(reviewBody);
 
@@ -329,7 +352,7 @@
                 if (focus) {
                     var first = steps[index].querySelector('input, select, textarea') || steps[index];
                     if (first.focus) first.focus({ preventScroll: true });
-                    card.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+                    band.scrollIntoView({ block: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
                 }
             }
 
@@ -354,17 +377,21 @@
             }
 
             next.addEventListener('click', function () {
-                if (stepIsValid(steps[index])) show(index + 1, true);
+                if (! stepIsValid(steps[index])) return;
+                // The server's complaint about this step has been dealt with
+                // as far as the browser can tell, so it stops showing red.
+                rail.children[index].classList.remove('is-error');
+                show(index + 1, true);
             });
 
             back.addEventListener('click', function () {
                 show(index - 1, true);
             });
 
-            // A finished step is clickable in the rail -- the same shortcut the
-            // review's Edit links give, for people who navigate by the rail.
+            // A finished step is a button in the bar -- the same shortcut the
+            // review's Edit links give. Unvisited ones are disabled in show().
             Array.prototype.forEach.call(rail.children, function (li, n) {
-                li.addEventListener('click', function () {
+                li.firstElementChild.addEventListener('click', function () {
                     if (n < index) show(n, true);
                 });
             });
@@ -375,8 +402,14 @@
                is on step 3 is the classic way a wizard wastes someone's
                time, so find it and open there.
                --------------------------------------------------------- */
-            var firstBad = steps.findIndex(function (step) {
-                return step.querySelector('.is-invalid, .field-error');
+            var firstBad = -1;
+            steps.forEach(function (step, n) {
+                // Marked on the bar too (Carbon's error state), so a student
+                // sent back can see every step that needs fixing, not just
+                // the one it opened on.
+                if (! step.querySelector('.is-invalid, .field-error')) return;
+                rail.children[n].classList.add('is-error');
+                if (firstBad < 0) firstBad = n;
             });
 
             show(firstBad > -1 ? firstBad : 0, false);

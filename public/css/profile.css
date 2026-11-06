@@ -1,508 +1,376 @@
 /* ============================================================
-   profile.css — the signed-in user's own record (/profile)
+   profile.css: the signed-in user's own record (/profile)
 
-   LAYOUT: identity card left, task-grouped cards right — the shape almost
-   every account screen uses, where the profile card is the page's visual
-   anchor and everything else is grouped by what the reader came to do. The
-   first version capped itself at 1080px and left a third of a wide monitor
-   empty; this one spans the content area and lets the right column take the
-   slack.
+   An identity band across the top, then one section per job, each laid
+   out like a stepper form's step: its name and the reason it works the
+   way it does on the left, its content on the right (2026-11-06). The
+   page before it was a sticky identity column beside a 2x2 grid of cards;
+   their different heights left holes, and the read-only record looked
+   exactly like the editable forms beside it.
 
-   Shares the dashboards' vocabulary rather than inventing one: .prof-card is
-   .sdash-card's shape (white, 1px --border-grey, 12px radius), the palette is
-   Norhanis' :root, and headings sit at the same 13px uppercase weight as the
-   dashboard panels.
-
-   It differs where a form should differ from a dashboard. A dashboard locks
-   to one screen and scrolls inside its panels; this page scrolls normally,
-   because a form whose submit button is inside a nested scroller is a form
-   people do not finish.
+   Surfaces are separated by a step in tone and space, not by a rule under
+   every heading; headings are sentence case at a readable size.
 
    Load order matters. Do not reorder the <link> tags.
    ============================================================ */
 
 .prof {
-    max-width: 1400px;
-    padding-bottom: 40px;
-}
-
-/* ---- the two columns ---------------------------------------------
-   The identity card is a fixed 300px; everything else takes what is left,
-   so the page fills a wide screen instead of stopping at a fixed width.
-   ------------------------------------------------------------------ */
-
-.prof-layout {
     display: grid;
-    grid-template-columns: 300px minmax(0, 1fr);
-    gap: 20px;
-    align-items: start;
+    gap: var(--space-5);
+    padding-bottom: var(--space-10);
 }
 
-/* Follows the reader down a long page — the identity stays in view while
-   they work through the forms on the right.
-
-   top is 80px, not 0: .main-content-header is pinned at the top of the
-   viewport and is 64px tall, so a card stuck at 0 would slide underneath it.
-   64 + 16 leaves the same gap below the bar that the layout uses elsewhere. */
-.prof-aside {
-    position: sticky;
-    top: 80px;
-}
-
-.prof-main {
+/* ---- the identity band ---- */
+.prof-hero {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
-    min-width: 0;
-}
-
-/* Wide enough for two, and the cards are short enough to pair. Below this
-   they stack, which keeps the forms comfortably wide rather than cramped. */
-@media (min-width: 1280px) {
-    .prof-main {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        align-items: start;
-    }
-}
-
-/* ---- card --------------------------------------------------------- */
-
-.prof-card {
-    background: var(--surface);
-    border: 1px solid var(--border-grey);
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-.prof-card-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 18px 12px;
-    border-bottom: 1px solid var(--border-subtle);
-}
-
-.prof-card-head h3 {
-    margin: 0;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--navy);
-}
-
-/* Says whether a card is editable, so the reader knows before they try. */
-.prof-card-note {
-    font-size: 11px;
-    color: var(--text-grey);
-    white-space: nowrap;
-}
-
-.prof-card-link {
-    font-size: 12px;
-    color: var(--navy);
-    text-decoration: none;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.prof-card-link:hover { text-decoration: underline; }
-
-/* A quiet footnote inside the card, for the "why can't I edit this" note. */
-.prof-card-foot {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    padding: 12px 18px 14px;
-    background: var(--surface-sunken);
-    border-top: 1px solid var(--border-subtle);
-    color: var(--text-grey);
-    font-size: 12px;
-    line-height: 1.55;
-}
-
-.prof-foot-icon {
-    flex-shrink: 0;
-    width: 15px;
-    height: 15px;
-    margin-top: 1px;
-    color: var(--text-grey);
-}
-
-.prof-foot-icon svg { width: 100%; height: 100%; display: block; }
-
-/* ---- identity card ------------------------------------------------ */
-
-.prof-identity {
-    display: flex;
-    flex-direction: column;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     align-items: center;
-    text-align: center;
-    padding: 26px 20px 0;
+    gap: var(--space-6);
+    padding: var(--space-6) var(--space-8);
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
 }
 
 .prof-avatar {
-    width: 84px;
-    height: 84px;
-    border-radius: 50%;
     display: grid;
     place-items: center;
-    background: var(--navy);
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius-full);
+    background: var(--accent-solid);
     color: var(--text-on-accent);
-    font-size: 28px;
-    font-weight: 600;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semi);
     letter-spacing: 0.02em;
-    user-select: none;
 }
 
 .prof-name {
-    margin: 14px 0 2px;
-    color: var(--navy);
-    font-size: 18px;
-    font-weight: 600;
-    line-height: 1.3;
+    margin: 0;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semi);
+    line-height: var(--leading-tight);
+    color: var(--text-dark);
+}
+
+.prof-meta {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-md);
+    color: var(--text-body);
 }
 
 .prof-email {
-    margin: 0 0 12px;
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
     color: var(--text-grey);
-    font-size: 12px;
     overflow-wrap: anywhere;
 }
 
-.prof-badges {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
-    margin: 0;
-}
-
-/* Role first, in the portal's navy; supporting facts recede to grey. The
-   hierarchy is the point — one badge is identity, the rest are context. */
-.prof-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    background: var(--light-blue-bg);
-    color: var(--navy);
-}
-
-.prof-badge-quiet {
-    background: var(--surface-hover);
-    color: var(--text-grey);
-}
-
-/* ---- the figures on the identity card ----------------------------- */
-
+/* The figures that matter to this role, set as numbers first. */
 .prof-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    gap: 1px;
-    width: 100%;
-    margin: 18px 0 0;
-    background: var(--border-subtle);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
-    overflow: hidden;
+    display: flex;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0 var(--space-8);
 }
 
 .prof-stat {
-    background: var(--surface);
-    padding: 10px 6px;
-}
-
-.prof-stat dt {
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-grey);
-    margin-bottom: 3px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
 }
 
 .prof-stat dd {
+    order: -1;
     margin: 0;
-    font-size: 17px;
-    font-weight: 600;
-    color: var(--text-dark);
+    font-size: var(--text-3xl);
+    font-weight: var(--weight-semi);
+    line-height: 1;
     font-variant-numeric: tabular-nums;
+    color: var(--text-dark);
 }
 
-/* Semantic, and separate from the navy accent: a figure that needs
-   attention says so in colour as well as in number. */
+.prof-stat dt {
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+}
+
+.prof-stat dd.tone-info     { color: var(--info-fg); }
 .prof-stat dd.tone-good     { color: var(--success-fg); }
 .prof-stat dd.tone-critical { color: var(--danger-fg); }
-.prof-stat dd.tone-info     { color: var(--navy); }
 
-.prof-identity-foot {
+.prof-hero-end {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    width: calc(100% + 40px);
-    margin: 18px -20px 0;
-    padding: 12px 18px;
-    border-top: 1px solid var(--border-subtle);
-    background: var(--surface-sunken);
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-2);
+}
+
+.prof-hero-end form { margin: 0; }
+
+.prof-signout {
+    margin: 0;
+    color: var(--danger-fg);
+    border-color: var(--danger-border);
+}
+
+.prof-signout:hover {
+    background: var(--danger-bg);
 }
 
 .prof-since {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-grey);
+    white-space: nowrap;
 }
 
-.prof-signout-form { margin: 0; }
-
-/* A link, not a button: signing out is a POST for CSRF reasons, but it
-   should not compete with the page's real actions. */
-.prof-signout {
-    margin: 0;
-    padding: 0;
-    background: none;
-    border: 0;
-    color: var(--danger-fg);
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.prof-signout:hover { text-decoration: underline; }
-
-.prof-signout:focus-visible {
-    outline: 2px solid var(--danger-fg);
-    outline-offset: 2px;
-    border-radius: 3px;
-}
-
-/* ---- the read-only record ----------------------------------------- */
-
-.prof-record {
-    margin: 0;
-    padding: 4px 18px 6px;
-}
-
-/* Label left, value right, hairline between — a record to be read down,
-   not a form. Two real columns rather than a dt/dd stack, so the values
-   line up and the eye can scan one side. */
-.prof-record-row {
+/* ---- a section: why on the left, what on the right ---- */
+.prof-section {
     display: grid;
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-    gap: 16px;
-    padding: 11px 0;
-    border-bottom: 1px solid var(--border-subtle);
+    grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+    gap: var(--space-10);
+    align-items: start;
+    padding: var(--space-8);
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
 }
 
-.prof-record-row:last-child { border-bottom: 0; }
-
-.prof-record-row dt {
-    color: var(--text-grey);
-    font-size: 12px;
-}
-
-.prof-record-row dd {
+.prof-section-aside h2 {
     margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semi);
     color: var(--text-dark);
-    font-size: 13px;
-    font-weight: 500;
+}
+
+.prof-section-aside p {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-sm);
+    line-height: var(--leading-normal);
+    color: var(--text-body);
+}
+
+.prof-lock {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-grey) !important;
+    font-weight: var(--weight-medium);
+}
+
+.prof-lock svg { width: 14px; height: 14px; flex: none; }
+
+.prof-link {
+    color: var(--accent-solid);
+    font-weight: var(--weight-semi);
+    text-decoration: none;
+}
+
+.prof-link:hover { text-decoration: underline; }
+
+/* The record reads as information: label over value, on a sunken panel,
+   no field chrome -- nothing here looks like it can be typed into. */
+.prof-record {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: var(--space-5) var(--space-6);
+    margin: 0;
+    padding: var(--space-6);
+    background: var(--surface-sunken);
+    border-radius: var(--radius-md);
+}
+
+.prof-record-item { min-width: 0; }
+
+.prof-record-item dt {
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+}
+
+.prof-record-item dd {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+    color: var(--text-dark);
     overflow-wrap: anywhere;
 }
 
-/* ---- forms --------------------------------------------------------- */
-
-.prof-form {
-    padding: 16px 18px 18px;
+/* ---- forms ---- */
+.prof-form label {
+    margin: 0 0 var(--space-1);
 }
-
-.prof-field-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
-    margin-bottom: 14px;
-}
-
-/* The two new-password fields belong beside each other — they are one
-   decision, and stacking them reads as two separate questions. */
-@media (min-width: 620px) {
-    .prof-field-row-split {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-.prof-field { min-width: 0; }
-
-.prof-form label,
-.prof-field label {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-dark);
-}
-
-.prof-form > label + input { margin-bottom: 14px; }
 
 .prof-form input {
     width: 100%;
-    padding: 9px 12px;
-    border: 1px solid var(--border-grey);
-    border-radius: 8px;
-    font-size: 13px;
-    color: var(--text-dark);
-    background: var(--surface);
 }
 
-.prof-form input:focus {
-    outline: none;
-    border-color: var(--navy);
-    box-shadow: 0 0 0 3px rgba(40, 75, 128, 0.12);
+/* A phone number and its Save button on one line. */
+.prof-inline {
+    display: flex;
+    gap: var(--space-3);
+    align-items: stretch;
+    max-width: 36rem;
 }
 
-/* Keyboard users need to see where they are even on a button. */
-.prof-form button:focus-visible,
-.prof-card-link:focus-visible {
-    outline: 2px solid var(--navy);
-    outline-offset: 2px;
-}
+.prof-inline input { flex: 1 1 auto; min-width: 0; }
+.prof-inline button { flex: none; margin: 0; }
 
-.prof-form input.is-invalid { border-color: var(--danger-fg); }
+/* Current, new and confirm side by side on a wide screen: one row that
+   fills the section instead of a short column with the right third empty. */
+.prof-trio {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-5);
+}
 
 .prof-hint {
-    margin: 0;
-    font-size: 12px;
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-sm);
     color: var(--text-grey);
-    line-height: 1.5;
 }
 
-/* One action per card, right-aligned, separated by a rule so it reads as
-   the end of the form rather than another field. */
-.prof-actions {
+/* The two password rules, ticking as they are met. */
+.prof-checks {
     display: flex;
-    justify-content: flex-end;
-    margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px solid var(--border-subtle);
-}
-
-.prof-actions button {
-    margin: 0;
-    padding: 9px 20px;
-    font-size: 13px;
-}
-
-/* ---- sign-in list --------------------------------------------------- */
-
-.prof-signins {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-6);
+    margin: var(--space-4) 0 0;
+    padding: 0;
     list-style: none;
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+}
+
+.prof-checks li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    transition: color var(--duration-base) var(--ease);
+}
+
+.prof-checks li::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    flex: none;
+    border-radius: var(--radius-full);
+    border: 2px solid var(--border-strong);
+    background: var(--surface) center / 10px no-repeat;
+    transition: background-color var(--duration-base) var(--ease),
+                border-color var(--duration-base) var(--ease);
+}
+
+.prof-checks li.is-met { color: var(--success-fg); }
+
+.prof-checks li.is-met::before {
+    background-color: var(--success-fg);
+    border-color: var(--success-fg);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3.5 8.5 6.5 11.5 12.5 4.5'/%3E%3C/svg%3E");
+}
+
+.prof-actions {
+    margin-top: var(--space-6);
+}
+
+.prof-actions button { margin: 0; }
+
+/* ---- recent sign-ins ---- */
+.prof-signins {
+    display: grid;
+    gap: var(--space-2);
     margin: 0;
-    padding: 6px 18px 10px;
+    padding: 0;
+    list-style: none;
 }
 
 .prof-signin {
     display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-4);
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
 }
 
-.prof-signin:last-child { border-bottom: 0; }
-
-.prof-signin-dot {
-    flex-shrink: 0;
-    width: 7px;
-    height: 7px;
-    margin-top: 6px;
-    border-radius: 50%;
-    background: var(--border-grey);
-}
-
-/* The newest entry is this session, so it gets the live colour. */
-.prof-signin.is-current .prof-signin-dot { background: var(--success-green); }
-
-.prof-signin-main {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
+.prof-signin.is-current { background: var(--success-bg); }
 
 .prof-signin-when {
-    font-size: 13px;
+    font-weight: var(--weight-medium);
     color: var(--text-dark);
-    font-weight: 500;
-}
-
-.prof-signin-now {
-    margin-left: 8px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--success-green);
+    font-variant-numeric: tabular-nums;
 }
 
 .prof-signin-meta {
-    font-size: 12px;
+    font-size: var(--text-sm);
     color: var(--text-grey);
+}
+
+.prof-signin-now {
+    margin-left: auto;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    color: var(--success-fg);
 }
 
 .prof-empty {
-    padding: 14px 0;
     color: var(--text-grey);
-    font-size: 13px;
+    font-size: var(--text-sm);
 }
 
-/* ---- responsive ------------------------------------------------------
-   Below 1000px the identity card stops being a column and becomes a banner
-   across the top: a 300px rail beside a 400px form is two cramped columns,
-   not two comfortable ones.
-   -------------------------------------------------------------------- */
+/* ---- arrival: sections rise in turn, once ---- */
+@keyframes prof-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: none; }
+}
 
-@media (max-width: 1000px) {
-    .prof-layout { grid-template-columns: minmax(0, 1fr); }
+.prof > * { animation: prof-in var(--duration-slow) var(--ease) both; }
+.prof > :nth-child(2) { animation-delay: 60ms; }
+.prof > :nth-child(3) { animation-delay: 120ms; }
+.prof > :nth-child(4) { animation-delay: 180ms; }
+.prof > :nth-child(5) { animation-delay: 240ms; }
 
-    .prof-aside { position: static; }
+@media (prefers-reduced-motion: reduce) {
+    .prof > * { animation: none; }
+    .prof-checks li,
+    .prof-checks li::before { transition: none; }
+}
 
-    /* As a banner it reads horizontally — avatar beside the name rather
-       than above it — so it costs a strip of height, not a screenful. */
-    .prof-identity {
-        display: grid;
+/* ---- narrower screens ---- */
+@media (max-width: 1100px) {
+    .prof-hero {
         grid-template-columns: auto minmax(0, 1fr);
-        grid-template-areas:
-            'avatar name'
-            'avatar badges'
-            'stats  stats'
-            'foot   foot';
+    }
+
+    .prof-stats {
+        grid-column: 1 / -1;
+        padding: 0;
+    }
+
+    .prof-hero-end {
+        grid-column: 1 / -1;
+        flex-direction: row;
         align-items: center;
-        text-align: left;
-        gap: 2px 18px;
-        padding: 20px 20px 0;
+        justify-content: space-between;
     }
 
-    .prof-avatar {
-        grid-area: avatar;
-        width: 64px;
-        height: 64px;
-        font-size: 22px;
+    .prof-section {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-5);
     }
 
-    .prof-name   { grid-area: name; margin: 0; align-self: end; }
-    .prof-email  { display: none; }
-    .prof-badges { grid-area: badges; justify-content: flex-start; align-self: start; }
-    .prof-stats  { grid-area: stats; margin-top: 16px; }
-
-    .prof-identity-foot { grid-area: foot; }
+    .prof-trio { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .prof-trio > :first-child { grid-column: 1 / -1; max-width: calc(50% - var(--space-5) / 2); }
 }
 
-@media (max-width: 560px) {
-    .prof-record-row {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 2px;
-    }
+@media (max-width: 640px) {
+    .prof-hero,
+    .prof-section { padding: var(--space-5); }
 
-    .prof-actions button { width: 100%; }
+    .prof-avatar { width: 56px; height: 56px; font-size: var(--text-xl); }
+
+    .prof-trio { grid-template-columns: minmax(0, 1fr); }
+    .prof-trio > :first-child { max-width: none; }
+
+    .prof-inline { flex-direction: column; }
 }

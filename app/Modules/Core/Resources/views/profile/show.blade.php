@@ -6,20 +6,19 @@
 {{--
     The signed-in user's own record.
 
-    LAYOUT: identity card on the left, task-grouped cards on the right — the
-    shape almost every account screen uses (GitHub, Stripe, LinkedIn), where
-    the profile card is the page's visual anchor and everything else is
-    grouped by what you came to do. It also fills a wide screen: the earlier
-    version capped itself at 1080px and left a third of a 1700px monitor
-    empty.
+    LAYOUT (2026-11-06): an identity band across the top, then one section
+    per job -- your record, contact details, password, recent sign-ins --
+    each as the step layout the stepper forms use: the section's name and
+    why-it-is-this-way on the left, its content on the right. It replaces a
+    sticky identity column beside a 2x2 grid of cards whose different
+    heights left holes, and whose read-only record looked exactly like the
+    editable forms beside it.
 
-    No tabs. With two groups, hiding one behind a tab costs a click and buys
-    nothing; the sub-navigation pattern earns its keep at five or six.
-
-    Built from the dashboards' pieces — .prof-card is .sdash-card's shape and
-    the palette is Norhanis' :root — but this page scrolls normally, because a
-    form whose submit button sits inside a nested scroller is a form people
-    do not finish.
+    Read-only versus editable is now visible before anyone tries: the record
+    is information (label over value, a lock and "Held by CGS"), contact and
+    password are forms (fields, a button). Account-settings guidance is
+    consistent on this -- say which fields are locked and the route to change
+    them, next to them, not in a footnote.
 
     Most fields are read-only by design; ProfileController explains why.
 --}}
@@ -42,199 +41,190 @@
         ['label' => 'Faculty',    'value' => $user->faculty],
         ['label' => 'Supervisor', 'value' => $supervisor?->name],
     ])->filter(fn ($row) => filled($row['value']));
+
+    // One line under the name: role, then whatever places this person.
+    $meta = collect([$user->roleLabel(), $user->matric_no, $user->department])->filter()->implode(' · ');
 @endphp
 
 <x-core::page-header title="My Profile"
-                     subtitle="Your record as the portal holds it. Contact details and password are changed here." />
+                     subtitle="Your record as the portal holds it. Your contact number and password are the two things you change here." />
 
+{{-- No flash include here: layouts/app.blade.php already renders one above
+     @yield('content'), and a second copy showed every message twice. --}}
 <div class="prof">
-    {{-- No flash include here: layouts/app.blade.php already renders one
-         above @yield('content'), and a second copy showed every "Contact
-         details updated." twice. --}}
 
-    <div class="prof-layout">
+    {{-- ---- Who this is ---- --}}
+    <section class="prof-hero" aria-label="Your account">
+        <span class="prof-avatar" aria-hidden="true">{{ $initials }}</span>
 
-        {{-- ---- Left: the identity card, the page's anchor ---- --}}
-        <aside class="prof-aside">
-            <section class="prof-card prof-identity">
-                <span class="prof-avatar" aria-hidden="true">{{ $initials }}</span>
-
-                <h2 class="prof-name">{{ $user->name }}</h2>
-                <p class="prof-email">{{ $user->email }}</p>
-
-                <p class="prof-badges">
-                    <span class="prof-badge">{{ $user->roleLabel() }}</span>
-                    @if ($user->matric_no)
-                        <span class="prof-badge prof-badge-quiet">{{ $user->matric_no }}</span>
-                    @endif
-                </p>
-
-                @if ($stats->isNotEmpty())
-                    <dl class="prof-stats">
-                        @foreach ($stats as $stat)
-                            <div class="prof-stat">
-                                <dt>{{ $stat['label'] }}</dt>
-                                <dd class="tone-{{ $stat['tone'] }}">{{ $stat['value'] }}</dd>
-                            </div>
-                        @endforeach
-                    </dl>
-                @endif
-
-                <div class="prof-identity-foot">
-                    <span class="prof-since">
-                        Member since {{ $user->created_at?->format('M Y') ?? '—' }}
-                    </span>
-
-                    <form method="POST" action="{{ route('logout') }}" class="prof-signout-form">
-                        @csrf
-                        <button type="submit" class="prof-signout">Sign out</button>
-                    </form>
-                </div>
-            </section>
-        </aside>
-
-        {{-- ---- Right: what you came here to do ---- --}}
-        <div class="prof-main">
-
-            <section class="prof-card">
-                <header class="prof-card-head">
-                    <h3>Your Record</h3>
-                    <span class="prof-card-note">Held by CGS</span>
-                </header>
-
-                <dl class="prof-record">
-                    @foreach ($record as $row)
-                        <div class="prof-record-row">
-                            <dt>{{ $row['label'] }}</dt>
-                            <dd>{{ $row['value'] }}</dd>
-                        </div>
-                    @endforeach
-                </dl>
-
-                <footer class="prof-card-foot">
-                    <span class="prof-foot-icon" aria-hidden="true">
-                        @include('core::dashboard.partials.icon', ['name' => 'info'])
-                    </span>
-                    <span>
-                        These are your official records and cannot be edited here.
-                        If something is wrong, contact CGS. Changing a programme or
-                        supervisor affects deadlines and approval routing, so it goes
-                        through them.
-                    </span>
-                </footer>
-            </section>
-
-            <section class="prof-card">
-                <header class="prof-card-head">
-                    <h3>Contact Details</h3>
-                    <span class="prof-card-note">You can change this</span>
-                </header>
-
-                <form method="POST" action="{{ route('profile.contact') }}" class="prof-form">
-                    @csrf
-                    @method('PATCH')
-
-                    <label for="contact_no">Contact Number</label>
-                    <input type="tel" name="contact_no" id="contact_no"
-                           value="{{ old('contact_no', $user->contact_no) }}"
-                           placeholder="e.g. 012-345 6789"
-                           autocomplete="tel"
-                           class="@error('contact_no') is-invalid @enderror">
-                    @error('contact_no') <p class="field-error">{{ $message }}</p> @enderror
-
-                    <p class="prof-hint">
-                        Used when CGS or your supervisor needs to reach you about an
-                        application. Leave it empty to remove it.
-                    </p>
-
-                    <div class="prof-actions">
-                        <button type="submit">Save Contact Details</button>
-                    </div>
-                </form>
-            </section>
-
-            <section class="prof-card">
-                <header class="prof-card-head">
-                    <h3>Change Password</h3>
-                </header>
-
-                <form method="POST" action="{{ route('profile.password') }}" class="prof-form">
-                    @csrf
-                    @method('PUT')
-
-                    <div class="prof-field-row">
-                        <div class="prof-field">
-                            <label for="current_password">Current Password</label>
-                            <input type="password" name="current_password" id="current_password" required
-                                   autocomplete="current-password"
-                                   class="@error('current_password') is-invalid @enderror">
-                            @error('current_password') <p class="field-error">{{ $message }}</p> @enderror
-                        </div>
-                    </div>
-
-                    <div class="prof-field-row prof-field-row-split">
-                        <div class="prof-field">
-                            <label for="password">New Password</label>
-                            <input type="password" name="password" id="password" required
-                                   autocomplete="new-password"
-                                   class="@error('password') is-invalid @enderror">
-                            @error('password') <p class="field-error">{{ $message }}</p> @enderror
-                        </div>
-
-                        <div class="prof-field">
-                            <label for="password_confirmation">Confirm New Password</label>
-                            <input type="password" name="password_confirmation" id="password_confirmation" required
-                                   autocomplete="new-password">
-                        </div>
-                    </div>
-
-                    <p class="prof-hint">At least 8 characters. You stay signed in on this device.</p>
-
-                    <div class="prof-actions">
-                        <button type="submit">Change Password</button>
-                    </div>
-                </form>
-            </section>
-
-            <section class="prof-card">
-                <header class="prof-card-head">
-                    <h3>Recent Sign-ins</h3>
-                    @if ($user->isAdmin())
-                        <a href="{{ route('admin.audit.index') }}" class="prof-card-link">Full audit log</a>
-                    @endif
-                </header>
-
-                <ul class="prof-signins">
-                    @forelse ($signIns as $i => $event)
-                        <li class="prof-signin {{ $i === 0 ? 'is-current' : '' }}">
-                            <span class="prof-signin-dot" aria-hidden="true"></span>
-                            <span class="prof-signin-main">
-                                <span class="prof-signin-when">
-                                    {{ $event['at']?->format('j M Y, g:ia') ?? 'Unknown time' }}
-                                    @if ($i === 0)<span class="prof-signin-now">This session</span>@endif
-                                </span>
-                                <span class="prof-signin-meta">
-                                    {{ ucfirst($event['action']) }}@if ($event['ip']) · {{ $event['ip'] }}@endif
-                                </span>
-                            </span>
-                        </li>
-                    @empty
-                        <li class="prof-empty">No sign-in activity recorded yet.</li>
-                    @endforelse
-                </ul>
-
-                <footer class="prof-card-foot">
-                    <span class="prof-foot-icon" aria-hidden="true">
-                        @include('core::dashboard.partials.icon', ['name' => 'info'])
-                    </span>
-                    <span>
-                        If you see a sign-in you do not recognise, change your password
-                        and tell CGS.
-                    </span>
-                </footer>
-            </section>
-
+        <div class="prof-hero-text">
+            <h2 class="prof-name">{{ $user->name }}</h2>
+            <p class="prof-meta">{{ $meta }}</p>
+            <p class="prof-email">{{ $user->email }}</p>
         </div>
-    </div>
+
+        @if ($stats->isNotEmpty())
+            <dl class="prof-stats">
+                @foreach ($stats as $stat)
+                    <div class="prof-stat">
+                        <dd class="tone-{{ $stat['tone'] }}">{{ $stat['value'] }}</dd>
+                        <dt>{{ $stat['label'] }}</dt>
+                    </div>
+                @endforeach
+            </dl>
+        @endif
+
+        <div class="prof-hero-end">
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <button type="submit" class="btn-secondary prof-signout">Sign out</button>
+            </form>
+            <span class="prof-since">Member since {{ $user->created_at?->format('M Y') ?? 'unknown' }}</span>
+        </div>
+    </section>
+
+    {{-- ---- Your record: information, not a form ---- --}}
+    <section class="prof-section" aria-labelledby="prof-record-h">
+        <div class="prof-section-aside">
+            <h2 id="prof-record-h">Your record</h2>
+            <p class="prof-lock">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                Held by CGS
+            </p>
+            <p>
+                Your official record, read-only here. If something is wrong,
+                contact CGS: a programme or supervisor change moves deadlines and
+                approval routing, so it goes through them.
+            </p>
+        </div>
+
+        <dl class="prof-record">
+            @foreach ($record as $row)
+                <div class="prof-record-item">
+                    <dt>{{ $row['label'] }}</dt>
+                    <dd>{{ $row['value'] }}</dd>
+                </div>
+            @endforeach
+        </dl>
+    </section>
+
+    {{-- ---- Contact details: the one field you own ---- --}}
+    <section class="prof-section" aria-labelledby="prof-contact-h">
+        <div class="prof-section-aside">
+            <h2 id="prof-contact-h">Contact details</h2>
+            <p>Used when CGS or your supervisor needs to reach you about an application.</p>
+        </div>
+
+        <form method="POST" action="{{ route('profile.contact') }}" class="prof-form">
+            @csrf
+            @method('PATCH')
+
+            <label for="contact_no">Contact Number</label>
+            <div class="prof-inline">
+                <input type="tel" name="contact_no" id="contact_no"
+                       value="{{ old('contact_no', $user->contact_no) }}"
+                       placeholder="e.g. 012-345 6789"
+                       autocomplete="tel"
+                       class="@error('contact_no') is-invalid @enderror">
+                <button type="submit">Save Contact Details</button>
+            </div>
+            @error('contact_no') <p class="field-error">{{ $message }}</p> @enderror
+            <p class="prof-hint">Leave it empty to remove it.</p>
+        </form>
+    </section>
+
+    {{-- ---- Password ---- --}}
+    <section class="prof-section" aria-labelledby="prof-password-h">
+        <div class="prof-section-aside">
+            <h2 id="prof-password-h">Password</h2>
+            <p>You stay signed in on this device after changing it.</p>
+        </div>
+
+        <form method="POST" action="{{ route('profile.password') }}" class="prof-form" data-password-form>
+            @csrf
+            @method('PUT')
+
+            <div class="prof-trio">
+                <div class="prof-field">
+                    <label for="current_password">Current Password</label>
+                    <input type="password" name="current_password" id="current_password" required
+                           autocomplete="current-password"
+                           class="@error('current_password') is-invalid @enderror">
+                    @error('current_password') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+
+                <div class="prof-field">
+                    <label for="password">New Password</label>
+                    <input type="password" name="password" id="password" required minlength="8"
+                           autocomplete="new-password" aria-describedby="password-checks"
+                           class="@error('password') is-invalid @enderror">
+                    @error('password') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+
+                <div class="prof-field">
+                    <label for="password_confirmation">Confirm New Password</label>
+                    <input type="password" name="password_confirmation" id="password_confirmation" required
+                           autocomplete="new-password" aria-describedby="password-checks">
+                </div>
+            </div>
+
+            {{-- Ticks as you type. A convenience: the controller's validation
+                 is the rule, and without JavaScript these read as plain
+                 requirements. --}}
+            <ul class="prof-checks" id="password-checks" aria-live="polite">
+                <li data-check="length">At least 8 characters</li>
+                <li data-check="match">Both new passwords match</li>
+            </ul>
+
+            <div class="prof-actions">
+                <button type="submit">Change Password</button>
+            </div>
+        </form>
+    </section>
+
+    {{-- ---- Recent sign-ins ---- --}}
+    <section class="prof-section" aria-labelledby="prof-signins-h">
+        <div class="prof-section-aside">
+            <h2 id="prof-signins-h">Recent sign-ins</h2>
+            <p>If you see one you do not recognise, change your password and tell CGS.</p>
+            @if ($user->isAdmin())
+                <p><a href="{{ route('admin.audit.index') }}" class="prof-link">Full audit log</a></p>
+            @endif
+        </div>
+
+        <ul class="prof-signins">
+            @forelse ($signIns as $i => $event)
+                <li @class(['prof-signin', 'is-current' => $i === 0])>
+                    <span class="prof-signin-when">{{ $event['at']?->format('j M Y, g:ia') ?? 'Unknown time' }}</span>
+                    <span class="prof-signin-meta">{{ ucfirst($event['action']) }}@if ($event['ip']) from {{ $event['ip'] }}@endif</span>
+                    @if ($i === 0)<span class="prof-signin-now">This session</span>@endif
+                </li>
+            @empty
+                <li class="prof-empty">No sign-in activity recorded yet.</li>
+            @endforelse
+        </ul>
+    </section>
 </div>
+
+@push('scripts')
+    <script @cspNonce>
+        (function () {
+            var form = document.querySelector('[data-password-form]');
+            if (!form) return;
+            var pw = form.querySelector('#password');
+            var confirm = form.querySelector('#password_confirmation');
+            var length = form.querySelector('[data-check="length"]');
+            var match = form.querySelector('[data-check="match"]');
+
+            function sync() {
+                length.classList.toggle('is-met', pw.value.length >= 8);
+                match.classList.toggle('is-met', pw.value.length > 0 && pw.value === confirm.value);
+            }
+
+            pw.addEventListener('input', sync);
+            confirm.addEventListener('input', sync);
+            sync();
+        })();
+    </script>
+@endpush
 @endsection
