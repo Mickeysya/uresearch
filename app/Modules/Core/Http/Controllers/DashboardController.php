@@ -53,6 +53,7 @@ class DashboardController extends Controller
                 'applications' => $dash->applications(3),
                 'notifications' => $dash->notifications(5),
                 'tasks' => $dash->tasks(),
+                'postgraduate' => $dash->postgraduateProgress(),
                 // Panels whose data could not be read; the view holds a
                 // skeleton for these instead of showing a false empty state.
                 'unavailable' => $dash->unavailable(),
@@ -68,6 +69,8 @@ class DashboardController extends Controller
                 'staffMembers' => $dash->staffMembers(),
                 'averageAttendance' => $dash->averageAttendance(),
                 'activeApplications' => $dash->activeApplications(),
+                'activeCandidatures' => $dash->activeCandidatures(),
+                'terminatedCandidatures' => $dash->terminatedCandidatures(),
                 'activities' => $dash->recentActivities(),
                 'health' => $dash->systemHealth(),
                 'mix' => $dash->applicationMix(),
@@ -86,6 +89,8 @@ class DashboardController extends Controller
                 'approvedCount' => $dash->approved(),
                 'rejectedCount' => $dash->rejected(),
                 'activeStudents' => $dash->activeStudents(),
+                'stageGateBottleneck' => $dash->stageGateBottleneck(),
+                'allowanceAnomalies' => $dash->allowanceAnomalies(),
                 'workload' => $dash->workload(),
                 'pendingActions' => $dash->pendingActions(),
                 'attendance' => $dash->attendanceAlerts(),

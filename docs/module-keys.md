@@ -28,14 +28,21 @@ Add a row here in the same commit that registers the workflow.
 | `candidacy_reminder` | Study Candidacy Reminder | Chloe | built · not application-backed (own tables + scheduled command), see `app/Modules/Chloe/README.md` |
 | `candidacy_appeal` | Study Candidacy Appeal | Chloe | built · own `study_candidacies` table, not shared with Norhanis' RPD trio — see overlap note |
 | `candidacy_dismissal` | Dismiss Exceeded Study Candidacy | Chloe | built · not application-backed (own tables + scheduled command), see `app/Modules/Chloe/README.md` |
-| `gra_application` | GRA Application + Stage Gates | Haziq | planned · see overlap note |
-| `ga_application` | GA Application | Haziq | planned · see overlap note |
+| `gra_application` | GRA Application + Extension + Stage Gates | Haziq | built |
+| `ga_application` | GA Application | Haziq | built |
 
 **Overlap note — do not claim these without agreeing first.** Chloe's three
 candidacy keys once duplicated the *shape* of the retired `rpd_appeal` and
-`rpd_dismissal` (RPD was removed from Norhanis' scope on 2026-10-30), and Haziq's
-two keys duplicate the *subject* of Nureen's already-built `ga_extension` and
-`ga_certification`. See the overlap section in `TODO.md`.
+`rpd_dismissal` (RPD was removed from Norhanis' scope on 2026-10-30). See the
+overlap section in `TODO.md`.
+
+**Resolved — Haziq/Nureen overlap (2026-09-21):** GRA Extension is not a
+separate `module_type`. It reuses `gra_application` with
+`gra_application_details.application_type = 'extension'` and
+`parent_application_id` pointing at the original appointment, routed through
+the same four-stage chain — no new key, no shared table with Nureen's
+modules. GA Extension stays entirely Nureen's `ga_extension`; Haziq's
+`ga_application` covers only the new-application lifecycle, never extension.
 
 ## Stage keys in use
 
@@ -60,6 +67,8 @@ across modules is fine and desirable — it keeps the vocabulary consistent.
 | `under_panel_review` | Under Panel Review | `academic_exec` |
 | `report_received` | Report Received | `academic_exec` |
 | `consolidation_scheduled` | Consolidation Scheduled | `academic_exec` |
+| `admin_verify` / `admin_eligibility` / `admin_final` | Admin | `admin` |
+| `research_centre_interview` | Research Centre | `research_centre` (not in `Support\Role` — see below) |
 
 The last four are Hani's re-viva monitoring stepper. They read as statuses
 rather than approvers because that is what they are: one actor advancing a
@@ -76,8 +85,6 @@ first whether an existing role already means the same person.
 
 | Actor | Named in | Likely resolution |
 |---|---|---|
-| GRS Executive | `haziq.md` | new role, or map to `non_exec_cgs` |
-| Research Centre | `haziq.md` | new role — conducts GA interviews |
 | Programme Chair | `chloe.md` | reused as the existing `chair` role in the built Study Candidacy Appeal chain (2026-09-21) — CGS confirmation is still outstanding, flag if that turns out wrong |
 | Project Director | `norhanis.md` | may be a post-approval export, not a stage |
 
@@ -85,3 +92,12 @@ first whether an existing role already means the same person.
 first claimed by the RPD dismissal chain, which has since been removed; no module
 uses it at present. Jason's or Chloe's modules may reuse it.
 Seeded as `faculty@utp.edu.my`.
+
+**Resolved — Haziq's roles (2026-09-21):** GRS Exec was dropped; his chain
+uses only `admin`, `non_exec_cgs`-team, `supervisor`, `senior_director_cgs`
+and `student`, all already in `Support\Role`. Research Centre is a real new
+role (conducts the GA interview) but is declared in
+`App\Modules\Haziq\Support\Roles::RESEARCH_CENTRE` rather than in
+`Support\Role` — `Role` is a plain VARCHAR, not an enum, so `EnsureRole` and
+`WorkflowEngine` work against it as a string with no Core edit required. If
+another module ever needs this role too, promote it into `Support\Role` then.

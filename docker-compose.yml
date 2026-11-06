@@ -57,6 +57,13 @@ services:
       redis:
         condition: service_started
 
+  # Drives every $schedule->command(...) registered across every module's
+  # ModuleProvider (e.g. Haziq's stage-gate:evaluate, dailyAt('07:30')) --
+  # without this, those jobs are correctly registered but nothing ever
+  # actually calls Laravel's scheduler, so they silently never run.
+  # Same pattern as `queue` above: a dedicated long-running container
+  # instead of relying on host cron, which nobody's machine has configured
+  # for this project.
   scheduler:
     build:
       context: ./vendor/laravel/sail/runtimes/8.3

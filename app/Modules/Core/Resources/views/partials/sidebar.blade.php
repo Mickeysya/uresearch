@@ -47,12 +47,16 @@
 
         @auth
             @if ($user->isStudent())
-                @include('core::partials.sidebar-student-nav', ['submittable' => $submittable, 'myApplicationOpen' => $myApplicationOpen])
+                @include('core::partials.sidebar-student-nav', ['submittable' => $submittable, 'myApplicationOpen' => $myApplicationOpen, 'extraLinks' => $extraLinks])
 
             @elseif ($user->isAdmin())
                 {{-- The administrator's oversight and administration sections.
-                     Document Repository sits with the shared items below. --}}
-                @include('core::partials.sidebar-admin-nav')
+                     Document Repository sits with the shared items below.
+                     $queues/$extraLinks are passed so a module that gives
+                     Admin a real acting stage (Haziq's GRA Application does)
+                     shows up here too — both are empty for every module that
+                     doesn't, so this is a no-op until one does. --}}
+                @include('core::partials.sidebar-admin-nav', ['queues' => $queues, 'extraLinks' => $extraLinks])
 
             @elseif ($user->isCgs())
                 {{-- CGS places module-declared links inside its own trees (the

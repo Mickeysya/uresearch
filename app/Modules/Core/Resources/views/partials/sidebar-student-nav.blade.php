@@ -4,9 +4,10 @@
     Application is driven by ModuleRegistry::submittable(), same as the
     "New Application" section it replaces, so a new module's create form
     appears here on its own -- nothing to edit when Norhanis, Hani, Jason or
-    Chloe ships one.
+    Chloe ships one. Anything a module declares via ProvidesLinks for this
+    student (e.g. Haziq's "My GRA Application") renders from $extraLinks.
 
-    Expects: $submittable, $myApplicationOpen
+    Expects: $submittable, $myApplicationOpen, $extraLinks
 --}}
 {{-- Track My Applications (Core) + My Candidacy (Chloe) nested under it --
      candidacy.status's own "View" link and this tree's Overview sub-item
@@ -83,3 +84,11 @@
         </div>
     </div>
 </div>
+
+@if (! empty($extraLinks))
+    @foreach ($extraLinks as $link)
+        <a href="{{ route($link['route'], $link['params'] ?? []) }}" class="nav-item nav-item-flat @if(request()->routeIs($link['route'])) active @endif" title="{{ $link['label'] }}">
+            <span class="nav-label">{{ $link['label'] }}</span>
+        </a>
+    @endforeach
+@endif

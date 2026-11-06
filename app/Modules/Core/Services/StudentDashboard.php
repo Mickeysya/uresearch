@@ -11,6 +11,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\Concerns\BuildsPanels;
 use App\Modules\Core\Services\Concerns\ReadsAttendance;
+use App\Modules\Core\Services\Concerns\ReadsPostgraduateProgress;
 use App\Modules\Core\Support\AttendanceReading;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -37,6 +38,9 @@ class StudentDashboard
 
     /** attendanceSource() — the module supplying attendance, or null. */
     use ReadsAttendance;
+
+    /** postgraduateProgressSource() — the module supplying Stage Gate/Allowance/TA Hours figures, or null. */
+    use ReadsPostgraduateProgress;
 
     public function __construct(protected User $student, protected ?ModuleRegistry $registry = null)
     {
@@ -242,6 +246,33 @@ class StudentDashboard
     public function unreadNotifications(): int
     {
         return $this->safely('notifications', fn () => $this->student->unreadNotifications()->count(), 0);
+    }
+
+    /**
+     * The "Postgraduate Progress" panel — allowance payable this month,
+     * the riskiest open Stage Gate, and TA Hours against the monthly cap.
+     * Null (panel held as its own skeleton) when nothing supplies this —
+     * see Core\Contracts\SuppliesPostgraduateProgress — or when the
+     * student has no qualifying appointment, which reads the same as
+     * "this panel has nothing to say" rather than an error.
+     *
+     * @return array{allowance: array{amount: float|null, forMonth: string}|null, risk: ?int, taHours: array{hours: float, cap: float}}|null
+     */
+    public function postgraduateProgress(): ?array
+    {
+        $source = $this->postgraduateProgressSource();
+
+        if (! $source) {
+            $this->markUnavailable('postgraduate');
+
+            return null;
+        }
+
+        return $this->safely('postgraduate', fn () => [
+            'allowance' => $source->allowanceSummaryFor($this->student),
+            'risk' => $source->riskiestOpenStageGateFor($this->student),
+            'taHours' => $source->taHoursThisMonthFor($this->student),
+        ], null);
     }
 
     /* ---------------------------------------------------------------

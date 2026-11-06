@@ -24,6 +24,10 @@
          'value'=>$pct($averageAttendance) ?? '—',        'delta'=>null,  'note'=>$averageAttendance === null ? 'no data yet' : 'across all students'],
         ['tone'=>'red',    'panel'=>'applications','icon'=>'folder',   'label'=>'Active Applications',
          'value'=>number_format($activeApplications['count']), 'delta'=>$activeApplications['delta'], 'note'=>$activeApplications['delta'] === null ? 'in progress' : 'vs last month'],
+        ['tone'=>'teal',   'panel'=>'postgraduate','icon'=>'people',   'label'=>'Active Candidatures',
+         'value'=>number_format($activeCandidatures['count']), 'delta'=>null, 'note'=>'GRA/GA appointments'],
+        ['tone'=>'red',    'panel'=>'postgraduate','icon'=>'cross',    'label'=>'Terminated Candidatures',
+         'value'=>number_format($terminatedCandidatures['count']), 'delta'=>null, 'note'=>'awaiting appeal or unresolved'],
     ];
 @endphp
 

@@ -15,6 +15,7 @@
             @include('core::dashboard.partials.attendance-overview')
             @include('core::dashboard.partials.application-status')
             @include('core::dashboard.partials.notifications')
+            @include('core::dashboard.partials.postgrad-progress')
         </div>
     </div>
 @endsection
