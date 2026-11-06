@@ -3,6 +3,7 @@
 use App\Modules\Core\Support\Role;
 use App\Modules\Haziq\Http\Controllers\AllowanceController;
 use App\Modules\Haziq\Http\Controllers\CandidatureAppealController;
+use App\Modules\Haziq\Http\Controllers\DelayReportController;
 use App\Modules\Haziq\Http\Controllers\GaApplicationController;
 use App\Modules\Haziq\Http\Controllers\GraApplicationController;
 use App\Modules\Haziq\Http\Controllers\StageGateController;
@@ -155,6 +156,17 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:'.Role::SENIOR_DIRECTOR_CGS)->group(function () {
         Route::post('/candidature-appeals/{appeal}/decide', [CandidatureAppealController::class, 'decide'])->name('candidature-appeal.decide');
+    });
+
+    // ---- Delay by Actor report ---------------------------------------------
+    // Every actor in either chain, not just one role -- confirmed explicitly
+    // 2026-11-06: "i want all of the actors to see this." Never the student --
+    // this is about who holds an application up, not their own progress,
+    // which they already see on the ordinary tracking page.
+    Route::middleware('role:'.implode(',', array_merge(
+        [Role::ADMIN, Roles::RESEARCH_CENTRE, Role::SUPERVISOR], Role::cgsTeam()
+    )))->group(function () {
+        Route::get('/delay-report', [DelayReportController::class, 'index'])->name('delay-report.index');
     });
 
     // ---- TA Hours ---------------------------------------------------------

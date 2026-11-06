@@ -12,6 +12,7 @@ use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\GraGaStudentProfile;
 use App\Modules\Haziq\Models\StageGate;
+use App\Modules\Haziq\Support\Roles;
 
 /**
  * GRA Application — new appointments and extensions alike.
@@ -179,6 +180,14 @@ class GraApplicationWorkflow implements WorkflowModule, ProvidesLinks
             $links[] = ['label' => 'Stage Gate Monitoring', 'route' => 'stage-gate.index'];
             $links[] = ['label' => 'Allowance Eligibility', 'route' => 'allowance.index'];
             $links[] = ['label' => 'Candidature Appeals', 'route' => 'candidature-appeal.queue'];
+        }
+
+        // Spans both GRA and GA, so every actor in either chain gets it —
+        // Research Centre included, which the block above doesn't cover
+        // since it has no business with GRA-specific screens. Confirmed
+        // explicitly 2026-11-06: "i want all of the actors to see this."
+        if ($user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR || $user->role === Roles::RESEARCH_CENTRE) {
+            $links[] = ['label' => 'Delay by Actor', 'route' => 'delay-report.index'];
         }
 
         return $links;
