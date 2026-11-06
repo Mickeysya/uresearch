@@ -2,6 +2,7 @@
 
 use App\Modules\Core\Support\Role;
 use App\Modules\Haziq\Http\Controllers\AllowanceController;
+use App\Modules\Haziq\Http\Controllers\AssistantController;
 use App\Modules\Haziq\Http\Controllers\CandidatureAppealController;
 use App\Modules\Haziq\Http\Controllers\DelayReportController;
 use App\Modules\Haziq\Http\Controllers\GaApplicationController;
@@ -167,6 +168,15 @@ Route::middleware('auth')->group(function () {
         [Role::ADMIN, Roles::RESEARCH_CENTRE, Role::SUPERVISOR], Role::cgsTeam()
     )))->group(function () {
         Route::get('/delay-report', [DelayReportController::class, 'index'])->name('delay-report.index');
+    });
+
+    // ---- Student chatbot ---------------------------------------------------
+    // Student-only -- confirmed explicitly 2026-11-06: "implement chatbox ai
+    // for my module for student." AssistantController itself also checks
+    // isStudent(), since a route middleware check and a controller check are
+    // cheap insurance against each other drifting.
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::post('/haziq-assistant/ask', [AssistantController::class, 'ask'])->name('haziq-assistant.ask');
     });
 
     // ---- TA Hours ---------------------------------------------------------

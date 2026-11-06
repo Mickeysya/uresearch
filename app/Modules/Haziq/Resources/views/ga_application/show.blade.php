@@ -183,4 +183,5 @@
         @endif
     </div>
 </div>
+@include('haziq::partials.assistant_widget')
 @endsection
