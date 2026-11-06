@@ -194,10 +194,36 @@ class AllowanceController extends Controller
      * place, visible every month straight through a termination
      * regardless of the lag, so it never needed this bypass; checking
      * `reviewable` alone already excludes it correctly.
+     *
+     * A second, separate case found 2026-11-05: a termination-entry
+     * month CGS *did* set a figure for (raw status flips to
+     * 'determined') doesn't pay out on its own row at all — rowFor()'s
+     * `$previousStatus === 'determined'` branch is what actually shows
+     * it, one row later, same payroll-lag rule `reviewable` already
+     * follows. But that's a *second* month's delay stacked on top of
+     * the calendar lag this method exists to bypass, with nothing
+     * reviewable about the carryover row itself (`reviewable` is
+     * always false there) to trigger the bypass above — CGS couldn't
+     * confirm a genuinely pending, already-decided figure until the
+     * calendar moved on *twice*. User: "selagi tak mark payment
+     * complete taleh completed for payment last month on current
+     * month" — a decided figure has to be confirmable the very next
+     * month, not two months later.
      */
     protected function needsImmediateDisplay(AllowancePaymentLog $todayLog): bool
     {
-        return $this->rowFor($todayLog)['reviewable'];
+        $row = $this->rowFor($todayLog);
+
+        if ($row['reviewable']) {
+            return true;
+        }
+
+        $precedingStatus = AllowancePaymentLog::where('application_id', $todayLog->application_id)
+            ->where('payment_month', '<', $todayLog->payment_month)
+            ->orderByDesc('payment_month')
+            ->value('status');
+
+        return $precedingStatus === 'determined' && $row['confirmable'];
     }
 
     /**
@@ -482,10 +508,22 @@ class AllowanceController extends Controller
                 $displayStatus = $rowConfirmed ? 'eligible' : 'payment_pending';
                 $reviewable = false;
                 $confirmable = ! $rowConfirmed;
-            } elseif (in_array($row->status, ['withheld', 'backdated'], true)) {
-                // Stage 1's own accumulate-then-settle mechanic, entirely
-                // unrelated to termination — unchanged, as long as
-                // nothing has ever deferred ($laggedMode stays false).
+            } elseif (in_array($row->status, AllowanceLedger::ACCUMULATING_STATUSES, true)) {
+                // Stage 1's own accumulate-then-settle mechanic — 'eligible'
+                // joined this branch 2026-11-05, on explicit instruction:
+                // "kene mark complete lah kalau tak cane nak tahu die
+                // accumulated by cgs... tiap bulan kene mark complete,
+                // bagi proof of payment." Every month now needs an
+                // explicit confirmation regardless of whether Stage 1 is
+                // actually overdue — a plain on-time month that CGS never
+                // confirms accumulates into the next one exactly like a
+                // withheld one always has, rather than silently auto-
+                // resolving to 'eligible' every month for free. The
+                // $row->status === 'withheld' check a few lines down is
+                // what keeps the *label* distinct (an unconfirmed-but-
+                // never-overdue month still reads 'payment_pending', not
+                // 'withheld' — Stage 1 itself is still fine) while the
+                // running-sum mechanics are now identical either way.
                 $runningSum += $heldBack;
                 $heldBack = 0.0;
 
@@ -518,7 +556,16 @@ class AllowanceController extends Controller
                 $displayStatus = $rowConfirmed || $monthsAccumulating === 0
                     ? 'eligible'
                     : ($row->status === 'withheld' ? 'withheld' : 'payment_pending');
-                $confirmable = $displayStatus === 'payment_pending';
+                // Confirmed explicitly 2026-11-06: a 'withheld' month is
+                // still money the student is owed for a period CGS simply
+                // hasn't paid out yet — the *label* reads 'withheld'
+                // (Stage 1 is overdue) but CGS can still mark it complete
+                // month by month, exactly like 'payment_pending'. Waiting
+                // for Stage 1 itself to be marked complete is no longer a
+                // precondition for confirming the accumulating total —
+                // only an *unconfirmed* row (nothing accumulated yet, or
+                // already paid this round) blocks the action.
+                $confirmable = $displayStatus !== 'eligible';
 
                 // A reinstatement month resumed immediately by
                 // StageGateEngine::resumeReinstatementMonth() still lets
@@ -602,63 +649,13 @@ class AllowanceController extends Controller
                 $displayStatus = 'review_required';
                 $reviewable = $rowMonthKey === Carbon::today()->format('Y-m');
                 $confirmable = false;
-            } else {
-                // Genuinely ordinary 'eligible' — never violated, far
-                // enough past a resolved transition that nothing is owed,
-                // or a reinstatement resumeReinstatementMonth() resolved
-                // straight back to 'eligible' (Stage 1 already settled
-                // before the termination, nothing to carry over) —
-                // trusted and shown directly either way, not
-                // second-guessed just because the row before it happened
-                // to be 'forfeited'.
-                //
-                // Still has to honour a queued pending_addition, same as
-                // the withheld/backdated branch — found 2026-11-03: a
-                // resumption whose underlying Stage Gate was always
-                // 'eligible' (never actually backdated at the gate
-                // level, only the log rows froze during the
-                // termination) reverts straight to this branch the very
-                // next month, and a CGS-set partial-month figure was
-                // silently dropped on the floor rather than landing
-                // here, since only the withheld/backdated branch ever
-                // checked for one.
-                $runningSum += $heldBack;
-                $heldBack = 0.0;
-
-                if (! $laggedMode && $previousPendingAddition > 0.0) {
-                    $runningSum += $previousPendingAddition;
-                    $laggedMode = true;
-                }
-
-                if ($laggedMode) {
-                    // A real lagged figure is showing here, not just
-                    // the ordinary flat stipend — CGS genuinely hasn't
-                    // confirmed paying this out yet, same as any other
-                    // confirmable row, so it needs the same button.
-                    // Found 2026-11-03 asking what happens if CGS marks
-                    // it complete: this branch hardcoded `confirmable
-                    // = false` unconditionally, which would have made
-                    // the real "Mark Payment Complete" button never
-                    // appear for a lagged eligible row at all.
-                    $heldBack = $rowAmount;
-                    $amount = $runningSum;
-                    $displayStatus = 'payment_pending';
-                    $confirmable = ! $rowConfirmed;
-                } else {
-                    $amount = $rowAmount;
-                    $displayStatus = 'eligible';
-                    $confirmable = false;
-                }
-
-                $previousPendingAddition = 0.0;
-                $reviewable = false;
-
-                if ($rowConfirmed) {
-                    $runningSum = 0.0;
-                    $laggedMode = false;
-                    $heldBack = 0.0;
-                }
             }
+            // No final `else` needed — 'eligible' merged into the
+            // withheld/backdated branch above 2026-11-05, and
+            // 'forfeited'/'review_required'/'determined' are the only
+            // other raw status values this column is ever written with
+            // (see the migration's own default), so every real case is
+            // covered.
 
             $previousStatus = $row->status;
             $previousAmount = $rowAmount;

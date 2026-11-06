@@ -21,6 +21,7 @@ use App\Modules\Haziq\Models\WorkExperience;
 use App\Modules\Haziq\Notifications\ApplicationCorrectionResubmitted;
 use App\Modules\Haziq\Notifications\ApplicationRejected;
 use App\Modules\Haziq\Notifications\ApplicationSubmitted;
+use App\Modules\Haziq\Notifications\GaInterviewFailed;
 use App\Modules\Haziq\Notifications\GaInterviewScheduled;
 use App\Modules\Haziq\Notifications\LetterIssued;
 use App\Modules\Haziq\Notifications\StageAwaitingReview;
@@ -28,6 +29,7 @@ use App\Modules\Haziq\Support\Roles;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\UnauthorizedException;
 
@@ -557,6 +559,21 @@ class GaApplicationController extends Controller
             $this->onApproved($decided, $documents);
         } elseif ($decided->status === Application::STATUS_REJECTED) {
             $application->student?->notify(new ApplicationRejected($application, $stage, $data['remarks']));
+
+            // Research Centre failing an interview is the one rejection
+            // in this chain nobody else used to hear about at all — the
+            // application was already visible to every approver
+            // (index()/show() never filtered it out) and already
+            // unactionable (decide()'s own "already decided" guard), so
+            // the only real gap was that they never found out it
+            // happened. Confirmed explicitly 2026-11-06: "sepatutnya
+            // even yang fail interview semua boleh tengok dapat noti,
+            // tapi no actions."
+            if ($stage?->key === 'research_centre_interview') {
+                $this->stakeholders($decided)->each(
+                    fn (User $u) => $u->notify(new GaInterviewFailed($decided, $data['remarks']))
+                );
+            }
         } elseif ($decided->status === Application::STATUS_PENDING) {
             $this->notifyNextApprover($decided, $engine);
         }
@@ -577,6 +594,27 @@ class GaApplicationController extends Controller
         foreach (User::where('role', $stage->role)->get() as $approver) {
             $approver->notify(new StageAwaitingReview($application, $stage));
         }
+    }
+
+    /**
+     * Admin + the full CGS team + the application's own student's
+     * assigned Supervisor — same shape as CandidatureAppealController's
+     * own stakeholders(), reused here for GaInterviewFailed.
+     *
+     * @return Collection<int, User>
+     */
+    protected function stakeholders(Application $application): Collection
+    {
+        $application->loadMissing('student.supervisor');
+
+        $recipients = User::where('role', Role::ADMIN)->get()
+            ->merge(User::whereIn('role', Role::cgsTeam())->get());
+
+        if ($supervisor = $application->student?->supervisor) {
+            $recipients->push($supervisor);
+        }
+
+        return $recipients->unique('id');
     }
 
     /**

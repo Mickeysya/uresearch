@@ -5508,6 +5508,351 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         read "1" and "0" — both matching the portal's real current
         state (one active candidature, none terminated). `php artisan
         test` 42/42.
+- [x] **2026-11-05 — the "Mark Payment Complete" flow emails every
+      stakeholder correctly but never actually showed the proof.** User
+      asked why CGS/Admin "cannot mark complete" with proof emailed to
+      everyone at once. Two separate things, both checked live:
+  - [x] **Not a bug — the button genuinely has nothing to act on right
+        now.** The only real application in the system (#25) currently
+        reads `eligible`/`confirmable=no` — a plain flat month has
+        nothing pending to confirm, by design (see the `withheld` vs
+        `backdated` distinction settled 2026-11-05 two rounds ago). The
+        button only ever appears once there's a real `payment_pending`
+        debt or lagged figure.
+  - [x] **A real bug, found checking the notification itself:**
+        `AllowancePaymentConfirmed` already goes out via mail+database
+        to the student *and* every stakeholder (Admin, full CGS team,
+        Supervisor) simultaneously on confirmation — that part was
+        already correct — but `toMail()`/`toArray()` never read
+        `$confirmation->proofDocument`, so the proof uploaded via
+        `DocumentStore::attach()` in `confirmPayment()` was stored and
+        linked on the model but never surfaced in the email that's
+        supposed to prove the payment happened. Fixed by adding the
+        proof as a markdown line (`MailMessage::action()` only ever
+        renders one button, so a second `->action()` call would have
+        silently overwritten the first rather than adding a second one)
+        alongside the existing "Review Allowance Eligibility" button.
+  - [x] Verified end to end over real HTTP, not just the code: built a
+        disposable confirmable scenario (application #90,
+        student2@utp.edu.my, deleted after), submitted the real
+        `confirm-payment` multipart request as `cgs@utp.edu.my` with an
+        actual file upload, and checked Mailpit directly — 6 emails
+        fired simultaneously (student2, admin, cgs, manager, director,
+        supervisor). **First check still showed no proof link** — the
+        persistent `uresearch-queue` worker (Redis-backed, long-running)
+        had the pre-fix class loaded in memory and doesn't reload PHP
+        files between jobs; `docker restart uresearch-queue` and
+        re-dispatching confirmed the fix for real: the email now reads
+        "RM 20,000.00 ... confirmed as paid" followed by
+        "[View Proof of Payment](http://localhost:8000/documents/209)",
+        rendered as a real clickable `<a>` in the HTML version too.
+        **Worth remembering for any future notification-class edit on
+        this branch: the queue worker needs a restart to pick it up,
+        the way `php artisan serve` doesn't.** `php artisan test`
+        42/42.
+- [x] **2026-11-05 — a decided termination-entry figure could sit
+      uselessly uncomfirmable for a full extra month.** User: "pending
+      payment on 1 hari bulan... selagi tak mark payment complete
+      taleh completed for payment last month on current month" — a
+      figure CGS has already decided on should be confirmable the very
+      next month, not frozen out for an extra one. Built a disposable
+      scenario (application #91, deleted after) to check precisely:
+      termination entry in January, CGS sets RM1,500 via
+      `setReviewAmount()` (raw status → `determined`), then advanced
+      to 1 Feb 2028.
+  - [x] `rowFor()` itself was already correct — February's row
+        computed as RM1,500/`payment_pending`/confirmable, via the
+        `$previousStatus === 'determined'` carryover branch, exactly
+        the one-month lag this mechanic has always had. But
+        `resolveActingMonth()` (and `needsImmediateDisplay()`, the
+        bypass it's built on) only ever checked `reviewable`, which
+        this carryover row never sets — so the *calendar* lag added a
+        **second** month of delay on top of the carryover's own
+        built-in one. On 1 Feb, CGS was shown January's row instead
+        (blank, nothing to do) and couldn't actually confirm the
+        RM1,500 until March.
+  - [x] Fixed by extending `needsImmediateDisplay()`: in addition to
+        the existing `reviewable` check, it now also bypasses when the
+        row immediately before today's own has status `determined` and
+        today's row is `confirmable` — the one case that specifically
+        needed it, without touching the ordinary ongoing
+        withheld/backdated accumulation cycle (whose preceding row is
+        never `determined`).
+  - [x] Verified live: re-ran the exact scenario post-fix —
+        `resolveActingMonth()` on 1 Feb 2028 now correctly resolves to
+        February itself, confirming the page would show RM1,500,
+        `payment_pending`, confirmable, the same day the new month
+        starts. Re-checked application #25's real page still renders
+        correctly. `php artisan test` 42/42. Disposable application #91
+        deleted afterward.
+- [x] **2026-11-05 — major, deliberate redesign: every month's
+      allowance now needs explicit CGS/Admin confirmation, not just a
+      withheld/backdated debt.** User, confirmed explicitly after being
+      asked directly whether this was the intent (given it contradicts
+      the "eligible = automatic, nothing to confirm" assumption this
+      whole session had been built and verified against): "kene mark
+      complete lah kalau tak cane nak tahu die accumulated by cgs...
+      tiap bulan kene mark complete, bagi proof of payment." A plain
+      on-time month no longer auto-resolves for free — if CGS never
+      confirms it, it accumulates into the next month exactly like an
+      overdue Stage 1 debt always has.
+  - [x] Implementation: merged `'eligible'` into the same
+        `in_array($row->status, [...])` branch `'withheld'`/`'backdated'`
+        already shared in `rowFor()`'s walk — the accumulate/confirm/
+        reset mechanics are now identical for all three; only the
+        *label* still differs (`$row->status === 'withheld'` is what
+        keeps an unconfirmed-but-never-overdue month reading
+        `payment_pending` rather than `withheld`, since Stage 1 itself
+        is still fine). The old dedicated `else` branch for a plain
+        eligible row is gone entirely — it's now genuinely unreachable,
+        since `eligible`/`withheld`/`backdated`/`forfeited`/
+        `review_required`/`determined` are the only values this column
+        is ever written with.
+  - [x] Confirmed separately, same round: the brand-new-enrollment
+        placeholder (`applicationsPendingFirstPay()`, confirmed
+        2026-11-03 — blank for the service-start month itself) is
+        untouched and still correct, since there's no real log row to
+        walk yet for that month at all. The new accumulate-if-
+        unconfirmed rule only starts applying from the *first real*
+        service month onward.
+  - [x] Verified live, two ways. Real data: application #25 — never
+        once confirmed across its whole history — now reads RM10,000
+        (5 unconfirmed months × RM2,000) for October, `payment_pending`,
+        confirmable, with the real "Mark Payment Complete" button and
+        confirm-dialog amount matching exactly. Fresh scenario
+        (application #92, student2@utp.edu.my, deleted after): a
+        brand-new November enrollment showed blank today (placeholder,
+        unaffected), RM2,000/confirmable viewed in December, and — left
+        deliberately unconfirmed — RM4,000 viewed in January, matching
+        the user's own description exactly. Also found and cleaned up
+        15 stale future-dated rows on application #25 left over from
+        an earlier `Carbon::setTestNow()` round in this same session
+        that a prior cleanup pass had missed. `php artisan test` 42/42.
+- [x] **2026-11-05 — real bug found in `AllowanceLedger`, caught by the
+      user asking directly whether the `eligible` merge changed
+      anything about termination behaviour.** It hadn't touched
+      `StageGateEngine`'s own termination logic at all — but
+      `AllowanceLedger::withheldTotalThrough()`/`priorWithheldTotal()`
+      (the shared running-total math `rowFor()` and
+      `resumeReinstatementMonth()` both depend on) still only
+      recognised `'withheld'`/`'backdated'`, not `'eligible'`. Any
+      unconfirmed money from an ordinary on-time month — real money
+      under the rule confirmed two rounds ago — was silently discarded
+      the instant a termination hit, and never restored on appeal,
+      since the ledger's own query for "what was accumulating right
+      before the gap" would never match an `'eligible'` row at all.
+  - [x] Fixed: extracted the three-status list into one shared
+        `AllowanceLedger::ACCUMULATING_STATUSES` constant, used by both
+        the ledger and `rowFor()`'s own merged branch, so the two can
+        never drift apart on what counts again.
+  - [x] **Separately, mid-verification: found application #25 itself
+        showing `candidature_status=terminated` with Stage 1 reading
+        `grace_expired`, even though the real dates (`grace_end =
+        2026-12-01`, today `2026-11-05`) don't support either —
+        confirmed this was leftover residue from this session's own
+        earlier `Carbon::setTestNow()` testing on this same
+        application, not a code bug: `evaluateGate()` derives
+        `timeline_status` fresh from the gate's real dates every time
+        it runs, so a stale value only ever means it hasn't been
+        re-evaluated since whatever simulated date produced it.** A
+        fresh `recomputeApplication()` under real "today" (same
+        `service_start_date`, unchanged) corrected it immediately —
+        `candidature_status=active`, Stage 1 `grace_period`, all three
+        gates `eligible` again, matching the real timeline. Confirmed
+        live over HTTP: `/stage-gate` now shows only `active`/
+        `eligible`/`grace_period`/`upcoming`/`not_recorded` badges, no
+        `terminated`/`forfeited`/`grace_expired`. **Lesson for this
+        session going forward: a `setTestNow()`-based test on
+        application #25 itself (as opposed to a disposable application)
+        needs a real-time `recomputeApplication()` afterward, not just
+        deleting the stray `AllowancePaymentLog` rows it leaves — the
+        Stage Gate's own `timeline_status`/`allowance_status` and the
+        application's `candidature_status` can go stale too.**
+  - [x] `php artisan test` 42/42 throughout both fixes.
+- [x] **2026-11-05 — no code change; user caught this session's own
+      testing stepping on their concurrent real use of application
+      #25.** Asked to verify "mark complete October's RM2,000 now →
+      November shows RM2,000; if not, RM4,000" — the real row read
+      something else partway through checking, and June–September had
+      seemingly vanished. Traced it: the user had submitted a real
+      correction via their own browser, moving `service_start_date` to
+      2026-10-01, *while* this session was mid-verification against
+      the old 2026-06-01 baseline — the "missing" months were correctly
+      gone under the new start date, not deleted by anything broken.
+      Re-verified against the corrected baseline: October reads
+      RM2,000/confirmable right now, confirming it resolves to RM2,000
+      next month, leaving it unconfirmed accumulates to RM4,000 —
+      exactly as asked. Cleaned up this session's own leftover
+      `setTestNow()` artifacts (a stray future-dated row) along the
+      way. **Reconfirms something flagged earlier this session: when
+      the user is actively testing live on application #25 through
+      their own browser at the same time as a verification round here,
+      check the application's current real fields again before
+      trusting a value read at the start of that round.** `php artisan
+      test` 42/42.
+- [x] **2026-11-06 — a failed GA interview told the student but nobody
+      else in the chain.** User: "sepatutnya even yang fail interview
+      semua boleh tengok dapat noti, tapi no actions" — the application
+      was already visible to every approver (`index()`/`show()` never
+      filtered rejected applications out) and already unactionable
+      (`decide()`'s own "already decided" guard), so the only real gap
+      was that Admin/CGS/Supervisor/Senior Director never found out a
+      Fail happened at all — only the student got `ApplicationRejected`
+      (Core's shared `WorkflowEngine::decide()` only ever notifies the
+      student on any rejection, in every module, by design — not
+      something to change there).
+  - [x] Added a new `GaInterviewFailed` notification (admin-facing
+        copy, distinct from the student-facing `ApplicationRejected`)
+        and a `stakeholders()` helper on `GaApplicationController`
+        (same Admin + full CGS team + student's own Supervisor shape
+        `CandidatureAppealController` already uses), dispatched
+        alongside the existing student notification specifically when
+        the rejected stage is `research_centre_interview` — ordinary
+        CGS/Supervisor/Director rejections later in the chain are
+        unchanged, since only the interview-fail case was asked about.
+  - [x] Verified live end to end: built a disposable GA application
+        (#93, at `research_centre_interview` with an interview date
+        set) and a temporary `research_centre` test user (deleted
+        after — there's still no seeded one, flagged earlier this
+        session), failed the interview through the real decision flow.
+        Checked Mailpit directly: 5 emails fired (admin, cgs, manager,
+        director, supervisor), each reading "Ahmad Danial's
+        GAAP-2026-00093 GA application failed the Research Centre
+        interview and will not proceed any further," linking to the
+        record. Confirmed over real HTTP as `cgs@utp.edu.my`: the
+        application still appears in `/ga-application`'s list
+        (`rejected` badge) and its own detail page, with no "Your
+        Decision" section — visible, no action, exactly as asked.
+        `php artisan test` 42/42. Disposable application, detail row,
+        and temporary user all deleted afterward.
+- [x] **2026-11-06 — no code change; verified the full Case B
+      resumption chain end to end against a real RM38,000 debt.** User
+      asked to confirm: student sees the total pending payment on
+      resumption, but CGS can't actually settle it until Stage 1 is
+      marked complete first; if CGS doesn't confirm, the following
+      month accumulates with either CGS's own set figure (not day 1)
+      or the full ordinary month (day 1) — correct or not?
+  - [x] Built a disposable application (temporarily #94/#95, deleted
+        after), Stage 1 never completed, withheld through 19 months
+        (RM38,000), terminated by Stage 2. First attempt caught a test-
+        sequencing mistake of my own — calling `reinstateCandidature()`
+        before the appeal month's own log row even existed let
+        candidature go "active" before the proper freeze had ever
+        backfilled through September/October, so the real flow needed
+        the frozen months to exist *before* the appeal is ever decided
+        (exactly how the real daily cron would have already left them,
+        one day at a time, by the time a real appeal gets decided).
+  - [x] Confirmed, correctly sequenced: resumed row read RM38,000,
+        `withheld`, confirmable=no — stayed that way until Stage 1 was
+        marked complete (even late), at which point `backPay()`
+        flipped it to `backdated`/confirmable=yes, exactly as described.
+        Left unconfirmed: CGS setting a custom RM1,000 → next month
+        RM39,000; CGS setting nothing at all → next month still
+        RM40,000 anyway (ordinary accrual isn't frozen just because
+        CGS didn't act); appeal approved on day 1 instead → same
+        RM40,000, via the automatic full-month queue rather than a
+        CGS decision. One nuance beyond what was asked: "CGS sets
+        nothing" and "day 1" land on the identical number by
+        coincidence (both end up adding the ordinary flat rate) — the
+        real distinction between the two paths is only CGS's *ability*
+        to prorate a genuinely partial month, not a different default
+        outcome when they don't bother to. `php artisan test` 42/42
+        throughout; both disposable applications deleted afterward.
+- [x] **2026-11-06 — same class of staleness as before, found again on
+      application #25.** User: Stage 1 showed `grace_expired` with
+      `grace_end = 2027-03-01` — a date still four months in the
+      future from real "today" (2026-11-06). Same root cause as the
+      earlier round: `timeline_status` only updates when
+      `evaluateGate()` actually runs, so a value computed against an
+      old `service_start_date` (or an earlier `setTestNow()` round)
+      just sits there until something re-evaluates it. A fresh
+      `recomputeApplication()` under real time corrected it
+      immediately — `due_soon`/`eligible` across all three gates,
+      matching `service_start_date = 2026-09-01`'s real schedule.
+      Also found and deleted 13 stale future-dated `AllowancePaymentLog`
+      rows (stretching to December 2027) left over the same way.
+      Confirmed live: `/stage-gate` now shows only
+      `active`/`due_soon`/`eligible`/`not_recorded`/`upcoming` badges.
+      `php artisan test` 42/42. No code change — same lesson as before,
+      logged again since it's now happened twice: a `setTestNow()`
+      round on application #25 itself needs a real-time
+      `recomputeApplication()` pass afterward to fully settle, not
+      just deleting the stray log rows it leaves.
+
+- [x] **2026-11-06 — no code change; verified the user's own compound
+      scenario about an unconfirmed streak running straight into Stage
+      1's grace expiry.** Scenario as given: CGS confirms every month
+      from October 2026 through "1 Feb 2027," then stops; Stage 1's
+      grace hasn't expired yet at that point, but does shortly after;
+      the user expected April's allowance to read as suspended, March's
+      payment (RM4000, "the payment for 1 Feb") to still be markable in
+      March, that month to pay out in April, and from May onward CGS to
+      be unable to mark April's payment at all because it just keeps
+      growing until Stage 1 is completed. Built a disposable application
+      (`service_start_date = 2026-08-01`, Stage 1 `deadline = 2026-11-01`,
+      `grace_end = 2027-02-01`, so `grace_end + 1 month = 2027-03-01` —
+      March 2027 is the first *service* month `statusAsOf()` marks
+      `withheld`), confirmed Aug–Dec 2026 service months, left Jan 2027
+      onward unconfirmed, then ran `rowFor()` for the three views the
+      user described (payroll lag: viewing month shows the *previous*
+      month's service):
+      - Viewing **March 2027** (Feb's service, still raw `eligible`,
+        unconfirmed since Jan): amount **RM4000**, `payment_pending`,
+        confirmable **YES** — matches "cgs can still mark payment for
+        march... 4000... as in the payment for 1 feb" exactly; two
+        unconfirmed months (Jan + Feb) stacked, not one.
+      - Viewing **April 2027** (March's service, first `withheld` month):
+        amount **RM6000**, `withheld`, confirmable **NO** — the
+        suspension the user predicted. Confirms the merged
+        `rowFor()` branch ([AllowanceController.php:556](app/Modules/Haziq/Http/Controllers/AllowanceController.php#L556)):
+        raw status `withheld` always displays as `withheld`
+        (never `payment_pending`), so it's never confirmable no matter
+        what CGS wants, until Stage 1 is marked complete.
+      - Viewing **May 2027** (April's service, second `withheld` month):
+        amount **RM8000**, still `withheld`, confirmable **NO** — matches
+        "cgs cannot mark the payment for april... as the payment will
+        get growing until stage 1 is completed," including the growing
+        part: the running total keeps accumulating every month
+        regardless of confirmability, it just can't be *settled* while
+        the raw status stays `withheld`.
+      User's understanding was correct on every point. Disposable
+      application (id 96) and all its rows deleted after. `php artisan
+      test` 42/42.
+
+- [x] **2026-11-06 — reversal: a `withheld` row is confirmable now,
+      same session as the verification above.** User, right after that
+      verification: "kau kene faham die still eligable dapat allowance
+      on march tu... cgs still can mark payment... so bulan die
+      completekan je, status kan berubah eligable" — the `withheld`
+      *label* just means Stage 1 is overdue, it was never meant to
+      block CGS from marking that month's accumulating total paid.
+      Waiting for Stage 1 itself to be marked complete (`backPay()`)
+      is no longer a precondition for confirming an accumulating
+      `withheld` total — only an *already-confirmed* or *not-yet-
+      accumulating* row blocks the action now. Drew the same parallel
+      the user used: a pre-termination row already stays confirmable
+      despite the application's overall status reading "terminated"
+      ([AllowanceLedger.php](app/Modules/Haziq/Support/AllowanceLedger.php) via
+      `ACCUMULATING_STATUSES`/`priorWithheldTotal()`, settled
+      2026-11-05) — `withheld` should work the same way against its
+      own overdue badge.
+      Changed [AllowanceController.php:556-563](app/Modules/Haziq/Http/Controllers/AllowanceController.php#L556-L563):
+      `$confirmable` no longer checks `$displayStatus === 'payment_pending'`
+      (excluding `'withheld'`) — now `$confirmable = $displayStatus !== 'eligible'`,
+      true for both `withheld` and `payment_pending` alike. Re-ran the
+      exact same disposable scenario from the entry above (app id 97,
+      same dates) after the fix: viewing April 2027 (RM6000, `withheld`)
+      and May 2027 (RM8000, `withheld`) both now read `confirmable: YES`
+      — previously `NO`. `confirmPayment()` itself needed no change —
+      it already only guards on `$row['confirmable']` from `rowFor()`,
+      no separate raw-status check, and neither does the Blade view
+      ([allowance/index.blade.php:193](app/Modules/Haziq/Resources/views/allowance/index.blade.php#L193)).
+      `backPay()` is unaffected and still runs on Stage 1 completion —
+      it now mostly just relabels any `withheld` rows CGS never got
+      around to confirming individually to `backdated`, cosmetic more
+      than functional at this point, but left as-is since nothing asked
+      for it to change. Disposable application (id 97) and all its rows
+      deleted after. `php artisan test` 42/42.
 
 ---
 
