@@ -47,7 +47,7 @@
 
         @auth
             @if ($user->isStudent())
-                @include('core::partials.sidebar-student-nav', ['submittable' => $submittable, 'myApplicationOpen' => $myApplicationOpen, 'extraLinks' => $extraLinks])
+                @include('core::partials.sidebar-student-nav', ['submittable' => $submittable, 'myApplicationOpen' => $myApplicationOpen])
 
             @elseif ($user->isAdmin())
                 {{-- The administrator's oversight and administration sections.

@@ -13,7 +13,11 @@
         subtitle="Confirm each requirement from the Postgraduate Handbook, then give your Notice of Thesis Submission below, at least 3 months before your softbound thesis. Your Academic Executive will then contact your supervisor about appointing examiners." />
 
     @if ($level !== null)
-        @include('hani::partials.module_stepper', ['tracker' => $tracker])
+        {{-- On a card, not straight on the background photo: bare, its grey
+             labels and hairlines disappeared into the sketch. --}}
+        <div class="card card-wide" style="margin-bottom: var(--space-5)">
+            @include('hani::partials.module_stepper', ['tracker' => $tracker])
+        </div>
     @endif
 
     <div class="card card-wide">
@@ -47,12 +51,19 @@
                 <p class="fstep-hint">Locked, because your notice was filed on it.</p>
             @endif
 
-            <form method="POST" action="{{ route('viva.notice.store') }}" enctype="multipart/form-data" id="viva-checklist">
+            {{-- Before a notice is filed this is a core::partials.form-stepper
+                 wizard (Eligibility, Thesis, Date & proof, Review). After, it
+                 is the same checklist, locked and read-only. --}}
+            <form method="POST" action="{{ route('viva.notice.store') }}" enctype="multipart/form-data" id="viva-checklist"
+                  @unless ($openNotice)
+                      data-stepper
+                      data-stepper-review="Check everything below, then submit. Your notice goes to your Academic Executive, who contacts your supervisor about appointing examiners."
+                  @endunless>
                 @csrf
 
-                <fieldset @disabled($openNotice)>
+                <fieldset @class(['fstep' => ! $openNotice]) data-label="Eligibility" @disabled($openNotice)>
                     @if (! $openNotice)
-                        <h3>1. Eligibility Checklist</h3>
+                        <p class="fstep-hint">Confirm each requirement from the Postgraduate Handbook. Save Progress keeps your ticks if you are not ready to file.</p>
                     @endif
 
                     @foreach ($items as $column => $item)
@@ -65,7 +76,7 @@
                             {{-- An item the system checked cannot be ticked or unticked by hand. --}}
                             <input type="checkbox" @unless ($bySystem) name="{{ $column }}" @endunless id="{{ $column }}" value="1"
                                    data-check
-                                   @checked($met) @disabled($bySystem)>
+                                   @checked($met) @disabled($bySystem) @required(! $bySystem && ! $openNotice)>
                             <label for="{{ $column }}">{{ $item['label'] }}</label>
                             @include('hani::viva._eligibility_badge', ['check' => $check])
                         </div>
@@ -83,14 +94,10 @@
                         and CGS may ask for evidence.
                     </p>
 
-                    @if (! $openNotice)
-                        {{-- formaction + formnovalidate: saving the ticks needs none of the notice fields. --}}
-                        <button type="submit" class="btn-secondary" formaction="{{ route('viva.eligibility.save') }}" formnovalidate>
-                            Save Progress
-                        </button>
+                </fieldset>
 
-                        <h3 id="notice">2. Notice of Thesis Submission</h3>
-
+                @if (! $openNotice)
+                    <fieldset class="fstep" data-label="Thesis" id="notice">
                         <label for="thesis_title">Thesis Title</label>
                         <input type="text" name="thesis_title" id="thesis_title" required maxlength="255"
                                value="{{ old('thesis_title') }}"
@@ -113,7 +120,9 @@
                                class="@error('keywords') is-invalid @enderror">
                         <p class="fstep-hint">{{ $limits['keywords_min'] }} to {{ $limits['keywords_max'] }} keywords, separated by semicolons.</p>
                         @error('keywords') <p class="field-error">{{ $message }}</p> @enderror
+                    </fieldset>
 
+                    <fieldset class="fstep" data-label="Date &amp; proof">
                         <label for="expected_softbound_date">Expected Softbound Submission Date</label>
                         {{-- min mirrors the controller's 3-month rule so the browser
                              catches it before the server does. --}}
@@ -138,12 +147,21 @@
                             @endif
                         </p>
                         @error('publication_proof') <p class="field-error">{{ $message }}</p> @enderror
-
-                        <button type="submit" data-continue>Submit Notice of Thesis Submission</button>
                         <p class="fstep-hint" data-continue-hint>Confirm every requirement and choose your publication proof to submit.</p>
-                    @endif
-                </fieldset>
+                    </fieldset>
+
+                    {{-- The real submit must come first: the stepper moves the
+                         form's first submit button into its nav, for the last
+                         step. Save Progress is moved in beside Back below, so it
+                         is there on every step. formaction + formnovalidate:
+                         saving the ticks needs none of the notice fields. --}}
+                    <button type="submit" data-continue>Submit Notice of Thesis Submission</button>
+                    <button type="submit" class="btn-secondary" data-save-progress formaction="{{ route('viva.eligibility.save') }}" formnovalidate>
+                        Save Progress
+                    </button>
+                @endif
             </form>
+            @include('core::partials.form-stepper')
         @endif
     </div>
 </div>
@@ -191,6 +209,22 @@
                 wordCount.textContent = n;
                 var min = +abstract.dataset.min, max = +abstract.dataset.max;
                 abstract.setCustomValidity(abstract.value && (n < min || n > max) ? 'The abstract must be between ' + min + ' and ' + max + ' words.' : '');
+            }
+
+            // Runs after the stepper's script (it is included above), so its
+            // nav exists. Without JS both buttons stay at the foot of the form.
+            var save = form.querySelector('[data-save-progress]');
+            var nav = form.querySelector('.fstep-nav');
+            if (save && nav) {
+                var cont = nav.querySelector('[data-fstep-next]');
+                nav.insertBefore(save, cont);
+                // Beside Continue, not floated to the middle: the nav CSS gives
+                // every .btn-secondary margin-right:auto (meant for Back), and
+                // submit buttons a different top margin.
+                save.style.marginRight = '0';
+                save.style.marginTop = getComputedStyle(cont).marginTop;
+                // Three buttons do not fit a phone's width in one row.
+                nav.style.flexWrap = 'wrap';
             }
 
             boxes.forEach(function (b) { b.addEventListener('change', sync); });

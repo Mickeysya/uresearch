@@ -9,7 +9,9 @@
         title="Soft Bound Thesis Submission"
         subtitle="CGS Online Form #019 (UTP/CGS/V3/VV/019). Get your thesis signed by yourself, your supervisor, co-supervisor and chair before submitting." />
 
-    @include('hani::partials.module_stepper', ['tracker' => $tracker])
+    <div class="card card-wide" style="margin-bottom: var(--space-5)">
+        @include('hani::partials.module_stepper', ['tracker' => $tracker])
+    </div>
 
     <div class="card card-wide">
         @if ($returnReason)
