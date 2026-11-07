@@ -6765,6 +6765,42 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         side-by-side against the historical RM24,000 settled case —
         not changed. `statusAsOf()` is untouched.
 
+- [x] **2026-11-08 — same-day correction: the first-withheld-month
+      exception above was too broad.** Caught live by the user looking
+      at application #25's real November 2026 row (RM38,000, raw
+      status `withheld`, previous row `forfeited`) still showing "Mark
+      Payment Complete" right after the fix above shipped —
+      `$previousStatus !== 'withheld'` is true for *any* non-withheld
+      predecessor, so a resumption row right after a termination
+      (previous status `forfeited`, or `review_required` mid-
+      termination-entry) was wrongly granted the same exception as a
+      genuinely fresh overdue month. User's own correction: "firts
+      month tuk case baru je withold sebab tak complete stage 1" — the
+      exception is for a *new case* of Stage 1 going overdue, not for
+      a resumption row that's still carrying an *unresolved* Stage 1
+      debt forward from before the termination.
+  - [x] Narrowed the condition from "`$previousStatus` isn't
+        `'withheld'`" to "`$previousStatus` is `'eligible'` (or `null`,
+        the very first log row ever)" — the only two predecessors that
+        actually mean this withheld row is the first month of a fresh
+        overdue episode, with its own payment still covering service
+        from before Stage 1 went overdue. A `forfeited` or
+        `review_required` predecessor no longer qualifies.
+  - [x] Added `test_a_resumption_row_after_termination_is_locked_not_
+        treated_as_a_fresh_first_month` to `AllowanceRowForTest`: a
+        withheld row directly after a `forfeited` one is now asserted
+        `confirmable === false`. `php artisan test --filter=Haziq`:
+        123/123.
+  - [x] Verified live against the real application #25 (left
+        untouched, no test data created this round): before the fix,
+        `rowFor()` on its November 2026 row (`amount=38000,
+        displayStatus=withheld`) returned `confirmable=true` and the
+        real `/allowance` page rendered "Mark Payment Complete" for
+        it; after the fix, the same row returns `confirmable=false`
+        and the button is gone from the live page — only "Set Amount"
+        (the separate, correctly-unaffected reviewable action for a
+        mid-month resumption) remains.
+
 ---
 
 ## Cross-module overlaps — unresolved

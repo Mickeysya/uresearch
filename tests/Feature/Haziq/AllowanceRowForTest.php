@@ -148,6 +148,25 @@ class AllowanceRowForTest extends TestCase
         $this->assertFalse($row['confirmable'], 'only the first withheld month is confirmable; this is the second in a row');
     }
 
+    /**
+     * Corrected same day as the rule above: a resumption row right
+     * after a termination carries an *unresolved* Stage 1 debt forward
+     * -- it's not a fresh overdue episode, even though the row right
+     * before it (forfeited, frozen) isn't itself 'withheld' either.
+     * Only a row whose immediately preceding month was genuinely
+     * 'eligible' gets the first-month exception.
+     */
+    public function test_a_resumption_row_after_termination_is_locked_not_treated_as_a_fresh_first_month(): void
+    {
+        $application = $this->application();
+        $this->log($application, '2026-08-01', 'withheld', 2000); // the real first withheld month, long settled
+        $this->log($application, '2026-09-01', 'forfeited', 0); // terminated
+        $row = $this->rowFor($this->log($application, '2026-10-01', 'withheld', 30000)); // appeal approved, resumes with the full backlog
+
+        $this->assertSame('withheld', $row['displayStatus']);
+        $this->assertFalse($row['confirmable'], 'a resumption row continues an unresolved Stage 1 debt -- it is not a fresh case, so it does not get the first-month exception');
+    }
+
     public function test_every_withheld_month_unlocks_together_once_stage_1_actually_completes(): void
     {
         $application = $this->application();

@@ -566,16 +566,24 @@ class AllowanceController extends Controller
                 // marked complete — at which point recordCompletion()'s
                 // back-pay flips every withheld row to 'backdated' in
                 // one go, confirmable as a batch from there.
-                // $previousStatus is still whatever the row before this
-                // one was (never reset by a confirmation in between,
-                // same variable used for the reviewable checks below) —
-                // it reads 'withheld' only once Stage 1's overdue run
-                // has already produced at least one withheld row, which
-                // is exactly "this is not the first one" either way.
-                // 'payment_pending' rows (unconfirmed but never overdue)
-                // are untouched by this — only the withheld label locks.
+                //
+                // Corrected same day: "the first one is confirmable"
+                // means the first month of a *fresh* overdue episode —
+                // the one right after a normal 'eligible' month, whose
+                // own payment is for service from before Stage 1 went
+                // overdue. It does NOT mean "whatever row happens to
+                // follow something other than 'withheld'". A resumption
+                // row after a termination (previous status 'forfeited',
+                // or 'review_required' mid-termination-entry) is still
+                // carrying an *unresolved* Stage 1 debt forward, not
+                // starting a new case — "firts month tuk case baru je
+                // withold sebab tak complete stage 1, tak masuk stage 2
+                // period lagi." That row stays locked like any other
+                // non-first withheld month, even though the row right
+                // before it isn't itself 'withheld'.
+                $freshOverdueEpisode = $previousStatus === null || $previousStatus === 'eligible';
                 $confirmable = $displayStatus !== 'eligible'
-                    && ($row->status !== 'withheld' || $previousStatus !== 'withheld');
+                    && ($row->status !== 'withheld' || $freshOverdueEpisode);
 
                 // A reinstatement month resumed immediately by
                 // StageGateEngine::resumeReinstatementMonth() still lets
