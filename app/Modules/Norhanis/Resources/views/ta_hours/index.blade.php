@@ -177,5 +177,4 @@
         <div style="margin-top: 16px;">{{ $logs->links() }}</div>
     </div>
 </div>
-@include('haziq::partials.assistant_widget')
 @endsection
