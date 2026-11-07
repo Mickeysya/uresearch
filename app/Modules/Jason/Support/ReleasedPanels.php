@@ -129,7 +129,7 @@ final class ReleasedPanels
      * letter of their own rather than being added to one the Dean has
      * already signed -- so every appointment against it is counted.
      *
-     * @return array<int, int> examiners.id
+     * @return array{exists: bool, ids: array<int, int>, names: array<int, string>}
      */
     public static function alreadyLettered(int $nominationApplicationId): array
     {
@@ -137,16 +137,50 @@ final class ReleasedPanels
             ->pluck('application_id');
 
         if ($applicationIds->isEmpty()) {
-            return [];
+            return ['exists' => false, 'ids' => [], 'names' => []];
         }
 
-        return AppointmentExaminer::whereIn('application_id', $applicationIds)
-            ->whereNotNull('hani_examiner_id')
-            ->pluck('hani_examiner_id')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
+        $rows = AppointmentExaminer::whereIn('application_id', $applicationIds)
+            ->get(['hani_examiner_id', 'examiner_name']);
+
+        return [
+            // An appointment exists, whether or not its rows can be tied to
+            // the chain's own examiner ids. The two are different facts and
+            // conflating them is what hid an appointment from both screens.
+            'exists' => true,
+            'ids' => $rows->pluck('hani_examiner_id')->filter()->map(fn ($id) => (int) $id)
+                ->unique()->values()->all(),
+            // Rows written before this module stored the chain's ids, and
+            // rows matched by name in the first place, have no id to compare.
+            // Their names are the only handle on them -- the same handle the
+            // importer itself falls back to.
+            'names' => $rows->pluck('examiner_name')
+                ->filter()
+                ->map(fn ($name) => mb_strtolower(trim($name)))
+                ->unique()->values()->all(),
+        ];
+    }
+
+    /**
+     * Whether this seat has already been written to.
+     *
+     * By the chain's examiner id where this module has one. Where it does
+     * not -- an appointment imported before that column existed, or one
+     * matched by name to begin with -- the name is all there is, and it is
+     * the same comparison the importer trusts to identify an examiner in
+     * the first place. Getting this wrong by name would withhold a letter
+     * rather than send a second, which is the safer way to be wrong.
+     *
+     * @param  array{exists: bool, ids: array<int, int>, names: array<int, string>}  $lettered
+     * @param  array<string, mixed>  $seat
+     */
+    protected static function seatIsLettered(array $lettered, array $seat): bool
+    {
+        if ($seat['hani_examiner_id'] && in_array($seat['hani_examiner_id'], $lettered['ids'], true)) {
+            return true;
+        }
+
+        return in_array(mb_strtolower(trim((string) $seat['examiner_name'])), $lettered['names'], true);
     }
 
     /**
@@ -181,16 +215,22 @@ final class ReleasedPanels
 
             $lettered = self::alreadyLettered($nominationId);
 
-            // Nothing has been written against this nomination at all, so
-            // it is a first import, not a promotion. The import screen
+            // No appointment against this nomination at all, so it is a
+            // first import rather than a promotion. The import screen
             // handles those; listing them here would ask CGS to open four
             // one-examiner appointments instead of one.
-            if ($lettered === []) {
+            //
+            // The test is whether an appointment EXISTS, not whether its
+            // examiners can be identified. An appointment whose rows carry
+            // no examiner id is still an appointment, and treating it as
+            // nothing hid it from this screen while the importer was
+            // skipping it as already done -- invisible on both.
+            if (! $lettered['exists']) {
                 continue;
             }
 
             foreach ($panel['examiners'] as $seat) {
-                if (! $seat['hani_examiner_id'] || in_array($seat['hani_examiner_id'], $lettered, true)) {
+                if (self::seatIsLettered($lettered, $seat)) {
                     continue;
                 }
 

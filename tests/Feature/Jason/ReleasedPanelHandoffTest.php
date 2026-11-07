@@ -421,6 +421,41 @@ class ReleasedPanelHandoffTest extends TestCase
         );
     }
 
+    /**
+     * An appointment written before this module stored the chain's
+     * examiner ids.
+     *
+     * Those rows name their examiner and nothing else. The nomination has
+     * an appointment, so the importer skips it as already done -- and if
+     * this screen also ignored it for having no ids to compare, the panel
+     * would be invisible on both and a promoted examiner would have no
+     * route to a letter at all.
+     */
+    public function test_an_appointment_with_no_examiner_ids_is_still_compared(): void
+    {
+        $sent = $this->alreadySent(80, 11, 'Dr. Chandra Segaran');
+
+        // As it would have been written before the id column existed.
+        AppointmentExaminer::where('application_id', $sent->id)
+            ->update(['hani_examiner_id' => null]);
+
+        $this->bindFakeChain([
+            $this->panel(80,
+                // Same person, still in the seat: known by name alone.
+                ['id' => 11, 'name' => 'Dr. Chandra Segaran', 'email' => 'chandra@utp.edu.my',
+                    'email_problem' => null, 'department' => 'Computing', 'faculty' => 'FSMC'],
+                ['id' => 12, 'name' => 'Prof. Madya Dr. Nabila Yusof', 'email' => 'nabila@um.edu.my',
+                    'email_problem' => null, 'institution' => 'Universiti Malaya', 'department' => 'Computing'],
+            ),
+        ]);
+
+        $needed = array_column(ReleasedPanels::lettersNeeded(), 'hani_examiner_id');
+
+        // The external has no letter and is offered one; the internal is
+        // recognised by name and is not offered a second.
+        $this->assertSame([12], $needed);
+    }
+
     /** Only the CGS officer who sends the letters may open one. */
     public function test_only_non_executive_cgs_may_prepare_a_promoted_letter(): void
     {
