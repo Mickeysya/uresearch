@@ -3,10 +3,10 @@
 @section('title', 'My Drafts')
 
 {{--
-    The student's saved GA Extension and Certification drafts --
-    DraftsController. A draft is never on a stage, so it is in no queue and
-    no one but its student can see it. Delete removes it completely,
-    attached files included.
+    The student's saved drafts -- GA Extension, Certification, GRA
+    Application and GA Application -- DraftsController. A draft is never on
+    a stage, so it is in no queue and no one but its student can see it.
+    Delete removes it completely, attached files included.
 --}}
 
 @section('content')
@@ -17,7 +17,7 @@
 
     @if ($drafts->isEmpty())
         <div class="empty-state">
-            You have no saved drafts. Use <b>Save draft</b> on the GA Extension or Certification Letter form to keep a half-finished request.
+            You have no saved drafts. Use <b>Save draft</b> on the GA Extension, Certification Letter, GRA Application or GA Application form to keep a half-finished request.
         </div>
     @else
         <div class="card card-wide">

@@ -21,14 +21,18 @@ use App\Modules\Haziq\Models\WorkExperience;
 use App\Modules\Haziq\Notifications\ApplicationCorrectionResubmitted;
 use App\Modules\Haziq\Notifications\ApplicationRejected;
 use App\Modules\Haziq\Notifications\ApplicationSubmitted;
+use App\Modules\Haziq\Notifications\GaInterviewFailed;
 use App\Modules\Haziq\Notifications\GaInterviewScheduled;
 use App\Modules\Haziq\Notifications\LetterIssued;
 use App\Modules\Haziq\Notifications\StageAwaitingReview;
+use App\Modules\Haziq\Support\DocumentCompleteness;
 use App\Modules\Haziq\Support\Roles;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\UnauthorizedException;
 
 class GaApplicationController extends Controller
@@ -166,6 +170,42 @@ class GaApplicationController extends Controller
             ->latest('id')
             ->first()
             ?->application;
+    }
+
+    /**
+     * "My Drafts" (Nureen\Support\Drafts::of()) Continue link. There is at
+     * most one draft per student (store() either updates it or creates the
+     * only one, activeApplication() blocks a second), so this just
+     * re-enters create() — which already finds and pre-fills it — once
+     * ownership of $application itself is confirmed.
+     */
+    public function editDraft(Request $request, Application $application)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($application->student_id === $request->user()->id, 403, 'This draft is not yours.');
+        abort_unless($application->status === Application::STATUS_DRAFT, 404, 'This application has already been submitted.');
+
+        return $this->create($request);
+    }
+
+    /** "My Drafts" Delete — the draft, its detail row and its attached files, gone completely. */
+    public function destroyDraft(Request $request, Application $application): RedirectResponse
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($application->student_id === $request->user()->id, 403, 'This draft is not yours.');
+        abort_unless($application->status === Application::STATUS_DRAFT, 404, 'This application has already been submitted.');
+
+        DB::transaction(function () use ($application) {
+            $application->documents->each(function (ApplicationDocument $document) {
+                Storage::disk('local')->delete($document->path);
+                $document->delete();
+            });
+
+            GaApplicationDetail::where('application_id', $application->id)->delete();
+            $application->delete();
+        });
+
+        return redirect()->route('nureen.drafts')->with('status', 'Draft deleted.');
     }
 
     /** The student's current GA application still in flight (pending or approved), if any. */
@@ -347,6 +387,7 @@ class GaApplicationController extends Controller
             'canCorrect' => false,
             'canEdit' => $this->canStudentEdit($application),
             'viewerIsStudent' => true,
+            'missingDocuments' => DocumentCompleteness::missingFor($application),
         ]);
     }
 
@@ -557,6 +598,21 @@ class GaApplicationController extends Controller
             $this->onApproved($decided, $documents);
         } elseif ($decided->status === Application::STATUS_REJECTED) {
             $application->student?->notify(new ApplicationRejected($application, $stage, $data['remarks']));
+
+            // Research Centre failing an interview is the one rejection
+            // in this chain nobody else used to hear about at all — the
+            // application was already visible to every approver
+            // (index()/show() never filtered it out) and already
+            // unactionable (decide()'s own "already decided" guard), so
+            // the only real gap was that they never found out it
+            // happened. Confirmed explicitly 2026-11-06: "sepatutnya
+            // even yang fail interview semua boleh tengok dapat noti,
+            // tapi no actions."
+            if ($stage?->key === 'research_centre_interview') {
+                $this->stakeholders($decided)->each(
+                    fn (User $u) => $u->notify(new GaInterviewFailed($decided, $data['remarks']))
+                );
+            }
         } elseif ($decided->status === Application::STATUS_PENDING) {
             $this->notifyNextApprover($decided, $engine);
         }
@@ -577,6 +633,27 @@ class GaApplicationController extends Controller
         foreach (User::where('role', $stage->role)->get() as $approver) {
             $approver->notify(new StageAwaitingReview($application, $stage));
         }
+    }
+
+    /**
+     * Admin + the full CGS team + the application's own student's
+     * assigned Supervisor — same shape as CandidatureAppealController's
+     * own stakeholders(), reused here for GaInterviewFailed.
+     *
+     * @return Collection<int, User>
+     */
+    protected function stakeholders(Application $application): Collection
+    {
+        $application->loadMissing('student.supervisor');
+
+        $recipients = User::where('role', Role::ADMIN)->get()
+            ->merge(User::whereIn('role', Role::cgsTeam())->get());
+
+        if ($supervisor = $application->student?->supervisor) {
+            $recipients->push($supervisor);
+        }
+
+        return $recipients->unique('id');
     }
 
     /**
