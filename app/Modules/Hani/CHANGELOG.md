@@ -7,6 +7,11 @@
   rule. Full edit, import, the review list and "Not the same person" stay with
   the Senior Executive.
 - **Fixed** the pool's header buttons: same row, same height.
+- **Changed** the supervisor's "Examiner pool" table on `/examiner-nomination/new`
+  to match `/examiners`: same card and badges, list tabs with counts, Department
+  and State filters, search and paging. Still read-only. The badges, tabs, filter
+  bar, pager and their styles are now shared partials, and
+  `Support/ExaminerPoolList` holds the filtering.
 
 ## 2026-11-07: The two letter contracts are in Core
 

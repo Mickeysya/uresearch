@@ -4,6 +4,7 @@ namespace Tests\Feature\Hani;
 
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerImportBatch;
 use App\Modules\Hani\Models\ExaminerNomination;
@@ -395,6 +396,148 @@ class ExaminerPoolTest extends TestCase
         $this->assertSame(2, Examiner::count());
         $this->assertTrue($examiner->fresh()->is_active);
         $this->assertSame('internal@utp.edu.my', $examiner->fresh()->email);
+    }
+
+    protected ?User $poolSupervisor = null;
+
+    /** The table under the nomination form, without the dropdowns above it. */
+    protected function supervisorPoolTable(array $query = []): string
+    {
+        $this->poolSupervisor ??= $this->supervisor();
+
+        $html = $this->actingAs($this->poolSupervisor)
+            ->get(route('examiner-nomination.create', $query))
+            ->assertOk()
+            ->getContent();
+
+        $start = strpos($html, 'class="exam-table-wrap"');
+        $this->assertNotFalse($start, 'The pool table is missing.');
+
+        return substr($html, $start, strpos($html, '</section>', $start) - $start);
+    }
+
+    public function test_the_supervisor_pool_uses_the_same_badges_as_cgs(): void
+    {
+        $available = $this->internal();
+        $assigned = $this->external();
+        $assigned->update(['assigned_until' => now()->addDays(30)]);
+        $onGap = $this->internal('gap@utp.edu.my');
+        $onGap->update(['name' => 'Dr On Gap', 'last_examination_date' => now()->subDays(10)]);
+        $unavailable = $this->internal('gone@utp.edu.my');
+        $unavailable->update(['name' => 'Dr Gone', 'is_active' => false]);
+
+        $this->assertSame(Examiner::STATE_ON_GAP, $onGap->fresh()->state());
+
+        $table = $this->supervisorPoolTable();
+
+        $this->assertStringContainsString('<span class="examiner-state-badge tone-good">Internal</span>', $table);
+        $this->assertStringContainsString('<span class="examiner-state-badge tone-info">External</span>', $table);
+        $this->assertStringContainsString('<span class="examiner-state-badge tone-good">Available</span>', $table);
+        $this->assertStringContainsString('<span class="examiner-state-badge tone-warn">On Gap</span>', $table);
+        $this->assertStringContainsString('<span class="examiner-state-badge tone-info">Assigned</span>', $table);
+        $this->assertStringContainsString('<span class="examiner-state-badge tone-critical">Unavailable</span>', $table);
+
+        // CGS renders the same partials.
+        $this->actingAs($this->seniorExec())->get(route('examiner-admin.index'))->assertOk()
+            ->assertSee('<span class="examiner-state-badge tone-good">Internal</span>', false)
+            ->assertSee('<span class="examiner-state-badge tone-warn">On Gap</span>', false);
+
+        // "Available from": the date for anyone coming back, a dash otherwise.
+        $this->assertStringContainsString($onGap->fresh()->gapEndsOn()->format('j M Y'), $table);
+        $this->assertStringContainsString($assigned->fresh()->assigned_until->format('j M Y'), $table);
+        $this->assertStringContainsString('—', $table);
+    }
+
+    public function test_the_supervisor_pool_has_tabs_with_counts_and_filters(): void
+    {
+        $this->internal();
+        $this->external();
+
+        $this->poolSupervisor = $this->supervisor();
+
+        $this->actingAs($this->poolSupervisor)
+            ->get(route('examiner-nomination.create'))
+            ->assertOk()
+            ->assertViewHas('typeCounts', ['' => 2, Examiner::TYPE_INTERNAL => 1, Examiner::TYPE_EXTERNAL => 1])
+            ->assertSee('class="exam-tabs"', false)
+            ->assertSee('class="examiner-filters"', false)
+            ->assertSee('All State')
+            ->assertDontSee('name="email"', false);
+
+        $internalTab = $this->supervisorPoolTable(['type' => Examiner::TYPE_INTERNAL]);
+        $this->assertStringContainsString('AP Dr Low Tang Jung', $internalTab);
+        $this->assertStringNotContainsString('AP Dr Hatijah Binti Basri', $internalTab);
+
+        $byDepartment = $this->supervisorPoolTable(['department' => 'Chemical Engineering']);
+        $this->assertStringContainsString('AP Dr Hatijah Binti Basri', $byDepartment);
+        $this->assertStringNotContainsString('AP Dr Low Tang Jung', $byDepartment);
+
+        $bySearch = $this->supervisorPoolTable(['search' => 'low tang']);
+        $this->assertStringContainsString('AP Dr Low Tang Jung', $bySearch);
+        $this->assertStringNotContainsString('AP Dr Hatijah Binti Basri', $bySearch);
+
+        $byState = $this->supervisorPoolTable(['status' => Examiner::STATE_ASSIGNED]);
+        $this->assertStringContainsString('No examiners found', $byState);
+    }
+
+    /** The dropdowns must not lose anyone because the table below is filtered. */
+    public function test_filtering_the_supervisor_pool_leaves_the_nomination_dropdowns_whole(): void
+    {
+        $internal = $this->internal();
+        $external = $this->external();
+
+        $this->actingAs($this->supervisor())
+            ->get(route('examiner-nomination.create', ['type' => Examiner::TYPE_INTERNAL, 'search' => 'nobody']))
+            ->assertOk()
+            ->assertViewHas('internals', fn ($list) => $list->pluck('id')->all() === [$internal->id])
+            ->assertViewHas('externals', fn ($list) => $list->pluck('id')->all() === [$external->id])
+            ->assertViewHas('examiners', fn ($page) => $page->total() === 0);
+    }
+
+    public function test_the_supervisor_pool_is_read_only_and_shows_no_private_details(): void
+    {
+        $examiner = $this->external('hatijah.private@uthm.edu.my');
+        $this->external('hatijah.other@uthm.edu.my')->update(['name' => 'AP Dr Hatijah Basri']);
+        $examiner->update(['is_active' => false, 'unavailable_reason' => 'A private reason']);
+
+        $otherStudent = $this->student(attributes: ['name' => 'Student Of Someone Else', 'supervisor_id' => $this->academicExec()->id]);
+        $application = Application::create([
+            'student_id' => $otherStudent->id,
+            'module_type' => 'examiner_nomination',
+            'status' => Application::STATUS_DRAFT,
+        ]);
+        ExaminerNomination::create([
+            'application_id' => $application->id,
+            'external_main_id' => $examiner->id,
+            'thesis_title' => 'A Study of Something',
+        ]);
+
+        $this->actingAs($this->supervisor())
+            ->get(route('examiner-nomination.create'))
+            ->assertOk()
+            ->assertDontSee('hatijah.private@uthm.edu.my')
+            ->assertDontSee('Student Of Someone Else')
+            ->assertDontSee('A private reason')
+            ->assertDontSee('Possible duplicate')
+            ->assertDontSee('Not the same person')
+            ->assertDontSee('Mark Unavailable')
+            ->assertDontSee('Reactivate')
+            ->assertDontSee('Add an examiner')
+            ->assertDontSee(route('examiner-admin.edit', $examiner), false)
+            ->assertDontSee(route('examiner-admin.show', $examiner), false);
+    }
+
+    public function test_a_malformed_filter_is_ignored_on_both_pool_lists(): void
+    {
+        $this->internal();
+
+        $this->actingAs($this->supervisor())
+            ->get(route('examiner-nomination.create', ['search' => ['x'], 'status' => ['y'], 'department' => ['z']]))
+            ->assertOk()->assertSee('AP Dr Low Tang Jung');
+
+        $this->actingAs($this->seniorExec())
+            ->get(route('examiner-admin.index', ['search' => ['x'], 'status' => ['y'], 'email' => ['z']]))
+            ->assertOk()->assertSee('AP Dr Low Tang Jung');
     }
 
     public function test_an_examiner_keeps_expertise_keywords_and_publications(): void

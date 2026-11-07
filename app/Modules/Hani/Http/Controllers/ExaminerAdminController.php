@@ -10,11 +10,11 @@ use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerReviewItem;
 use App\Modules\Hani\Support\Departments;
 use App\Modules\Hani\Support\ExaminerContact;
+use App\Modules\Hani\Support\ExaminerPoolList;
 use App\Modules\Hani\Support\DuplicateDetector;
 use App\Modules\Hani\Models\ExaminerDuplicateDismissal;
 use App\Modules\Hani\Support\Import\Cells;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -30,20 +30,16 @@ use Illuminate\Validation\Rule;
  */
 class ExaminerAdminController extends Controller
 {
-    protected const PER_PAGE = 8;
-
     public function index(Request $request)
     {
         // Internal and external are two different records, not one list with a
         // flag: CGS keeps them as two sheets, and the external one carries nine
         // columns the internal one has no equivalent of. The tab strip is this
         // parameter; '' shows both, with only the columns they share.
-        $type = in_array($request->input('type'), [Examiner::TYPE_INTERNAL, Examiner::TYPE_EXTERNAL], true)
-            ? (string) $request->input('type')
-            : '';
+        $type = ExaminerPoolList::type($request);
 
         $pool = Examiner::all();
-        $tabPool = $type === '' ? $pool : $pool->where('type', $type);
+        $tabPool = ExaminerPoolList::inTab($pool, $type);
 
         // Counts for the stat cards follow the tab, never the filters or the
         // page below it -- filtering to 2 examiners shouldn't make "42
@@ -59,49 +55,25 @@ class ExaminerAdminController extends Controller
             $stateCounts[$examiner->state()]++;
         }
 
-        // Plain strings throughout, not the Stringable Request::string() returns --
-        // Examiner::state() is a plain string, and Stringable === string is never
-        // true even when the contents match.
-        $department = (string) $request->input('department', '');
-        $status = (string) $request->input('status', '');
-        $search = mb_strtolower((string) $request->input('search', ''));
-        $emailFilter = in_array($request->input('email'), ['problem', 'stale'], true) ? (string) $request->input('email') : '';
+        $filters = ExaminerPoolList::filters($request, ['department', 'type', 'status', 'search', 'email']);
+        $emailFilter = in_array($filters['email'], ['problem', 'stale'], true) ? $filters['email'] : '';
 
-        $filtered = $tabPool
-            ->when($department !== '', fn ($c) => $c->where('department', $department))
-            ->when($status !== '', fn ($c) => $c->filter(fn (Examiner $e) => $e->state() === $status))
+        $filtered = ExaminerPoolList::filtered($tabPool, $filters)
             // Email upkeep: active examiners only, as on the dashboard tiles.
             ->when($emailFilter === 'problem', fn ($c) => $c->filter(fn (Examiner $e) => $e->is_active && $e->emailNeedsUpdating()))
             ->when($emailFilter === 'stale', fn ($c) => $c->filter(fn (Examiner $e) => $e->is_active && $e->emailStale()))
-            ->when($search !== '', fn ($c) => $c->filter(fn (Examiner $e) => str_contains(mb_strtolower($e->name), $search)
-                || str_contains(mb_strtolower($e->department), $search)
-                || str_contains(mb_strtolower((string) $e->institution), $search)))
-            ->sortBy('name')
             ->values();
 
-        $page = $request->integer('page', 1);
-        $examiners = new LengthAwarePaginator(
-            $filtered->forPage($page, self::PER_PAGE)->values(),
-            $filtered->count(),
-            self::PER_PAGE,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()],
-        );
+        $examiners = ExaminerPoolList::paginate($filtered, $request);
 
         return view('hani::examiner_admin.index', [
             'examiners' => $examiners,
             'type' => $type,
-            'typeCounts' => [
-                '' => $pool->count(),
-                Examiner::TYPE_INTERNAL => $pool->where('type', Examiner::TYPE_INTERNAL)->count(),
-                Examiner::TYPE_EXTERNAL => $pool->where('type', Examiner::TYPE_EXTERNAL)->count(),
-            ],
+            'typeCounts' => ExaminerPoolList::typeCounts($pool),
             'stateCounts' => $stateCounts,
-            // Scoped to the tab: an external department list on the internal
-            // tab only ever filters everything away.
-            'departments' => $tabPool->pluck('department')->unique()->sort()->values(),
+            'departments' => ExaminerPoolList::departments($tabPool),
             'studentsByExaminer' => $this->studentsByExaminer($examiners->getCollection()->pluck('id')),
-            'filters' => $request->only(['department', 'type', 'status', 'search', 'email']),
+            'filters' => $filters,
             'openReviewItems' => ExaminerReviewItem::open()->count(),
             // Emails supervisors gave at nomination, for CGS to confirm.
             'proposals' => ExaminerEmailProposal::pending()->with('examiner', 'proposedBy', 'nomination')->oldest()->get(),

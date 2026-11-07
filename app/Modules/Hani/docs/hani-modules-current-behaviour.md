@@ -101,6 +101,11 @@ Re-viva (only after a category-4 result or a level-4 outcome).
   required) or back to Active, and change an examiner's email (reason
   required). Full edit, import, the review list and "Not the same person" stay
   with the Senior Executive.
+- **Supervisors** read the pool under the nomination form
+  (`/examiner-nomination/new`): name, department, type, state and available
+  from, with the same tabs, filters and badges as `/examiners`. No emails,
+  students, actions or duplicate warnings. Filtering leaves a half-filled form
+  alone.
 
 **State is derived, not stored** (`Examiner::state()`):
 
