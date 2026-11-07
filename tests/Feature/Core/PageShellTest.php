@@ -42,6 +42,10 @@ class PageShellTest extends TestCase
         'app/Modules/Core/Resources/views/dashboard/cgs.blade.php',
         'app/Modules/Core/Resources/views/dashboard/student.blade.php',
         'app/Modules/Core/Resources/views/dashboard/supervisor.blade.php',
+
+        // Help and Support opens with its own search banner (an <h1> hero),
+        // for the same reason as the dashboards above.
+        'app/Modules/Core/Resources/views/help/index.blade.php',
     ];
 
     /** @return array<int, string> */
