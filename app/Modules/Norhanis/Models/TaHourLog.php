@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Haziq\Models;
+namespace App\Modules\Norhanis\Models;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;

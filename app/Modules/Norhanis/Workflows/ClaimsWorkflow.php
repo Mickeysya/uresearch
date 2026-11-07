@@ -10,6 +10,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\ClaimsDetail;
+use App\Modules\Norhanis\Support\Drafts;
 
 /**
  * Student Claims — journal publication claims only.
@@ -54,7 +55,7 @@ class ClaimsWorkflow implements WorkflowModule, ProvidesLinks
         $detail = ClaimsDetail::where('application_id', $application->id)->first();
 
         if (! $detail) {
-            return 'Student Claims application';
+            return Drafts::summary($application, 'Student Claims application', 'bank_name');
         }
 
         return 'Journal claim · RM '.number_format($detail->total_claims, 2).' · '.$detail->bank_name;

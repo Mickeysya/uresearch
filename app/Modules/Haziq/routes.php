@@ -6,7 +6,6 @@ use App\Modules\Haziq\Http\Controllers\CandidatureAppealController;
 use App\Modules\Haziq\Http\Controllers\GaApplicationController;
 use App\Modules\Haziq\Http\Controllers\GraApplicationController;
 use App\Modules\Haziq\Http\Controllers\StageGateController;
-use App\Modules\Haziq\Http\Controllers\TaHourController;
 use App\Modules\Haziq\Support\Roles;
 use Illuminate\Support\Facades\Route;
 
@@ -157,11 +156,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/candidature-appeals/{appeal}/decide', [CandidatureAppealController::class, 'decide'])->name('candidature-appeal.decide');
     });
 
-    // ---- TA Hours ---------------------------------------------------------
-    // Every role: a student sees their own total, staff record entries for
-    // their scope. Enforced inside TaHourController, not by route middleware,
-    // because "my own" vs "my supervisees" needs the signed-in user's row.
-    Route::get('/ta-hours', [TaHourController::class, 'index'])->name('ta-hours.index');
-    Route::post('/ta-hours', [TaHourController::class, 'store'])->name('ta-hours.store');
+    // TA Hours moved to Norhanis' module (app/Modules/Norhanis/routes.php),
+    // same URL and route names.
 
 });
