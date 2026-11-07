@@ -148,6 +148,18 @@ class AllowanceLedger
             return null;
         }
 
-        return (float) $log->amount + $monthlyRate;
+        // $log->amount is only ever this ONE month's own flat
+        // contribution, never the running total -- ensureMonthlyLogs()
+        // writes each row that way and leaves the walk to the reader.
+        // Real bug, caught live 2026-11-08: a student with three
+        // unconfirmed months in a row (each stored as a flat RM2,000)
+        // was told next month would be RM4,000 (one row's RM2,000 +
+        // the rate) instead of the real RM8,000 (the walked RM6,000
+        // already owed, plus the rate) -- off by every month before the
+        // last one. withheldTotalThrough() is the real running total;
+        // this method is already gated to exactly the case it's safe to
+        // use in (no pending_addition, no immediately-preceding
+        // forfeited row, so $laggedMode would be false next month too).
+        return self::withheldTotalThrough($applicationId, $month) + $monthlyRate;
     }
 }

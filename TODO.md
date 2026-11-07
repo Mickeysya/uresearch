@@ -6673,6 +6673,44 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         application as expected, not back to the terms page; GA renders
         the form directly). `php artisan test` 118/118 in
         `tests/Feature/Haziq/`.
+- [x] **2026-11-08 — real bug, caught by the user in live use, not by
+      any test: the allowance assistant was wrong for every student
+      with more than one unconfirmed month in a row.** User's own
+      report: three unconfirmed months (Sep/Oct/Nov, each a flat
+      RM2,000), expected RM6,000 now and RM8,000 next month if November
+      also goes unconfirmed; the assistant answered RM4,000 for next
+      month.
+  - [x] **Root cause:** `AllowanceLedger::projectedNextMonthIfUnconfirmed()`
+        (added 2026-11-07) and `AssistantContext::allowanceSummary()`'s
+        "current amount" line both used `$log->amount` directly — but
+        that column is only ever ONE month's own flat contribution,
+        never the running total. `ensureMonthlyLogs()` writes each row
+        that way and leaves the walk to whoever reads it (`rowFor()`'s
+        own `$runningSum`, never written back to the row). With only
+        one unconfirmed month, `$log->amount` and the true walked total
+        happen to be the same number, which is exactly why this passed
+        every test and every live check from 2026-11-07 — none of them
+        had a second unconfirmed month in the fixture.
+  - [x] Fixed both to use the already-existing `AllowanceLedger::
+        withheldTotalThrough()` — the same walk `rowFor()` itself
+        calls elsewhere — instead of the raw column.
+        `applicationSummary()`'s fix is scoped to
+        `ACCUMULATING_STATUSES` only (`eligible`/`withheld`/
+        `backdated`); `forfeited`/`review_required`/`determined` keep
+        their own stored figure, which already means something
+        different in those branches and wasn't part of what broke.
+  - [x] Added the regression this bug needed and didn't have: a 3-row
+        unconfirmed fixture (not the old tests' single synthetic row
+        already holding the accumulated figure, which is not how the
+        real engine ever stores one) at both the `AllowanceLedger`
+        level and the `AssistantContext` level. `php artisan test`
+        120/120 in `tests/Feature/Haziq/`.
+  - [x] Verified live against the real Gemini API and application #25's
+        actual three-month-unconfirmed state: "Your most recent
+        allowance record for November 2026 is RM6,000.00. If this
+        month's figure stays unconfirmed, next month's running total
+        would be RM8,000.00." — matches the user's own hand-worked
+        figures exactly.
 
 ---
 
