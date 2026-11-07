@@ -158,8 +158,16 @@ class ExaminerLetterStatusTest extends TestCase
             'Letter Needed For', 'Replaced Examiners',
         ], array_slice($headings, 19));
 
-        $this->assertSame(AppointmentSheet::mapHeader(array_slice($headings, 0, 19)), AppointmentSheet::mapHeader($headings),
+        // Jason's importer now reads the six new columns on purpose (the letter
+        // status per seat, AppointmentSheet::SLOTS), so they may map -- but only
+        // to keys of their own: every original heading keeps its column.
+        $original = AppointmentSheet::mapHeader(array_slice($headings, 0, 19));
+        $mapped = AppointmentSheet::mapHeader($headings);
+
+        $this->assertSame($original, array_intersect_key($mapped, $original),
             'A new column must not claim one of the importer\'s headings.');
+        $this->assertSame(range(19, count($headings) - 1), array_values(array_diff_key($mapped, $original)),
+            'Each new column maps to a key of its own.');
     }
 
     public function test_without_the_binding_the_entered_date_decides_and_sent_seats_are_not_flagged(): void
