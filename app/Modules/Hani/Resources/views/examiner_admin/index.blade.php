@@ -191,17 +191,19 @@
 @php
     $isExternal = $type === \App\Modules\Hani\Models\Examiner::TYPE_EXTERNAL;
     $isInternal = $type === \App\Modules\Hani\Models\Examiner::TYPE_INTERNAL;
-    // Non-Executive CGS reads the pool and keeps emails current; only the
-    // Senior Executive adds, imports, edits or marks examiners unavailable.
-    $canManage = auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS;
+    // Display only: routes.php is what enforces this. Both CGS desks add
+    // examiners, mark them unavailable and keep emails current; the full edit
+    // form, import, the review list and "Not the same person" stay with the
+    // Senior Executive.
+    $isSeniorExec = auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS;
 @endphp
 
 <div class="card-container-inline">
     <x-core::page-header
         title="Examiner Pool"
         subtitle="{{ $examiners->total() }} {{ Str::plural('examiner', $examiners->total()) }} on record. State is derived, so anyone on gap becomes available again on their own.">
-        @if ($canManage)
-            <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
+        <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
+        @if ($isSeniorExec)
             <a href="{{ route('examiner-import.create') }}" class="btn-secondary">Import from Excel</a>
             @if ($openReviewItems)
                 <a href="{{ route('examiner-import.review') }}" class="btn-secondary">Review list ({{ $openReviewItems }})</a>
@@ -402,7 +404,7 @@
                                     @foreach ($duplicates[$examiner->id] ?? [] as $dup)
                                         <span class="examiner-duplicate">
                                             Possible duplicate of {{ $dup['other']->name }} ({{ $dup['score'] }}% similar)
-                                            @if ($canManage)
+                                            @if ($isSeniorExec)
                                                 <form method="POST" action="{{ route('examiner-admin.dismiss-duplicate') }}">
                                                     @csrf
                                                     <input type="hidden" name="examiner_id" value="{{ $examiner->id }}">
@@ -459,10 +461,11 @@
                             @endif
                         </td>
                         <td>
-                            @if (! $canManage)
-                                <a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Update email</a>
+                            @if ($isSeniorExec)
+                                <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Edit</a>
                             @else
-                            <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Edit</a>
+                                <a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Update email</a>
+                            @endif
                             @if ($examiner->is_active)
                                 <button type="button" class="btn-reject"
                                         data-unavailable="{{ $examiner->id }}"
@@ -474,7 +477,6 @@
                                     @csrf
                                     <button type="submit">Reactivate</button>
                                 </form>
-                            @endif
                             @endif
                         </td>
                     </tr>
@@ -514,7 +516,6 @@
     </div>
 </div>
 
-@if ($canManage)
 <dialog id="unavailable-modal" class="reason-modal">
     <div class="card">
         <div class="reason-modal-head">
@@ -537,7 +538,6 @@
         </form>
     </div>
 </dialog>
-@endif
 
 @include('core::partials.region-swap')
 
@@ -561,7 +561,6 @@
         document.querySelectorAll('[data-close-modal]').forEach(function (button) {
             button.addEventListener('click', function () { modal.close(); });
         });
-        // Non-Executive CGS gets no modal and no "Mark Unavailable" buttons.
 
         // Links in these regions that leave the pool (an examiner's page,
         // Edit, Update email) carry data-region-swap-ignore, so they are

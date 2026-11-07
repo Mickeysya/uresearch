@@ -5,6 +5,7 @@ namespace Tests\Feature\Hani;
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use App\Modules\Core\Models\Application;
 use App\Modules\Hani\Models\Examiner;
+use App\Modules\Hani\Models\ExaminerImportBatch;
 use App\Modules\Hani\Models\ExaminerNomination;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\MakesUsers;
@@ -259,23 +260,141 @@ class ExaminerPoolTest extends TestCase
         $this->assertMatchesRegularExpression('/id="external-fields"[^>]*hidden disabled/s', $html);
     }
 
-    public function test_only_the_senior_executive_maintains_the_pool(): void
+    /** @return array<string, mixed> A valid new examiner. */
+    protected function newExaminer(): array
+    {
+        return [
+            'name' => 'Dr Added By Non Exec',
+            'email' => 'added@utp.edu.my',
+            'department' => 'Computing',
+            'type' => Examiner::TYPE_INTERNAL,
+        ];
+    }
+
+    public function test_the_non_executive_can_add_an_examiner_with_the_same_wizard(): void
+    {
+        $nonExec = $this->cgs();
+
+        $html = $this->actingAs($nonExec)->get(route('examiner-admin.create'))->assertOk()->getContent();
+        $this->assertStringContainsString('data-stepper', $html);
+        $this->assertSame(2, substr_count($html, 'class="fstep"'));
+
+        $this->actingAs($nonExec)->post(route('examiner-admin.store'), $this->newExaminer())
+            ->assertRedirect(route('examiner-admin.index'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('added@utp.edu.my', Examiner::sole()->email);
+        // Same rules as the Senior Executive's route.
+        $this->actingAs($nonExec)->post(route('examiner-admin.store'), ['name' => 'No Department'])
+            ->assertSessionHasErrors('department');
+    }
+
+    public function test_the_non_executive_can_mark_unavailable_with_a_reason_and_back_to_active(): void
+    {
+        $examiner = $this->internal();
+        $nonExec = $this->cgs();
+
+        $this->actingAs($nonExec)->post(route('examiner-admin.toggle-active', $examiner), [])
+            ->assertSessionHasErrors('unavailable_reason');
+        $this->assertTrue($examiner->fresh()->is_active);
+
+        $this->actingAs($nonExec)->post(route('examiner-admin.toggle-active', $examiner), ['unavailable_reason' => 'Retired'])
+            ->assertSessionHasNoErrors();
+        $this->assertFalse($examiner->fresh()->is_active);
+        $this->assertSame('Retired', $examiner->fresh()->unavailable_reason);
+
+        $this->actingAs($nonExec)->post(route('examiner-admin.toggle-active', $examiner))
+            ->assertSessionHasNoErrors();
+        $this->assertTrue($examiner->fresh()->is_active);
+        $this->assertNull($examiner->fresh()->unavailable_reason);
+    }
+
+    public function test_the_non_executive_can_update_an_email(): void
     {
         $examiner = $this->internal();
 
-        // Non-Executive CGS reads the pool and keeps emails current
-        // (ExaminerContactTest); adding, editing and marking unavailable stay
-        // with the Senior Executive.
-        $nonExec = $this->cgs();
-        $this->actingAs($nonExec)->get(route('examiner-admin.index'))->assertOk()->assertDontSee('Add an examiner')->assertDontSee('data-unavailable=', false)->assertDontSee('unavailable-modal"', false);
-        $this->actingAs($nonExec)->get(route('examiner-admin.create'))->assertForbidden();
-        $this->actingAs($nonExec)->get(route('examiner-admin.edit', $examiner))->assertForbidden();
-        $this->actingAs($nonExec)->put(route('examiner-admin.update', $examiner), [])->assertForbidden();
-        $this->actingAs($this->academicExec())->get(route('examiner-admin.index'))->assertForbidden();
-        $this->actingAs($nonExec)->post(route('examiner-admin.store'), [])->assertForbidden();
-        $this->actingAs($nonExec)->post(route('examiner-admin.toggle-active', $examiner))->assertForbidden();
+        $this->actingAs($this->cgs())->put(route('examiner-admin.email.update', $examiner), [
+            'email' => 'new.address@utp.edu.my',
+            'reason' => 'University directory',
+        ])->assertSessionHasNoErrors();
 
-        $this->actingAs($this->seniorExec())->get(route('examiner-admin.index'))->assertOk();
+        $this->assertSame('new.address@utp.edu.my', $examiner->fresh()->email);
+    }
+
+    public function test_the_non_executive_cannot_import_full_edit_or_dismiss_duplicates(): void
+    {
+        $examiner = $this->internal();
+        $other = $this->external();
+        $nonExec = $this->cgs();
+
+        $this->actingAs($nonExec)->get(route('examiner-admin.edit', $examiner))->assertForbidden();
+        $this->actingAs($nonExec)->put(route('examiner-admin.update', $examiner), $this->newExaminer())->assertForbidden();
+        $this->actingAs($nonExec)->get(route('examiner-import.create'))->assertForbidden();
+        $this->actingAs($nonExec)->post(route('examiner-import.store'))->assertForbidden();
+        $this->actingAs($nonExec)->get(route('examiner-import.review'))->assertForbidden();
+        $this->actingAs($nonExec)->post(route('examiner-admin.dismiss-duplicate'), [
+            'examiner_id' => $examiner->id,
+            'other_id' => $other->id,
+        ])->assertForbidden();
+    }
+
+    public function test_the_pool_page_offers_each_cgs_desk_its_own_actions(): void
+    {
+        $examiner = $this->internal();
+        $unavailable = $this->external();
+        $unavailable->update(['is_active' => false, 'unavailable_reason' => 'Retired']);
+        $edit = route('examiner-admin.edit', $examiner);
+
+        $this->actingAs($this->cgs())->get(route('examiner-admin.index'))->assertOk()
+            ->assertSee('Add an examiner')
+            ->assertSee('data-unavailable="'.$examiner->id.'"', false)
+            ->assertSee('id="unavailable-modal"', false)
+            ->assertSee('Reactivate')
+            ->assertSee('Update email')
+            ->assertDontSee('Import from Excel')
+            ->assertDontSee($edit, false);
+
+        $this->actingAs($this->seniorExec())->get(route('examiner-admin.index'))->assertOk()
+            ->assertSee('Add an examiner')
+            ->assertSee('Import from Excel')
+            ->assertSee($edit, false)
+            ->assertSee('data-unavailable="'.$examiner->id.'"', false);
+    }
+
+    /**
+     * "Email not working" (examiner-admin.report-email) is not here: it flags
+     * an address for CGS rather than changing the pool, and the AE keeps it.
+     */
+    public function test_the_academic_executive_and_supervisor_cannot_write_to_the_pool(): void
+    {
+        $examiner = $this->internal();
+        $other = $this->external();
+        $batch = ExaminerImportBatch::create([
+            'user_id' => $this->seniorExec()->id,
+            'layout' => 'template',
+            'filename' => 'pool.xlsx',
+            'rows' => [],
+            'messages' => [],
+            'summary' => [],
+        ]);
+
+        foreach ([$this->academicExec(), $this->supervisor()] as $user) {
+            $this->actingAs($user)->get(route('examiner-admin.index'))->assertForbidden();
+            $this->actingAs($user)->get(route('examiner-admin.create'))->assertForbidden();
+            $this->actingAs($user)->post(route('examiner-admin.store'), $this->newExaminer())->assertForbidden();
+            $this->actingAs($user)->post(route('examiner-admin.toggle-active', $examiner), ['unavailable_reason' => 'x'])->assertForbidden();
+            $this->actingAs($user)->get(route('examiner-admin.edit', $examiner))->assertForbidden();
+            $this->actingAs($user)->put(route('examiner-admin.update', $examiner), $this->newExaminer())->assertForbidden();
+            $this->actingAs($user)->put(route('examiner-admin.email.update', $examiner), ['email' => 'x@example.com', 'reason' => 'x'])->assertForbidden();
+            $this->actingAs($user)->post(route('examiner-admin.email.confirm', $examiner))->assertForbidden();
+            $this->actingAs($user)->post(route('examiner-admin.dismiss-duplicate'), ['examiner_id' => $examiner->id, 'other_id' => $other->id])->assertForbidden();
+            $this->actingAs($user)->post(route('examiner-import.store'))->assertForbidden();
+            $this->actingAs($user)->post(route('examiner-import.confirm', $batch))->assertForbidden();
+        }
+
+        $this->assertSame(2, Examiner::count());
+        $this->assertTrue($examiner->fresh()->is_active);
+        $this->assertSame('internal@utp.edu.my', $examiner->fresh()->email);
     }
 
     public function test_an_examiner_keeps_expertise_keywords_and_publications(): void

@@ -1,5 +1,13 @@
 # Changelog: Hani's modules
 
+## 2026-11-07: Non-Executive CGS manages the examiner pool
+
+- **Changed** Non-Exec can now add an examiner, mark one Unavailable (reason
+  required) or back to Active, and update emails. This reverses the 2026-11-03
+  rule. Full edit, import, the review list and "Not the same person" stay with
+  the Senior Executive.
+- **Fixed** the pool's header buttons: same row, same height.
+
 ## 2026-11-07: The two letter contracts are in Core
 
 - **Added** `Core/Contracts/SuppliesReleasedExaminers` and

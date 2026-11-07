@@ -20,9 +20,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 
 /**
- * Day-to-day upkeep of the examiner pool for the Senior Executive CGS: add
- * or edit an examiner, or flip one to Unavailable (retired, resigned, deceased) without deleting their
- * history. Everything else about the pool -- eligibility, the gap, the
+ * Day-to-day upkeep of the examiner pool for both CGS desks: add an examiner,
+ * or flip one to Unavailable (retired, resigned, deceased) without deleting
+ * their history. The full edit form and "Not the same person" stay with the
+ * Senior Executive; routes.php says who reaches what. Everything else about the pool -- eligibility, the gap, the
  * assigned tie-up -- is derived state the nomination and evaluation flows
  * already maintain; this screen only ever touches the fields a human has to
  * set by hand.

@@ -174,8 +174,9 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
             Role::SUPERVISOR => [
                 ['label' => 'Nominate Examiners', 'route' => 'examiner-nomination.create'],
             ],
-            // The released list, and the pool read-only apart from examiner
-            // emails. The appointment letters are Jason's module.
+            // The released list, and the pool, which both CGS desks manage (the
+            // Senior Executive alone imports and full-edits). The appointment
+            // letters are Jason's module.
             Role::NON_EXEC_CGS => [
                 ['label' => 'Examiner Pool', 'route' => 'examiner-admin.index'],
                 $report,
