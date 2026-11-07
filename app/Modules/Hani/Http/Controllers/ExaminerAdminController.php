@@ -5,6 +5,7 @@ namespace App\Modules\Hani\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerEmailProposal;
+use App\Modules\Hani\Models\ExaminerMerge;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerReviewItem;
 use App\Modules\Hani\Support\Departments;
@@ -291,6 +292,11 @@ class ExaminerAdminController extends Controller
      */
     public function toggleActive(Request $request, Examiner $examiner)
     {
+        if (! $examiner->is_active && ExaminerMerge::where('duplicate_id', $examiner->id)->exists()) {
+            return redirect()->route('examiner-admin.index')
+                ->with('error', "{$examiner->name} was merged into another record, so cannot be reactivated.");
+        }
+
         if ($examiner->is_active) {
             $data = $request->validate([
                 'unavailable_reason' => ['required', 'string', 'max:2000'],

@@ -3,6 +3,7 @@
 namespace App\Modules\Jason\Models;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -16,12 +17,12 @@ class AppointmentExaminer extends Model
         'application_id', 'pool_examiner_id', 'hani_examiner_id',
         'examiner_type', 'examiner_role', 'examiner_name', 'examiner_institution', 'email_problem',
         'examiner_address', 'examiner_email', 'examiner_expertise', 'letter_ref_no',
-        'appointed_at', 'pack_sent_at',
+        'appointed_at', 'pack_sent_at', 'resent_by_id', 'resent_at', 'resent_reason',
     ];
 
     protected function casts(): array
     {
-        return ['appointed_at' => 'datetime', 'pack_sent_at' => 'datetime'];
+        return ['appointed_at' => 'datetime', 'pack_sent_at' => 'datetime', 'resent_at' => 'datetime'];
     }
 
     public function application(): BelongsTo
@@ -30,6 +31,12 @@ class AppointmentExaminer extends Model
     }
 
     /** The list entry this panel member was picked from, where there was one. */
+    /** The officer who sent this pack again, for the issued list. */
+    public function resentBy()
+    {
+        return $this->belongsTo(User::class, 'resent_by_id');
+    }
+
     public function poolExaminer(): BelongsTo
     {
         return $this->belongsTo(PoolExaminer::class, 'pool_examiner_id');

@@ -81,7 +81,7 @@ class ExaminerProgress
             ->get();
     }
 
-    /** Is the appointment-letter dispatch contract available? (Proposed: SHARED_CHANGES.md, section 1b.) */
+    /** Is the appointment-letter dispatch contract available? (SHARED_CHANGES.md, section 1b.) */
     public function dispatchAvailable(): bool
     {
         return $this->dispatch() !== null;

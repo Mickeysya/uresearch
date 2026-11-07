@@ -74,12 +74,25 @@
                                     @else
                                         <span class="status-badge rejected">Not delivered</span>
                                     @endif
+
+                                    {{-- Outside the branches above: a pack is usually resent
+                                         BECAUSE it was not delivered, so showing this only
+                                         beside "Delivered" would hide it in the very case it
+                                         is kept for. --}}
+                                    @if ($examiner->resent_at)
+                                        <br><small>Resent {{ $examiner->resent_at->format('j M Y') }}
+                                            by {{ $examiner->resentBy?->name ?? 'CGS' }}:
+                                            &ldquo;{{ $examiner->resent_reason }}&rdquo;</small>
+                                    @endif
                                 </td>
                                 <td>
                                     @if (! $examiner->packSent() && ! $examiner->email_problem)
                                         <form method="POST"
                                               action="{{ route('appointment-letter.resend', [$application, $examiner]) }}">
                                             @csrf
+                                            <input type="text" name="reason" required maxlength="300"
+                                                   placeholder="Why resend?"
+                                                   style="font-size: 12px; margin-bottom: 4px;">
                                             <button type="submit" style="padding: 4px 10px; font-size: 12px;">Resend</button>
                                         </form>
                                     @endif
