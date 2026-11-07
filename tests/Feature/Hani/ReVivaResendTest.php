@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Hani;
 
+use App\Modules\Core\Models\User;
+use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
+use App\Modules\Hani\Models\ReVivaEvaluation;
 use App\Modules\Hani\Models\ReVivaLetterSend;
 use App\Modules\Hani\Models\ReVivaStaffDocument;
 use App\Modules\Hani\Notifications\ReVivaCorrectionLetter;
@@ -11,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Tests\Feature\Hani\Concerns\BuildsReVivas;
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\Support\MakesUsers;
@@ -61,6 +65,30 @@ class ReVivaResendTest extends TestCase
         });
 
         return $found;
+    }
+
+    public function test_a_letter_already_emailed_keeps_working_after_its_record_is_merged(): void
+    {
+        $viva = $this->roundUnderPanelReview();
+        $letter = $this->letterTo($viva);
+        $old = Examiner::find($viva['panel']->external_main_id);
+        $kept = Examiner::create(['name' => 'Kept Record', 'email' => 'kept.record@example.org', 'department' => 'External', 'type' => Examiner::TYPE_EXTERNAL, 'institution' => 'UM', 'is_active' => true]);
+        $evaluation = ReVivaEvaluation::create(['re_viva_detail_id' => $viva['round']->id, 'seat' => 'external_main_id', 'examiner_id' => $old->id, 'category' => 1]);
+
+        // The link as it went out, carrying the old record's id.
+        $link = URL::temporarySignedRoute('reviva.panel.documents', now()->addDay(), ['detail' => $viva['round']->id, 'examiner' => $old->id]);
+        $this->get($link)->assertOk();
+
+        $this->actingAs(User::where('role', Role::SENIOR_EXEC_CGS)->first() ?? $this->seniorExec())
+            ->post(route('conflict-detection.merge'), ['record_a_id' => $kept->id, 'record_b_id' => $old->id, 'keep_id' => $kept->id])
+            ->assertSessionHas('status');
+
+        $this->assertSame($kept->id, $viva['panel']->fresh()->external_main_id);
+        $this->assertSame($kept->id, $letter->fresh()->examiner_id);
+        $this->assertSame($kept->id, $evaluation->fresh()->examiner_id);
+
+        auth()->logout();
+        $this->get($link)->assertOk();
     }
 
     public function test_the_ae_resends_the_same_letter_with_a_fresh_link_after_the_first_expired(): void

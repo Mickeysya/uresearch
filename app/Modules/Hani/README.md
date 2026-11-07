@@ -35,7 +35,7 @@ re-run it whenever the demo should look fresh.
 | **Suggested examiners** per seat, explained | Supervisor, AE, Senior Exec | nomination form |
 | **Duplicate examiner** flags, "Not the same person" | Senior Exec | pool, import preview, `cgs_compile` |
 | **Conflict-of-interest** pre-check (UTP/CGS/026) | everyone in the chain | form, cards, report |
-| Cross-department clashes | AE, Senior Exec | form, cards, Conflict Detection |
+| Cross-department clashes | AE, Senior Exec, Senior Director, Dean | form, cards, Conflict Detection |
 | Declines recorded, backup promoted, seat history | AE, Senior Exec | panel page |
 | Examiner Report, xlsx/csv export ("Application No." for Jason's letters) | AE (own dept), CGS, Director, Dean | `/examiner-nomination/report` |
 | Examiner email upkeep: report not working, confirm still valid, history, proposals at nomination | Non-Exec, Senior Exec, AE | examiner page, pool |

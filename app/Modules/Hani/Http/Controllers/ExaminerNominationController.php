@@ -12,6 +12,7 @@ use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerReminderLog;
 use App\Modules\Hani\Models\ExaminerSeatHistory;
+use App\Modules\Hani\Models\ExaminerSubstitutionRequest;
 use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Notifications\ExaminersReleased;
 use App\Modules\Hani\Notifications\NominationsNeedCompileReview;
@@ -39,9 +40,9 @@ class ExaminerNominationController extends Controller
      * faculty list; neither of them rejects it outright, because the thing
      * that has to change is one department's choice of examiner.
      */
-    protected const RETURNING_STAGES = ['senior_director', 'dean'];
+    public const RETURNING_STAGES = ['senior_director', 'dean'];
 
-    protected const RETURN_TARGET = 'academic_exec';
+    public const RETURN_TARGET = 'academic_exec';
 
     /** The stage whose Approve also releases the list -- see finaliseAndRelease(). */
     public const FINALISE_STAGE = 'cgs_final';
@@ -269,6 +270,8 @@ class ExaminerNominationController extends Controller
             // records of one person on different departments' lists can
             // first be seen (Support\DuplicateDetector).
             'coiFlags' => $this->coiFlags($nominations),
+            'substitutions' => ExaminerSubstitutionRequest::open()->with('examiner')
+                ->whereIn('nomination_id', $nominations->pluck('id'))->get()->groupBy('nomination_id'),
             'duplicates' => $queue['stage']->key === 'cgs_compile'
                 ? app(DuplicateDetector::class)->acrossNominations()
                 : [],

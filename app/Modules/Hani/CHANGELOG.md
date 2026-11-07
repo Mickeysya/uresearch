@@ -1,5 +1,25 @@
 # Changelog: Hani's modules
 
+## 2026-11-07: Conflict Detection can act, not only flag
+
+- **Conflict rows:** every number links to wherever the viewer can open that
+  list, the released list is marked as keeping the examiner (Manage panel →
+  Replace), and pending lists get "Ask department to substitute".
+- **Decision: the return remarks stay generic.** `returnTo()` sends them to the
+  candidate, who must never learn their examiners, so the reason lives on
+  `examiner_substitution_requests`.
+- **Decision: a return also records a request.** A returned list otherwise had
+  no way to change a seat. Seats can only change at academic_exec or
+  cgs_compile, never under a signature further up the chain.
+- **Decision: Senior Director and Dean now reach Conflict Detection,** or the
+  return action could not be used from it. Duplicates stay Senior Exec only.
+- **Duplicates:** one line per pair, with "Not the same person" and "Same person:
+  merge" (`Support/ExaminerMerger`, logged in `examiner_merges`). Nothing is
+  deleted. Old re-viva letter links resolve to the record kept.
+- **Known gap:** Jason's module keys sent letters by examiner id, so a letter
+  sent under a merged record reads as unsent for the record kept. The merge
+  warns when it can detect this.
+
 ## 2026-11-04: Across the modules, and wrap-up (Prompt 4)
 
 Branch `feature/hani-automation`. Commits: `5b1683d` (a), `43076e6` (b),

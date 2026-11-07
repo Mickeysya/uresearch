@@ -28,6 +28,9 @@
     .rep-band h2 { margin: 0; font-size: var(--text-base); font-weight: 700; color: var(--navy); }
     .rep-band-meta { font-size: var(--text-sm); color: var(--text-grey); }
 
+    /* Arrived from a Conflict Detection link. */
+    .rep-table tr:target > td { background: var(--warning-bg); }
+
     .rep-actions { display: flex; gap: var(--space-3); flex-wrap: wrap; margin: 0 0 var(--space-4); }
 
     /* The same examiner named by two departments. Flagged, never
@@ -55,7 +58,7 @@
 
     <div class="rep-actions">
         <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx']) }}" class="btn-secondary">Download Excel</a>
-        @if (in_array(auth()->user()->role, [\App\Modules\Core\Support\Role::ACADEMIC_EXEC, \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS], true))
+        @if (auth()->user()->role !== \App\Modules\Core\Support\Role::NON_EXEC_CGS)
             <a href="{{ route('conflict-detection.index') }}" class="btn-secondary">Conflict detection</a>
         @endif
         <a href="{{ route('examiner-nomination.queue') }}" class="btn-secondary">Back to my queue</a>
@@ -107,7 +110,7 @@
 
                             @foreach ($rows as $nomination)
                                 @php($application = $nomination->application)
-                                <tr>
+                                <tr id="nomination-{{ $nomination->id }}">
                                     <td>
                                         {{ $application?->student?->name }}
                                         <span class="rep-seat">
