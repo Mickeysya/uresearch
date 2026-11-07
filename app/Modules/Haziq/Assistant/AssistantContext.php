@@ -109,6 +109,14 @@ class AssistantContext
 
         if ($detail) {
             $line .= " Candidature status: {$detail->candidature_status}.";
+
+            // Same dates already shown on the student's own show.blade.php
+            // (both modules) -- the service period an appointment actually
+            // runs, not just when it was decided.
+            if ($detail->service_start_date && $detail->service_end_date) {
+                $line .= ' Service period: '.$detail->service_start_date->format('j M Y')
+                    .' to '.$detail->service_end_date->format('j M Y').'.';
+            }
         }
 
         // GA's interview result/notes -- confirmed visible to the student

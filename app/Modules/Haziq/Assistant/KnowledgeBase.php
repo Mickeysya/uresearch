@@ -39,6 +39,15 @@ class KnowledgeBase
             approved and not terminated -- not only once something is flagged;
             editing is not locked to waiting for a correction request first.
 
+            A NEW appointment's own service period is never typed in by the
+            student -- its end date is always computed automatically as the start
+            date plus 24 months for a Master's student or 42 months for a PhD
+            student, matching the Stage Gate schedule's own last milestone. Only
+            one 'new' GRA application may be in flight at a time (pending or
+            approved) -- a second attempt is blocked while one is. A REJECTED
+            application does not block a fresh one: the student may submit again
+            at any time after a rejection.
+
             GRA EXTENSION
             Reuses the exact same four-stage chain as a new GRA application above
             (not a separate application type) -- the only differences are Section B
@@ -47,7 +56,13 @@ class KnowledgeBase
             date). Eligibility is simple and has nothing to do with dates: a
             student may apply for an extension at any time once their current GRA
             application is approved, full stop -- there is no need to wait for the
-            current service period to actually end first.
+            current service period to actually end first. Unlike a new
+            appointment, an extension's new end date is NOT auto-computed -- the
+            student proposes it directly, and it becomes whatever the chain
+            approves. An already-extended appointment can be extended again: the
+            "current" appointment being extended is always whichever GRA
+            application was approved most recently, extension or not, so there is
+            no limit on how many times in a row an appointment can be extended.
 
             GA APPLICATION
             Routed Student -> Admin (verifies) -> Research Centre (conducts an
@@ -58,6 +73,13 @@ class KnowledgeBase
             to GRA. Approval issues the Offer and Program Offer Letters. Same
             editing rule as GRA: the student can edit every section any time it
             is pending, or approved and not terminated, not only once flagged.
+            Same in-flight rule too: only one GA application at a time while
+            pending or approved, but a rejection never blocks reapplying. Unlike
+            GRA, a GA appointment's service period is simply whatever dates the
+            application itself proposed -- there is no automatic 24/42-month
+            calculation for GA, since there is no Stage Gate schedule to match it
+            to. GA has no extension of its own through this assistant at all --
+            see the "DO NOT CONFUSE" note below.
 
             STAGE GATE MONITORING (GRA only)
             A Master's student has THREE milestones; a PhD student has FOUR -- one

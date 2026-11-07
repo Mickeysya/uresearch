@@ -6592,6 +6592,52 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         the real Gemini API. `php artisan test` 117/117 in
         `tests/Feature/Haziq/`, same 71 pre-existing/already-documented
         failures elsewhere, nothing else moved.
+- [x] **2026-11-07 — one more knowledge-base pass, specifically aimed
+      at never falling back to "contact CGS" for anything the module's
+      own logic actually answers.** User: "aku nak die faham every
+      logic and all possible outcomes, and can answer all questions
+      realted to the module without asking seeking help to cgs...
+      kecuali die tanya pasal module lain" -- i.e. only a genuinely
+      different module, or a genuine hard limit (a pending allowance
+      amount, approver-performance data), should ever defer; nothing
+      else should.
+  - [x] Added, all traced to the real code: a NEW GRA appointment's
+        service end date is never student-chosen -- always start date +
+        24 months (Master) or 42 (PhD), matching the Stage Gate
+        schedule's own last milestone, computed by
+        `GraApplicationDetail::computeServiceEndDate()`; only one
+        'new' GRA/GA application may be in flight at a time, but a
+        REJECTED one never blocks reapplying (`activeNewApplication()`/
+        `activeApplication()` only check pending/approved); an
+        already-extended GRA appointment can be extended again with no
+        limit (`createExtension()`'s own parent lookup takes whichever
+        GRA application was approved most recently, extension or not);
+        GA's own service period has no such auto-calculation at all --
+        the application just proposes its own dates, a real and
+        deliberately-stated contrast with GRA's rule.
+  - [x] `AssistantContext::applicationSummary()` now also states each
+        application's own service period -- same dates already on the
+        student's own `show.blade.php` for both modules, just not
+        previously carried into the assistant's context. 1 new test.
+  - [x] `GeminiClient`'s system instruction rewritten to say plainly
+        what "contact CGS" is actually for -- a different module, a
+        hard limit, or something genuinely absent from both blocks --
+        and to check the knowledge text (even reworded) and combine it
+        with the student's own records before reaching for it, rather
+        than defer on a first pass that didn't find an exact phrase
+        match.
+  - [x] Verified live, 5 questions (the service-duration rule, reapply
+        after rejection, extending an already-extended appointment, the
+        student's own real end date pulled from their live record, and
+        the GA-has-no-auto-calculation contrast) -- all five answered
+        directly and confidently against the real Gemini API, no
+        deferral to CGS on any of them. Hit the 20/day cap partway
+        through from this session's own accumulated testing; cleared
+        only today's disposable `haziq_assistant_logs` rows for
+        `student@utp.edu.my` (this session's own test traffic, not real
+        student data) to finish verifying. `php artisan test` 118/118
+        in `tests/Feature/Haziq/`, same 71 pre-existing/already-
+        documented failures elsewhere, nothing else moved.
 
 ---
 

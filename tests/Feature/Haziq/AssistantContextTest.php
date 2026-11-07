@@ -132,6 +132,18 @@ class AssistantContextTest extends TestCase
         $this->assertStringContainsString('Appeal upheld on review', $context);
     }
 
+    public function test_the_service_period_is_included_same_as_the_students_own_show_page(): void
+    {
+        $student = $this->student('serviceperiod@test.com');
+        $this->graApplication($student, [
+            'service_start_date' => '2026-01-01', 'service_end_date' => '2028-07-01',
+        ]);
+
+        $context = AssistantContext::forStudent($student);
+
+        $this->assertStringContainsString('Service period: 1 Jan 2026 to 1 Jul 2028.', $context);
+    }
+
     public function test_missing_required_documents_are_listed_by_name_for_a_new_application(): void
     {
         $student = $this->student('missingdocs@test.com');
