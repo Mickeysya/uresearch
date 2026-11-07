@@ -469,15 +469,15 @@ both scopes (`Exports/ExaminerListExport.php`).
 | 12–14 | External Main, External Main Institution, External Backup | the **current** panel |
 | 15–17 | Stage, Status, Submitted | |
 | 18–19 | Internal Main Email, External Main Email | blank where CGS has no email yet |
-| 20–23 | Internal Main, Internal Backup, External Main, External Backup **Letter Status** | `Not sent`, `Sent 01 Nov 2026`, or `Replaced 05 Nov 2026`. Blank before release, and for a seat that has never had a letter and is empty. |
+| 20–23 | Internal Main, Internal Backup, External Main, External Backup **Letter Status** | `Not sent`, `Sent 01 Nov 2026 (letter module)`, `Sent 01 Nov 2026 (entered by AE)`, or `Replaced 05 Nov 2026`. Blank before release, and for a seat that has never had a letter and is empty. |
 | 24 | **Letter Needed For** | Awaiting scope only: the main seats still `Not sent`, as `External Main: Dr Name`. A seat already sent is never listed. Several are separated by `; `. |
 | 25 | **Replaced Examiners** | Everyone who had a letter and has left the panel, as `Internal Main: Dr Name, Replaced 05 Nov 2026`. |
 
-**Where "Sent" comes from** (`Support/AppointmentLetters`): `packSentAt()` when
-`SuppliesAppointmentDispatch` is bound, otherwise the date the Academic Executive
-entered on the examiner progress page. One source only, never a mix. Until the
-Core contract is added (SHARED_CHANGES.md, section 1b) nothing is bound, so a
-letter Jason's module sent reads "Sent" only if the AE also entered its date.
+**Where "Sent" comes from** (`Support/AppointmentLetters`): Jason's `packSentAt()`
+and the date on the examiner progress page both count, and Jason's wins where
+both exist. The status names which one it is, on the report and in the sheet.
+A date copied onto a progress row from Jason's module reads "letter module". With
+`SuppliesAppointmentDispatch` unbound, only the progress-page date is read.
 
 **A status belongs to whoever holds the seat now.** A replacement starts at
 `Not sent`, and the person they replaced moves to column 25. The seat's own
@@ -489,10 +489,10 @@ removing them could make the import refuse the sheet. Read column 24 for who is
 owed a letter. Jason's import does not read it yet (SHARED_CHANGES.md, section 11).
 
 **Stability rule:** columns are only ever added at the end; none is renamed,
-reordered or removed. Code-level access is the proposed Core contract
+reordered or removed. Code-level access is the Core contract
 `SuppliesReleasedExaminers` (SHARED_CHANGES.md, section 1a), implemented by
-`Support/ReleasedExaminerProvider`. It returns released panels only and is
-bound automatically once the contract exists.
+`Support/ReleasedExaminerProvider` and bound in `ModuleProvider`. It returns
+released panels only.
 
 On release, every Non-Executive CGS user gets "New examiner list released"
 (email and in-app). Letters go to the two **main** examiners only. Backups

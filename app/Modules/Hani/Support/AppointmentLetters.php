@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hani\Support;
 
+use App\Modules\Core\Contracts\SuppliesAppointmentDispatch;
 use App\Modules\Core\Models\Application;
 use App\Modules\Hani\Models\ExaminerMerge;
 use App\Modules\Hani\Models\ExaminerNomination;
@@ -15,12 +16,14 @@ use Illuminate\Support\Str;
  * Which examiners on a released panel already have an appointment letter, so
  * the Examiner Report and its export can stop a second one being sent.
  *
- * Where the date comes from: Jason's SuppliesAppointmentDispatch when it is
- * bound, otherwise the date the Academic Executive entered on the examiner
- * progress page. Only one source is read, never a mix of the two.
+ * Where the date comes from: both Jason's SuppliesAppointmentDispatch, when it
+ * is bound, and the date on the examiner progress page count as sent, because
+ * a letter sent by hand is still a letter. Where both exist Jason's wins, as it
+ * records the mail actually being accepted. The status names its source.
  *
  * A panel's result:
- *   seats     seat column => "Not sent" | "Sent 01 Nov 2026" | "Replaced 05 Nov 2026" | null
+ *   seats     seat column => "Not sent" | "Sent 01 Nov 2026 (letter module)"
+ *             | "Sent 01 Nov 2026 (entered by AE)" | "Replaced 05 Nov 2026" | null
  *   needed    main seat column => examiner name, the mains still "Not sent"
  *   replaced  [{seat, name, status}] everyone who had a letter and left the panel
  *   sent      how many of the two main seats show "Sent"
@@ -38,8 +41,11 @@ class AppointmentLetters
 {
     public const MAIN_SEATS = 2;
 
-    /** The contract, named as a string: it is proposed and not yet in Core. */
-    protected const DISPATCH = 'App\\Modules\\Core\\Contracts\\SuppliesAppointmentDispatch';
+    public const FROM_MODULE = 'letter module';
+
+    public const FROM_AE = 'entered by AE';
+
+    protected const DISPATCH = SuppliesAppointmentDispatch::class;
 
     /** Seat column => the name the export's headings use. */
     public const SEATS = [
@@ -75,13 +81,11 @@ class AppointmentLetters
 
         $this->mergedInto = ExaminerMerge::query()->pluck('kept_id', 'duplicate_id')->all();
         $this->dispatch = app()->bound(self::DISPATCH) ? app(self::DISPATCH) : null;
-        $this->entered = $this->dispatch
-            ? collect()
-            : VivaExaminerProgress::query()
-                ->whereIn('nomination_id', $ids)
-                ->whereNotNull('letter_sent_at')
-                ->get(['nomination_id', 'examiner_id', 'letter_sent_at'])
-                ->groupBy('nomination_id');
+        $this->entered = VivaExaminerProgress::query()
+            ->whereIn('nomination_id', $ids)
+            ->whereNotNull('letter_sent_at')
+            ->get(['nomination_id', 'examiner_id', 'letter_sent_at', 'letter_source'])
+            ->groupBy('nomination_id');
 
         $history = ExaminerSeatHistory::with('examiner')
             ->whereIn('nomination_id', $ids)
@@ -131,11 +135,11 @@ class AppointmentLetters
                 continue;
             }
 
-            $at = $this->sentAt($nomination, $examinerId);
-            $seats[$seat] = $at ? 'Sent '.$at->format('d M Y') : 'Not sent';
+            $letter = $this->letter($nomination, $examinerId);
+            $seats[$seat] = $letter ? 'Sent '.$letter['at']->format('d M Y').' ('.$letter['source'].')' : 'Not sent';
 
             if (array_key_exists($seat, PanelSeats::MAINS)) {
-                if ($at) {
+                if ($letter) {
                     $sent++;
                 } else {
                     $needed[$seat] = $this->holder($nomination, $seat)?->name;
@@ -174,7 +178,7 @@ class AppointmentLetters
             ->map(function ($rows) use ($nomination, $history) {
                 $last = $rows->last();
 
-                if (! $this->sentAt($nomination, $last->examiner_id)) {
+                if (! $this->letter($nomination, $last->examiner_id)) {
                     return null;
                 }
 
@@ -194,22 +198,37 @@ class AppointmentLetters
             ->all();
     }
 
-    /** The latest letter this person has had for this nomination, under any of their records. */
-    protected function sentAt(ExaminerNomination $nomination, int $examinerId): ?Carbon
+    /**
+     * The latest letter this person has had for this nomination, under any of
+     * their records. A progress row Jason's date was copied onto
+     * (ExaminerProgress::sync()) is his record, not something the AE entered.
+     *
+     * @return array{at: Carbon, source: string}|null
+     */
+    protected function letter(ExaminerNomination $nomination, int $examinerId): ?array
     {
         $records = $this->recordsOf($examinerId);
 
-        if (! $this->dispatch) {
-            return $this->entered->get($nomination->id, collect())
-                ->whereIn('examiner_id', $records)
-                ->max('letter_sent_at');
+        $sent = $this->dispatch
+            ? collect($records)
+                ->map(fn (int $id) => $this->dispatch->packSentAt($nomination->application_id, $id))
+                ->filter()
+                ->map(fn ($at) => Carbon::parse($at))
+                ->max()
+            : null;
+
+        if ($sent) {
+            return ['at' => $sent, 'source' => self::FROM_MODULE];
         }
 
-        return collect($records)
-            ->map(fn (int $id) => $this->dispatch->packSentAt($nomination->application_id, $id))
-            ->filter()
-            ->map(fn ($at) => Carbon::parse($at))
-            ->max();
+        $row = $this->entered->get($nomination->id, collect())
+            ->whereIn('examiner_id', $records)
+            ->sortBy('letter_sent_at')
+            ->last();
+
+        return $row
+            ? ['at' => $row->letter_sent_at, 'source' => $row->letter_source === 'dispatch' ? self::FROM_MODULE : self::FROM_AE]
+            : null;
     }
 
     /** The record this examiner lives on now. */

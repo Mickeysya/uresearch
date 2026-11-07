@@ -1,5 +1,14 @@
 # Changelog: Hani's modules
 
+## 2026-11-07: The two letter contracts are in Core
+
+- **Added** `Core/Contracts/SuppliesReleasedExaminers` and
+  `SuppliesAppointmentDispatch`. `ReleasedExaminerProvider` now implements the
+  first directly, so `ReleasedExaminerBinding` is gone.
+- **Letter status counts both sources** and names them: "(letter module)" or
+  "(entered by AE)". Jason's date wins where both exist.
+- **Jason's hand-off is now live:** see SHARED_CHANGES.md, section 1.
+
 ## 2026-11-07: Examiner Report guards against duplicate letters
 
 - **Letter status per seat** on the report and in the export: "Not sent", "Sent

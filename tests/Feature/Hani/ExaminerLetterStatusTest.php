@@ -11,7 +11,10 @@ use App\Modules\Hani\Models\ExaminerMerge;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\VivaExaminerProgress;
 use App\Modules\Hani\Support\PanelSeats;
+use App\Modules\Jason\Models\AppointmentDetail;
+use App\Modules\Jason\Models\AppointmentExaminer;
 use App\Modules\Jason\Support\AppointmentSheet;
+use App\Modules\Jason\Support\ReleasedPanels;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
@@ -20,8 +23,8 @@ use Tests\TestCase;
 
 /**
  * The Examiner Report and its export say who already has an appointment
- * letter, so nobody is sent a second one. Sent dates come from Jason's
- * dispatch when it is bound, and otherwise from the AE-entered date.
+ * letter, so nobody is sent a second one. Jason's dispatch and the AE-entered
+ * date both count; where both exist, Jason's wins.
  */
 class ExaminerLetterStatusTest extends TestCase
 {
@@ -125,7 +128,7 @@ class ExaminerLetterStatusTest extends TestCase
         });
     }
 
-    /** Another test in this process may have declared the interface, so Jason's module binds it. */
+    /** Jason's module binds the contract; these tests are about what happens without it. */
     protected function unbindDispatch(): void
     {
         app()->offsetUnset(self::CONTRACT);
@@ -179,7 +182,7 @@ class ExaminerLetterStatusTest extends TestCase
             'Awaiting letters is released panels with a main seat Not sent.');
 
         $partial = $rows[$oneSent->application_id];
-        $this->assertSame('Sent 03 Nov 2026', $partial['Internal Main Letter Status']);
+        $this->assertSame('Sent 03 Nov 2026 (entered by AE)', $partial['Internal Main Letter Status']);
         $this->assertSame('Not sent', $partial['External Main Letter Status']);
         $this->assertSame('External Main: ExMain 22000002', $partial['Letter Needed For'],
             'Only the seat still owed a letter is flagged.');
@@ -188,24 +191,64 @@ class ExaminerLetterStatusTest extends TestCase
         $this->assertSame('Internal Main: InMain 22000003; External Main: ExMain 22000003', $rows[$noneSent->application_id]['Letter Needed For']);
     }
 
-    public function test_with_the_binding_the_dispatch_decides_and_an_entered_date_is_not_read(): void
+    public function test_bound_with_only_an_entered_date_counts_as_sent_by_the_ae(): void
     {
         $nomination = $this->panel('22000001');
         $this->enterLetterDate($nomination, 'external_main_id', '2026-11-02');
         $this->bindDispatch([[$nomination->application_id, $nomination->internal_main_id, '2026-11-01']]);
 
+        $row = $this->export(['scope' => 'full'])[0];
+
+        $this->assertSame('Sent 01 Nov 2026 (letter module)', $row['Internal Main Letter Status']);
+        $this->assertSame('Sent 02 Nov 2026 (entered by AE)', $row['External Main Letter Status']);
+        $this->assertSame([], $this->export(), 'The AE date counts, so no second letter is asked for.');
+    }
+
+    public function test_bound_with_both_dates_jasons_wins(): void
+    {
+        $nomination = $this->panel('22000001');
+        $this->enterLetterDate($nomination, 'internal_main_id', '2026-10-20');
+        $this->bindDispatch([[$nomination->application_id, $nomination->internal_main_id, '2026-11-01']]);
+
         $row = $this->export()[0];
 
-        $this->assertSame('Sent 01 Nov 2026', $row['Internal Main Letter Status']);
+        $this->assertSame('Sent 01 Nov 2026 (letter module)', $row['Internal Main Letter Status']);
         $this->assertSame('Not sent', $row['External Main Letter Status']);
         $this->assertSame('External Main: ExMain 22000001', $row['Letter Needed For']);
+    }
 
-        $this->bindDispatch([
-            [$nomination->application_id, $nomination->internal_main_id, '2026-11-01'],
-            [$nomination->application_id, $nomination->external_main_id, '2026-11-02'],
-        ]);
+    public function test_a_date_copied_from_jasons_module_is_not_labelled_as_entered_by_the_ae(): void
+    {
+        $this->unbindDispatch();
 
-        $this->assertSame([], $this->export(), 'Both mains sent: nothing left to send.');
+        $nomination = $this->panel('22000001');
+        $this->enterLetterDate($nomination, 'internal_main_id', '2026-11-01');
+        VivaExaminerProgress::query()->update(['letter_source' => 'dispatch']);
+
+        $this->assertSame('Sent 01 Nov 2026 (letter module)', $this->export()[0]['Internal Main Letter Status']);
+    }
+
+    /** The real classes on both sides of both contracts, not stand-ins. */
+    public function test_the_contracts_join_the_real_modules(): void
+    {
+        $nomination = $this->panel('22000001');
+
+        $panels = ReleasedPanels::all();
+        $this->assertCount(1, $panels);
+        $this->assertSame($nomination->application_id, $panels[0]['nomination_application_id']);
+        $this->assertContains($nomination->internal_main_id, array_column($panels[0]['examiners'], 'hani_examiner_id'));
+
+        $appointment = Application::create(['student_id' => $nomination->application->student_id,
+            'submitted_by_id' => $this->nonExec()->id, 'module_type' => 'appointment_letter', 'status' => Application::STATUS_APPROVED]);
+        AppointmentDetail::create(['application_id' => $appointment->id, 'nomination_application_id' => $nomination->application_id]);
+        AppointmentExaminer::create(['application_id' => $appointment->id, 'hani_examiner_id' => $nomination->internal_main_id,
+            'examiner_name' => 'InMain 22000001', 'examiner_type' => 'internal', 'examiner_institution' => 'UTP',
+            'examiner_address' => 'UTP', 'examiner_email' => 'inmain@example.com', 'examiner_expertise' => 'Computing',
+            'pack_sent_at' => '2026-11-01 10:00:00']);
+
+        $row = $this->export()[0];
+        $this->assertSame('Sent 01 Nov 2026 (letter module)', $row['Internal Main Letter Status']);
+        $this->assertSame('Not sent', $row['External Main Letter Status']);
     }
 
     public function test_a_replacement_shows_only_the_new_examiner_as_not_sent(): void
@@ -231,7 +274,7 @@ class ExaminerLetterStatusTest extends TestCase
         $row = $this->export()[0];
         $this->assertSame('Not sent', $row['Internal Main Letter Status']);
         $this->assertSame('New Internal', $row['Internal Main']);
-        $this->assertSame('Sent 02 Nov 2026', $row['External Main Letter Status']);
+        $this->assertSame('Sent 02 Nov 2026 (letter module)', $row['External Main Letter Status']);
         $this->assertSame('Internal Main: New Internal', $row['Letter Needed For']);
         $this->assertSame("Internal Main: {$old->name}, Replaced 05 Nov 2026", $row['Replaced Examiners']);
 
@@ -274,7 +317,7 @@ class ExaminerLetterStatusTest extends TestCase
 
         $row = $this->export(['scope' => 'full'])[0];
 
-        $this->assertSame('Sent 02 Nov 2026', $row['External Main Letter Status']);
+        $this->assertSame('Sent 02 Nov 2026 (letter module)', $row['External Main Letter Status']);
         $this->assertSame('', $row['Replaced Examiners'], 'The same person, not a replacement.');
         $this->assertSame([], $this->export());
     }
@@ -338,7 +381,7 @@ class ExaminerLetterStatusTest extends TestCase
 
         $response->assertSee('Letters: 2/2 sent')
             ->assertSee('Letters: 0/2 sent')
-            ->assertSee('Letter: Sent 01 Nov 2026')
+            ->assertSee('Letter: Sent 01 Nov 2026 (entered by AE)')
             ->assertSee('Letter: Not sent')
             ->assertSee('Download Excel: awaiting letters')
             ->assertSee('Download Excel: full list')

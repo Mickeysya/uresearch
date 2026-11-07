@@ -38,7 +38,7 @@ Re-viva (only after a category-4 result or a level-4 outcome).
   "Expected resubmissions" for the Senior Executive, who logs the round.
   The re-viva outcome then completes or keeps holding the same mains.
 - **Appointment letters** are Jason's module. Hani hands over the released
-  list as an export today, and through a proposed Core contract later.
+  list as an export, and through the Core contract `SuppliesReleasedExaminers`.
 
 ### Platform rules these modules follow
 - Approval chains are `Stage` lists in a `WorkflowModule`. Only Core's
@@ -166,8 +166,9 @@ replaced automatically.
   clashes and conflict flags inline. xlsx/csv export with the same scope;
   column 1 "Application No." is the key for Jason's letters; columns are
   only ever added at the end. Each released seat shows its letter status ("Not
-  sent", "Sent <date>", "Replaced <date>"), from Jason's dispatch when bound and
-  otherwise the AE-entered date, with a "Letters: 2/2 sent" badge per candidate.
+  sent", "Sent <date> (letter module)", "Sent <date> (entered by AE)", "Replaced
+  <date>"), counting both sources with Jason's date winning, and a "Letters: 2/2
+  sent" badge per candidate.
   The download defaults to "Awaiting letters" (released, not yet examined on, a
   main seat not sent; only those seats flagged); "Full list" is every row.
 - **Conflict Detection** (`/examiner-nomination/conflicts`, AE own
