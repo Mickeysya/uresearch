@@ -19,7 +19,7 @@
         </p>
 
         @if ($draft ?? false)
-            <div class="haziq-repeatable-row" style="border-color: #C28E40;">
+            <div class="haziq-repeatable-row" style="border-color: var(--warning-fg);">
                 <p style="grid-column: 1 / -1;">
                     <b>Continuing your saved draft</b> (#{{ $draft->id }}) — everything below is what
                     you last saved. Keep editing, Save Draft again any time, or Submit Application
@@ -114,7 +114,7 @@
             @foreach (['resume' => 'Resume/CV', 'academic_transcript' => 'Academic Transcript', 'visa_or_ic' => 'Visa / IC'] as $field => $label)
                 <label for="{{ $field }}">{{ $label }}
                     @if ($draftDocLabels->contains($label))
-                        <span style="color: #07794A;">— already uploaded, choose a file only to replace it</span>
+                        <span style="color: var(--success-fg);">— already uploaded, choose a file only to replace it</span>
                     @endif
                 </label>
                 <input type="file" name="{{ $field }}" id="{{ $field }}">

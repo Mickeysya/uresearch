@@ -8,18 +8,40 @@
 --}}
 @if (auth()->check() && auth()->user()->isStudent())
     <div id="haziq-assistant" style="position: fixed; bottom: 20px; right: 20px; z-index: 40;">
-        <button type="button" id="haziq-assistant-toggle" class="btn" style="border-radius: 999px; padding: 10px 18px;">
-            Ask about my application
+        <button type="button" id="haziq-assistant-toggle" class="btn" style="border-radius: 999px; padding: 10px 18px; display: inline-flex; align-items: center; gap: 8px;">
+            <span aria-hidden="true" style="display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center;">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="8" width="16" height="12" rx="4"/>
+                    <path d="M12 8V4"/>
+                    <circle cx="12" cy="3" r="1.2" fill="currentColor" stroke="none"/>
+                    <circle cx="9" cy="14" r="1.4" fill="currentColor" stroke="none"/>
+                    <circle cx="15" cy="14" r="1.4" fill="currentColor" stroke="none"/>
+                    <path d="M9 18h6"/>
+                    <path d="M2 13h2"/>
+                    <path d="M20 13h2"/>
+                </svg>
+            </span>
+            Ask me anything
         </button>
 
         <div id="haziq-assistant-panel" class="card" style="display: none; position: absolute; bottom: 54px; right: 0; width: 320px; max-height: 420px; flex-direction: column;">
-            <div style="padding: 10px 14px; border-bottom: 1px solid var(--border, #E4E7EE); font-weight: 600;">
-                Ask about your application
+            <div style="padding: 10px 14px; border-bottom: 1px solid var(--border-grey); font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                <span aria-hidden="true" style="display: inline-flex; width: 18px; height: 18px; color: var(--navy);">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="8" width="16" height="12" rx="4"/>
+                        <path d="M12 8V4"/>
+                        <circle cx="12" cy="3" r="1.2" fill="currentColor" stroke="none"/>
+                        <circle cx="9" cy="14" r="1.4" fill="currentColor" stroke="none"/>
+                        <circle cx="15" cy="14" r="1.4" fill="currentColor" stroke="none"/>
+                        <path d="M9 18h6"/>
+                    </svg>
+                </span>
+                Ask me anything about your GRA/GA
             </div>
 
             <div id="haziq-assistant-messages" style="flex: 1; overflow-y: auto; padding: 10px 14px; font-size: 13.5px;"></div>
 
-            <form id="haziq-assistant-form" style="display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--border, #E4E7EE);">
+            <form id="haziq-assistant-form" style="display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--border-grey);">
                 <input type="text" id="haziq-assistant-input" placeholder="e.g. when is my Stage 1 deadline?" maxlength="500" style="flex: 1;" required>
                 <button type="submit" class="btn-secondary">Ask</button>
             </form>
@@ -56,8 +78,8 @@
                     bubble.style.display = 'inline-block';
                     bubble.style.padding = '6px 10px';
                     bubble.style.borderRadius = '10px';
-                    bubble.style.background = who === 'me' ? '#5B6E9C' : '#F1F3F7';
-                    bubble.style.color = who === 'me' ? '#fff' : '#23283A';
+                    bubble.style.background = who === 'me' ? 'var(--accent-solid)' : 'var(--surface-sunken)';
+                    bubble.style.color = who === 'me' ? 'var(--text-on-accent)' : 'var(--text-dark)';
                     bubble.textContent = text;
                     row.appendChild(bubble);
                     messages.appendChild(row);
