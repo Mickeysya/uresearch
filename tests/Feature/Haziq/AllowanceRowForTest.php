@@ -269,4 +269,26 @@ class AllowanceRowForTest extends TestCase
 
         $this->assertSame(32000.0, $nextRow['amount'], 'the queued pending_addition folds in next month, on top of the held-back row amount being deferred too');
     }
+
+    /**
+     * Real bug, caught live 2026-11-08: October here is mid-defer -- its
+     * own RM2,000 contribution is held back for November, exactly like
+     * the test above. Confirming October's shown figure (RM32,000)
+     * before November ever happens used to also wipe that deferred
+     * RM2,000, so it never landed anywhere. User's own words: "next
+     * monthnya baru bayar untuk previous month... same cycle" -- nothing
+     * in the chain should vanish just because an earlier figure in it
+     * got settled.
+     */
+    public function test_confirming_a_lagged_row_still_carries_its_own_deferred_contribution_forward(): void
+    {
+        $application = $this->application();
+        $this->log($application, '2026-09-01', 'withheld', 30000, pendingAddition: 2000);
+        $this->log($application, '2026-10-01', 'withheld', 2000);
+        $this->confirm($application, '2026-10-01');
+
+        $novRow = $this->rowFor($this->log($application, '2026-11-01', 'withheld', 2000));
+
+        $this->assertSame(4000.0, $novRow['amount'], "October's own deferred 2000 must still land on November, not vanish just because October itself got confirmed");
+    }
 }

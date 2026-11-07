@@ -614,7 +614,18 @@ class AllowanceController extends Controller
                     $monthsAccumulating = 0;
                     $monthsAccruing = 0;
                     $laggedMode = false;
-                    $heldBack = 0.0;
+                    // $heldBack is deliberately left alone here. Confirmed
+                    // live 2026-11-08: confirming THIS row's shown figure
+                    // only pays what's shown — if this row was itself
+                    // mid-defer, $heldBack already holds its own
+                    // contribution, set a few lines up, earmarked for the
+                    // row right after. Zeroing it here silently wrote off
+                    // that month's allowance instead of letting it keep
+                    // following "next month pays for the month before,
+                    // same cycle" like every other deferred amount until
+                    // it's actually paid — user's own words, confirming
+                    // nothing in the cycle should vanish just because an
+                    // earlier figure in the chain got settled.
                 }
             } elseif ($row->status === 'forfeited') {
                 // An ongoing terminated month — never shown as a number,
