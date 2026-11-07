@@ -53,7 +53,7 @@ class GaExtensionTest extends TestCase
      */
     protected function supervisedStudent(): User
     {
-        return $this->student(attributes: ['supervisor_id' => $this->supervisor()->id]);
+        return tap($this->student(attributes: ['supervisor_id' => $this->supervisor()->id]), fn (User $s) => $this->approveGaApplication($s));
     }
 
     protected function payload(array $overrides = []): array
@@ -217,6 +217,7 @@ class GaExtensionTest extends TestCase
     public function test_the_form_shows_the_logged_in_students_own_profile_details(): void
     {
         $student = $this->student(attributes: ['programme' => 'PhD in Chemical Engineering']);
+        $this->approveGaApplication($student);
         $supervisor = $this->supervisor();
         $student->update(['supervisor_id' => $supervisor->id]);
 
@@ -236,6 +237,7 @@ class GaExtensionTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
 
@@ -271,6 +273,7 @@ class GaExtensionTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
         $director = $this->seniorDirector();
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
@@ -315,6 +318,7 @@ class GaExtensionTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
 
         $application = Application::create([
             'student_id' => $student->id,
@@ -356,6 +360,7 @@ class GaExtensionTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
         $director = $this->seniorDirector();
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
@@ -384,6 +389,7 @@ class GaExtensionTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
 
@@ -411,6 +417,7 @@ class GaExtensionTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
         $application = Application::where('module_type', 'ga_extension')->sole();
@@ -440,6 +447,7 @@ class GaExtensionTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
         $application = Application::where('module_type', 'ga_extension')->sole();
@@ -458,6 +466,7 @@ class GaExtensionTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
         $application = Application::where('module_type', 'ga_extension')->sole();
@@ -483,6 +492,7 @@ class GaExtensionTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
 

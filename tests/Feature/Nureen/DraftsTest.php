@@ -48,6 +48,7 @@ class DraftsTest extends TestCase
 
         $this->supervisor = $this->supervisor('sup@test.my');
         $this->student = $this->student('22001001', 'me@test.my', ['supervisor_id' => $this->supervisor->id]);
+        $this->approveGaApplication($this->student);
     }
 
     protected function pdf(string $name): UploadedFile
@@ -118,10 +119,11 @@ class DraftsTest extends TestCase
             'draft_step' => 2,
         ])->assertRedirect(route('ga-extension.draft.edit', $draft));
 
-        $this->assertSame(1, Application::count());
+        $this->assertSame(1, Application::where('module_type', 'ga_extension')->count());
         $detail = GaExtensionDetail::where('application_id', $draft->id)->sole();
         $this->assertSame('Second, longer thoughts.', $detail->reason_for_extension);
-        $this->assertSame('2026-12-01', $detail->current_end_date->toDateString());
+        // The posted date is ignored: the current end date is always the approved GA application's.
+        $this->assertSame('2026-12-31', $detail->current_end_date->toDateString());
         $this->assertSame(2, $detail->draft_step);
 
         // Both sessions' files are attached, and the form lists them.
@@ -141,7 +143,7 @@ class DraftsTest extends TestCase
             'admission_letter_documents' => [UploadedFile::fake()->create('virus.exe', 10, 'application/x-msdownload')],
         ])->assertSessionHasErrors(['current_end_date', 'reason_for_extension', 'admission_letter_documents.0']);
 
-        $this->assertSame(0, Application::count());
+        $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
 
     public function test_a_ticked_file_is_removed_from_the_draft_and_the_disk(): void
@@ -209,7 +211,7 @@ class DraftsTest extends TestCase
             'published_article_documents' => [$this->pdf('paper.pdf')],
         ] + $this->gaFields())->assertSessionHasNoErrors()->assertRedirect(route('applications.index'));
 
-        $this->assertSame(1, Application::count());
+        $this->assertSame(1, Application::where('module_type', 'ga_extension')->count());
         $application = $draft->fresh();
         $this->assertSame(Application::STATUS_PENDING, $application->status);
         $this->assertSame('supervisor', $application->current_stage);
@@ -231,7 +233,7 @@ class DraftsTest extends TestCase
         $this->actingAs($this->supervisor)->get(route('ga-extension.queue'))->assertSee('#'.$application->id);
         $this->actingAs($this->student)->get(route('ga-extension.draft.edit', $application))->assertNotFound();
         $this->actingAs($this->student)->post(route('ga-extension.store'), ['draft_id' => $application->id] + $this->gaFields() + $this->gaDocuments())->assertNotFound();
-        $this->assertSame(1, Application::count());
+        $this->assertSame(1, Application::where('module_type', 'ga_extension')->count());
     }
 
     public function test_a_certification_draft_submits_and_takes_the_final_types_labels(): void

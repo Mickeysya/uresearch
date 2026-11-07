@@ -298,6 +298,16 @@ class GaExtensionController extends Controller
 
         $data = $request->validate($rules, $messages);
 
+        // The one rule of the form's Terms and Conditions that is absolute:
+        // "Backdated appointment ... is not allowed". The rest only warn,
+        // on the approver's System checks (Support\GaExtensionRules). Checked
+        // against the approved GA application's end date, the one saved below.
+        if ($approved['service_end_date']->copy()->addDay()->lt(today())) {
+            return back()->withInput()->withErrors([
+                'current_end_date' => 'The extension would start before today. Backdated GA appointments are not allowed; contact CGS.',
+            ]);
+        }
+
         $application = DB::transaction(function () use ($request, $data, $draft, $existing, $approved, $removing, $requiredDocuments, $additionalFields, $engine, $documents) {
             if ($draft) {
                 // Locked and re-checked, so a double-click can never submit

@@ -2,6 +2,10 @@
 
 namespace Tests\Feature\Nureen\Concerns;
 
+use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
+use App\Modules\Haziq\Models\GaApplicationDetail;
+use App\Modules\Haziq\Models\GraGaStudentProfile;
 use Illuminate\Http\UploadedFile;
 
 /**
@@ -16,6 +20,43 @@ use Illuminate\Http\UploadedFile;
  */
 trait FilesGaExtensions
 {
+    /**
+     * Since 2026-11-07 a student may only apply once their GA application is
+     * approved, and the extension's current end date is that application's
+     * service end date, never the posted one (Core\Contracts\
+     * SuppliesApprovedGaApplication, answered by Haziq's module). Defaults to
+     * the same date gaExtensionFields() posts, so the two always agree.
+     * Same records as Tests\Feature\Haziq\GaExtensionLinkTest builds.
+     */
+    protected function approveGaApplication(User $student, ?string $serviceEndDate = null): Application
+    {
+        $profile = GraGaStudentProfile::create([
+            'user_id' => $student->id,
+            'level_of_study' => 'master',
+            'programme' => 'MSc Data Science',
+            'admission_date' => '2025-09-01',
+            'bank_name' => 'Maybank',
+            'bank_account_no' => '1234567890',
+        ]);
+
+        $application = Application::create([
+            'student_id' => $student->id,
+            'module_type' => 'ga_application',
+            'status' => Application::STATUS_APPROVED,
+            'submitted_at' => now(),
+        ]);
+
+        GaApplicationDetail::create([
+            'application_id' => $application->id,
+            'profile_id' => $profile->id,
+            'service_start_date' => now()->subMonths(6),
+            'service_end_date' => $serviceEndDate ?? now()->addMonthNoOverflow()->endOfMonth()->toDateString(),
+            'proposed_allowance' => 1500,
+        ]);
+
+        return $application;
+    }
+
     /** @return array<string, mixed> */
     protected function gaExtensionFields(array $overrides = []): array
     {
