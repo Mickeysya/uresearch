@@ -157,7 +157,7 @@
     <div id="haziq-assistant" style="position: fixed; bottom: 20px; right: 20px; z-index: 40;">
         <div id="haziq-assistant-bubble" class="haziq-bubble" aria-hidden="true">Ask me anything 💬</div>
 
-        <button type="button" id="haziq-assistant-toggle" class="haziq-assistant-fab" aria-expanded="false" aria-controls="haziq-assistant-panel" aria-label="Ask me anything about your GRA/GA" title="Ask me anything about your GRA/GA">
+        <button type="button" id="haziq-assistant-toggle" class="haziq-assistant-fab" aria-expanded="false" aria-controls="haziq-assistant-panel" aria-label="Ask me anything about your GA/GRA application, Stage Gate, or Allowance" title="Ask me anything about your GA/GRA application, Stage Gate, or Allowance">
             <span class="haziq-bot-stage" aria-hidden="true">
                 <svg class="haziq-bot-figure" viewBox="0 0 64 64" width="48" height="48">
                     <defs>
@@ -210,7 +210,7 @@
                         <path d="M9 18h6"/>
                     </svg>
                 </span>
-                Ask me anything about your GRA/GA
+                Ask me anything about GA/GRA, Stage Gate, or Allowance
             </div>
 
             <div id="haziq-assistant-messages" style="flex: 1; overflow-y: auto; padding: 10px 14px; font-size: 13.5px;"></div>
