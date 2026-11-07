@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Saved drafts of GA Extension and GA/GRA Certification requests.
+ * Saved drafts for "My Drafts": GA Extension, GA/GRA Certification (this
+ * module), plus GRA Application and GA Application (Haziq's module, whose
+ * own editDraft()/destroyDraft() do the ownership check inline rather than
+ * calling ownedBy() here — same rule, enforced on that module's side).
  *
  * A draft is Core's own: an `applications` row with status 'draft' and
  * current_stage NULL, plus the module's detail row. It is never on a
@@ -20,11 +23,11 @@ use Illuminate\Support\Facades\Storage;
  * the Client Charter has no clock for it.
  *
  * Only the student who owns a draft may open, change, submit or delete it
- * -- ownedBy() is the one check every draft action goes through.
+ * -- ownedBy() is the check this module's own draft actions go through.
  */
 class Drafts
 {
-    public const MODULES = ['ga_extension', 'ga_certification'];
+    public const MODULES = ['ga_extension', 'ga_certification', 'gra_application', 'ga_application'];
 
     /**
      * The draft, if it is one of $module's and belongs to $student --
