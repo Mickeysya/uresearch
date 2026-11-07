@@ -2,21 +2,19 @@
 
 namespace App\Modules\Jason\Support;
 
+use App\Modules\Core\Contracts\SuppliesReleasedExaminers;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
 
 /**
  * The examiner panels the nomination chain has released, ready for letters.
  *
- * Today the list arrives as a spreadsheet emailed between two desks in the
- * same office and retyped at this end. The nomination chain proposes to
- * hand the same list over in code instead, through a Core contract. That
- * contract is proposed but not yet added, so everything here is written to
- * work either way: the contract is named as a STRING and asked for with
- * interface_exists(), never imported, so this module neither fails to load
- * nor shows an error while the file is absent. The spreadsheet import stays
- * as the manual fallback, and becomes the exception rather than the rule
- * once the contract lands.
+ * The list used to arrive as a spreadsheet emailed between two desks in
+ * the same office and retyped at this end. Core now carries the contract
+ * that hands it over in code, and the nomination chain binds it, so that
+ * is the ordinary path. The spreadsheet import remains as the manual
+ * fallback -- for a panel released before the hand-off existed, and for a
+ * checkout where the chain is not installed.
  *
  * Nothing in this class writes, and nothing in it reaches into another
  * member's folder: the contract is Core's, and the fallback path goes
@@ -25,21 +23,19 @@ use App\Modules\Jason\Models\AppointmentExaminer;
 final class ReleasedPanels
 {
     /**
-     * Named as a string on purpose: the file does not exist yet, so a
-     * `use` of it here would be a fatal error the moment this class loads.
+     * Resolved from the container by name rather than type-hinted, so the
+     * binding alone decides whether the hand-off is live. It was a plain
+     * string while the file was only proposed; it is the real class now.
      */
-    public const CONTRACT = 'App\Modules\Core\Contracts\SuppliesReleasedExaminers';
+    public const CONTRACT = SuppliesReleasedExaminers::class;
 
     /**
      * Whether the hand-off is live, or the spreadsheet is still the way in.
      *
-     * The binding alone decides, not interface_exists(). A container key is
-     * just a string, so asking whether anything is bound answers the only
-     * question that matters -- is there something to read? -- and answers it
-     * before the Core file exists, which is what makes the live path
-     * testable at all. Adding interface_exists() would gate this module's
-     * own behaviour on a file in a folder it does not own, and nothing here
-     * type-hints the contract: it resolves an object and calls one method.
+     * The binding decides. Core having the interface says only that the
+     * contract exists; it is the nomination chain binding an implementation
+     * that means there is something to read. A checkout without that module
+     * has the file and nothing behind it.
      */
     public static function available(): bool
     {

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Jason\Support;
 
+use App\Modules\Core\Contracts\SuppliesAppointmentDispatch;
 use App\Modules\Jason\Models\AppointmentDetail;
 use App\Modules\Jason\Models\AppointmentExaminer;
 
@@ -27,16 +28,14 @@ use App\Modules\Jason\Models\AppointmentExaminer;
  * being asked is "has this reached them", so the most recent yes is the
  * answer, and null means nothing has been accepted for them at all.
  *
- * Deliberately not implementing the Core interface in a `implements`
- * clause: the interface is proposed but not yet added, and naming a
- * missing interface is a fatal error the moment this class loads. The
- * signature matches it exactly, and ModuleProvider binds this to it only
- * once the file exists.
+ * Implements the Core contract directly, now that Core has the file. It
+ * was named as a string while the interface was only proposed, because
+ * naming a missing interface is a fatal error the moment the class loads.
  */
-final class AppointmentDispatch
+final class AppointmentDispatch implements SuppliesAppointmentDispatch
 {
-    /** The Core contract this satisfies, named as a string until it exists. */
-    public const CONTRACT = 'App\Modules\Core\Contracts\SuppliesAppointmentDispatch';
+    /** @deprecated Kept while callers move to the interface itself. */
+    public const CONTRACT = SuppliesAppointmentDispatch::class;
 
     /**
      * @param  int  $applicationId  the NOMINATION's applications.id

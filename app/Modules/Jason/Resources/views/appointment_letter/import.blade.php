@@ -40,9 +40,9 @@
         title="Import Examiner List"
         subtitle="The finalised list, once the Dean has settled it. Each candidate on the sheet becomes an appointment waiting for its pack." />
 
-    {{-- The direct hand-off. Until the nomination chain's Core contract
-         exists this whole section is the one notice, and the spreadsheet
-         below is the only way in. --}}
+    {{-- The direct hand-off. Where the nomination chain is not installed
+         this whole section is the one notice, and the spreadsheet below is
+         the only way in. --}}
     @if ($handoffLive)
         <div class="card card-wide" style="margin-bottom: 18px;">
             <p style="margin-top: 0;"><b>Ready for appointment letters</b>
