@@ -87,7 +87,7 @@ The two accounts the README walkthroughs use.
 
 ### Cohort: 180 students (109 male, 71 female)
 
-15 per department. Matric `2410DDNN`: `DD` is the department number from the table above, `NN` 01–15. Email `<name>_<matric>@utp.edu.my` (name lower-case, spaces and *bin/binti* dropped). Programmes rotate MSc Full-Time, PhD Full-Time, MSc Part-Time, PhD Part-Time. Each department's students alternate between its two supervisors. Gender is stored in `student_genders` (Workstation rooms are gendered).
+15 per department. Matric `2410DDNN`: `DD` is the department number from the table above, `NN` 01–15. Email `<name>_<matric>@utp.edu.my` (name lower-case, spaces and *bin/binti* dropped). Programmes rotate MSc Full-Time, PhD Full-Time, MSc Part-Time, PhD Part-Time. Each department's students alternate between its two supervisors. Gender is stored in `student_genders` (Workstation rooms are gendered). Each has an active Study Candidacy expiring 3–35 months out, so **the 96 Full-Time students can pick a workstation**; the 84 Part-Time ones get "not eligible", which is the rule (Full-Time research only), not a bug.
 
 | # | Department | Male | Female | Total |
 |---|---|---:|---:|---:|
