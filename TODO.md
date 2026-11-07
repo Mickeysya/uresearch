@@ -6801,6 +6801,39 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         (the separate, correctly-unaffected reviewable action for a
         mid-month resumption) remains.
 
+- [x] **2026-11-08 — confirming a mid-defer row was silently dropping
+      its own deferred contribution instead of letting it keep
+      following the lag cycle.** `rowFor()`'s own "permanent lag"
+      mechanic defers a row's own contribution into the *next* row's
+      `$heldBack` once a reinstatement's queued figure first folds in
+      (confirmed 2026-11-03, "lag berterusan selamanya lepas
+      reinstatement"). The confirmed-reset block zeroed `$heldBack`
+      unconditionally, even when it had just been set a few lines
+      earlier for the row right after. Caught by walking the user's own
+      worked example end to end (resumption → Set Amount → settle →
+      settle again) — before the fix, a deferred month's allowance
+      vanished the instant an earlier figure in the same chain got
+      confirmed, rather than surfacing next cycle like everything else.
+      User's own words, confirming the principle: "next monthnya baru
+      bayar untuk previous month... same cycle" — nothing in the chain
+      should disappear just because an earlier figure in it got settled.
+  - [x] One-line fix: removed the `$heldBack = 0.0;` line from the
+        `$rowConfirmed` reset block in [AllowanceController.php](app/Modules/Haziq/Http/Controllers/AllowanceController.php).
+        Everything else in that block (`$runningSum`,
+        `$monthsAccumulating`, `$monthsAccruing`, `$laggedMode`) still
+        resets as before — the chain still ends cleanly at the
+        confirmation, it just no longer throws away a contribution that
+        was already earmarked for the very next row.
+  - [x] Added `test_confirming_a_lagged_row_still_carries_its_own_
+        deferred_contribution_forward` to `AllowanceRowForTest`. `php
+        artisan test --filter=Haziq`: 124/124.
+  - [x] Verified live end to end with numbers mirroring application
+        #25's real chain (disposable application, deleted after): Nov
+        RM38,000 + RM1,000 pending addition, confirmed → Dec shows
+        RM1,000 → confirmed → Jan now correctly shows RM4,000 (Dec's own
+        deferred RM2,000 + Jan's own RM2,000), not RM2,000 as it did
+        before this fix.
+
 ---
 
 ## Cross-module overlaps — unresolved
