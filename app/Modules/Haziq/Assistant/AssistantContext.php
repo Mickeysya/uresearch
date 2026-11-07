@@ -11,6 +11,7 @@ use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\StageGate;
 use App\Modules\Haziq\Models\TaHourLog;
+use App\Modules\Haziq\Support\AllowanceLedger;
 use Illuminate\Support\Carbon;
 
 /**
@@ -119,6 +120,28 @@ class AssistantContext
             return null;
         }
 
-        return "Allowance, most recent record ({$log->payment_month->format('M Y')}): status={$log->status}, amount=RM".number_format((float) $log->amount, 2).'.';
+        $line = "Allowance, most recent record ({$log->payment_month->format('M Y')}): status={$log->status}, amount=RM"
+            .number_format((float) $log->amount, 2).'.';
+
+        // GA has no allowance tracking at all (GraApplicationDetail only),
+        // so a null rate here is routine for a GA student, not a data gap.
+        $rate = GraApplicationDetail::where('application_id', $log->application_id)->value('proposed_allowance');
+
+        if ($rate !== null) {
+            $line .= ' Monthly rate once eligible: RM'.number_format((float) $rate, 2).'.';
+
+            $projected = AllowanceLedger::projectedNextMonthIfUnconfirmed(
+                (int) $log->application_id,
+                Carbon::parse($log->payment_month),
+                (float) $rate
+            );
+
+            if ($projected !== null) {
+                $line .= " If this month's figure above stays unconfirmed by CGS/Admin, next month's running total would be RM"
+                    .number_format($projected, 2).'.';
+            }
+        }
+
+        return $line;
     }
 }

@@ -6479,6 +6479,52 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         `Core\ModuleContractsTest`, `Core\PageShellTest` x2,
         `Core\ProseTest`, `WorkstationCgsScreensTest`) plus exactly the
         65 Nureen GA Extension failures above — nothing else moved.
+- [x] **2026-11-07 — the student assistant can now answer a real
+      allowance projection question, not just report the current
+      figure.** User's own example: RM4,000 this month unconfirmed, the
+      assistant said it couldn't answer; it should say RM6,000 (the
+      month's own rate, RM2,000, carrying forward). Root cause:
+      `AssistantContext` gave the model the current amount and the
+      qualitative carry-forward rule, but never the actual monthly rate
+      or a computed next-month figure — the system instruction's own
+      "never invent an amount" rule correctly refused rather than guess
+      at arithmetic it did not have the inputs for.
+  - [x] **Deliberately not "let the LLM do the maths."** `rowFor()`'s
+        accrual walk has real edge cases hard-won over many rounds this
+        session (payroll lag, termination freeze, resumption's
+        `pending_addition` lag) — asking a model to reproduce that
+        reliably risks a confidently wrong number in exactly the cases
+        that matter most. Instead: `Support\AllowanceLedger::
+        projectedNextMonthIfUnconfirmed()` computes the real number in
+        PHP, reusing the same `ACCUMULATING_STATUSES` this class'
+        existing methods already share with `rowFor()`, and returns
+        `null` — "don't guess" — for every case the simple add-the-rate
+        rule doesn't actually cover: already confirmed, a queued
+        `pending_addition`, or the row right after a `forfeited` one
+        (a resumption about to enter `$laggedMode`).
+  - [x] `AssistantContext::allowanceSummary()` now states the monthly
+        rate and, when available, the projected figure as plain facts in
+        the context block. `GeminiClient`'s system instruction updated
+        to match: relay a given projection confidently, but never
+        compute one itself even when the arithmetic looks simple, and
+        say a reliable projection isn't available rather than estimate
+        one when the context gives none.
+  - [x] `tests/Feature/Haziq/AllowanceProjectionTest.php`, 9 tests: the
+        user's own RM4,000+RM2,000=RM6,000 case, the eligible-branch
+        equivalent, and every null case (confirmed, forfeited/
+        review_required/determined, a queued pending_addition, right
+        after a forfeited row, no log at all) — plus two `AssistantContext`
+        tests confirming the rate/projection lines actually appear (or
+        correctly don't, once confirmed) in what the model is sent.
+  - [x] Verified live over real HTTP as `student@utp.edu.my` against
+        application #25's actual live state (November eligible, RM2,000,
+        unconfirmed): asked "If my allowance this month is not confirmed
+        by CGS, what will next month's total be?", got back "RM4,000.00"
+        — correct for that application's real RM2,000 rate, confirming
+        the fix end to end against the real Gemini API, not just the
+        test suite. `php artisan test` 110/110 in `tests/Feature/Haziq/`,
+        same 71 pre-existing/already-documented failures elsewhere,
+        nothing else moved.
 
 ---
 
