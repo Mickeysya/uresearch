@@ -7,6 +7,7 @@ use App\Modules\Hani\Http\Controllers\ExaminerAdminController;
 use App\Modules\Hani\Http\Controllers\ExaminerContactController;
 use App\Modules\Hani\Http\Controllers\ExaminerImportController;
 use App\Modules\Hani\Http\Controllers\ExaminerNominationController;
+use App\Modules\Hani\Http\Controllers\ExaminerSubstitutionController;
 use App\Modules\Hani\Http\Controllers\ExaminerSuggestionController;
 use App\Modules\Hani\Http\Controllers\PanelController;
 use App\Modules\Hani\Http\Controllers\ProcessAnalyticsController;
@@ -165,10 +166,34 @@ Route::middleware('auth')->group(function () {
 
     // Touchpoint 2: cross-department conflict compilation. The Academic
     // Executive for their department; the Senior Executive across all of
-    // them, since cgs_compile is where the department lists are merged.
-    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS)->group(function () {
+    // them, since cgs_compile is where the department lists are merged; the
+    // Senior Director and the Dean, who can send a clashing list back.
+    Route::middleware('role:'.implode(',', [
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR,
+    ]))->group(function () {
         Route::get('/examiner-nomination/conflicts', [ConflictDetectionController::class, 'index'])
             ->name('conflict-detection.index');
+    });
+
+    // "Ask department to substitute". The controller checks that the person
+    // holds the list's current stage.
+    Route::middleware('role:'.implode(',', [
+        Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR,
+    ]))->post('/examiner-nomination/conflicts/{nomination}/substitution', [ExaminerSubstitutionController::class, 'store'])
+        ->whereNumber('nomination')->name('examiner-substitution.store');
+
+    // "Same person": merge two pool records.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS)
+        ->post('/examiner-nomination/conflicts/merge', [ConflictDetectionController::class, 'merge'])
+        ->name('conflict-detection.merge');
+
+    // The department answers: the candidate's own AE or supervisor (the
+    // controller narrows both). Never a student: this page names examiners.
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SUPERVISOR)->group(function () {
+        Route::get('/examiner-nomination/substitutions/{substitution}', [ExaminerSubstitutionController::class, 'show'])
+            ->name('examiner-substitution.show');
+        Route::post('/examiner-nomination/substitutions/{substitution}', [ExaminerSubstitutionController::class, 'replace'])
+            ->name('examiner-substitution.replace');
     });
 
     // ---- Examiner availability dashboard --------------------------------

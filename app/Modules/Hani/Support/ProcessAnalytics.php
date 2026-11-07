@@ -351,7 +351,9 @@ class ProcessAnalytics
         $size = $pool->count();
 
         // Who held each main seat, and when: a release, promotion or
-        // replacement starts a holding; examined, freed or declined ends it.
+        // replacement starts a holding; examined, freed or declined ends it. A
+        // merge only renames a holding already open: on a pending list the
+        // seat holds nobody yet.
         $holdings = [];
         $open = [];
         ExaminerSeatHistory::whereIn('seat', self::MAIN_SEATS)
@@ -364,6 +366,9 @@ class ProcessAnalytics
                     if (isset($open[$key])) {
                         $holdings[] = $open[$key] + ['to' => $row->created_at];
                     }
+                    $open[$key] = ['examiner' => $row->examiner_id, 'from' => $row->created_at];
+                } elseif ($row->event === 'merged' && $row->examiner_id && isset($open[$key])) {
+                    $holdings[] = $open[$key] + ['to' => $row->created_at];
                     $open[$key] = ['examiner' => $row->examiner_id, 'from' => $row->created_at];
                 } elseif (in_array($row->event, ['examined', 'freed', 'declined'], true) && isset($open[$key])) {
                     $holdings[] = $open[$key] + ['to' => $row->created_at];

@@ -1,5 +1,50 @@
 # Changelog: Hani's modules
 
+## 2026-11-07: The two letter contracts are in Core
+
+- **Added** `Core/Contracts/SuppliesReleasedExaminers` and
+  `SuppliesAppointmentDispatch`. `ReleasedExaminerProvider` now implements the
+  first directly, so `ReleasedExaminerBinding` is gone.
+- **Letter status counts both sources** and names them: "(letter module)" or
+  "(entered by AE)". Jason's date wins where both exist.
+- **Jason's hand-off is now live:** see SHARED_CHANGES.md, section 1.
+
+## 2026-11-07: Examiner Report guards against duplicate letters
+
+- **Letter status per seat** on the report and in the export: "Not sent", "Sent
+  <date>" or "Replaced <date>", read from Jason's dispatch when bound and
+  otherwise from the AE-entered date (`Support/AppointmentLetters`).
+- **Download Excel defaults to "Awaiting letters";** "Full list" is the second
+  option. Six columns added at the end, none moved.
+- **Report badge:** "Letters: 2/2 sent" per released candidate.
+- **Decision: names stay on a part-sent row.** Jason's import reads the mains from
+  the records whenever a row has an Application No., so blanking a name would not
+  stop a second letter, and on its name-matching path could refuse the sheet. The
+  fix for those rows is on his side (SHARED_CHANGES.md, section 11).
+- **Decision: a panel already examined on is not "awaiting".**
+- **Narrows the merge gap below:** the report counts a letter under a merged record
+  for the record kept. The panel page and Jason's module still do not.
+
+## 2026-11-07: Conflict Detection can act, not only flag
+
+- **Conflict rows:** every number links to wherever the viewer can open that
+  list, the released list is marked as keeping the examiner (Manage panel →
+  Replace), and pending lists get "Ask department to substitute".
+- **Decision: the return remarks stay generic.** `returnTo()` sends them to the
+  candidate, who must never learn their examiners, so the reason lives on
+  `examiner_substitution_requests`.
+- **Decision: a return also records a request.** A returned list otherwise had
+  no way to change a seat. Seats can only change at academic_exec or
+  cgs_compile, never under a signature further up the chain.
+- **Decision: Senior Director and Dean now reach Conflict Detection,** or the
+  return action could not be used from it. Duplicates stay Senior Exec only.
+- **Duplicates:** one line per pair, with "Not the same person" and "Same person:
+  merge" (`Support/ExaminerMerger`, logged in `examiner_merges`). Nothing is
+  deleted. Old re-viva letter links resolve to the record kept.
+- **Known gap:** Jason's module keys sent letters by examiner id, so a letter
+  sent under a merged record reads as unsent for the record kept. The merge
+  warns when it can detect this.
+
 ## 2026-11-04: Across the modules, and wrap-up (Prompt 4)
 
 Branch `feature/hani-automation`. Commits: `5b1683d` (a), `43076e6` (b),

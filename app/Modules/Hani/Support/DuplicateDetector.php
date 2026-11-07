@@ -5,6 +5,7 @@ namespace App\Modules\Hani\Support;
 use App\Modules\Core\Models\Application;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerDuplicateDismissal;
+use App\Modules\Hani\Models\ExaminerMerge;
 use App\Modules\Hani\Models\ExaminerNomination;
 use Illuminate\Support\Collection;
 
@@ -22,7 +23,8 @@ use Illuminate\Support\Collection;
  *     person, which the exact clash check (same examiner id) never catches.
  *
  * Never blocks anything. A pair marked "Not the same person"
- * (ExaminerDuplicateDismissal) is not flagged again.
+ * (ExaminerDuplicateDismissal) is not flagged again, and neither is a record
+ * already merged away (ExaminerMerge).
  */
 class DuplicateDetector
 {
@@ -37,7 +39,7 @@ class DuplicateDetector
     public function pairs(Collection $examiners): array
     {
         $dismissed = ExaminerDuplicateDismissal::keys();
-        $list = $examiners->values()->all();
+        $list = $examiners->whereNotIn('id', ExaminerMerge::duplicateIds())->values()->all();
         $normalised = array_map(fn (Examiner $e) => $this->names->normalise($e->name), $list);
         $threshold = (int) config('hani.duplicates.threshold', 85);
         $pairs = [];
@@ -89,30 +91,48 @@ class DuplicateDetector
     }
 
     /**
-     * Likely duplicates between examiners on different active nominations --
-     * the compilation stage's check across departments. Keyed by application
-     * id, each entry a sentence naming both records and where they were
-     * nominated.
+     * Likely duplicates between examiners on different active nominations, one
+     * entry per pair, with every application naming either record. Conflict
+     * Detection's list, where it is acted on once for the pair.
+     *
+     * @return array<int, array{a: Examiner, b: Examiner, score: int, applications: array<int, array{nomination: ExaminerNomination, department: string, names: array<int, string>}>}>
+     */
+    public function pairsAcrossNominations(): array
+    {
+        [$where, $examiners] = $this->activeSeats();
+        $result = [];
+
+        foreach ($this->pairs($examiners) as $pair) {
+            $applications = [];
+
+            foreach ([$pair['a'], $pair['b']] as $examiner) {
+                foreach ($where[$examiner->id] as $nomination) {
+                    $applications[$nomination->application_id]['nomination'] = $nomination;
+                    $applications[$nomination->application_id]['department'] = $nomination->application?->student?->department ?: 'no department';
+                    $applications[$nomination->application_id]['names'][] = $examiner->name;
+                }
+            }
+
+            // Both records on one panel alone is not a clash between lists.
+            if (count($applications) > 1) {
+                ksort($applications);
+                $result[] = $pair + ['applications' => array_values($applications)];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * The same finding per application, for that application's card and the
+     * compile notification. Keyed by application id, each entry a sentence
+     * naming both records and where they were nominated.
      *
      * @return array<int, array<int, string>>
      */
     public function acrossNominations(): array
     {
-        $nominations = ExaminerNomination::with(array_merge(ExaminerNomination::slotRelations(), ['application.student']))
-            ->whereHas('application', fn ($q) => $q->where('module_type', 'examiner_nomination')
-                ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED]))
-            ->get();
-
-        // examiner id => the nominations (application ids) naming them
-        $where = [];
-        $examiners = collect();
-
-        foreach ($nominations as $nomination) {
-            foreach ($nomination->examiners() as $examiner) {
-                $where[$examiner->id][] = $nomination;
-                $examiners->put($examiner->id, $examiner);
-            }
-        }
+        [$where, $examiners] = $this->activeSeats();
 
         $flags = [];
 
@@ -139,5 +159,26 @@ class DuplicateDetector
         }
 
         return array_map(fn ($list) => array_values(array_unique($list)), $flags);
+    }
+
+    /** @return array{0: array<int, array<int, ExaminerNomination>>, 1: Collection<int, Examiner>} examiner id => nominations naming them, and those examiners */
+    protected function activeSeats(): array
+    {
+        $nominations = ExaminerNomination::with(array_merge(ExaminerNomination::slotRelations(), ['application.student']))
+            ->whereHas('application', fn ($q) => $q->where('module_type', 'examiner_nomination')
+                ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED]))
+            ->get();
+
+        $where = [];
+        $examiners = collect();
+
+        foreach ($nominations as $nomination) {
+            foreach ($nomination->examiners() as $examiner) {
+                $where[$examiner->id][] = $nomination;
+                $examiners->put($examiner->id, $examiner);
+            }
+        }
+
+        return [$where, $examiners];
     }
 }

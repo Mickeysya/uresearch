@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hani\Support;
 
+use App\Modules\Core\Contracts\SuppliesReleasedExaminers;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Hani\Models\Examiner;
@@ -15,13 +16,10 @@ use App\Modules\Hani\Models\ExaminerNomination;
  * released nominations only, each panel as it stands NOW (after any decline
  * and backup promotion -- PanelSeats keeps the seat columns current).
  *
- * The methods are those of the Core contract proposed in SHARED_CHANGES.md
- * (SuppliesReleasedExaminers). This class does not declare the interface,
- * so it loads whether or not Core has it; ReleasedExaminerBinding does, and
- * Hani\ModuleProvider binds that only when the interface exists. Never
- * imported by anyone else's module.
+ * Hani\ModuleProvider binds it to the Core contract. Never imported by anyone
+ * else's module: they ask the container for SuppliesReleasedExaminers.
  */
-class ReleasedExaminerProvider
+class ReleasedExaminerProvider implements SuppliesReleasedExaminers
 {
     /** @return array<int, array> every released panel, newest first, optionally only those released since a moment */
     public function releasedPanels(?\DateTimeInterface $since = null): array

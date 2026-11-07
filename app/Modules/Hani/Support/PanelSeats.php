@@ -2,11 +2,13 @@
 
 namespace App\Modules\Hani\Support;
 
+use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerSeatHistory;
+use App\Modules\Hani\Models\ExaminerSubstitutionRequest;
 use App\Modules\Hani\Notifications\PanelSeatChanged;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +29,9 @@ use Illuminate\Validation\ValidationException;
  *               re-examine, so they stay Assigned (until the re-viva outcome)
  *   freeWithoutGap()  category 4 and the window closed with no re-viva
  *               logged: the mains never examined again, so no gap
+ *   substitute()  a seat on a PENDING list, replaced at a Conflict Detection
+ *               request. Nobody is tied up before release, so nobody is freed
+ *   reassign()  a merge (ExaminerMerger): the same person, on one record now
  *
  * The seat columns on examiner_nominations are updated in place so they
  * always show the CURRENT panel -- Jason's appointment-letter module reads
@@ -156,6 +161,49 @@ class PanelSeats
     }
 
     /**
+     * The department answers a substitution request. Refused once the list has
+     * moved past the stages where a seat may change, or has been decided.
+     *
+     * @return ExaminerSubstitutionRequest the request, now done
+     */
+    public function substitute(ExaminerSubstitutionRequest $request, Examiner $examiner, User $actor): ExaminerSubstitutionRequest
+    {
+        return DB::transaction(function () use ($request, $examiner, $actor) {
+            $locked = ExaminerSubstitutionRequest::whereKey($request->id)->lockForUpdate()->firstOrFail();
+            $nomination = ExaminerNomination::with('application.student')->whereKey($locked->nomination_id)->lockForUpdate()->firstOrFail();
+            Application::whereKey($nomination->application_id)->lockForUpdate()->first();
+            $locked->setRelation('nomination', $nomination);
+
+            if (! $locked->isReplaceable()) {
+                throw ValidationException::withMessages(['examiner_id' => 'This request can no longer be answered here: it has been closed, or the list has moved on.']);
+            }
+
+            $this->assertCanTake($examiner, $nomination, $locked->seat);
+
+            $previous = $nomination->{$locked->seat} ? Examiner::find($nomination->{$locked->seat}) : null;
+            $nomination->forceFill([$locked->seat => $examiner->id])->save();
+
+            $this->log($nomination, $locked->seat, $examiner->id, 'substituted', 'Replaces '.($previous?->name ?? 'an empty seat').'. '.$locked->reason, $actor);
+
+            $locked->update([
+                'status' => ExaminerSubstitutionRequest::DONE,
+                'replacement_examiner_id' => $examiner->id,
+                'resolved_by_id' => $actor->id,
+                'resolved_at' => now(),
+            ]);
+
+            return $locked;
+        });
+    }
+
+    /** One merged record's seat moves to the kept record, or empties if they already sit here. */
+    public function reassign(ExaminerNomination $nomination, string $seat, ?Examiner $to, string $reason, User $actor): void
+    {
+        $nomination->forceFill([$seat => $to?->id])->save();
+        $this->log($nomination, $seat, $to?->id, 'merged', $reason, $actor);
+    }
+
+    /**
      * The evaluation is done. The examiners in the main seats examined, so
      * their 90-day gap starts today; anyone else this panel had tied up (a
      * backup, when letters went to backups too) is freed with no gap.
@@ -268,7 +316,7 @@ class PanelSeats
         }
     }
 
-    protected function log(ExaminerNomination $nomination, string $seat, ?int $examinerId, string $event, ?string $reason, ?User $actor): void
+    public function log(ExaminerNomination $nomination, string $seat, ?int $examinerId, string $event, ?string $reason, ?User $actor): void
     {
         ExaminerSeatHistory::create([
             'nomination_id' => $nomination->id,

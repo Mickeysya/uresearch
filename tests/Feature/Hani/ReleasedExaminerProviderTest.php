@@ -3,15 +3,15 @@
 namespace Tests\Feature\Hani;
 
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
+use App\Modules\Core\Contracts\SuppliesAppointmentDispatch;
+use App\Modules\Core\Contracts\SuppliesReleasedExaminers;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
-use App\Modules\Hani\ModuleProvider;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Notifications\ExaminersReleased;
 use App\Modules\Hani\Support\PanelSeats;
-use App\Modules\Hani\Support\ReleasedExaminerBinding;
 use App\Modules\Hani\Support\ReleasedExaminerProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
@@ -20,7 +20,7 @@ use Tests\TestCase;
 
 /**
  * The hand-off to Jason's appointment letters: the released panels, the
- * optional Core contracts, the release notification and the export's
+ * Core contracts, the release notification and the export's
  * Application No. column.
  */
 class ReleasedExaminerProviderTest extends TestCase
@@ -111,33 +111,20 @@ class ReleasedExaminerProviderTest extends TestCase
         $this->assertNull($panel['examiners']['internal_backup']);
     }
 
-    public function test_the_contracts_are_used_only_when_core_provides_them(): void
+    public function test_the_contracts_are_bound_and_the_panel_page_reads_jasons_dispatch(): void
     {
         $nomination = $this->nomination(Application::STATUS_APPROVED, '22000001');
-        $contract = 'App\\Modules\\Core\\Contracts\\SuppliesReleasedExaminers';
-        $dispatchContract = 'App\\Modules\\Core\\Contracts\\SuppliesAppointmentDispatch';
-
-        // Not in Core yet (SHARED_CHANGES.md): nothing bound, nothing broken.
-        $this->assertFalse(interface_exists($contract));
-        $this->assertFalse(app()->bound($contract));
-
         $senior = $this->seniorExec();
+
+        $this->assertInstanceOf(ReleasedExaminerProvider::class, app(SuppliesReleasedExaminers::class));
+        $this->assertCount(1, app(SuppliesReleasedExaminers::class)->releasedPanels());
+
+        // Taken away, the panel page drops the column and nothing breaks.
+        unset($this->app[SuppliesAppointmentDispatch::class]);
         $this->actingAs($senior)->get(route('examiner-panel.show', $nomination))
             ->assertOk()->assertDontSee('<th>Appointment letter</th>', false);
 
-        // Once Core declares them, the module binds itself and reads Jason's dispatch.
-        eval('namespace App\\Modules\\Core\\Contracts; interface SuppliesReleasedExaminers {
-            public function releasedPanels(?\\DateTimeInterface $since = null): array;
-            public function panelForStudent(int $studentId): ?array; }');
-        eval('namespace App\\Modules\\Core\\Contracts; interface SuppliesAppointmentDispatch {
-            public function packSentAt(int $applicationId, int $examinerId): ?\\DateTimeInterface; }');
-
-        (new ModuleProvider(app()))->bindReleasedExaminers();
-
-        $this->assertInstanceOf(ReleasedExaminerBinding::class, app($contract));
-        $this->assertCount(1, app($contract)->releasedPanels());
-
-        app()->instance($dispatchContract, new class implements \App\Modules\Core\Contracts\SuppliesAppointmentDispatch {
+        app()->instance(SuppliesAppointmentDispatch::class, new class implements SuppliesAppointmentDispatch {
             public function packSentAt(int $applicationId, int $examinerId): ?\DateTimeInterface
             {
                 return new \DateTimeImmutable('2026-11-01');

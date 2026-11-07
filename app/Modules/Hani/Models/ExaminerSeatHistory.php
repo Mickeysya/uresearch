@@ -42,6 +42,9 @@ class ExaminerSeatHistory extends Model
             'replaced' => 'Replacement appointed',
             'examined' => 'Examined; gap started',
             'freed' => 'Freed without a gap',
+            'sub_requested' => 'Substitution requested',
+            'substituted' => 'Substituted by the department',
+            'merged' => 'Record merged',
             default => ucfirst($this->event),
         };
     }
