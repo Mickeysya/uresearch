@@ -165,7 +165,11 @@ replaced automatically.
   CGS, Senior Director, Dean, Non-Exec. Faculty → department → candidate,
   clashes and conflict flags inline. xlsx/csv export with the same scope;
   column 1 "Application No." is the key for Jason's letters; columns are
-  only ever added at the end.
+  only ever added at the end. Each released seat shows its letter status ("Not
+  sent", "Sent <date>", "Replaced <date>"), from Jason's dispatch when bound and
+  otherwise the AE-entered date, with a "Letters: 2/2 sent" badge per candidate.
+  The download defaults to "Awaiting letters" (released, not yet examined on, a
+  main seat not sent; only those seats flagged); "Full list" is every row.
 - **Conflict Detection** (`/examiner-nomination/conflicts`, AE own
   department, Senior Exec, Senior Director, Dean): examiners nominated by more
   than one department on **open** nominations (pending, or released and not

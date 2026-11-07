@@ -19,6 +19,7 @@
     .rep-table th, .rep-table td { padding-left: var(--space-3); vertical-align: top; }
     .rep-seat { display: block; font-size: var(--text-xs); color: var(--text-grey); }
     .rep-none { color: var(--text-grey); }
+    .rep-letters { display: block; margin-top: var(--space-1); }
 
     .rep-band > td {
         padding: var(--space-4) var(--space-3);
@@ -57,7 +58,8 @@
     </x-core::page-header>
 
     <div class="rep-actions">
-        <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx']) }}" class="btn-secondary">Download Excel</a>
+        <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx']) }}" class="btn-secondary" data-region-swap-ignore>Download Excel: awaiting letters</a>
+        <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx', 'scope' => 'full']) }}" class="btn-secondary" data-region-swap-ignore>Download Excel: full list</a>
         @if (auth()->user()->role !== \App\Modules\Core\Support\Role::NON_EXEC_CGS)
             <a href="{{ route('conflict-detection.index') }}" class="btn-secondary">Conflict detection</a>
         @endif
@@ -110,6 +112,7 @@
 
                             @foreach ($rows as $nomination)
                                 @php($application = $nomination->application)
+                                @php($panelLetters = $letters[$nomination->id] ?? null)
                                 <tr id="nomination-{{ $nomination->id }}">
                                     <td>
                                         {{ $application?->student?->name }}
@@ -119,6 +122,13 @@
                                         {{-- Declines are recorded here, by the department's AE or the Senior Executive. --}}
                                         @if ($application?->status === 'approved' && (auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS || auth()->user()->role === \App\Modules\Core\Support\Role::ACADEMIC_EXEC))
                                             <a href="{{ route('examiner-panel.show', $nomination) }}" class="rep-seat">Manage panel</a>
+                                        @endif
+                                        @if ($panelLetters)
+                                            <span class="rep-letters">
+                                                <span class="status-badge {{ $panelLetters['sent'] === \App\Modules\Hani\Support\AppointmentLetters::MAIN_SEATS ? 'approved' : 'pending' }}">
+                                                    Letters: {{ $panelLetters['sent'] }}/{{ \App\Modules\Hani\Support\AppointmentLetters::MAIN_SEATS }} sent
+                                                </span>
+                                            </span>
                                         @endif
                                     </td>
                                     <td>{{ $nomination->thesis_title }}</td>
@@ -139,6 +149,10 @@
                                                 <span class="rep-none">Not named</span>
                                             @endif
 
+                                            @if ($panelLetters['seats'][Str::snake($main).'_id'] ?? null)
+                                                <span class="rep-seat">Letter: {{ $panelLetters['seats'][Str::snake($main).'_id'] }}</span>
+                                            @endif
+
                                             <span class="rep-seat">
                                                 backup:
                                                 @if ($nomination->$backup)
@@ -152,6 +166,16 @@
                                                     none
                                                 @endif
                                             </span>
+
+                                            @if ($panelLetters['seats'][Str::snake($backup).'_id'] ?? null)
+                                                <span class="rep-seat">Backup letter: {{ $panelLetters['seats'][Str::snake($backup).'_id'] }}</span>
+                                            @endif
+
+                                            @foreach ($panelLetters['replaced'] ?? [] as $former)
+                                                @if (in_array($former['seat'], [Str::snake($main).'_id', Str::snake($backup).'_id'], true))
+                                                    <span class="rep-seat">{{ $former['name'] }}: {{ $former['status'] }}</span>
+                                                @endif
+                                            @endforeach
                                         </td>
                                     @endforeach
 

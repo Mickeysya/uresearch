@@ -1,5 +1,21 @@
 # Changelog: Hani's modules
 
+## 2026-11-07: Examiner Report guards against duplicate letters
+
+- **Letter status per seat** on the report and in the export: "Not sent", "Sent
+  <date>" or "Replaced <date>", read from Jason's dispatch when bound and
+  otherwise from the AE-entered date (`Support/AppointmentLetters`).
+- **Download Excel defaults to "Awaiting letters";** "Full list" is the second
+  option. Six columns added at the end, none moved.
+- **Report badge:** "Letters: 2/2 sent" per released candidate.
+- **Decision: names stay on a part-sent row.** Jason's import reads the mains from
+  the records whenever a row has an Application No., so blanking a name would not
+  stop a second letter, and on its name-matching path could refuse the sheet. The
+  fix for those rows is on his side (SHARED_CHANGES.md, section 11).
+- **Decision: a panel already examined on is not "awaiting".**
+- **Narrows the merge gap below:** the report counts a letter under a merged record
+  for the record kept. The panel page and Jason's module still do not.
+
 ## 2026-11-07: Conflict Detection can act, not only flag
 
 - **Conflict rows:** every number links to wherever the viewer can open that

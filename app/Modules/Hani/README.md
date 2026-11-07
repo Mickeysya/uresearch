@@ -37,7 +37,7 @@ re-run it whenever the demo should look fresh.
 | **Conflict-of-interest** pre-check (UTP/CGS/026) | everyone in the chain | form, cards, report |
 | Cross-department clashes | AE, Senior Exec, Senior Director, Dean | form, cards, Conflict Detection |
 | Declines recorded, backup promoted, seat history | AE, Senior Exec | panel page |
-| Examiner Report, xlsx/csv export ("Application No." for Jason's letters) | AE (own dept), CGS, Director, Dean | `/examiner-nomination/report` |
+| Examiner Report with letter status per seat and a "Letters: 2/2 sent" badge; xlsx/csv export, awaiting letters or full list ("Application No." for Jason's letters) | AE (own dept), CGS, Director, Dean | `/examiner-nomination/report` |
 | Examiner email upkeep: report not working, confirm still valid, history, proposals at nomination | Non-Exec, Senior Exec, AE | examiner page, pool |
 | Examiner Dashboard (state, departments, returning, stages, expertise gaps) | AE (own dept), CGS, Director, Dean | `/examiner-dashboard` |
 | Pending Evaluation, mark complete (starts the 90-day gap) | AE | `/examiner-nomination/pending-evaluation` |
@@ -451,9 +451,14 @@ Settings in `config/hani.php` under `reviva`; unconfirmed values are marked
 
 ### Examiner Report export layout (for Jason's appointment letters)
 
-`/examiner-nomination/report/export?format=xlsx|csv`. There is one row per
-candidate, one sheet, and the same columns in both formats
-(`Exports/ExaminerListExport.php`).
+`/examiner-nomination/report/export?format=xlsx|csv&scope=awaiting|full`. There
+is one row per candidate, one sheet, and the same columns in both formats and
+both scopes (`Exports/ExaminerListExport.php`).
+
+| Scope | Rows |
+|---|---|
+| `awaiting` (the default, "Download Excel: awaiting letters") | Released panels with at least one main seat "Not sent". A panel already examined on, or freed without a viva, is left out. |
+| `full` ("Download Excel: full list") | Every row on the report, at any stage. |
 
 | # | Column | Notes |
 |---|---|---|
@@ -464,6 +469,24 @@ candidate, one sheet, and the same columns in both formats
 | 12–14 | External Main, External Main Institution, External Backup | the **current** panel |
 | 15–17 | Stage, Status, Submitted | |
 | 18–19 | Internal Main Email, External Main Email | blank where CGS has no email yet |
+| 20–23 | Internal Main, Internal Backup, External Main, External Backup **Letter Status** | `Not sent`, `Sent 01 Nov 2026`, or `Replaced 05 Nov 2026`. Blank before release, and for a seat that has never had a letter and is empty. |
+| 24 | **Letter Needed For** | Awaiting scope only: the main seats still `Not sent`, as `External Main: Dr Name`. A seat already sent is never listed. Several are separated by `; `. |
+| 25 | **Replaced Examiners** | Everyone who had a letter and has left the panel, as `Internal Main: Dr Name, Replaced 05 Nov 2026`. |
+
+**Where "Sent" comes from** (`Support/AppointmentLetters`): `packSentAt()` when
+`SuppliesAppointmentDispatch` is bound, otherwise the date the Academic Executive
+entered on the examiner progress page. One source only, never a mix. Until the
+Core contract is added (SHARED_CHANGES.md, section 1b) nothing is bound, so a
+letter Jason's module sent reads "Sent" only if the AE also entered its date.
+
+**A status belongs to whoever holds the seat now.** A replacement starts at
+`Not sent`, and the person they replaced moves to column 25. The seat's own
+column reads `Replaced` only while the seat is empty. A letter sent under a
+record later merged away counts for the record kept.
+
+**The names in columns 9–14 stay on a part-sent row:** they are the panel, and
+removing them could make the import refuse the sheet. Read column 24 for who is
+owed a letter. Jason's import does not read it yet (SHARED_CHANGES.md, section 11).
 
 **Stability rule:** columns are only ever added at the end; none is renamed,
 reordered or removed. Code-level access is the proposed Core contract
