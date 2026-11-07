@@ -5,6 +5,7 @@ use App\Modules\Haziq\Http\Controllers\AllowanceController;
 use App\Modules\Haziq\Http\Controllers\AssistantController;
 use App\Modules\Haziq\Http\Controllers\CandidatureAppealController;
 use App\Modules\Haziq\Http\Controllers\DelayReportController;
+use App\Modules\Haziq\Http\Controllers\DocumentCompletenessController;
 use App\Modules\Haziq\Http\Controllers\GaApplicationController;
 use App\Modules\Haziq\Http\Controllers\GraApplicationController;
 use App\Modules\Haziq\Http\Controllers\StageGateController;
@@ -139,6 +140,20 @@ Route::middleware('auth')->group(function () {
         // sampai director leh dowload excel", the same approver audience
         // as the monitoring screens, never the student's own narrow view.
         Route::get('/allowance/export', [AllowanceController::class, 'export'])->name('allowance.export');
+    });
+
+    // ---- Document Completeness ---------------------------------------
+    // "Document completeness never blocks routing" -- a report plus one
+    // manual action, same approver audience as Stage Gate/Allowance's own
+    // monitoring routes above (no Student here -- see the student's own
+    // missing-documents box on gra-application.mine/ga-application.mine
+    // instead).
+    Route::middleware('role:'.implode(',', array_merge(
+        [Role::ADMIN, Role::SUPERVISOR],
+        Role::cgsTeam(),
+    )))->group(function () {
+        Route::get('/document-completeness', [DocumentCompletenessController::class, 'index'])->name('document-completeness.index');
+        Route::post('/document-completeness/remind-all', [DocumentCompletenessController::class, 'remindAll'])->name('document-completeness.remind-all');
     });
 
     // Admin or CGS (non_exec) only — narrower than the monitoring group

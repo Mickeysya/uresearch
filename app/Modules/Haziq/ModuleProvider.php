@@ -2,9 +2,12 @@
 
 namespace App\Modules\Haziq;
 
+use App\Modules\Core\Contracts\SuppliesApprovedGaApplication;
 use App\Modules\Core\Contracts\SuppliesPostgraduateProgress;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Haziq\Console\Commands\EvaluateStageGates;
+use App\Modules\Haziq\Console\Commands\RemindIncompleteDocuments;
+use App\Modules\Haziq\Support\ApprovedGaApplicationProvider;
 use App\Modules\Haziq\Support\DashboardSupplier;
 use App\Modules\Haziq\Workflows\GaApplicationWorkflow;
 use App\Modules\Haziq\Workflows\GraApplicationWorkflow;
@@ -29,6 +32,13 @@ class ModuleProvider extends ServiceProvider
         // SuppliesPostgraduateProgress. This binding is what connects the
         // two, and it is the only place either side knows about the other.
         $this->app->bind(SuppliesPostgraduateProgress::class, DashboardSupplier::class);
+
+        // Nureen's GA Extension may only be requested once this module's
+        // own GA application is approved, and reads its service end date
+        // from there -- see Core\Contracts\SuppliesApprovedGaApplication.
+        // Same inversion as the binding above: Nureen never names a class
+        // in this folder either.
+        $this->app->bind(SuppliesApprovedGaApplication::class, ApprovedGaApplicationProvider::class);
     }
 
     public function boot(ModuleRegistry $registry): void
@@ -39,6 +49,7 @@ class ModuleProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 EvaluateStageGates::class,
+                RemindIncompleteDocuments::class,
             ]);
         }
 
@@ -48,6 +59,7 @@ class ModuleProvider extends ServiceProvider
         $this->app->booted(function () {
             $schedule = $this->app->make(Schedule::class);
             $schedule->command('stage-gate:evaluate')->dailyAt('07:30');
+            $schedule->command('document-completeness:remind')->weeklyOn(1, '08:00');
         });
     }
 }

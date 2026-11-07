@@ -6345,6 +6345,140 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
       background to confirm no wider regression; convention tests
       re-confirmed at the same 4 pre-existing, unrelated failures.
       Committing after this entry.
+- [x] **2026-11-07 — Document Completeness: a reminder engine plus a
+      chart, for both GRA and GA.** User, framing it explicitly: document
+      completeness never gates routing — "application boleh terus ke
+      approver lain even document tak complete" — it is a parallel
+      tracking concern only.
+  - [x] New `Support\DocumentCompleteness`: required-document lists
+        mirror `Gra`/`GaApplicationController::documentTypes()` exactly
+        (duplicated deliberately, not reached into those controllers —
+        see its own docblock), scoped to 'new' applications only (GRA
+        Extension was never gated on these at Submit either, so there is
+        nothing to chase there), tracked while `pending`/`approved`/
+        `returned` (never `draft` or `rejected`).
+  - [x] New `document_completeness_reminders` table (one row per
+        application, `reminder_count` + `last_reminded_at`) — this
+        module's own table, per Hard Rule 2, not a shared one.
+  - [x] `RemindIncompleteDocuments` (`document-completeness:remind`),
+        scheduled weekly (Monday 08:00) from `Haziq\ModuleProvider`, same
+        pattern as `stage-gate:evaluate`. Throttled to once a week per
+        application; `DocumentCompleteness::remind()` is shared by both
+        the weekly job and the manual action below, so they can never
+        double-send the same week.
+  - [x] `IncompleteDocumentsReminder` notification (mail + database),
+        listing every missing document by name, explicit that the
+        application keeps moving regardless.
+  - [x] `DocumentCompletenessController` + `document_completeness/index`
+        view: a doughnut chart (complete vs incomplete), a module filter,
+        and a **Send Reminder to All** button that bypasses the weekly
+        throttle. Visible to Admin/Supervisor/CGS team only — same
+        route-middleware group Stage Gate/Allowance's own monitoring
+        routes already use. New sidebar entry on `GraApplicationWorkflow`
+        (the one module that implements `ProvidesLinks`), same block as
+        Stage Gate Monitoring/Allowance Eligibility.
+  - [x] Student's own `gra-application.mine`/`ga-application.mine` page
+        now shows a "Still missing N documents" notice (new
+        `.alert-banner-warning` token-based style in this module's own
+        `partials/styles.blade.php`), never shown to an approver on the
+        same `show.blade.php`, never shown for a GRA Extension row.
+  - [x] `tests/Feature/Haziq/DocumentCompletenessTest.php`, 22 tests:
+        required-doc scoping per module, tracked-application scoping
+        (draft/rejected excluded, extension excluded), routing never
+        blocked by an incomplete application (locked in with a real
+        `decide()` call), the weekly throttle (not twice in the same
+        week, reminds again after one has passed), role-gated report
+        access, the module filter, "Send Reminder to All" respecting
+        both the filter and completeness, and the student/approver
+        banner visibility split. `php artisan test` 2023 passed, the
+        same 6 pre-existing unrelated failures as before this round
+        (`CandidacyAssistantRolesTest`, `Core\ModuleContractsTest`
+        research_centre seeding, `Core\PageShellTest` x2,
+        `Core\ProseTest`, `WorkstationCgsScreensTest` — none in a file
+        this round touched).
+- [x] **2026-11-07 — GRA Extension no longer waits for the service period
+      to actually end; applicable once approved.** User: "gra extention
+      tu diorang boleh apply je even tak habis service date, buang bende
+      tu, just bende tu applicable once die dah approve as gra je."
+      Reverses the "boleh isi bila dah end service date je" rule from
+      earlier in 2026-11.
+  - [x] `GraApplicationDetail::canBeExtended()` now checks
+        `application->status === STATUS_APPROVED` instead of
+        `service_end_date <= today`.
+  - [x] **Found while making this change: a real, separate security
+        gap in `storeExtension()`.** Its own `$parent` lookup had no
+        status filter at all (unlike `createExtension()`'s) — the old
+        date-only `canBeExtended()` check was the *only* thing stopping
+        a direct POST from extending a pending or rejected application,
+        and a rejected application's stale `service_end_date` could
+        still satisfy it once that date passed. The status-based
+        replacement closes this for both call sites, not just the one
+        the user asked about.
+  - [x] `tests/Feature/Haziq/GraExtensionEligibilityTest.php`, 4 tests:
+        an approved application extends with its service period still
+        2 months out (would have 403'd under the old rule), a pending
+        application's extension form is unreachable, and a direct POST
+        against a pending or rejected application's id is refused.
+- [x] **2026-11-07 — GA Extension (Nureen's module) linked to this
+      module's `ga_application`, reversing TODO.md's own "no shared key
+      or table between the two folders" decision from 2026-09-21.** User:
+      "ga pun sama selagi tak approve as ga, selagi tu taleh apply ga
+      extention, pastu kan ga extention form die dah mintak service end
+      date bila, amik je data dari form application tu." Confirmed via
+      `AskUserQuestion` before touching Nureen's folder or Core.
+  - [x] New Core contract `SuppliesApprovedGaApplication` (same
+        inversion as `SuppliesAttendance`/`SuppliesDraftCount` — Nureen
+        never names a Haziq class, Core never names either module's),
+        implemented by this module's new `Support\
+        ApprovedGaApplicationProvider` and bound in `Haziq\
+        ModuleProvider`. **This is the one piece of this round that
+        touches Core** — one new, additive, optionally-bound file;
+        nothing existing changed.
+  - [x] `Nureen\Http\Controllers\GaExtensionController`: `create()` now
+        aborts (403) without an approved `ga_application`; `saveDraft()`
+        re-checks the same for a brand-new draft (not for one already in
+        progress, so existing work is never retroactively punished);
+        `store()` re-checks unconditionally (the actual authority, since
+        it is what reaches the approval chain). `current_end_date` is no
+        longer trusted from the request in either — always read from the
+        approved application's own `service_end_date` — verified live
+        with a deliberately tampered request value, which was silently
+        ignored in favour of the real one.
+  - [x] `Nureen\Resources\views\ga_extension\form.blade.php`: "Current
+        GA End Date" changed from an editable `<input type="date">` to a
+        read-only display plus a hidden field carrying the same value
+        for the existing stage-gate-hint JS (`syncGate()`) — unaware of
+        the change, since it only ever reads `.value`. The "Backdated
+        appointments are not allowed" copy/check is dropped — it
+        specifically guarded against the student's own input, which no
+        longer exists.
+  - [x] `tests/Feature/Haziq/GaExtensionLinkTest.php`, 5 tests, all from
+        this module's own side: unreachable/reachable by approval status,
+        `saveDraft()`/`store()` both refuse without one, and the tamper
+        test above. `php artisan test` on this file and the rest of
+        `tests/Feature/Haziq/` (101 total): all green.
+  - [ ] **Left deliberately undone, by explicit instruction: Nureen's own
+        test suite is now 65 tests red**, per the full-suite run
+        (`--filter=GaExtension` alone only caught 48 of them) —
+        `GaExtensionTest`, `GaExtensionFormTest`, `GaExtensionHandbookTest`,
+        `SupervisorSafeguardsTest`, `SnapshotChainReachabilityTest`,
+        `DocumentPreviewTest`, `DraftsTest`. None of her fixtures set
+        up a prerequisite `ga_application`, so every `create()`/
+        `saveDraft()`/`store()` call in her suite now 403s before
+        reaching whatever it was testing. Asked via `AskUserQuestion`
+        whether to fix all of them (add a shared fixture helper to
+        `Concerns\FilesGaExtensions`, delete the one test that
+        specifically asserts the now-removed backdated-date rejection in
+        `GaExtensionFormTest`) or stop; user chose to stop — **"Stop
+        here, leave her tests red for now."** Flag this at the next
+        team sync before anyone touches `ga_extension` again; Nureen's
+        suite will not reflect reality until that fixture is added.
+  - [x] Full project suite re-run after all three of today's changes:
+        **1967 passed, 71 failed** — the 6 pre-existing unrelated
+        failures from earlier today (`CandidacyAssistantRolesTest`,
+        `Core\ModuleContractsTest`, `Core\PageShellTest` x2,
+        `Core\ProseTest`, `WorkstationCgsScreensTest`) plus exactly the
+        65 Nureen GA Extension failures above — nothing else moved.
 
 ---
 
@@ -6370,6 +6504,17 @@ exactly as built — Haziq's `ga_application` never covers GA extension, and
 GRA Extension is not a separate key (it reuses `gra_application` with
 `application_type = 'extension'`), so there is no key or table shared
 between the two folders. See `docs/module-keys.md` for the exact split.
+
+**Partially reversed 2026-11-05 (dashboard) and 2026-11-07 (eligibility).**
+"No key or table shared between the two folders" no longer holds in full:
+Core's `Application.module_type` is read across the boundary via contracts
+(`SuppliesPostgraduateProgress`, `SuppliesApprovedGaApplication`), never a
+direct model import either way. The module-ownership split above — who
+owns which workflow and table — is unchanged; only the "no cross-reads at
+all" part has been relaxed, deliberately, each time via the same
+Core-contract inversion the rest of the system already uses. See this
+section's own 2026-11-07 TODO entry for the GA Extension link's full
+detail, including the 48 of Nureen's tests it leaves failing.
 
 ### 2. Chloe's candidacy trio vs Norhanis' RPD trio
 

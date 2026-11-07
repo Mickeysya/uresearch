@@ -27,6 +27,7 @@ use App\Modules\Haziq\Notifications\ApplicationRejected;
 use App\Modules\Haziq\Notifications\ApplicationSubmitted;
 use App\Modules\Haziq\Notifications\LetterIssued;
 use App\Modules\Haziq\Notifications\StageAwaitingReview;
+use App\Modules\Haziq\Support\DocumentCompleteness;
 use App\Modules\Haziq\Support\StageGateEngine;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -404,6 +405,10 @@ class GraApplicationController extends Controller
             // see AllowanceRecommendationNote's migration for why.
             'allowanceNotes' => collect(),
             'canEditAllowance' => false,
+            // Extension rows were never gated on these documents at
+            // Submit (storeExtension() has no missingRequiredDocuments()
+            // call) -- see Support\DocumentCompleteness's own docblock.
+            'missingDocuments' => $data['detail']->isExtension() ? collect() : DocumentCompleteness::missingFor($application),
         ]);
     }
 
@@ -663,12 +668,13 @@ class GraApplicationController extends Controller
 
         $parentDetail = GraApplicationDetail::where('application_id', $parent->id)->firstOrFail();
 
-        // "boleh isi bila dah end service date je" — extension only opens
-        // once the current appointment has actually run out, 2026-11.
+        // Redundant with the query above (already APPROVED-only), kept so
+        // this reads the same rule the one unguarded lookup in
+        // storeExtension() actually relies on.
         abort_unless(
             $parentDetail->canBeExtended(),
             403,
-            "You can only apply for an extension once your current service period (ending {$parentDetail->service_end_date->format('j M Y')}) has passed."
+            'You can only apply for an extension once your current GRA application has been approved.'
         );
 
         return view('haziq::gra_application.form', [
@@ -692,10 +698,13 @@ class GraApplicationController extends Controller
 
         $parentDetail = GraApplicationDetail::where('application_id', $parent->id)->firstOrFail();
 
+        // This lookup has no status filter of its own (unlike
+        // createExtension()'s), so this is the only thing stopping a
+        // direct POST from extending a pending or rejected application.
         abort_unless(
             $parentDetail->canBeExtended(),
             403,
-            "You can only apply for an extension once your current service period (ending {$parentDetail->service_end_date->format('j M Y')}) has passed."
+            'You can only apply for an extension once your current GRA application has been approved.'
         );
 
         $data = $request->validate([

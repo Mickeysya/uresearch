@@ -179,6 +179,7 @@ class GraApplicationWorkflow implements WorkflowModule, ProvidesLinks
             $links[] = ['label' => 'GRA Applicants', 'route' => 'gra-application.index'];
             $links[] = ['label' => 'Stage Gate Monitoring', 'route' => 'stage-gate.index'];
             $links[] = ['label' => 'Allowance Eligibility', 'route' => 'allowance.index'];
+            $links[] = ['label' => 'Document Completeness', 'route' => 'document-completeness.index'];
             $links[] = ['label' => 'Candidature Appeals', 'route' => 'candidature-appeal.queue'];
         }
 

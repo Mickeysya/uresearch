@@ -103,4 +103,12 @@
         border: 1px solid #D0342C;
         color: #8A1F1A;
     }
+    /* Document completeness on the student's own application page -- an
+       informational notice, never a block, so it reads as a lighter
+       amber than the termination danger banner above. */
+    .alert-banner-warning {
+        background: var(--warning-bg);
+        border: 1px solid var(--warning-border);
+        color: var(--warning-fg);
+    }
 </style>

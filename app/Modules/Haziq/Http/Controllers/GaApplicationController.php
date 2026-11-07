@@ -25,6 +25,7 @@ use App\Modules\Haziq\Notifications\GaInterviewFailed;
 use App\Modules\Haziq\Notifications\GaInterviewScheduled;
 use App\Modules\Haziq\Notifications\LetterIssued;
 use App\Modules\Haziq\Notifications\StageAwaitingReview;
+use App\Modules\Haziq\Support\DocumentCompleteness;
 use App\Modules\Haziq\Support\Roles;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -386,6 +387,7 @@ class GaApplicationController extends Controller
             'canCorrect' => false,
             'canEdit' => $this->canStudentEdit($application),
             'viewerIsStudent' => true,
+            'missingDocuments' => DocumentCompleteness::missingFor($application),
         ]);
     }
 

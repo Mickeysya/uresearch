@@ -186,6 +186,14 @@
             <p style="color: var(--text-grey);">No documents uploaded.</p>
         @endif
 
+        @if (($viewerIsStudent ?? false) && ($missingDocuments ?? collect())->isNotEmpty())
+            <div class="alert-banner alert-banner-warning" role="status">
+                <strong>Still missing {{ $missingDocuments->count() }} {{ Str::plural('document', $missingDocuments->count()) }}:</strong>
+                {{ $missingDocuments->implode(', ') }}.
+                Your application keeps moving through the approval chain either way, so upload these whenever you can.
+            </div>
+        @endif
+
         <h3>Approval History</h3>
         @forelse ($application->history as $entry)
             <p>
