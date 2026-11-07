@@ -51,8 +51,18 @@
 
     /* The two date-ish columns and the action never need to wrap. */
     .exam-table td:nth-child(6), .exam-table th:nth-child(6) { white-space: nowrap; }
+    /* The row's actions stack, at one compact size, so the column is one button
+       wide. Side by side they pushed the second action off the table's edge,
+       behind a sideways scroll, at 1440px. */
+    .exam-table th { white-space: normal; }
     .exam-table td:last-child { text-align: right; white-space: nowrap; }
-    .exam-table td:last-child button { margin: 0; padding: 6px 12px; font-size: var(--text-sm); }
+    .exam-table td:last-child > * { display: flex; width: 100%; margin: 0 0 6px; }
+    .exam-table td:last-child > :last-child { margin-bottom: 0; }
+    .exam-table td:last-child button,
+    .exam-table td:last-child .btn-secondary {
+        width: 100%; margin: 0; padding: 6px 12px;
+        font-size: var(--text-sm); line-height: 1.2; box-sizing: border-box;
+    }
 
     .examiner-duplicate { display: block; margin-top: 3px; padding: 2px 8px; border-radius: 8px; font-size: var(--text-2xs); background: var(--warning-bg); color: var(--warning-fg); }
     .examiner-duplicate form { display: inline; }
@@ -323,7 +333,7 @@
                                     Mark Unavailable
                                 </button>
                             @else
-                                <form method="POST" action="{{ route('examiner-admin.toggle-active', $examiner) }}" style="display: inline;">
+                                <form method="POST" action="{{ route('examiner-admin.toggle-active', $examiner) }}">
                                     @csrf
                                     <button type="submit">Reactivate</button>
                                 </form>
