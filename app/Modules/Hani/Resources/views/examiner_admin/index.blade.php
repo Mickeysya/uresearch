@@ -20,6 +20,19 @@
        table -- and 680px is why the fourth stat card wrapped onto its own row
        and the table scrolled sideways on a 1900px monitor. It is a full-width
        page now, capped only where a table stops being readable. */
+    /* The header's actions as one row of one size. uresearch.css still gives
+       .btn margin-top: 16px and margin-right: 8px, which .btn-secondary never
+       had, and layout.css gives the two different padding and line-height,
+       which is why "Add an examiner" sat lower and stood a different height.
+       The row's gap (layout.css, .page-header-actions) is the only spacing. */
+    .page-header-actions > .btn,
+    .page-header-actions > .btn-secondary {
+        margin: 0;
+        padding: var(--space-3) var(--space-5);
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
     /* Sizes come from tokens.css, not literals: --page-max and the --text-*
        scale are fluid, so this page narrows and its type shrinks with the
        viewport instead of holding laptop-era numbers on every screen. */
