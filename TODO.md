@@ -6711,6 +6711,59 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         month's figure stays unconfirmed, next month's running total
         would be RM8,000.00." — matches the user's own hand-worked
         figures exactly.
+- [x] **2026-11-08 — only the FIRST withheld month is confirmable; every
+      withheld month after it is locked until Stage 1 actually
+      completes.** Explicitly reverses 2026-11-06's own decision
+      ("every withheld month is confirmable, waiting for Stage 1 is no
+      longer a precondition") on direct instruction, after a side-by-
+      side trace of the grace-boundary question surfaced the real
+      disagreement. User, asked directly to choose between the two:
+      "only the first withheld month confirmable until Stage 1
+      completes, the rest locked."
+  - [x] **Reasoning, confirmed by the user**: the first withheld month
+        is still legitimately payable — its own payment is for service
+        from *before* Stage 1 actually went overdue (the permanent
+        payroll lag means a CGS viewer only ever sees last month's
+        service). Every withheld month after that has no such excuse,
+        so it stays locked until Stage 1 is genuinely marked complete —
+        at which point `recordCompletion()`'s existing back-pay still
+        flips every withheld row to `backdated` in one go, confirmable
+        as a batch exactly as before. Nothing about back-pay itself
+        changed.
+  - [x] One-line fix, `rowFor()`'s `$confirmable`: added
+        `&& ($row->status !== 'withheld' || $previousStatus !== 'withheld')`
+        — `$previousStatus` is the walk's own existing variable (already
+        used by the `reviewable` checks just below it), never reset by
+        a confirmation in between, so it correctly reads 'withheld' only
+        once an overdue run has already produced at least one withheld
+        row. `confirmPayment()` needed no change at all — it already
+        calls `rowFor()` and aborts on `! $row['confirmable']`, so the
+        server-side guard inherited the new rule automatically; no
+        separate logic to keep in sync.
+  - [x] Updated `AllowanceRowForTest`: the old test asserting "withheld
+        must stay confirmable" directly encoded the rule just reversed,
+        replaced with 4 tests — first withheld month confirmable, second
+        consecutive one locked (still accumulates, just not
+        confirmable), every withheld row unlocking together once
+        `recordCompletion()` actually runs, and the existing "confirming
+        resets next month" test re-pointed at the first withheld month
+        (the only one still legitimately confirmable to begin with).
+        `php artisan test` 122/122 in `tests/Feature/Haziq/`.
+  - [x] Verified live over real HTTP as `cgs@utp.edu.my` against two
+        disposable applications (deleted after): one with two
+        consecutive withheld months showed the second (the one the lag
+        currently displays) with an empty Action column, and a direct
+        POST to `confirm-payment` against it correctly 404'd
+        ("Nothing pending to confirm for this application this
+        month."); a second, single-withheld-month application showed
+        "Mark Payment Complete" normally. Application #25 confirmed
+        untouched throughout.
+  - [x] **Left open, by the user's own choice not to resolve it this
+        round**: the related grace-boundary question (does the month
+        `grace_end_date` falls in count as eligible or already
+        withheld) surfaced during this same exchange, traced
+        side-by-side against the historical RM24,000 settled case —
+        not changed. `statusAsOf()` is untouched.
 
 ---
 

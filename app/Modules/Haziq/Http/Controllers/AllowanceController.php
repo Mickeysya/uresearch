@@ -556,16 +556,26 @@ class AllowanceController extends Controller
                 $displayStatus = $rowConfirmed || $monthsAccumulating === 0
                     ? 'eligible'
                     : ($row->status === 'withheld' ? 'withheld' : 'payment_pending');
-                // Confirmed explicitly 2026-11-06: a 'withheld' month is
-                // still money the student is owed for a period CGS simply
-                // hasn't paid out yet — the *label* reads 'withheld'
-                // (Stage 1 is overdue) but CGS can still mark it complete
-                // month by month, exactly like 'payment_pending'. Waiting
-                // for Stage 1 itself to be marked complete is no longer a
-                // precondition for confirming the accumulating total —
-                // only an *unconfirmed* row (nothing accumulated yet, or
-                // already paid this round) blocks the action.
-                $confirmable = $displayStatus !== 'eligible';
+                // Confirmed explicitly 2026-11-08, replacing the
+                // 2026-11-06 decision this comment used to describe:
+                // only the FIRST withheld month is confirmable. Its own
+                // payment is still for service from before Stage 1
+                // actually went overdue (the payroll lag), so it's
+                // legitimately payable on its own; every withheld month
+                // after that stays locked until Stage 1 is actually
+                // marked complete — at which point recordCompletion()'s
+                // back-pay flips every withheld row to 'backdated' in
+                // one go, confirmable as a batch from there.
+                // $previousStatus is still whatever the row before this
+                // one was (never reset by a confirmation in between,
+                // same variable used for the reviewable checks below) —
+                // it reads 'withheld' only once Stage 1's overdue run
+                // has already produced at least one withheld row, which
+                // is exactly "this is not the first one" either way.
+                // 'payment_pending' rows (unconfirmed but never overdue)
+                // are untouched by this — only the withheld label locks.
+                $confirmable = $displayStatus !== 'eligible'
+                    && ($row->status !== 'withheld' || $previousStatus !== 'withheld');
 
                 // A reinstatement month resumed immediately by
                 // StageGateEngine::resumeReinstatementMonth() still lets
