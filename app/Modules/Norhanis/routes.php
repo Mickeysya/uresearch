@@ -8,6 +8,7 @@ use App\Modules\Norhanis\Http\Controllers\ClaimsController;
 use App\Modules\Norhanis\Http\Controllers\PublicationCertificationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationEvaluationController;
+use App\Modules\Norhanis\Http\Controllers\TaHourController;
 use App\Modules\Norhanis\Http\Controllers\TravelController;
 use Illuminate\Support\Facades\Route;
 
@@ -62,6 +63,13 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/travel/new', [TravelController::class, 'create'])->name('travel.create');
         Route::post('/travel', [TravelController::class, 'store'])->name('travel.store');
+
+        // Saved drafts -- the owning student only (Support\Drafts::ownedBy()).
+        // Named <module>.draft.* so Nureen's My Drafts page can link to them.
+        Route::post('/travel/draft', [TravelController::class, 'saveDraft'])->name('travel.draft.save');
+        Route::get('/travel/draft/{application}', [TravelController::class, 'editDraft'])->name('travel.draft.edit');
+        Route::post('/travel/draft/{application}', [TravelController::class, 'saveDraft'])->name('travel.draft.update');
+        Route::delete('/travel/draft/{application}', [TravelController::class, 'destroyDraft'])->name('travel.draft.destroy');
         Route::get('/travel/{application}/supporting-document', [TravelController::class, 'editDocument'])->name('travel.document.edit');
         Route::post('/travel/{application}/supporting-document', [TravelController::class, 'updateDocument'])->name('travel.document.update');
     });
@@ -85,6 +93,12 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/claims/new', [ClaimsController::class, 'create'])->name('claims.create');
         Route::post('/claims', [ClaimsController::class, 'store'])->name('claims.store');
+
+        // module_type is claims_student, hence the route names.
+        Route::post('/claims/draft', [ClaimsController::class, 'saveDraft'])->name('claims-student.draft.save');
+        Route::get('/claims/draft/{application}', [ClaimsController::class, 'editDraft'])->name('claims-student.draft.edit');
+        Route::post('/claims/draft/{application}', [ClaimsController::class, 'saveDraft'])->name('claims-student.draft.update');
+        Route::delete('/claims/draft/{application}', [ClaimsController::class, 'destroyDraft'])->name('claims-student.draft.destroy');
     });
 
     Route::middleware('role:'.implode(',', [
@@ -98,6 +112,11 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/publication/new', [PublicationController::class, 'create'])->name('publication.create');
         Route::post('/publication', [PublicationController::class, 'store'])->name('publication.store');
+
+        Route::post('/publication/draft', [PublicationController::class, 'saveDraft'])->name('publication.draft.save');
+        Route::get('/publication/draft/{application}', [PublicationController::class, 'editDraft'])->name('publication.draft.edit');
+        Route::post('/publication/draft/{application}', [PublicationController::class, 'saveDraft'])->name('publication.draft.update');
+        Route::delete('/publication/draft/{application}', [PublicationController::class, 'destroyDraft'])->name('publication.draft.destroy');
 
         // Who has signed the online Authorship Certification, and a nudge
         // for whoever has not. Throttled so it cannot be used to flood an inbox.
@@ -126,6 +145,13 @@ Route::middleware('auth')->group(function () {
         Route::post('/publication/{application}/decide', [PublicationController::class, 'decide'])->name('publication.decide');
     });
 
+    // ---- TA Hours (handed over from Haziq's module) ----------------------
+    // Every role: a student sees their own total, staff record entries for
+    // their scope. Enforced inside TaHourController, not by route middleware,
+    // because "my own" vs "my supervisees" needs the signed-in user's row.
+    // Same URL and route names as before, so every existing link still works.
+    Route::get('/ta-hours', [TaHourController::class, 'index'])->name('ta-hours.index');
+    Route::post('/ta-hours', [TaHourController::class, 'store'])->name('ta-hours.store');
 });
 
 // ---- Publication: sign-offs from people without an account ---------------

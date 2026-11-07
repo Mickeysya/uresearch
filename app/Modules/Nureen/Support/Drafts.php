@@ -27,6 +27,23 @@ class Drafts
     public const MODULES = ['ga_extension', 'ga_certification'];
 
     /**
+     * Other modules' saved drafts, listed on My Drafts beside these:
+     * module_type => a scope narrowing that module's draft rows to the ones
+     * that are saved drafts (or null for all of them). Each module registers
+     * itself from its own ModuleProvider -- Norhanis' Travel, Publication and
+     * Claims do -- and links its rows through <module-type>.draft.edit and
+     * .draft.destroy routes, the same names this module's routes use.
+     *
+     * @var array<string, \Closure|null>
+     */
+    protected static array $listed = [];
+
+    public static function list(string $module, ?\Closure $scope = null): void
+    {
+        static::$listed[$module] = $scope;
+    }
+
+    /**
      * The draft, if it is one of $module's and belongs to $student --
      * otherwise abort: 403 for someone else's, 404 for anything that is
      * not (or is no longer) a draft of this module.
@@ -46,7 +63,12 @@ class Drafts
         return Application::query()
             ->where('student_id', $student->id)
             ->where('status', Application::STATUS_DRAFT)
-            ->whereIn('module_type', $module ? [$module] : self::MODULES)
+            ->whereIn('module_type', $module ? [$module] : [...self::MODULES, ...array_keys(static::$listed)])
+            ->where(function ($query) {
+                foreach (array_filter(static::$listed) as $listed => $scope) {
+                    $query->where(fn ($q) => $q->where('module_type', '!=', $listed)->orWhere(fn ($own) => $scope($own)));
+                }
+            })
             ->with('documents')
             ->latest('updated_at')
             ->get();

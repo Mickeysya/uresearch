@@ -3,9 +3,11 @@
 namespace App\Modules\Haziq;
 
 use App\Modules\Core\Contracts\SuppliesPostgraduateProgress;
+use App\Modules\Core\Contracts\SuppliesTeachingAssistantStatus;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Haziq\Console\Commands\EvaluateStageGates;
 use App\Modules\Haziq\Support\DashboardSupplier;
+use App\Modules\Haziq\Support\TeachingAssistantStatus;
 use App\Modules\Haziq\Workflows\GaApplicationWorkflow;
 use App\Modules\Haziq\Workflows\GraApplicationWorkflow;
 use Illuminate\Console\Scheduling\Schedule;
@@ -29,6 +31,10 @@ class ModuleProvider extends ServiceProvider
         // SuppliesPostgraduateProgress. This binding is what connects the
         // two, and it is the only place either side knows about the other.
         $this->app->bind(SuppliesPostgraduateProgress::class, DashboardSupplier::class);
+
+        // Same seam for other modules' forms: whether a student is a GA/GRA
+        // today, and their TA hours -- see Core\Contracts\SuppliesTeachingAssistantStatus.
+        $this->app->bind(SuppliesTeachingAssistantStatus::class, TeachingAssistantStatus::class);
     }
 
     public function boot(ModuleRegistry $registry): void

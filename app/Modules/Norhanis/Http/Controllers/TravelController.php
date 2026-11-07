@@ -4,6 +4,7 @@ namespace App\Modules\Norhanis\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Norhanis\Http\Controllers\Concerns\ApprovesAndNotifies;
+use App\Modules\Norhanis\Http\Controllers\Concerns\SavesDrafts;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
@@ -15,6 +16,7 @@ use App\Modules\Norhanis\Models\TravelDetail;
 use App\Modules\Norhanis\Models\TravelTaPlan;
 use App\Modules\Norhanis\Notifications\TravelSupportingDocumentUpdated;
 use App\Modules\Norhanis\Support\StageDurations;
+use App\Modules\Norhanis\Support\TaStatus;
 use App\Modules\Norhanis\Workflows\TravelWorkflow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,17 +26,38 @@ use Illuminate\Support\Facades\Storage;
 class TravelController extends Controller
 {
     use ApprovesAndNotifies;
-
-    /** Fixed per semester. Never trusted from the form -- see store(). */
-    protected const TA_HOURS_REQUIRED = 84;
+    use SavesDrafts;
 
     protected function moduleKey(): string
     {
         return 'travel';
     }
 
-    public function create(TravelWorkflow $workflow, StageDurations $durations)
+    protected function draftFields(): array
     {
+        return [
+            'type_of_request', 'other_request_specify', 'is_international', 'travel_start_date', 'travel_end_date',
+            'reason_for_travel', 'destination_address', 'cost_centre', 'contact_person_name', 'contact_person_no',
+            'contact_person_email', 'is_ga_gra', 'ta_hours_completed', 'ta_hours_during_travel',
+            'ta_management_method', 'ta_plan_dates',
+        ];
+    }
+
+    protected function draftDocuments(): array
+    {
+        return ['supporting_document' => 'Supporting Document'];
+    }
+
+    public function create(Request $request)
+    {
+        return $this->form($request, null);
+    }
+
+    protected function form(Request $request, ?Application $draft)
+    {
+        $workflow = app(TravelWorkflow::class);
+        $durations = app(StageDurations::class);
+
         // How long approval usually takes on each route, and so the earliest
         // a decision should arrive if submitted now. The form warns when the
         // trip starts before that -- a warning, never a block, because an
@@ -52,12 +75,31 @@ class TravelController extends Controller
         return view('norhanis::travel.form', [
             'requestTypes' => TravelDetail::requestTypes(),
             'leadTimes' => $leadTimes,
-        ]);
+            'ta' => app(TaStatus::class)->for($request->user()),
+            'taHoursRequired' => (int) config('norhanis.ta.hours_required'),
+        ] + $this->draftViewData($request, $draft));
     }
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents, ApproverNotifier $notifier)
     {
-        $data = $request->validate([
+        $draft = $this->submittingDraft($request);
+        $removing = $this->draftRemoving($request, $draft);
+
+        // Whether the student is a GA/GRA, and their TA hours this semester,
+        // come from the GA/GRA module when it can say -- never from the form,
+        // which could claim anything. Only when nothing answers does the
+        // student's own answer stand.
+        $ta = app(TaStatus::class)->for($request->user());
+        if ($ta['known']) {
+            $request->merge(['is_ga_gra' => $ta['type'] ? 'yes' : 'no']);
+
+            if ($ta['type']) {
+                // Past the semester's requirement is simply "done".
+                $request->merge(['ta_hours_completed' => min($ta['hoursCompleted'], (float) config('norhanis.ta.hours_required'))]);
+            }
+        }
+
+        $data = $this->validateWithDocuments($request, $draft, $removing, [
             'type_of_request' => ['required', 'in:'.implode(',', array_keys(TravelDetail::requestTypes()))],
             'other_request_specify' => ['nullable', 'string', 'max:255', 'required_if:type_of_request,others'],
             'travel_start_date' => ['required', 'date', 'after_or_equal:today'],
@@ -71,7 +113,6 @@ class TravelController extends Controller
             'contact_person_name' => ['nullable', 'string', 'max:150'],
             'contact_person_no' => ['nullable', 'string', 'max:30'],
             'contact_person_email' => ['required', 'email', 'max:150'],
-            'supporting_document' => DocumentStore::rules(true),
             'is_ga_gra' => ['required', 'in:yes,no'],
             'ta_hours_completed' => ['required_if:is_ga_gra,yes', 'numeric', 'min:0', 'max:84'],
             'ta_hours_during_travel' => ['required_if:is_ga_gra,yes', 'numeric', 'min:0'],
@@ -86,12 +127,10 @@ class TravelController extends Controller
             'supporting_document.required' => 'Upload the supporting document.',
         ]);
 
-        $application = DB::transaction(function () use ($request, $data, $engine, $documents) {
-            $application = Application::create([
-                'student_id' => $request->user()->id,
-                'module_type' => $this->moduleKey(),
-                'status' => Application::STATUS_DRAFT,
-            ]);
+        $application = DB::transaction(function () use ($request, $data, $engine, $documents, $draft, $removing) {
+            // Submitting a saved draft finishes that application rather than
+            // starting a second one.
+            $application = $this->draftOrNewApplication($request, $draft, $removing);
 
             // Duration is derived, never trusted from the form — the legacy
             // form let the student type any number they liked.
@@ -120,7 +159,7 @@ class TravelController extends Controller
             if ($isGaGra) {
                 $taPlan = TravelTaPlan::create([
                     'application_id' => $application->id,
-                    'total_hours_required' => self::TA_HOURS_REQUIRED,
+                    'total_hours_required' => (int) config('norhanis.ta.hours_required'),
                     'hours_completed' => $data['ta_hours_completed'],
                     'hours_during_travel' => $data['ta_hours_during_travel'],
                     'management_method' => $data['ta_management_method'],
@@ -131,9 +170,7 @@ class TravelController extends Controller
                 }
             }
 
-            if ($request->hasFile('supporting_document')) {
-                $documents->attach($application, $request->file('supporting_document'), 'Supporting Document');
-            }
+            $this->attachDraftFiles($request, $application, $documents);
 
             // Hands the application to the first approver in the chain.
             return $engine->submit($application);

@@ -14,10 +14,14 @@
         </p>
     @endforeach
 
+    @include('norhanis::partials.draft-banner')
+
     <div class="card card-wide">
         <form method="POST" action="{{ route('publication.store') }}" enctype="multipart/form-data" class="app-form" data-stepper
+              data-draft-form data-resume-step="{{ $draftStep }}"
               data-stepper-review="Check everything below, then submit. Your co-authors and your reviewers are each emailed a link. The application goes to your supervisor once all of them have signed. You cannot edit it after this.">
             @csrf
+            @include('norhanis::partials.draft-fields')
 
             <fieldset class="fstep" data-label="Paper">
             <p class="fstep-hint">Nothing here is downloaded, printed or signed by hand. The Authorship Certification and the Paper Evaluation Sheet are both completed online: you name the people on the next steps, and each is emailed a link to sign.</p>
@@ -150,6 +154,25 @@
                     <label for="author_0_role"><span hidden>Author 1 </span>Role / Contribution</label>
                     <input type="text" name="authors[0][role_contribution]" id="author_0_role" value="{{ old('authors.0.role_contribution') }}">
                 </div>
+
+                {{-- Co-authors already entered: from a saved draft, or a submit that came back with an error. --}}
+                @foreach (array_slice(array_values((array) old('authors', [])), 1) as $offset => $author)
+                    @php($i = $offset + 1)
+                    <div class="pub-person-row" data-index="{{ $i }}">
+                        <p class="queue-meta">Author {{ $i + 1 }}</p>
+                        <label for="author_{{ $i }}_name"><span hidden>Author {{ $i + 1 }} </span>Name</label>
+                        <input type="text" name="authors[{{ $i }}][author_name]" id="author_{{ $i }}_name" value="{{ $author['author_name'] ?? '' }}">
+                        <label for="author_{{ $i }}_email"><span hidden>Author {{ $i + 1 }} </span>Email</label>
+                        <input type="email" name="authors[{{ $i }}][email]" id="author_{{ $i }}_email" required value="{{ $author['email'] ?? '' }}">
+                        <label for="author_{{ $i }}_designation"><span hidden>Author {{ $i + 1 }} </span>Designation</label>
+                        <input type="text" name="authors[{{ $i }}][designation]" id="author_{{ $i }}_designation" value="{{ $author['designation'] ?? '' }}" placeholder="e.g. PhD Student, Co-Supervisor, External Collaborator">
+                        <label for="author_{{ $i }}_organisation"><span hidden>Author {{ $i + 1 }} </span>Organisation</label>
+                        <input type="text" name="authors[{{ $i }}][organisation]" id="author_{{ $i }}_organisation" value="{{ $author['organisation'] ?? '' }}">
+                        <label for="author_{{ $i }}_role"><span hidden>Author {{ $i + 1 }} </span>Role / Contribution</label>
+                        <input type="text" name="authors[{{ $i }}][role_contribution]" id="author_{{ $i }}_role" value="{{ $author['role_contribution'] ?? '' }}">
+                        <button type="button" class="btn-secondary remove-author-btn" style="margin-top: 8px;">Remove</button>
+                    </div>
+                @endforeach
             </div>
 
             <button type="button" id="add-author-btn" class="btn-secondary" style="margin-top: 12px;">
@@ -184,7 +207,8 @@
             <p class="fstep-hint">Your internal reviewers: two for a journal or a local conference, three for an international conference. Each is emailed a link to read the paper and complete the Paper Evaluation Sheet online, so nobody prints or uploads it. A reviewer must be UTP staff and cannot be one of the authors.</p>
 
             <label for="manuscript" style="margin-top: 0;">Paper for the reviewers to read</label>
-            <input type="file" name="manuscript" id="manuscript" required class="@error('manuscript') is-invalid @enderror">
+            <input type="file" name="manuscript" id="manuscript" @unless ($attached->has(\App\Modules\Norhanis\Support\PublicationSignOffs::MANUSCRIPT)) required @endunless class="@error('manuscript') is-invalid @enderror">
+            @include('norhanis::partials.draft-attached', ['label' => \App\Modules\Norhanis\Support\PublicationSignOffs::MANUSCRIPT])
             @error('manuscript') <p class="field-error">{{ $message }}</p> @enderror
 
             @error('reviewers') <p class="field-error">{{ $message }}</p> @enderror
@@ -212,42 +236,37 @@
             </fieldset>
 
             <fieldset class="fstep" data-label="Documents">
-            <label for="invoice" style="margin-top: 0;">Invoice</label>
-            <input type="file" name="invoice" id="invoice" required class="@error('invoice') is-invalid @enderror">
-            @error('invoice') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="invoice" label="Invoice" :required="true"
+                :existing="$attached->get('Invoice', collect())" />
 
-            <label for="index_proof">Index Proof</label>
-            <input type="file" name="index_proof" id="index_proof" required class="@error('index_proof') is-invalid @enderror">
-            @error('index_proof') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="index_proof" label="Index Proof" :required="true"
+                :existing="$attached->get('Index Proof', collect())" />
 
-            <label for="turnitin_report">Turnitin Report</label>
-            <input type="file" name="turnitin_report" id="turnitin_report" required class="@error('turnitin_report') is-invalid @enderror">
-            @error('turnitin_report') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="turnitin_report" label="Turnitin Report" :required="true"
+                :existing="$attached->get('Turnitin Report', collect())" />
 
-            <label for="letter_of_acceptance">Letter of Acceptance</label>
-            <input type="file" name="letter_of_acceptance" id="letter_of_acceptance" required class="@error('letter_of_acceptance') is-invalid @enderror">
-            @error('letter_of_acceptance') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="letter_of_acceptance" label="Letter of Acceptance" :required="true"
+                :existing="$attached->get('Letter of Acceptance', collect())" />
 
-            <label for="conference_journal_details">Conference/Journal Details</label>
-            <input type="file" name="conference_journal_details" id="conference_journal_details" required class="@error('conference_journal_details') is-invalid @enderror">
-            @error('conference_journal_details') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="conference_journal_details" label="Conference/Journal Details" :required="true"
+                :existing="$attached->get('Conference/Journal Details', collect())" />
 
-            <label for="response_to_reviewer_comment">Response to Reviewer Comment</label>
-            <input type="file" name="response_to_reviewer_comment" id="response_to_reviewer_comment" required class="@error('response_to_reviewer_comment') is-invalid @enderror">
-            @error('response_to_reviewer_comment') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="response_to_reviewer_comment" label="Response to Reviewer Comment" :required="true"
+                :existing="$attached->get('Response to Reviewer Comment', collect())" />
 
-            <label for="corrected_conference_journal_paper">Corrected Conference/Journal Paper</label>
-            <input type="file" name="corrected_conference_journal_paper" id="corrected_conference_journal_paper" required class="@error('corrected_conference_journal_paper') is-invalid @enderror">
-            @error('corrected_conference_journal_paper') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="corrected_conference_journal_paper" label="Corrected Conference/Journal Paper" :required="true"
+                :existing="$attached->get('Corrected Conference/Journal Paper', collect())" />
 
             </fieldset>
 
             <button type="submit">Submit Application</button>
+            @include('norhanis::partials.draft-save')
         </form>
     </div>
 </div>
 
 @include('core::partials.form-stepper')
+@includeIf('nureen::partials.draft-form-script')
 
 {{-- Each author and reviewer is its own card. Without it, the rows ran into
      each other: .queue-meta pulls itself up with a negative top margin, so
@@ -295,7 +314,7 @@
 </template>
 
 <script @cspNonce>
-    let authorIndex = 1;
+    let authorIndex = document.querySelectorAll('#authors-container .pub-person-row').length;
     document.getElementById('add-author-btn').addEventListener('click', function () {
         const template = document.getElementById('author-row-template').innerHTML;
         const html = template
