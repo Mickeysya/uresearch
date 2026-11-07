@@ -398,6 +398,18 @@ class ExaminerPoolTest extends TestCase
         $this->assertSame('internal@utp.edu.my', $examiner->fresh()->email);
     }
 
+    /** The AE keeps "Email not working"; a supervisor has no way to flag one directly. */
+    public function test_a_supervisor_cannot_report_an_examiner_email(): void
+    {
+        $examiner = $this->internal();
+
+        $this->actingAs($this->supervisor())
+            ->post(route('examiner-admin.report-email', $examiner), ['reason' => 'Bounced'])
+            ->assertForbidden();
+
+        $this->assertFalse($examiner->fresh()->emailInvalid());
+    }
+
     protected ?User $poolSupervisor = null;
 
     /** The table under the nomination form, without the dropdowns above it. */
