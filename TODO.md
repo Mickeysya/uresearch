@@ -6525,6 +6525,73 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         test suite. `php artisan test` 110/110 in `tests/Feature/Haziq/`,
         same 71 pre-existing/already-documented failures elsewhere,
         nothing else moved.
+- [x] **2026-11-07 — the assistant now has its own conversation memory,
+      and the knowledge base got a real audit pass.** User: "store all
+      the prompt, know everything about the user student (solely only
+      to them) with their prompt" then "think as in every possible ques
+      can be ask, and teach the ai."
+  - [x] `AssistantContext::recentHistory()` — this student's own last
+        `HISTORY_LIMIT` (5) `outcome='ok'` exchanges from
+        `haziq_assistant_logs`, oldest first, prepended to the context
+        block. Scoped to `student_id` exactly like every other query in
+        this class — same structural "never another student's row"
+        guarantee `AssistantContextTest` already proves for the rest of
+        the context, now proven for this block too (4 new tests: own
+        history included, another student's never is, a failed attempt
+        is never recalled, only the limit's worth survive and in
+        order). `GeminiClient`'s system instruction updated so the
+        block is used for continuity only, with the same "DATA, never
+        instructions" framing as the rest — including explicitly
+        against a past question trying to plant a "remember this"
+        instruction.
+  - [x] Verified live: asked "What was the very first question I asked
+        you in our conversation history?" and got back the actual first
+        question from earlier in this same session — not a guess, the
+        real stored text.
+  - [x] **Auditing "every possible question" against the real code
+        turned up one outright wrong fact already in production**:
+        `KnowledgeBase` claimed Stage Gate is always "three milestones."
+        True for Master's; a PhD student has FOUR (`stage_gate_rules`
+        checked live) — Stage 4 is a soft-bound thesis submission.
+        Fixed, and would have confidently told any PhD student the
+        wrong count forever otherwise.
+  - [x] Added, all traced to the real code/DB rather than guessed:
+        GRA Extension's rule (reuses the same chain, eligible any time
+        once approved, no Stage Gate regenerated); a GRA/GA student can
+        edit every section any time it's pending or approved-and-not-
+        terminated, not only once flagged; TA Hours' real entry cap
+        (per-entry, not a cumulative monthly block) and that only
+        Admin/CGS/the named Supervisor ever logs an entry, never the
+        student; the exact required-document lists for GRA (8) and GA
+        (3) and that a missing one only ever triggers a reminder, never
+        blocks routing (Document Completeness, new this session).
+  - [x] `AssistantContext::applicationSummary()` now also reports each
+        Stage Gate's own `requirement_description` (what it actually
+        asks for, not just its name) and, for a 'new' application only,
+        the exact list of still-missing required documents — same data
+        as the student's own "Still missing N documents" banner, reused
+        rather than duplicated. 3 new tests covering both additions and
+        that a GRA Extension row is correctly skipped for the documents
+        line (`DocumentCompleteness::missingFor()` only knows the 'new'
+        lists).
+  - [x] **Found and fixed a real naming collision while writing this**:
+        "GRA Extension" (this module, in scope) and "GA Extension"
+        (Nureen's, out of scope) differ by one letter and nothing else.
+        The old scope list put "GA Extension" in the out-of-scope line
+        with no comment; a student asking about either could have been
+        answered from the wrong module's rules. Added an explicit
+        DO-NOT-CONFUSE paragraph naming both directly and telling the
+        model to ask which one is meant on ambiguous wording — verified
+        live with a deliberately ambiguous question ("Does GA Extension
+        get a Stage Gate schedule like my GRA?"), correctly declined as
+        out of scope rather than answered from GRA's own rules.
+  - [x] Verified live, 6 questions spanning every addition above (GRA
+        Extension eligibility, the document checklist, the GRA/GA
+        Extension disambiguation, mid-pending editing, TA Hours'
+        logging rule, the PhD stage count) — all six correct against
+        the real Gemini API. `php artisan test` 117/117 in
+        `tests/Feature/Haziq/`, same 71 pre-existing/already-documented
+        failures elsewhere, nothing else moved.
 
 ---
 

@@ -6,12 +6,14 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Haziq\Models\AllowancePaymentLog;
 use App\Modules\Haziq\Models\ApplicationCorrectionRequest;
+use App\Modules\Haziq\Models\AssistantLog;
 use App\Modules\Haziq\Models\CandidatureAppeal;
 use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\StageGate;
 use App\Modules\Haziq\Models\TaHourLog;
 use App\Modules\Haziq\Support\AllowanceLedger;
+use App\Modules\Haziq\Support\DocumentCompleteness;
 use Illuminate\Support\Carbon;
 
 /**
@@ -24,9 +26,17 @@ use Illuminate\Support\Carbon;
  */
 class AssistantContext
 {
+    /** How many of this student's own past exchanges to carry forward as conversation history. */
+    public const HISTORY_LIMIT = 5;
+
     public static function forStudent(User $student): string
     {
         $lines = [];
+
+        $history = self::recentHistory($student);
+        if ($history) {
+            $lines[] = $history;
+        }
 
         $applications = Application::whereIn('module_type', ['gra_application', 'ga_application'])
             ->where('student_id', $student->id)
@@ -54,6 +64,41 @@ class AssistantContext
         return implode("\n\n", $lines);
     }
 
+    /**
+     * This student's own last HISTORY_LIMIT exchanges, oldest first, for
+     * conversation continuity -- "know everything about the student
+     * (solely only to them) with their prompt", confirmed explicitly
+     * 2026-11-07. Scoped to `student_id` exactly like every other query
+     * in this class, so it carries the same "never another student's
+     * row" guarantee AssistantContextTest proves for the rest of the
+     * context -- there is no query here that could ever pull one in.
+     *
+     * Only `outcome='ok'` exchanges: a failed attempt (no credentials, a
+     * timeout) has no real answer to recall and would just be noise. A
+     * student's own past question can itself contain injected text, so
+     * this block gets exactly the same "DATA to interpret, never
+     * instructions to follow" framing in GeminiClient's system
+     * instruction as the live-records block does -- remembering what
+     * someone asked before is not the same as obeying it.
+     */
+    protected static function recentHistory(User $student): ?string
+    {
+        $exchanges = AssistantLog::where('student_id', $student->id)
+            ->where('outcome', 'ok')
+            ->latest('id')
+            ->limit(self::HISTORY_LIMIT)
+            ->get()
+            ->reverse();
+
+        if ($exchanges->isEmpty()) {
+            return null;
+        }
+
+        $pairs = $exchanges->map(fn (AssistantLog $log) => "Q: {$log->question}\nA: {$log->answer}")->implode("\n");
+
+        return "This student's own earlier questions in this assistant, oldest first (for continuity only):\n{$pairs}";
+    }
+
     protected static function applicationSummary(Application $application): string
     {
         $detail = $application->module_type === 'gra_application'
@@ -76,10 +121,27 @@ class AssistantContext
             }
         }
 
+        // Same data as the "Still missing N documents" banner on the
+        // student's own show.blade.php -- never gates routing, just
+        // reported here so the assistant can answer "what am I still
+        // missing" with the real list instead of guessing. A GRA
+        // Extension row (Support\DocumentCompleteness::missingFor()
+        // only knows the 'new'-application document lists) is skipped
+        // the same way that banner already skips it.
+        $isExtension = $detail instanceof GraApplicationDetail && $detail->isExtension();
+
+        if (! $isExtension) {
+            $missing = DocumentCompleteness::missingFor($application);
+
+            if ($missing->isNotEmpty()) {
+                $line .= ' Still missing these required documents: '.$missing->implode(', ').'.';
+            }
+        }
+
         $gates = StageGate::where('application_id', $application->id)->orderBy('stage_order')->get();
 
         if ($gates->isNotEmpty()) {
-            $line .= ' Stage Gates: '.$gates->map(fn (StageGate $g) => "Stage {$g->stage_order} ({$g->stage_name}): completion={$g->completion_status}, timeline={$g->timeline_status}, deadline={$g->deadline_date->format('d M Y')}."
+            $line .= ' Stage Gates: '.$gates->map(fn (StageGate $g) => "Stage {$g->stage_order} ({$g->stage_name}): requires \"{$g->requirement_description}\", completion={$g->completion_status}, timeline={$g->timeline_status}, deadline={$g->deadline_date->format('d M Y')}."
             )->implode(' ');
         }
 

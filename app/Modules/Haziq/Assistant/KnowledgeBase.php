@@ -34,7 +34,20 @@ class KnowledgeBase
             request sent back to the student, not a rejection) -> CGS Staff ->
             Supervisor -> Senior Director CGS (final approval). Approval creates the
             GRA record, generates the Stage Gate schedule below, and issues the
-            Offer and Admission Letters automatically.
+            Offer and Admission Letters automatically. A student can keep editing
+            every section of their own application at any time it is pending, or
+            approved and not terminated -- not only once something is flagged;
+            editing is not locked to waiting for a correction request first.
+
+            GRA EXTENSION
+            Reuses the exact same four-stage chain as a new GRA application above
+            (not a separate application type) -- the only differences are Section B
+            is re-entered rather than copied, and no new Stage Gate schedule is
+            generated (extension approval only moves the appointment's own end
+            date). Eligibility is simple and has nothing to do with dates: a
+            student may apply for an extension at any time once their current GRA
+            application is approved, full stop -- there is no need to wait for the
+            current service period to actually end first.
 
             GA APPLICATION
             Routed Student -> Admin (verifies) -> Research Centre (conducts an
@@ -42,18 +55,28 @@ class KnowledgeBase
             A Research Centre Fail rejects outright right there; CGS never even
             sees it. A GA appointment does NOT get a Stage Gate schedule and is
             NOT tracked by the Allowance cycle at all -- those two only ever apply
-            to GRA. Approval issues the Offer and Program Offer Letters.
+            to GRA. Approval issues the Offer and Program Offer Letters. Same
+            editing rule as GRA: the student can edit every section any time it
+            is pending, or approved and not terminated, not only once flagged.
 
             STAGE GATE MONITORING (GRA only)
-            Three milestones with a deadline and a grace period each. Stage 1 (RPD)
-            is RECOVERABLE: miss the deadline, get a grace-period reminder: "finish
-            or lose allowance"; when the grace period itself ends, allowance is
-            SUSPENDED (not the student -- just the money stops being newly payable);
-            finishing Stage 1 even late gets everything owed back-paid from the
-            month after the grace period ended. Stages 2 and 3 are NOT recoverable:
-            miss the deadline, get a reminder: "finish or get terminated"; when
-            grace ends, the student is automatically TERMINATED, final, with no
-            way back except a Candidature Appeal decided by a Senior Director.
+            A Master's student has THREE milestones; a PhD student has FOUR -- one
+            more, a soft-bound thesis submission, since a PhD runs longer. Stage 1
+            is always RPD Completion (Research Progress Defense); the later stages
+            are published/accepted journal article requirements building up to,
+            for a PhD, Q1/Q2 publication or soft-bound submission. Each milestone
+            has its own deadline and grace period, read from the student's own
+            Stage Gates below, which also states what each one actually requires.
+
+            Stage 1 (RPD) is RECOVERABLE: miss the deadline, get a grace-period
+            reminder: "finish or lose allowance"; when the grace period itself
+            ends, allowance is SUSPENDED (not the student -- just the money stops
+            being newly payable); finishing Stage 1 even late gets everything owed
+            back-paid from the month after the grace period ended. Every stage
+            after Stage 1 is NOT recoverable: miss the deadline, get a reminder:
+            "finish or get terminated"; when grace ends, the student is
+            automatically TERMINATED, final, with no way back except a
+            Candidature Appeal decided by a Senior Director.
 
             THE ALLOWANCE CYCLE
             Money is always tied to the month it was EARNED, never the month it
@@ -83,7 +106,26 @@ class KnowledgeBase
             complete.
 
             TA HOURS
-            A plain monthly activity log, capped at 21 hours per calendar month.
+            A plain monthly activity log, capped at 21 hours per calendar month
+            (per single entry; there is no separate running monthly total that
+            blocks further logging on its own). The student never logs their own
+            hours -- only Admin, CGS Staff, or the student's own named Supervisor
+            records an entry on the student's behalf.
+
+            DOCUMENT COMPLETENESS (GRA and GA, 'new' applications only -- never a
+            GRA Extension, which was never gated on these at Submit)
+            A missing required document NEVER blocks an application from moving to
+            its next approver -- it is a parallel tracking concern only, never a
+            gate. GRA needs eight: Resume/CV, Academic Transcript, Visa/IC, UTP
+            Admission Offer Letter, Bank Account Details Letter, Study Plan (Gantt
+            Chart), Grant Utilization Approval, and a GRA Supporting Letter from
+            Supervisor. GA needs three: Resume/CV, Academic Transcript, Visa/IC.
+            While anything required is still missing and the application is not
+            yet rejected, the student is reminded automatically once a week (and
+            may also be reminded on demand by Admin/CGS/Supervisor/Senior
+            Director) listing exactly what is still missing, by name -- this never
+            means anything is wrong with the application itself, only that a file
+            has not been uploaded yet.
 
             CANDIDATURE APPEAL
             The only way back from a Stage 2/3 termination. A terminated student
@@ -102,17 +144,29 @@ class KnowledgeBase
             so they know what to fix -- never hidden from them.
 
             WHAT THIS ASSISTANT DOES NOT COVER
-            Only GRA Application, GA Application, Stage Gate monitoring, the
-            Allowance cycle, TA Hours, and Candidature Appeal (the termination
-            appeal above). Everything else belongs to a different module and a
-            different team member -- Study Candidacy status/reminder/appeal/
-            dismissal, Workstation seats and locker keys, Travel, Publication,
-            Claims, RPD, Attendance, GA Extension, Supervision, Certification,
-            Examiner Nomination, Conflict Detection, Re-viva, Hardbound
-            Submission, and Appointment Letters are all out of scope. If asked
-            about any of these, say plainly that it is a different part of the
-            system and the student should check that module's own page or ask
-            CGS -- never guess at how another module works.
+            Only GRA Application (new and Extension), GA Application, Document
+            Completeness, Stage Gate monitoring, the Allowance cycle, TA Hours,
+            and Candidature Appeal (the termination appeal above). Everything
+            else belongs to a different module and a different team member --
+            Study Candidacy status/reminder/appeal/dismissal, Workstation seats
+            and locker keys, Travel, Publication, Claims, RPD, Attendance,
+            Supervision, Certification, Examiner Nomination, Conflict Detection,
+            Re-viva, Hardbound Submission, and Appointment Letters are all out of
+            scope. If asked about any of these, say plainly that it is a
+            different part of the system and the student should check that
+            module's own page or ask CGS -- never guess at how another module
+            works.
+
+            DO NOT CONFUSE "GRA Extension" WITH "GA Extension" -- despite the
+            near-identical name these are two unrelated things owned by two
+            different people. "GRA Extension" (covered above, in scope) extends
+            a GRA appointment and reuses this module's own gra_application chain.
+            "GA Extension" is a completely different, separate module (Supervisor
+            -> CGS Staff -> Senior Director CGS, a wholly different chain and
+            team) that happens to share the word "extension" and nothing else --
+            it is out of scope, same as every other module in the list above. If
+            a student's wording is ambiguous between the two, ask which one they
+            mean rather than guessing.
 
             WHO DOES WHAT
             The system itself never decides an amount or a status on its own
