@@ -17,8 +17,8 @@ use App\Modules\Haziq\Models\AllowanceRecommendationNote;
 use App\Modules\Haziq\Models\ApplicationCorrectionRequest;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\GraGaStudentProfile;
-use App\Modules\Haziq\Models\GraTermsAcceptance;
 use App\Modules\Haziq\Models\Publication;
+use App\Modules\Haziq\Models\TermsAcceptance;
 use App\Modules\Haziq\Models\WorkExperience;
 use App\Modules\Haziq\Notifications\AllowanceRecommendationFlagged;
 use App\Modules\Haziq\Notifications\AllowanceRecommendationUpdated;
@@ -110,13 +110,13 @@ class GraApplicationController extends Controller
 
     /**
      * The GRA Scheme Terms and Conditions — accepted once per student,
-     * never per application (see GraTermsAcceptance's migration). Gates
+     * never per application (see TermsAcceptance's own docblock). Gates
      * both create() and createExtension(), checked again in store() and
      * storeExtension() in case either is posted to directly.
      */
     protected function hasAcceptedTerms(User $user): bool
     {
-        return GraTermsAcceptance::where('user_id', $user->id)->exists();
+        return TermsAcceptance::where('user_id', $user->id)->where('scheme', TermsAcceptance::GRA)->exists();
     }
 
     public function showTerms(Request $request)
@@ -133,8 +133,8 @@ class GraApplicationController extends Controller
             'intent' => ['required', 'in:new,extension'],
         ]);
 
-        GraTermsAcceptance::firstOrCreate(
-            ['user_id' => $request->user()->id],
+        TermsAcceptance::firstOrCreate(
+            ['user_id' => $request->user()->id, 'scheme' => TermsAcceptance::GRA],
             ['accepted_at' => now()]
         );
 

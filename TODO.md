@@ -6638,6 +6638,41 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         student data) to finish verifying. `php artisan test` 118/118
         in `tests/Feature/Haziq/`, same 71 pre-existing/already-
         documented failures elsewhere, nothing else moved.
+- [x] **2026-11-08 — `gra_terms_acceptances` + `ga_terms_acceptances`
+      merged into one `terms_acceptances` table.** Team table audit
+      (`docs/table-audit.md` on `develop`, finding A), proposal handed
+      to Haziq directly: identical columns, identical usage in both
+      application controllers, two tables for one concept. Acted on
+      exactly as specified in `docs/proposals/haziq-terms-acceptances.md`.
+  - [x] New migration `2026_11_08_000100_create_terms_acceptances_table.php`
+        -- creates `terms_acceptances` (`user_id`, `scheme` `'gra'`/`'ga'`,
+        `accepted_at`, timestamps, unique on `(user_id, scheme)` replacing
+        each old table's own unique `user_id`), copies every row across by
+        scheme, drops both originals. The two original create migrations
+        untouched, per the proposal -- everyone has already run them.
+        `down()` recreates both and copies back by scheme.
+  - [x] New `Models\TermsAcceptance` (with `GRA`/`GA` scheme constants,
+        not raw strings at the call sites) replacing `GraTermsAcceptance`
+        and `GaTermsAcceptance`, both deleted. `Gra`/`GaApplicationController
+        ::hasAcceptedTerms()`/`acceptTerms()` updated to the new model plus
+        a `scheme` filter -- exactly the 2 call sites each the proposal
+        named, confirmed by grepping the whole tree first (found no
+        seeder, view, or other reference either model).
+  - [x] Found while grepping: 2 of this session's own test files
+        (`DraftIntegrationTest`, `GraExtensionEligibilityTest`) construct
+        `Gra`/`GaTermsAcceptance` rows directly as fixtures -- not
+        mentioned in the proposal since it predates them. Updated both to
+        `TermsAcceptance` with the new `scheme` column.
+  - [x] Ran the migration against the live dev database (not just the
+        test suite's own fresh SQLite): verified both pre-existing rows
+        (`student@utp.edu.my`'s real gra+ga acceptances) copied across
+        correctly by scheme and both old tables are gone. Verified live
+        over real HTTP post-migration: `/gra-application/new` and
+        `/ga-application/new` both still recognise the existing
+        acceptance correctly (GRA redirects to the student's in-progress
+        application as expected, not back to the terms page; GA renders
+        the form directly). `php artisan test` 118/118 in
+        `tests/Feature/Haziq/`.
 
 ---
 
