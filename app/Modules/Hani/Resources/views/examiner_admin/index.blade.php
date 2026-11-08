@@ -54,12 +54,14 @@
     /* The row's actions stack, at one compact size, so the column is one button
        wide. Side by side they pushed the second action off the table's edge,
        behind a sideways scroll, at 1440px. */
+    /* By class, not :last-child: the Academic Executive's list has no action
+       column, and its last cell is the students. */
     .exam-table th { white-space: normal; }
-    .exam-table td:last-child { text-align: right; white-space: nowrap; }
-    .exam-table td:last-child > * { display: flex; width: 100%; margin: 0 0 6px; }
-    .exam-table td:last-child > :last-child { margin-bottom: 0; }
-    .exam-table td:last-child button,
-    .exam-table td:last-child .btn-secondary {
+    .exam-table td.exam-actions { text-align: right; white-space: nowrap; }
+    .exam-table td.exam-actions > * { display: flex; width: 100%; margin: 0 0 6px; }
+    .exam-table td.exam-actions > :last-child { margin-bottom: 0; }
+    .exam-table td.exam-actions button,
+    .exam-table td.exam-actions .btn-secondary {
         width: 100%; margin: 0; padding: 6px 12px;
         font-size: var(--text-sm); line-height: 1.2; box-sizing: border-box;
     }
@@ -82,6 +84,13 @@
     .reason-modal textarea { width: 100%; }
 
     .exam-tab-note { margin: -6px 0 16px; color: var(--text-grey); font-size: var(--text-sm); }
+
+    /* The Academic Executive's read-only note: who to email to change the pool. */
+    .exam-cgs-note {
+        margin: 0 0 18px; padding: 12px 16px; border-radius: 12px;
+        background: var(--info-bg); color: var(--info-fg); font-size: var(--text-sm);
+    }
+    .exam-cgs-note a { color: inherit; font-weight: 600; }
 
     /* Experience / MSc / PhD arrive as one string with newlines, exactly as
        the sheet stacks them in a single cell. */
@@ -115,7 +124,7 @@
     // Display only: routes.php is what enforces this. Both CGS desks add
     // examiners, mark them unavailable and keep emails current; the full edit
     // form, import, the review list and "Not the same person" stay with the
-    // Senior Executive.
+    // Senior Executive. The Academic Executive ($canManage false) reads only.
     $isSeniorExec = auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS;
 @endphp
 
@@ -123,7 +132,9 @@
     <x-core::page-header
         title="Examiner Pool"
         subtitle="{{ $examiners->total() }} {{ Str::plural('examiner', $examiners->total()) }} on record. State is derived, so anyone on gap becomes available again on their own.">
-        <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
+        @if ($canManage)
+            <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
+        @endif
         @if ($isSeniorExec)
             <a href="{{ route('examiner-import.create') }}" class="btn-secondary">Import from Excel</a>
             @if ($openReviewItems)
@@ -131,6 +142,15 @@
             @endif
         @endif
     </x-core::page-header>
+
+    @if ($cgsContacts)
+        <p class="exam-cgs-note">
+            To add or remove an examiner, email CGS:
+            @foreach ($cgsContacts as $contact)
+                <a href="mailto:{{ $contact['email'] }}">{{ $contact['name'] }}</a> ({{ $contact['role'] }}, {{ $contact['email'] }}){{ $loop->last ? '.' : ' or' }}
+            @endforeach
+        </p>
+    @endif
 
     @if ($proposals->isNotEmpty())
         {{-- Not a RegionSwap region (its own class, not .exam-table-wrap, which
@@ -238,7 +258,7 @@
                     @if ($isExternal)<th>Date 1st</th><th>Date 2nd</th>@endif
                     <th>Remark / Next availability</th>
                     <th>{{ $isInternal ? 'Remarks (students held)' : 'Student Name' }}</th>
-                    <th></th>
+                    @if ($canManage)<th></th>@endif
                 </tr>
             </thead>
             <tbody>
@@ -250,7 +270,11 @@
                             <div class="examiner-name-cell">
                                 @include('hani::examiner_admin._avatar')
                                 <span>
-                                    <a href="{{ route('examiner-admin.show', $examiner) }}" data-region-swap-ignore>{{ $examiner->name }}</a>
+                                    @if (isset($openable[$examiner->id]))
+                                        <a href="{{ route('examiner-admin.show', $examiner) }}" data-region-swap-ignore>{{ $examiner->name }}</a>
+                                    @else
+                                        {{ $examiner->name }}
+                                    @endif
                                     {{-- CGS's pool file has no email column; nothing that
                                          writes to an examiner will reach this one yet. --}}
                                     @if ($examiner->emailInvalid())
@@ -320,7 +344,8 @@
                                 —
                             @endif
                         </td>
-                        <td>
+                        @if ($canManage)
+                        <td class="exam-actions">
                             @if ($isSeniorExec)
                                 <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Edit</a>
                             @else
@@ -339,11 +364,13 @@
                                 </form>
                             @endif
                         </td>
+                        @endif
                     </tr>
                 @empty
-                    {{-- 7 shared, + List on the combined list, + Faculty on every
-                         list but external, + external's own eight. --}}
-                    <tr><td colspan="{{ 7 + (! $type ? 1 : 0) + (! $isExternal ? 1 : 0) + ($isExternal ? 8 : 0) }}">
+                    {{-- 6 shared, + the action column for CGS, + List on the
+                         combined list, + Faculty on every list but external,
+                         + external's own eight. --}}
+                    <tr><td colspan="{{ 6 + ($canManage ? 1 : 0) + (! $type ? 1 : 0) + (! $isExternal ? 1 : 0) + ($isExternal ? 8 : 0) }}">
                         <div class="empty-state">No examiners found. Try adjusting your filters.</div>
                     </td></tr>
                 @endforelse
@@ -354,6 +381,7 @@
     </div>
 </div>
 
+@if ($canManage)
 <dialog id="unavailable-modal" class="reason-modal">
     <div class="card">
         <div class="reason-modal-head">
@@ -376,6 +404,7 @@
         </form>
     </div>
 </dialog>
+@endif
 
 @include('core::partials.region-swap')
 

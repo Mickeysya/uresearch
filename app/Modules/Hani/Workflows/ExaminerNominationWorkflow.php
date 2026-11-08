@@ -198,8 +198,11 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
                 $dashboard,
                 $analytics,
             ],
+            // The pool read-only: they advise supervisors on who is free, and
+            // email CGS to change it.
             Role::ACADEMIC_EXEC => [
                 ['label' => 'Pending Evaluation', 'route' => 'examiner-nomination.pending-evaluation'],
+                ['label' => 'Examiner Pool', 'route' => 'examiner-admin.index'],
                 ['label' => 'Conflict Detection', 'route' => 'conflict-detection.index'],
                 $report,
                 $dashboard,

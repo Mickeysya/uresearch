@@ -3,6 +3,7 @@
 namespace App\Modules\Hani\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
+use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerEmailProposal;
 use App\Modules\Hani\Models\ExaminerMerge;
@@ -23,14 +24,15 @@ use Illuminate\Validation\Rule;
  * Day-to-day upkeep of the examiner pool for both CGS desks: add an examiner,
  * or flip one to Unavailable (retired, resigned, deceased) without deleting
  * their history. The full edit form and "Not the same person" stay with the
- * Senior Executive; routes.php says who reaches what. Everything else about the pool -- eligibility, the gap, the
+ * Senior Executive, and the Academic Executive only reads the list;
+ * routes.php says who reaches what. Everything else about the pool -- eligibility, the gap, the
  * assigned tie-up -- is derived state the nomination and evaluation flows
  * already maintain; this screen only ever touches the fields a human has to
  * set by hand.
  */
 class ExaminerAdminController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, ExaminerContact $contact)
     {
         // Internal and external are two different records, not one list with a
         // flag: CGS keeps them as two sheets, and the external one carries nine
@@ -66,7 +68,19 @@ class ExaminerAdminController extends Controller
 
         $examiners = ExaminerPoolList::paginate($filtered, $request);
 
+        // The Academic Executive reads the whole pool, every department and
+        // every external, because supervisors may pick from any of them; they
+        // change nothing (routes.php) and email CGS instead. The examiner page
+        // stays as narrow as it was, so a name links only where it would open.
+        $canManage = in_array($request->user()->role, [Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS], true);
+        $openable = $canManage
+            ? $examiners->getCollection()->pluck('id')
+            : $examiners->getCollection()->filter(fn (Examiner $e) => $contact->canReport($request->user(), $e))->pluck('id');
+
         return view('hani::examiner_admin.index', [
+            'canManage' => $canManage,
+            'openable' => $openable->flip()->all(),
+            'cgsContacts' => $canManage ? [] : config('hani.cgs.contacts', []),
             'examiners' => $examiners,
             'type' => $type,
             'typeCounts' => ExaminerPoolList::typeCounts($pool),
@@ -74,9 +88,11 @@ class ExaminerAdminController extends Controller
             'departments' => ExaminerPoolList::departments($tabPool),
             'studentsByExaminer' => $this->studentsByExaminer($examiners->getCollection()->pluck('id')),
             'filters' => $filters,
-            'openReviewItems' => ExaminerReviewItem::open()->count(),
+            'openReviewItems' => $canManage ? ExaminerReviewItem::open()->count() : 0,
             // Emails supervisors gave at nomination, for CGS to confirm.
-            'proposals' => ExaminerEmailProposal::pending()->with('examiner', 'proposedBy', 'nomination')->oldest()->get(),
+            'proposals' => $canManage
+                ? ExaminerEmailProposal::pending()->with('examiner', 'proposedBy', 'nomination')->oldest()->get()
+                : collect(),
             // Across the whole pool, not just this page: a duplicate is
             // usually on another page or the other tab.
             'duplicates' => app(DuplicateDetector::class)->byExaminer($pool),

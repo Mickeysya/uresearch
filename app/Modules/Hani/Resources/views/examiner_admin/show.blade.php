@@ -10,7 +10,7 @@
         @if ($canEditAll)
             <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary">Edit examiner</a>
         @endif
-        @if (auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS || auth()->user()->role === \App\Modules\Core\Support\Role::NON_EXEC_CGS)
+        @if (in_array(auth()->user()->role, [\App\Modules\Core\Support\Role::SENIOR_EXEC_CGS, \App\Modules\Core\Support\Role::NON_EXEC_CGS, \App\Modules\Core\Support\Role::ACADEMIC_EXEC], true))
             <a href="{{ route('examiner-admin.index') }}" class="btn-secondary">Back to the pool</a>
         @endif
     </x-core::page-header>

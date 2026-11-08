@@ -1,5 +1,15 @@
 # Changelog: Hani's modules
 
+## 2026-11-08: The Academic Executive reads the examiner pool
+
+- **Added** `/examiners` for the AE, read-only, with "Examiner Pool" in their
+  sidebar. It shows the whole pool, not just their department, because
+  supervisors may pick examiners from anywhere. Every write route stays 403.
+- **Added** a note naming the CGS contacts to email to add or remove an
+  examiner, read from `hani.cgs.contacts`.
+- The examiner page keeps its old scope for the AE, so a name links only where
+  it opens. "Email not working" is unchanged.
+
 ## 2026-11-07: Non-Executive CGS manages the examiner pool
 
 - **Changed** Non-Exec can now add an examiner, mark one Unavailable (reason

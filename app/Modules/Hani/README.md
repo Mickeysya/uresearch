@@ -30,7 +30,7 @@ re-run it whenever the demo should look fresh.
 |---|---|---|
 | Six-stage nomination chain, with "send back to department" (reason required) | Supervisor → AE → Senior Exec → Senior Director → Dean → Senior Exec | `/examiner-nomination/new`, queues |
 | "Finalise and release": one Approve records `cgs_final` and `cgs_release`; Non-Exec notified | Senior Exec | nomination queue |
-| Examiner pool: internal/external lists, derived state (Available, On Gap 90 days, Assigned, Unavailable), edit page, expertise and publications | Senior Exec, Non-Exec (add, Unavailable or Active, emails). Full edit and import: Senior Exec only | `/examiners` |
+| Examiner pool: internal/external lists, derived state (Available, On Gap 90 days, Assigned, Unavailable), edit page, expertise and publications | Senior Exec, Non-Exec (add, Unavailable or Active, emails). Full edit and import: Senior Exec only. AE: read-only, whole pool | `/examiners` |
 | Pool import from CGS's workbook or the UResearch template, with a preview before anything is written | Senior Exec | `/examiners/import` |
 | **Suggested examiners** per seat, explained | Supervisor, AE, Senior Exec | nomination form |
 | **Duplicate examiner** flags, "Not the same person" | Senior Exec | pool, import preview, `cgs_compile` |
@@ -251,8 +251,10 @@ described under "Demo data" below. A suggested walkthrough:
   at the `cgs_compile` stage.
 - **Examiner admin** — `/examiners` (Senior Exec and Non-Exec CGS): add an
   examiner, toggle Unavailable. The full edit form, import, the review list and
-  "Not the same person" are the Senior Executive's. The Academic Executive has
-  no pool page and emails CGS to add or remove an examiner. A supervisor reads
+  "Not the same person" are the Senior Executive's. The Academic Executive
+  reads the whole pool there, every department and external, with no write
+  actions, and a note naming the CGS contacts to email to add or remove an
+  examiner (`hani.cgs.contacts`). Sidebar: Actions → Examiner Pool. A supervisor reads
   the pool on `/examiner-nomination/new` (tabs, filters and the same badges; no
   emails, students, actions or duplicate warnings) and cannot change it. Internal and external are kept as two lists behind a tab
   strip, because CGS keeps two spreadsheets and the external one carries nine

@@ -215,11 +215,13 @@ Route::middleware('auth')->group(function () {
     // ---- Examiner pool admin -------------------------------------------
     // Both CGS desks manage the pool since 2026-11-07: reading it, adding an
     // examiner, marking one Unavailable or Active, and keeping emails current.
-    // The Senior Executive alone has the group below. The Academic Executive
-    // has no pool page and emails CGS instead; a supervisor reads the pool on
-    // /examiner-nomination/new.
+    // The Senior Executive alone has the group further down. The Academic
+    // Executive reads the whole pool (2026-11-08) and emails CGS to change
+    // it; a supervisor reads the pool on /examiner-nomination/new.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS.','.Role::ACADEMIC_EXEC)
+        ->get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
+
     Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
-        Route::get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
         Route::get('/examiners/new', [ExaminerAdminController::class, 'create'])->name('examiner-admin.create');
         Route::post('/examiners', [ExaminerAdminController::class, 'store'])->name('examiner-admin.store');
         Route::post('/examiners/{examiner}/toggle-active', [ExaminerAdminController::class, 'toggleActive'])

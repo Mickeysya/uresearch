@@ -379,8 +379,11 @@ class ExaminerPoolTest extends TestCase
             'summary' => [],
         ]);
 
-        foreach ([$this->academicExec(), $this->supervisor()] as $user) {
-            $this->actingAs($user)->get(route('examiner-admin.index'))->assertForbidden();
+        // The AE reads the pool (below); a supervisor reads it on the nomination form.
+        $supervisor = $this->supervisor();
+        $this->actingAs($supervisor)->get(route('examiner-admin.index'))->assertForbidden();
+
+        foreach ([$this->academicExec(), $supervisor] as $user) {
             $this->actingAs($user)->get(route('examiner-admin.create'))->assertForbidden();
             $this->actingAs($user)->post(route('examiner-admin.store'), $this->newExaminer())->assertForbidden();
             $this->actingAs($user)->post(route('examiner-admin.toggle-active', $examiner), ['unavailable_reason' => 'x'])->assertForbidden();
@@ -408,6 +411,177 @@ class ExaminerPoolTest extends TestCase
             ->assertForbidden();
 
         $this->assertFalse($examiner->fresh()->emailInvalid());
+    }
+
+    /** An AE in a department neither test examiner belongs to. */
+    protected function departmentAe(): User
+    {
+        $ae = User::where('email', 'ae@test.my')->first() ?? $this->academicExec();
+        $ae->update(['department' => 'Mechanical Engineering']);
+
+        return $ae;
+    }
+
+    public function test_the_academic_executive_reads_the_whole_pool(): void
+    {
+        $this->internal();
+        $this->external();
+
+        $this->actingAs($this->departmentAe())->get(route('examiner-admin.index'))->assertOk()
+            // Another department's internal examiner and an external one.
+            ->assertSee('AP Dr Low Tang Jung')
+            ->assertSee('AP Dr Hatijah Binti Basri')
+            ->assertSee('2 examiners on record')
+            // The same page as CGS: cards, tabs, filters, badges.
+            ->assertSee('On Gap')
+            ->assertSee('Unavailable')
+            ->assertSee(route('examiner-admin.index', ['type' => Examiner::TYPE_EXTERNAL]), false)
+            // No department preselected.
+            ->assertSee('<option value="">All Departments</option>', false)
+            ->assertDontSee('selected>Mechanical Engineering', false)
+            ->assertSee('name="email"', false)
+            ->assertSee('name="search"', false)
+            ->assertSee('examiner-state-badge', false);
+    }
+
+    public function test_the_academic_executive_sees_no_write_actions(): void
+    {
+        $examiner = $this->internal();
+        $unavailable = $this->external();
+        $unavailable->update(['is_active' => false, 'unavailable_reason' => 'Retired']);
+        // A likely duplicate pair, and a proposal CGS has to confirm.
+        Examiner::create(['name' => 'Low Tang Jung, PhD', 'email' => 'ltj@utp.edu.my', 'department' => 'Computer & Information Sciences', 'type' => Examiner::TYPE_INTERNAL, 'is_active' => true]);
+        \App\Modules\Hani\Models\ExaminerEmailProposal::create(['examiner_id' => $examiner->id, 'proposed_email' => 'proposed@utp.edu.my']);
+        \App\Modules\Hani\Models\ExaminerReviewItem::create(['examiner_id' => $examiner->id, 'kind' => 'current_assignment', 'detail' => 'x']);
+
+        // By link and attribute: the page's own CSS and JS comments name
+        // "Add an examiner", "Update email" and "Mark Unavailable".
+        $this->actingAs($this->departmentAe())->get(route('examiner-admin.index'))->assertOk()
+            ->assertDontSee('href="'.route('examiner-admin.create').'"', false)
+            ->assertDontSee('href="'.route('examiner-import.create').'"', false)
+            ->assertDontSee('href="'.route('examiner-import.review').'"', false)
+            ->assertDontSee(route('examiner-admin.edit', $examiner), false)
+            ->assertDontSee(route('examiner-admin.email.edit', $examiner), false)
+            ->assertDontSee('data-unavailable=', false)
+            ->assertDontSee(route('examiner-admin.toggle-active', $unavailable), false)
+            ->assertDontSee('class="exam-actions"', false)
+            ->assertDontSee('id="unavailable-modal"', false)
+            ->assertDontSee('Proposed emails to confirm')
+            ->assertDontSee('proposed@utp.edu.my')
+            // The warning, without the way to dismiss it.
+            ->assertSee('Possible duplicate of')
+            ->assertDontSee('Not the same person')
+            ->assertSee('Retired');
+    }
+
+    public function test_the_academic_executive_is_told_whom_to_email_from_config(): void
+    {
+        $this->internal();
+
+        $this->actingAs($this->departmentAe())->get(route('examiner-admin.index'))->assertOk()
+            ->assertSee('To add or remove an examiner, email CGS:')
+            ->assertSee('href="mailto:syahmi.cgs@utp.edu.my"', false)
+            ->assertSee('Encik Syahmi')
+            ->assertSee('href="mailto:seniorexec@utp.edu.my"', false)
+            ->assertSee('Puan Waheeda');
+
+        config(['hani.cgs.contacts' => [['name' => 'Someone Else', 'role' => 'Non-Executive CGS', 'email' => 'else.cgs@utp.edu.my']]]);
+
+        $this->actingAs($this->departmentAe())->get(route('examiner-admin.index'))
+            ->assertSee('href="mailto:else.cgs@utp.edu.my"', false)
+            ->assertDontSee('syahmi.cgs@utp.edu.my');
+
+        // CGS manage the pool themselves, so the note is not theirs.
+        foreach ([$this->cgs(), $this->seniorExec()] as $user) {
+            $this->actingAs($user)->get(route('examiner-admin.index'))->assertOk()
+                ->assertDontSee('To add or remove an examiner, email CGS:');
+        }
+    }
+
+    /**
+     * The examiner page keeps its old scope for the AE: their own department,
+     * or a panel for one of its students. A name links only where it opens.
+     */
+    public function test_the_academic_executive_gets_a_link_only_to_examiner_pages_they_may_open(): void
+    {
+        $own = $this->internal();
+        $other = $this->external();
+        $ae = $this->academicExec();
+        $ae->update(['department' => 'Computer & Information Sciences']);
+
+        $this->actingAs($ae)->get(route('examiner-admin.index'))->assertOk()
+            ->assertSee(route('examiner-admin.show', $own), false)
+            ->assertDontSee(route('examiner-admin.show', $other), false);
+
+        $this->actingAs($ae)->get(route('examiner-admin.show', $own))->assertOk()->assertSee('Back to the pool');
+        $this->actingAs($ae)->get(route('examiner-admin.show', $other))->assertForbidden();
+    }
+
+    public function test_the_academic_executive_gets_403_on_every_pool_write_route(): void
+    {
+        $examiner = $this->internal();
+        $other = $this->external();
+        $ae = $this->departmentAe();
+        $proposal = \App\Modules\Hani\Models\ExaminerEmailProposal::create(['examiner_id' => $examiner->id, 'proposed_email' => 'p@utp.edu.my']);
+        $item = \App\Modules\Hani\Models\ExaminerReviewItem::create(['examiner_id' => $examiner->id, 'kind' => 'current_assignment', 'detail' => 'x']);
+        $batch = ExaminerImportBatch::create([
+            'user_id' => $this->seniorExec()->id, 'layout' => 'template', 'filename' => 'pool.xlsx',
+            'rows' => [], 'messages' => [], 'summary' => [],
+        ]);
+
+        $this->actingAs($ae);
+        $this->get(route('examiner-admin.create'))->assertForbidden();
+        $this->post(route('examiner-admin.store'), $this->newExaminer())->assertForbidden();
+        $this->get(route('examiner-admin.edit', $examiner))->assertForbidden();
+        $this->put(route('examiner-admin.update', $examiner), $this->newExaminer())->assertForbidden();
+        $this->post(route('examiner-admin.toggle-active', $examiner), ['unavailable_reason' => 'x'])->assertForbidden();
+        $this->get(route('examiner-admin.email.edit', $examiner))->assertForbidden();
+        $this->put(route('examiner-admin.email.update', $examiner), ['email' => 'x@utp.edu.my', 'reason' => 'x'])->assertForbidden();
+        $this->post(route('examiner-admin.email.confirm', $examiner))->assertForbidden();
+        $this->post(route('examiner-admin.proposal.confirm', $proposal))->assertForbidden();
+        $this->post(route('examiner-admin.proposal.dismiss', $proposal))->assertForbidden();
+        $this->get(route('examiner-admin.proposal.cv', $proposal))->assertForbidden();
+        $this->post(route('examiner-admin.dismiss-duplicate'), ['examiner_id' => $examiner->id, 'other_id' => $other->id])->assertForbidden();
+        $this->get(route('examiner-import.create'))->assertForbidden();
+        $this->post(route('examiner-import.store'))->assertForbidden();
+        $this->get(route('examiner-import.template'))->assertForbidden();
+        $this->get(route('examiner-import.show', $batch))->assertForbidden();
+        $this->post(route('examiner-import.confirm', $batch))->assertForbidden();
+        $this->get(route('examiner-import.review'))->assertForbidden();
+        $this->post(route('examiner-import.resolve', $item))->assertForbidden();
+
+        $this->assertSame(2, Examiner::count());
+        $this->assertTrue($examiner->fresh()->is_active);
+        $this->assertSame('internal@utp.edu.my', $examiner->fresh()->email);
+        $this->assertNull($item->fresh()->resolved_at);
+        $this->assertDatabaseMissing('examiner_duplicate_dismissals', []);
+    }
+
+    public function test_the_academic_executive_keeps_email_not_working(): void
+    {
+        $examiner = $this->internal();
+        $ae = $this->academicExec();
+        $ae->update(['department' => 'Computer & Information Sciences']);
+
+        $this->actingAs($ae)
+            ->post(route('examiner-admin.report-email', $examiner), ['reason' => 'Invitation bounced'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue($examiner->fresh()->emailInvalid());
+    }
+
+    public function test_the_academic_executive_has_examiner_pool_in_the_sidebar(): void
+    {
+        $links = fn (User $user) => array_column(app(\App\Modules\Hani\Workflows\ExaminerNominationWorkflow::class)->links($user), 'route');
+
+        $ae = $links($this->academicExec());
+        $this->assertContains('examiner-admin.index', $ae);
+        // Beside the AE's other examiner screens.
+        $this->assertSame(array_search('conflict-detection.index', $ae) - 1, array_search('examiner-admin.index', $ae));
+
+        $this->assertContains('examiner-admin.index', $links($this->cgs()));
+        $this->assertContains('examiner-admin.index', $links($this->seniorExec()));
+        $this->assertNotContains('examiner-admin.index', $links($this->supervisor()));
     }
 
     protected ?User $poolSupervisor = null;
