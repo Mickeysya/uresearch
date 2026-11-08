@@ -50,25 +50,22 @@ unchanged until CGS answers.
 
 ## 2. Core contracts this module reads and implements
 
-**Status:** both proposed by Hani, in `app/Modules/Hani/SHARED_CHANGES.md`
-items 3 and 4. Not duplicated here — hers is the proposal of record, and the
-exact file contents live there.
+**Status: applied.** Both interfaces are now in `app/Modules/Core/Contracts/`,
+proposed in `app/Modules/Hani/SHARED_CHANGES.md` items 3 and 4. Nothing further
+is needed from the team; this entry stays as the record of what was agreed.
 
 - **`SuppliesReleasedExaminers`** — this module *reads* it, through
-  `Jason\Support\ReleasedPanels`. It replaces the spreadsheet emailed from
-  the Senior Executive's desk to the Non-Executive's. Until the file exists
-  nothing is bound, the import screen says the hand-off is not switched on,
-  and the spreadsheet remains the way in.
+  `Jason\Support\ReleasedPanels`. It replaces the spreadsheet emailed from the
+  Senior Executive's desk to the Non-Executive's. The spreadsheet import remains
+  as the manual fallback, for a panel released before the hand-off existed and
+  for a checkout where the nomination module is not installed.
 
 - **`SuppliesAppointmentDispatch`** — this module *implements* it, as
-  `Jason\Support\AppointmentDispatch`, and `ModuleProvider::register()` binds
-  it only once `interface_exists()` says the file is there. Binding a class
-  to a missing interface is a fatal error on every request in the
-  application, not just this module's pages.
+  `Jason\Support\AppointmentDispatch`, bound in `ModuleProvider::register()`.
 
-**One difference from Hani's item 3, deliberate.** Her write-up has the
-reader gate on `interface_exists(...)` *and* the container binding. This
-module gates on the **binding alone**:
+**One difference from Hani's item 3, still deliberate.** Her write-up has the
+reader gate on `interface_exists(...)` *and* the container binding. This module
+gates on the **binding alone**:
 
 ```php
 public static function available(): bool
@@ -77,19 +74,13 @@ public static function available(): bool
 }
 ```
 
-A container key is just a string, so asking whether anything is bound
-answers the only question that matters — is there something to read? — and
-answers it *before* the Core file exists, which is what makes the live path
-testable today rather than after Core changes. Nothing in this module
-type-hints the contract; it resolves an object and calls one method on it.
-Adding `interface_exists()` would gate this module's own behaviour on a file
-in a folder it does not own, for no safety in return.
+Core having the interface says only that the contract exists. It is the
+nomination chain *binding an implementation* that means there is something to
+read — a checkout without that module has the file and nothing behind it. So
+the binding is the question worth asking, and it was also what made the live
+path testable before the file landed.
 
-The rule is not the same on the implementing side, which is why
-`ModuleProvider::register()` *does* check `interface_exists()`: there the
-interface name is the bind target, so a missing file really is fatal.
-
----
+Both sides type-hint the interface properly now that it exists.
 
 ## 3. The examiner list export's column layout
 

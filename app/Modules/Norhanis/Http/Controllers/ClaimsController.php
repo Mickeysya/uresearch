@@ -4,6 +4,7 @@ namespace App\Modules\Norhanis\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Norhanis\Http\Controllers\Concerns\ApprovesAndNotifies;
+use App\Modules\Norhanis\Http\Controllers\Concerns\SavesDrafts;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 class ClaimsController extends Controller
 {
     use ApprovesAndNotifies;
+    use SavesDrafts;
 
     /**
      * The named upload fields on page 2, in display order, each attached
@@ -34,19 +36,49 @@ class ClaimsController extends Controller
         'passport' => 'Passport',
     ];
 
-    /** PDF/JPG/PNG, 5 MB max -- tighter than the portal-wide DocumentStore default. */
-    protected const FILE_RULES = ['file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'];
+    /** PDF/JPG/PNG only (5 MB a file, as everywhere). */
+    protected const FILE_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 
     protected function moduleKey(): string
     {
         return 'claims_student';
     }
 
+    protected function draftFields(): array
+    {
+        return ['publication_application_id', 'total_claims', 'bank_name', 'bank_account_no'];
+    }
+
+    protected function draftDocuments(): array
+    {
+        return self::DOCUMENT_FIELDS;
+    }
+
+    /**
+     * Passport is optional: the form tells international students it
+     * applies to them; nothing reads an international flag back to enforce it.
+     */
+    protected function optionalDocuments(): array
+    {
+        return ['passport'];
+    }
+
+    /** PDF/JPG/PNG -- narrower than the portal-wide list, which allows DOCX. */
+    protected function documentExtensions(): ?array
+    {
+        return self::FILE_EXTENSIONS;
+    }
+
     public function create(Request $request)
+    {
+        return $this->form($request, null);
+    }
+
+    protected function form(Request $request, ?Application $draft)
     {
         return view('norhanis::claims.form', [
             'publications' => $this->approvedPublications($request->user()),
-        ]);
+        ] + $this->draftViewData($request, $draft));
     }
 
     /**
@@ -71,7 +103,10 @@ class ClaimsController extends Controller
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents, ApproverNotifier $notifier)
     {
-        $data = $request->validate([
+        $draft = $this->submittingDraft($request);
+        $removing = $this->draftRemoving($request, $draft);
+
+        $data = $this->validateWithDocuments($request, $draft, $removing, [
             'publication_application_id' => ['required', Rule::in($this->approvedPublications($request->user())->pluck('application_id'))],
             'bank_name' => ['required', 'string', 'max:100'],
             'bank_account_no' => ['required', 'string', 'max:30'],
@@ -82,25 +117,15 @@ class ClaimsController extends Controller
             // why that is safe.
             'total_claims' => ['required', 'numeric', 'gt:0', 'max:50000', 'decimal:0,2'],
 
-            'receipt' => [...self::FILE_RULES, 'required'],
-            'proof_of_payment' => [...self::FILE_RULES, 'required'],
-            'invoice' => [...self::FILE_RULES, 'required'],
-
-            // Optional, not conditionally required -- the form tells
-            // international students it applies to them; nothing here reads
-            // an international flag back to enforce it.
-            'passport' => [...self::FILE_RULES, 'nullable'],
         ], [
             'publication_application_id.required' => 'Choose the publication this claim is for.',
             'publication_application_id.in' => 'Choose one of your own approved publications.',
         ]);
 
-        $application = DB::transaction(function () use ($request, $data, $engine, $documents) {
-            $application = Application::create([
-                'student_id' => $request->user()->id,
-                'module_type' => $this->moduleKey(),
-                'status' => Application::STATUS_DRAFT,
-            ]);
+        $application = DB::transaction(function () use ($request, $data, $engine, $documents, $draft, $removing) {
+            // Submitting a saved draft finishes that application rather than
+            // starting a second one.
+            $application = $this->draftOrNewApplication($request, $draft, $removing);
 
             // total_claims is a direct student input, not derived from a
             // breakdown — there is nothing here for a tampered DOM value to
@@ -117,11 +142,7 @@ class ClaimsController extends Controller
                 'total_claims' => $data['total_claims'],
             ]);
 
-            foreach (self::DOCUMENT_FIELDS as $field => $label) {
-                if ($request->hasFile($field)) {
-                    $documents->attach($application, $request->file($field), $label);
-                }
-            }
+            $this->attachDraftFiles($request, $application, $documents);
 
             // Hands the application to the first approver in the chain.
             return $engine->submit($application);

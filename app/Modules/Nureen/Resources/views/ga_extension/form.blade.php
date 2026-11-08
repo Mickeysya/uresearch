@@ -124,17 +124,18 @@
 
             <fieldset class="fstep" data-label="Extension details">
             <p class="fstep-hint">
-                Your current end date, the date you are asking for, and why. The terms: an extension is
+                The date you are asking for, and why. The terms: an extension is
                 {{ $rules['extension_months']['min'] }}–{{ $rules['extension_months']['max'] }} months, starts on the 1st or 16th
                 (so the current appointment ends on the 15th or the last day of a month), ends on the 15th or the last day of a month,
                 and is submitted at least {{ $rules['notice_months'] === 1 ? 'one month' : $rules['notice_months'].' months' }} before it starts.
-                Backdated appointments are not allowed.
             </p>
 
-            <label for="current_end_date">Current GA End Date</label>
-            <input type="date" name="current_end_date" id="current_end_date" required
-                   value="{{ old('current_end_date', $detail?->current_end_date?->format('Y-m-d')) }}"
-                   class="@error('current_end_date') is-invalid @enderror">
+            <label>Current GA End Date</label>
+            <p class="queue-meta" style="margin: 0 0 var(--space-4);">
+                {{ $currentEndDate ? $currentEndDate->format('j M Y') : 'Not available' }}.
+                Read from your approved GA application, not entered here.
+            </p>
+            <input type="hidden" name="current_end_date" value="{{ old('current_end_date', $currentEndDate?->format('Y-m-d')) }}">
             @error('current_end_date') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="requested_new_end_date">Requested New End Date</label>

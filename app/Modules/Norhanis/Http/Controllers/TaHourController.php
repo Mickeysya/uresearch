@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Modules\Haziq\Http\Controllers;
+namespace App\Modules\Norhanis\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
-use App\Modules\Haziq\Models\TaHourLog;
+use App\Modules\Norhanis\Models\TaHourLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -28,7 +28,7 @@ class TaHourController extends Controller
             $logs = TaHourLog::where('student_id', $user->id)->latest('activity_date')->paginate(25);
             $total = TaHourLog::where('student_id', $user->id)->sum('hours');
 
-            return view('haziq::ta_hours.index', [
+            return view('norhanis::ta_hours.index', [
                 'logs' => $logs,
                 'total' => $total,
                 'student' => $user,
@@ -48,7 +48,7 @@ class TaHourController extends Controller
 
         $logs = $query->paginate(25);
 
-        return view('haziq::ta_hours.index', [
+        return view('norhanis::ta_hours.index', [
             'logs' => $logs,
             'total' => null,
             'student' => null,

@@ -2,11 +2,13 @@
 
 use App\Modules\Core\Support\Role;
 use App\Modules\Haziq\Http\Controllers\AllowanceController;
+use App\Modules\Haziq\Http\Controllers\AssistantController;
 use App\Modules\Haziq\Http\Controllers\CandidatureAppealController;
+use App\Modules\Haziq\Http\Controllers\DelayReportController;
+use App\Modules\Haziq\Http\Controllers\DocumentCompletenessController;
 use App\Modules\Haziq\Http\Controllers\GaApplicationController;
 use App\Modules\Haziq\Http\Controllers\GraApplicationController;
 use App\Modules\Haziq\Http\Controllers\StageGateController;
-use App\Modules\Haziq\Http\Controllers\TaHourController;
 use App\Modules\Haziq\Support\Roles;
 use Illuminate\Support\Facades\Route;
 
@@ -25,6 +27,12 @@ Route::middleware('auth')->group(function () {
         Route::post('/gra-application', [GraApplicationController::class, 'store'])->name('gra-application.store');
         Route::get('/gra-application/extension/new', [GraApplicationController::class, 'createExtension'])->name('gra-application.extension.create');
         Route::post('/gra-application/extension', [GraApplicationController::class, 'storeExtension'])->name('gra-application.extension.store');
+
+        // Saved drafts -- route names Nureen\Support\Drafts::of() builds its
+        // Continue/Delete links from (see "My Drafts"). The owning student
+        // only; editDraft()/destroyDraft() check that themselves.
+        Route::get('/gra-application/draft/{application}', [GraApplicationController::class, 'editDraft'])->name('gra-application.draft.edit');
+        Route::delete('/gra-application/draft/{application}', [GraApplicationController::class, 'destroyDraft'])->name('gra-application.draft.destroy');
     });
 
     // Every approver role — Admin, CGS, Supervisor, Senior Director. All
@@ -75,6 +83,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/ga-application/{application}/mine', [GaApplicationController::class, 'showMine'])->name('ga-application.mine');
         Route::get('/ga-application/{application}/correction', [GaApplicationController::class, 'showCorrection'])->name('ga-application.correction.edit');
         Route::post('/ga-application/{application}/correction', [GaApplicationController::class, 'storeCorrection'])->name('ga-application.correction.store');
+
+        // Saved drafts -- same convention as GRA's, see the comment there.
+        Route::get('/ga-application/draft/{application}', [GaApplicationController::class, 'editDraft'])->name('ga-application.draft.edit');
+        Route::delete('/ga-application/draft/{application}', [GaApplicationController::class, 'destroyDraft'])->name('ga-application.draft.destroy');
     });
 
     // Every approver role — Admin, Research Centre, CGS, Supervisor, Senior
@@ -129,6 +141,20 @@ Route::middleware('auth')->group(function () {
         Route::get('/allowance/export', [AllowanceController::class, 'export'])->name('allowance.export');
     });
 
+    // ---- Document Completeness ---------------------------------------
+    // "Document completeness never blocks routing" -- a report plus one
+    // manual action, same approver audience as Stage Gate/Allowance's own
+    // monitoring routes above (no Student here -- see the student's own
+    // missing-documents box on gra-application.mine/ga-application.mine
+    // instead).
+    Route::middleware('role:'.implode(',', array_merge(
+        [Role::ADMIN, Role::SUPERVISOR],
+        Role::cgsTeam(),
+    )))->group(function () {
+        Route::get('/document-completeness', [DocumentCompletenessController::class, 'index'])->name('document-completeness.index');
+        Route::post('/document-completeness/remind-all', [DocumentCompletenessController::class, 'remindAll'])->name('document-completeness.remind-all');
+    });
+
     // Admin or CGS (non_exec) only — narrower than the monitoring group
     // above, confirmed explicitly 2026-10-23: "cgs admin dua dua boleh
     // buat" (not Supervisor, not Senior Director — same authorization
@@ -157,11 +183,27 @@ Route::middleware('auth')->group(function () {
         Route::post('/candidature-appeals/{appeal}/decide', [CandidatureAppealController::class, 'decide'])->name('candidature-appeal.decide');
     });
 
-    // ---- TA Hours ---------------------------------------------------------
-    // Every role: a student sees their own total, staff record entries for
-    // their scope. Enforced inside TaHourController, not by route middleware,
-    // because "my own" vs "my supervisees" needs the signed-in user's row.
-    Route::get('/ta-hours', [TaHourController::class, 'index'])->name('ta-hours.index');
-    Route::post('/ta-hours', [TaHourController::class, 'store'])->name('ta-hours.store');
+    // ---- Delay by Actor report ---------------------------------------------
+    // Every actor in either chain, not just one role -- confirmed explicitly
+    // 2026-11-06: "i want all of the actors to see this." Never the student --
+    // this is about who holds an application up, not their own progress,
+    // which they already see on the ordinary tracking page.
+    Route::middleware('role:'.implode(',', array_merge(
+        [Role::ADMIN, Roles::RESEARCH_CENTRE, Role::SUPERVISOR], Role::cgsTeam()
+    )))->group(function () {
+        Route::get('/delay-report', [DelayReportController::class, 'index'])->name('delay-report.index');
+    });
+
+    // ---- Student chatbot ---------------------------------------------------
+    // Student-only -- confirmed explicitly 2026-11-06: "implement chatbox ai
+    // for my module for student." AssistantController itself also checks
+    // isStudent(), since a route middleware check and a controller check are
+    // cheap insurance against each other drifting.
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::post('/haziq-assistant/ask', [AssistantController::class, 'ask'])->name('haziq-assistant.ask');
+    });
+
+    // TA Hours moved to Norhanis' module (app/Modules/Norhanis/routes.php),
+    // same URL and route names.
 
 });

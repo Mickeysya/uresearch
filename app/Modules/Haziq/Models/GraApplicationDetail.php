@@ -59,14 +59,15 @@ class GraApplicationDetail extends Model
     }
 
     /**
-     * Extension can only be requested once the current appointment has
-     * actually run out — "boleh isi bila dah end service date je", 2026-11.
-     * Same-day as service_end_date counts as already ended, not one day
-     * early.
+     * Extension can be requested any time once the current appointment is
+     * approved — no longer gated on the service period having actually run
+     * out. Confirmed explicitly 2026-11-07, reversing the earlier
+     * "boleh isi bila dah end service date je" rule (2026-11): extension is
+     * "applicable once die dah approve as gra je."
      */
     public function canBeExtended(): bool
     {
-        return $this->service_end_date->lte(\Illuminate\Support\Carbon::today());
+        return $this->application->status === Application::STATUS_APPROVED;
     }
 
     public function allowanceNotes(): HasMany

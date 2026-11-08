@@ -6,7 +6,7 @@ use App\Modules\Core\Contracts\SuppliesPostgraduateProgress;
 use App\Modules\Core\Models\User;
 use App\Modules\Haziq\Http\Controllers\AllowanceController;
 use App\Modules\Haziq\Http\Controllers\StageGateController;
-use App\Modules\Haziq\Http\Controllers\TaHourController;
+use App\Modules\Norhanis\Http\Controllers\TaHourController;
 use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\StageGate;

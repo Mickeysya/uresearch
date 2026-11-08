@@ -29,6 +29,8 @@ class DatabaseSeeder extends Seeder
 {
     public const PASSWORD = 'password';
 
+    protected static ?string $hash = null;
+
     public function run(): void
     {
         $this->departments();
@@ -66,6 +68,8 @@ class DatabaseSeeder extends Seeder
             'department' => 'Faculty of Engineering', 'faculty' => 'FOE',
         ]);
         $this->user('Registry Officer', 'registry@utp.edu.my', Role::REGISTRY, ['department' => 'Registry']);
+        // Haziq's GA interview stage; the role lives in his module, not Role.
+        $this->user('Research Centre Officer', 'researchcentre@utp.edu.my', \App\Modules\Haziq\Support\Roles::RESEARCH_CENTRE, ['department' => 'Research Centre']);
         $this->user('System Admin', 'admin@utp.edu.my', Role::ADMIN);
 
         // Students, all attached to the supervisor above so the supervisee
@@ -86,6 +90,7 @@ class DatabaseSeeder extends Seeder
             'supervisor_id' => $supervisor->id,
         ]);
 
+        $this->cohort();
         $this->examiners();
         $this->workstations();
         $this->studyCandidacies();
@@ -176,8 +181,79 @@ class DatabaseSeeder extends Seeder
         'Management' => ['Puan Lee Siew Mei', 'ae.management'],
     ];
 
-    /** The faculty each one inherits is the department's own, not a second list. */
-    protected function academicExecs(): void
+    /**
+     * One Chair per department, for the same reason as the Academic
+     * Executives above: the Chair queue is department-scoped, so a department
+     * without one strands every request at the Chair stage. Computing is
+     * chair@utp.edu.my; Chemical keeps DemoDataSeeder's Dr. Mei Ling Tan.
+     */
+    protected const CHAIRS = [
+        'Foundation in Business Management & Computing' => ['Dr. Rosnah Abdul Karim', 'chair.foundation.business'],
+        'Foundation in Engineering & Science' => ['Dr. Kamarul Ariffin', 'chair.foundation.engineering'],
+        'Chemical Engineering' => ['Dr. Mei Ling Tan', 'meiling.tan'],
+        'Civil & Environmental Engineering' => ['Dr. Hisham Mohamad', 'chair.civil'],
+        'Electrical & Electronics Engineering' => ['Dr. Rajesh Kumar Nair', 'chair.electrical'],
+        'Integrated Engineering' => ['Dr. Azlan Shah Ibrahim', 'chair.integrated'],
+        'Mechanical Engineering' => ['Dr. Tan Boon Huat', 'chair.mechanical'],
+        'Petroleum Engineering' => ['Dr. Nurul Huda Zainal', 'chair.petroleum'],
+        'Applied Sciences' => ['Dr. Lakshmi Devi Subramaniam', 'chair.applied'],
+        'Geosciences' => ['Dr. Mohd Fauzi Hassan', 'chair.geosciences'],
+        'Management' => ['Dr. Wong Pei Shan', 'chair.management'],
+    ];
+
+    /**
+     * Two supervisors per department (24). Computing's first is the roster's
+     * supervisor@utp.edu.my; Kumaran, Farid and Siti are DemoDataSeeder's,
+     * kept on the same addresses so the two seeders agree.
+     */
+    protected const SUPERVISORS = [
+        'Foundation in Business Management & Computing' => [['Dr. Hasliza Omar', 'hasliza.omar'], ['Mr. Daniel Lee Chee Wai', 'daniel.lee']],
+        'Foundation in Engineering & Science' => [['Dr. Suhaimi Yahya', 'suhaimi.yahya'], ['Dr. Kalaivani Murugan', 'kalaivani.murugan']],
+        'Chemical Engineering' => [['Dr. Farid Kamal', 'farid.kamal'], ['Dr. Lau Kok Keong', 'lau.kokkeong']],
+        'Civil & Environmental Engineering' => [['Dr. Noor Azlina Hamid', 'azlina.hamid'], ['Dr. Teo Wee Liang', 'teo.weeliang']],
+        'Electrical & Electronics Engineering' => [['Dr. Siti Nurhaliza', 'siti.nurhaliza'], ['Dr. Balachandran Ramasamy', 'bala.ramasamy']],
+        'Integrated Engineering' => [['Dr. Khairil Anwar Rosli', 'khairil.rosli'], ['Dr. Ooi Mei Fong', 'ooi.meifong']],
+        'Mechanical Engineering' => [['Dr. Faizal Mustapha', 'faizal.mustapha'], ['Dr. Ng Siew Ling', 'ng.siewling']],
+        'Petroleum Engineering' => [['Dr. Zulkifli Hamzah', 'zulkifli.hamzah'], ['Dr. Anitha Pillai', 'anitha.pillai']],
+        'Applied Sciences' => [['Dr. Rohana Ismail', 'rohana.ismail'], ['Dr. Chua Boon Leng', 'chua.boonleng']],
+        'Computing' => [['Dr. Aisyah Rahman', 'supervisor'], ['Prof. Dr. Kumaran Vellu', 'kumaran.vellu']],
+        'Geosciences' => [['Dr. Mohd Rizal Ahmad', 'rizal.ahmad'], ['Dr. Yeap Siew Hoon', 'yeap.siewhoon']],
+        'Management' => [['Dr. Nor Hafizah Aziz', 'hafizah.aziz'], ['Dr. Sanjay Menon', 'sanjay.menon']],
+    ];
+
+    /**
+     * Six Non-Executive CGS officers, one per team member's modules (was
+     * database/sql/cgs_officers.sql). Core scopes queues by role, so each
+     * still sees every Non-Executive queue; a module that emails only its own
+     * officer says so itself (Norhanis' Config/cgs.php).
+     */
+    protected const CGS_OFFICERS = [
+        ['Waheda', 'waheda.cgs'],       // Hani
+        ['Akmar', 'akmar.cgs'],         // Haziq
+        ['Norshahira', 'norshahira.cgs'], // Norhanis
+        ['Amirul', 'amirul.cgs'],       // Chloe
+        ['Zulkifly', 'zulkifly.cgs'],   // Nureen
+        ['Syahmi', 'syahmi.cgs'],       // Jason
+    ];
+
+    /** Per department, in FACULTY_DEPARTMENTS order: [male, female]. 109 + 71 = 180. */
+    protected const COHORT = [[9, 6], [8, 7], [10, 5], [9, 6], [8, 7], [9, 6], [10, 5], [9, 6], [8, 7], [10, 5], [9, 6], [10, 5]];
+
+    protected const NAMES = [
+        'male' => [
+            'malay' => [['Ahmad Faris', 'Muhammad Irfan', 'Amirul Hakim', 'Haziq Danial', 'Syafiq Aiman', 'Firdaus Hakimi', 'Aiman Hafiz', 'Luqman Hakim', 'Nabil Arif', 'Hafiy Iskandar', 'Zikri Asyraf', 'Ikhwan Zarif', 'Adam Rayyan', 'Danish Haikal', 'Arif Fahmi'], ['Ismail', 'Abdullah', 'Rahman', 'Hassan', 'Yusof', 'Ibrahim', 'Osman', 'Zainal', 'Kamarudin', 'Salleh']],
+            'chinese' => [['Tan', 'Lim', 'Lee', 'Wong', 'Ng', 'Ong', 'Chong', 'Chan', 'Goh', 'Yap', 'Teh', 'Loh', 'Yeoh', 'Chin', 'Koh'], ['Wei Jie', 'Jun Hao', 'Zhi Hao', 'Kai Xiang', 'Jia Hao', 'Wen Kai', 'Hong Wei', 'Chee Keong', 'Boon Kiat', 'Yong Sheng']],
+            'indian' => [['Arjun', 'Karthik', 'Vikram', 'Pravin', 'Suresh', 'Ganesh', 'Ravi', 'Dinesh', 'Harish', 'Naveen'], ['Subramaniam', 'Krishnan', 'Muthu', 'Rajendran', 'Ganesan', 'Pillai', 'Nair', 'Raman', 'Selvam', 'Kumar']],
+        ],
+        'female' => [
+            'malay' => [['Nur Aisyah', 'Siti Hajar', 'Nurul Izzah', 'Farah Nadhirah', 'Aina Sofea', 'Nur Insyirah', 'Alya Maisarah', 'Hani Batrisya', 'Syazwani Amira', 'Nadia Huda', 'Puteri Balqis', 'Iman Safiyya', 'Athirah Husna', 'Liyana Qistina', 'Damia Irdina'], ['Ismail', 'Abdullah', 'Rahman', 'Hassan', 'Yusof', 'Ibrahim', 'Osman', 'Zainal', 'Kamarudin', 'Salleh']],
+            'chinese' => [['Tan', 'Lim', 'Lee', 'Wong', 'Ng', 'Ong', 'Chong', 'Chan', 'Goh', 'Yap', 'Teh', 'Loh', 'Yeoh', 'Chin', 'Koh'], ['Xin Yi', 'Hui Min', 'Mei Ling', 'Jia Wen', 'Pei Shan', 'Yi Ting', 'Siew Mei', 'Li Ying', 'Shu Fen', 'Wen Qi']],
+            'indian' => [['Priya', 'Kavitha', 'Divya', 'Shalini', 'Revathi', 'Anusha', 'Deepa', 'Nisha', 'Meena', 'Thivya'], ['Subramaniam', 'Krishnan', 'Muthu', 'Rajendran', 'Ganesan', 'Pillai', 'Nair', 'Raman', 'Selvam', 'Kumar']],
+        ],
+    ];
+
+    /** @return array<string, string> department => faculty */
+    protected function facultyOf(): array
     {
         $facultyOf = [];
 
@@ -187,12 +263,96 @@ class DatabaseSeeder extends Seeder
             }
         }
 
-        foreach (self::ACADEMIC_EXECS as $department => [$name, $handle]) {
-            $this->user($name, $handle.'@utp.edu.my', Role::ACADEMIC_EXEC, [
-                'department' => $department,
-                'faculty' => $facultyOf[$department] ?? null,
-            ]);
+        return $facultyOf;
+    }
+
+    /** Academic Executives, Chairs, Supervisors and the CGS officers. The faculty each inherits is the department's own. */
+    protected function academicExecs(): void
+    {
+        $facultyOf = $this->facultyOf();
+
+        foreach ([Role::ACADEMIC_EXEC => self::ACADEMIC_EXECS, Role::CHAIR => self::CHAIRS] as $role => $staff) {
+            foreach ($staff as $department => [$name, $handle]) {
+                $this->user($name, $handle.'@utp.edu.my', $role, [
+                    'department' => $department,
+                    'faculty' => $facultyOf[$department] ?? null,
+                ]);
+            }
         }
+
+        foreach (self::SUPERVISORS as $department => $pair) {
+            foreach ($pair as [$name, $handle]) {
+                $this->user($name, $handle.'@utp.edu.my', Role::SUPERVISOR, [
+                    'department' => $department,
+                    'faculty' => $facultyOf[$department] ?? null,
+                ]);
+            }
+        }
+
+        foreach (self::CGS_OFFICERS as [$name, $handle]) {
+            $this->user($name, $handle.'@utp.edu.my', Role::NON_EXEC_CGS, ['department' => 'CGS']);
+        }
+    }
+
+    /**
+     * 180 students, 15 per department (COHORT), matric 2410DDNN (DD the
+     * department's place in FACULTY_DEPARTMENTS, NN 01-15), email
+     * <name>_<matric>@utp.edu.my. Names are a pure function of the gender's
+     * running count, so every run produces the same people. Supervisors
+     * alternate between the department's two. Gender goes in
+     * student_genders: `users` gets no gender column (rule 2).
+     */
+    protected function cohort(): void
+    {
+        $facultyOf = $this->facultyOf();
+        $programmes = ['MSc Full-Time', 'PhD Full-Time', 'MSc Part-Time', 'PhD Part-Time'];
+        $count = ['male' => 0, 'female' => 0];
+        $d = 0;
+
+        foreach ($facultyOf as $department => $faculty) {
+            [$male, $female] = self::COHORT[$d++];
+            $supervisors = collect(self::SUPERVISORS[$department])
+                ->map(fn ($s) => User::where('email', $s[1].'@utp.edu.my')->value('id'))->all();
+            $genders = array_merge(array_fill(0, $male, 'male'), array_fill(0, $female, 'female'));
+
+            foreach ($genders as $n => $gender) {
+                $name = $this->cohortName($gender, $count[$gender]++);
+                $matric = sprintf('2410%02d%02d', $d, $n + 1);
+                $slug = preg_replace('/[^a-z]/', '', str_replace([' bin ', ' binti '], ' ', strtolower($name)));
+
+                $student = $this->user($name, "{$slug}_{$matric}@utp.edu.my", Role::STUDENT, [
+                    'matric_no' => $matric,
+                    'programme' => $programmes[$n % 4],
+                    'department' => $department,
+                    'faculty' => $faculty,
+                    'supervisor_id' => $supervisors[$n % 2],
+                ]);
+
+                StudentGender::updateOrCreate(['student_id' => $student->id], ['gender' => $gender]);
+
+                // Workstation and Study Candidacy both need an active candidacy with a future expiry
+                // (WorkstationEligibility). Expiry spread 3-35 months out; firstOrCreate so a re-run
+                // never moves dates CGS or a demo has since changed.
+                $expiry = now()->startOfDay()->addMonths(3 + ($n * 7 + $d) % 33);
+                StudyCandidacy::firstOrCreate(['student_id' => $student->id], [
+                    'programme_start_date' => $expiry->copy()->subMonths(str_starts_with($programmes[$n % 4], 'PhD') ? 48 : 30),
+                    'candidacy_expiry_date' => $expiry,
+                    'status' => StudyCandidacy::STATUS_ACTIVE,
+                ]);
+            }
+        }
+    }
+
+    /** The i-th name of a gender: Malay, Chinese, Indian in turn. Pairs never repeat within the 109/71 a gender needs. */
+    protected function cohortName(string $gender, int $i): string
+    {
+        $k = intdiv($i, 3);
+
+        return match ($i % 3) {
+            0 => (fn ($p) => $p[0][$k % 15].($gender === 'male' ? ' bin ' : ' binti ').$p[1][($k + intdiv($k, 15)) % 10])(self::NAMES[$gender]['malay']),
+            1 => (fn ($p) => $p[0][$k % 15].' '.$p[1][($k + intdiv($k, 15)) % 10])(self::NAMES[$gender]['chinese']),
+            2 => (fn ($p) => $p[0][$k % 10].' '.$p[1][($k + intdiv($k, 10)) % 10])(self::NAMES[$gender]['indian']),
+        };
     }
 
     /**
@@ -229,7 +389,8 @@ class DatabaseSeeder extends Seeder
         return User::updateOrCreate(['email' => $email], array_merge([
             'name' => $name,
             'role' => $role,
-            'password' => Hash::make(self::PASSWORD),
+            // One bcrypt for the whole run: ~250 accounts x a fresh hash is most of a minute.
+            'password' => self::$hash ??= Hash::make(self::PASSWORD),
         ], $extra));
     }
 

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Nureen;
 
 use App\Modules\Core\Models\Application;
+use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Core\Models\ApplicationDocument;
 use App\Modules\Core\Models\User;
 use App\Modules\Nureen\Models\GaExtensionDetail;
@@ -50,6 +51,7 @@ class GaExtensionFormTest extends TestCase
             'supervisor_id' => $this->supervisor->id,
             'programme' => 'MSc Information Technology',
         ]);
+        $this->approveGaApplication($this->student);
     }
 
     protected function submit(array $overrides = [], ?User $as = null): Application
@@ -146,7 +148,7 @@ class GaExtensionFormTest extends TestCase
         $this->actingAs($this->student)
             ->post(route('ga-extension.store'), $this->gaExtensionFields(['declaration' => null]) + $this->gaExtensionDocuments())
             ->assertSessionHasErrors('declaration');
-        $this->assertSame(0, Application::count());
+        $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
 
         $this->actingAs($this->student)->post(route('ga-extension.draft.save'), ['contact_no' => '+60 12-000 0000'])->assertSessionHasNoErrors();
         $this->assertNull(GaExtensionDetail::sole()->declaration_accepted_at);
@@ -154,6 +156,9 @@ class GaExtensionFormTest extends TestCase
 
     public function test_a_backdated_extension_is_refused(): void
     {
+        // The date checked is the approved GA application's, not the posted one.
+        GaApplicationDetail::query()->update(['service_end_date' => now()->subMonths(2)->endOfMonth()->toDateString()]);
+
         $this->actingAs($this->student)
             ->post(route('ga-extension.store'), $this->gaExtensionFields([
                 'current_end_date' => now()->subMonths(2)->endOfMonth()->toDateString(),
@@ -161,7 +166,7 @@ class GaExtensionFormTest extends TestCase
             ]) + $this->gaExtensionDocuments())
             ->assertSessionHasErrors('current_end_date');
 
-        $this->assertSame(0, Application::count());
+        $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
 
     /* -----------------------------------------------------------------
@@ -215,7 +220,7 @@ class GaExtensionFormTest extends TestCase
             'bank_account_no' => '1122 3344 5566',
             'identity_number' => '010203-08-1234',
         ]);
-        $draft = Application::sole();
+        $draft = Application::where('module_type', 'ga_extension')->sole();
 
         $this->actingAs($this->student)->get(route('ga-extension.draft.edit', $draft))
             ->assertOk()
@@ -308,7 +313,7 @@ class GaExtensionFormTest extends TestCase
         $this->actingAs($this->student)
             ->post(route('ga-extension.draft.save'), ['publications' => [['title' => 'Half done']]])
             ->assertSessionHasNoErrors();
-        $draft = Application::sole();
+        $draft = Application::where('module_type', 'ga_extension')->sole();
         $this->assertSame('Half done', $this->detail($draft)->publications[0]['title']);
 
         $this->actingAs($this->student)->get(route('ga-extension.draft.edit', $draft))->assertSee('value="Half done"', false);
@@ -337,7 +342,7 @@ class GaExtensionFormTest extends TestCase
             ->post(route('ga-extension.store'), $this->gaExtensionFields() + $this->gaExtensionDocuments()
                 + ['acceptance_proof_documents' => [UploadedFile::fake()->create('acceptance.pdf', 40, 'application/pdf')]])
             ->assertSessionHasNoErrors();
-        $application = Application::sole();
+        $application = Application::where('module_type', 'ga_extension')->sole();
 
         $checklist = $this->formData($application)['checklist'];
         $this->assertSame([true, true, true, true], array_column($checklist, 'student'));
@@ -468,7 +473,7 @@ class GaExtensionFormTest extends TestCase
     {
         $this->actingAs($this->student)->post(route('ga-extension.draft.save'), ['contact_no' => '+60 12-000 0000', 'download_form' => '1'])
             ->assertSessionHas('download_form', true);
-        $draft = Application::sole();
+        $draft = Application::where('module_type', 'ga_extension')->sole();
 
         $this->actingAs($this->student)->withSession(['download_form' => true])->get(route('ga-extension.draft.edit', $draft))
             ->assertSee('data-auto-download', false)

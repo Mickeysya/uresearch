@@ -224,8 +224,8 @@ seeding.
 To get back to a clean database at any time:
 
 ```bash
-./reset.sh                                          # asks for confirmation
-./vendor/bin/sail artisan migrate:fresh --seed      # same thing, no prompt
+./sync.sh --fresh          # wipe DB + uploads, rebuild with every account and all demo data (asks first)
+./sync.sh --fresh --yes    # same, no prompt (./reset.sh is an alias)
 ```
 
 ---
@@ -451,7 +451,7 @@ The three project scripts, all safe to re-run:
 ./setup.sh                                 # first-time setup, from a clean clone (safe to re-run)
 ./sync.sh                                  # after a git pull or branch switch
 ./sync.sh --check                          # report what sync.sh would do, change nothing
-./reset.sh                                 # wipe and reseed the database (prompts first)
+./sync.sh --fresh                          # wipe and rebuild with all demo data (prompts first)
 ```
 
 Everything else is Sail:

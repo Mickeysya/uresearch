@@ -220,11 +220,13 @@ class SnapshotChainReachabilityTest extends TestCase
 
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
         $this->assertSame($supervisor->id, GaExtensionDetail::sole()->supervisor_id);
 
         $unassigned = $this->student('22001002', 'unassigned@test.my');
+        $this->approveGaApplication($unassigned);
         $this->actingAs($unassigned)
             ->post(route('ga-extension.store'), $this->payload())
             ->assertSessionHas('error');
