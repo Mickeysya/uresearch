@@ -60,13 +60,23 @@ final class AppointmentSheet
             'external backup inst', 'external backup institution', 'external backup dept',
             'external backup department', 'external backup university',
         ],
+        // Added by the nomination chain once it began tracking letters.
+        // A seat reads "Not sent", "Sent 01 Nov 2026 (letter module)",
+        // "Sent 01 Nov 2026 (entered by AE)" or "Replaced 05 Nov 2026".
+        'internal_main_letter_status' => ['internal main letter status'],
+        'internal_backup_letter_status' => ['internal backup letter status'],
+        'external_main_letter_status' => ['external main letter status'],
+        'external_backup_letter_status' => ['external backup letter status'],
+        'letter_needed_for' => ['letter needed for'],
+        'replaced_examiners' => ['replaced examiners'],
         'stage' => ['stage'],
         'status' => ['status'],
         'submitted' => ['submitted', 'submitted at', 'submitted on'],
     ];
 
     /**
-     * The four panel slots, as [name column, detail column, kind, role].
+     * The four panel slots, as
+     * [name column, detail column, kind, role, letter-status column].
      *
      * All four are read from the list, because the list is what the Dean
      * approved -- but only the two mains are appointed. A backup is the
@@ -74,10 +84,10 @@ final class AppointmentSheet
      * happens. See AppointmentLetterController::readPanel().
      */
     public const SLOTS = [
-        ['internal_main', 'internal_main_dept', 'internal', 'main'],
-        ['internal_backup', 'internal_backup_dept', 'internal', 'backup'],
-        ['external_main', 'external_main_inst', 'external', 'main'],
-        ['external_backup', 'external_backup_inst', 'external', 'backup'],
+        ['internal_main', 'internal_main_dept', 'internal', 'main', 'internal_main_letter_status'],
+        ['internal_backup', 'internal_backup_dept', 'internal', 'backup', 'internal_backup_letter_status'],
+        ['external_main', 'external_main_inst', 'external', 'main', 'external_main_letter_status'],
+        ['external_backup', 'external_backup_inst', 'external', 'backup', 'external_backup_letter_status'],
     ];
 
     /** The headings the template is written with, in the export's order. */
@@ -129,6 +139,24 @@ final class AppointmentSheet
         $value = preg_replace('/\s+/', ' ', trim((string) $value));
 
         return mb_strtolower(rtrim($value, " :*."));
+    }
+
+    /**
+     * Whether a seat's letter-status cell says a letter has already gone.
+     *
+     * The nomination chain writes "Sent <date> (letter module)" when this
+     * module's own dispatch recorded it, and "Sent <date> (entered by AE)"
+     * when the Academic Executive posted one by hand. Both are letters the
+     * examiner has had, so both stop a second.
+     *
+     * "Replaced <date>" is not one: that cell describes whoever LEFT the
+     * seat, so whoever holds it now has had nothing. An empty cell is an
+     * export from before the chain tracked this and says nothing either
+     * way -- the appointment records answer for those.
+     */
+    public static function saysLetterSent(string $status): bool
+    {
+        return str_starts_with(mb_strtolower(trim($status)), 'sent');
     }
 
     /**

@@ -33,6 +33,15 @@
         <p>Notes: {{ $nomination->notes }}</p>
     @endif
 
+    @foreach ($substitutions[$nomination->id] ?? [] as $substitution)
+        <p class="message-warning">
+            Substitution requested: {{ $substitution->seatLabel() }} ({{ $substitution->examiner?->name }}). {{ $substitution->reason }}
+            @if (auth()->user()->role === \App\Modules\Core\Support\Role::ACADEMIC_EXEC)
+                <a href="{{ route('examiner-substitution.show', $substitution) }}">Replace this seat</a>
+            @endif
+        </p>
+    @endforeach
+
     @foreach ($duplicates[$application->id] ?? [] as $flag)
         <p class="message-warning">Possible duplicate: {{ $flag }}</p>
     @endforeach

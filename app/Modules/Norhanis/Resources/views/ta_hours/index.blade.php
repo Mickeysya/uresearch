@@ -3,7 +3,13 @@
 @section('title', 'TA Hours')
 
 @push('head')
-    @include('haziq::partials.styles')
+    {{-- The log table's look, kept from when this page was in Haziq's module. --}}
+    <style>
+        .ta-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        .ta-table th, .ta-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border-grey); }
+        .ta-table th { color: var(--text-grey); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+        .ta-table tbody tr:hover { background: var(--page-bg); }
+    </style>
 @endpush
 
 @section('content')
@@ -142,7 +148,7 @@
         @endif
 
         <div style="overflow-x: auto;">
-            <table class="haziq-table">
+            <table class="ta-table">
                 <thead>
                     <tr>
                         @unless ($student)<th>Student</th>@endunless

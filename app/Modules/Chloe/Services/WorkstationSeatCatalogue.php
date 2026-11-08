@@ -5,7 +5,6 @@ namespace App\Modules\Chloe\Services;
 use App\Modules\Chloe\Models\Workstation;
 use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationLocation;
-use App\Modules\Chloe\Models\WorkstationPendingSelection;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Models\WorkstationTerminationNotice;
 use App\Modules\Core\Models\User;
@@ -77,7 +76,6 @@ class WorkstationSeatCatalogue
         }
 
         $held = WorkstationRequest::where('workstation_id', $seat->id)->where('status', WorkstationRequest::STATUS_CONFIRMED)->exists()
-            || WorkstationPendingSelection::where('workstation_id', $seat->id)->where('status', WorkstationPendingSelection::STATUS_PENDING)->exists()
             || WorkstationTerminationNotice::whereHas('workstationRequest', fn ($q) => $q->where('workstation_id', $seat->id))->where('status', WorkstationTerminationNotice::STATUS_ACTIVE)->exists();
 
         if ($held) {

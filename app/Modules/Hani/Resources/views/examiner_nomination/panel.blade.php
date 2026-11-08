@@ -21,7 +21,7 @@
             <tbody>
                 @foreach (\App\Modules\Hani\Models\ExaminerNomination::SLOTS as $seat => $label)
                     @php($examiner = $nomination->{\Illuminate\Support\Str::camel(str_replace('_id', '', $seat))})
-                    <tr>
+                    <tr id="seat-{{ $seat }}">
                         <td>{{ $label }}</td>
                         <td>
                             {{ $examiner?->name ?? 'Empty' }}

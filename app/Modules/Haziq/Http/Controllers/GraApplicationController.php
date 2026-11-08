@@ -27,12 +27,14 @@ use App\Modules\Haziq\Notifications\ApplicationRejected;
 use App\Modules\Haziq\Notifications\ApplicationSubmitted;
 use App\Modules\Haziq\Notifications\LetterIssued;
 use App\Modules\Haziq\Notifications\StageAwaitingReview;
+use App\Modules\Haziq\Support\DocumentCompleteness;
 use App\Modules\Haziq\Support\StageGateEngine;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\UnauthorizedException;
 
 class GraApplicationController extends Controller
@@ -403,6 +405,10 @@ class GraApplicationController extends Controller
             // see AllowanceRecommendationNote's migration for why.
             'allowanceNotes' => collect(),
             'canEditAllowance' => false,
+            // Extension rows were never gated on these documents at
+            // Submit (storeExtension() has no missingRequiredDocuments()
+            // call) -- see Support\DocumentCompleteness's own docblock.
+            'missingDocuments' => $data['detail']->isExtension() ? collect() : DocumentCompleteness::missingFor($application),
         ]);
     }
 
@@ -511,6 +517,42 @@ class GraApplicationController extends Controller
             ->latest('id')
             ->first()
             ?->application;
+    }
+
+    /**
+     * "My Drafts" (Nureen\Support\Drafts::of()) Continue link. There is at
+     * most one 'new'-type draft per student (store() either updates it or
+     * creates the only one, activeNewApplication() blocks a second), so
+     * this just re-enters create() — which already finds and pre-fills it
+     * — once ownership of $application itself is confirmed.
+     */
+    public function editDraft(Request $request, Application $application)
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($application->student_id === $request->user()->id, 403, 'This draft is not yours.');
+        abort_unless($application->status === Application::STATUS_DRAFT, 404, 'This application has already been submitted.');
+
+        return $this->create($request);
+    }
+
+    /** "My Drafts" Delete — the draft, its detail row and its attached files, gone completely. */
+    public function destroyDraft(Request $request, Application $application): RedirectResponse
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($application->student_id === $request->user()->id, 403, 'This draft is not yours.');
+        abort_unless($application->status === Application::STATUS_DRAFT, 404, 'This application has already been submitted.');
+
+        DB::transaction(function () use ($application) {
+            $application->documents->each(function (ApplicationDocument $document) {
+                Storage::disk('local')->delete($document->path);
+                $document->delete();
+            });
+
+            GraApplicationDetail::where('application_id', $application->id)->delete();
+            $application->delete();
+        });
+
+        return redirect()->route('nureen.drafts')->with('status', 'Draft deleted.');
     }
 
     /**
@@ -626,12 +668,13 @@ class GraApplicationController extends Controller
 
         $parentDetail = GraApplicationDetail::where('application_id', $parent->id)->firstOrFail();
 
-        // "boleh isi bila dah end service date je" — extension only opens
-        // once the current appointment has actually run out, 2026-11.
+        // Redundant with the query above (already APPROVED-only), kept so
+        // this reads the same rule the one unguarded lookup in
+        // storeExtension() actually relies on.
         abort_unless(
             $parentDetail->canBeExtended(),
             403,
-            "You can only apply for an extension once your current service period (ending {$parentDetail->service_end_date->format('j M Y')}) has passed."
+            'You can only apply for an extension once your current GRA application has been approved.'
         );
 
         return view('haziq::gra_application.form', [
@@ -655,10 +698,13 @@ class GraApplicationController extends Controller
 
         $parentDetail = GraApplicationDetail::where('application_id', $parent->id)->firstOrFail();
 
+        // This lookup has no status filter of its own (unlike
+        // createExtension()'s), so this is the only thing stopping a
+        // direct POST from extending a pending or rejected application.
         abort_unless(
             $parentDetail->canBeExtended(),
             403,
-            "You can only apply for an extension once your current service period (ending {$parentDetail->service_end_date->format('j M Y')}) has passed."
+            'You can only apply for an extension once your current GRA application has been approved.'
         );
 
         $data = $request->validate([

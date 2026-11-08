@@ -92,6 +92,7 @@ class GaExtensionHandbookTest extends TestCase
         Notification::fake();
         $supervisor = $this->supervisor();
         $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)
             ->post(route('ga-extension.store'), $this->gaExtensionFields(['mode_of_study' => 'part_time']) + $this->gaExtensionDocuments())
@@ -228,6 +229,7 @@ class GaExtensionHandbookTest extends TestCase
         Storage::fake('local');
         Notification::fake();
         $student = $this->student(attributes: ['supervisor_id' => $this->supervisor()->id]);
+        $this->approveGaApplication($student);
 
         return [$student, $this->actingAs($student)->post(route('ga-extension.store'), $this->gaExtensionFields(['level_of_study' => $level]) + $this->gaExtensionDocuments())];
     }
@@ -257,7 +259,7 @@ class GaExtensionHandbookTest extends TestCase
 
         // A draft still saves, so nothing typed is lost.
         $this->actingAs($student)->post(route('ga-extension.draft.save'), ['level_of_study' => 'msc'])->assertSessionHasNoErrors();
-        $this->assertSame(Application::STATUS_DRAFT, Application::sole()->status);
+        $this->assertSame(Application::STATUS_DRAFT, Application::where('module_type', 'ga_extension')->sole()->status);
     }
 
     public function test_phd_only_still_accepts_a_phd_student(): void
@@ -273,6 +275,7 @@ class GaExtensionHandbookTest extends TestCase
     public function test_the_form_shows_no_level_note_when_every_level_is_allowed(): void
     {
         $student = $this->student();
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)->get(route('ga-extension.create'))
             ->assertDontSee('<p class="message-warning" data-level-blocked hidden>', false)
@@ -289,6 +292,7 @@ class GaExtensionHandbookTest extends TestCase
         Storage::fake('local');
         Notification::fake();
         $student = $this->student(attributes: ['supervisor_id' => $this->supervisor()->id]);
+        $this->approveGaApplication($student);
 
         $this->actingAs($student)
             ->post(route('ga-extension.store'), $this->gaExtensionFields(['publications' => [

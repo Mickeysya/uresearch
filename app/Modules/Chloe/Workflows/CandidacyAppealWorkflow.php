@@ -2,7 +2,7 @@
 
 namespace App\Modules\Chloe\Workflows;
 
-use App\Modules\Chloe\Models\CandidacyAppealDetail;
+use App\Modules\Chloe\Models\CandidacyAppeal;
 use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesApplicationDetail;
@@ -48,10 +48,11 @@ class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime, Supp
 
     public function summary(Application $application): string
     {
-        $detail = CandidacyAppealDetail::where('application_id', $application->id)->first();
+        // Only the one appeal filed through the shared engine before 2026-11-01 comes here; its data now lives in candidacy_appeals.
+        $months = CandidacyAppeal::where('legacy_application_id', $application->id)->value('requested_months');
 
-        return $detail
-            ? "Extension request: {$detail->requested_extension_months} month(s)"
+        return $months
+            ? "Extension request: {$months} month(s)"
             : 'Study candidacy appeal';
     }
 

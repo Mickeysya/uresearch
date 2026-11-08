@@ -2,6 +2,7 @@
 
 namespace App\Modules\Jason;
 
+use App\Modules\Core\Contracts\SuppliesAppointmentDispatch;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Jason\Listeners\RecordExaminerPackDelivery;
 use App\Modules\Jason\Support\AppointmentDispatch;
@@ -27,18 +28,14 @@ class ModuleProvider extends ServiceProvider
      * Offers this module's dispatch dates to whoever owns the examiner
      * panel, so their page can show whether each pack actually went out.
      *
-     * Bound only once the Core contract exists. Named as a string and
-     * checked with interface_exists() because binding a class to a missing
-     * interface would be a fatal error on every request -- including every
-     * request that has nothing to do with appointment letters. The chain
-     * reads it only if it is bound, so until the file is added neither side
-     * does anything and neither side breaks.
+     * Bound outright now that Core has the interface. It was guarded with
+     * interface_exists() while the file was only proposed, because binding
+     * a class to a missing interface is a fatal error on every request in
+     * the application, not only this module's pages.
      */
     public function register(): void
     {
-        if (interface_exists(AppointmentDispatch::CONTRACT)) {
-            $this->app->bind(AppointmentDispatch::CONTRACT, AppointmentDispatch::class);
-        }
+        $this->app->bind(SuppliesAppointmentDispatch::class, AppointmentDispatch::class);
     }
 
     public function boot(ModuleRegistry $registry): void

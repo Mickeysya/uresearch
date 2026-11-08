@@ -10,7 +10,6 @@ use App\Modules\Chloe\Models\StudentGender;
 use App\Modules\Chloe\Models\Workstation;
 use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationLocation;
-use App\Modules\Chloe\Models\WorkstationPendingSelection;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Chloe\Support\WorkstationLiveVersion;

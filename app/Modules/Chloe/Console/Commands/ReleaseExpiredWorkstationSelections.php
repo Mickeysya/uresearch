@@ -2,27 +2,22 @@
 
 namespace App\Modules\Chloe\Console\Commands;
 
-use App\Modules\Chloe\Services\WorkstationAllocator;
 use Illuminate\Console\Command;
 
 /**
- * The periodic half of the 5-minute confirmation window's safety net — see
- * WorkstationAllocator::releaseExpiredSelections(), which this just calls.
- * The other half runs inline whenever seats are listed or a token is used,
- * so this is a backstop for a hold nobody happens to look at again, not the
- * only thing standing between an expired hold and a seat stuck Pending.
+ * DEPRECATED, does nothing. The emailed seat-confirmation link (a 5-minute hold) was replaced by in-page seat selection on 2026-11-03 and its
+ * table (workstation_pending_selections) was dropped. The shared routes/console.php still schedules this name every minute, so it stays as a
+ * harmless no-op until that line is removed.
  */
 class ReleaseExpiredWorkstationSelections extends Command
 {
     protected $signature = 'workstation:release-expired-selections';
 
-    protected $description = 'Release workstation seats whose 5-minute confirmation window has expired';
+    protected $description = 'DEPRECATED (does nothing): seat holds no longer exist';
 
-    public function handle(WorkstationAllocator $allocator): int
+    public function handle(): int
     {
-        $released = $allocator->releaseExpiredSelections();
-
-        $this->info("Released {$released} expired workstation selection(s).");
+        $this->line('workstation:release-expired-selections is deprecated and does nothing. Seats are selected in-page; there are no holds to release.');
 
         return self::SUCCESS;
     }

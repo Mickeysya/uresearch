@@ -43,7 +43,7 @@ $add('student', 'cand_reminders', ['when do i get candidacy reminders', 'what st
 $add('student', 'cand_notifications', ['will i be emailed when my appeal is returned', 'do i get a bell notification for approvals', 'who is told when the dean rejects']);
 $add('student', 'cand_if_expires', ['what if my candidacy runs out before i finish', 'will i be dismissed if i miss my end date', 'my candidacy has already expired, what happens next']);
 $add('student', 'cand_twelve_month_limit', ['is there a cap on total extension months', 'can i extend for more than a year altogether', 'what is the 12 month rule for']);
-$add('student', 'cand_deadline', ['until when can i submit an appeal', 'can i appeal on the very last day of my candidacy', 'is the day after expiry too late']);
+$add('student', 'cand_deadline', ['until when can i submit an appeal', 'can i appeal on the very last day of my candidacy', 'is the day after expiry too late', 'how early can i submit an appeal', 'can i appeal 6 months before my expiry date']);
 $add('student', 'cand_withdraw', ['can i take back an appeal i already submitted', 'is there a way to withdraw my appeal', 'i submitted by mistake, can i cancel it']);
 $add('student', 'cand_appeal_rules', ['what are the conditions for making an appeal', 'how many appeals can i have at one time', 'rules for extension appeals pls']);
 $add('student', 'cand_faq', ['candidacy faqs please', 'quick answers about appeals', 'most asked candidacy questions']);
@@ -85,7 +85,7 @@ $add('cgs', 'cand_after_approval', ['why do operations show a different approved
 $add('approver', 'cand_after_approval', ['what happens after the dean approves', 'who gets the memo', 'where does an approved appeal go in my list']);
 $add('approver', 'cand_status_meanings', ['what is meant by the status with cgs', 'explain the appeal statuses', 'what does the closed expired status stand for']);
 $add('approver', 'cand_twelve_month_limit', ['what is the maximum extension in total', 'can a student get more than 12 months', 'how is the 12 month limit counted']);
-$add('approver', 'cand_deadline', ['when is the last day to submit an appeal', 'can a student appeal on the expiry day', 'appeal deadline rule']);
+$add('approver', 'cand_deadline', ['when is the last day to submit an appeal', 'can a student appeal on the expiry day', 'appeal deadline rule', 'when does the appeal window open']);
 $add('approver', 'cand_withdraw', ['can the student withdraw an appeal', 'is withdrawal allowed after submission', 'can an appeal be cancelled']);
 $add('approver', 'cand_appeal_rules', ['what are the appeal rules', 'conditions for an appeal', 'how many appeals at a time per student']);
 $add('approver', 'cand_faq', ['faq about candidacy for approvers', 'quick answers about the appeal process', 'common questions on candidacy']);

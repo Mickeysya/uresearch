@@ -16,7 +16,7 @@ To ask for more time:
 2. Step 1 Department and Supervisor / Programme Manager: your department, programme, Supervisor / Programme Manager, Department Chair and Dean of PGR are shown for information. They come from your student record and you cannot change them. If your Supervisor / Programme Manager is not recorded yet, you cannot start an appeal: contact CGS. Step 2 Research and extension: Section A Research progress, B Earlier extensions, C Publications, D Extension requested (the months, from 1 up to what you have left).
 3. Step 3 Documents: upload the official appeal form (.xlsx, required) and any supporting files. Step 4 Review and submit.
 4. It goes to your Supervisor / Programme Manager, the Department Chair, CGS Verification and the Dean. You cannot withdraw it after you submit.
-Do it on or before your expiry date. The Handbook says the application is made to CGS on the recommendation of the supervisor or the Chair of Department (section 2.1.1, p.8).
+Do it inside the appeal window: it opens 3 calendar months before your expiry date (the same day as your 3-month reminder) and closes at the end of your expiry date. Before then, New Appeal is disabled and tells you the date it opens. The Handbook says the application is made to CGS on the recommendation of the supervisor or the Chair of Department (section 2.1.1, p.8).
 
 Source: UResearch Study Candidacy design (confirmed with CGS); Postgraduate Student Handbook 2025, section 2.1.1, p.8.
 

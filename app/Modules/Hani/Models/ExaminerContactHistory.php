@@ -20,6 +20,7 @@ class ExaminerContactHistory extends Model
         'proposal' => 'Confirmed from a nomination',
         'reported' => 'Reported not working',
         'confirmed' => 'Confirmed still valid',
+        'merge' => 'Moved by a record merge',
     ];
 
     protected $fillable = ['examiner_id', 'old_email', 'new_email', 'source', 'reason', 'changed_by_id'];

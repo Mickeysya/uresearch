@@ -53,6 +53,19 @@ class CandidacyAppealService
 
     // ------------------------------------------------------------------ eligibility
 
+    /** The first day an appeal may be submitted: the expiry date minus appeal_window_months (no month overflow), as a Kuala Lumpur calendar date. */
+    public static function windowOpens(\DateTimeInterface $expiry): Carbon
+    {
+        return Carbon::parse($expiry->format('Y-m-d'), 'Asia/Kuala_Lumpur')->startOfDay()->subMonthsNoOverflow((int) config('candidacy.appeal_window_months', 3));
+    }
+
+    public static function beforeWindowMessage(\DateTimeInterface $expiry): string
+    {
+        $months = (int) config('candidacy.appeal_window_months', 3);
+
+        return 'You can submit an appeal from '.self::windowOpens($expiry)->format('j M Y').", {$months} months before your expiry date.";
+    }
+
     /** @return list<string> the reasons the student cannot appeal now; empty = may appeal */
     public function eligibilityProblems(?StudyCandidacy $candidacy, ?int $months = null): array
     {
@@ -69,6 +82,8 @@ class CandidacyAppealService
 
         if ($candidacy->candidacy_expiry_date->toDateString() < $today->toDateString()) {
             $problems[] = 'Your study candidacy has already expired.';
+        } elseif ($today->toDateString() < self::windowOpens($candidacy->candidacy_expiry_date)->toDateString()) {
+            $problems[] = self::beforeWindowMessage($candidacy->candidacy_expiry_date);
         }
 
         if ($candidacy->candidacyAppeals()->whereIn('status', CandidacyAppeal::OPEN_STATUSES)->exists() || $candidacy->hasOpenAppeal()) {

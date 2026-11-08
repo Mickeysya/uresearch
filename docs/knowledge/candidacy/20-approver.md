@@ -30,7 +30,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_my_signature
 
-Open My Signature (the link on the Approval Portal), upload a PNG or JPEG of your signature (up to 1 MB) and press Save signature; Remove my signature takes it
+Open My Signatures (the link in the sidebar and on the Approval Portal), find the Study Candidacy Appeal section, upload a PNG or JPEG of your signature (up to 1 MB) and press Upload signature (Replace signature when one is on file); Remove takes it
 away. Your signature is stamped on your decisions and on the approval memo. Supervisors / Programme Managers, Department Chairs and the Dean must have one to approve.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).

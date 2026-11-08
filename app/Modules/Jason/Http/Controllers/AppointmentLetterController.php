@@ -57,9 +57,9 @@ class AppointmentLetterController extends Controller
         return view('jason::appointment_letter.import', [
             'columns' => AppointmentSheet::TEMPLATE_HEADINGS,
             'poolAvailable' => ExaminerDirectory::available(),
-            // The direct hand-off, when the nomination chain offers it.
-            // Until the Core contract exists this is false and empty, and
-            // the spreadsheet below is the only way in.
+            // The direct hand-off, when the nomination chain binds it.
+            // False in a checkout without that module, where the
+            // spreadsheet below is the only way in.
             'handoffLive' => ReleasedPanels::available(),
             'released' => ReleasedPanels::all(),
             'lettersNeeded' => ReleasedPanels::lettersNeeded(),
@@ -197,11 +197,20 @@ class AppointmentLetterController extends Controller
                 .'on this page to see the headings this expects.');
         }
 
-        [$candidates, $problems] = $this->readSheet($rows, $columns);
+        [$candidates, $problems, $skipped] = $this->readSheet($rows, $columns);
 
         if ($problems !== []) {
             return back()->with('error', 'Nothing was imported. '.implode(' ', array_slice($problems, 0, 6))
                 .(count($problems) > 6 ? ' (+'.(count($problems) - 6).' more)' : ''));
+        }
+
+        // Everything on the sheet is already done. Almost always the same
+        // list uploaded twice, so it is said plainly rather than as an
+        // error: nothing was wrong, and nothing needed doing.
+        if ($candidates === [] && $skipped !== []) {
+            return back()->with('status', 'Nothing new on that list: '
+                .count($skipped).' '.Str::plural('row', $skipped).' already appointed. '
+                .$this->firstFew($skipped));
         }
 
         $opened = [];
@@ -238,11 +247,18 @@ class AppointmentLetterController extends Controller
         $count = count($opened);
         $packs = collect($candidates)->sum(fn ($c) => count($c['examiners']));
 
+        $message = "{$count} new ".Str::plural('appointment', $count).' created, '
+            ."{$packs} ".Str::plural('examiner', $packs).' in all. '
+            .'Prepare each pack, then send it to the Dean.';
+
+        if ($skipped !== []) {
+            $message .= ' '.count($skipped).' '.Str::plural('row', $skipped)
+                .' skipped: '.$this->firstFew($skipped);
+        }
+
         return redirect()
             ->route('appointment-letter.queue')
-            ->with('status', "{$count} ".Str::plural('candidate', $count).' imported, '
-                ."{$packs} ".Str::plural('examiner', $packs).' in all. '
-                .'Prepare each pack, then send it to the Dean.');
+            ->with('status', $message);
     }
 
     /**
@@ -259,14 +275,22 @@ class AppointmentLetterController extends Controller
      * Every problem is reported with its row number, because the person
      * repairing the file is looking at row numbers.
      *
+     * Two kinds of bad news, kept apart. A `problem` is something wrong
+     * with the file -- an unknown matric, a name the records do not hold,
+     * the same candidate twice -- and rejects the whole upload, because a
+     * list is approved as a whole and importing half of it leaves CGS
+     * working out which candidates made it. A `skip` is a row that is
+     * simply already done; the file is fine, so the rest of it imports.
+     *
      * @param  array<int, array<int, mixed>>  $rows
      * @param  array<string, int>  $columns
-     * @return array{0: array<string, array<string, mixed>>, 1: array<int, string>}
+     * @return array{0: array<string, array<string, mixed>>, 1: array<int, string>, 2: array<int, string>}
      */
     protected function readSheet(array $rows, array $columns): array
     {
         $candidates = [];
         $problems = [];
+        $skipped = [];
 
         foreach ($rows as $i => $row) {
             // +2: the header is row 1 and spreadsheets count from 1.
@@ -294,7 +318,30 @@ class AppointmentLetterController extends Controller
                 continue;
             }
 
-            $examiners = $this->readPanel($cell, $line, $problems);
+            $nominationId = ctype_digit($cell('nomination_id')) ? (int) $cell('nomination_id') : null;
+
+            // Already appointed. Re-uploading the same list is the ordinary
+            // way this happens -- the officer checks whether it went in,
+            // uploads again, and without this gets a second set of letters
+            // to the same examiners over a second Dean's signature. It is
+            // not an error in the file, so it does not reject the file:
+            // the row is skipped and reported, and anything new on the
+            // same sheet still imports.
+            if ($existing = $this->existingAppointment($nominationId, $student)) {
+                $skipped[] = "Row {$line}: {$matric} already appointed (#{$existing}), skipped. "
+                    ."Use 'Letter needed' if the panel changed.";
+
+                continue;
+            }
+
+            $before = count($skipped);
+
+            $examiners = $this->readPanel($cell, $line, $problems, $skipped);
+
+            // Seats dropped because the sheet says they already have a
+            // letter. A row whose seats were ALL already lettered has
+            // nothing left to do, which is not a problem with the file.
+            $alreadyLettered = count($skipped) - $before;
 
             if ($examiners === []) {
                 continue;
@@ -302,7 +349,10 @@ class AppointmentLetterController extends Controller
 
             $kinds = array_unique(array_column($examiners, 'examiner_type'));
 
-            if (count($kinds) < 2) {
+            // A panel needs both kinds -- unless one of them is already
+            // appointed. Then one side is all that is left to write, and
+            // insisting on both would reject the file for being half done.
+            if ($alreadyLettered === 0 && count($kinds) < 2) {
                 $problems[] = "Row {$line}: a panel needs at least one internal and one external examiner.";
 
                 continue;
@@ -321,14 +371,47 @@ class AppointmentLetterController extends Controller
                 'thesis_title' => $cell('thesis_title') ?: null,
                 // The export's "Application No.". Kept so the panel page
                 // can ask about this appointment in its own terms.
-                'nomination_application_id' => ctype_digit($cell('nomination_id'))
-                    ? (int) $cell('nomination_id')
-                    : null,
+                'nomination_application_id' => $nominationId,
                 'examiners' => $examiners,
             ];
         }
 
-        return [$candidates, $problems];
+        return [$candidates, $problems, $skipped];
+    }
+
+    /**
+     * As many reasons as fit in a flash message, and a count for the rest.
+     *
+     * @param  array<int, string>  $lines
+     */
+    protected function firstFew(array $lines, int $keep = 6): string
+    {
+        return implode(' ', array_slice($lines, 0, $keep))
+            .(count($lines) > $keep ? ' (+'.(count($lines) - $keep).' more)' : '');
+    }
+
+    /**
+     * The appointment this candidate already has, if any.
+     *
+     * By the nomination's own number where the sheet carries one: that is
+     * exact, and it is what "already appointed" really means -- this list,
+     * imported before. Without one, fall back to any appointment for the
+     * candidate that is still running or already approved. A returned one
+     * does not count: the Dean sent it back, so it is meant to be redone.
+     *
+     * @return int|null the appointment's application id
+     */
+    protected function existingAppointment(?int $nominationId, User $student): ?int
+    {
+        if ($nominationId) {
+            return AppointmentDetail::where('nomination_application_id', $nominationId)
+                ->value('application_id');
+        }
+
+        return Application::where('module_type', $this->moduleKey())
+            ->where('student_id', $student->id)
+            ->whereIn('status', [Application::STATUS_PENDING, Application::STATUS_APPROVED])
+            ->value('id');
     }
 
     /**
@@ -365,8 +448,20 @@ class AppointmentLetterController extends Controller
      * @param  array<int, string>  $problems
      * @return array<int, array<string, string>>
      */
-    protected function readPanel(callable $cell, int $line, array &$problems): array
+    protected function readPanel(callable $cell, int $line, array &$problems, array &$skipped = []): array
     {
+        // Seats the sheet says already have a letter, by slot. The chain
+        // records one the Academic Executive posted by hand as well as one
+        // this module sent, and a letter is a letter however it travelled.
+        $lettered = [];
+
+        foreach (AppointmentSheet::SLOTS as [$nameKey, , , $role, $statusKey]) {
+            if ($role === AppointmentExaminer::ROLE_MAIN
+                && AppointmentSheet::saysLetterSent($cell($statusKey))) {
+                $lettered[$nameKey] = $cell($nameKey) ?: 'that examiner';
+            }
+        }
+
         // The exact path first: the nomination's own row names its four
         // examiners by id, so two people with the same name cannot be
         // confused for one another.
@@ -384,7 +479,24 @@ class AppointmentLetterController extends Controller
         ));
 
         if ($mains !== []) {
-            return array_map(fn (array $e) => $this->examinerRow($e), $mains);
+            $wanted = [];
+
+            foreach ($mains as $examiner) {
+                $slot = $examiner['examiner_type'] === AppointmentExaminer::TYPE_INTERNAL
+                    ? 'internal_main'
+                    : 'external_main';
+
+                if (isset($lettered[$slot])) {
+                    $skipped[] = "Row {$line}: {$examiner['examiner_name']} already has a letter "
+                        .'on this panel, skipped.';
+
+                    continue;
+                }
+
+                $wanted[] = $this->examinerRow($examiner);
+            }
+
+            return $wanted;
         }
 
         $examiners = [];
@@ -397,6 +509,12 @@ class AppointmentLetterController extends Controller
             $name = $cell($nameKey);
 
             if ($name === '') {
+                continue;
+            }
+
+            if (isset($lettered[$nameKey])) {
+                $skipped[] = "Row {$line}: {$name} already has a letter on this panel, skipped.";
+
                 continue;
             }
 
@@ -791,6 +909,9 @@ class AppointmentLetterController extends Controller
         return view('jason::appointment_letter.issued', [
             'applications' => $applications,
             'examiners' => AppointmentExaminer::whereIn('application_id', $applications->pluck('id'))
+                // Eager loaded: the list names whoever resent each pack,
+                // and one query per row would grow with the backlog.
+                ->with('resentBy')
                 ->orderByRaw("CASE WHEN examiner_type = 'internal' THEN 0 ELSE 1 END")
                 ->get()
                 ->groupBy('application_id'),
@@ -808,6 +929,15 @@ class AppointmentLetterController extends Controller
         abort_unless($examiner->application_id === $application->id, 404);
         abort_unless($application->status === Application::STATUS_APPROVED, 403);
 
+        // A resend posts documents the Dean has signed to someone who has
+        // already been written to once. Saying why is what makes it an
+        // action on the record rather than a button someone pressed.
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:300'],
+        ], [
+            'reason.required' => 'Say why this pack is going out again — a failed send, a corrected address.',
+        ]);
+
         $sent = $this->dispatchPacks($application, collect([$examiner]));
 
         if ($sent === 0) {
@@ -815,6 +945,12 @@ class AppointmentLetterController extends Controller
                 "Nothing was sent to {$examiner->examiner_name} — the prepared documents for that examiner are missing from the archive. "
                 .'Ask CGS to prepare the pack again before resending.');
         }
+
+        $examiner->forceFill([
+            'resent_by_id' => $request->user()->id,
+            'resent_at' => now(),
+            'resent_reason' => $data['reason'],
+        ])->save();
 
         return back()->with('status',
             "Appointment pack queued again for {$examiner->examiner_name} ({$examiner->examiner_email}).");

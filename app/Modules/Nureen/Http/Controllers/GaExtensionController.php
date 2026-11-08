@@ -3,6 +3,7 @@
 namespace App\Modules\Nureen\Http\Controllers;
 
 use App\Modules\Nureen\Support\SubmissionNotifier;
+use App\Modules\Core\Contracts\SuppliesApprovedGaApplication;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
@@ -34,22 +35,59 @@ class GaExtensionController extends Controller
         return 'ga_extension';
     }
 
+    /**
+     * The student's approved GA application and its service end date, via
+     * Core\Contracts\SuppliesApprovedGaApplication -- this module never
+     * names Haziq's classes directly. Null (and the caller aborts, where
+     * that matters) without one bound, the same "fail closed, not silently
+     * skipped" rule Core\Services\Concerns\ReadsAttendance follows.
+     *
+     * @return array{application: \App\Modules\Core\Models\Application, service_end_date: \Illuminate\Support\Carbon}|null
+     */
+    protected function approvedGaApplication(User $student): ?array
+    {
+        return app()->bound(SuppliesApprovedGaApplication::class)
+            ? app(SuppliesApprovedGaApplication::class)->approvedFor($student)
+            : null;
+    }
+
     public function create(Request $request)
     {
-        return $this->form($request, null);
+        $approved = $this->approvedGaApplication($request->user());
+        abort_unless($approved, 403, 'You can only apply for a GA Extension once your GA application has been approved.');
+
+        return $this->form($request, null, $approved['service_end_date']);
     }
 
     /** Continue a saved draft: the same form, pre-filled, on the step last saved. */
     public function editDraft(Request $request, Application $application)
     {
-        return $this->form($request, Drafts::ownedBy($request->user(), $application, $this->moduleKey()));
+        $draft = Drafts::ownedBy($request->user(), $application, $this->moduleKey());
+
+        // Not re-aborted here, unlike create() -- a draft already started
+        // keeps working even if the student's approval somehow changed
+        // since, same as every other draft action in this module never
+        // retroactively punishing work already in progress.
+        $approved = $this->approvedGaApplication($request->user());
+
+        return $this->form($request, $draft, $approved['service_end_date'] ?? null);
     }
 
-    protected function form(Request $request, ?Application $draft)
+    /**
+     * $currentEndDate is this module's own GA application's service end
+     * date (Core\Contracts\SuppliesApprovedGaApplication), read fresh every
+     * render rather than trusted from the draft's own stored copy -- see
+     * approvedGaApplication()'s own docblock for why a student only ever
+     * has the one.
+     */
+    protected function form(Request $request, ?Application $draft, ?\Illuminate\Support\Carbon $currentEndDate)
     {
         $student = $request->user()->loadMissing('supervisor');
+        $detail = $draft ? GaExtensionDetail::where('application_id', $draft->id)->first() : null;
+        $currentEndDate ??= $detail?->current_end_date;
 
         return view('nureen::ga_extension.form', [
+            'currentEndDate' => $currentEndDate,
             'student' => $student,
             'supervisorProblem' => SupervisorCheck::problemFor($student),
             'requiredDocuments' => config('nureen.ga_extension.required_documents'),
@@ -61,7 +99,7 @@ class GaExtensionController extends Controller
             'allowedLevels' => $this->allowedLevels(),
             'additionalFields' => config('nureen.ga_extension.additional_fields'),
             'draft' => $draft,
-            'detail' => $draft ? GaExtensionDetail::where('application_id', $draft->id)->first() : null,
+            'detail' => $detail,
             'attached' => $draft ? Drafts::attached($draft) : collect(),
             // On a fresh form, offer any draft already in progress.
             'otherDrafts' => $draft ? collect() : Drafts::of($request->user(), $this->moduleKey()),
@@ -91,8 +129,13 @@ class GaExtensionController extends Controller
     {
         if ($application) {
             Drafts::ownedBy($request->user(), $application, $this->moduleKey());
+        } else {
+            // Re-checked here too, in case of a direct POST -- create()'s
+            // own abort is not itself an authorization check.
+            abort_unless($this->approvedGaApplication($request->user()), 403, 'You can only apply for a GA Extension once your GA application has been approved.');
         }
 
+        $approved = $this->approvedGaApplication($request->user());
         $requiredDocuments = config('nureen.ga_extension.required_documents');
         $additionalFields = config('nureen.ga_extension.additional_fields');
         $removing = $this->removing($request, $application);
@@ -122,7 +165,7 @@ class GaExtensionController extends Controller
 
         $data = $request->validate($rules, $messages);
 
-        $application = DB::transaction(function () use ($request, $data, $application, $detail, $requiredDocuments, $additionalFields, $removing, $documents) {
+        $application = DB::transaction(function () use ($request, $data, $application, $detail, $approved, $requiredDocuments, $additionalFields, $removing, $documents) {
             $application ??= Application::create([
                 'student_id' => $request->user()->id,
                 'submitted_by_id' => $request->user()->id,
@@ -131,7 +174,12 @@ class GaExtensionController extends Controller
             ]);
 
             GaExtensionDetail::updateOrCreate(['application_id' => $application->id], [
-                'current_end_date' => $data['current_end_date'] ?? null,
+                // Never the client's own input -- read from this
+                // module's approved GA application instead (see
+                // approvedGaApplication()), falling back to whatever was
+                // already saved if that application is unreachable right
+                // now, same as editDraft()'s own fallback.
+                'current_end_date' => $approved['service_end_date'] ?? $detail?->current_end_date,
                 'requested_new_end_date' => $data['requested_new_end_date'] ?? null,
                 'reason_for_extension' => $data['reason_for_extension'] ?? null,
                 'additional_info' => $additionalFields === [] ? null : ($data['additional_info'] ?? []),
@@ -176,6 +224,13 @@ class GaExtensionController extends Controller
             ? Drafts::ownedBy($request->user(), Application::findOrFail((int) $request->input('draft_id')), $this->moduleKey())
             : null;
 
+        // The final, authoritative check -- create()/saveDraft() already
+        // gate the same rule, but this is what actually reaches the
+        // approval chain, so it is re-checked here regardless of how the
+        // request got here.
+        $approved = $this->approvedGaApplication($request->user());
+        abort_unless($approved, 403, 'You can only apply for a GA Extension once your GA application has been approved.');
+
         // The first stage is addressed to the student's own named
         // supervisor, so there has to be one who can act -- same rule as
         // CertificationController::store(); see Support\SupervisorCheck.
@@ -190,6 +245,10 @@ class GaExtensionController extends Controller
         $this->normalisePublications($request);
 
         $rules = [
+            // Hidden on the form, carrying the approved GA application's
+            // own service end date -- validated here so after:current_end_date
+            // below has something real to compare against, but the saved
+            // value always comes from $approved, never from $data.
             'current_end_date' => ['required', 'date'],
             'requested_new_end_date' => ['required', 'date', 'after:current_end_date'],
             'reason_for_extension' => ['required', 'string', 'min:20', 'max:2000'],
@@ -241,14 +300,15 @@ class GaExtensionController extends Controller
 
         // The one rule of the form's Terms and Conditions that is absolute:
         // "Backdated appointment ... is not allowed". The rest only warn,
-        // on the approver's System checks (Support\GaExtensionRules).
-        if (\Illuminate\Support\Carbon::parse($data['current_end_date'])->addDay()->lt(today())) {
+        // on the approver's System checks (Support\GaExtensionRules). Checked
+        // against the approved GA application's end date, the one saved below.
+        if ($approved['service_end_date']->copy()->addDay()->lt(today())) {
             return back()->withInput()->withErrors([
                 'current_end_date' => 'The extension would start before today. Backdated GA appointments are not allowed; contact CGS.',
             ]);
         }
 
-        $application = DB::transaction(function () use ($request, $data, $draft, $existing, $removing, $requiredDocuments, $additionalFields, $engine, $documents) {
+        $application = DB::transaction(function () use ($request, $data, $draft, $existing, $approved, $removing, $requiredDocuments, $additionalFields, $engine, $documents) {
             if ($draft) {
                 // Locked and re-checked, so a double-click can never submit
                 // the same draft twice.
@@ -269,7 +329,8 @@ class GaExtensionController extends Controller
                 // stays with whoever it was addressed to -- at SUBMISSION,
                 // not when the draft was first saved.
                 'supervisor_id' => $request->user()->supervisor_id,
-                'current_end_date' => $data['current_end_date'],
+                // Never the client's own input -- see approvedGaApplication().
+                'current_end_date' => $approved['service_end_date'],
                 'requested_new_end_date' => $data['requested_new_end_date'],
                 'reason_for_extension' => $data['reason_for_extension'],
                 'additional_info' => $additionalFields === [] ? null : ($data['additional_info'] ?? []),

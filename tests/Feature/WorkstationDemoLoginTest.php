@@ -8,7 +8,6 @@ use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Chloe\Models\Workstation;
 use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationLocation;
-use App\Modules\Chloe\Models\WorkstationPendingSelection;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
@@ -202,31 +201,12 @@ class WorkstationDemoLoginTest extends TestCase
         ])->exists());
     }
 
-    public function test_reset_expires_a_pending_selection(): void
-    {
-        $this->artisan('workstation:demo-login')->assertSuccessful();
-        $user = User::where('name', 'Chloe Ching')->first();
-
-        $room = WorkstationLocation::create(['block' => 'N2', 'room_code' => 'N2-TEST-03', 'gender' => 'female', 'name' => 'N2-TEST-03']);
-        $seat = Workstation::create(['workstation_location_id' => $room->id, 'seat_code' => '3', 'position' => 1, 'status' => Workstation::STATUS_PENDING]);
-        WorkstationPendingSelection::create([
-            'workstation_id' => $seat->id, 'student_id' => $user->id, 'token' => 'test-token',
-            'status' => WorkstationPendingSelection::STATUS_PENDING, 'expires_at' => now()->addMinutes(5),
-        ]);
-
-        $this->artisan('workstation:demo-login')->assertSuccessful();
-
-        $this->assertSame(Workstation::STATUS_AVAILABLE, $seat->fresh()->status);
-        $this->assertSame(WorkstationPendingSelection::STATUS_EXPIRED, WorkstationPendingSelection::first()->status);
-    }
-
-    public function test_a_fresh_account_has_no_seat_no_pending_selection_and_no_key(): void
+    public function test_a_fresh_account_has_no_seat_and_no_key(): void
     {
         $this->artisan('workstation:demo-login')->assertSuccessful();
         $user = User::where('name', 'Chloe Ching')->first();
 
         $this->assertFalse(WorkstationRequest::where('student_id', $user->id)->where('status', WorkstationRequest::STATUS_CONFIRMED)->exists());
-        $this->assertFalse(WorkstationPendingSelection::where('student_id', $user->id)->where('status', WorkstationPendingSelection::STATUS_PENDING)->exists());
         $this->assertFalse(LockerKey::where('student_id', $user->id)->exists());
     }
 }

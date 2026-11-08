@@ -229,4 +229,5 @@
 </div>
 
 @include('haziq::partials.confirm_scripts')
+@include('haziq::partials.assistant_widget')
 @endsection

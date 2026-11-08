@@ -5,6 +5,7 @@ namespace App\Modules\Hani\Http\Controllers;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\ApplicationDocument;
 use App\Modules\Hani\Models\Examiner;
+use App\Modules\Hani\Models\ExaminerMerge;
 use App\Modules\Hani\Models\ReVivaDetail;
 use App\Modules\Hani\Models\ReVivaStaffDocument;
 use Illuminate\Http\Request;
@@ -63,6 +64,10 @@ class ReVivaPanelLinkController extends Controller
 
     protected function authorise(ReVivaDetail $detail, Examiner $examiner): void
     {
+        // A letter already emailed carries the id of the record it was sent to;
+        // if that record has since been merged, the person is the record kept.
+        $examiner = ExaminerMerge::resolve($examiner);
+
         $lettered = ReVivaStaffDocument::where('re_viva_detail_id', $detail->id)
             ->where('kind', ReVivaStaffDocument::LETTER)
             ->where('examiner_id', $examiner->id)

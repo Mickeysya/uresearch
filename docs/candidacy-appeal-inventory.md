@@ -46,7 +46,7 @@ Dean rejection is final and needs at least one reason from the Dean's list ("Oth
 
 | Rule | Where |
 |---|---|
-| eligibility: active candidacy; **on or before the expiry date** (the expiry day itself is still a valid day; compared as Asia/Kuala_Lumpur calendar dates, not UTC; the day after is refused); no open appeal; no earlier final rejection; at least 1 month left; 1..remaining months | `CandidacyAppealService::eligibilityProblems()` |
+| eligibility: active candidacy; **inside the appeal window: from `appeal_window_months` (3) calendar months before the expiry date, same arithmetic as the reminder milestones, until the end of the expiry date** (requested by CGS 2026-11-08; before the window New Appeal is disabled and the server refuses with "You can submit an appeal from <date>, 3 months before your expiry date."; resubmitting a returned appeal is allowed up to the expiry date; the expiry day itself is still a valid day; compared as Asia/Kuala_Lumpur calendar dates, not UTC; the day after is refused); no open appeal; no earlier final rejection; at least 1 month left; 1..remaining months | `CandidacyAppealService::eligibilityProblems()` |
 | allowance 12 months | `config('candidacy.max_extension_months')` |
 | waiting markers: gold dot from 5 days, red from 10 (no reminders, no escalation) | `config('candidacy.waiting_marker')` |
 | CGS roles (view every appeal, act at the CGS stage): `cgs`, `non_exec_cgs`, `senior_exec_cgs`, `manager_cgs`, `senior_director_cgs` | `config('candidacy.cgs_roles')` (the four are `Role::cgsTeam()`, the roles the Workstation CGS routes accept) |

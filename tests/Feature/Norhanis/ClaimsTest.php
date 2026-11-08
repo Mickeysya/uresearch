@@ -78,7 +78,7 @@ class ClaimsTest extends TestCase
             ->post(route('claims.store'), $this->claim([
                 'invoice' => UploadedFile::fake()->create('notes.txt', 10, 'text/plain'),
             ]))
-            ->assertSessionHasErrors('invoice');
+            ->assertSessionHasErrors('invoice.0');
 
         $this->assertSame(0, ClaimsDetail::count());
     }
@@ -89,11 +89,11 @@ class ClaimsTest extends TestCase
 
         $this->actingAs($this->student())
             ->post(route('claims.store'), $this->claim([
-                // Claims' own 5 MB cap (ClaimsController::FILE_RULES), tighter
-                // than the portal-wide DocumentStore default.
+                // 5 MB a file (DocumentStore::MULTI_MAX_FILE_KB), checked per
+                // file, so the error lands on proof_of_payment.0.
                 'proof_of_payment' => UploadedFile::fake()->create('payment.pdf', 5121, 'application/pdf'),
             ]))
-            ->assertSessionHasErrors('proof_of_payment');
+            ->assertSessionHasErrors('proof_of_payment.0');
 
         $this->assertSame(0, ClaimsDetail::count());
     }

@@ -12,6 +12,7 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\TravelDetail;
 use Carbon\CarbonInterface;
+use App\Modules\Norhanis\Support\Drafts;
 
 /**
  * Travel requests.
@@ -92,7 +93,8 @@ class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
         $detail = $this->detail($application);
 
         if (! $detail) {
-            return 'Travel application';
+            // A saved draft has no detail row yet: name it from what was typed.
+            return Drafts::summary($application, 'Travel application', 'reason_for_travel', 'destination_address');
         }
 
         return $detail->reason_for_travel.', '.$detail->destination_address;
@@ -111,7 +113,15 @@ class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
     /** "Travel Applications": everyone who has applied, for those who approve travel. */
     public function links(User $user): array
     {
-        return ApplicationOverviewController::link($this, $user);
+        $links = ApplicationOverviewController::link($this, $user);
+
+        // TA Hours (handed over from Haziq's module) sits with Travel, whose
+        // TA plan reads it. Only for the roles TaHourController lets in.
+        if ($user->isStudent() || $user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR) {
+            $links[] = ['label' => 'TA Hours', 'route' => 'ta-hours.index'];
+        }
+
+        return $links;
     }
 
     protected function isInternational(Application $application): bool

@@ -190,7 +190,9 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
                 $dashboard,
                 $analytics,
             ],
+            // Conflict Detection too: they can send a clashing list back from there.
             Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR => [
+                ['label' => 'Conflict Detection', 'route' => 'conflict-detection.index'],
                 $report,
                 $dashboard,
                 $analytics,

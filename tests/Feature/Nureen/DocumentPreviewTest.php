@@ -47,6 +47,7 @@ class DocumentPreviewTest extends TestCase
 
         $this->supervisor = $this->supervisor();
         $this->student = $this->student(attributes: ['supervisor_id' => $this->supervisor->id]);
+        $this->approveGaApplication($this->student);
     }
 
     /** A certification at the supervisor stage, with one PDF attached. */

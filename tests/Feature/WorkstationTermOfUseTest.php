@@ -7,7 +7,6 @@ use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Chloe\Models\Workstation;
 use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationLocation;
-use App\Modules\Chloe\Models\WorkstationPendingSelection;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Models\WorkstationTerminationNotice;
 use App\Modules\Chloe\Notifications\WorkstationStatusNotice;

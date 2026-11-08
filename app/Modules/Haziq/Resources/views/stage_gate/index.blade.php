@@ -342,4 +342,5 @@
 @if ($canAct)
     @include('haziq::partials.confirm_scripts')
 @endif
+@include('haziq::partials.assistant_widget')
 @endsection

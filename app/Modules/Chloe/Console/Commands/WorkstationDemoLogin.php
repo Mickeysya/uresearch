@@ -7,7 +7,6 @@ use App\Modules\Chloe\Models\StudentGender;
 use App\Modules\Chloe\Models\StudyCandidacy;
 use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationLocation;
-use App\Modules\Chloe\Models\WorkstationPendingSelection;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Core\Models\User;
@@ -207,16 +206,6 @@ class WorkstationDemoLogin extends Command
                 isAutomaticRelease: true,
             );
         }
-
-        // A hold from a Select that was never confirmed or expired yet --
-        // expire it now and let the existing sweep (the same one
-        // workstation:release-expired-selections runs every minute) do the
-        // actual release-to-Available and History write.
-        WorkstationPendingSelection::where('student_id', $user->id)
-            ->where('status', WorkstationPendingSelection::STATUS_PENDING)
-            ->update(['expires_at' => now()->subMinute()]);
-
-        $allocator->releaseExpiredSelections();
 
         // Whatever the release above just turned a Collected key into --
         // Return Pending has no "it's fine, leave it" case for a reset.

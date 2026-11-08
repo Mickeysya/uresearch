@@ -108,12 +108,27 @@ class FormsTest extends TestCase
             ->assertDontSee('data-stepper', false);
     }
 
-    public function test_the_import_and_preparation_forms_are_steppers(): void
+    public function test_the_import_form_is_one_field_and_not_a_stepper(): void
+    {
+        $cgs = $this->cgs();
+
+        $html = $this->actingAs($cgs)->get(route('appointment-letter.import'))->assertOk()->getContent();
+
+        // The list is the output of the nomination chain, so there is
+        // nothing to build here and nothing to step through: one file to
+        // upload. A wizard with a single step is a wizard in the way.
+        $this->assertStringNotContainsString('data-stepper', $html);
+        $this->assertStringContainsString('Finalised Examiner List', $html);
+
+        // The headings stay on the page as reference even though the blank
+        // template has gone, so CGS can still see what the import reads.
+        $this->assertStringContainsString('Matric No', $html);
+    }
+
+    public function test_the_preparation_form_is_a_stepper(): void
     {
         $cgs = $this->cgs();
         $candidate = $this->student(attributes: ['department' => 'Civil & Environmental Engineering']);
-
-        $this->assertIsStepper($this->actingAs($cgs)->get(route('appointment-letter.import')), 2);
 
         // Importing the finalised list is what puts a candidate on the CGS
         // preparation desk; nobody fills in a nomination form any more.

@@ -27,7 +27,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_my_signature
 
-Open My Signature (the link on the Approval Portal), upload a PNG or JPEG (up to 1 MB) and press Save signature; Remove my signature removes it. For CGS the
+Open My Signatures (the link in the sidebar and on the Approval Portal), find the Study Candidacy Appeal section, upload a PNG or JPEG (up to 1 MB) and press Upload signature (Replace signature when one is on file); Remove deletes it. For CGS the
 signature is optional: without one, a text-only stamp is used.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -35,7 +35,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_when_how_appeal
 
 Students ask for more time with Submit an Appeal on My Study Candidacy: Step 1 Department and Supervisor / Programme Manager (read-only, from the student record), Step 2 Research and extension (Sections A to D), Step 3
-Documents, Step 4 Review and submit. It must be submitted on or before the expiry date, and the total extension is at most {{cand_max_extension_months}} months. The
+Documents, Step 4 Review and submit. It must be submitted inside the appeal window (from 3 months before the expiry date until the end of the expiry date), and the total extension is at most {{cand_max_extension_months}} months. The
 appeal then goes Supervisor / Programme Manager, Department Chair, CGS Verification, Dean.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -166,7 +166,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_cgs_process_summary
 
-1. Students appeal on or before the expiry date: Supervisor / Programme Manager, Department Chair, CGS Verification, Dean; maximum {{cand_max_extension_months}} months in total; a Dean rejection is final.
+1. Students appeal inside the window (3 months before the expiry date until the end of the expiry date): Supervisor / Programme Manager, Department Chair, CGS Verification, Dean; maximum {{cand_max_extension_months}} months in total; a Dean rejection is final.
 2. After approval the expiry date is recalculated and the memo is e-mailed.
 3. Reminders at 3, 2 and 1 month; they stop at Softbound submission.
 4. After expiry with no Softbound and no appeal in review the student is on the Dismissal List; CGS exports it, the Registry processes it, CGS uploads the result.

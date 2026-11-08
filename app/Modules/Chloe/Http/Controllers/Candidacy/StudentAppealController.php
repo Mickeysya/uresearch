@@ -3,7 +3,6 @@
 namespace App\Modules\Chloe\Http\Controllers\Candidacy;
 
 use App\Modules\Chloe\Models\CandidacyAppeal;
-use App\Modules\Chloe\Models\CandidacyAppealDetail;
 use App\Modules\Chloe\Models\CandidacyAppealDocument;
 use App\Modules\Chloe\Models\CandidacyDepartment;
 use App\Modules\Chloe\Models\StudyCandidacy;
@@ -312,7 +311,7 @@ class StudentAppealController extends Controller
             'chair' => $department ? CandidacyStaffDirectory::chair($department) : null,
             'dean' => CandidacyStaffDirectory::dean(),
             'remaining' => $candidacy?->remainingAppealMonths() ?? 0,
-            'phases' => CandidacyAppealDetail::phases(),
+            'phases' => CandidacyAppeal::phases(),
             'returnedEvent' => $returned,
             'officialForm' => $appeal->documents->where('kind', CandidacyAppealDocument::KIND_OFFICIAL_FORM)->sortByDesc('id')->first(),
             'supporting' => $appeal->documents->where('kind', CandidacyAppealDocument::KIND_SUPPORTING)->values(),
@@ -333,7 +332,7 @@ class StudentAppealController extends Controller
         }
 
         return [
-            'phase' => [$req, Rule::in(array_keys(CandidacyAppealDetail::phases()))],
+            'phase' => [$req, Rule::in(array_keys(CandidacyAppeal::phases()))],
             'percent_complete' => [$req, 'integer', 'between:0,100'],
             'rcs_status' => [$req, Rule::in(['done', 'pending'])],
             'rcs_date' => [$strict ? 'required_if:rcs_status,done' : 'nullable', 'nullable', 'date', 'before_or_equal:today'],

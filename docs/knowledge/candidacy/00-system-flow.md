@@ -66,7 +66,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_deadline
 
-An appeal must be submitted on or before the expiry date. The expiry day itself is allowed; the day after is too late.
+An appeal can be submitted only inside the appeal window: it opens 3 calendar months before the expiry date (the same day as the 3-month reminder) and closes at the end of the expiry date. Before the window, New Appeal is disabled and says the date it opens; the expiry day itself is allowed; the day after is too late. A returned appeal can still be resubmitted up to the expiry date, and after a Dean approval the window follows the new expiry date.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
@@ -79,7 +79,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_appeal_rules
 
 • The candidacy must be active and not expired, with no appeal already in progress.
-• Submit on or before the expiry date (the expiry day is allowed).
+• Submit inside the appeal window: from 3 months before the expiry date until the end of the expiry date (the expiry day is allowed).
 • Maximum extension {{cand_max_extension_months}} months in total.
 • One appeal at a time; no withdrawal after submission.
 • Route: Student, Supervisor / Programme Manager, Department Chair, CGS Verification, Dean. Only the Dean can reject, and a rejection is final.
@@ -89,7 +89,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_faq
 
 • How long can an extension be? Up to {{cand_max_extension_months}} months in total.
-• Can an appeal be made on the expiry day? Yes, on or before it.
+• Can an appeal be made on the expiry day? Yes: the window closes at the end of the expiry date.
 • Who decides? The approvers; only the Dean can reject.
 • Can an appeal be withdrawn? No.
 • Are there reminders? Yes, 3, 2 and 1 month before the expiry date, at 08:00.

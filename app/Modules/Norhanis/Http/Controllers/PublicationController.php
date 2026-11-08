@@ -4,12 +4,14 @@ namespace App\Modules\Norhanis\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Norhanis\Http\Controllers\Concerns\ApprovesAndNotifies;
+use App\Modules\Norhanis\Http\Controllers\Concerns\SavesDrafts;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Models\PublicationAuthor;
 use App\Modules\Norhanis\Models\PublicationDetail;
 use App\Modules\Norhanis\Models\PublicationEvaluation;
+use App\Modules\Norhanis\Models\SavedDraft;
 use App\Modules\Norhanis\Support\PublicationSignOffs;
 use App\Modules\Norhanis\Support\SignatureImage;
 use Illuminate\Http\Request;
@@ -19,6 +21,7 @@ use Illuminate\Validation\ValidationException;
 class PublicationController extends Controller
 {
     use ApprovesAndNotifies;
+    use SavesDrafts;
 
     /**
      * The named upload fields on the form, each attached under its own
@@ -38,29 +41,60 @@ class PublicationController extends Controller
         'manuscript' => PublicationSignOffs::MANUSCRIPT,
     ];
 
+    /** The paper itself stays one file: reviewers and co-authors read that one copy. */
+    protected function singleFileDocuments(): array
+    {
+        return ['manuscript'];
+    }
+
     protected function moduleKey(): string
     {
         return 'publication';
     }
 
+    protected function draftFields(): array
+    {
+        return [
+            'type_of_request', 'conference_scope', 'title_of_paper', 'title_of_conference_journal',
+            'organizer_publisher', 'venue', 'conference_start_date', 'conference_end_date',
+            'conference_journal_fee', 'currency_type', 'cost_centre', 'cost_centre_other',
+            'authors', 'applicant_conflict_disclosure', 'reviewers',
+        ];
+    }
+
+    protected function draftDocuments(): array
+    {
+        return self::DOCUMENT_FIELDS;
+    }
+
     public function create(Request $request)
+    {
+        return $this->form($request, null);
+    }
+
+    protected function form(Request $request, ?Application $draft)
     {
         return view('norhanis::publication.form', [
             // Applications already filed that are still waiting on authors or
             // reviewers, so the student can get back to their sign-off page.
+            // A saved draft is a draft too, but nobody has been asked to sign it.
             'awaitingSignOffs' => Application::for($this->moduleKey())
                 ->where('student_id', $request->user()->id)
                 ->where('status', Application::STATUS_DRAFT)
+                ->whereNotIn('id', SavedDraft::select('application_id'))
                 ->latest('id')
                 ->get(),
             'requestTypes' => PublicationDetail::requestTypes(),
             'conferenceScopes' => PublicationDetail::conferenceScopes(),
             'costCentres' => PublicationDetail::COST_CENTRES,
-        ]);
+        ] + $this->draftViewData($request, $draft));
     }
 
     public function store(Request $request, DocumentStore $documents, PublicationSignOffs $signOffs)
     {
+        $draft = $this->submittingDraft($request);
+        $removing = $this->draftRemoving($request, $draft);
+
         // Read before validate(): the publication type decides how many internal
         // reviewers must be named. Anything that is not a string compares
         // false below and falls back to two, and validate() then rejects the
@@ -74,7 +108,7 @@ class PublicationController extends Controller
         // their co-authors are emailed a link afterwards.
         $signature = SignatureImage::capture($request, 'applicant_signature');
 
-        $data = $request->validate([
+        $data = $this->validateWithDocuments($request, $draft, $removing, [
             'type_of_request' => ['required', 'in:'.implode(',', array_keys(PublicationDetail::requestTypes()))],
             'conference_scope' => [
                 'nullable', 'required_if:type_of_request,publication_conference',
@@ -112,17 +146,6 @@ class PublicationController extends Controller
                 'required', 'email', 'max:255', 'distinct:ignore_case',
                 'ends_with:'.PublicationEvaluation::REVIEWER_EMAIL_DOMAIN,
             ],
-            'manuscript' => DocumentStore::rules(true),
-            // Every document is required, as CGS asked. An internal
-            // reviewer's corrections are still answered later, on the
-            // sign-off page.
-            'invoice' => DocumentStore::rules(true),
-            'index_proof' => DocumentStore::rules(true),
-            'turnitin_report' => DocumentStore::rules(true),
-            'letter_of_acceptance' => DocumentStore::rules(true),
-            'conference_journal_details' => DocumentStore::rules(true),
-            'response_to_reviewer_comment' => DocumentStore::rules(true),
-            'corrected_conference_journal_paper' => DocumentStore::rules(true),
         ], [
             'conference_end_date.after_or_equal' => 'The end date must fall on or after the start date.',
             'cost_centre.required' => 'Choose the cost centre to be utilized.',
@@ -164,12 +187,10 @@ class PublicationController extends Controller
             'reviewers',
         );
 
-        $application = DB::transaction(function () use ($request, $data, $documents, $signOffs, $reviewers, $signature, $isApplicant) {
-            $application = Application::create([
-                'student_id' => $request->user()->id,
-                'module_type' => $this->moduleKey(),
-                'status' => Application::STATUS_DRAFT,
-            ]);
+        $application = DB::transaction(function () use ($request, $data, $documents, $signOffs, $reviewers, $signature, $isApplicant, $draft, $removing) {
+            // Submitting a saved draft finishes that application rather than
+            // starting a second one; from here on it waits for sign-offs.
+            $application = $this->draftOrNewApplication($request, $draft, $removing);
 
             $publicationDetail = PublicationDetail::create([
                 'application_id' => $application->id,
@@ -214,11 +235,7 @@ class PublicationController extends Controller
                 ]);
             }
 
-            foreach (self::DOCUMENT_FIELDS as $field => $label) {
-                if ($request->hasFile($field)) {
-                    $documents->attach($application, $request->file($field), $label);
-                }
-            }
+            $this->attachDraftFiles($request, $application, $documents);
 
             // Left as a draft. It is handed to the first approver by
             // PublicationSignOffs::finishIfComplete(), once every author has

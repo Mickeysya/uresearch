@@ -131,7 +131,7 @@ final class CandidacyLookups
         [$expiry, $days] = self::expiryOf($c);
         $when = $days > 0 ? self::plural($days, 'day', 'days').' from today' : ($days === 0 ? 'today' : self::plural(-$days, 'day', 'days').' ago');
         $text = $days >= 0
-            ? "Your study candidacy expires on {$expiry->format('j M Y')} ({$when}). An appeal for more time must be submitted on or before that date."
+            ? "Your study candidacy expires on {$expiry->format('j M Y')} ({$when}). An appeal for more time can be submitted from ".\App\Modules\Chloe\Services\CandidacyAppealService::windowOpens($expiry)->format('j M Y')." until the end of that date."
             : "Your study candidacy expired on {$expiry->format('j M Y')} ({$when}). Please contact CGS about what happens next.";
 
         return self::done($text, [self::link('My candidacy', 'candidacy.status')], 1);
@@ -162,7 +162,7 @@ final class CandidacyLookups
             [$expiry] = self::expiryOf($c);
             $left = $c->remainingAppealMonths();
 
-            return self::done("Yes. You can submit an appeal now, for between 1 and {$left} month(s). It must be submitted on or before {$expiry->format('j M Y')}.", [self::link('New appeal', 'candidacy.appeals.new')], 1);
+            return self::done("Yes. You can submit an appeal now, for between 1 and {$left} month(s). The window closes at the end of {$expiry->format('j M Y')}, your expiry date.", [self::link('New appeal', 'candidacy.appeals.new')], 1);
         }
 
         return self::done("Not at the moment:\n- ".implode("\n- ", $problems), [self::link('My candidacy', 'candidacy.status')], count($problems), false);

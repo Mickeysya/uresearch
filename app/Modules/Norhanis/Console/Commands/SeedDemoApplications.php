@@ -10,6 +10,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 use App\Modules\Norhanis\Models\PublicationDetail;
 use App\Modules\Norhanis\Models\TravelDetail;
+use App\Modules\Norhanis\Support\CgsOfficer;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -349,7 +350,6 @@ class SeedDemoApplications extends Command
         }
     }
 
-    /** Whoever holds the stage the application is on now. */
     /** Whoever may decide the current stage, or null when nobody can. */
     protected function approver(Application $application): ?User
     {
@@ -357,6 +357,12 @@ class SeedDemoApplications extends Command
 
         if ($role === Role::SUPERVISOR) {
             return $application->student->supervisor;
+        }
+
+        // Travel, Claims and Publication have their own CGS officer, so the
+        // demo history names her rather than whichever officer came first.
+        if ($role === Role::NON_EXEC_CGS && $officer = app(CgsOfficer::class)->user()) {
+            return $officer;
         }
 
         // A Chair or AE may only act on their own department's students
