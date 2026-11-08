@@ -38,7 +38,7 @@
                     <div data-tip="Out of use until CGS reopens them"><dt>Maintenance</dt><dd>{{ $counts['disabled'] ?? 0 }}</dd></div>
                 </dl>
                 <p class="ws-room-desc">
-                    <span class="ws-chip" data-tip="Only {{ strtolower($workstationLocation->genderLabel()) }} students can be given a seat here">{{ $workstationLocation->genderLabel() }}</span>
+                    <span class="ws-chip ws-gender-{{ $workstationLocation->gender === 'female' ? 'female' : 'male' }}" data-tip="Only {{ strtolower($workstationLocation->genderLabel()) }} students can be given a seat here">{{ $workstationLocation->genderLabel() }}</span>
                     @if ($workstationLocation->description)
                         &nbsp;{{ $workstationLocation->description }}
                     @endif

@@ -21,15 +21,12 @@
     // former occupant but isn't Occupied itself).
     $showPreviousOccupant = $row['status'] !== 'occupied' && $row['is_former_student'];
 @endphp
-{{-- A tile in a grid, like the student seat picker: the seat photo is the
-     same for every seat in a room, so it is shown once at the top of the
-     Room page rather than repeated on every card. --}}
-<div class="cgs-seat-card cgs-seat-{{ $row['status'] }}">
+<div class="cgs-seat-card">
+    <img src="{{ $row['seat']->location->seatIconUrl() }}" alt="" aria-hidden="true" class="cgs-seat-image">
+
     <div class="cgs-seat-text">
-        <div class="cgs-seat-head">
-            <div class="cgs-seat-title">Seat {{ $row['seat_code'] }}</div>
-            <div class="cgs-seat-sub">Block {{ $row['block'] }} &middot; {{ $row['room_code'] }}</div>
-        </div>
+        <div class="cgs-seat-title">Seat {{ $row['seat_code'] }}</div>
+        <div class="cgs-seat-sub">Block {{ $row['block'] }} &middot; {{ $row['room_code'] }}</div>
 
         <div class="cgs-seat-badges">
             @if ($row['status'] === 'awaiting_key_return')
@@ -70,5 +67,5 @@
         @endif
     </div>
 
-    <a href="{{ route('workstation.cgs.seat', $row['seat']) }}" class="cgs-seat-button" data-tip="Assign, release, key and history for Seat {{ $row['seat_code'] }}"><button type="button" class="btn-secondary">View Details</button></a>
+    <a href="{{ route('workstation.cgs.seat', $row['seat']) }}" class="cgs-seat-button" data-tip="Assign, release, key and history for Seat {{ $row['seat_code'] }}"><button type="button">View Details</button></a>
 </div>

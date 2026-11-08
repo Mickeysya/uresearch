@@ -136,7 +136,12 @@ services:
       - "1025:1025"   # SMTP
       - "8025:8025"   # web UI
     environment:
-      MP_MAX_MESSAGES: 500
+      # Keep every message: stored in a file on a named volume (survives
+      # `docker compose down`, restarts and recreation), never trimmed.
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: 0
+    volumes:
+      - mailpit-data:/data
 
   redis:
     image: redis:7-alpine
@@ -147,3 +152,4 @@ services:
 
 volumes:
   mysql-data:
+  mailpit-data:

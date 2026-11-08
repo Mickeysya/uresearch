@@ -34,7 +34,7 @@
                     <div class="ws-photo-body">
                         <div class="ws-photo-head">
                             <span class="ws-photo-name">{{ $room->name }}</span>
-                            <span class="ws-chip">{{ $room->genderLabel() }}</span>
+                            <span class="ws-chip ws-gender-{{ $room->gender === 'female' ? 'female' : 'male' }}">{{ $room->genderLabel() }}</span>
                         </div>
                         <svg class="ws-meter {{ $tone }}" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" data-tip="{{ $percent }}% of seats free"><rect class="ws-meter-track" width="100" height="6"></rect><rect class="ws-meter-fill" width="{{ $percent }}" height="6"></rect></svg>
                         <p class="ws-count-line">

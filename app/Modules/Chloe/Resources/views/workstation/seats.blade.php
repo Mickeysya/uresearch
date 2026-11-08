@@ -50,7 +50,7 @@
                     <div><dt>Open seats</dt><dd>{{ $availableSeats->count() }}</dd></div>
                 </dl>
                 <p class="ws-room-desc">
-                    <span class="ws-chip">{{ $workstationLocation->genderLabel() }}</span>
+                    <span class="ws-chip ws-gender-{{ $workstationLocation->gender === 'female' ? 'female' : 'male' }}">{{ $workstationLocation->genderLabel() }}</span>
                     @if ($workstationLocation->description)
                         &nbsp;{{ $workstationLocation->description }}
                     @endif
