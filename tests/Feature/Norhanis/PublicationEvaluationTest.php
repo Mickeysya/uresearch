@@ -210,6 +210,86 @@ class PublicationEvaluationTest extends TestCase
         $this->assertSame(Application::STATUS_PENDING, $application->refresh()->status);
     }
 
+    /**
+     * Application #949, replayed: one reviewer asks for corrections, another
+     * rejects. Replying to the corrections is not enough on its own, so the
+     * student is told what is still holding it, and once the rejected
+     * reviewer is replaced by one who recommends, it goes to the supervisor.
+     */
+    public function test_a_reply_says_what_still_holds_the_application_until_a_rejection_is_replaced(): void
+    {
+        $student = $this->student();
+        $application = $this->file($student);
+        [$first, $second] = PublicationEvaluation::orderBy('position')->get()->all();
+
+        $this->post($this->evaluationUrl($first, 'publication.evaluate.submit'), $this->sheet([
+            'recommendation' => PublicationEvaluation::CORRECTIONS,
+            'additional_comments' => 'Justify the sampling interval.',
+        ]));
+        $this->post($this->evaluationUrl($second, 'publication.evaluate.submit'), $this->sheet([
+            'recommendation' => PublicationEvaluation::REJECTED,
+            'additional_comments' => 'The method does not support the conclusion.',
+        ]));
+
+        $rejected = "Reviewer 2 ({$second->reviewer_name}) rejected the paper. Ask another reviewer.";
+
+        // Before replying, the sign-offs page names both.
+        $this->actingAs($student)->get(route('publication.sign-offs', $application))
+            ->assertOk()
+            ->assertSee('Not sent to your supervisor yet, because:')
+            ->assertSee("Reviewer 1 ({$first->reviewer_name}) asked for corrections.", false)
+            ->assertSee($rejected, false);
+
+        // The reply is saved, but the rejection still holds it -- and the student is told so.
+        $this->from(route('publication.sign-offs', $application))
+            ->post(route('publication.evaluations.respond', [$application, $first]), [
+                'response' => 'Added in section 3.',
+                'corrected_paper' => $this->pdf('corrected.pdf'),
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status', 'Response saved. Not sent to your supervisor yet: '.$rejected);
+
+        $this->assertSame(Application::STATUS_DRAFT, $application->refresh()->status);
+        $this->get(route('publication.sign-offs', $application))
+            ->assertSee($rejected, false)
+            ->assertDontSee('asked for corrections.');
+
+        // Replace the rejecting reviewer; the new one recommends.
+        $this->post(route('publication.evaluations.replace', [$application, $second]), [
+            'reviewer_name' => 'Dr. Tan Wei Ming', 'reviewer_email' => 'tan.weiming@utp.edu.my',
+        ])->assertSessionHasNoErrors();
+
+        $this->get(route('publication.sign-offs', $application))
+            ->assertSee('Reviewer 2 (Dr. Tan Wei Ming) has not returned the Paper Evaluation Sheet yet.', false);
+
+        auth()->logout();
+        $third = PublicationEvaluation::where('reviewer_email', 'tan.weiming@utp.edu.my')->sole();
+        $this->post($this->evaluationUrl($third, 'publication.evaluate.submit'), $this->sheet())
+            ->assertSessionHasNoErrors();
+
+        // Now every sheet is complete: submitted to the supervisor, nothing left to list.
+        $this->assertSame(Application::STATUS_PENDING, $application->refresh()->status);
+        $this->assertSame('supervisor', $application->current_stage);
+        $this->actingAs($student)->get(route('publication.sign-offs', $application))
+            ->assertSee('Every sign-off is in')
+            ->assertDontSee('Not sent to your supervisor yet');
+    }
+
+    public function test_the_outstanding_list_names_unsigned_co_authors_and_unreturned_sheets(): void
+    {
+        $student = $this->student();
+        $application = $this->file($student, ['authors' => [
+            ['author_name' => 'Ahmad Danial', 'email' => 'student@test.my'],
+            ['author_name' => 'Prof. Li Wen', 'email' => 'li.wen@example.edu'],
+        ]]);
+
+        $this->actingAs($student)->get(route('publication.sign-offs', $application))
+            ->assertSee('Prof. Li Wen has not signed the Authorship Certification yet.')
+            ->assertSee('Reviewer 1 (Dr. Siti Mariam) has not returned the Paper Evaluation Sheet yet.')
+            ->assertSee('Reviewer 2 (Dr. Faridah Osman) has not returned the Paper Evaluation Sheet yet.')
+            ->assertDontSee('Ahmad Danial has not signed');
+    }
+
     public function test_a_reviewer_can_decline_and_the_student_asks_someone_else(): void
     {
         $student = $this->student();

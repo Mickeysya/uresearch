@@ -249,6 +249,49 @@ class PublicationSignOffs
     }
 
     /**
+     * What still keeps the application from going to the supervisor, in
+     * plain words for the student: the same checks as isComplete(), one
+     * line per author or reviewer still owed. Empty when nothing is.
+     *
+     * @return array<int, string>
+     */
+    public function outstanding(PublicationDetail $detail): array
+    {
+        $detail->loadMissing('authors', 'activeEvaluations');
+        $lines = [];
+
+        foreach ($detail->authors as $author) {
+            if (! $author->hasSigned()) {
+                $lines[] = "{$author->author_name} has not signed the Authorship Certification yet.";
+            }
+        }
+
+        foreach ($detail->activeEvaluations->sortBy('position') as $evaluation) {
+            $who = "Reviewer {$evaluation->position} ({$evaluation->reviewer_name})";
+
+            $line = match (true) {
+                $evaluation->isDeclined() => "{$who} declined to review the paper. Ask another reviewer.",
+                ! $evaluation->isSubmitted() => "{$who} has not returned the Paper Evaluation Sheet yet.",
+                $evaluation->recommendation === PublicationEvaluation::REJECTED => "{$who} rejected the paper. Ask another reviewer.",
+                $evaluation->needsResponse() => "{$who} asked for corrections. Reply to the comments and upload the corrected paper.",
+                default => null,
+            };
+
+            if ($line) {
+                $lines[] = $line;
+            }
+        }
+
+        $missing = PublicationDetail::reviewersRequired($detail->type_of_request, $detail->conference_scope)
+            - $detail->activeEvaluations->count();
+        if ($missing > 0) {
+            $lines[] = "{$missing} more internal ".($missing === 1 ? 'reviewer is' : 'reviewers are').' needed.';
+        }
+
+        return $lines;
+    }
+
+    /**
      * storeGenerated() does not report a failed write. A sign-off without its
      * PDF must not count, so stop here: the surrounding transaction rolls
      * back and the step can simply be done again.

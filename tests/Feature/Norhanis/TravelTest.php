@@ -351,60 +351,24 @@ class TravelTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_only_the_applicant_can_update_the_supporting_document_and_only_for_international_travel(): void
+    public function test_the_supporting_document_cannot_be_replaced_after_submitting(): void
     {
-        $localStudent = $this->student('22002222', 'student2@test.my');
-        $local = $this->submitAs($localStudent, ['is_international' => 0]);
+        $application = $this->submit(['is_international' => 1]);
+        $original = $application->documents()->where('doc_type', 'Supporting Document')->sole();
 
-        // Local travel: the page does not apply, even for the applicant.
-        $this->actingAs($localStudent)
-            ->get(route('travel.document.edit', $local))
-            ->assertForbidden();
+        // No button on the student's own page, local or international...
+        $this->get(route('travel.show', $application))
+            ->assertOk()
+            ->assertDontSee('Update Supporting Document');
 
-        $student = $this->student('22003333', 'student3@test.my');
-        $international = $this->submitAs($student, ['is_international' => 1]);
+        // ...and no route behind it, even posted by hand.
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('travel.document.edit'));
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('travel.document.update'));
+        $this->post('/travel/'.$application->id.'/supporting-document', [
+            'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('swap.pdf', 20, 'application/pdf'),
+        ])->assertNotFound();
 
-        // Someone else's international application.
-        $this->actingAs($this->student('22004444', 'student4@test.my'))
-            ->get(route('travel.document.edit', $international))
-            ->assertForbidden();
-
-        // The applicant, on their own international application: allowed.
-        $this->actingAs($student)
-            ->get(route('travel.document.edit', $international))
-            ->assertOk();
-    }
-
-    public function test_updating_the_supporting_document_replaces_the_file_and_logs_the_history(): void
-    {
-        \Illuminate\Support\Facades\Storage::fake('local');
-        \Illuminate\Support\Facades\Notification::fake();
-
-        $student = $this->student();
-        $application = $this->submitAs($student, [
-            'is_international' => 1,
-            'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('memo-old.pdf', 40, 'application/pdf'),
-        ]);
-
-        $old = $application->documents()->where('doc_type', 'Supporting Document')->sole();
-
-        $this->actingAs($student)
-            ->post(route('travel.document.update', $application), [
-                'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('memo-new.pdf', 40, 'application/pdf'),
-            ])
-            ->assertRedirect(route('travel.show', $application));
-
-        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk('local')->exists($old->path));
-
-        $new = $application->documents()->where('doc_type', 'Supporting Document')->sole();
-        $this->assertSame('memo-new.pdf', $new->original_name);
-
-        $this->assertDatabaseHas('approval_history', [
-            'application_id' => $application->id,
-            'remarks' => 'Supporting document updated',
-        ]);
-
-        \Illuminate\Support\Facades\Notification::assertSentTo($this->sup(), \App\Modules\Norhanis\Notifications\TravelSupportingDocumentUpdated::class);
+        $this->assertSame([$original->id], $application->documents()->where('doc_type', 'Supporting Document')->pluck('id')->all());
     }
 
     public function test_the_form_renders_with_the_wizard_wired_up(): void

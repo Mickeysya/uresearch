@@ -145,11 +145,12 @@ class ClaimsTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        // The student's own supervisor: only they may decide the supervisor stage.
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
         $application = $this->submitAs($student);
         $document = $application->documents()->where('doc_type', 'Receipt')->sole();
 
-        $supervisor = $this->supervisor();
         $chair = $this->chair();
         $cgs = $this->cgs();
         $manager = $this->manager();

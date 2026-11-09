@@ -6,7 +6,6 @@ use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Norhanis\Http\Controllers\Concerns\ApprovesAndNotifies;
 use App\Modules\Norhanis\Http\Controllers\Concerns\SavesDrafts;
 use App\Modules\Core\Models\Application;
-use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
@@ -14,14 +13,11 @@ use App\Modules\Norhanis\Support\ApproverNotifier;
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\TravelDetail;
 use App\Modules\Norhanis\Models\TravelTaPlan;
-use App\Modules\Norhanis\Notifications\TravelSupportingDocumentUpdated;
 use App\Modules\Norhanis\Support\StageDurations;
 use App\Modules\Norhanis\Support\TaStatus;
 use App\Modules\Norhanis\Workflows\TravelWorkflow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
 
 class TravelController extends Controller
 {
@@ -200,69 +196,9 @@ class TravelController extends Controller
             ? TravelTaPlan::with('dates')->where('application_id', $application->id)->first()
             : null;
 
-        $canUpdateDocument = $request->user()->id === $application->student_id && $detail->is_international;
-
-        return view('norhanis::travel.show', compact('application', 'detail', 'taPlan', 'canUpdateDocument'));
-    }
-
-    public function editDocument(Request $request, Application $application)
-    {
-        [$detail] = $this->authorizeDocumentUpdate($request, $application);
-
-        $currentDocument = $application->documents()->where('doc_type', 'Supporting Document')->latest()->first();
-
-        return view('norhanis::travel.document-edit', compact('application', 'detail', 'currentDocument'));
-    }
-
-    public function updateDocument(Request $request, Application $application, DocumentStore $documents)
-    {
-        $this->authorizeDocumentUpdate($request, $application);
-
-        $request->validate([
-            'supporting_document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-        ]);
-
-        DB::transaction(function () use ($request, $application, $documents) {
-            $old = $application->documents()->where('doc_type', 'Supporting Document')->latest()->first();
-
-            if ($old) {
-                Storage::disk('local')->delete($old->path);
-                $old->delete();
-            }
-
-            $documents->attach($application, $request->file('supporting_document'), 'Supporting Document');
-
-            ApprovalHistory::create([
-                'application_id' => $application->id,
-                'approver_id' => $request->user()->id,
-                'stage_key' => 'supporting_document',
-                'stage_label' => 'Supporting Document',
-                'decision' => 'updated',
-                'remarks' => 'Supporting document updated',
-            ]);
-        });
-
-        $stage = $application->currentStage();
-
-        if ($stage) {
-            Notification::send(User::where('role', $stage->role)->get(), new TravelSupportingDocumentUpdated($application));
-        }
-
-        return redirect()
-            ->route('travel.show', $application)
-            ->with('status', 'Supporting document updated.');
-    }
-
-    /** @return array{0: TravelDetail} */
-    protected function authorizeDocumentUpdate(Request $request, Application $application): array
-    {
-        abort_unless($application->module_type === $this->moduleKey(), 404);
-        abort_unless($application->student_id === $request->user()->id, 403);
-
-        $detail = TravelDetail::where('application_id', $application->id)->firstOrFail();
-        abort_unless($detail->is_international, 403);
-
-        return [$detail];
+        // The supporting document is fixed once submitted: there is no
+        // replacing it afterwards, local or international.
+        return view('norhanis::travel.show', compact('application', 'detail', 'taPlan'));
     }
 
     /**

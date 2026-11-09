@@ -4,6 +4,7 @@ namespace App\Modules\Norhanis\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -26,7 +27,7 @@ use App\Modules\Norhanis\Support\Drafts;
  * a chain instead means the student's stepper shows the correct number of
  * steps from the moment they submit, and nothing has to be kept in sync.
  */
-class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
+class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime
 {
     /** @var array<int, bool> memoised per application, keyed by id */
     protected array $internationalCache = [];

@@ -2391,6 +2391,21 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     overflow-y: auto;
 }
 
+/* The supervisor's "My candidates" list holds every candidate, so unlike the
+   other panels it shows a thin scrollbar: with 19 students in a box that fits
+   four, a hidden bar made it look as if there were no more. Two classes, so it
+   outranks dashboard-states.css's [class*="-scroll"] hiding rule whatever the
+   load order. The max-height keeps the panel from stretching its whole row
+   to fit everyone. */
+.approver-scroll.cand-list {
+    max-height: 18rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-grey) transparent;
+}
+.approver-scroll.cand-list::-webkit-scrollbar { display: block; width: 8px; height: auto; }
+.approver-scroll.cand-list::-webkit-scrollbar-thumb { background: var(--border-grey); border-radius: 4px; }
+.approver-scroll.cand-list:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+
 /* Nothing to add: `.sdash-stats` is a wrapping flex row (dashboard-student.css)
    and already shares the cards out at any width. A grid-template-columns was
    written here first and was dead code -- the property does nothing on a flex

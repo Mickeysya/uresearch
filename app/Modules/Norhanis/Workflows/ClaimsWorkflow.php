@@ -3,6 +3,7 @@
 namespace App\Modules\Norhanis\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -28,7 +29,7 @@ use App\Modules\Norhanis\Support\Drafts;
  * the Project Director happens after approval and outside this app, so it
  * is not modelled as a Stage.
  */
-class ClaimsWorkflow implements WorkflowModule, ProvidesLinks
+class ClaimsWorkflow implements WorkflowModule, ProvidesLinks, DecidesOneAtATime
 {
     public function key(): string
     {

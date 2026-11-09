@@ -14,6 +14,7 @@ use App\Modules\Core\Http\Controllers\PageController;
 use App\Modules\Core\Http\Controllers\ProfileController;
 use App\Modules\Core\Http\Controllers\QueueController;
 use App\Modules\Core\Http\Controllers\SignatureController;
+use App\Modules\Core\Http\Controllers\SupervisorCandidatesController;
 use App\Modules\Core\Http\Controllers\UserAdminController;
 use App\Modules\Core\Support\Role;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +28,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+
+    // Every student a supervisor is responsible for: the full list behind the
+    // dashboard's "My candidates" panel.
+    Route::get('/dashboard/candidates', [SupervisorCandidatesController::class, 'index'])
+        ->middleware('role:'.Role::SUPERVISOR)
+        ->name('supervisor.candidates');
 
     // Tracking is students-only; approvers see applications through their queues.
     Route::middleware('role:student')->group(function () {

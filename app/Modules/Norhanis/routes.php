@@ -70,8 +70,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/travel/draft/{application}', [TravelController::class, 'editDraft'])->name('travel.draft.edit');
         Route::post('/travel/draft/{application}', [TravelController::class, 'saveDraft'])->name('travel.draft.update');
         Route::delete('/travel/draft/{application}', [TravelController::class, 'destroyDraft'])->name('travel.draft.destroy');
-        Route::get('/travel/{application}/supporting-document', [TravelController::class, 'editDocument'])->name('travel.document.edit');
-        Route::post('/travel/{application}/supporting-document', [TravelController::class, 'updateDocument'])->name('travel.document.update');
     });
 
     // Every role that owns a stage in the travel chain shares one queue

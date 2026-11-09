@@ -25,6 +25,16 @@
                 When the last one is in, your application goes to your supervisor by itself.
                 You do not need to come back and submit it.
             </p>
+            @if ($outstanding)
+                <div class="message-warning" data-outstanding>
+                    <b>Not sent to your supervisor yet, because:</b>
+                    <ul style="margin: 6px 0 0 18px; padding: 0;">
+                        @foreach ($outstanding as $line)
+                            <li>{{ $line }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
         @else
             <p><b>Every sign-off is in</b>, and your application has been submitted.</p>
             <p><a href="{{ route('applications.show', $application) }}" class="btn-secondary">Track the application</a></p>

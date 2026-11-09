@@ -4,6 +4,7 @@ namespace App\Modules\Norhanis\Workflows;
 
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -20,7 +21,7 @@ use App\Modules\Norhanis\Support\Drafts;
  * One fixed chain, no conditional routing: Supervisor -> Chair -> Non-Exec
  * CGS -> Senior Director CGS. Senior Director CGS has the final say.
  */
-class PublicationWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
+class PublicationWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime
 {
     public function key(): string
     {

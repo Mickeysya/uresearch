@@ -34,9 +34,13 @@ class SupervisorDashboard extends ApproverDashboard
      *
      * @return Collection<int, array{student: User, attendance: ?\App\Modules\Core\Support\AttendanceReading, tone: string}>
      */
-    public function candidates(int $limit = 8): Collection
+    public function candidates(?int $limit = null): Collection
     {
-        return $this->remember('candidates', fn () => $this->safely('candidates', function () use ($limit) {
+        // Cached as the WHOLE list, then cut. The cache key used to ignore
+        // $limit, so the first call (the panel's 8) was what every later
+        // call got back too: the attendance ring and the at-risk count
+        // described 8 students for a supervisor with 19.
+        $all = $this->remember('candidates', fn () => $this->safely('candidates', function () {
             $source = $this->attendanceSource();
 
             return User::where('supervisor_id', $this->user->id)
@@ -58,9 +62,10 @@ class SupervisorDashboard extends ApproverDashboard
                     fn ($a, $b) => ($b['attendance']?->at_risk ?? false) <=> ($a['attendance']?->at_risk ?? false),
                     fn ($a, $b) => ($a['attendance']?->percentage ?? 101) <=> ($b['attendance']?->percentage ?? 101),
                 ])
-                ->take($limit)
                 ->values();
         }, collect()));
+
+        return $limit === null ? $all : $all->take($limit)->values();
     }
 
     /**
@@ -82,7 +87,7 @@ class SupervisorDashboard extends ApproverDashboard
     public function attendanceSpread(): Collection
     {
         return $this->safely('candidates', function () {
-            $rows = $this->candidates(PHP_INT_MAX);
+            $rows = $this->candidates();
 
             $slices = collect(StudentDashboard::attendanceBands())
                 ->map(fn (array $band) => [
@@ -99,7 +104,7 @@ class SupervisorDashboard extends ApproverDashboard
         }, collect());
     }
 
-    /** How many candidates this supervisor has, before the panel's limit. */
+    /** How many candidates this supervisor has. */
     public function candidateCount(): int
     {
         return $this->safely('candidates',
@@ -112,7 +117,7 @@ class SupervisorDashboard extends ApproverDashboard
      */
     public function atRiskCount(): int
     {
-        return $this->candidates(PHP_INT_MAX)
+        return $this->candidates()
             ->filter(fn (array $row) => $row['attendance']?->at_risk)
             ->count();
     }
