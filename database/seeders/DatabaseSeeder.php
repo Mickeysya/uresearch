@@ -222,18 +222,22 @@ class DatabaseSeeder extends Seeder
     ];
 
     /**
-     * Six Non-Executive CGS officers, one per team member's modules (was
-     * database/sql/cgs_officers.sql). Core scopes queues by role, so each
-     * still sees every Non-Executive queue; a module that emails only its own
-     * officer says so itself (Norhanis' Config/cgs.php).
+     * The CGS officers (was database/sql/cgs_officers.sql), with the role the
+     * CGS Staff Directory gives them: its Senior Executives are Senior
+     * Executive CGS, its Senior Assistants Non-Executive CGS. Six are one per
+     * team member's modules; Aqil is the directory's third Senior Executive.
+     * Core scopes queues by role, so each still sees every queue of that
+     * role; a module that emails only its own officer says so itself
+     * (Norhanis' Config/cgs.php).
      */
     protected const CGS_OFFICERS = [
-        ['Waheda', 'waheda.cgs'],       // Hani
-        ['Akmar', 'akmar.cgs'],         // Haziq
-        ['Norshahira', 'norshahira.cgs'], // Norhanis
-        ['Amirul', 'amirul.cgs'],       // Chloe
-        ['Zulkifly', 'zulkifly.cgs'],   // Nureen
-        ['Syahmi', 'syahmi.cgs'],       // Jason
+        ['Waheda', 'waheda.cgs', Role::SENIOR_EXEC_CGS],       // Hani
+        ['Akmar', 'akmar.cgs', Role::SENIOR_EXEC_CGS],         // Haziq
+        ['Aqil', 'aqil.cgs', Role::SENIOR_EXEC_CGS],
+        ['Norshahira', 'norshahira.cgs', Role::NON_EXEC_CGS], // Norhanis
+        ['Amirul', 'amirul.cgs', Role::NON_EXEC_CGS],       // Chloe
+        ['Zulkifly', 'zulkifly.cgs', Role::NON_EXEC_CGS],   // Nureen
+        ['Syahmi', 'syahmi.cgs', Role::NON_EXEC_CGS],       // Jason
     ];
 
     /** Per department, in FACULTY_DEPARTMENTS order: [male, female]. 109 + 71 = 180. */
@@ -289,8 +293,8 @@ class DatabaseSeeder extends Seeder
             }
         }
 
-        foreach (self::CGS_OFFICERS as [$name, $handle]) {
-            $this->user($name, $handle.'@utp.edu.my', Role::NON_EXEC_CGS, ['department' => 'CGS']);
+        foreach (self::CGS_OFFICERS as [$name, $handle, $role]) {
+            $this->user($name, $handle.'@utp.edu.my', $role, ['department' => 'CGS']);
         }
     }
 

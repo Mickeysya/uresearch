@@ -1,17 +1,19 @@
--- Six Non-Executive CGS officers: one for each team member's modules.
+-- The CGS officers, with the role the CGS Staff Directory gives them. Six are
+-- one for each team member's modules; Aqil is the third Senior Executive.
 --
---   Officer     Email                      Team member
---   Waheda      waheda.cgs@utp.edu.my      Hani      Examiner Nomination · Conflict Detection · Re-viva
---   Akmar       akmar.cgs@utp.edu.my       Haziq     GRA · GA · Stage Gates · Allowance Eligibility
---   Norshahira  norshahira.cgs@utp.edu.my  Norhanis  Travel · Publication · Claims
---   Amirul      amirul.cgs@utp.edu.my      Chloe     Workstation · Study Candidacy
---   Zulkifly    zulkifly.cgs@utp.edu.my    Nureen    Attendance · GA Extension · Supervision · Certification
---   Syahmi      syahmi.cgs@utp.edu.my      Jason     Hardbound · Appeal Hardbound · Appointment Letters
+--   Officer     Email                      Role           Team member
+--   Waheda      waheda.cgs@utp.edu.my      Senior Exec    Hani      Examiner Nomination · Conflict Detection · Re-viva
+--   Akmar       akmar.cgs@utp.edu.my       Senior Exec    Haziq     GRA · GA · Stage Gates · Allowance Eligibility
+--   Aqil        aqil.cgs@utp.edu.my        Senior Exec    -
+--   Norshahira  norshahira.cgs@utp.edu.my  Non-Executive  Norhanis  Travel · Publication · Claims
+--   Amirul      amirul.cgs@utp.edu.my      Non-Executive  Chloe     Workstation · Study Candidacy
+--   Zulkifly    zulkifly.cgs@utp.edu.my    Non-Executive  Nureen    Attendance · GA Extension · Supervision · Certification
+--   Syahmi      syahmi.cgs@utp.edu.my      Non-Executive  Jason     Hardbound · Appeal Hardbound · Appointment Letters
 --
--- No ids are given: the six are inserted together, so they take the next
--- six in a row (15-20 on a database with the standard seed), with no gap.
+-- No ids are given: they are inserted together, so they take the next ids
+-- in a row, with no gap.
 --
--- Development accounts. The password for all six is "password" (bcrypt
+-- Development accounts. The password for all of them is "password" (bcrypt
 -- below), the same as every other test account in README.md.
 --
 -- Load into the Docker database:
@@ -20,12 +22,13 @@
 -- Safe to run more than once: an existing address is updated, not duplicated.
 --
 -- Core scopes queues by role, so on its own an account here sees every
--- Non-Executive CGS queue. A module that should go to its own officer only
+-- queue of its role. A module that should go to its own officer only
 -- says so itself -- Norhanis's does, in app/Modules/Norhanis/Config/cgs.php.
 
 INSERT INTO users (name, email, password, role, department, created_at, updated_at) VALUES
-    ('Waheda',     'waheda.cgs@utp.edu.my',     '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'non_exec_cgs', 'CGS', NOW(), NOW()),
-    ('Akmar',      'akmar.cgs@utp.edu.my',      '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'non_exec_cgs', 'CGS', NOW(), NOW()),
+    ('Waheda',     'waheda.cgs@utp.edu.my',     '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'senior_exec_cgs', 'CGS', NOW(), NOW()),
+    ('Akmar',      'akmar.cgs@utp.edu.my',      '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'senior_exec_cgs', 'CGS', NOW(), NOW()),
+    ('Aqil',       'aqil.cgs@utp.edu.my',       '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'senior_exec_cgs', 'CGS', NOW(), NOW()),
     ('Norshahira', 'norshahira.cgs@utp.edu.my', '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'non_exec_cgs', 'CGS', NOW(), NOW()),
     ('Amirul',     'amirul.cgs@utp.edu.my',     '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'non_exec_cgs', 'CGS', NOW(), NOW()),
     ('Zulkifly',   'zulkifly.cgs@utp.edu.my',   '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'non_exec_cgs', 'CGS', NOW(), NOW()),
