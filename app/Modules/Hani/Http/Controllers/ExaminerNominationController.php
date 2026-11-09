@@ -19,6 +19,7 @@ use App\Modules\Hani\Notifications\ExaminersReleased;
 use App\Modules\Hani\Notifications\NominationsNeedCompileReview;
 use App\Modules\Hani\Support\ConflictOfInterest;
 use App\Modules\Hani\Support\ExaminerContact;
+use App\Modules\Hani\Support\ExaminerPoolList;
 use App\Modules\Hani\Support\CrossDepartmentClashes;
 use App\Modules\Hani\Support\Departments;
 use App\Modules\Hani\Support\DuplicateDetector;
@@ -67,11 +68,23 @@ class ExaminerNominationController extends Controller
 
     public function create(Request $request)
     {
+        // The dropdowns always offer the whole pool. Only the read-only table
+        // under the form follows the tabs and filters.
+        $pool = Examiner::orderBy('name')->get();
+        $type = ExaminerPoolList::type($request);
+        $tabPool = ExaminerPoolList::inTab($pool, $type);
+        $filters = ExaminerPoolList::filters($request, ['department', 'type', 'status', 'search']);
+
         return view('hani::examiner_nomination.form', [
             // Only the supervisor's own candidates may be nominated for.
             'candidates' => $request->user()->supervisees()->where('role', Role::STUDENT)->get(),
-            'internals' => Examiner::where('type', Examiner::TYPE_INTERNAL)->orderBy('name')->get(),
-            'externals' => Examiner::where('type', Examiner::TYPE_EXTERNAL)->orderBy('name')->get(),
+            'internals' => $pool->where('type', Examiner::TYPE_INTERNAL)->values(),
+            'externals' => $pool->where('type', Examiner::TYPE_EXTERNAL)->values(),
+            'examiners' => ExaminerPoolList::paginate(ExaminerPoolList::filtered($tabPool, $filters), $request),
+            'type' => $type,
+            'typeCounts' => ExaminerPoolList::typeCounts($pool),
+            'departments' => ExaminerPoolList::departments($tabPool),
+            'filters' => $filters,
         ]);
     }
 

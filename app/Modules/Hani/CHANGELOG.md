@@ -1,5 +1,28 @@
 # Changelog: Hani's modules
 
+## 2026-11-08: The Academic Executive reads the examiner pool
+
+- **Added** `/examiners` for the AE, read-only, with "Examiner Pool" in their
+  sidebar. It shows the whole pool, not just their department, because
+  supervisors may pick examiners from anywhere. Every write route stays 403.
+- **Added** a note naming the CGS contacts to email to add or remove an
+  examiner, read from `hani.cgs.contacts`.
+- The examiner page keeps its old scope for the AE, so a name links only where
+  it opens. "Email not working" is unchanged.
+
+## 2026-11-07: Non-Executive CGS manages the examiner pool
+
+- **Changed** Non-Exec can now add an examiner, mark one Unavailable (reason
+  required) or back to Active, and update emails. This reverses the 2026-11-03
+  rule. Full edit, import, the review list and "Not the same person" stay with
+  the Senior Executive.
+- **Fixed** the pool's header buttons: same row, same height.
+- **Changed** the supervisor's "Examiner pool" table on `/examiner-nomination/new`
+  to match `/examiners`: same card and badges, list tabs with counts, Department
+  and State filters, search and paging. Still read-only. The badges, tabs, filter
+  bar, pager and their styles are now shared partials, and
+  `Support/ExaminerPoolList` holds the filtering.
+
 ## 2026-11-07: The two letter contracts are in Core
 
 - **Added** `Core/Contracts/SuppliesReleasedExaminers` and

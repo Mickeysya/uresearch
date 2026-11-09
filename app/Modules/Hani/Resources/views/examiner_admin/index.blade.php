@@ -4,11 +4,13 @@
 
 @section('content')
 
+@include('hani::examiner_admin._pool_styles')
+
 {{-- Scoped to this page only -- nothing here touches a Core/shared stylesheet.
      The .sdash-* classes borrowed below (stat card shell, tone colours) are
-     already global via partials/stylesheets.blade.php; this block only adds
-     what doesn't already exist anywhere: a 4-column stat grid, the status
-     badge, the avatar circle, the filter bar and the reason modal. --}}
+     already global via partials/stylesheets.blade.php; _pool_styles has what the
+     supervisor's read-only list shares; this block adds what only this page has:
+     the stat grid, the action column, duplicate warnings and the reason modal. --}}
 <style>
     /* Scoped to this page -- nothing here touches a Core/shared stylesheet.
        The .sdash-* classes borrowed below (stat card shell, tone colours) and
@@ -20,6 +22,19 @@
        table -- and 680px is why the fourth stat card wrapped onto its own row
        and the table scrolled sideways on a 1900px monitor. It is a full-width
        page now, capped only where a table stops being readable. */
+    /* The header's actions as one row of one size. uresearch.css still gives
+       .btn margin-top: 16px and margin-right: 8px, which .btn-secondary never
+       had, and layout.css gives the two different padding and line-height,
+       which is why "Add an examiner" sat lower and stood a different height.
+       The row's gap (layout.css, .page-header-actions) is the only spacing. */
+    .page-header-actions > .btn,
+    .page-header-actions > .btn-secondary {
+        margin: 0;
+        padding: var(--space-3) var(--space-5);
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
     /* Sizes come from tokens.css, not literals: --page-max and the --text-*
        scale are fluid, so this page narrows and its type shrinks with the
        viewport instead of holding laptop-era numbers on every screen. */
@@ -34,59 +49,22 @@
     .examiner-stats .sdash-stat { max-width: none; }
     .examiner-stats .sdash-pill.is-active-filter { box-shadow: inset 0 0 0 1.5px currentColor; }
 
-    /* The filter bar is its own surface, so it reads as a control strip over
-       the table rather than as more page content. */
-    .examiner-filters {
-        display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
-        margin-bottom: 16px; padding: 14px 16px;
-        background: var(--surface); border: 1px solid var(--border-subtle);
-        border-radius: 12px;
-    }
-    .examiner-filters .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    .examiner-filters label { font-size: var(--text-xs); color: var(--text-grey); font-weight: 600; margin: 0; }
-    .examiner-filters select,
-    .examiner-filters input[type="text"] {
-        margin: 0; padding: 8px 10px; font-size: var(--text-sm); min-width: 170px;
-    }
-    .examiner-filters .search-field { flex: 1 1 260px; }
-    .examiner-filters .search-field input { min-width: 0; width: 100%; }
-    .examiner-filters button { margin: 0; padding: 9px 18px; }
-    .examiner-filters .clear-link { align-self: center; font-size: var(--text-sm); color: var(--text-grey); }
-
-    .exam-table-wrap {
-        background: var(--surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: 12px;
-        padding: 4px 16px 16px;
-        overflow-x: auto;
-    }
-
-    .exam-table { width: 100%; }
-    .exam-table th, .exam-table td { vertical-align: middle; }
     /* The two date-ish columns and the action never need to wrap. */
     .exam-table td:nth-child(6), .exam-table th:nth-child(6) { white-space: nowrap; }
-    .exam-table td:last-child { text-align: right; white-space: nowrap; }
-    .exam-table td:last-child button { margin: 0; padding: 6px 12px; font-size: var(--text-sm); }
-
-    .examiner-avatar {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: calc(var(--text-md) * 2.3); height: calc(var(--text-md) * 2.3);
-        border-radius: 50%; flex-shrink: 0;
-        background: var(--light-blue-bg); color: var(--navy);
-        font-size: var(--text-sm); font-weight: 700;
+    /* The row's actions stack, at one compact size, so the column is one button
+       wide. Side by side they pushed the second action off the table's edge,
+       behind a sideways scroll, at 1440px. */
+    /* By class, not :last-child: the Academic Executive's list has no action
+       column, and its last cell is the students. */
+    .exam-table th { white-space: normal; }
+    .exam-table td.exam-actions { text-align: right; white-space: nowrap; }
+    .exam-table td.exam-actions > * { display: flex; width: 100%; margin: 0 0 6px; }
+    .exam-table td.exam-actions > :last-child { margin-bottom: 0; }
+    .exam-table td.exam-actions button,
+    .exam-table td.exam-actions .btn-secondary {
+        width: 100%; margin: 0; padding: 6px 12px;
+        font-size: var(--text-sm); line-height: 1.2; box-sizing: border-box;
     }
-    .examiner-name-cell { display: flex; align-items: center; gap: 10px; min-width: 190px; }
-
-    .examiner-state-badge {
-        display: inline-block; padding: 3px 10px; border-radius: 999px;
-        font-size: var(--text-xs); font-weight: 600; white-space: nowrap;
-    }
-    /* Tokens, not the literals this block used to carry -- the old hexes were
-       light-mode values and stayed light on the dark theme. */
-    .examiner-state-badge.tone-good     { background: var(--success-bg); color: var(--success-fg); }
-    .examiner-state-badge.tone-warn     { background: var(--warning-bg); color: var(--warning-fg); }
-    .examiner-state-badge.tone-info     { background: var(--info-bg); color: var(--info-fg); }
-    .examiner-state-badge.tone-critical { background: var(--danger-bg); color: var(--danger-fg); }
 
     .examiner-duplicate { display: block; margin-top: 3px; padding: 2px 8px; border-radius: 8px; font-size: var(--text-2xs); background: var(--warning-bg); color: var(--warning-fg); }
     .examiner-duplicate form { display: inline; }
@@ -98,15 +76,6 @@
         border-radius: 12px; padding: 4px 16px 16px; overflow-x: auto; margin-bottom: 18px;
     }
 
-    .examiner-pagination { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
-    .examiner-pagination a, .examiner-pagination span {
-        padding: 6px 11px; border-radius: 8px; font-size: var(--text-sm); border: 1px solid var(--border-grey);
-    }
-    .examiner-pagination a { color: var(--navy); text-decoration: none; }
-    .examiner-pagination a:hover { background: var(--surface-hover); border-color: var(--navy); }
-    .examiner-pagination .is-current { background: var(--navy); color: var(--text-on-accent); border-color: var(--navy); }
-    .examiner-pagination .is-disabled { color: var(--text-grey); }
-
     .reason-modal { border: none; border-radius: 14px; padding: 0; max-width: 420px; width: 90vw; }
     .reason-modal::backdrop { background: rgba(20, 25, 40, 0.45); }
     .reason-modal .card { border: none; box-shadow: none; margin: 0; max-width: none; }
@@ -114,36 +83,14 @@
     .reason-modal-close { background: none; border: none; font-size: var(--text-xl); cursor: pointer; color: var(--text-grey); }
     .reason-modal textarea { width: 100%; }
 
-    /* The internal/external split reads as two lists, so it gets a tab strip
-       rather than a third dropdown sitting among the filters -- a filter you
-       have to open to see the state of is the wrong control for the thing
-       that decides which columns the table even has. */
-    .exam-tabs {
-        display: flex; gap: 4px; margin-bottom: 18px;
-        border-bottom: 1px solid var(--border-grey);
-    }
-    .exam-tab {
-        display: inline-flex; align-items: center; gap: 8px;
-        padding: 10px 16px; margin-bottom: -1px;
-        border: 1px solid transparent; border-bottom: none;
-        border-radius: 10px 10px 0 0;
-        font-size: var(--text-sm); font-weight: 600;
-        color: var(--text-grey); text-decoration: none;
-    }
-    .exam-tab:hover { color: var(--navy); background: var(--surface-hover); }
-    .exam-tab.is-current {
-        background: var(--surface); color: var(--navy);
-        border-color: var(--border-grey);
-        box-shadow: inset 0 2px 0 var(--navy);
-    }
-    .exam-tab-count {
-        padding: 1px 8px; border-radius: 999px;
-        background: var(--border-subtle); color: var(--text-grey);
-        font-size: var(--text-2xs); font-weight: 700;
-    }
-    .exam-tab.is-current .exam-tab-count { background: var(--accent-subtle); color: var(--navy); }
-
     .exam-tab-note { margin: -6px 0 16px; color: var(--text-grey); font-size: var(--text-sm); }
+
+    /* The Academic Executive's read-only note: who to email to change the pool. */
+    .exam-cgs-note {
+        margin: 0 0 18px; padding: 12px 16px; border-radius: 12px;
+        background: var(--info-bg); color: var(--info-fg); font-size: var(--text-sm);
+    }
+    .exam-cgs-note a { color: inherit; font-weight: 600; }
 
     /* Experience / MSc / PhD arrive as one string with newlines, exactly as
        the sheet stacks them in a single cell. */
@@ -169,18 +116,16 @@
         animation: none;
     }
 
-    @media (max-width: 720px) {
-        .examiner-filters select, .examiner-filters input[type="text"] { min-width: 0; width: 100%; }
-        .examiner-filters .field { flex: 1 1 100%; }
-    }
 </style>
 
 @php
     $isExternal = $type === \App\Modules\Hani\Models\Examiner::TYPE_EXTERNAL;
     $isInternal = $type === \App\Modules\Hani\Models\Examiner::TYPE_INTERNAL;
-    // Non-Executive CGS reads the pool and keeps emails current; only the
-    // Senior Executive adds, imports, edits or marks examiners unavailable.
-    $canManage = auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS;
+    // Display only: routes.php is what enforces this. Both CGS desks add
+    // examiners, mark them unavailable and keep emails current; the full edit
+    // form, import, the review list and "Not the same person" stay with the
+    // Senior Executive. The Academic Executive ($canManage false) reads only.
+    $isSeniorExec = auth()->user()->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS;
 @endphp
 
 <div class="card-container-inline">
@@ -189,12 +134,23 @@
         subtitle="{{ $examiners->total() }} {{ Str::plural('examiner', $examiners->total()) }} on record. State is derived, so anyone on gap becomes available again on their own.">
         @if ($canManage)
             <a href="{{ route('examiner-admin.create') }}" class="btn">Add an examiner</a>
+        @endif
+        @if ($isSeniorExec)
             <a href="{{ route('examiner-import.create') }}" class="btn-secondary">Import from Excel</a>
             @if ($openReviewItems)
                 <a href="{{ route('examiner-import.review') }}" class="btn-secondary">Review list ({{ $openReviewItems }})</a>
             @endif
         @endif
     </x-core::page-header>
+
+    @if ($cgsContacts)
+        <p class="exam-cgs-note">
+            To add or remove an examiner, email CGS:
+            @foreach ($cgsContacts as $contact)
+                <a href="mailto:{{ $contact['email'] }}">{{ $contact['name'] }}</a> ({{ $contact['role'] }}, {{ $contact['email'] }}){{ $loop->last ? '.' : ' or' }}
+            @endforeach
+        </p>
+    @endif
 
     @if ($proposals->isNotEmpty())
         {{-- Not a RegionSwap region (its own class, not .exam-table-wrap, which
@@ -231,21 +187,7 @@
         </div>
     @endif
 
-    <nav class="exam-tabs" aria-label="Examiner lists">
-        @foreach ([
-            '' => 'All Examiners',
-            \App\Modules\Hani\Models\Examiner::TYPE_INTERNAL => 'Internal',
-            \App\Modules\Hani\Models\Examiner::TYPE_EXTERNAL => 'External',
-        ] as $tabValue => $tabLabel)
-            {{-- Switching list drops the filters on purpose: a department or a
-                 status picked on one list rarely means anything on the other. --}}
-            <a href="{{ route('examiner-admin.index', array_filter(['type' => $tabValue])) }}"
-               class="exam-tab @if($type === $tabValue) is-current @endif"
-               @if($type === $tabValue) aria-current="page" @endif>
-                {{ $tabLabel }}<span class="exam-tab-count">{{ $typeCounts[$tabValue] }}</span>
-            </a>
-        @endforeach
-    </nav>
+    @include('hani::examiner_admin._tabs', ['route' => 'examiner-admin.index'])
 
     <p class="exam-tab-note">
         @if ($isExternal)
@@ -288,50 +230,7 @@
             @endforeach
         </div>
 
-        <form method="GET" action="{{ route('examiner-admin.index') }}" class="examiner-filters">
-            {{-- Filtering stays on the list you are looking at. --}}
-            <input type="hidden" name="type" value="{{ $type }}">
-            <div class="field">
-                <label for="f-department">Department</label>
-                <select name="department" id="f-department" data-autosubmit>
-                    <option value="">All Departments</option>
-                    @foreach ($departments as $dept)
-                        <option value="{{ $dept }}" @selected(($filters['department'] ?? null) === $dept)>{{ $dept }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="field">
-                <label for="f-status">Status</label>
-                <select name="status" id="f-status" data-autosubmit>
-                    <option value="">All Status</option>
-                    @foreach ([
-                        \App\Modules\Hani\Models\Examiner::STATE_AVAILABLE => 'Available',
-                        \App\Modules\Hani\Models\Examiner::STATE_ON_GAP => 'On Gap',
-                        \App\Modules\Hani\Models\Examiner::STATE_ASSIGNED => 'Assigned',
-                        \App\Modules\Hani\Models\Examiner::STATE_UNAVAILABLE => 'Unavailable',
-                    ] as $value => $label)
-                        <option value="{{ $value }}" @selected(($filters['status'] ?? null) === $value)>{{ $label }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="field">
-                <label for="f-email">Email</label>
-                <select name="email" id="f-email" data-autosubmit>
-                    <option value="">All emails</option>
-                    <option value="problem" @selected(($filters['email'] ?? null) === 'problem')>Missing or invalid emails</option>
-                    <option value="stale" @selected(($filters['email'] ?? null) === 'stale')>Emails not confirmed in {{ config('hani.examiner_contact.stale_months') }} months</option>
-                </select>
-            </div>
-            <div class="field search-field">
-                <label for="f-search">Search</label>
-                <input type="text" name="search" id="f-search" placeholder="Search by name, department..."
-                       value="{{ $filters['search'] ?? '' }}">
-            </div>
-            <button type="submit">Filter</button>
-            @if (array_filter(\Illuminate\Support\Arr::except($filters, 'type')))
-                <a href="{{ route('examiner-admin.index', array_filter(['type' => $type])) }}" class="clear-link">Clear filters</a>
-            @endif
-        </form>
+        @include('hani::examiner_admin._filters', ['route' => 'examiner-admin.index', 'emailFilter' => true])
 
     <div class="exam-table-wrap">
         <table class="data-table exam-table">
@@ -359,23 +258,23 @@
                     @if ($isExternal)<th>Date 1st</th><th>Date 2nd</th>@endif
                     <th>Remark / Next availability</th>
                     <th>{{ $isInternal ? 'Remarks (students held)' : 'Student Name' }}</th>
-                    <th></th>
+                    @if ($canManage)<th></th>@endif
                 </tr>
             </thead>
             <tbody>
                 @forelse ($examiners as $i => $examiner)
-                    @php
-                        $initials = collect(explode(' ', preg_replace('/^(Dr\.|Prof\.|Prof\. Madya|Puan|En)\s+/', '', $examiner->name)))
-                            ->filter()->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('');
-                        $students = $studentsByExaminer[$examiner->id] ?? [];
-                    @endphp
+                    @php($students = $studentsByExaminer[$examiner->id] ?? [])
                     <tr>
                         <td>{{ $examiners->firstItem() + $i }}</td>
                         <td>
                             <div class="examiner-name-cell">
-                                <span class="examiner-avatar">{{ strtoupper($initials) }}</span>
+                                @include('hani::examiner_admin._avatar')
                                 <span>
-                                    <a href="{{ route('examiner-admin.show', $examiner) }}" data-region-swap-ignore>{{ $examiner->name }}</a>
+                                    @if (isset($openable[$examiner->id]))
+                                        <a href="{{ route('examiner-admin.show', $examiner) }}" data-region-swap-ignore>{{ $examiner->name }}</a>
+                                    @else
+                                        {{ $examiner->name }}
+                                    @endif
                                     {{-- CGS's pool file has no email column; nothing that
                                          writes to an examiner will reach this one yet. --}}
                                     @if ($examiner->emailInvalid())
@@ -389,7 +288,7 @@
                                     @foreach ($duplicates[$examiner->id] ?? [] as $dup)
                                         <span class="examiner-duplicate">
                                             Possible duplicate of {{ $dup['other']->name }} ({{ $dup['score'] }}% similar)
-                                            @if ($canManage)
+                                            @if ($isSeniorExec)
                                                 <form method="POST" action="{{ route('examiner-admin.dismiss-duplicate') }}">
                                                     @csrf
                                                     <input type="hidden" name="examiner_id" value="{{ $examiner->id }}">
@@ -403,7 +302,7 @@
                             </div>
                         </td>
                         @if (! $type)
-                            <td><span class="examiner-state-badge tone-{{ $examiner->isExternal() ? 'info' : 'good' }}">{{ $examiner->typeLabel() }}</span></td>
+                            <td>@include('hani::examiner_admin._type_badge')</td>
                         @endif
                         <td>{{ $examiner->department }}</td>
                         @if (! $isExternal)<td>{{ $examiner->faculty ?? '—' }}</td>@endif
@@ -416,7 +315,7 @@
                             <td class="exam-details">{{ $examiner->experienceSummary() ?? '—' }}</td>
                         @endif
                         <td>
-                            <span class="examiner-state-badge tone-{{ $examiner->stateTone() }}">{{ $examiner->stateLabel() }}</span>
+                            @include('hani::examiner_admin._state_badge')
                             @if ($examiner->unavailable_reason)
                                 <span class="examiner-reason">{{ $examiner->unavailable_reason }}</span>
                             @endif
@@ -445,11 +344,13 @@
                                 —
                             @endif
                         </td>
-                        <td>
-                            @if (! $canManage)
-                                <a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Update email</a>
+                        @if ($canManage)
+                        <td class="exam-actions">
+                            @if ($isSeniorExec)
+                                <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Edit</a>
                             @else
-                            <a href="{{ route('examiner-admin.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Edit</a>
+                                <a href="{{ route('examiner-admin.email.edit', $examiner) }}" class="btn-secondary" data-region-swap-ignore>Update email</a>
+                            @endif
                             @if ($examiner->is_active)
                                 <button type="button" class="btn-reject"
                                         data-unavailable="{{ $examiner->id }}"
@@ -457,47 +358,26 @@
                                     Mark Unavailable
                                 </button>
                             @else
-                                <form method="POST" action="{{ route('examiner-admin.toggle-active', $examiner) }}" style="display: inline;">
+                                <form method="POST" action="{{ route('examiner-admin.toggle-active', $examiner) }}">
                                     @csrf
                                     <button type="submit">Reactivate</button>
                                 </form>
                             @endif
-                            @endif
                         </td>
+                        @endif
                     </tr>
                 @empty
-                    {{-- 7 shared, + List on the combined list, + Faculty on every
-                         list but external, + external's own eight. --}}
-                    <tr><td colspan="{{ 7 + (! $type ? 1 : 0) + (! $isExternal ? 1 : 0) + ($isExternal ? 8 : 0) }}">
+                    {{-- 6 shared, + the action column for CGS, + List on the
+                         combined list, + Faculty on every list but external,
+                         + external's own eight. --}}
+                    <tr><td colspan="{{ 6 + ($canManage ? 1 : 0) + (! $type ? 1 : 0) + (! $isExternal ? 1 : 0) + ($isExternal ? 8 : 0) }}">
                         <div class="empty-state">No examiners found. Try adjusting your filters.</div>
                     </td></tr>
                 @endforelse
             </tbody>
         </table>
 
-        @if ($examiners->hasPages())
-            <div class="examiner-pagination">
-                @if ($examiners->onFirstPage())
-                    <span class="is-disabled">&laquo; Prev</span>
-                @else
-                    <a href="{{ $examiners->previousPageUrl() }}">&laquo; Prev</a>
-                @endif
-
-                @for ($i = 1; $i <= $examiners->lastPage(); $i++)
-                    @if ($i === $examiners->currentPage())
-                        <span class="is-current">{{ $i }}</span>
-                    @else
-                        <a href="{{ $examiners->url($i) }}">{{ $i }}</a>
-                    @endif
-                @endfor
-
-                @if ($examiners->hasMorePages())
-                    <a href="{{ $examiners->nextPageUrl() }}">Next &raquo;</a>
-                @else
-                    <span class="is-disabled">Next &raquo;</span>
-                @endif
-            </div>
-        @endif
+        @include('hani::examiner_admin._pagination')
     </div>
 </div>
 
@@ -548,7 +428,6 @@
         document.querySelectorAll('[data-close-modal]').forEach(function (button) {
             button.addEventListener('click', function () { modal.close(); });
         });
-        // Non-Executive CGS gets no modal and no "Mark Unavailable" buttons.
 
         // Links in these regions that leave the pool (an examiner's page,
         // Edit, Update email) carry data-region-swap-ignore, so they are

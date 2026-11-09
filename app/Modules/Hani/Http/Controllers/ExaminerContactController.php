@@ -14,11 +14,11 @@ use Illuminate\Validation\Rule;
 /**
  * The examiner page, and keeping an examiner's email current.
  *
- * Non-Executive CGS (Encik Syahmi) sends the appointment letters, so he is
- * the one who finds out an address is out of date. He may change the EMAIL
- * and nothing else: the update below validates and writes that one field,
- * whatever else is posted. The Senior Executive edits everything on the
- * full examiner form (ExaminerAdminController).
+ * Non-Executive CGS (Encik Syahmi) sends the appointment letters, so is the
+ * one who finds out an address is out of date. The update below validates and
+ * writes the EMAIL and nothing else, whatever else is posted. Everything else
+ * about an existing examiner is on the Senior Executive's full form
+ * (ExaminerAdminController).
  */
 class ExaminerContactController extends Controller
 {
