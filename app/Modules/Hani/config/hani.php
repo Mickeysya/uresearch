@@ -438,6 +438,15 @@ return [
         'stale_months' => 12,
     ],
 
+    'cgs' => [
+        // Who an Academic Executive emails to add or remove an examiner,
+        // listed at the top of their read-only Examiner Pool.
+        'contacts' => [
+            ['name' => 'Encik Syahmi', 'role' => 'Non-Executive CGS', 'email' => 'syahmi.cgs@utp.edu.my'],
+            ['name' => 'Puan Waheeda', 'role' => 'Senior Executive CGS', 'email' => 'seniorexec@utp.edu.my'],
+        ],
+    ],
+
     'import' => [
         // Largest pool file accepted, in KB. Provisional.
         'max_kb' => 5120,

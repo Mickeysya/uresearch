@@ -160,7 +160,7 @@ return [
         // match before the question ever reached the model, which is
         // exactly the kind of flat-phrase collision PART B's engine is
         // meant to replace. Question-form phrasings only.
-        'my_workstation' => ['what is my workstation', 'what is my seat', 'which seat am i', 'where is my seat', 'where is my workstation'],
+        'my_workstation' => ['what seat do i have', 'which room am i in', 'my seat number', 'saya dapat seat', 'seat saya', 'when does my loan end', 'what is my workstation', 'what is my seat', 'which seat am i', 'where is my seat', 'where is my workstation'],
         // Deliberately NOT bare "my key"/"my locker key" -- found live via
         // STEP 2: that caught "my key got lost, what do I do?" before
         // guidance:key_lost ever got a chance, since nothing in that
@@ -173,22 +173,22 @@ return [
         // key on record" -- the same kind of collision as "my workstation"
         // in Round B. Dropped; the remaining phrases all still need "my"
         // or "locker", which a plain glossary question never has.
-        'my_locker_key' => ['my locker key status', 'status of my locker key', 'my key status', 'locker key status'],
-        'available_seats' => ['available seats', 'free seats', 'empty seat', 'empty seats', 'seats available', 'how many seats'],
+        'my_locker_key' => ['have i collected my key', 'status kunci saya', 'when must i return my key', 'my locker key status', 'status of my locker key', 'my key status', 'locker key status'],
+        'available_seats' => ['which seats are free', 'any seat available', 'available seat', 'seat kosong', 'ada seat kosong', 'available seats', 'free seats', 'empty seat', 'empty seats', 'seats available', 'how many seats'],
         // Round 4 PART B.2: available to BOTH roles -- block N2 vs J2, side by side.
-        'block_comparison' => ['n2 and j2', 'n2 vs j2', 'n2 versus j2', 'compare block', 'compare n2', 'compare j2', 'which block is fuller', 'which block is more crowded', 'block is fuller', 'more crowded', 'how crowded is block'],
+        'block_comparison' => ['which block has more free', 'block mana paling', 'which block is the fullest', 'n2 and j2', 'n2 vs j2', 'n2 versus j2', 'compare block', 'compare n2', 'compare j2', 'which block is fuller', 'which block is more crowded', 'block is fuller', 'more crowded', 'how crowded is block'],
 
         // CGS lookups.
-        'seat_availability' => ['seat availability', 'how many available', 'free seats in'],
-        'overall_stats' => ['overall stats', 'overall statistics', 'total seats', 'dashboard numbers', 'how many seats are available', 'seats are available'],
+        'seat_availability' => ['available seats in room', 'seat availability', 'how many available', 'free seats in'],
+        'overall_stats' => ['how many seats are occupied', 'seats are occupied', 'berapa seat', 'total available and occupied', 'occupancy statistics', 'overall stats', 'overall statistics', 'total seats', 'dashboard numbers', 'how many seats are available', 'seats are available'],
         'seat_lookup' => ['who is in seat', 'who is sitting in seat', 'seat lookup', 'status of seat'],
         'student_lookup' => ['find student', 'student lookup', 'look up student'],
-        'keys_pending_collection' => ['keys pending collection', 'key pending', 'pending collection', 'uncollected key', 'uncollected keys'],
-        'keys_pending_return' => ['keys pending return', 'overdue key', 'overdue keys', 'return pending', 'keys overdue', 'overdue for return', 'keys are overdue'],
+        'keys_pending_collection' => ['not collected their key', 'has not collected', 'not collected key', 'keys pending collection', 'key pending', 'pending collection', 'uncollected key', 'uncollected keys'],
+        'keys_pending_return' => ['keys are pending return', 'pending return', 'keys pending return', 'overdue key', 'overdue keys', 'return pending', 'keys overdue', 'overdue for return', 'keys are overdue'],
         'awaiting_key_return_seats' => ['awaiting key return', 'seats awaiting key'],
         'termination_notices' => ['termination notice', 'termination notices', 'seats in termination', 'vacate notice'],
         'maintenance_seats' => ['maintenance seats', 'seats in maintenance', 'under maintenance', 'which seats are in maintenance'],
-        'room_occupancy' => ['room occupancy', 'occupancy rate', 'occupancy percentage'],
+        'room_occupancy' => ['occupancy by room', 'room occupancy', 'occupancy rate', 'occupancy percentage'],
         'candidacy_expiring' => ['candidacy expiring', 'expiring candidacy', 'expiring soon'],
         'releases_this_week' => ['released this week', 'releases this week', 'seats released'],
         // Round 3 PART E.6.
@@ -203,27 +203,39 @@ return [
         'return_outlook' => ['when are keys due back', 'keys due back', 'key return outlook', 'return outlook'],
 
         // Guidance topics -- student.
-        'guidance:select_seat' => ['how do i select', 'how to select a workstation', 'select a seat', 'how to choose a seat'],
-        'guidance:visibility_rules' => ['why cant i see', "why can't i see", 'not showing', 'missing seats', 'missing rooms'],
-        'guidance:confirmation' => ['confirm my selection', 'confirmation email', 'did not confirm', "didn't confirm", 'do not confirm', 'no email arrived'],
-        'guidance:change_or_return' => ['change my workstation', 'return my workstation', 'how to return'],
-        'guidance:locker_key_request' => ['how do i request a locker key', 'request a locker key', 'request my key'],
-        'guidance:locker_key_collect_return' => ['how do i collect my key', 'collect my key', 'collect my locker key', 'return my key', 'return my locker key', 'collect the key'],
-        'guidance:key_lost' => ['lost my key', 'lost my locker key', 'lost the key', 'key is lost'],
-        'guidance:termination_vacate' => ['termination notice mean', 'why was my loan terminated', 'when do i have to vacate', 'vacate by'],
-        'guidance:eligibility_loan_period' => ['am i eligible', 'eligibility', 'loan period', 'loan duration'],
-        'guidance:contact_and_hours' => ['contact cgs', 'opening hours', 'office hours', 'operating hours'],
-        'guidance:terms_of_use' => ['term of use', 'terms of use', 'rules of the workstation'],
+        'guidance:select_seat' => ['how to pick a workstation', 'pilih seat', 'select seat', 'choose a seat', 'how can i choose seat', 'how do i select', 'how to select a workstation', 'select a seat', 'how to choose a seat'],
+        'guidance:visibility_rules' => ['why no room for me', 'tak nampak bilik', 'cant see the female', 'cant see the male', 'i cant see the', 'why cant i see', "why can't i see", 'not showing', 'missing seats', 'missing rooms'],
+        'guidance:confirmation' => ['press confirm', 'took the seat first', 'no longer available', 'confirm my selection', 'confirmation email', 'did not confirm', "didn't confirm", 'do not confirm', 'no email arrived'],
+        'guidance:change_or_return' => ['change my seat', 'tukar seat', 'give back my seat', 'change my workstation', 'return my workstation', 'how to return'],
+        'guidance:locker_key_request' => ['request key', 'mohon kunci', 'days to collect the key', 'how do i request a locker key', 'request a locker key', 'request my key'],
+        'guidance:locker_key_collect_return' => ['hand in the key', 'how do i collect my key', 'collect my key', 'collect my locker key', 'return my key', 'return my locker key', 'collect the key'],
+        'guidance:key_lost' => ['lost key', 'kunci saya hilang', 'key is broken', 'locker key is broken', 'lost my key', 'lost my locker key', 'lost the key', 'key is lost'],
+        'guidance:termination_vacate' => ['got a termination notice', 'when must i vacate', 'days to vacate', 'notis tamat', 'termination notice mean', 'why was my loan terminated', 'when do i have to vacate', 'vacate by'],
+        'guidance:eligibility_loan_period' => ['part time students', 'hold 2 seats', 'how long can i keep', 'am i eligible', 'eligibility', 'loan period', 'loan duration'],
+        'guidance:contact_and_hours' => ['access the workstation', 'waktu operasi', 'contact cgs', 'opening hours', 'office hours', 'operating hours'],
+        'guidance:terms_of_use' => ['bring food', 'term of use', 'terms of use', 'rules of the workstation'],
 
         // Guidance topics -- CGS.
         'guidance:cgs_reassign' => ['how do i reassign', 'how to reassign'],
         'guidance:cgs_release' => ['how do i release', 'how to release a seat', 'release reasons'],
         'guidance:cgs_assign' => ['how do i assign', 'how to assign a student'],
-        'guidance:cgs_maintenance' => ['how do i set maintenance', 'set to maintenance'],
-        'guidance:cgs_release_hold' => ['release hold', 'how do i release hold'],
+        'guidance:cgs_maintenance' => ['set a seat to maintenance', 'how do i set maintenance', 'set to maintenance'],
+        'guidance:cgs_release_hold' => ['release a hold', 'release hold', 'how do i release hold'],
         'guidance:cgs_keys' => ['mark as collected', 'mark as returned', 'mark key'],
-        'guidance:cgs_termination' => ['release now', 'withdraw termination', 'how does termination work'],
-        'guidance:cgs_search_export' => ['how do i search', 'how do i export', 'export results', 'export history'],
+        'guidance:cgs_termination' => ['start a termination', 'release now', 'withdraw termination', 'how does termination work'],
+        'guidance:cgs_search_export' => ['search and export', 'how do i search', 'how do i export', 'export results', 'export history'],
+        'almost_full_rooms' => ['almost full', 'nearly full'],
+        'seat_release_outlook' => ['release outlook'],
+        'guidance:student_return_reasons' => ['which reason do i pick', 'return reasons'],
+        'guidance:student_system_guide' => ['whole workstation process', 'overview of how workstations'],
+        'guidance:student_status_glossary' => ['what does occupied mean', 'awaiting key return mean', 'what does pending mean'],
+        'guidance:student_timeline' => ['all the time limits', 'how many days do i have for everything'],
+        'guidance:cgs_reasons' => ['reasons can i choose when releasing'],
+        'guidance:cgs_system_guide' => ['overview of the cgs workstation'],
+        'guidance:cgs_status_glossary' => ['what does each seat status mean'],
+        'guidance:cgs_automation' => ['runs automatically', 'automatic jobs'],
+        'guidance:cgs_insights_definitions' => ['insights calculated'],
+        'guidance:cgs_assistant_scope' => ['what can you do'],
         'guidance:system_rules' => ['what are the workstation rules', 'system rules'],
     ],
 

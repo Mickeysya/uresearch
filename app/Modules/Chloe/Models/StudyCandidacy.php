@@ -48,17 +48,7 @@ class StudyCandidacy extends Model
         return $this->belongsTo(User::class, 'dismissed_by_id');
     }
 
-    public function reminders(): HasMany
-    {
-        return $this->hasMany(StudyCandidacyReminder::class);
-    }
-
-    public function appeals(): HasMany
-    {
-        return $this->hasMany(CandidacyAppealDetail::class);
-    }
-
-    /** The appeals in OUR tables -- the source of truth (the `appeals()` relation above is the legacy per-application detail). */
+    /** The appeals in OUR tables (candidacy_appeals) -- the only source of truth. */
     public function candidacyAppeals(): HasMany
     {
         return $this->hasMany(CandidacyAppeal::class, 'study_candidacy_id');
@@ -137,18 +127,7 @@ class StudyCandidacy extends Model
 
     public function hasOpenAppeal(): bool
     {
-        if ($this->candidacyAppeals()->whereIn('status', CandidacyAppeal::OPEN_STATUSES)->exists()) {
-            return true;
-        }
-
-        // A legacy appeal that has not been backfilled yet is still open in the shared engine's tables.
-        return $this->appeals()
-            ->whereHas('application', fn ($q) => $q->whereIn('status', [
-                \App\Modules\Core\Models\Application::STATUS_PENDING,
-                \App\Modules\Core\Models\Application::STATUS_RETURNED,
-            ]))
-            ->whereNotIn('application_id', CandidacyAppeal::whereNotNull('legacy_application_id')->select('legacy_application_id'))
-            ->exists();
+        return $this->candidacyAppeals()->whereIn('status', CandidacyAppeal::OPEN_STATUSES)->exists();
     }
 
     /** @return array<string, string> */

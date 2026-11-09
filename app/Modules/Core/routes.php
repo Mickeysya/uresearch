@@ -7,6 +7,7 @@ use App\Modules\Core\Http\Controllers\CalendarController;
 use App\Modules\Core\Http\Controllers\DepartmentAdminController;
 use App\Modules\Core\Http\Controllers\DocumentController;
 use App\Modules\Core\Http\Controllers\DocumentLibraryController;
+use App\Modules\Core\Http\Controllers\HelpController;
 use App\Modules\Core\Http\Controllers\LoginController;
 use App\Modules\Core\Http\Controllers\NotificationController;
 use App\Modules\Core\Http\Controllers\PageController;
@@ -58,8 +59,8 @@ Route::middleware('auth')->group(function () {
     // A month grid over dates the modules already own -- no events table.
     Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar.index');
 
-    // Sidebar destinations with no feature behind them yet -- see PageController.
-    Route::get('/help', [PageController::class, 'show'])->name('help.index')->defaults('page', 'help');
+    // Help and Support. All wording in config/help.php -- see HelpController.
+    Route::get('/help', HelpController::class)->name('help.index');
     // The signed-in user's own record. Contact details and password are
     // separate routes on purpose — see ProfileController.
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');

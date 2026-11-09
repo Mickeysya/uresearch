@@ -3,6 +3,7 @@
 namespace App\Modules\Hani\Exports;
 
 use App\Modules\Hani\Models\ExaminerNomination;
+use App\Modules\Hani\Support\AppointmentLetters;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -22,8 +23,16 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
  */
 class ExaminerListExport implements FromArray, WithHeadings
 {
-    /** @param  Collection<int, ExaminerNomination>  $nominations */
-    public function __construct(protected Collection $nominations) {}
+    /**
+     * @param  Collection<int, ExaminerNomination>  $nominations
+     * @param  array<int, array>  $letters  AppointmentLetters::forPanels()
+     * @param  bool  $flagNeeded  fill "Letter Needed For": the Awaiting letters download
+     */
+    public function __construct(
+        protected Collection $nominations,
+        protected array $letters = [],
+        protected bool $flagNeeded = false,
+    ) {}
 
     /** @return array<int, string> */
     public function headings(): array
@@ -41,6 +50,9 @@ class ExaminerListExport implements FromArray, WithHeadings
             'External Main', 'External Main Institution', 'External Backup',
             'Stage', 'Status', 'Submitted',
             'Internal Main Email', 'External Main Email',
+            'Internal Main Letter Status', 'Internal Backup Letter Status',
+            'External Main Letter Status', 'External Backup Letter Status',
+            'Letter Needed For', 'Replaced Examiners',
         ];
     }
 
@@ -50,6 +62,7 @@ class ExaminerListExport implements FromArray, WithHeadings
         return $this->nominations->map(function (ExaminerNomination $nomination) {
             $application = $nomination->application;
             $student = $application?->student;
+            $letters = $this->letters[$nomination->id] ?? null;
 
             return [
                 $application?->id,
@@ -73,7 +86,27 @@ class ExaminerListExport implements FromArray, WithHeadings
                 $application?->submitted_at?->format('Y-m-d'),
                 $nomination->internalMain?->email,
                 $nomination->externalMain?->email,
+                $letters['seats']['internal_main_id'] ?? null,
+                $letters['seats']['internal_backup_id'] ?? null,
+                $letters['seats']['external_main_id'] ?? null,
+                $letters['seats']['external_backup_id'] ?? null,
+                $this->flagNeeded ? $this->needed($letters) : null,
+                $this->replaced($letters),
             ];
         })->values()->all();
+    }
+
+    protected function needed(?array $letters): ?string
+    {
+        return collect($letters['needed'] ?? [])
+            ->map(fn (?string $name, string $seat) => AppointmentLetters::SEATS[$seat].': '.$name)
+            ->join('; ') ?: null;
+    }
+
+    protected function replaced(?array $letters): ?string
+    {
+        return collect($letters['replaced'] ?? [])
+            ->map(fn (array $former) => AppointmentLetters::SEATS[$former['seat']].': '.$former['name'].', '.$former['status'])
+            ->join('; ') ?: null;
     }
 }

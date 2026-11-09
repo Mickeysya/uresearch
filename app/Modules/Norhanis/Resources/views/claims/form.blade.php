@@ -7,6 +7,8 @@
     <x-core::page-header
         title="Student Claims Application" />
 
+    @include('norhanis::partials.draft-banner')
+
     <div class="card card-wide">
         {{-- A claim pays for a publication CGS has already approved, so with
              none there is nothing to claim for. See ClaimsController::create(). --}}
@@ -15,8 +17,10 @@
                publication application that has been approved, so you can claim once yours is.</p>
             <p><a href="{{ route('publication.create') }}">Apply for publication funding</a></p>
         @else
-        <form method="POST" action="{{ route('claims.store') }}" enctype="multipart/form-data" class="app-form" data-stepper>
+        <form method="POST" action="{{ route('claims.store') }}" enctype="multipart/form-data" class="app-form" data-stepper
+              data-draft-form data-resume-step="{{ $draftStep }}">
             @csrf
+            @include('norhanis::partials.draft-fields')
 
             <fieldset class="fstep" data-label="Claim details">
             <p class="fstep-hint">Journal publication claims only. Choose the approved publication you are claiming for, then enter the amount and where it should be paid.</p>
@@ -54,53 +58,34 @@
             </fieldset>
 
             <fieldset class="fstep" data-label="Attachments">
-            <p class="fstep-hint">PDF, JPG or PNG, 5 MB max per file.</p>
+            <p class="fstep-hint">Attach each document under its own heading. You can add more than one file to each.</p>
 
-            <label for="receipt">Receipt</label>
-            <input type="file" name="receipt" id="receipt" required accept=".pdf,.jpg,.jpeg,.png"
-                   class="@error('receipt') is-invalid @enderror">
-            <span data-file-name-for="receipt" style="display: block; font-size: 0.85em; color: var(--text-grey);"></span>
-            @error('receipt') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="receipt" label="Receipt" :required="true"
+                :existing="$attached->get('Receipt', collect())"
+                :allowed="['pdf', 'jpg', 'jpeg', 'png']" />
 
-            <label for="proof_of_payment">Proof of Payment</label>
-            <input type="file" name="proof_of_payment" id="proof_of_payment" required accept=".pdf,.jpg,.jpeg,.png"
-                   class="@error('proof_of_payment') is-invalid @enderror">
-            <span data-file-name-for="proof_of_payment" style="display: block; font-size: 0.85em; color: var(--text-grey);"></span>
-            @error('proof_of_payment') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="proof_of_payment" label="Proof of Payment" :required="true"
+                :existing="$attached->get('Proof of Payment', collect())"
+                :allowed="['pdf', 'jpg', 'jpeg', 'png']" />
 
-            <label for="invoice">Invoice</label>
-            <input type="file" name="invoice" id="invoice" required accept=".pdf,.jpg,.jpeg,.png"
-                   class="@error('invoice') is-invalid @enderror">
-            <span data-file-name-for="invoice" style="display: block; font-size: 0.85em; color: var(--text-grey);"></span>
-            @error('invoice') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="invoice" label="Invoice" :required="true"
+                :existing="$attached->get('Invoice', collect())"
+                :allowed="['pdf', 'jpg', 'jpeg', 'png']" />
 
-            <label for="passport">Passport</label>
-            <p class="field-hint">Required for international students only.</p>
-            <input type="file" name="passport" id="passport" accept=".pdf,.jpg,.jpeg,.png"
-                   class="@error('passport') is-invalid @enderror">
-            <span data-file-name-for="passport" style="display: block; font-size: 0.85em; color: var(--text-grey);"></span>
-            @error('passport') <p class="field-error">{{ $message }}</p> @enderror
+            <x-nureen::multi-file-upload name="passport" label="Passport" :required="false"
+                :existing="$attached->get('Passport', collect())"
+                :allowed="['pdf', 'jpg', 'jpeg', 'png']"
+                hint="Required for international students only." />
             </fieldset>
 
             <button type="submit">Submit Application</button>
+            @include('norhanis::partials.draft-save')
         </form>
         @endif
     </div>
 </div>
 
-<script @cspNonce>
-    (function () {
-        // Filename next to each file field, so a student can tell at a
-        // glance which of the four inputs still needs picking.
-        document.querySelectorAll('form[data-stepper] input[type="file"]').forEach(function (input) {
-            var out = document.querySelector('[data-file-name-for="' + input.name + '"]');
-            input.addEventListener('change', function () {
-                out.textContent = input.files && input.files.length ? input.files[0].name : '';
-            });
-        });
-    })();
-</script>
-
 @include('core::partials.form-stepper')
+@includeIf('nureen::partials.draft-form-script')
 @include('norhanis::partials.file-remove')
 @endsection

@@ -9,7 +9,9 @@
         title="Corrected Final Thesis"
         :subtitle="'Result '.$d->resultLabel().'. Upload your corrected thesis by '.$d->corrections_due_at->format('j M Y').'.'" />
 
-    @include('hani::partials.module_stepper', ['tracker' => $tracker])
+    <div class="card card-wide" style="margin-bottom: var(--space-5)">
+        @include('hani::partials.module_stepper', ['tracker' => $tracker])
+    </div>
 
     <div class="card card-wide">
         @if ($d->corrections_submitted_at)

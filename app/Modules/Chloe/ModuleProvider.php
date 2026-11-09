@@ -6,7 +6,7 @@ use App\Modules\Chloe\Assistant\AssistantModel;
 use App\Modules\Chloe\Assistant\FakeModel;
 use App\Modules\Chloe\Assistant\GeminiModel;
 use App\Modules\Chloe\Console\Commands\AssistantAsk;
-use App\Modules\Chloe\Console\Commands\BackfillCandidacyAppeals;
+use App\Modules\Chloe\Console\Commands\AssignSharedAccounts;
 use App\Modules\Chloe\Console\Commands\BackfillCandidacySupervisors;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoClear;
 use App\Modules\Chloe\Console\Commands\CandidacyDemoRegistryFile;
@@ -16,6 +16,8 @@ use App\Modules\Chloe\Console\Commands\CheckCandidacyAllowance;
 use App\Modules\Chloe\Console\Commands\CheckCandidacyStatusSource;
 use App\Modules\Chloe\Console\Commands\CloseExpiredCandidacyAppeals;
 use App\Modules\Chloe\Console\Commands\GenerateCandidacyDismissals;
+use App\Modules\Chloe\Console\Commands\MailArchiveList;
+use App\Modules\Chloe\Listeners\ArchiveSentMail;
 use App\Modules\Chloe\Console\Commands\WorkstationRefreshDaily;
 use App\Modules\Chloe\Console\Commands\WorkstationSendRemindersDaily;
 use App\Modules\Chloe\Console\Commands\AssistantCatalogue;
@@ -40,6 +42,8 @@ use App\Modules\Chloe\Models\CandidacyStaffProfile;
 use App\Modules\Chloe\Policies\CandidacyAppealPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Mail\Events\MessageSent;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -83,6 +87,9 @@ class ModuleProvider extends ServiceProvider
     {
         $registry->register(new Workflows\CandidacyAppealWorkflow);
 
+        // Permanent copy of every e-mail sent (queued or direct), independent of Mailpit -- see Support\MailArchive.
+        Event::listen(MessageSent::class, ArchiveSentMail::class);
+
         // One policy for every appeal route (pages, downloads, signature images, actions).
         Gate::policy(CandidacyAppeal::class, CandidacyAppealPolicy::class);
         Gate::policy(CandidacyStaffProfile::class, CandidacyAppealPolicy::class);
@@ -116,6 +123,7 @@ class ModuleProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 RemindOverdueLockerKeys::class,
+                MailArchiveList::class,
                 WorkstationRefreshDaily::class,
                 WorkstationSendRemindersDaily::class,
                 SendCandidacyReminders::class,
@@ -129,7 +137,7 @@ class ModuleProvider extends ServiceProvider
                 AssistantBudget::class,
                 AssistantCheck::class,
                 AssistantCatalogue::class,
-                BackfillCandidacyAppeals::class,
+                AssignSharedAccounts::class,
                 BackfillCandidacySupervisors::class,
                 CheckCandidacyAllowance::class,
                 CloseExpiredCandidacyAppeals::class,

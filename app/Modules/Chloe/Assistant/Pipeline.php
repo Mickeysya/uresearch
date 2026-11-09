@@ -51,6 +51,9 @@ final class Pipeline
 
     public const PRIVACY_NAME_MESSAGE = 'For privacy, please search using a Student ID or seat number.';
 
+    /** Nobody gets another person's e-mail address or phone number from the assistant, whatever their role. */
+    public const CONTACT_DETAILS_MESSAGE = "For privacy I can't give out e-mail addresses or phone numbers. For a student's contact details, open their record in the system or ask CGS.";
+
     public const EMAIL_NOT_A_KEY_MESSAGE = 'Please use a Student ID or seat number.';
 
     public const ANYONE_ELSE_MESSAGE = 'I can only share information about your own workstation.';
@@ -180,8 +183,8 @@ final class Pipeline
         $idMap = $masked['idMap'];
         $this->traceLine("masked question: {$maskedQuestion}");
 
-        if (PrivacyMasker::containsKnownStudentName($message)) {
-            $this->traceLine('decision: refused, a known student name (no model call)');
+        if (PrivacyMasker::containsKnownStudentName($message) || PrivacyMasker::containsKnownStaffName($message)) {
+            $this->traceLine('decision: refused, a known student or staff name (no model call)');
 
             return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'privacy_name', AssistantLog::OUTCOME_REFUSED, self::PRIVACY_NAME_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'name_detected');
         }
@@ -191,6 +194,13 @@ final class Pipeline
             $this->traceLine('decision: asked back, an email is not a lookup key (no model call)');
 
             return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'email_not_a_key', AssistantLog::OUTCOME_ASKED_BACK, self::EMAIL_NOT_A_KEY_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'email_not_a_key');
+        }
+
+        // A request for someone else's e-mail address or phone number is refused for every role, before any model call.
+        if (ParameterExtractor::asksForContactDetails($maskedQuestion)) {
+            $this->traceLine('decision: refused, a request for contact details (no model call)');
+
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'privacy_contact', AssistantLog::OUTCOME_REFUSED, self::CONTACT_DETAILS_MESSAGE, [], null, AssistantLog::ANSWERED_BY_DIRECT, 'contact_details', suggestions: $this->suggestionsList($role));
         }
 
         // The exact suggested-question texts, answered without any model call.
@@ -233,10 +243,8 @@ final class Pipeline
         }
 
         $recentTurns = (int) config('assistant.recent_turns', 5);
-        $recentMasked = array_values(array_map(
-            fn ($q) => PrivacyMasker::mask((string) $q)['masked'],
-            array_slice($recentUserQuestions, -$recentTurns)
-        ));
+        // masked like the question itself; an earlier question that named a known person is dropped, not sent
+        $recentMasked = PrivacyMasker::maskHistory(array_slice($recentUserQuestions, -$recentTurns));
 
         if ($recentMasked !== []) {
             $this->traceLine('recent (masked): '.implode(' | ', $recentMasked));
@@ -323,6 +331,14 @@ final class Pipeline
                 $params['period'] = PeriodExtractor::toString($own);
                 $this->traceLine("validation: follow-up names its own period -> {$params['period']}");
             }
+        }
+
+        // A student naming a seat number, or a student ID that is not their own, is asking about someone else -- whatever entry the router picked (it may be a glossary or their OWN eligibility).
+        if ($role === Role::STUDENT && $this->namesSomeoneElse($user, $maskedQuestion, $idMap)) {
+            $this->traceLine("validation: a student named a seat number or someone else's ID -> not {$id}, only their own information");
+            $result = $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'anyone_else', AssistantLog::OUTCOME_REFUSED, self::ANYONE_ELSE_MESSAGE, [], null, AssistantLog::ANSWERED_BY_MODEL_ROUTER, 'anyone_else', modelUsed: $modelUsed);
+
+            return [...$result, 'meta' => ['catalogue_id' => 'out_of_scope', 'kind' => 'out_of_scope', 'confidence' => (float) ($routed['confidence'] ?? 0.0), 'alternatives' => [], 'router_params' => [], 'model_used' => $modelUsed]];
         }
 
         // A student's question that is plainly a CGS-only forecast is
@@ -499,6 +515,17 @@ final class Pipeline
         return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'out_of_scope', AssistantLog::OUTCOME_REFUSED, self::OUT_OF_SCOPE_MESSAGE, [], null, $answeredBy, 'out_of_scope', modelUsed: $modelUsed);
     }
 
+    protected function namesSomeoneElse(User $user, string $maskedQuestion, array $idMap): bool
+    {
+        if (ParameterExtractor::seatNumber($maskedQuestion) !== null) {
+            return true;
+        }
+
+        $placeholder = ParameterExtractor::studentIdPlaceholder($maskedQuestion);
+
+        return $placeholder !== null && preg_match('/\bmy\s+(student\s+)?(id|matric)\b/i', $maskedQuestion) !== 1 && PrivacyMasker::unmask($placeholder, $idMap) !== (string) (\App\Modules\Chloe\Support\StudentDirectory::fromUser($user)->studentId ?? $user->matric_no);
+    }
+
     /**
      * True when a student's question matches a CGS-only catalogue entry
      * clearly better than anything in the student's own catalogue (by
@@ -515,6 +542,19 @@ final class Pipeline
 
         if (self::hasReleaseCue($normalised) && PeriodExtractor::parseDeterministic($normalised) !== null) {
             return true;
+        }
+
+        // Staff-only only when the question plainly asks for a staff-wide figure: a count, total or breakdown of students, seats, rooms, keys or notices
+        // WITHOUT the asker's own scope ("my", "i", "me"). A student's own how-to or rule question ("can i hold 2 seats", "how many working days to vacate")
+        // that merely shares words with a CGS entry is never refused here; it falls through to "did you mean".
+        if (preg_match('/\b(my|mine|me|i)\b/', $normalised) === 1) {
+            return false;
+        }
+
+        $aggregate = preg_match('/\b(how many|number of|count of|total)\b.*\b(students?|everyone|seats|rooms?|blocks?|keys?|termination|notices?|candidacies|overdue|released|maintenance)\b|\b(occupancy|forecast|outlook|statistics|breakdown|distribution|per block|per room|each block|each room|all students)\b/', $normalised) === 1;
+
+        if (! $aggregate) {
+            return false;
         }
 
         $cgsOnly = collect(Catalogue::keywordCandidates($normalised, 'cgs', 1, 2, 'workstation'))
@@ -585,6 +625,12 @@ final class Pipeline
         }
 
         // An imperative -- never a question (the interrogative guard), never a how-to.
+        if ($role === Role::STUDENT && $this->namesSomeoneElse($user, $maskedQuestion, $idMap)) {
+            $this->traceLine('fallback: a student named a seat number or someone else\'s ID');
+
+            return $this->finish($user, $role, AssistantLog::SOURCE_TYPED, 'anyone_else', AssistantLog::OUTCOME_REFUSED, self::ANYONE_ELSE_MESSAGE, [], null, $answeredBy, 'anyone_else');
+        }
+
         $actionId = $this->fallbackActionId($normalised, $role);
 
         if ($actionId === null && $deterministicName === 'action_request') {
@@ -605,13 +651,15 @@ final class Pipeline
         if ($this->domain === 'candidacy' && ($candidacyId = CandidacyAssistant::keywordMatch($normalised, $role)) !== null) {
             $entry = Catalogue::find($candidacyId);
             $this->traceLine("fallback: candidacy {$candidacyId}");
+            // the one candidacy lookup that names a student takes the ID the user typed (masked to a placeholder on the way in, mapped back here)
+            $params = isset($entry['parameters']['student_id']) && ($p = ParameterExtractor::studentIdPlaceholder($normalised)) !== null ? ['student_id' => PrivacyMasker::unmask($p, $idMap)] : [];
             $answer = match ($entry['kind']) {
-                'lookup' => $this->answerLookup($user, $role, $candidacyId, [], $answeredBy),
+                'lookup' => $this->answerLookup($user, $role, $candidacyId, $params, $answeredBy),
                 'guidance' => $this->answerGuidance($user, $role, $candidacyId, AssistantLog::SOURCE_TYPED, $answeredBy, $modelUsed),
                 default => $this->actionRequestResponse($user, $role, $candidacyId, [], $answeredBy),
             };
 
-            return $this->withInterpretation($answer, $candidacyId, []);
+            return $this->withInterpretation($answer, $candidacyId, $params);
         }
 
         // release_forecast: a release cue with a period, or a bare-period follow-up to one.
@@ -843,8 +891,11 @@ final class Pipeline
 
         $seatNumber = isset($parameters['seat_number']) ? (int) $parameters['seat_number'] : null;
 
-        if ($seatNumber !== null && $seatNumber >= 1 && $seatNumber <= 315 && Workstation::whereKey($seatNumber)->exists()) {
-            return $log(self::ACTION_REFUSED_MESSAGE, [['label' => 'Seat Details', 'url' => route('workstation.cgs.seat', $seatNumber)]], 'action_request');
+        // the seat NUMBER users see (seat_code), not the database id
+        $namedSeat = $seatNumber !== null && $seatNumber >= 1 ? Workstation::where('seat_code', (string) $seatNumber)->first() : null;
+
+        if ($namedSeat !== null) {
+            return $log(self::ACTION_REFUSED_MESSAGE, [['label' => 'Seat Details', 'url' => route('workstation.cgs.seat', $namedSeat->id)]], 'action_request');
         }
 
         $studentId = $parameters['student_id'] ?? null;

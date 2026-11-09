@@ -235,6 +235,23 @@
                 var key = node.getAttribute('data-live-count');
                 if (Object.prototype.hasOwnProperty.call(room, key)) setNumber(node, room[key]);
             });
+            applyMeter(room);
+        });
+    }
+
+    // The availability bar on a room card (same formula as cgs/block.blade.php:
+    // percent of seats free; red when none, amber under 20%). It is an SVG
+    // attribute, not an inline style, so it passes the page's CSP.
+    function applyMeter(room) {
+        if (typeof room.available === 'undefined') return;
+        var total = Math.max(1, (+room.available || 0) + (+room.occupied || 0) + (+room.maintenance || 0));
+        var percent = Math.round((+room.available || 0) / total * 100);
+        document.querySelectorAll('[data-live-room="' + room.id + '"] .ws-meter').forEach(function (meter) {
+            var fill = meter.querySelector('.ws-meter-fill');
+            if (fill) fill.setAttribute('width', String(percent));
+            meter.setAttribute('data-tip', percent + '% of seats free');
+            meter.classList.toggle('is-empty', (+room.available || 0) === 0);
+            meter.classList.toggle('is-low', (+room.available || 0) !== 0 && percent < 20);
         });
     }
 

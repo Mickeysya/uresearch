@@ -9,8 +9,8 @@ use App\Modules\Chloe\Models\Workstation;
 use App\Modules\Chloe\Models\WorkstationBlock;
 use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationLocation;
-use App\Modules\Chloe\Models\WorkstationPendingSelection;
 use App\Modules\Chloe\Models\WorkstationRequest;
+use App\Modules\Chloe\Support\SeatOrder;
 use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Chloe\Support\StudentDirectory;
 use App\Modules\Chloe\Support\WorkstationEligibility;
@@ -93,8 +93,6 @@ class WorkstationController extends Controller
     {
         // Checked here too, not just by the scheduled command, so a hold
         // that expired seconds ago doesn't still show as taken.
-        $allocator->releaseExpiredSelections();
-
         $activeRequest = $this->activeRequestFor($request);
         $gender = $this->genderFor($request);
 
@@ -123,8 +121,6 @@ class WorkstationController extends Controller
 
     public function seats(Request $request, WorkstationLocation $workstationLocation, WorkstationAllocator $allocator)
     {
-        $allocator->releaseExpiredSelections();
-
         $activeRequest = $this->activeRequestFor($request);
         $gender = $this->genderFor($request);
 
@@ -151,17 +147,14 @@ class WorkstationController extends Controller
         // already scoped to this room via workstation_location_id, so a
         // room can never surface another room's seat.
         $availableSeats = $workstationLocation->workstations()
-            ->where('status', Workstation::STATUS_AVAILABLE)
-            ->orderByRaw('CAST(seat_code AS UNSIGNED) ASC')
-            ->get();
+            ->where('status', Workstation::STATUS_AVAILABLE);
+        $availableSeats = SeatOrder::query($availableSeats)->get();
 
         return view('chloe::workstation.seats', compact('workstationLocation', 'availableSeats', 'activeRequest'));
     }
 
     public function store(Request $request, Workstation $workstation, WorkstationAllocator $allocator)
     {
-        $allocator->releaseExpiredSelections();
-
         $student = $request->user();
         $gender = $this->genderFor($request);
 
@@ -202,35 +195,12 @@ class WorkstationController extends Controller
     }
 
     /**
-     * The link in the old confirmation e-mail (seat holds made before round 4). Deliberately reachable without being logged in
-     * as the selecting student — the token itself, not the session, is the
-     * proof of authorisation (the same shape as a password-reset link), so
-     * the seat goes to the token's own student_id regardless of who is
-     * signed in on the device the link is opened on, or whether anyone is.
+     * The link in the old confirmation e-mail (seat holds made before round 4). The emailed-token flow was removed on 2026-11-03 and its table
+     * dropped, so every such link now lands on the "invalid" page instead of an error.
      */
-    public function confirm(Request $request, string $token, WorkstationAllocator $allocator)
+    public function confirm(Request $request, string $token)
     {
-        $allocator->releaseExpiredSelections();
-
-        $selection = WorkstationPendingSelection::where('token', $token)->first();
-
-        if (! $selection) {
-            return view('chloe::workstation.confirm', ['outcome' => 'invalid']);
-        }
-
-        if ($selection->status === WorkstationPendingSelection::STATUS_CONFIRMED) {
-            return view('chloe::workstation.confirm', ['outcome' => 'already-confirmed', 'workstation' => $selection->workstation]);
-        }
-
-        $result = $allocator->confirmPendingSelection($selection);
-
-        if (! $result['confirmed']) {
-            $outcome = $result['already'] === 'expired' ? 'expired' : 'invalid';
-
-            return view('chloe::workstation.confirm', ['outcome' => $outcome]);
-        }
-
-        return view('chloe::workstation.confirm', ['outcome' => 'confirmed', 'workstation' => $result['workstation']]);
+        return view('chloe::workstation.confirm', ['outcome' => 'invalid']);
     }
 
     protected function hasAnActiveSelection(int $studentId): bool
@@ -239,12 +209,7 @@ class WorkstationController extends Controller
             ->where('status', WorkstationRequest::STATUS_CONFIRMED)
             ->exists();
 
-        $hasPendingSelection = WorkstationPendingSelection::where('student_id', $studentId)
-            ->where('status', WorkstationPendingSelection::STATUS_PENDING)
-            ->where('expires_at', '>', now())
-            ->exists();
-
-        return $hasConfirmedSeat || $hasPendingSelection;
+        return $hasConfirmedSeat;
     }
 
     /**

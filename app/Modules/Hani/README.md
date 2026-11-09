@@ -30,14 +30,14 @@ re-run it whenever the demo should look fresh.
 |---|---|---|
 | Six-stage nomination chain, with "send back to department" (reason required) | Supervisor → AE → Senior Exec → Senior Director → Dean → Senior Exec | `/examiner-nomination/new`, queues |
 | "Finalise and release": one Approve records `cgs_final` and `cgs_release`; Non-Exec notified | Senior Exec | nomination queue |
-| Examiner pool: internal/external lists, derived state (Available, On Gap 90 days, Assigned, Unavailable), edit page, expertise and publications | Senior Exec (Non-Exec: emails only) | `/examiners` |
+| Examiner pool: internal/external lists, derived state (Available, On Gap 90 days, Assigned, Unavailable), edit page, expertise and publications | Senior Exec, Non-Exec (add, Unavailable or Active, emails). Full edit and import: Senior Exec only. AE: read-only, whole pool | `/examiners` |
 | Pool import from CGS's workbook or the UResearch template, with a preview before anything is written | Senior Exec | `/examiners/import` |
 | **Suggested examiners** per seat, explained | Supervisor, AE, Senior Exec | nomination form |
 | **Duplicate examiner** flags, "Not the same person" | Senior Exec | pool, import preview, `cgs_compile` |
 | **Conflict-of-interest** pre-check (UTP/CGS/026) | everyone in the chain | form, cards, report |
-| Cross-department clashes | AE, Senior Exec | form, cards, Conflict Detection |
+| Cross-department clashes | AE, Senior Exec, Senior Director, Dean | form, cards, Conflict Detection |
 | Declines recorded, backup promoted, seat history | AE, Senior Exec | panel page |
-| Examiner Report, xlsx/csv export ("Application No." for Jason's letters) | AE (own dept), CGS, Director, Dean | `/examiner-nomination/report` |
+| Examiner Report with letter status per seat and a "Letters: 2/2 sent" badge; xlsx/csv export, awaiting letters or full list ("Application No." for Jason's letters) | AE (own dept), CGS, Director, Dean | `/examiner-nomination/report` |
 | Examiner email upkeep: report not working, confirm still valid, history, proposals at nomination | Non-Exec, Senior Exec, AE | examiner page, pool |
 | Examiner Dashboard (state, departments, returning, stages, expertise gaps) | AE (own dept), CGS, Director, Dean | `/examiner-dashboard` |
 | Pending Evaluation, mark complete (starts the 90-day gap) | AE | `/examiner-nomination/pending-evaluation` |
@@ -249,8 +249,14 @@ described under "Demo data" below. A suggested walkthrough:
   nominated by more than one department. Read-only; never auto-rejects. The
   same check runs inline on the compiled report, which is where CGS sees it
   at the `cgs_compile` stage.
-- **Examiner admin** — `/examiners` (Non-Exec CGS): add an examiner, toggle
-  Unavailable. Internal and external are kept as two lists behind a tab
+- **Examiner admin** — `/examiners` (Senior Exec and Non-Exec CGS): add an
+  examiner, toggle Unavailable. The full edit form, import, the review list and
+  "Not the same person" are the Senior Executive's. The Academic Executive
+  reads the whole pool there, every department and external, with no write
+  actions, and a note naming the CGS contacts to email to add or remove an
+  examiner (`hani.cgs.contacts`). Sidebar: Actions → Examiner Pool. A supervisor reads
+  the pool on `/examiner-nomination/new` (tabs, filters and the same badges; no
+  emails, students, actions or duplicate warnings) and cannot change it. Internal and external are kept as two lists behind a tab
   strip, because CGS keeps two spreadsheets and the external one carries nine
   columns the internal one has no equivalent of: faculty approval reference,
   institution, technical or research, UTP cluster, area of expertise, years
@@ -279,8 +285,9 @@ described under "Demo data" below. A suggested walkthrough:
 
 ### Examiner emails (who keeps them current)
 
-- **Non-Executive CGS** reads the pool and may change an examiner's email,
-  and nothing else. A reason is required.
+- **Non-Executive CGS** may change an existing examiner's email (a reason is
+  required), add an examiner, and mark one Unavailable or Active, but not edit
+  their other details.
 - **The Senior Executive** edits everything on the full form.
 - **Every change is logged** in `examiner_contact_history`, shown on the
   examiner page (`/examiners/{id}`), whether it came from the form, the
@@ -451,9 +458,14 @@ Settings in `config/hani.php` under `reviva`; unconfirmed values are marked
 
 ### Examiner Report export layout (for Jason's appointment letters)
 
-`/examiner-nomination/report/export?format=xlsx|csv`. There is one row per
-candidate, one sheet, and the same columns in both formats
-(`Exports/ExaminerListExport.php`).
+`/examiner-nomination/report/export?format=xlsx|csv&scope=awaiting|full`. There
+is one row per candidate, one sheet, and the same columns in both formats and
+both scopes (`Exports/ExaminerListExport.php`).
+
+| Scope | Rows |
+|---|---|
+| `awaiting` (the default, "Download Excel: awaiting letters") | Released panels with at least one main seat "Not sent". A panel already examined on, or freed without a viva, is left out. |
+| `full` ("Download Excel: full list") | Every row on the report, at any stage. |
 
 | # | Column | Notes |
 |---|---|---|
@@ -464,12 +476,30 @@ candidate, one sheet, and the same columns in both formats
 | 12–14 | External Main, External Main Institution, External Backup | the **current** panel |
 | 15–17 | Stage, Status, Submitted | |
 | 18–19 | Internal Main Email, External Main Email | blank where CGS has no email yet |
+| 20–23 | Internal Main, Internal Backup, External Main, External Backup **Letter Status** | `Not sent`, `Sent 01 Nov 2026 (letter module)`, `Sent 01 Nov 2026 (entered by AE)`, or `Replaced 05 Nov 2026`. Blank before release, and for a seat that has never had a letter and is empty. |
+| 24 | **Letter Needed For** | Awaiting scope only: the main seats still `Not sent`, as `External Main: Dr Name`. A seat already sent is never listed. Several are separated by `; `. |
+| 25 | **Replaced Examiners** | Everyone who had a letter and has left the panel, as `Internal Main: Dr Name, Replaced 05 Nov 2026`. |
+
+**Where "Sent" comes from** (`Support/AppointmentLetters`): Jason's `packSentAt()`
+and the date on the examiner progress page both count, and Jason's wins where
+both exist. The status names which one it is, on the report and in the sheet.
+A date copied onto a progress row from Jason's module reads "letter module". With
+`SuppliesAppointmentDispatch` unbound, only the progress-page date is read.
+
+**A status belongs to whoever holds the seat now.** A replacement starts at
+`Not sent`, and the person they replaced moves to column 25. The seat's own
+column reads `Replaced` only while the seat is empty. A letter sent under a
+record later merged away counts for the record kept.
+
+**The names in columns 9–14 stay on a part-sent row:** they are the panel, and
+removing them could make the import refuse the sheet. Read column 24 for who is
+owed a letter. Jason's import does not read it yet (SHARED_CHANGES.md, section 11).
 
 **Stability rule:** columns are only ever added at the end; none is renamed,
-reordered or removed. Code-level access is the proposed Core contract
+reordered or removed. Code-level access is the Core contract
 `SuppliesReleasedExaminers` (SHARED_CHANGES.md, section 1a), implemented by
-`Support/ReleasedExaminerProvider`. It returns released panels only and is
-bound automatically once the contract exists.
+`Support/ReleasedExaminerProvider` and bound in `ModuleProvider`. It returns
+released panels only.
 
 On release, every Non-Executive CGS user gets "New examiner list released"
 (email and in-app). Letters go to the two **main** examiners only. Backups

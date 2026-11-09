@@ -67,7 +67,7 @@ final class WorkstationTerminationTriggers
                     $candidacy->status === StudyCandidacy::STATUS_DISMISSED => WorkstationAllocator::REASON_TERMINATION_DISMISSAL,
                     $candidacy->status === StudyCandidacy::STATUS_COMPLETED => WorkstationAllocator::REASON_TERMINATION_GRADUATED,
                     $candidacy->status === StudyCandidacy::STATUS_ACTIVE
-                        && $candidacy->candidacy_expiry_date?->isPast()
+                        && ExpiryRule::hasPassed($candidacy->candidacy_expiry_date)
                         && ! $candidacy->hasOpenAppeal() => WorkstationAllocator::REASON_TERMINATION_EXPIRY,
                     default => null,
                 };

@@ -416,8 +416,81 @@ class JasonAppointmentLetterTest extends TestCase
         // Nothing was ever prepared for this nomination, so there is nothing
         // to resend — and CGS is told that rather than shown a false success.
         $this->actingAs($cgs)
-            ->post(route('appointment-letter.resend', [$application, $row]))
+            ->post(route('appointment-letter.resend', [$application, $row]), [
+                'reason' => 'The first attempt bounced.',
+            ])
             ->assertSessionHas('error');
+
+        // Nothing went out, so nothing is recorded as having gone out again.
+        $this->assertNull($row->fresh()->resent_at);
+    }
+
+    /**
+     * A resend posts documents the Dean has signed to someone already
+     * written to once, so it is an action on the record: who, when, why.
+     */
+    public function test_a_resend_needs_a_reason_and_is_recorded(): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+
+        $application = $this->imported();
+        $cgs = $this->cgs();
+
+        $dean = User::create([
+            'name' => 'Prof. Dr. Hafiz Osman', 'email' => 'dean@test.my',
+            'password' => 'password', 'role' => Role::DEAN_PGR, 'department' => 'PGR',
+        ]);
+
+        $this->signatureFor($dean);
+
+        // Prepared and approved, so there are archived documents to resend.
+        $this->actingAs($cgs)
+            ->post(route('appointment-letter.prepare.store', $application), [
+                'candidate_degree' => 'Master of Science',
+                'candidate_programme' => 'MSc Full-Time',
+                'supervisor_name' => 'Dr. Aisyah Rahman',
+                'thesis_title' => 'Introduction to IoT',
+                'examiners' => AppointmentExaminer::where('application_id', $application->id)
+                    ->get()
+                    ->map(fn ($e, $i) => [
+                        'id' => $e->id,
+                        'examiner_type' => $e->examiner_type,
+                        'examiner_address' => 'Bandar Seri Iskandar, 32610 Perak',
+                        'letter_ref_no' => 'UTP/CGS/001/'.($i + 1),
+                    ])->all(),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($dean)
+            ->post(route('appointment-letter.decide', $application), ['decision' => 'approve'])
+            ->assertSessionHasNoErrors();
+
+        $row = AppointmentExaminer::where('application_id', $application->id)->firstOrFail();
+
+        // No reason, no resend.
+        $this->actingAs($cgs)
+            ->post(route('appointment-letter.resend', [$application, $row]), [])
+            ->assertSessionHasErrors('reason');
+
+        $this->assertNull($row->fresh()->resent_at);
+
+        $this->actingAs($cgs)
+            ->post(route('appointment-letter.resend', [$application, $row]), [
+                'reason' => 'Address corrected in the Examiner Pool.',
+            ])
+            ->assertSessionHas('status');
+
+        $row = $row->fresh();
+
+        $this->assertNotNull($row->resent_at);
+        $this->assertSame($cgs->id, $row->resent_by_id);
+        $this->assertSame('Address corrected in the Examiner Pool.', $row->resent_reason);
+
+        $this->actingAs($cgs)
+            ->get(route('appointment-letter.issued'))
+            ->assertOk()
+            ->assertSee('Address corrected in the Examiner Pool.');
     }
 
     /**

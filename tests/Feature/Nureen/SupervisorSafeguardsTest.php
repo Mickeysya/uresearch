@@ -87,7 +87,8 @@ class SupervisorSafeguardsTest extends TestCase
 
     protected function supervised(string $supervisorEmail = 'sup@test.my'): User
     {
-        return $this->student(attributes: ['supervisor_id' => $this->supervisor($supervisorEmail)->id]);
+        // gaExtensionPayload() posts 2026-12-01 as the current end date.
+        return tap($this->student(attributes: ['supervisor_id' => $this->supervisor($supervisorEmail)->id]), fn (User $s) => $this->approveGaApplication($s, '2026-12-01'));
     }
 
     /* -----------------------------------------------------------------
@@ -99,6 +100,9 @@ class SupervisorSafeguardsTest extends TestCase
         $none = $this->student('22001001', 'none@test.my');
         $wrongRole = $this->student('22001002', 'wrong@test.my', ['supervisor_id' => $this->chair()->id]);
 
+        $this->approveGaApplication($none, '2026-12-01');
+        $this->approveGaApplication($wrongRole, '2026-12-01');
+
         foreach ([[$none, 'no supervisor is assigned'], [$wrongRole, 'does not have the Supervisor role']] as [$student, $message]) {
             $this->actingAs($student)->get(route('ga-extension.create'))->assertOk()->assertSee($message);
             $this->actingAs($student)->get(route('ga-certification.create'))->assertOk()->assertSee($message);
@@ -109,7 +113,7 @@ class SupervisorSafeguardsTest extends TestCase
                 ->assertRedirect()->assertSessionHas('error', fn ($m) => str_contains($m, $message));
         }
 
-        $this->assertSame(0, Application::count());
+        $this->assertSame(0, Application::where('module_type', '!=', 'ga_application')->count());
         Notification::assertNothingSent();
     }
 
@@ -123,7 +127,7 @@ class SupervisorSafeguardsTest extends TestCase
         $supervisor = User::find($student->supervisor_id);
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->gaExtensionPayload())->assertSessionHasNoErrors();
-        $application = Application::sole();
+        $application = Application::where('module_type', 'ga_extension')->sole();
 
         Notification::assertSentTo($supervisor, ApplicationAwaitingYou::class, function ($n) use ($supervisor, $application) {
             $mail = $n->toMail($supervisor);
@@ -183,10 +187,11 @@ class SupervisorSafeguardsTest extends TestCase
     public function test_the_details_page_names_the_supervisor_it_is_waiting_for(): void
     {
         $student = $this->student(attributes: ['supervisor_id' => User::create(['name' => 'Dr. Aisyah Rahman', 'email' => 'aisyah@test.my', 'password' => 'password', 'role' => Role::SUPERVISOR])->id]);
+        $this->approveGaApplication($student, '2026-12-01');
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->gaExtensionPayload());
 
-        $this->actingAs($student)->get(route('applications.show', Application::sole()))
+        $this->actingAs($student)->get(route('applications.show', Application::where('module_type', 'ga_extension')->sole()))
             ->assertOk()
             ->assertSee('Waiting for <b>Dr. Aisyah Rahman, your supervisor</b>.', false);
     }

@@ -147,8 +147,8 @@ class CandidacyDepartmentRosterTest extends TestCase
         $message = 'Your Supervisor / Programme Manager is not recorded yet. Please contact CGS.';
 
         $this->actingAs($this->student)->get(route('candidacy.status'))->assertOk()->assertSee($message);
-        $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertRedirect(route('candidacy.status'))->assertSessionHasErrors('appeal');
-        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1))->assertRedirect(route('candidacy.status'));
+        $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertOk()->assertSee($message);
+        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1))->assertRedirect(route('candidacy.appeals.new'));
         $this->assertSame(0, CandidacyAppeal::where('student_id', $this->student->id)->count());
         $this->assertContains($message, $this->service->eligibilityProblems($this->candidacy->fresh()));
     }

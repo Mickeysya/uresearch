@@ -781,7 +781,9 @@ class WorkstationCgsScreensTest extends TestCase
 
         $response = $this->actingAs($cgs)->get(route('workstation.cgs.room', $room));
         $response->assertOk();
-        $this->assertStringContainsString('.cgs-seat-text { flex: 1 1 160px; min-width: 0; max-width: 100%; }', $response->getContent());
-        $this->assertStringContainsString('.cgs-seat-badges .status-badge { white-space: normal; max-width: 100%; box-sizing: border-box; }', $response->getContent());
+        $this->assertStringContainsString('css/chloe-workstation.css', $response->getContent());
+        $css = file_get_contents(public_path('css/chloe-workstation.css'));
+        $this->assertStringContainsString('.cgs-seat-text { flex: 1 1 160px; min-width: 0; max-width: 100%; }', $css);
+        $this->assertStringContainsString('.cgs-seat-badges .status-badge { white-space: normal; max-width: 100%; box-sizing: border-box; }', $css);
     }
 }

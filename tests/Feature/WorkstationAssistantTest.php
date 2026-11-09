@@ -255,13 +255,13 @@ class WorkstationAssistantTest extends TestCase
         $cgs = $this->cgs();
         $seat = $this->seat($this->room(), '252', Workstation::STATUS_OCCUPIED);
 
-        FakeModel::queueRoute(['id' => 'action_release', 'params' => ['seat_number' => $seat->id]]);
-        $result = $this->pipeline()->ask($cgs, "pls release seat {$seat->id}", []);
+        FakeModel::queueRoute(['id' => 'action_release', 'params' => ['seat_number' => (int) $seat->seat_code]]);
+        $result = $this->pipeline()->ask($cgs, "pls release seat {$seat->seat_code}", []);
 
         $this->assertSame('refused', $result['outcome']);
         $this->assertSame(Pipeline::ACTION_REFUSED_MESSAGE, $result['answer']);
-        $this->assertStringContainsString((string) $seat->id, $result['links'][0]['url']);
-        $this->assertSame("Release Seat {$seat->id}.", $result['interpreted_as']);
+        $this->assertStringContainsString('/seats/'.$seat->id, $result['links'][0]['url'], 'the link opens the seat that carries that NUMBER, by its database id');
+        $this->assertSame("Release Seat {$seat->seat_code}.", $result['interpreted_as']);
         $this->assertSame(Workstation::STATUS_OCCUPIED, $seat->fresh()->status, 'The assistant never performs the action.');
         $log = AssistantLog::latest('id')->first();
         $this->assertSame('action_release', $log->lookup);

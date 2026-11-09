@@ -55,11 +55,7 @@ class ModuleProvider extends ServiceProvider
      */
     public function bindReleasedExaminers(): void
     {
-        $contract = 'App\\Modules\\Core\\Contracts\\SuppliesReleasedExaminers';
-
-        if (interface_exists($contract)) {
-            $this->app->bind($contract, \App\Modules\Hani\Support\ReleasedExaminerBinding::class);
-        }
+        $this->app->bind(\App\Modules\Core\Contracts\SuppliesReleasedExaminers::class, \App\Modules\Hani\Support\ReleasedExaminerProvider::class);
     }
 
     public function boot(ModuleRegistry $registry): void

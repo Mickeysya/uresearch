@@ -4,7 +4,6 @@
 
 @php
     use App\Modules\Chloe\Support\CandidacyAppealPresenter as P;
-    use App\Modules\Chloe\Models\CandidacyAppealDetail;
 
     $steps = P::stepBar($appeal);
     $used = $candidacy?->allowanceUsed() ?? 0;
@@ -78,7 +77,7 @@
     <section class="wca-card" aria-labelledby="wca-h-a">
         <h3 id="wca-h-a">Section A: Research progress</h3>
         <dl class="wca-kv">
-            <dt>Current phase</dt><dd>{{ CandidacyAppealDetail::phases()[$appeal->phase] ?? '—' }}</dd>
+            <dt>Current phase</dt><dd>{{ \App\Modules\Chloe\Models\CandidacyAppeal::phases()[$appeal->phase] ?? '—' }}</dd>
             <dt>Thesis written</dt><dd>{{ $appeal->percent_complete !== null ? $appeal->percent_complete.'%' : '—' }}</dd>
             <dt>RCS status</dt><dd>{{ $appeal->rcs_status === 'done' ? 'Done' : ($appeal->rcs_status === 'pending' ? 'Pending' : '—') }}</dd>
             <dt>RCS date</dt><dd>{{ ($appeal->rcs_status === 'pending' ? $appeal->rcs_expected_date : $appeal->rcs_date)?->format('j M Y') ?? '—' }}</dd>

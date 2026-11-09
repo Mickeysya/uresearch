@@ -300,10 +300,12 @@ class CandidacyDemoSeed extends Command
 
     protected function seedStaff(CandidacySignatureService $signatures): void
     {
-        $profileOf = fn (?int $userId) => $userId ? CandidacyStaffProfile::where('user_id', $userId)->first() : null;
-        $realLecturer = $profileOf(User::where('email', 'supervisor@utp.edu.my')->value('id'));
-        $realChair = $profileOf(User::where('email', 'chair@utp.edu.my')->value('id'));
-        $dean = CandidacyStaffDirectory::defaultDean();
+        // A fresh database has the logins but no profiles yet (the portal makes one on a user's first visit), so make them here the same way.
+        $profileOf = fn (?User $user, string $designation) => $user ? CandidacyStaffProfile::firstOrCreate(['user_id' => $user->id], ['full_name' => $user->name, 'designation' => $designation]) : null;
+        $realLecturer = $profileOf(User::where('email', 'supervisor@utp.edu.my')->first(), 'Lecturer');
+        $realChair = $profileOf(User::where('email', 'chair@utp.edu.my')->first(), 'Department Chair');
+        $dean = CandidacyStaffDirectory::defaultDean()
+            ?? $profileOf(User::where('role', \App\Modules\Core\Support\Role::DEAN_PGR)->orderBy('id')->first(), 'Dean of Postgraduate and Research');
 
         if (! $dean) {
             throw new \RuntimeException('There is no profile for the account with the Dean role.');
@@ -415,7 +417,12 @@ class CandidacyDemoSeed extends Command
     {
         $list = [];
         $add = function (string $dept, int $i, string $state, int $months, int $wait, int $age, array $extra = []) use (&$list, $students) {
-            $list[] = ['dept' => $dept, 'profile' => $students[$dept][$i], 'state' => $state, 'months' => $months, 'wait' => $wait, 'age' => $age] + $extra;
+            // The roster comes from workstation:demo-seed's occupied seats; a smaller seat catalogue means fewer students, so skip, never crash.
+            if (! isset($students[$dept][$i])) {
+                return;
+            }
+
+            $list[] =['dept' => $dept, 'profile' => $students[$dept][$i], 'state' => $state, 'months' => $months, 'wait' => $wait, 'age' => $age] + $extra;
         };
 
         // two approved appeals for one student, and one at exactly 12 of 12 months (6 + 6); a second student with 3 + 4

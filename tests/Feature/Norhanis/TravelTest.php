@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Norhanis;
 
+use App\Modules\Core\Contracts\SuppliesTeachingAssistantStatus;
 use App\Modules\Core\Models\Application;
+use App\Modules\Norhanis\Models\TaHourLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
@@ -167,17 +169,23 @@ class TravelTest extends TestCase
 
     public function test_a_ga_gra_student_must_provide_the_ta_plan(): void
     {
+        $this->asGa(20);
         $this->actingAs($this->student());
 
-        $this->post(route('travel.store'), $this->payload(['is_ga_gra' => 'yes']))
-            ->assertSessionHasErrors(['ta_hours_completed', 'ta_hours_during_travel', 'ta_management_method']);
+        // Hours completed come from the GA/GRA module, so only the rest is asked.
+        $this->post(route('travel.store'), $this->payload())
+            ->assertSessionHasErrors(['ta_hours_during_travel', 'ta_management_method'])
+            ->assertSessionDoesntHaveErrors('ta_hours_completed');
     }
 
     public function test_the_ta_plan_is_saved_with_its_dates(): void
     {
+        $this->asGa(20);
+
         $application = $this->submit([
-            'is_ga_gra' => 'yes',
-            'ta_hours_completed' => 20,
+            // Whatever the form claims, the GA/GRA module's figure is kept.
+            'is_ga_gra' => 'no',
+            'ta_hours_completed' => 99,
             'ta_hours_during_travel' => 8,
             'ta_management_method' => 'rescheduled_after_travel',
             'ta_plan_dates' => [now()->addDays(20)->toDateString(), now()->addDays(21)->toDateString()],
@@ -202,6 +210,7 @@ class TravelTest extends TestCase
 
     public function test_proposed_dates_are_not_required_when_the_method_does_not_need_them(): void
     {
+        $this->asGa(10);
         $application = $this->submit([
             'is_ga_gra' => 'yes',
             'ta_hours_completed' => 10,
@@ -215,6 +224,7 @@ class TravelTest extends TestCase
 
     public function test_proposed_dates_are_required_when_the_method_needs_them(): void
     {
+        $this->asGa(10);
         $this->actingAs($this->student());
 
         $this->post(route('travel.store'), $this->payload([
@@ -227,6 +237,7 @@ class TravelTest extends TestCase
 
     public function test_the_ta_plan_shows_in_the_supervisors_queue(): void
     {
+        $this->asGa(15);
         $this->submit([
             'is_ga_gra' => 'yes',
             'ta_hours_completed' => 15,
@@ -332,7 +343,88 @@ class TravelTest extends TestCase
             ->assertSee('class="fstep"', false);
     }
 
+    public function test_a_student_without_a_ga_gra_appointment_gives_no_ta_plan_whatever_the_form_says(): void
+    {
+        // Haziq's module is present and has no appointment for this student.
+        $application = $this->submit([
+            'is_ga_gra' => 'yes',
+            'ta_hours_completed' => 30,
+            'ta_hours_during_travel' => 4,
+            'ta_management_method' => 'completed_before_travel',
+        ]);
+
+        $this->assertFalse(\App\Modules\Norhanis\Models\TravelDetail::where('application_id', $application->id)->value('is_ga_gra'));
+        $this->assertSame(0, \App\Modules\Norhanis\Models\TravelTaPlan::where('application_id', $application->id)->count());
+    }
+
+    public function test_the_form_shows_a_ga_their_hours_and_hides_the_ta_step_from_everyone_else(): void
+    {
+        $this->actingAs($this->student());
+
+        $this->get(route('travel.create'))
+            ->assertOk()
+            ->assertDontSee('Teaching Assistant (TA) Plan')
+            ->assertDontSee('Are you a GA/GRA recipient?');
+
+        $this->asGa(40);
+
+        $this->get(route('travel.create'))
+            ->assertOk()
+            ->assertSee('You hold an active GA appointment')
+            ->assertSee('40 hours (logged since', false)
+            ->assertDontSee('Are you a GA/GRA recipient?');
+    }
+
+    public function test_without_the_ga_gra_module_the_student_is_asked_as_before(): void
+    {
+        $this->app->offsetUnset(SuppliesTeachingAssistantStatus::class);
+
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->get(route('travel.create'))
+            ->assertSee('Are you a GA/GRA recipient?');
+
+        $application = $this->submitAs($student, [
+            'is_ga_gra' => 'yes',
+            'ta_hours_completed' => 12,
+            'ta_hours_during_travel' => 3,
+            'ta_management_method' => 'completed_before_travel',
+        ]);
+
+        $this->assertEquals(12, \App\Modules\Norhanis\Models\TravelTaPlan::where('application_id', $application->id)->value('hours_completed'));
+    }
+
     /* ---------------- helpers ---------------- */
+
+    /** Stand in for the GA/GRA module: every student holds an appointment with $hours of TA done. */
+    /**
+     * Haziq's module says the student is a GA (or GRA), and this module's
+     * TA Hours log holds $hours for them this semester -- logged the first
+     * time the student is asked about, since the fake only learns who they
+     * are then.
+     */
+    protected function asGa(float $hours, string $type = 'GA'): void
+    {
+        $this->app->instance(SuppliesTeachingAssistantStatus::class, new class($type, $hours) implements SuppliesTeachingAssistantStatus
+        {
+            public function __construct(private string $type, private float $hours) {}
+
+            public function currentAppointmentFor(\App\Modules\Core\Models\User $student): ?array
+            {
+                if ($this->hours > 0 && ! TaHourLog::where('student_id', $student->id)->exists()) {
+                    TaHourLog::create([
+                        'student_id' => $student->id,
+                        'activity_type' => 'Lab session',
+                        'activity_date' => now()->toDateString(),
+                        'hours' => $this->hours,
+                    ]);
+                }
+
+                return ['type' => $this->type, 'since' => now()->subYear()];
+            }
+        });
+    }
 
     protected function submit(array $overrides = []): Application
     {

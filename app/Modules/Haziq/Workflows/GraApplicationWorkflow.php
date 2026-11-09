@@ -111,11 +111,12 @@ class GraApplicationWorkflow implements WorkflowModule, ProvidesLinks
     /**
      * Extra links the approval-chain-derived sidebar cannot infer on its
      * own: extension (a student action outside any queue), and Stage
-     * Gate / Allowance / TA Hours monitoring for the roles that use it.
+     * Gate / Allowance monitoring for the roles that use it.
      */
     public function links(User $user): array
     {
-        $links = [['label' => 'TA Hours', 'route' => 'ta-hours.index']];
+        // TA Hours moved to Norhanis' module; its link is on her Travel section.
+        $links = [];
 
         if ($user->isStudent()) {
             // Without this, the only way back to a submitted application

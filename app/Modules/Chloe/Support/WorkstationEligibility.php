@@ -18,7 +18,7 @@ use Illuminate\Support\Carbon;
  *   (a) Active status -- StudyCandidacy.status for a real student,
  *       DemoStudentProfile.status for a demo one (that table mirrors
  *       StudyCandidacy's field names for exactly this kind of reuse).
- *   (b) candidacy_expiry_date in the future.
+ *   (b) candidacy_expiry_date not passed: the expiry day itself is still valid (ExpiryRule).
  *   (c) full-time AND research.
  *
  * Neither StudyCandidacy nor DemoStudentProfile has a dedicated study-mode
@@ -68,7 +68,8 @@ final class WorkstationEligibility
             return false;
         }
 
-        return Carbon::parse($expiry)->isFuture();
+        // the expiry day itself is still valid (one rule, see ExpiryRule): expired only from the day after
+        return ExpiryRule::isStillValid(Carbon::parse($expiry));
     }
 
     protected static function isFullTimeResearch(StudentIdentity $identity): bool

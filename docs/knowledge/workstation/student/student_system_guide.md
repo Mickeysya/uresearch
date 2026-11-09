@@ -1,6 +1,6 @@
 The whole student journey, in order. See student_status_glossary for every status's meaning, student_timeline for every number, and terms_of_use for the full rules text.
 
-**1. Eligibility.** You must be Active status, on a full-time research programme (not part-time, not coursework), with a candidacy expiry date still in the future. All three together, checked every time you try to browse or select.
+**1. Eligibility.** You must be Active status, on a full-time research programme (not part-time, not coursework), with a candidacy expiry date that has not passed (the expiry day itself is still valid). All three together, checked every time you try to browse or select.
 
 **2. Browsing rooms and seats.** Only rooms matching your own recorded gender are shown; a seat is only listed if it is currently Available (see visibility_rules for the full list of reasons a seat might be hidden).
 

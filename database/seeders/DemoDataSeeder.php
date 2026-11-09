@@ -400,10 +400,17 @@ class DemoDataSeeder extends Seeder
 
         $when = $submittedAt->copy();
 
-        foreach ($decisions as $i => $decision) {
-            $role = self::CHAINS[$chainKey][$i];
+        foreach ($decisions as $decision) {
+            // The module's live chain, not CHAINS: a teammate shortening or
+            // re-ordering theirs must not break the demo. Finished early = done.
+            $stage = $this->engine->currentStage($application);
+
+            if ($stage === null) {
+                break;
+            }
+
             $when = $when->copy()->addDays($gapDays);
-            $actor = $this->deciderFor($role, $application);
+            $actor = $this->deciderFor($stage->role, $application);
 
             $this->at($when, fn () => $this->engine->decide($application, $actor, $decision));
 

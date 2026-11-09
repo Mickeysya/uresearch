@@ -3,45 +3,45 @@
 namespace App\Modules\Hani\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
+use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerEmailProposal;
+use App\Modules\Hani\Models\ExaminerMerge;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerReviewItem;
 use App\Modules\Hani\Support\Departments;
 use App\Modules\Hani\Support\ExaminerContact;
+use App\Modules\Hani\Support\ExaminerPoolList;
 use App\Modules\Hani\Support\DuplicateDetector;
 use App\Modules\Hani\Models\ExaminerDuplicateDismissal;
 use App\Modules\Hani\Support\Import\Cells;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 
 /**
- * Day-to-day upkeep of the examiner pool for the Senior Executive CGS: add
- * or edit an examiner, or flip one to Unavailable (retired, resigned, deceased) without deleting their
- * history. Everything else about the pool -- eligibility, the gap, the
+ * Day-to-day upkeep of the examiner pool for both CGS desks: add an examiner,
+ * or flip one to Unavailable (retired, resigned, deceased) without deleting
+ * their history. The full edit form and "Not the same person" stay with the
+ * Senior Executive, and the Academic Executive only reads the list;
+ * routes.php says who reaches what. Everything else about the pool -- eligibility, the gap, the
  * assigned tie-up -- is derived state the nomination and evaluation flows
  * already maintain; this screen only ever touches the fields a human has to
  * set by hand.
  */
 class ExaminerAdminController extends Controller
 {
-    protected const PER_PAGE = 8;
-
-    public function index(Request $request)
+    public function index(Request $request, ExaminerContact $contact)
     {
         // Internal and external are two different records, not one list with a
         // flag: CGS keeps them as two sheets, and the external one carries nine
         // columns the internal one has no equivalent of. The tab strip is this
         // parameter; '' shows both, with only the columns they share.
-        $type = in_array($request->input('type'), [Examiner::TYPE_INTERNAL, Examiner::TYPE_EXTERNAL], true)
-            ? (string) $request->input('type')
-            : '';
+        $type = ExaminerPoolList::type($request);
 
         $pool = Examiner::all();
-        $tabPool = $type === '' ? $pool : $pool->where('type', $type);
+        $tabPool = ExaminerPoolList::inTab($pool, $type);
 
         // Counts for the stat cards follow the tab, never the filters or the
         // page below it -- filtering to 2 examiners shouldn't make "42
@@ -57,52 +57,42 @@ class ExaminerAdminController extends Controller
             $stateCounts[$examiner->state()]++;
         }
 
-        // Plain strings throughout, not the Stringable Request::string() returns --
-        // Examiner::state() is a plain string, and Stringable === string is never
-        // true even when the contents match.
-        $department = (string) $request->input('department', '');
-        $status = (string) $request->input('status', '');
-        $search = mb_strtolower((string) $request->input('search', ''));
-        $emailFilter = in_array($request->input('email'), ['problem', 'stale'], true) ? (string) $request->input('email') : '';
+        $filters = ExaminerPoolList::filters($request, ['department', 'type', 'status', 'search', 'email']);
+        $emailFilter = in_array($filters['email'], ['problem', 'stale'], true) ? $filters['email'] : '';
 
-        $filtered = $tabPool
-            ->when($department !== '', fn ($c) => $c->where('department', $department))
-            ->when($status !== '', fn ($c) => $c->filter(fn (Examiner $e) => $e->state() === $status))
+        $filtered = ExaminerPoolList::filtered($tabPool, $filters)
             // Email upkeep: active examiners only, as on the dashboard tiles.
             ->when($emailFilter === 'problem', fn ($c) => $c->filter(fn (Examiner $e) => $e->is_active && $e->emailNeedsUpdating()))
             ->when($emailFilter === 'stale', fn ($c) => $c->filter(fn (Examiner $e) => $e->is_active && $e->emailStale()))
-            ->when($search !== '', fn ($c) => $c->filter(fn (Examiner $e) => str_contains(mb_strtolower($e->name), $search)
-                || str_contains(mb_strtolower($e->department), $search)
-                || str_contains(mb_strtolower((string) $e->institution), $search)))
-            ->sortBy('name')
             ->values();
 
-        $page = $request->integer('page', 1);
-        $examiners = new LengthAwarePaginator(
-            $filtered->forPage($page, self::PER_PAGE)->values(),
-            $filtered->count(),
-            self::PER_PAGE,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()],
-        );
+        $examiners = ExaminerPoolList::paginate($filtered, $request);
+
+        // The Academic Executive reads the whole pool, every department and
+        // every external, because supervisors may pick from any of them; they
+        // change nothing (routes.php) and email CGS instead. The examiner page
+        // stays as narrow as it was, so a name links only where it would open.
+        $canManage = in_array($request->user()->role, [Role::SENIOR_EXEC_CGS, Role::NON_EXEC_CGS], true);
+        $openable = $canManage
+            ? $examiners->getCollection()->pluck('id')
+            : $examiners->getCollection()->filter(fn (Examiner $e) => $contact->canReport($request->user(), $e))->pluck('id');
 
         return view('hani::examiner_admin.index', [
+            'canManage' => $canManage,
+            'openable' => $openable->flip()->all(),
+            'cgsContacts' => $canManage ? [] : config('hani.cgs.contacts', []),
             'examiners' => $examiners,
             'type' => $type,
-            'typeCounts' => [
-                '' => $pool->count(),
-                Examiner::TYPE_INTERNAL => $pool->where('type', Examiner::TYPE_INTERNAL)->count(),
-                Examiner::TYPE_EXTERNAL => $pool->where('type', Examiner::TYPE_EXTERNAL)->count(),
-            ],
+            'typeCounts' => ExaminerPoolList::typeCounts($pool),
             'stateCounts' => $stateCounts,
-            // Scoped to the tab: an external department list on the internal
-            // tab only ever filters everything away.
-            'departments' => $tabPool->pluck('department')->unique()->sort()->values(),
+            'departments' => ExaminerPoolList::departments($tabPool),
             'studentsByExaminer' => $this->studentsByExaminer($examiners->getCollection()->pluck('id')),
-            'filters' => $request->only(['department', 'type', 'status', 'search', 'email']),
-            'openReviewItems' => ExaminerReviewItem::open()->count(),
+            'filters' => $filters,
+            'openReviewItems' => $canManage ? ExaminerReviewItem::open()->count() : 0,
             // Emails supervisors gave at nomination, for CGS to confirm.
-            'proposals' => ExaminerEmailProposal::pending()->with('examiner', 'proposedBy', 'nomination')->oldest()->get(),
+            'proposals' => $canManage
+                ? ExaminerEmailProposal::pending()->with('examiner', 'proposedBy', 'nomination')->oldest()->get()
+                : collect(),
             // Across the whole pool, not just this page: a duplicate is
             // usually on another page or the other tab.
             'duplicates' => app(DuplicateDetector::class)->byExaminer($pool),
@@ -291,6 +281,11 @@ class ExaminerAdminController extends Controller
      */
     public function toggleActive(Request $request, Examiner $examiner)
     {
+        if (! $examiner->is_active && ExaminerMerge::where('duplicate_id', $examiner->id)->exists()) {
+            return redirect()->route('examiner-admin.index')
+                ->with('error', "{$examiner->name} was merged into another record, so cannot be reactivated.");
+        }
+
         if ($examiner->is_active) {
             $data = $request->validate([
                 'unavailable_reason' => ['required', 'string', 'max:2000'],

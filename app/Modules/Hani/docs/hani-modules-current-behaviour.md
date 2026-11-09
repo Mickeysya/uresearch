@@ -38,7 +38,7 @@ Re-viva (only after a category-4 result or a level-4 outcome).
   "Expected resubmissions" for the Senior Executive, who logs the round.
   The re-viva outcome then completes or keeps holding the same mains.
 - **Appointment letters** are Jason's module. Hani hands over the released
-  list as an export today, and through a proposed Core contract later.
+  list as an export, and through the Core contract `SuppliesReleasedExaminers`.
 
 ### Platform rules these modules follow
 - Approval chains are `Stage` lists in a `WorkflowModule`. Only Core's
@@ -67,18 +67,18 @@ Re-viva (only after a category-4 result or a level-4 outcome).
 |---|---|---|
 | Student | `student` | Eligibility and notice, softbound, corrections; My Re-viva (final thesis, digital Summary of Corrections). Sees statuses, the result category and the chairman's viva report; **never examiner names, categories or staff-only files** |
 | Supervisor | `supervisor` | Nominates examiners for their own students (with suggestions); proposes a missing examiner email; reads their students' viva progress |
-| Academic Executive (AE) | `academic_exec` | The main operator, own department only: first stage of the chain; acknowledges notices; checks softbounds; records examiner progress; schedules vivas; records results and accepts corrections; runs the re-viva stages and outcome; Pending Evaluation; Conflict Detection; Examiner Dashboard and Process Analytics for their department |
-| Senior Executive CGS | `senior_exec_cgs` | Maintains the examiner pool (and imports); compiles every department's lists; "Finalise and release"; examiner progress; logs re-viva rounds; Re-viva Cycles; resends letters; second SLA threshold; dashboards and analytics for everyone |
+| Academic Executive (AE) | `academic_exec` | The main operator, own department only: first stage of the chain; acknowledges notices; checks softbounds; records examiner progress; schedules vivas; records results and accepts corrections; runs the re-viva stages and outcome; Pending Evaluation; Conflict Detection; Examiner Dashboard and Process Analytics for their department; the whole Examiner Pool, read-only |
+| Senior Executive CGS | `senior_exec_cgs` | Maintains the examiner pool (the only role that full-edits and imports); compiles every department's lists; "Finalise and release"; examiner progress; logs re-viva rounds; Re-viva Cycles; resends letters; second SLA threshold; dashboards and analytics for everyone |
 | Senior Director CGS | `senior_director_cgs` | Verifies the compiled list, or sends it back to the department; reads the report, dashboard and analytics |
 | Dean of PGR | `dean_pgr` | Approves the list, or sends it back; reads the report, dashboard and analytics |
-| Non-Executive CGS | `non_exec_cgs` | Read-only: the released Examiner Report (notified on release), the pool (may update an examiner's email only), the dashboard, Process Analytics, Re-viva Cycles and the staff-only re-viva files (a return contact on the letter). Every action is 403 |
+| Non-Executive CGS | `non_exec_cgs` | Manages the pool: adds examiners, marks them Unavailable or Active, updates emails (not full edit, import, the review list or "Not the same person"). Otherwise read-only: the released Examiner Report (notified on release), the dashboard, Process Analytics, Re-viva Cycles and the staff-only re-viva files (a return contact on the letter). Every other action is 403 |
 | Examiners, chairman, co-supervisor | not system users | Receive emails (invitations, reminders, re-viva letters with signed links) |
 
 ---
 
 ## 3. Module 1: Examiner Matching & Pool
 
-### 3.1 Examiner pool (`/examiners`, Senior Executive CGS)
+### 3.1 Examiner pool (`/examiners`, CGS; read-only for the AE)
 - Two lists behind tabs, **Internal** and **External**. External examiners
   carry nine extra columns (faculty approval reference, institution, sector,
   UTP cluster, area of expertise, years of experience, MSc and PhD
@@ -97,8 +97,22 @@ Re-viva (only after a category-4 result or a level-4 outcome).
 - **Duplicates**: names are normalised and compared; pairs at or above the
   threshold are flagged in the pool and the preview, with "Not the same
   person" to dismiss.
-- **Non-Executive CGS** reads the pool and may change an examiner's email
-  (reason required), nothing else.
+- **Non-Executive CGS** may add an examiner, mark one Unavailable (reason
+  required) or back to Active, and change an examiner's email (reason
+  required). Full edit, import, the review list and "Not the same person" stay
+  with the Senior Executive.
+- **Academic Executives** read the whole pool on `/examiners` (every
+  department and external, because supervisors may pick from any of them):
+  the same cards, tabs, filters and badges, with no write actions. Duplicate
+  warnings show without "Not the same person". A note lists the CGS contacts to
+  email to add or remove an examiner (`hani.cgs.contacts`). A name links to the
+  examiner page only where the AE could already open it (own department, or on
+  a panel for one of its students). "Email not working" is unchanged.
+- **Supervisors** read the pool under the nomination form
+  (`/examiner-nomination/new`): name, department, type, state and available
+  from, with the same tabs, filters and badges as `/examiners`. No emails,
+  students, actions or duplicate warnings. Filtering leaves a half-filled form
+  alone.
 
 **State is derived, not stored** (`Examiner::state()`):
 
@@ -165,11 +179,33 @@ replaced automatically.
   CGS, Senior Director, Dean, Non-Exec. Faculty → department → candidate,
   clashes and conflict flags inline. xlsx/csv export with the same scope;
   column 1 "Application No." is the key for Jason's letters; columns are
-  only ever added at the end.
+  only ever added at the end. Each released seat shows its letter status ("Not
+  sent", "Sent <date> (letter module)", "Sent <date> (entered by AE)", "Replaced
+  <date>"), counting both sources with Jason's date winning, and a "Letters: 2/2
+  sent" badge per candidate.
+  The download defaults to "Awaiting letters" (released, not yet examined on, a
+  main seat not sent; only those seats flagged); "Full list" is every row.
 - **Conflict Detection** (`/examiner-nomination/conflicts`, AE own
-  department, Senior Exec): examiners nominated by more than one department
-  on **open** nominations (pending, or released and not yet examined).
-  Flags, never rejects.
+  department, Senior Exec, Senior Director, Dean): examiners nominated by more
+  than one department on **open** nominations (pending, or released and not
+  yet examined). Flags, never rejects. Each number links to wherever the viewer
+  can open that list (queue card, panel, or report row; an AE gets no link to
+  another department's). A sole released list is marked as keeping the
+  examiner, with Manage panel → Replace. On a pending list, "Ask department to
+  substitute" (required reason) is offered to whoever holds it at cgs_compile,
+  senior_director or dean. From the last two it also sends the list back. The
+  candidate's AE and supervisor are notified and replace the seat on a page
+  with suggestions, while the list is at academic_exec or cgs_compile. The
+  reason and the examiner stay out of the return remarks, because the engine
+  sends those to the candidate.
+- **Possibly the same person** (Senior Exec, on that page): one line per pair
+  with its applications. "Not the same person" dismisses the pair. "Same person:
+  merge" (`Support/ExaminerMerger`) picks the record to keep; the other goes
+  Unavailable, "Duplicate of ...", and is never deleted. Pending and released
+  seats, viva progress, re-viva letters and evaluations, tie-up and gap,
+  expertise, publications and blank details move across, logged in the seat
+  history, `examiner_merges` and the activity log. Refused if the kept record
+  is Unavailable, is the other type, or could not sit on one of the panels.
 - **Examiner Dashboard** (`/examiner-dashboard`): pool by state and
   department, returning to Available in 30 days, nominations by stage,
   email upkeep tiles, top expertise, expertise gaps against recent theses.
@@ -381,10 +417,11 @@ Generated by Core from each workflow's declarations.
 |---|---|
 | Student | My Application → Notice of Thesis Submission (one "Viva" entry once SHARED_CHANGES section 2 is applied); My Re-viva when they have a round or a category-4 viva |
 | Supervisor | Nominate Examiners · Students' Viva Progress |
-| AE | queues: Examiner Nomination, Notice of Thesis Submission, Softbound Thesis, Re-viva (4 stages). Links: Pending Evaluation · Conflict Detection · Examiner Report · Examiner Dashboard · Process Analytics · Viva Scheduling · Viva Results · Re-viva Outcomes |
+| AE | queues: Examiner Nomination, Notice of Thesis Submission, Softbound Thesis, Re-viva (4 stages). Links: Pending Evaluation · Examiner Pool (read-only) · Conflict Detection · Examiner Report · Examiner Dashboard · Process Analytics · Viva Scheduling · Viva Results · Re-viva Outcomes |
+| Senior Director / Dean | nomination queues. Links: Conflict Detection · Examiner Report · Examiner Dashboard · Process Analytics |
 | Senior Exec CGS | nomination queues; Examiner Pool · Conflict Detection · Examiner Report · Examiner Dashboard · Process Analytics · Log Re-viva Submission · Re-viva Cycles |
 | Senior Director / Dean | nomination queues; Examiner Report · Examiner Dashboard · Process Analytics |
-| Non-Exec CGS | Examiner Pool · Examiner Report · Examiner Dashboard · Process Analytics · Re-viva Cycles (all read-only) |
+| Non-Exec CGS | Examiner Pool (manages it) · Examiner Report · Examiner Dashboard · Process Analytics · Re-viva Cycles (read-only) |
 
 ---
 

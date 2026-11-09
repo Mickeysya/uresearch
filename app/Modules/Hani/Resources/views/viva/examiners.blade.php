@@ -15,7 +15,9 @@
         :title="'Examiner Progress: '.$student->name"
         subtitle="Record each main examiner's appointment letter, acceptance, receipt of the thesis and returned report. Late steps are chased automatically, and reports that disagree are flagged before the viva." />
 
-    @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::viva($progress), 'compact' => true])
+    <div class="card card-wide" style="margin-bottom: var(--space-5)">
+        @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::viva($progress), 'compact' => true])
+    </div>
 
     @if ($divergence)
         <div class="card card-wide">

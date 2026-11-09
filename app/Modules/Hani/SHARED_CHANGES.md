@@ -12,7 +12,7 @@ optional.** The modules work today with none of them applied.
 
 | # | Target | What | Works without it? |
 |---|---|---|---|
-| 1 | `app/Modules/Core/Contracts/` (3 new files) | `SuppliesReleasedExaminers`, `SuppliesAppointmentDispatch`, `SuppliesCandidature` | Yes |
+| 1 | `app/Modules/Core/Contracts/` (3 new files) | `SuppliesReleasedExaminers`, `SuppliesAppointmentDispatch`: **added 2026-11-07**. `SuppliesCandidature`: proposed | Yes |
 | 2 | Core sidebar partials | one "Viva" entry for students (`navLabel()` / `navPattern()`) | Yes |
 | 3 | Core `decision-form` and `queue` partial | an "approve" button label ("Finalise and release") | Yes |
 | 4 | `routes/console.php` | Hani's four daily commands | Yes (they schedule themselves) |
@@ -22,13 +22,27 @@ optional.** The modules work today with none of them applied.
 | 8 | `DocumentStore` / `application_documents` | a staff-only flag | Yes |
 | 9 | `TODO.md` | Hani's section is out of date | Yes |
 | 10 | Chloe's `study_candidacies` table | read-only, guarded read | Yes |
+| 11 | Jason's appointment import | skip an Application No. + examiner already sent | Yes, but a part-sent row can still produce a second letter |
 
 ---
 
 ## 1. `app/Modules/Core/Contracts/`: three new contracts
 
-**Status:** proposed, not applied. Three new files, nothing existing
-changes.
+**Status:** 1a and 1b **added to Core on 2026-11-07**; 1c is still proposed.
+
+**What adding 1a and 1b changed.** Two new files in Core; no existing Core file
+and no line in another member's folder was edited. Only Hani's and Jason's
+modules read these contracts, so the other four modules behave exactly as
+before. Jason's module was written to switch on when they appear, and it has:
+- **Import Examiner List** now shows "Ready for appointment letters", the
+  released panels, in place of the "not switched on yet" notice. It is a list to
+  read: the spreadsheet upload is still how an appointment is opened.
+- **Letters needed** (`ReleasedPanels::lettersNeeded()`) now compares against
+  every released panel, not only nominations already imported.
+
+Comments in Jason's folder and his SHARED_CHANGES.md still say the files do not
+exist. `AppointmentDispatch` still has no `implements` clause; it works because
+nothing type-hints it, and he can now add one.
 
 ### 1a. `SuppliesReleasedExaminers.php` (Hani supplies, Jason reads)
 
@@ -39,22 +53,19 @@ in code: released nominations only, each panel as it stands now (after any
 decline and backup promotion).
 
 **Impact.** Additive.
-- **Hani:** binds it automatically once the file exists
-  (`ModuleProvider::bindReleasedExaminers()` checks `interface_exists()`),
-  through `Support\ReleasedExaminerBinding`.
+- **Hani:** `Support\ReleasedExaminerProvider` implements it, and
+  `ModuleProvider::bindReleasedExaminers()` binds it.
 - **Jason:** reads it with `app(SuppliesReleasedExaminers::class)` instead of
-  importing anything from Hani's folder. Until then he can keep importing
-  the Examiner Report export; its "Application No." column is the key to
-  `examiner_nominations.application_id`. His importer does not yet recognise
-  that heading (its aliases lack the full stop); he is adding an
-  `application no.` alias on his side.
+  importing anything from Hani's folder. He can still import the Examiner
+  Report export; its "Application No." column is the key to
+  `examiner_nominations.application_id`.
 - **Flagged emails.** A reported address stays in `examiners.email` with
   `email_status = 'invalid'`. The contract already hands over `email = null`
   plus `email_problem`. Anything reading the `examiners` table directly
   (such as Jason's `ExaminerDirectory`) must check `email_status` and not
   send to an address marked invalid.
 
-**Works without it?** Yes. Nothing is bound, and the export is the hand-off.
+**Works without it?** Yes. With nothing bound, the export is the hand-off.
 
 ```php
 <?php
@@ -126,6 +137,11 @@ bound (`PanelController::lettersSent()`, `Support\ExaminerProgress`).
 **Works without it?** Yes. The "Appointment letter" column simply does not
 appear, and the AE records letters by hand on the examiner progress page.
 
+**How the Examiner Report uses it** (`Support\AppointmentLetters`): Jason's date
+and the AE-entered date both count as sent, and Jason's wins where both exist.
+The status names its source: "Sent 01 Nov 2026 (letter module)" or "Sent 01 Nov
+2026 (entered by AE)". With nothing bound, only the AE-entered date is read.
+
 ```php
 <?php
 
@@ -147,10 +163,11 @@ interface SuppliesAppointmentDispatch
 }
 ```
 
-Jason's binding, in `app/Modules/Jason/ModuleProvider.php` `register()`:
+Jason's binding is in `app/Modules/Jason/ModuleProvider.php` `register()`, under
+an `interface_exists()` check:
 
 ```php
-$this->app->bind(\App\Modules\Core\Contracts\SuppliesAppointmentDispatch::class, \App\Modules\Jason\Support\AppointmentDispatch::class);
+$this->app->bind(AppointmentDispatch::CONTRACT, AppointmentDispatch::class);
 ```
 
 ### 1c. `SuppliesCandidature.php` (Chloe supplies, Hani reads)
@@ -523,3 +540,70 @@ make the dependency explicit.
 
 **Works without it?** Yes. With no Study Candidacy record the item is
 self-declared, as the other checklist items are.
+
+---
+
+## 11. Jason's appointment import: skip who already has a letter
+
+**Status:** proposed, for Jason. Hani does not edit his folder.
+
+**Target:** `AppointmentLetterController::readPanel()` in
+`app/Modules/Jason/Http/Controllers/`.
+
+**Reason.** The Examiner Report export now defaults to "Awaiting letters":
+released panels with a main seat "Not sent". A panel with both letters sent is
+no longer on the sheet, so it cannot be imported again. A **part-sent** panel
+still is, because the other seat is owed a letter. When a row has an
+Application No., `readPanel()` reads both mains from the examiner records and
+does not look at the sheet, so that row writes a second letter to the examiner
+who already has one.
+
+**The rule for the import:** skip any Application No. + examiner pair that
+already has a letter. Do not read "already sent" from the name columns: they
+stay filled in on a part-sent row. Column 24, "Letter Needed For", lists the
+seats owed a letter if a person is reading the sheet. The letter module only
+knows its own sends, so a letter an AE recorded by hand ("entered by AE") is not
+in `alreadyLettered()`. Skipping those as well means reading the status columns.
+
+**New columns, all at the end.** Nothing existing moved or was renamed, and
+none of the new headings matches an `AppointmentSheet` alias, so they are
+ignored until read:
+
+| # | Heading |
+|---|---|
+| 20–23 | Internal Main / Internal Backup / External Main / External Backup Letter Status |
+| 24 | Letter Needed For |
+| 25 | Replaced Examiners |
+
+**Impact.** Only the import. The row check that needs one internal and one
+external examiner has to allow for a seat skipped on purpose, as below, or a
+part-sent row is refused and **the whole sheet with it**.
+
+**Works without it?** Yes for panels with both letters sent. Until this is
+applied, importing a part-sent row opens an appointment for both mains, so CGS
+has to catch the repeat before it is sent.
+
+```php
+// readPanel(), after $mains is built:
+$nominationId = $cell('nomination_id');
+
+if ($mains !== [] && ctype_digit($nominationId)) {
+    $already = ReleasedPanels::alreadyLettered((int) $nominationId);
+
+    // Return here, or an empty list falls through to matching by name.
+    return array_map(fn (array $e) => $this->examinerRow($e), array_values(array_filter(
+        $mains,
+        fn (array $e) => ! in_array($e['hani_examiner_id'] ?? null, $already, true),
+    )));
+}
+```
+
+```php
+// readSheet(): one side skipped on purpose is not an incomplete panel.
+if (count($kinds) < 2 && ! ctype_digit($cell('nomination_id'))) {
+```
+
+**Merged records.** `alreadyLettered()` compares examiner ids, so a letter sent
+under a record later merged by Conflict Detection does not match the record
+kept. Hani's report counts it as sent because it knows about the merge
+(`examiner_merges`). The import would not, so that one examiner is still at risk.

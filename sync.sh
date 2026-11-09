@@ -2,12 +2,15 @@
 # UResearch 2.0 — bring your checkout back into a working state after a
 # `git pull`, a branch switch, or a merge.
 #
-# Everything here is safe to re-run and nothing destroys data: it migrates and
-# re-seeds, it never drops. Use ./reset.sh if you want the database wiped.
+# Safe to re-run: plain ./sync.sh migrates and re-seeds the accounts, it never
+# drops. Only --fresh destroys data.
 #
 #   ./sync.sh            do it all
 #   ./sync.sh --check    report what WOULD change; touch nothing
 #   ./sync.sh --update   use `composer update` instead of `composer install`
+#   ./sync.sh --fresh    WIPE the database and uploads, rebuild from zero with
+#                        every account and every module's demo data (asks first)
+#   ./sync.sh --fresh --yes   same, no prompt
 #
 set -euo pipefail
 
@@ -18,13 +21,17 @@ cd "$(dirname "$0")"
 
 CHECK_ONLY=0
 COMPOSER_MODE="install"
+FRESH=0
+YES=0
 
 for arg in "$@"; do
     case "$arg" in
         --check|-n)  CHECK_ONLY=1 ;;
         --update)    COMPOSER_MODE="update" ;;
+        --fresh)     FRESH=1 ;;
+        --yes|-y)    YES=1 ;;
         -h|--help)
-            sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *) printf 'Unknown option: %s (try --help)\n' "$arg" >&2; exit 1 ;;
     esac
@@ -41,6 +48,13 @@ note() { WOULD+=("$1"); }
 
 if [ "$CHECK_ONLY" -eq 1 ]; then
     printf '\n\033[1;33mCHECK MODE\033[0m — reporting only, nothing will be changed.\n'
+fi
+
+if [ "$FRESH" -eq 1 ] && [ "$CHECK_ONLY" -eq 0 ] && [ "$YES" -eq 0 ]; then
+    printf '\n\033[1;31m--fresh\033[0m drops EVERY table in your local database and deletes every\n'
+    printf 'uploaded file in storage/app/private, then rebuilds it all from the seeders.\n'
+    read -rp "Type 'reset' to continue: " reply
+    [ "$reply" = "reset" ] || { echo "Cancelled."; exit 0; }
 fi
 
 # ---------------------------------------------------------------------------
@@ -210,6 +224,61 @@ if [ "$CHECK_ONLY" -eq 0 ] && ! container_up uresearch-mysql; then
     fail "MySQL is not running. Try ./setup.sh, or './vendor/bin/sail logs mysql' to see why."
 fi
 
+# Every demo seeder and command, in the order they depend on each other:
+# demo:seed first (its students are what Nureen's seeders pick from), then
+# Nureen's, whose attendance seeder must precede its risk seeder. Each entry is
+# an artisan command line. Add yours here when your module gets demo data.
+FRESH_SEEDS=(
+    "demo:seed"
+    "db:seed --force --class=App\\Modules\\Nureen\\Database\\Seeders\\NureenRealignedWorkflowDemoSeeder"
+    "db:seed --force --class=App\\Modules\\Nureen\\Database\\Seeders\\NureenClientCharterDemoSeeder"
+    "db:seed --force --class=App\\Modules\\Nureen\\Database\\Seeders\\NureenAttendanceDemoSeeder"
+    "db:seed --force --class=App\\Modules\\Nureen\\Database\\Seeders\\AttendanceRiskDemoSeeder"
+    "db:seed --force --class=App\\Modules\\Nureen\\Database\\Seeders\\GaAppointmentRecordSeeder"
+    "db:seed --force --class=App\\Modules\\Hani\\Database\\Seeders\\HaniDemoSeeder"
+    "db:seed --force --class=App\\Modules\\Jason\\Database\\Seeders\\ExaminerPoolSeeder"
+    "workstation:demo-login"
+    "workstation:demo-seed"
+    "candidacy:demo-seed"
+    "candidacy:demo-registry-file"
+)
+
+if [ "$FRESH" -eq 1 ]; then
+# ---------------------------------------------------------------------------
+say "Rebuilding the database from zero"
+# ---------------------------------------------------------------------------
+if [ "$CHECK_ONLY" -eq 1 ]; then
+    note "drop every table and uploaded file, then reseed everything"
+    warn "would wipe the database and storage/app/private, then run:"
+    info "  migrate:fresh, db:seed"
+    for c in "${FRESH_SEEDS[@]}"; do info "  $c"; done
+elif [ -x ./vendor/bin/sail ] && container_up uresearch-mysql; then
+    # Uploads point at rows that are about to vanish; keep the folders' .gitignore.
+    find storage/app/private storage/app/demo -mindepth 1 ! -name .gitignore -delete 2>/dev/null || true
+    ok "uploaded files deleted"
+
+    artisan migrate:fresh --force
+    ok "every table dropped and recreated"
+
+    artisan db:seed --force >/dev/null
+    ok "departments and every account seeded"
+
+    FAILED=()
+    for c in "${FRESH_SEEDS[@]}"; do
+        # shellcheck disable=SC2086  # each entry is a command line, split on purpose
+        if OUT="$(artisan $c 2>&1)"; then
+            ok "$c"
+        else
+            warn "$c failed:"
+            printf '%s\n' "$OUT" | tail -5 | sed 's/^/      /'
+            FAILED+=("$c")
+        fi
+    done
+    [ ${#FAILED[@]} -eq 0 ] || warn "${#FAILED[@]} demo step(s) failed — the rest of the data is in place"
+else
+    fail "MySQL is not running, so there is nothing to reset."
+fi
+else
 # ---------------------------------------------------------------------------
 say "Database migrations"
 # ---------------------------------------------------------------------------
@@ -266,6 +335,7 @@ if [ -x ./vendor/bin/sail ] && container_up uresearch-mysql; then
 else
     warn "skipped — containers are not up"
 fi
+fi  # end of the non --fresh path
 
 # ---------------------------------------------------------------------------
 say "Clearing stale caches"
@@ -348,6 +418,6 @@ cat <<'MSG'
     Mailpit       http://localhost:8025
 
   If something still looks wrong, ./setup.sh rebuilds from scratch and
-  ./reset.sh wipes and reseeds the database.
+  ./sync.sh --fresh wipes the database and rebuilds it with all demo data.
 
 MSG

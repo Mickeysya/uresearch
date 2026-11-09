@@ -11,7 +11,7 @@ use App\Modules\Haziq\Models\CandidatureAppeal;
 use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\StageGate;
-use App\Modules\Haziq\Models\TaHourLog;
+use App\Modules\Norhanis\Support\TaStatus;
 use App\Modules\Haziq\Support\AllowanceLedger;
 use App\Modules\Haziq\Support\DocumentCompleteness;
 use Illuminate\Support\Carbon;
@@ -56,9 +56,8 @@ class AssistantContext
             $lines[] = $allowance;
         }
 
-        $taHours = (float) TaHourLog::where('student_id', $student->id)
-            ->where('activity_date', '>=', Carbon::today()->startOfMonth())
-            ->sum('hours');
+        // The TA hours log moved to Norhanis' module; read it through her helper, not her table.
+        $taHours = TaStatus::hoursBetween($student, Carbon::today()->startOfMonth(), Carbon::today()->endOfMonth());
         $lines[] = "TA hours this month: {$taHours} of 21 allowed.";
 
         return implode("\n\n", $lines);

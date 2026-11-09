@@ -10,6 +10,7 @@ use App\Modules\Chloe\Models\WorkstationBlock;
 use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationLocation;
 use App\Modules\Chloe\Models\WorkstationRequest;
+use App\Modules\Chloe\Support\SeatOrder;
 use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Chloe\Support\StudentDirectory;
 use App\Modules\Chloe\Support\StudentIdentity;
@@ -110,7 +111,7 @@ class WorkstationManagementController extends Controller
         WorkstationLiveVersion::begin();
         $seats = $workstationLocation->workstations()
             ->with(['activeRequest.student', 'activeRequest.demoProfile', 'activeRequest.lockerKey', 'activeRequest.activeTerminationNotice', 'lockerKeysHistory.student', 'lockerKeysHistory.demoProfile'])
-            ->orderByRaw('CAST(seat_code AS UNSIGNED) ASC')
+            ->tap(fn ($q) => SeatOrder::query($q))
             ->get()
             ->map(fn ($seat) => $this->presentSeat($seat));
 
@@ -146,12 +147,13 @@ class WorkstationManagementController extends Controller
         $availableSeatsForReassign = collect();
 
         if ($workstation->status === Workstation::STATUS_OCCUPIED && $occupant) {
-            $availableSeatsForReassign = Workstation::where('status', Workstation::STATUS_AVAILABLE)
-                ->whereHas('location', fn ($q) => $q->where('gender', $occupant->gender))
-                ->with('location')
-                ->get()
-                ->sortBy(fn ($seat) => $seat->location->room_code.'-'.sprintf('%05d', (int) $seat->seat_code))
-                ->values();
+            $availableSeatsForReassign = SeatOrder::sort(
+                Workstation::where('status', Workstation::STATUS_AVAILABLE)
+                    ->whereHas('location', fn ($q) => $q->where('gender', $occupant->gender))
+                    ->with('location')
+                    ->get(),
+                fn ($seat) => [$seat->location->block, $seat->location->room_code, $seat->seat_code, $seat->id]
+            );
         }
 
         // PART 2 #1: no current occupant but a Return Pending key (always
@@ -751,7 +753,7 @@ class WorkstationManagementController extends Controller
             $query->whereHas('location', fn ($q) => $q->where('gender', $filters['gender']));
         }
 
-        return $query->get()
+        return SeatOrder::queryAcrossRooms($query)->get()
             ->map(fn ($seat) => $this->presentSeat($seat))
             ->filter(function (array $row) use ($filters) {
                 if ($filters['key_status'] !== '' && $row['key_filter_value'] !== $filters['key_status']) {
@@ -776,8 +778,7 @@ class WorkstationManagementController extends Controller
 
                 return true;
             })
-            ->sortBy(fn (array $row) => $row['block'].'|'.$row['room_code'].'|'.sprintf('%05d', (int) $row['seat_code']))
-            ->values();
+            ->pipe(fn ($rows) => SeatOrder::sortAcrossRooms($rows, fn (array $row) => [$row['block'], $row['room_code'], $row['seat_code'], $row['seat']->id ?? 0]));
     }
 
     /** @return array<string, mixed> */

@@ -12,6 +12,7 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\PublicationDetail;
 use Carbon\CarbonInterface;
+use App\Modules\Norhanis\Support\Drafts;
 
 /**
  * Conference/journal funding applications and Letters of Undertaking.
@@ -46,7 +47,7 @@ class PublicationWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCale
         $detail = PublicationDetail::where('application_id', $application->id)->first();
 
         if (! $detail) {
-            return 'Publication application';
+            return Drafts::summary($application, 'Publication application', 'title_of_paper', 'title_of_conference_journal');
         }
 
         return $detail->title_of_paper.', '.$detail->title_of_conference_journal;

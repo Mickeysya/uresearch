@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Modules\Chloe\Models\StudentGender;
 use App\Modules\Chloe\Models\Workstation;
 use App\Modules\Chloe\Models\WorkstationLocation;
-use App\Modules\Chloe\Models\WorkstationPendingSelection;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Notifications\WorkstationSeatSelected;
 use App\Modules\Chloe\Services\WorkstationAllocator;
@@ -54,33 +53,6 @@ class WorkstationSelectionConfirmationTest extends TestCase
     }
 
     /** A seat hold exactly as the old Select button made it (before round 4); only legacy rows still look like this. */
-    protected function legacyHold($student, Workstation $seat, int $minutes = 5): WorkstationPendingSelection
-    {
-        $seat->update(['status' => Workstation::STATUS_PENDING]);
-
-        return WorkstationPendingSelection::create([
-            'workstation_id' => $seat->id, 'student_id' => $student->id, 'token' => \Illuminate\Support\Str::random(64),
-            'status' => WorkstationPendingSelection::STATUS_PENDING, 'expires_at' => now()->addMinutes($minutes),
-        ]);
-    }
-
-    public function test_selecting_a_seat_gives_it_at_once_with_a_bell_and_no_email(): void
-    {
-        $student = $this->eligibleStudent();
-        StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
-        $room = $this->room();
-        $seat = $this->seat($room);
-
-        $this->actingAs($student)->post(route('workstation.register', $seat))
-            ->assertRedirect(route('workstation.select'))
-            ->assertSessionHas('status');
-
-        $this->assertSame(Workstation::STATUS_OCCUPIED, $seat->fresh()->status);
-        $this->assertTrue(WorkstationRequest::where('workstation_id', $seat->id)->where('student_id', $student->id)->where('status', 'confirmed')->exists());
-        $this->assertSame(0, WorkstationPendingSelection::count());
-
-        Notification::assertSentTo($student, WorkstationSeatSelected::class, fn ($n) => $n->via($student) === ['database']);
-    }
 
     public function test_a_stale_page_selecting_a_taken_seat_changes_nothing_and_shows_the_banner(): void
     {
@@ -142,148 +114,11 @@ class WorkstationSelectionConfirmationTest extends TestCase
         $this->assertTrue(app(WorkstationAllocator::class)->selectSeat($second, $seat)['selected']);
     }
 
-    public function test_a_seat_held_as_pending_does_not_appear_in_the_available_count(): void
-    {
-        $student = $this->eligibleStudent();
-        StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
-        $room = $this->room();
-        $seat = $this->seat($room);
-
-        $this->legacyHold($student, $seat);
-
-        $this->assertFalse($seat->fresh()->isAvailable());
-    }
-
-    public function test_clicking_an_old_confirm_link_within_the_window_grants_the_seat_with_a_bell_only(): void
-    {
-        $student = $this->eligibleStudent();
-        StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
-        $room = $this->room();
-        $seat = $this->seat($room);
-
-        $token = $this->legacyHold($student, $seat)->token;
-
-        $response = $this->get(route('workstation.confirm', $token));
-
-        $response->assertOk()->assertViewHas('outcome', 'confirmed');
-        $this->assertSame(Workstation::STATUS_OCCUPIED, $seat->fresh()->status);
-        $this->assertSame(
-            WorkstationPendingSelection::STATUS_CONFIRMED,
-            WorkstationPendingSelection::where('token', $token)->value('status')
-        );
-        $this->assertTrue(
-            WorkstationRequest::where('workstation_id', $seat->id)
-                ->where('student_id', $student->id)
-                ->where('status', WorkstationRequest::STATUS_CONFIRMED)
-                ->exists()
-        );
-
-        Notification::assertSentTo($student, WorkstationSeatSelected::class);
-    }
-
-    public function test_the_confirm_link_works_without_being_logged_in(): void
-    {
-        $student = $this->eligibleStudent();
-        StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
-        $room = $this->room();
-        $seat = $this->seat($room);
-
-        $result = ['selection' => $this->legacyHold($student, $seat)];
-
-        // No actingAs() -- the token itself is the authorisation, the same
-        // shape as a password-reset link, not the session.
-        $this->get(route('workstation.confirm', $result['selection']->token))
-            ->assertOk()
-            ->assertViewHas('outcome', 'confirmed');
-    }
-
-    public function test_clicking_the_same_confirm_link_twice_does_nothing_the_second_time(): void
-    {
-        $student = $this->eligibleStudent();
-        StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
-        $room = $this->room();
-        $seat = $this->seat($room);
-
-        $token = $this->legacyHold($student, $seat)->token;
-        $this->get(route('workstation.confirm', $token));
-
-        $response = $this->get(route('workstation.confirm', $token));
-
-        $response->assertOk()->assertViewHas('outcome', 'already-confirmed');
-        $this->assertSame(Workstation::STATUS_OCCUPIED, $seat->fresh()->status);
-    }
-
-    public function test_an_expired_link_shows_the_expiry_message_and_releases_the_seat(): void
-    {
-        $student = $this->eligibleStudent();
-        StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
-        $room = $this->room();
-        $seat = $this->seat($room);
-
-        $selection = $this->legacyHold($student, $seat);
-        $selection->update(['expires_at' => now()->subMinute()]);
-
-        $response = $this->get(route('workstation.confirm', $selection->token));
-
-        $response->assertOk()->assertViewHas('outcome', 'expired')
-            ->assertSee('This confirmation link has expired. Your selection has been cancelled. Please return to the dashboard and select a seat again.');
-        $this->assertSame(Workstation::STATUS_AVAILABLE, $seat->fresh()->status);
-        $this->assertSame(WorkstationPendingSelection::STATUS_EXPIRED, $selection->fresh()->status);
-    }
-
     public function test_an_invalid_token_shows_a_not_valid_message_without_touching_any_seat(): void
     {
         $response = $this->get(route('workstation.confirm', 'this-token-does-not-exist'));
 
         $response->assertOk()->assertViewHas('outcome', 'invalid');
-    }
-
-    public function test_the_scheduled_cleanup_command_releases_expired_selections(): void
-    {
-        $student = $this->eligibleStudent();
-        StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
-        $room = $this->room();
-        $seat = $this->seat($room);
-
-        $selection = $this->legacyHold($student, $seat);
-        $selection->update(['expires_at' => now()->subMinute()]);
-
-        $this->artisan('workstation:release-expired-selections')
-            ->expectsOutputToContain('Released 1 expired workstation selection(s).')
-            ->assertSuccessful();
-
-        $this->assertSame(Workstation::STATUS_AVAILABLE, $seat->fresh()->status);
-    }
-
-    public function test_visiting_the_room_list_inline_releases_an_expired_selection_even_without_the_scheduled_command(): void
-    {
-        $student = $this->eligibleStudent();
-        StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
-        $room = $this->room();
-        $seat = $this->seat($room);
-
-        $selection = $this->legacyHold($student, $seat);
-        $selection->update(['expires_at' => now()->subMinute()]);
-
-        $this->actingAs($student)->get(route('workstation.rooms', $room->block));
-
-        $this->assertSame(Workstation::STATUS_AVAILABLE, $seat->fresh()->status);
-    }
-
-    public function test_a_student_cannot_select_a_second_seat_while_one_is_pending(): void
-    {
-        $student = $this->eligibleStudent();
-        StudentGender::create(['student_id' => $student->id, 'gender' => 'male']);
-        $room = $this->room();
-        $firstSeat = $this->seat($room, '1');
-        $secondSeat = $this->seat($room, '2');
-
-        $this->legacyHold($student, $firstSeat);
-
-        $response = $this->actingAs($student)->post(route('workstation.register', $secondSeat));
-
-        $response->assertSessionHas('error');
-        $this->assertSame(Workstation::STATUS_AVAILABLE, $secondSeat->fresh()->status);
     }
 
     public function test_a_student_cannot_select_a_second_seat_while_one_is_confirmed(): void

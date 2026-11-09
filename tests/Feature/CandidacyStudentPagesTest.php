@@ -79,9 +79,10 @@ class CandidacyStudentPagesTest extends TestCase
         $html = $this->actingAs($this->student)->get(route('candidacy.status'))->getContent();
         $this->assertStringContainsString('maximum of 12 months', $html);
         $this->assertStringContainsString('aria-disabled="true"', $html);
-        $this->assertStringNotContainsString(route('candidacy.appeals.new'), $html);
+        // the page's own button is disabled (the sidebar still links to the form, which now opens read-only)
+        $this->assertStringNotContainsString('class="wca-btn is-primary" href="'.route('candidacy.appeals.new').'"', $html);
 
-        $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertRedirect(route('candidacy.status'));
+        $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertOk()->assertSee('You cannot submit an appeal now.');
     }
 
     public function test_a_draft_shows_a_continue_row(): void
@@ -138,8 +139,13 @@ class CandidacyStudentPagesTest extends TestCase
 
     public function test_there_is_only_one_draft_per_student(): void
     {
+        // opening the form writes nothing; the first save creates the draft and later saves reuse it
         $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1));
-        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 1));
+        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 3))->assertRedirect(route('candidacy.appeals.draft', 1));
+        $this->assertSame(0, CandidacyAppeal::where('student_id', $this->student->id)->count());
+
+        $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'save']);
+        $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', 1), ['intent' => 'save']);
         $this->actingAs($this->student)->get(route('candidacy.appeals.draft', 3));
 
         $this->assertSame(1, CandidacyAppeal::where('student_id', $this->student->id)->count());

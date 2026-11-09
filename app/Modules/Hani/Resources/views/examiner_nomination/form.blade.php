@@ -3,8 +3,14 @@
 @section('title', 'Nominate Examiners')
 
 @section('content')
+@include('hani::examiner_admin._pool_styles')
+
 {{-- Page-scoped, tokens only, so it follows the dark theme. --}}
 <style>
+    .nomination-pool { margin-top: var(--space-6); }
+    .nomination-pool h3 { margin: 0 0 var(--space-1); color: var(--navy); }
+    .nomination-pool-note { margin: 0 0 var(--space-4); color: var(--text-grey); font-size: var(--text-sm); }
+    .nomination-pool-date { white-space: nowrap; }
     .suggest-box { margin: 18px 0 6px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-sunken); }
     .suggest-box h4 { margin: 0 0 4px; color: var(--navy); font-size: var(--text-sm); }
     .suggest-note, .suggest-empty { margin: 0 0 8px; color: var(--text-grey); font-size: var(--text-xs); }
@@ -182,33 +188,62 @@
             </form>
         @endif
     </div>
+
+    {{-- For reference while choosing, and read-only: no emails, students, actions
+         or duplicate warnings. Those are CGS's, on /examiners. Examiner names do
+         not link anywhere because the examiner page is staff-only. --}}
+    <section class="nomination-pool" aria-labelledby="pool-heading">
+        <h3 id="pool-heading">Examiner pool</h3>
+        <p class="nomination-pool-note">Read-only, and kept by CGS. Anyone Assigned, On Gap or Unavailable cannot be nominated right now.</p>
+
+        @include('hani::examiner_admin._tabs', ['route' => 'examiner-nomination.create'])
+        @include('hani::examiner_admin._filters', ['route' => 'examiner-nomination.create', 'stateLabel' => 'State'])
+
+        <div class="exam-table-wrap">
+            <table class="data-table exam-table">
+                <thead>
+                    <tr><th>Name</th><th>Department</th><th>Type</th><th>State</th><th>Available from</th></tr>
+                </thead>
+                <tbody>
+                    @forelse ($examiners as $examiner)
+                        <tr>
+                            <td>
+                                <div class="examiner-name-cell">
+                                    @include('hani::examiner_admin._avatar')
+                                    <span>{{ $examiner->name }}</span>
+                                </div>
+                            </td>
+                            <td>{{ $examiner->department }}</td>
+                            <td>@include('hani::examiner_admin._type_badge')</td>
+                            <td>@include('hani::examiner_admin._state_badge')</td>
+                            <td class="nomination-pool-date">
+                                @if ($examiner->state() === \App\Modules\Hani\Models\Examiner::STATE_ON_GAP)
+                                    {{ $examiner->gapEndsOn()->format('j M Y') }}
+                                @elseif ($examiner->state() === \App\Modules\Hani\Models\Examiner::STATE_ASSIGNED)
+                                    {{ $examiner->assigned_until->format('j M Y') }}
+                                @else
+                                    —
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5"><div class="empty-state">No examiners found. Try adjusting your filters.</div></td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+
+            @include('hani::examiner_admin._pagination')
+        </div>
+    </section>
 </div>
 
-<h3 style="color: var(--navy); font-size: 15px;">Examiner pool</h3>
-<table class="recent-activity-table">
-    <thead>
-        <tr><th>Name</th><th>Department</th><th>Type</th><th>State</th><th>Available from</th></tr>
-    </thead>
-    <tbody>
-        @foreach ($internals->concat($externals)->sortBy('name') as $examiner)
-            <tr>
-                <td>{{ $examiner->name }}</td>
-                <td>{{ $examiner->department }}</td>
-                <td>{{ $examiner->typeLabel() }}</td>
-                <td>{{ $examiner->stateLabel() }}</td>
-                <td>
-                    @if ($examiner->state() === \App\Modules\Hani\Models\Examiner::STATE_ON_GAP)
-                        {{ $examiner->gapEndsOn()->format('j M Y') }}
-                    @elseif ($examiner->state() === \App\Modules\Hani\Models\Examiner::STATE_ASSIGNED)
-                        {{ $examiner->assigned_until->format('j M Y') }}
-                    @else
-                        —
-                    @endif
-                </td>
-            </tr>
-        @endforeach
-    </tbody>
-</table>
+@include('core::partials.region-swap')
+{{-- A filter must not reload the page: the wizard above may be half filled in,
+     and RegionSwap replaces only the pool's regions. Without JS these are plain
+     GET links and forms. --}}
+<script @cspNonce>
+    RegionSwap({ selectors: ['.exam-tabs', '.examiner-filters', '.exam-table-wrap'] });
+</script>
 
 @include('core::partials.form-stepper')
 <script src="{{ asset('js/hani/examiner-suggestions.js') }}" defer></script>

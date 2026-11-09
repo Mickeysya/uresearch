@@ -174,8 +174,9 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
             Role::SUPERVISOR => [
                 ['label' => 'Nominate Examiners', 'route' => 'examiner-nomination.create'],
             ],
-            // The released list, and the pool read-only apart from examiner
-            // emails. The appointment letters are Jason's module.
+            // The released list, and the pool, which both CGS desks manage (the
+            // Senior Executive alone imports and full-edits). The appointment
+            // letters are Jason's module.
             Role::NON_EXEC_CGS => [
                 ['label' => 'Examiner Pool', 'route' => 'examiner-admin.index'],
                 $report,
@@ -190,13 +191,18 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
                 $dashboard,
                 $analytics,
             ],
+            // Conflict Detection too: they can send a clashing list back from there.
             Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR => [
+                ['label' => 'Conflict Detection', 'route' => 'conflict-detection.index'],
                 $report,
                 $dashboard,
                 $analytics,
             ],
+            // The pool read-only: they advise supervisors on who is free, and
+            // email CGS to change it.
             Role::ACADEMIC_EXEC => [
                 ['label' => 'Pending Evaluation', 'route' => 'examiner-nomination.pending-evaluation'],
+                ['label' => 'Examiner Pool', 'route' => 'examiner-admin.index'],
                 ['label' => 'Conflict Detection', 'route' => 'conflict-detection.index'],
                 $report,
                 $dashboard,

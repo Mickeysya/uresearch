@@ -172,11 +172,16 @@ class SidebarQueuesTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $sidebar = substr($html, strpos($html, 'id="app-sidebar"'));
+        $start = strpos($html, 'id="app-sidebar"');
+        $sidebar = substr($html, $start, strpos($html, 'sidebar-footer') - $start);
 
-        $this->assertStringContainsString('>My Drafts<', $sidebar);
-        $this->assertStringContainsString(route('nureen.drafts'), $sidebar);
-        // Chloe's study-candidacy link keeps its own name, once.
-        $this->assertSame(1, substr_count($sidebar, '>My Candidacy<'));
+        // Once, not twice: the Haziq merge (89b7385) had both the shell and
+        // sidebar-student-nav render $extraLinks, listing every link twice.
+        $this->assertSame(1, substr_count($sidebar, 'href="'.route('nureen.drafts').'"'));
+        $this->assertSame(1, substr_count($sidebar, 'href="'.route('nureen.expected-dates').'"'));
+        // Chloe's study-candidacy link is its own top-level item, once, and
+        // no longer sits under Track My Applications.
+        $this->assertSame(1, substr_count($sidebar, '>My Study Candidacy<'));
+        $this->assertSame(0, substr_count($sidebar, '>My Candidacy<'));
     }
 }

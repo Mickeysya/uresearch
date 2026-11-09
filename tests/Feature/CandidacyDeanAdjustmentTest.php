@@ -215,7 +215,7 @@ class CandidacyDeanAdjustmentTest extends TestCase
     {
         $this->candidacy->update(['extension_months_used' => 12]);
 
-        $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertRedirect(route('candidacy.status'))->assertSessionHasErrors('appeal');
+        $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertOk()->assertSee('You cannot submit an appeal now.');
         $this->assertContains('You have used the maximum of 12 months of extension.', $this->service->eligibilityProblems($this->candidacy->fresh()));
     }
 

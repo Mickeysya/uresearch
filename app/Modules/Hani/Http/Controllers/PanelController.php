@@ -100,7 +100,7 @@ class PanelController extends Controller
 
     /**
      * When Jason's module sent each main examiner their appointment pack,
-     * through the Core contract proposed in SHARED_CHANGES.md
+     * through the Core contract in SHARED_CHANGES.md
      * (SuppliesAppointmentDispatch). Read only if something is bound to it;
      * null means "not known here", not "not sent".
      *

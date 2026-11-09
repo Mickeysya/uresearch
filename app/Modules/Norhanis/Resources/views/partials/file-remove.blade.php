@@ -11,7 +11,8 @@
 <script @cspNonce>
 (function () {
     document.querySelectorAll('input[type="file"]').forEach(function (input) {
-        if (input.dataset.removable) return;
+        // Nureen's multi-file picker has its own remove buttons.
+        if (input.dataset.removable || input.hasAttribute('data-doc-upload-input')) return;
         input.dataset.removable = '1';
 
         var button = document.createElement('button');

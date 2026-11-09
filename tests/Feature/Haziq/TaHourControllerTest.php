@@ -4,8 +4,8 @@ namespace Tests\Feature\Haziq;
 
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
-use App\Modules\Haziq\Http\Controllers\TaHourController;
-use App\Modules\Haziq\Models\TaHourLog;
+use App\Modules\Norhanis\Http\Controllers\TaHourController;
+use App\Modules\Norhanis\Models\TaHourLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;

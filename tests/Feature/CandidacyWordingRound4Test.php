@@ -58,7 +58,7 @@ class CandidacyWordingRound4Test extends TestCase
         $bad = [];
         $sources = array_merge(
             glob(base_path('app/Modules/Chloe/Notifications/*.php')),
-            [base_path('config/candidacy.php'), base_path('app/Modules/Chloe/Models/CandidacyDismissal.php'), base_path('app/Modules/Chloe/Support/CandidacyDismissalList.php'), base_path('app/Modules/Chloe/Workflows/CandidacyAppealWorkflow.php')],
+            [base_path('config/candidacy.php'), base_path('app/Modules/Chloe/Support/CandidacyDismissalList.php'), base_path('app/Modules/Chloe/Workflows/CandidacyAppealWorkflow.php')],
             $this->files('docs/knowledge/candidacy', ['md']),
         );
 

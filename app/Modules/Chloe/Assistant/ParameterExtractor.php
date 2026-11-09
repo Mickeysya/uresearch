@@ -34,16 +34,33 @@ final class ParameterExtractor
         return null;
     }
 
-    /** "seat 252", "seat #252", or a bare "#252" -- 1 to 315 only, matching the real Workstation id range. */
+    /**
+     * "seat 252", "seat #252", or a bare "#252": the seat NUMBER as users see it (the seat_code), any positive number up to 5 digits. Whether such a
+     * seat exists is the lookup's question, so seats added later (316, 317 ...) work and an unknown number gets "Seat N does not exist".
+     */
     public static function seatNumber(string $text): ?int
     {
-        if (preg_match('/\bseat\s*#?\s*(\d{1,3})\b/i', $text, $m) || preg_match('/#(\d{1,3})\b/', $text, $m)) {
+        if (preg_match('/\bseat\s*#?\s*(\d{1,5})\b/i', $text, $m) || preg_match('/#(\d{1,5})\b/', $text, $m)) {
             $n = (int) $m[1];
 
-            return ($n >= 1 && $n <= 315) ? $n : null;
+            return $n >= 1 ? $n : null;
         }
 
         return null;
+    }
+
+    /**
+     * Asking for someone else's e-mail address or phone number: a contact word, a give / show / what-is verb, and a person other than the asker ("of
+     * student in seat 12", "of my supervisor", "of all students"). Refused for every role; "will i get an email when..." and "how do i email my supervisor"
+     * are not requests for a contact detail and pass.
+     */
+    public static function asksForContactDetails(string $text): bool
+    {
+        $t = mb_strtolower($text);
+
+        return preg_match('/\b(e-?mails?|emel|phones?|telephones?|telefon|mobile|handphone|contact numbers?|whatsapp)\b/', $t) === 1
+            && preg_match('/\b(give|show|tell|share|list|provide|reveal|what(?:\'?s| is| are)|whats|who(?:\'?s| is))\b/', $t) === 1
+            && preg_match('/\b(of|for|from)\b[^?]*\b(students?|seat\s*#?\d+|<id\d+>|him|her|them|person|someone|supervisors?|chairs?|dean|staff|lecturer|officer|everyone|all)\b|\b(student|person) in seat\b/', $t) === 1;
     }
 
     /** PrivacyMasker has already replaced every 8-digit ID with a placeholder by the time this runs -- so this looks for the placeholder, never a raw digit run. Pipeline maps it back to the real ID afterwards. */

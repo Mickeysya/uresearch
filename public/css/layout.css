@@ -894,171 +894,196 @@ button[value="rejected"]:hover {
    10b · Multi-step forms
 
    Built by core::partials.form-stepper, which re-casts the .card it
-   finds the form in: heading into a band at the top, rail into a left
-   column, step content into the rest.
+   finds the form in: step bar across the top, then each step as its
+   name and description beside its fields.
 
    Everything here is inert until that script runs -- .fstep has no
    `display: none`, so a form with JavaScript off is still one long page
    with one submit button.
    ============================================================ */
 
-/* A wizard is narrower than the page: rail (232px) + padding + the 46rem
-   field column comes to ~1040px, so at the full --page-max the right half
-   of the card was empty. The page header lives in the same container, so
-   the title and "Step 1 of 3" narrow with the card instead of drifting to
-   the far right. :has() applies it before the script runs (no jump on
-   load); the class covers a browser without :has(). */
-.card-container-inline:has(> .card form[data-stepper]),
-.card-container-inline.is-wizard-container {
-    max-width: 1080px;
-    margin-inline: auto;
-}
-
-/* The wizard is a page like any other page: it fills the shell, which is
-   already capped at --page-max and fluid. It used to carry its own 880px,
-   which is how a stepper form and the list screen beside it ended up
-   looking like two different products. The measure that actually matters
-   is the field column, capped below, not the surface. */
+/* The wizard fills the page like every other screen. It was capped at
+   1080px and centred only because a 232px side rail plus a 46rem field
+   column left the rest of a full-width card empty; the rail is a bar
+   across the top now (2026-11-06), and each step uses the width as two
+   columns instead. The card is the container the step layout queries. */
 .card.is-wizard {
     max-width: none;
     width: 100%;
     margin: 0;
     padding: 0;
     overflow: hidden;
+    container-type: inline-size;
 }
 
-/* ---- the head band: title, and the only step counter ---- */
+/* ---- the head band: only for a card that carries its own h2 ---- */
 .wizard-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-4);
-    flex-wrap: wrap;
     padding: var(--space-6) var(--space-8);
     border-bottom: 1px solid var(--border-subtle);
-    background: var(--surface-sunken);
 }
 
-/* The heading is the page title now -- the rail says which step you are
-   on, so nothing below repeats it. */
 .card.is-wizard .wizard-head h2 {
     margin: 0;
     font-size: var(--text-2xl);
 }
 
-.wizard-counter {
-    margin: 0;
-    font-size: var(--text-sm);
-    font-weight: var(--weight-semi);
-    color: var(--text-grey);
-    font-variant-numeric: tabular-nums;
+/* ---- the step bar ----
+   One segment per step (the USWDS step-indicator pattern): it fills as
+   you go, the name sits under it, a tick appears once it is done. Set on
+   a step down in tone from the card rather than ruled off. */
+.wizard-steps {
+    padding: var(--space-6) var(--space-8) var(--space-5);
+    background: var(--surface-sunken);
 }
 
-/* ---- rail beside content ---- */
-.wizard-body {
-    display: grid;
-    grid-template-columns: minmax(0, 232px) minmax(0, 1fr);
-    align-items: start;
-}
-
-.wizard-pane {
-    padding: var(--space-8);
-    min-width: 0;
-    /* Clips the sliding step to the pane instead of letting it paint over
-       the rail on its way in. */
-    overflow: hidden;
-}
-
-/* ---- the progress rail ----
-   Vertical on desktop: a column of steps reads as a list of what is
-   still to come, and it leaves the full content width for the fields. */
 .form-steps {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
+    gap: var(--space-2);
     list-style: none;
     margin: 0;
-    padding: var(--space-8) var(--space-5) var(--space-8) var(--space-8);
-    border-right: 1px solid var(--border-subtle);
-    align-self: stretch;
+    padding: 0;
 }
 
 .form-step {
-    position: relative;
-    display: grid;
-    grid-template-columns: 30px minmax(0, 1fr);
-    align-items: center;
-    gap: var(--space-3);
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* A plain button underneath: every global button rule is undone here,
+   because this is a step marker that happens to be clickable. */
+.form-step-btn,
+.form-step-btn:hover,
+.form-step-btn:active,
+.form-step-btn:disabled {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+    color: inherit;
+    font: inherit;
     text-align: left;
+    cursor: default;
 }
 
-/* The connector runs from each step up to the one before it, so it never
-   overhangs either end of the rail. */
-.form-step + .form-step::before {
-    content: '';
-    position: absolute;
-    left: 14px;
-    bottom: 100%;
-    height: var(--space-5);
-    width: 2px;
-    background: var(--border-grey);
-    z-index: 0;
-}
-
-.form-step.is-current + .form-step::before,
-.form-step.is-done::before,
-.form-step.is-done + .form-step::before {
-    background: var(--accent-solid);
-}
-
-.form-step-dot {
+.form-step-bar {
     position: relative;
-    z-index: 1;
-    width: 30px;
-    height: 30px;
-    display: grid;
-    place-items: center;
+    display: block;
+    height: 6px;
     border-radius: var(--radius-full);
-    background: var(--surface);
-    border: 2px solid var(--border-strong);
-    color: var(--text-grey);
+    background: var(--border-grey);
+    overflow: hidden;
+}
+
+/* The fill grows from the left with transform, not width, so moving a
+   step is a compositor-only animation. */
+.form-step-fill {
+    position: absolute;
+    inset: 0;
+    background: var(--accent-solid);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform var(--duration-slow) var(--ease),
+                background-color var(--duration-base) var(--ease);
+}
+
+.form-step.is-done .form-step-fill,
+.form-step.is-current .form-step-fill {
+    transform: scaleX(1);
+}
+
+.form-step-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
     font-size: var(--text-sm);
+    line-height: var(--leading-tight);
+    color: var(--text-grey);
+    transition: color var(--duration-base) var(--ease);
+}
+
+/* The number before each name says how many steps are left; a finished
+   step swaps it for a tick, the current one is filled. */
+.form-step-num {
+    position: relative;
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-full);
+    /* A whole pixel count: 1.5px rounds unevenly at 1x and the ring looks
+       lopsided. */
+    border: 2px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text-grey);
+    font-size: var(--text-xs);
     font-weight: var(--weight-semi);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
     transition: background-color var(--duration-base) var(--ease),
                 border-color var(--duration-base) var(--ease),
                 color var(--duration-base) var(--ease);
 }
 
-.form-step.is-current .form-step-dot {
+/* Digits have no descenders, but the line box keeps room for one, so a
+   box-centred digit rides high (0.8px measured, more in some faces).
+   Trimming its box to cap height and baseline centres the ink itself, in
+   whatever font the browser picked. It needs a block box of its own --
+   text-box does nothing to the anonymous item a grid makes of bare text --
+   hence the inner span. Unsupported browsers keep line-height: 1. */
+.form-step-num > span {
+    display: block;
+    text-box: trim-both cap alphabetic;
+}
+
+.form-step-num::after {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 10px;
+    margin-top: -2px;
+    border: solid var(--text-on-accent);
+    border-width: 0 2px 2px 0;
+    opacity: 0;
+    transform: rotate(45deg) scale(0.4);
+    transition: opacity var(--duration-base) var(--ease),
+                transform var(--duration-base) var(--ease);
+}
+
+.form-step.is-current .form-step-num {
     background: var(--accent-solid);
     border-color: var(--accent-solid);
     color: var(--text-on-accent);
-    box-shadow: var(--shadow-focus);
 }
 
-/* A finished step swaps its number for a tick: the number has done its
-   job once you are past it, and the tick says "this one is fine". */
-.form-step.is-done .form-step-dot {
+.form-step.is-done .form-step-num {
     background: var(--success-fg);
     border-color: var(--success-fg);
     color: transparent;
 }
 
-.form-step.is-done .form-step-dot::after {
-    content: '';
-    position: absolute;
-    width: 5px;
-    height: 10px;
-    border: solid var(--text-on-accent);
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg) translate(-1px, -1px);
+.form-step.is-done .form-step-num::after {
+    opacity: 1;
+    transform: rotate(45deg) scale(1);
 }
 
-.form-step-label {
-    font-size: var(--text-sm);
-    color: var(--text-grey);
-    line-height: var(--leading-tight);
+.form-step.is-error .form-step-num {
+    background: var(--danger-fg);
+    border-color: var(--danger-fg);
+    color: var(--text-on-accent);
 }
+
+.form-step.is-error .form-step-num::after { opacity: 0; }
+
+.form-step-name { min-width: 0; }
 
 .form-step.is-current .form-step-label {
     color: var(--text-dark);
@@ -1071,15 +1096,48 @@ button[value="rejected"]:hover {
 
 /* A finished step is a shortcut back to itself; an unvisited one is not,
    and must not look like it is. */
-.form-step.is-done {
-    cursor: pointer;
+.form-step.is-done .form-step-btn { cursor: pointer; }
+.form-step.is-done .form-step-btn:hover .form-step-label { color: var(--accent-solid); }
+
+/* Carbon's error state: a step the server sent back stays red until it
+   passes the browser's checks again. */
+.form-step.is-error .form-step-fill {
+    background: var(--danger-fg);
+    transform: scaleX(1);
 }
 
-.form-step.is-done:hover .form-step-label {
-    color: var(--accent-solid);
+.form-step.is-error .form-step-label { color: var(--danger-fg); }
+
+.form-steps-summary {
+    display: none;
+    margin: var(--space-3) 0 0;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
 }
 
-/* ---- a step ---- */
+/* Eight names cannot share a phone's width; the bar stays and one line
+   says where you are. */
+@container (max-width: 640px) {
+    .form-step-label { display: none; }
+    .form-steps-summary { display: block; }
+    .wizard-steps { padding: var(--space-5) var(--space-5) var(--space-4); }
+}
+
+.wizard-pane {
+    padding: var(--space-8);
+    min-width: 0;
+    /* Clips the sliding step to the pane. */
+    overflow: hidden;
+}
+
+@container (max-width: 640px) {
+    .wizard-pane { padding: var(--space-5); }
+    .wizard-head { padding: var(--space-5); }
+}
+
+/* ---- a step: its name and description, then its fields ---- */
 .fstep {
     border: 0;
     margin: 0;
@@ -1093,10 +1151,34 @@ button[value="rejected"]:hover {
     color: var(--text-grey);
     font-size: var(--text-sm);
     margin: 0 0 var(--space-6);
-    /* Still a measure -- a line that runs the full width of a wide card is
-       hard to track back from -- just not one that stops short of the fields
-       under it. */
     max-width: 74ch;
+}
+
+.fstep-title {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semi);
+    color: var(--text-dark);
+}
+
+.fstep-aside {
+    margin-bottom: var(--space-6);
+}
+
+.fstep-aside .fstep-hint {
+    margin: var(--space-2) 0 0;
+    color: var(--text-body);
+}
+
+@container (min-width: 760px) {
+    .fstep:not([hidden]) {
+        display: grid;
+        grid-template-columns: minmax(11rem, 16rem) minmax(0, 1fr);
+        column-gap: var(--space-10);
+        align-items: start;
+    }
+
+    .fstep-aside { margin-bottom: 0; }
 }
 
 /* ---- step transition ----
@@ -1107,92 +1189,86 @@ button[value="rejected"]:hover {
    check stops the class being added, this one stops the animation if a
    class survives a cached page. */
 @keyframes fstep-in-fwd {
-    from { opacity: 0; transform: translateX(18px); }
+    from { opacity: 0; transform: translateX(24px); }
     to   { opacity: 1; transform: none; }
 }
 
 @keyframes fstep-in-back {
-    from { opacity: 0; transform: translateX(-18px); }
+    from { opacity: 0; transform: translateX(-24px); }
     to   { opacity: 1; transform: none; }
 }
 
-.fstep.is-entering-fwd  { animation: fstep-in-fwd var(--duration-base) var(--ease) both; }
-.fstep.is-entering-back { animation: fstep-in-back var(--duration-base) var(--ease) both; }
+.fstep.is-entering-fwd  { animation: fstep-in-fwd var(--duration-slow) var(--ease) both; }
+.fstep.is-entering-back { animation: fstep-in-back var(--duration-slow) var(--ease) both; }
 
 @media (prefers-reduced-motion: reduce) {
     .fstep.is-entering-fwd,
     .fstep.is-entering-back { animation: none; }
+    .form-step-fill,
+    .form-step-label,
+    .form-step-num,
+    .form-step-num::after { transition: none; }
 }
 
 /* ---- field rhythm ----
-   A step is a plain run of siblings: label, control, label, control, with
-   no wrapper around each pair. Vertical rhythm therefore comes from the
-   label's own top margin (see the base `label` rule), and this only opens
-   that gap up -- a wizard step has room to breathe that a cramped 480px
-   card did not.
-
-   There was a two-column grid here briefly. It could not work: with no
-   element pairing a label to its control, the grid took them as separate
-   items and filed every label into column one and every control into
-   column two, with no row gap between them. Two columns need a wrapper
-   per field in nine Blade files across four people's folders -- more
-   markup churn than a second column of inputs is worth.
-
-   The measure cap was the other half of that fix: stretching a text input
-   across the full 800px pane made it look like a textarea and gave the eye
-   no anchor, so fields were capped at ~34em. That cap is gone as of
-   2026-09-17, because the card it was defending against is gone too. The
-   card is 880px now rather than 1080px, which leaves a 584px field column,
-   and 584px is inside the range the cap existed to protect. Capping as well
-   would only move the empty third of the card inside the pane, which is the
-   problem that was reported. */
-.card.is-wizard .fstep > label {
+   A step's fields are a plain run of siblings -- label, control, label,
+   control -- with no wrapper per pair, so the rhythm comes from the
+   label's top margin. All the room goes above a label, never between it
+   and its own control. (A two-column field grid needs a wrapper per
+   field in fifteen views across six folders, which is why the second
+   column is the step's description instead.) */
+.card.is-wizard .fstep-fields > label {
     margin-top: var(--space-8);
 }
 
-/* The first label in a step sits under the hint, which already carries
-   its own bottom margin. */
-.card.is-wizard .fstep > .fstep-hint + label {
+.card.is-wizard .fstep-fields > :first-child {
     margin-top: 0;
 }
 
-/* The 4px under a label is deliberate and stays: a label belongs to the
-   control below it, so it sits close to that one and far from the one
-   above. All the breathing room goes above the label, never between the
-   label and its own field. */
-.card.is-wizard .fstep > .field-error {
+.card.is-wizard .fstep-fields > .fstep-hint + label {
+    margin-top: 0;
+}
+
+.card.is-wizard .fstep-fields > .field-error {
     margin-top: var(--space-2);
 }
 
-/* The cap is back, and for the reason it existed the first time: the card
-   is no longer 880px, it is up to 1320px, and a text input stretched
-   across that reads as a textarea and gives the eye no anchor. 46rem is
-   the same measure every other form on the site now uses. */
-.card.is-wizard .fstep > input,
-.card.is-wizard .fstep > select,
-.card.is-wizard .fstep > textarea,
-.card.is-wizard .fstep > .field-error,
-.card.is-wizard .fstep > .field-hint,
-.card.is-wizard .fstep > .fstep-hint,
-.card.is-wizard .fstep > label {
-    max-width: 46rem;
+/* Fields fill the step's column. They were capped at 46rem, a measure
+   from when the column itself was narrow; inside today's two-column step
+   the cap left 276px of every plain-field step empty at 1658px, while the
+   steps built from a module's own blocks (uploads, tables, the review) ran
+   to the edge -- so one form's steps did not line up with each other
+   (measured on all fifteen, 2026-11-06). The column is already bounded by
+   the step's left-hand column and the page's own --page-max.
+
+   Values with a known short length keep a width that fits them: a date
+   box stretched to 1000px reads as a text area. */
+.card.is-wizard .fstep-fields > input[type="date"],
+.card.is-wizard .fstep-fields > input[type="datetime-local"],
+.card.is-wizard .fstep-fields > input[type="time"],
+.card.is-wizard .fstep-fields > input[type="month"],
+.card.is-wizard .fstep-fields > input[type="number"] {
+    max-width: 20rem;
 }
 
 /* A textarea is inline-block by default, so it sits on a text baseline and
-   leaves a descender's worth of gap under it -- which pushed its hint
-   visibly further away than an input's or a select's. */
-.card.is-wizard .fstep > textarea {
+   leaves a descender's worth of gap under it. */
+.card.is-wizard .fstep-fields > textarea {
     display: block;
 }
 
-.card.is-wizard .fstep > .checkbox-row {
+.card.is-wizard .fstep-fields > .checkbox-row {
     margin-top: var(--space-8);
+}
+
+.card.is-wizard .fstep-fields > .checkbox-row:first-child {
+    margin-top: 0;
 }
 
 /* A run of repeated rows (claim items, publication authors) is a group,
    not a field: it gets the gap above it and its own internal rhythm. */
-.card.is-wizard .fstep > h3,
-.card.is-wizard .fstep > [id$="-container"] {
+.card.is-wizard .fstep-fields > h3,
+.card.is-wizard .fstep-fields > [id$="-container"] {
     margin-top: var(--space-8);
 }
 
@@ -1278,56 +1354,7 @@ button[value="rejected"]:hover {
     overflow-wrap: anywhere;
 }
 
-/* ---- narrow: rail goes back on top, horizontal ---- */
-@media (max-width: 860px) {
-    .wizard-body {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    .form-steps {
-        flex-direction: row;
-        gap: 0;
-        padding: var(--space-6) var(--space-6) var(--space-2);
-        border-right: 0;
-        border-bottom: 1px solid var(--border-subtle);
-        overflow-x: auto;
-        scrollbar-width: none;
-    }
-
-    .form-steps::-webkit-scrollbar { display: none; }
-
-    .form-step {
-        flex: 1 1 0;
-        min-width: 84px;
-        grid-template-columns: minmax(0, 1fr);
-        justify-items: center;
-        gap: var(--space-2);
-        text-align: center;
-    }
-
-    /* Horizontal connector again, reaching back to the previous step. */
-    .form-step + .form-step::before {
-        left: -50%;
-        right: 50%;
-        bottom: auto;
-        top: 15px;
-        width: auto;
-        height: 2px;
-    }
-
-    .wizard-pane { padding: var(--space-6); }
-
-    .wizard-head { padding: var(--space-5) var(--space-6); }
-}
-
 @media (max-width: 560px) {
-    /* Labels stop being readable once four share a phone's width, so
-       below this the rail is dots only and the counter says where you
-       are. */
-    .form-step-label { display: none; }
-
-    .form-step { min-width: 0; }
-
     .freview-list {
         grid-template-columns: 1fr;
         gap: 0;
@@ -2238,12 +2265,12 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 }
 .page-header-back:hover { text-decoration: underline; }
 
-/* The subtitle stops at a readable measure even when the page does not.
-   A 1320px-wide line of explanatory prose is unreadable however wide the
-   monitor is. */
+/* The subtitle runs the width of the page like the content under it.
+   It was capped at 68ch, which on a wide screen left a short block of
+   text pinned to the left above full-width content. Subtitles are one to
+   three lines, so the long-line cost a cap guards against barely applies. */
 .page-header p {
     margin: 0;
-    max-width: 68ch;
     color: var(--text-grey);
     font-size: var(--text-sm);
 }
@@ -2271,19 +2298,11 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 
 @media (max-width: 720px) {
     .page-header { flex-direction: column; }
+    /* In a column, the 24rem flex-basis above sizes the HEIGHT: every page
+       header on a phone was 384px tall, most of it blank. */
+    .page-header-text { flex-basis: auto; }
     .page-header-actions { width: 100%; }
     .page-header-actions > * { flex: 1 1 auto; justify-content: center; }
-}
-
-/* The step counter when the page header already carries the title, so the
-   wizard has no heading of its own to sit beside. */
-.page-header-counter {
-    margin: 0;
-    align-self: center;
-    font-size: var(--text-sm);
-    font-weight: var(--weight-semi);
-    color: var(--text-grey);
-    font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================

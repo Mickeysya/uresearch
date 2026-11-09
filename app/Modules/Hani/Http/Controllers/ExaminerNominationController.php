@@ -12,11 +12,14 @@ use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ExaminerReminderLog;
 use App\Modules\Hani\Models\ExaminerSeatHistory;
+use App\Modules\Hani\Models\ExaminerSubstitutionRequest;
+use App\Modules\Hani\Support\AppointmentLetters;
 use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Notifications\ExaminersReleased;
 use App\Modules\Hani\Notifications\NominationsNeedCompileReview;
 use App\Modules\Hani\Support\ConflictOfInterest;
 use App\Modules\Hani\Support\ExaminerContact;
+use App\Modules\Hani\Support\ExaminerPoolList;
 use App\Modules\Hani\Support\CrossDepartmentClashes;
 use App\Modules\Hani\Support\Departments;
 use App\Modules\Hani\Support\DuplicateDetector;
@@ -39,9 +42,9 @@ class ExaminerNominationController extends Controller
      * faculty list; neither of them rejects it outright, because the thing
      * that has to change is one department's choice of examiner.
      */
-    protected const RETURNING_STAGES = ['senior_director', 'dean'];
+    public const RETURNING_STAGES = ['senior_director', 'dean'];
 
-    protected const RETURN_TARGET = 'academic_exec';
+    public const RETURN_TARGET = 'academic_exec';
 
     /** The stage whose Approve also releases the list -- see finaliseAndRelease(). */
     public const FINALISE_STAGE = 'cgs_final';
@@ -65,11 +68,23 @@ class ExaminerNominationController extends Controller
 
     public function create(Request $request)
     {
+        // The dropdowns always offer the whole pool. Only the read-only table
+        // under the form follows the tabs and filters.
+        $pool = Examiner::orderBy('name')->get();
+        $type = ExaminerPoolList::type($request);
+        $tabPool = ExaminerPoolList::inTab($pool, $type);
+        $filters = ExaminerPoolList::filters($request, ['department', 'type', 'status', 'search']);
+
         return view('hani::examiner_nomination.form', [
             // Only the supervisor's own candidates may be nominated for.
             'candidates' => $request->user()->supervisees()->where('role', Role::STUDENT)->get(),
-            'internals' => Examiner::where('type', Examiner::TYPE_INTERNAL)->orderBy('name')->get(),
-            'externals' => Examiner::where('type', Examiner::TYPE_EXTERNAL)->orderBy('name')->get(),
+            'internals' => $pool->where('type', Examiner::TYPE_INTERNAL)->values(),
+            'externals' => $pool->where('type', Examiner::TYPE_EXTERNAL)->values(),
+            'examiners' => ExaminerPoolList::paginate(ExaminerPoolList::filtered($tabPool, $filters), $request),
+            'type' => $type,
+            'typeCounts' => ExaminerPoolList::typeCounts($pool),
+            'departments' => ExaminerPoolList::departments($tabPool),
+            'filters' => $filters,
         ]);
     }
 
@@ -269,6 +284,8 @@ class ExaminerNominationController extends Controller
             // records of one person on different departments' lists can
             // first be seen (Support\DuplicateDetector).
             'coiFlags' => $this->coiFlags($nominations),
+            'substitutions' => ExaminerSubstitutionRequest::open()->with('examiner')
+                ->whereIn('nomination_id', $nominations->pluck('id'))->get()->groupBy('nomination_id'),
             'duplicates' => $queue['stage']->key === 'cgs_compile'
                 ? app(DuplicateDetector::class)->acrossNominations()
                 : [],
@@ -487,7 +504,7 @@ class ExaminerNominationController extends Controller
      * their stages is that the departments have been merged. Nobody decides
      * anything here -- that stays on the queue, behind the stage checks.
      */
-    public function report(Request $request)
+    public function report(Request $request, AppointmentLetters $letters)
     {
         abort_unless(in_array($request->user()->role, self::REPORT_ROLES, true), 403);
 
@@ -513,6 +530,7 @@ class ExaminerNominationController extends Controller
             'byFaculty' => $byFaculty,
             'total' => $nominations->count(),
             'clashes' => $clashes,
+            'letters' => $letters->forPanels($nominations),
             'scopedToDepartment' => Role::isDepartmentScoped($request->user()->role)
                 ? $request->user()->department
                 : null,
@@ -526,11 +544,19 @@ class ExaminerNominationController extends Controller
      * the two downloads can never drift apart, and both are scoped by the
      * same reportRows() the screen uses -- an Academic Executive cannot
      * export a department they cannot read.
+     *
+     * ?scope=awaiting (the default) is the released panels still owed a
+     * letter, the file appointment letters are worked from, so a panel that
+     * has its letters cannot be picked up a second time. ?scope=full is every
+     * row on the report.
      */
-    public function export(Request $request)
+    public function export(Request $request, AppointmentLetters $letters)
     {
         abort_unless(in_array($request->user()->role, self::REPORT_ROLES, true), 403);
 
+        $request->validate(['scope' => ['nullable', Rule::in(['awaiting', 'full'])]]);
+
+        $awaiting = $request->query('scope') !== 'full';
         $format = $request->query('format') === 'csv' ? 'csv' : 'xlsx';
         $stamp = now()->format('Y-m-d');
 
@@ -538,11 +564,15 @@ class ExaminerNominationController extends Controller
             ? \Illuminate\Support\Str::slug($request->user()->department ?: 'department')
             : 'all-departments';
 
-        $export = new ExaminerListExport($this->reportRows($request->user()));
+        $rows = $this->reportRows($request->user());
+        $statuses = $letters->forPanels($rows);
+
+        $export = new ExaminerListExport($awaiting ? $letters->awaiting($rows, $statuses) : $rows, $statuses, $awaiting);
+        $name = ($awaiting ? 'examiner-letters-awaiting' : 'examiner-list')."-{$scope}-{$stamp}";
 
         return $format === 'csv'
-            ? Excel::download($export, "examiner-list-{$scope}-{$stamp}.csv", ExcelFormat::CSV)
-            : Excel::download($export, "examiner-list-{$scope}-{$stamp}.xlsx");
+            ? Excel::download($export, "{$name}.csv", ExcelFormat::CSV)
+            : Excel::download($export, "{$name}.xlsx");
     }
 
     /**

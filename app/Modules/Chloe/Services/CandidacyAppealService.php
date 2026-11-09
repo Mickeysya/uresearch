@@ -53,6 +53,19 @@ class CandidacyAppealService
 
     // ------------------------------------------------------------------ eligibility
 
+    /** The first day an appeal may be submitted: the expiry date minus appeal_window_months (no month overflow), as a Kuala Lumpur calendar date. */
+    public static function windowOpens(\DateTimeInterface $expiry): Carbon
+    {
+        return Carbon::parse($expiry->format('Y-m-d'), 'Asia/Kuala_Lumpur')->startOfDay()->subMonthsNoOverflow((int) config('candidacy.appeal_window_months', 3));
+    }
+
+    public static function beforeWindowMessage(\DateTimeInterface $expiry): string
+    {
+        $months = (int) config('candidacy.appeal_window_months', 3);
+
+        return 'You can submit an appeal from '.self::windowOpens($expiry)->format('j M Y').", {$months} months before your expiry date.";
+    }
+
     /** @return list<string> the reasons the student cannot appeal now; empty = may appeal */
     public function eligibilityProblems(?StudyCandidacy $candidacy, ?int $months = null): array
     {
@@ -69,6 +82,8 @@ class CandidacyAppealService
 
         if ($candidacy->candidacy_expiry_date->toDateString() < $today->toDateString()) {
             $problems[] = 'Your study candidacy has already expired.';
+        } elseif ($today->toDateString() < self::windowOpens($candidacy->candidacy_expiry_date)->toDateString()) {
+            $problems[] = self::beforeWindowMessage($candidacy->candidacy_expiry_date);
         }
 
         if ($candidacy->candidacyAppeals()->whereIn('status', CandidacyAppeal::OPEN_STATUSES)->exists() || $candidacy->hasOpenAppeal()) {
@@ -209,6 +224,18 @@ class CandidacyAppealService
 
             $by = $appeal->returned_by_stage;
             $target = $by === CandidacyAppeal::STAGE_DEAN ? CandidacyAppeal::STAGE_CGS : $by;
+
+            // Confirmed rule: a resubmitted appeal goes back to THE SAME approver who returned it. The profile on the latest 'returned' decision at that
+            // stage is written into the stage's pointer, so a pointer that was changed since (for example by a re-routing) cannot send it to someone else.
+            // The one exception: a returner with no login (a demo profile) cannot act, so the pointer stays as it is. A Dean return still goes to CGS first;
+            // CGS is a role, so there is nothing to write for it.
+            if (in_array($by, [CandidacyAppeal::STAGE_SUPERVISOR, CandidacyAppeal::STAGE_CHAIR, CandidacyAppeal::STAGE_DEAN], true)) {
+                $returnerId = CandidacyAppealApproval::where('candidacy_appeal_id', $appeal->id)->where('stage', $by)->where('decision', 'returned')->orderByDesc('id')->value('profile_id');
+
+                if ($returnerId && CandidacyStaffProfile::whereKey($returnerId)->whereNotNull('user_id')->exists()) {
+                    $appeal->{['supervisor' => 'supervisor_profile_id', 'chair' => 'chair_profile_id', 'dean' => 'dean_profile_id'][$by]} = $returnerId;
+                }
+            }
             $from = $appeal->status;
 
             $appeal->round = $appeal->round + 1;

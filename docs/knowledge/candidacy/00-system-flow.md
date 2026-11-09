@@ -11,8 +11,8 @@ verify appeals. Registry staff work outside the system.
 
 ## Student pages
 
-My Study Candidacy (Track My Applications > My Study Candidacy, page title "My Study Candidacy"): expiry date, extension months used and left, My Appeals table, and the
-"Submit an Appeal" button when allowed. New Appeal has 4 steps: 1 Department and Supervisor / Programme Manager (read-only, from the student record); 2 Research and extension (Section A Research progress, B Earlier
+My Study Candidacy (sidebar item, page title "My Study Candidacy"): expiry date, extension months used and left, My Appeals table, and the
+"Submit an Appeal" button when allowed. The sidebar item My Application > Study Candidacy Appeal opens the appeal form itself: editable when you may appeal (a returned appeal opens Edit and resubmit, an unfinished draft opens the draft), read-only with the reasons when you may not, or when an appeal is already with an approver. New Appeal has 4 steps: 1 Department and Supervisor / Programme Manager (read-only, from the student record); 2 Research and extension (Section A Research progress, B Earlier
 extensions, C Publications, D Extension requested); 3 Documents (official appeal form .xlsx, up to 4 supporting files); 4 Review and submit. Appeal number SCA-<student ID>-<NN>.
 
 ## Approval route
@@ -66,7 +66,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_deadline
 
-An appeal must be submitted on or before the expiry date. The expiry day itself is allowed; the day after is too late.
+An appeal can be submitted only inside the appeal window: it opens 3 calendar months before the expiry date (the same day as the 3-month reminder) and closes at the end of the expiry date. Before the window, New Appeal is disabled and says the date it opens; the expiry day itself is allowed; the day after is too late. A returned appeal can still be resubmitted up to the expiry date, and after a Dean approval the window follows the new expiry date.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
@@ -79,7 +79,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_appeal_rules
 
 • The candidacy must be active and not expired, with no appeal already in progress.
-• Submit on or before the expiry date (the expiry day is allowed).
+• Submit inside the appeal window: from 3 months before the expiry date until the end of the expiry date (the expiry day is allowed).
 • Maximum extension {{cand_max_extension_months}} months in total.
 • One appeal at a time; no withdrawal after submission.
 • Route: Student, Supervisor / Programme Manager, Department Chair, CGS Verification, Dean. Only the Dean can reject, and a rejection is final.
@@ -89,7 +89,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_faq
 
 • How long can an extension be? Up to {{cand_max_extension_months}} months in total.
-• Can an appeal be made on the expiry day? Yes, on or before it.
+• Can an appeal be made on the expiry day? Yes: the window closes at the end of the expiry date.
 • Who decides? The approvers; only the Dean can reject.
 • Can an appeal be withdrawn? No.
 • Are there reminders? Yes, 3, 2 and 1 month before the expiry date, at 08:00.
@@ -100,5 +100,35 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 I can't predict whether an appeal will be approved. The approvers and the Dean decide from the reasons and documents in the appeal. I can explain the rules, show
 the current status and say who has the appeal.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_appeal_window
+
+A student can appeal from 3 calendar months before the expiry date up to and including the expiry day. This rule applies from 2026-11-08. Before the window opens the New Appeal button is disabled and says the date it opens; after the expiry date an appeal can no longer be started. "3 months" means calendar months, not 90 days. A returned appeal can still be resubmitted up to the expiry date.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_expiry_rules
+
+The expiry date is the current expiry date held for the candidacy. After the Dean approves an appeal, the approved extension months are added to it. The total extension is at most {{cand_max_extension_months}} months across all appeals. The expiry day itself is still valid: a candidacy counts as expired only from the day after its expiry date. Dates follow Malaysia time (GMT+8), and "3 months" in the appeal window and the reminders means calendar months. The system never dismisses a student automatically; a dismissal is always a CGS decision.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_return_same_approver
+
+When a student resubmits a returned appeal it goes back to the same approver who returned it, not to the start of the route. CGS is a role, so any CGS officer can handle it. The one exception is a Dean return: it goes to CGS for a re-check first, then back to the Dean.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_appeal_number
+
+An appeal gets its number when it is submitted, in the form SCA-<student matric number>-<two-digit sequence>, for example SCA-22001001-01. A draft has no number yet. The number is shown on the appeal and on the memo.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_memo_verification
+
+The approval memo is e-mailed to the student after the Dean approves. It lists each approval step with the approver, the decision, the date and time (Malaysia time) and a verification code, one code per approval. CGS can check the codes of a memo with the system's verification command (candidacy:verify-memo, given the appeal number); it also checks that the stored signature copy still matches.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).

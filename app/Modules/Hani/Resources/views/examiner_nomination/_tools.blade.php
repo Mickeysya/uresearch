@@ -8,5 +8,6 @@
 --}}
 <div class="queue-tools queue-tools-actions">
     <a href="{{ route('examiner-nomination.report') }}" class="btn-secondary">Open the compiled list</a>
-    <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx']) }}" class="btn-secondary">Download Excel</a>
+    <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx']) }}" class="btn-secondary" data-region-swap-ignore>Download Excel: awaiting letters</a>
+    <a href="{{ route('examiner-nomination.export', ['format' => 'xlsx', 'scope' => 'full']) }}" class="btn-secondary" data-region-swap-ignore>Download Excel: full list</a>
 </div>

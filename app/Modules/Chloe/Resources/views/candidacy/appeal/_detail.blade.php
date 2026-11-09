@@ -12,7 +12,7 @@
     Same $detail either way, so @include('..._sections') never has to know
     which screen it's on.
 --}}
-@php($detail = isset($details) ? ($details[$application->id] ?? null) : \App\Modules\Chloe\Models\CandidacyAppealDetail::where('application_id', $application->id)->with('candidacy', 'supervisor', 'publications')->first())
+@php($detail = \App\Modules\Chloe\Models\CandidacyAppeal::where('legacy_application_id', $application->id)->with('candidacy', 'supervisorProfile', 'department', 'publications')->first())
 
 @if (! $detail)
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
@@ -42,7 +42,7 @@
     @elseif ($application->status === \App\Modules\Core\Models\Application::STATUS_APPROVED)
         <div class="empty-state" style="text-align:left;">
             Approved. Your candidacy expiry date is now
-            <b>{{ $detail->new_expiry_date?->format('j M Y') ?? $detail->candidacy->candidacy_expiry_date->format('j M Y') }}</b>.
+            <b>{{ $detail->new_expiry_date?->format('j M Y') ?? $detail->candidacy?->candidacy_expiry_date?->format('j M Y') }}</b>.
         </div>
     @endif
 

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Modules\Chloe\Models\CandidacyAppealDetail;
+use App\Modules\Chloe\Models\CandidacyAppeal;
 use App\Modules\Chloe\Models\LockerKey;
 use App\Modules\Chloe\Models\StudentGender;
 use App\Modules\Chloe\Models\StudyCandidacy;
@@ -489,19 +489,10 @@ class WorkstationManagementTest extends TestCase
             'candidacy_expiry_date' => now()->subDay(), 'status' => StudyCandidacy::STATUS_ACTIVE,
         ]);
 
-        $supervisor = $this->supervisor();
-        $application = Application::create([
-            'student_id' => $student->id,
-            'module_type' => 'candidacy_appeal',
-            'status' => Application::STATUS_PENDING,
-            'current_stage' => 'supervisor',
-        ]);
-        CandidacyAppealDetail::create([
-            'application_id' => $application->id,
-            'study_candidacy_id' => $candidacy->id,
-            'supervisor_id' => $supervisor->id,
-            'reason' => '',
-            'requested_extension_months' => 3,
+        CandidacyAppeal::create([
+            'student_id' => $student->id, 'study_candidacy_id' => $candidacy->id, 'appeal_no' => 'SCA-99999994-01', 'sequence_no' => 1,
+            'status' => CandidacyAppeal::STATUS_WITH_SUPERVISOR, 'current_stage' => 'supervisor', 'round' => 1, 'requested_months' => 3,
+            'submitted_at' => now()->subDay(), 'stage_entered_at' => now()->subDay(),
         ]);
 
         $this->artisan('workstation:process-releases')->assertSuccessful();
