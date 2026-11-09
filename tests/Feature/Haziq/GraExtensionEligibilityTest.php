@@ -6,7 +6,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\GraGaStudentProfile;
-use App\Modules\Haziq\Models\GraTermsAcceptance;
+use App\Modules\Haziq\Models\TermsAcceptance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
@@ -25,7 +25,7 @@ class GraExtensionEligibilityTest extends TestCase
     protected function studentWithTermsAccepted(string $matric = '22001001', string $email = 'student@test.my'): User
     {
         $student = $this->student($matric, $email);
-        GraTermsAcceptance::create(['user_id' => $student->id, 'accepted_at' => now()]);
+        TermsAcceptance::create(['user_id' => $student->id, 'scheme' => TermsAcceptance::GRA, 'accepted_at' => now()]);
 
         return $student;
     }

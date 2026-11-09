@@ -20,7 +20,7 @@
         </p>
 
         @if ($terminated ?? false)
-            <div class="haziq-repeatable-row" style="border-color: #D0342C; background: #FDEEED;">
+            <div class="haziq-repeatable-row" style="border-color: var(--danger-fg); background: var(--danger-bg);">
                 <p style="grid-column: 1 / -1;">
                     <b>This appointment has been terminated</b> — a Stage Gate requirement was not completed
                     within its grace period.
@@ -32,7 +32,7 @@
         @endif
 
         @if ($openCorrections->isNotEmpty())
-            <div class="haziq-repeatable-row" style="border-color: #D0342C;">
+            <div class="haziq-repeatable-row" style="border-color: var(--danger-fg);">
                 <p style="grid-column: 1 / -1;"><b>Awaiting student action:</b></p>
                 @foreach ($openCorrections as $req)
                     <p>{{ $req->target_label }} — <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>
@@ -98,7 +98,7 @@
                  $canFlagAllowance is always false there), see
                  AllowanceRecommendationNote's migration for why. --}}
             @if ($allowanceNotes->isNotEmpty())
-                <div class="haziq-repeatable-row" style="border-color: #C28E40;">
+                <div class="haziq-repeatable-row" style="border-color: var(--warning-fg);">
                     <p style="grid-column: 1 / -1;"><b>Allowance notes (internal — CGS/Admin/Supervisor/Senior Director only):</b></p>
                     @foreach ($allowanceNotes as $note)
                         <p style="grid-column: 1 / -1;">

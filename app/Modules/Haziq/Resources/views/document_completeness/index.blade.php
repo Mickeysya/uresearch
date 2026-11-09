@@ -43,7 +43,17 @@
                                 labels: ['Complete', 'Incomplete'],
                                 datasets: [{
                                     data: [{{ $counts['complete'] }}, {{ $counts['incomplete'] }}],
-                                    backgroundColor: ['#07794A', '#C28E40'],
+                                    // --tone-* on purpose, not --success-fg/--warning-fg: these
+                                    // are the solid fill under a WHITE datalabel, and the tone
+                                    // tokens are deliberately the same saturated colour in both
+                                    // themes (tokens.css) so white text stays legible on them
+                                    // either way -- the status -fg tokens turn light in dark
+                                    // mode specifically for text-on-tint use, which would wash
+                                    // out white text on top of them here.
+                                    backgroundColor: [
+                                        Chart.uresearchToken('--tone-green', '#00A857'),
+                                        Chart.uresearchToken('--tone-orange', '#F08A24'),
+                                    ],
                                     borderWidth: 0,
                                 }],
                             },

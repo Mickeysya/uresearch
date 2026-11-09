@@ -13,7 +13,7 @@
         subtitle="How long an actor takes once a GRA or GA application actually reaches them, read off the real approval history. Not a workflow, just a read." />
 
     @if ($bottleneck)
-        <div class="card card-wide" style="border-left: 4px solid #C28E40;">
+        <div class="card card-wide" style="border-left: 4px solid var(--warning-fg);">
             <h3 style="margin-top: 0;">Predicted bottleneck{{ $module ? ' ('.($module === 'gra_application' ? 'GRA' : 'GA').')' : '' }}</h3>
             <p class="queue-meta" style="margin-bottom: 0;">
                 <b>{{ \App\Modules\Core\Support\Role::label($bottleneck['role']) }}</b> is the role predicted to
@@ -94,7 +94,11 @@
                                 datasets: [{
                                     label: 'Predicted days to decide',
                                     data: points.map(function (p) { return p.avg_days; }),
-                                    backgroundColor: points.map(function (p) { return p.reliable ? '#5B6E9C' : '#C28E40'; }),
+                                    backgroundColor: points.map(function (p) {
+                                        return p.reliable
+                                            ? Chart.uresearchToken('--navy', '#284B80')
+                                            : Chart.uresearchToken('--warning-fg', '#C28E40');
+                                    }),
                                     borderRadius: 5,
                                     borderSkipped: false,
                                     maxBarThickness: 36,
@@ -107,7 +111,7 @@
                                     legend: { display: false },
                                     datalabels: {
                                         display: true, anchor: 'end', align: 'right', offset: 4,
-                                        color: '#23283A', font: { size: 11, weight: '700' },
+                                        color: function () { return Chart.uresearchToken('--text-body', '#23283A'); }, font: { size: 11, weight: '700' },
                                         formatter: function (value, ctx) {
                                             var p = points[ctx.dataIndex];
                                             var label = value + 'd';
@@ -118,7 +122,7 @@
                                     },
                                 },
                                 scales: {
-                                    x: { beginAtZero: true, grid: { color: '#F1F3F7' }, border: { display: false } },
+                                    x: { beginAtZero: true, grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } }, border: { display: false } },
                                     y: { grid: { display: false }, border: { display: false } },
                                 },
                             },
@@ -194,9 +198,9 @@
                             <td>{{ $a['avg_days'] }} {{ Str::plural('day', $a['avg_days']) }} ({{ $a['avg_hours'] }} hrs)</td>
                             <td>
                                 @if ($a['vs_role_percent'] > 0)
-                                    <span style="color: var(--red, #c0392b); font-weight: 600;">+{{ $a['vs_role_percent'] }}% slower</span>
+                                    <span style="color: var(--danger-fg); font-weight: 600;">+{{ $a['vs_role_percent'] }}% slower</span>
                                 @elseif ($a['vs_role_percent'] < 0)
-                                    <span style="color: #07794A; font-weight: 600;">{{ $a['vs_role_percent'] }}% faster</span>
+                                    <span style="color: var(--success-fg); font-weight: 600;">{{ $a['vs_role_percent'] }}% faster</span>
                                 @else
                                     <span class="queue-meta">about the same</span>
                                 @endif

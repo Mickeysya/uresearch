@@ -60,6 +60,8 @@
                         var el = document.getElementById('my-allowance-trend');
                         if (! el || typeof Chart === 'undefined') return;
 
+                        function token(name, fallback) { return function () { return Chart.uresearchToken(name, fallback); }; }
+
                         new Chart(el, {
                             type: 'line',
                             data: {
@@ -67,8 +69,8 @@
                                 datasets: [{
                                     label: 'Allowance (RM)',
                                     data: @json($trend->pluck('amount')),
-                                    borderColor: '#284B80',
-                                    backgroundColor: 'rgba(40, 75, 128, 0.12)',
+                                    borderColor: token('--navy', '#284B80'),
+                                    backgroundColor: token('--accent-subtle', '#E2EAFA'),
                                     fill: true,
                                     tension: 0.25,
                                     spanGaps: true,
@@ -82,7 +84,7 @@
                                     datalabels: { display: false },
                                 },
                                 scales: {
-                                    y: { beginAtZero: true, grid: { color: '#F1F3F7' }, border: { display: false } },
+                                    y: { beginAtZero: true, grid: { color: token('--border-grey', '#F1F3F7') }, border: { display: false } },
                                     x: { grid: { display: false }, border: { display: false } },
                                 },
                             },
@@ -120,6 +122,8 @@
                         var el = document.getElementById('allowance-anomaly');
                         if (! el || typeof Chart === 'undefined') return;
 
+                        function token(name, fallback) { return function () { return Chart.uresearchToken(name, fallback); }; }
+
                         new Chart(el, {
                             type: 'bar',
                             data: {
@@ -127,7 +131,11 @@
                                 datasets: [{
                                     label: 'Students',
                                     data: @json(array_values($buckets)),
-                                    backgroundColor: ['#07794A', '#C28E40', '#D0342C'],
+                                    backgroundColor: [
+                                        Chart.uresearchToken('--success-fg', '#07794A'),
+                                        Chart.uresearchToken('--warning-fg', '#C28E40'),
+                                        Chart.uresearchToken('--danger-fg', '#D0342C'),
+                                    ],
                                     borderRadius: 5,
                                     borderSkipped: false,
                                     maxBarThickness: 64,
@@ -138,10 +146,10 @@
                                 animation: { duration: 650, easing: 'easeOutQuart' },
                                 plugins: {
                                     legend: { display: false },
-                                    datalabels: { display: true, anchor: 'end', align: 'end', color: '#23283A', font: { size: 11, weight: '700' } },
+                                    datalabels: { display: true, anchor: 'end', align: 'end', color: token('--text-body', '#23283A'), font: { size: 11, weight: '700' } },
                                 },
                                 scales: {
-                                    x: { beginAtZero: true, grid: { color: '#F1F3F7' }, border: { display: false }, ticks: { precision: 0 } },
+                                    x: { beginAtZero: true, grid: { color: token('--border-grey', '#F1F3F7') }, border: { display: false }, ticks: { precision: 0 } },
                                     y: { grid: { display: false }, border: { display: false } },
                                 },
                             },
@@ -179,7 +187,7 @@
                             <td>
                                 {{ $row['monthsAccruing'] > 0 ? $row['monthsAccruing'] : '—' }}
                                 @if ($row['monthsAccruing'] >= $anomalyThreshold)
-                                    <span title="{{ $anomalyThreshold }}+ months accruing — flagged for attention" style="color: #D0342C; font-weight: 700;">⚠</span>
+                                    <span title="{{ $anomalyThreshold }}+ months accruing — flagged for attention" style="color: var(--danger-fg); font-weight: 700;">⚠</span>
                                 @endif
                                 @if ($row['monthsAccumulating'] > $row['monthsAccruing'])
                                     <br><span style="color: var(--text-grey); font-size: 11px;">

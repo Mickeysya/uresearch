@@ -11,19 +11,19 @@
 --}}
 <style>
     .status-badge.upcoming        { background: var(--light-blue-bg); color: var(--navy); }
-    .status-badge.due_soon        { background: var(--light-gold-bg); color: #8A5F14; }
+    .status-badge.due_soon        { background: var(--warning-bg); color: var(--warning-fg); }
     .status-badge.grace_period    { background: var(--light-gold-bg); color: var(--gold); }
     .status-badge.grace_expired,
     .status-badge.withheld,
     .status-badge.forfeited,
     .status-badge.not_completed,
-    .status-badge.terminated      { background: #FDEEED; color: #D0342C; }
+    .status-badge.terminated      { background: var(--danger-bg); color: var(--danger-fg); }
     .status-badge.completed,
     .status-badge.backdated,
     .status-badge.eligible,
-    .status-badge.active          { background: #E4F8ED; color: #07794A; }
+    .status-badge.active          { background: var(--success-bg); color: var(--success-fg); }
     .status-badge.not_recorded    { background: var(--border-grey); color: var(--text-grey); }
-    .status-badge.payment_pending { background: var(--light-gold-bg); color: #8A5F14; }
+    .status-badge.payment_pending { background: var(--warning-bg); color: var(--warning-fg); }
     .status-badge.review_required { background: var(--light-purple-bg); color: var(--navy); }
     .status-badge.master          { background: var(--light-blue-bg); color: var(--navy); }
     .status-badge.phd             { background: var(--light-purple-bg); color: var(--navy); }
@@ -40,7 +40,7 @@
         border-radius: 6px;
         font-size: 13px;
         color: var(--text-dark);
-        background: white;
+        background: var(--surface);
     }
 
     .haziq-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -74,17 +74,17 @@
        "needs attention" state (status-badge.grace_expired etc.), just
        applied to an input's border instead of a badge's background. */
     .haziq-flagged {
-        border: 2px solid #D0342C !important;
-        background: #FDEEED;
+        border: 2px solid var(--danger-fg) !important;
+        background: var(--danger-bg);
         border-radius: 6px;
     }
     .haziq-flag-reason {
-        color: #D0342C;
+        color: var(--danger-fg);
         font-size: 12.5px;
         margin: -6px 0 10px;
     }
     .haziq-flagged-section {
-        border: 1px solid #D0342C;
+        border: 1px solid var(--danger-fg);
         border-radius: 8px;
         padding: 12px;
         margin-bottom: 4px;
@@ -99,9 +99,9 @@
         font-size: 13.5px;
     }
     .alert-banner-danger {
-        background: #FDEEED;
-        border: 1px solid #D0342C;
-        color: #8A1F1A;
+        background: var(--danger-bg);
+        border: 1px solid var(--danger-border);
+        color: var(--danger-fg);
     }
     /* Document completeness on the student's own application page -- an
        informational notice, never a block, so it reads as a lighter

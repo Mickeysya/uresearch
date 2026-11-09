@@ -6638,6 +6638,201 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         student data) to finish verifying. `php artisan test` 118/118
         in `tests/Feature/Haziq/`, same 71 pre-existing/already-
         documented failures elsewhere, nothing else moved.
+- [x] **2026-11-08 — `gra_terms_acceptances` + `ga_terms_acceptances`
+      merged into one `terms_acceptances` table.** Team table audit
+      (`docs/table-audit.md` on `develop`, finding A), proposal handed
+      to Haziq directly: identical columns, identical usage in both
+      application controllers, two tables for one concept. Acted on
+      exactly as specified in `docs/proposals/haziq-terms-acceptances.md`.
+  - [x] New migration `2026_11_08_000100_create_terms_acceptances_table.php`
+        -- creates `terms_acceptances` (`user_id`, `scheme` `'gra'`/`'ga'`,
+        `accepted_at`, timestamps, unique on `(user_id, scheme)` replacing
+        each old table's own unique `user_id`), copies every row across by
+        scheme, drops both originals. The two original create migrations
+        untouched, per the proposal -- everyone has already run them.
+        `down()` recreates both and copies back by scheme.
+  - [x] New `Models\TermsAcceptance` (with `GRA`/`GA` scheme constants,
+        not raw strings at the call sites) replacing `GraTermsAcceptance`
+        and `GaTermsAcceptance`, both deleted. `Gra`/`GaApplicationController
+        ::hasAcceptedTerms()`/`acceptTerms()` updated to the new model plus
+        a `scheme` filter -- exactly the 2 call sites each the proposal
+        named, confirmed by grepping the whole tree first (found no
+        seeder, view, or other reference either model).
+  - [x] Found while grepping: 2 of this session's own test files
+        (`DraftIntegrationTest`, `GraExtensionEligibilityTest`) construct
+        `Gra`/`GaTermsAcceptance` rows directly as fixtures -- not
+        mentioned in the proposal since it predates them. Updated both to
+        `TermsAcceptance` with the new `scheme` column.
+  - [x] Ran the migration against the live dev database (not just the
+        test suite's own fresh SQLite): verified both pre-existing rows
+        (`student@utp.edu.my`'s real gra+ga acceptances) copied across
+        correctly by scheme and both old tables are gone. Verified live
+        over real HTTP post-migration: `/gra-application/new` and
+        `/ga-application/new` both still recognise the existing
+        acceptance correctly (GRA redirects to the student's in-progress
+        application as expected, not back to the terms page; GA renders
+        the form directly). `php artisan test` 118/118 in
+        `tests/Feature/Haziq/`.
+- [x] **2026-11-08 — real bug, caught by the user in live use, not by
+      any test: the allowance assistant was wrong for every student
+      with more than one unconfirmed month in a row.** User's own
+      report: three unconfirmed months (Sep/Oct/Nov, each a flat
+      RM2,000), expected RM6,000 now and RM8,000 next month if November
+      also goes unconfirmed; the assistant answered RM4,000 for next
+      month.
+  - [x] **Root cause:** `AllowanceLedger::projectedNextMonthIfUnconfirmed()`
+        (added 2026-11-07) and `AssistantContext::allowanceSummary()`'s
+        "current amount" line both used `$log->amount` directly — but
+        that column is only ever ONE month's own flat contribution,
+        never the running total. `ensureMonthlyLogs()` writes each row
+        that way and leaves the walk to whoever reads it (`rowFor()`'s
+        own `$runningSum`, never written back to the row). With only
+        one unconfirmed month, `$log->amount` and the true walked total
+        happen to be the same number, which is exactly why this passed
+        every test and every live check from 2026-11-07 — none of them
+        had a second unconfirmed month in the fixture.
+  - [x] Fixed both to use the already-existing `AllowanceLedger::
+        withheldTotalThrough()` — the same walk `rowFor()` itself
+        calls elsewhere — instead of the raw column.
+        `applicationSummary()`'s fix is scoped to
+        `ACCUMULATING_STATUSES` only (`eligible`/`withheld`/
+        `backdated`); `forfeited`/`review_required`/`determined` keep
+        their own stored figure, which already means something
+        different in those branches and wasn't part of what broke.
+  - [x] Added the regression this bug needed and didn't have: a 3-row
+        unconfirmed fixture (not the old tests' single synthetic row
+        already holding the accumulated figure, which is not how the
+        real engine ever stores one) at both the `AllowanceLedger`
+        level and the `AssistantContext` level. `php artisan test`
+        120/120 in `tests/Feature/Haziq/`.
+  - [x] Verified live against the real Gemini API and application #25's
+        actual three-month-unconfirmed state: "Your most recent
+        allowance record for November 2026 is RM6,000.00. If this
+        month's figure stays unconfirmed, next month's running total
+        would be RM8,000.00." — matches the user's own hand-worked
+        figures exactly.
+- [x] **2026-11-08 — only the FIRST withheld month is confirmable; every
+      withheld month after it is locked until Stage 1 actually
+      completes.** Explicitly reverses 2026-11-06's own decision
+      ("every withheld month is confirmable, waiting for Stage 1 is no
+      longer a precondition") on direct instruction, after a side-by-
+      side trace of the grace-boundary question surfaced the real
+      disagreement. User, asked directly to choose between the two:
+      "only the first withheld month confirmable until Stage 1
+      completes, the rest locked."
+  - [x] **Reasoning, confirmed by the user**: the first withheld month
+        is still legitimately payable — its own payment is for service
+        from *before* Stage 1 actually went overdue (the permanent
+        payroll lag means a CGS viewer only ever sees last month's
+        service). Every withheld month after that has no such excuse,
+        so it stays locked until Stage 1 is genuinely marked complete —
+        at which point `recordCompletion()`'s existing back-pay still
+        flips every withheld row to `backdated` in one go, confirmable
+        as a batch exactly as before. Nothing about back-pay itself
+        changed.
+  - [x] One-line fix, `rowFor()`'s `$confirmable`: added
+        `&& ($row->status !== 'withheld' || $previousStatus !== 'withheld')`
+        — `$previousStatus` is the walk's own existing variable (already
+        used by the `reviewable` checks just below it), never reset by
+        a confirmation in between, so it correctly reads 'withheld' only
+        once an overdue run has already produced at least one withheld
+        row. `confirmPayment()` needed no change at all — it already
+        calls `rowFor()` and aborts on `! $row['confirmable']`, so the
+        server-side guard inherited the new rule automatically; no
+        separate logic to keep in sync.
+  - [x] Updated `AllowanceRowForTest`: the old test asserting "withheld
+        must stay confirmable" directly encoded the rule just reversed,
+        replaced with 4 tests — first withheld month confirmable, second
+        consecutive one locked (still accumulates, just not
+        confirmable), every withheld row unlocking together once
+        `recordCompletion()` actually runs, and the existing "confirming
+        resets next month" test re-pointed at the first withheld month
+        (the only one still legitimately confirmable to begin with).
+        `php artisan test` 122/122 in `tests/Feature/Haziq/`.
+  - [x] Verified live over real HTTP as `cgs@utp.edu.my` against two
+        disposable applications (deleted after): one with two
+        consecutive withheld months showed the second (the one the lag
+        currently displays) with an empty Action column, and a direct
+        POST to `confirm-payment` against it correctly 404'd
+        ("Nothing pending to confirm for this application this
+        month."); a second, single-withheld-month application showed
+        "Mark Payment Complete" normally. Application #25 confirmed
+        untouched throughout.
+  - [x] **Left open, by the user's own choice not to resolve it this
+        round**: the related grace-boundary question (does the month
+        `grace_end_date` falls in count as eligible or already
+        withheld) surfaced during this same exchange, traced
+        side-by-side against the historical RM24,000 settled case —
+        not changed. `statusAsOf()` is untouched.
+
+- [x] **2026-11-08 — same-day correction: the first-withheld-month
+      exception above was too broad.** Caught live by the user looking
+      at application #25's real November 2026 row (RM38,000, raw
+      status `withheld`, previous row `forfeited`) still showing "Mark
+      Payment Complete" right after the fix above shipped —
+      `$previousStatus !== 'withheld'` is true for *any* non-withheld
+      predecessor, so a resumption row right after a termination
+      (previous status `forfeited`, or `review_required` mid-
+      termination-entry) was wrongly granted the same exception as a
+      genuinely fresh overdue month. User's own correction: "firts
+      month tuk case baru je withold sebab tak complete stage 1" — the
+      exception is for a *new case* of Stage 1 going overdue, not for
+      a resumption row that's still carrying an *unresolved* Stage 1
+      debt forward from before the termination.
+  - [x] Narrowed the condition from "`$previousStatus` isn't
+        `'withheld'`" to "`$previousStatus` is `'eligible'` (or `null`,
+        the very first log row ever)" — the only two predecessors that
+        actually mean this withheld row is the first month of a fresh
+        overdue episode, with its own payment still covering service
+        from before Stage 1 went overdue. A `forfeited` or
+        `review_required` predecessor no longer qualifies.
+  - [x] Added `test_a_resumption_row_after_termination_is_locked_not_
+        treated_as_a_fresh_first_month` to `AllowanceRowForTest`: a
+        withheld row directly after a `forfeited` one is now asserted
+        `confirmable === false`. `php artisan test --filter=Haziq`:
+        123/123.
+  - [x] Verified live against the real application #25 (left
+        untouched, no test data created this round): before the fix,
+        `rowFor()` on its November 2026 row (`amount=38000,
+        displayStatus=withheld`) returned `confirmable=true` and the
+        real `/allowance` page rendered "Mark Payment Complete" for
+        it; after the fix, the same row returns `confirmable=false`
+        and the button is gone from the live page — only "Set Amount"
+        (the separate, correctly-unaffected reviewable action for a
+        mid-month resumption) remains.
+
+- [x] **2026-11-08 — confirming a mid-defer row was silently dropping
+      its own deferred contribution instead of letting it keep
+      following the lag cycle.** `rowFor()`'s own "permanent lag"
+      mechanic defers a row's own contribution into the *next* row's
+      `$heldBack` once a reinstatement's queued figure first folds in
+      (confirmed 2026-11-03, "lag berterusan selamanya lepas
+      reinstatement"). The confirmed-reset block zeroed `$heldBack`
+      unconditionally, even when it had just been set a few lines
+      earlier for the row right after. Caught by walking the user's own
+      worked example end to end (resumption → Set Amount → settle →
+      settle again) — before the fix, a deferred month's allowance
+      vanished the instant an earlier figure in the same chain got
+      confirmed, rather than surfacing next cycle like everything else.
+      User's own words, confirming the principle: "next monthnya baru
+      bayar untuk previous month... same cycle" — nothing in the chain
+      should disappear just because an earlier figure in it got settled.
+  - [x] One-line fix: removed the `$heldBack = 0.0;` line from the
+        `$rowConfirmed` reset block in [AllowanceController.php](app/Modules/Haziq/Http/Controllers/AllowanceController.php).
+        Everything else in that block (`$runningSum`,
+        `$monthsAccumulating`, `$monthsAccruing`, `$laggedMode`) still
+        resets as before — the chain still ends cleanly at the
+        confirmation, it just no longer throws away a contribution that
+        was already earmarked for the very next row.
+  - [x] Added `test_confirming_a_lagged_row_still_carries_its_own_
+        deferred_contribution_forward` to `AllowanceRowForTest`. `php
+        artisan test --filter=Haziq`: 124/124.
+  - [x] Verified live end to end with numbers mirroring application
+        #25's real chain (disposable application, deleted after): Nov
+        RM38,000 + RM1,000 pending addition, confirmed → Dec shows
+        RM1,000 → confirmed → Jan now correctly shows RM4,000 (Dec's own
+        deferred RM2,000 + Jan's own RM2,000), not RM2,000 as it did
+        before this fix.
 
 ---
 

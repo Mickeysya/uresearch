@@ -33,7 +33,7 @@
                             datasets: [{
                                 label: 'Past deadline',
                                 data: @json($bottleneckChart->pluck('count')),
-                                backgroundColor: '#C28E40',
+                                backgroundColor: function () { return Chart.uresearchToken('--gold', '#C28E40'); },
                                 borderRadius: 5,
                                 borderSkipped: false,
                                 maxBarThickness: 64,
@@ -47,7 +47,7 @@
                                 y: {
                                     beginAtZero: true,
                                     border: { display: false },
-                                    grid: { color: '#F1F3F7' },
+                                    grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } },
                                     ticks: { precision: 0 },
                                 },
                             },
@@ -57,7 +57,7 @@
                                     anchor: 'end',
                                     align: 'top',
                                     offset: 2,
-                                    color: '#23283A',
+                                    color: function () { return Chart.uresearchToken('--text-body', '#23283A'); },
                                     font: { size: 11, weight: '700' },
                                 },
                                 tooltip: {
@@ -79,13 +79,13 @@
                 <p style="grid-column: 1 / -1; margin: 0;"><b>Active GRA</b><br>
                     <span style="font-size: 22px;">{{ $activeCount }}</span></p>
             </div>
-            <div class="haziq-repeatable-row" style="flex: 1; min-width: 160px; border-color: #D0342C;">
+            <div class="haziq-repeatable-row" style="flex: 1; min-width: 160px; border-color: var(--danger-fg);">
                 <p style="grid-column: 1 / -1; margin: 0;"><b>Terminated</b><br>
-                    <span style="font-size: 22px; color: #D0342C;">{{ $terminatedCount }}</span></p>
+                    <span style="font-size: 22px; color: var(--danger-fg);">{{ $terminatedCount }}</span></p>
             </div>
-            <div class="haziq-repeatable-row" style="flex: 1; min-width: 160px; border-color: #C28E40;">
+            <div class="haziq-repeatable-row" style="flex: 1; min-width: 160px; border-color: var(--warning-fg);">
                 <p style="grid-column: 1 / -1; margin: 0;"><b>Allowance Suspended</b><br>
-                    <span style="font-size: 22px; color: #8A5F14;">{{ $suspended->count() }}</span></p>
+                    <span style="font-size: 22px; color: var(--warning-fg);">{{ $suspended->count() }}</span></p>
             </div>
         </div>
 
@@ -141,7 +141,9 @@
 
                             var risk = @json($openGates->map(fn ($g) => $riskByGate[$g->id] ?? 0)->values());
                             var colors = risk.map(function (r) {
-                                return r >= 100 ? '#D0342C' : (r >= 60 ? '#C28E40' : '#07794A');
+                                return r >= 100 ? Chart.uresearchToken('--danger-fg', '#D0342C')
+                                    : r >= 60 ? Chart.uresearchToken('--warning-fg', '#C28E40')
+                                    : Chart.uresearchToken('--success-fg', '#07794A');
                             });
 
                             new Chart(el, {
@@ -160,7 +162,7 @@
                                     indexAxis: 'y',
                                     animation: { duration: 650, easing: 'easeOutQuart' },
                                     scales: {
-                                        x: { min: 0, max: 100, grid: { color: '#F1F3F7' }, border: { display: false }, ticks: { callback: function (v) { return v + '%'; } } },
+                                        x: { min: 0, max: 100, grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } }, border: { display: false }, ticks: { callback: function (v) { return v + '%'; } } },
                                         y: { grid: { display: false }, border: { display: false } },
                                     },
                                     plugins: {
@@ -169,7 +171,7 @@
                                             display: true,
                                             anchor: 'end',
                                             align: 'end',
-                                            color: '#23283A',
+                                            color: function () { return Chart.uresearchToken('--text-body', '#23283A'); },
                                             font: { size: 11, weight: '700' },
                                             formatter: function (v) { return v + '%'; },
                                         },
@@ -297,7 +299,7 @@
                                 <td>
                                     @php($risk = ($riskByGate ?? [])[$gate->id] ?? null)
                                     @if ($risk !== null)
-                                        <span style="font-weight: 600; color: {{ $risk >= 100 ? '#D0342C' : ($risk >= 60 ? '#8A5F14' : '#07794A') }};">{{ $risk }}%</span>
+                                        <span style="font-weight: 600; color: {{ $risk >= 100 ? 'var(--danger-fg)' : ($risk >= 60 ? 'var(--warning-fg)' : 'var(--success-fg)') }};">{{ $risk }}%</span>
                                     @else
                                         <span style="color: var(--text-grey);">—</span>
                                     @endif

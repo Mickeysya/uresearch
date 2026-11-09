@@ -14,9 +14,9 @@ use App\Modules\Haziq\Http\Controllers\Concerns\HandlesApplicationCorrections;
 use App\Modules\Haziq\Models\AcademicQualification;
 use App\Modules\Haziq\Models\ApplicationCorrectionRequest;
 use App\Modules\Haziq\Models\GaApplicationDetail;
-use App\Modules\Haziq\Models\GaTermsAcceptance;
 use App\Modules\Haziq\Models\GraGaStudentProfile;
 use App\Modules\Haziq\Models\Publication;
+use App\Modules\Haziq\Models\TermsAcceptance;
 use App\Modules\Haziq\Models\WorkExperience;
 use App\Modules\Haziq\Notifications\ApplicationCorrectionResubmitted;
 use App\Modules\Haziq\Notifications\ApplicationRejected;
@@ -102,13 +102,13 @@ class GaApplicationController extends Controller
 
     /**
      * Mirrors GraApplicationController::hasAcceptedTerms() — a separate
-     * table from GRA's own, confirmed explicitly 2026-11-03: "ga is
-     * different from gra." One row per student, covers every GA
-     * application that student submits afterwards.
+     * scheme from GRA's own, confirmed explicitly 2026-11-03: "ga is
+     * different from gra." One row per student per scheme, covers every
+     * GA application that student submits afterwards.
      */
     protected function hasAcceptedTerms(User $user): bool
     {
-        return GaTermsAcceptance::where('user_id', $user->id)->exists();
+        return TermsAcceptance::where('user_id', $user->id)->where('scheme', TermsAcceptance::GA)->exists();
     }
 
     public function showTerms()
@@ -120,8 +120,8 @@ class GaApplicationController extends Controller
     {
         $request->validate(['agree' => ['required', 'accepted']]);
 
-        GaTermsAcceptance::firstOrCreate(
-            ['user_id' => $request->user()->id],
+        TermsAcceptance::firstOrCreate(
+            ['user_id' => $request->user()->id, 'scheme' => TermsAcceptance::GA],
             ['accepted_at' => now()]
         );
 

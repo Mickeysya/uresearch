@@ -20,7 +20,7 @@
         </p>
 
         @if ($openCorrections->isNotEmpty())
-            <div class="haziq-repeatable-row" style="border-color: #D0342C;">
+            <div class="haziq-repeatable-row" style="border-color: var(--danger-fg);">
                 <p style="grid-column: 1 / -1;"><b>Awaiting student action:</b></p>
                 @foreach ($openCorrections as $req)
                     <p>{{ $req->target_label }} — <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>

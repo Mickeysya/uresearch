@@ -189,8 +189,21 @@ class AssistantContext
             return null;
         }
 
+        // $log->amount is only ever this ONE month's own flat
+        // contribution, never the running total a run of several
+        // unconfirmed months actually owes -- real bug, caught live
+        // 2026-11-08: three unconfirmed months (each stored as a flat
+        // RM2,000) were reported as "amount=RM2,000" instead of the
+        // real RM6,000 owed. Walk it properly for the statuses that
+        // actually accumulate; every other status (forfeited/
+        // review_required/determined) keeps its own stored figure,
+        // which already means something different in those branches.
+        $displayAmount = in_array($log->status, AllowanceLedger::ACCUMULATING_STATUSES, true)
+            ? AllowanceLedger::withheldTotalThrough((int) $log->application_id, Carbon::parse($log->payment_month))
+            : (float) $log->amount;
+
         $line = "Allowance, most recent record ({$log->payment_month->format('M Y')}): status={$log->status}, amount=RM"
-            .number_format((float) $log->amount, 2).'.';
+            .number_format($displayAmount, 2).'.';
 
         // GA has no allowance tracking at all (GraApplicationDetail only),
         // so a null rate here is routine for a GA student, not a data gap.
