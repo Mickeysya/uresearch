@@ -168,8 +168,8 @@ class CandidacyAppealWindowTest extends TestCase
         $this->at('2027-03-14 10:00:00');
         $message = 'You can submit an appeal from 15 Mar 2027, 3 months before your expiry date.';
 
-        $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertRedirect(route('candidacy.status'))->assertSessionHasErrors(['appeal' => $message]);
-        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', ['step' => 1]))->assertRedirect(route('candidacy.status'))->assertSessionHasErrors(['appeal' => $message]);
+        $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertOk()->assertSee($message);
+        $this->actingAs($this->student)->get(route('candidacy.appeals.draft', ['step' => 1]))->assertRedirect(route('candidacy.appeals.new'));
         $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', ['step' => 1]), ['intent' => 'save'])->assertRedirect(route('candidacy.status'))->assertSessionHasErrors(['appeal' => $message]);
 
         $this->assertSame(0, CandidacyAppeal::where('student_id', $this->student->id)->count(), 'no draft was created');
@@ -191,6 +191,8 @@ class CandidacyAppealWindowTest extends TestCase
 
         $this->actingAs($this->student)->get(route('candidacy.appeals.new'))->assertRedirect(route('candidacy.appeals.draft', ['step' => 1]));
         $this->actingAs($this->student)->get(route('candidacy.appeals.draft', ['step' => 1]))->assertOk();
+        $this->assertSame(0, CandidacyAppeal::where('student_id', $this->student->id)->count(), 'opening the form writes nothing');
+        $this->actingAs($this->student)->post(route('candidacy.appeals.draft.save', ['step' => 1]), ['intent' => 'save'])->assertRedirect();
         $this->assertSame(1, CandidacyAppeal::where('student_id', $this->student->id)->count());
     }
 }

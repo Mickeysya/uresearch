@@ -309,3 +309,12 @@ select:not([multiple]):not([size]):disabled {
 .wca-btn.is-row.is-long, .wca-table .wca-btn.is-row.is-long { padding: 0 var(--space-4); } /* a label longer than the 132px width */
 .wca-btn.is-row[aria-disabled="true"] { cursor: not-allowed; }
 .wca-btn.is-row[aria-disabled="true"]:hover { background-color: var(--border-grey); color: var(--text-grey); }
+
+/* the read-only appeal form (a student who cannot appeal now): same cards, every control disabled and dimmed */
+.wca-page fieldset.wca-readonly { border: 0; margin: 0; padding: 0; min-width: 0; opacity: .72; }
+.wca-page fieldset.wca-readonly input:disabled, .wca-page fieldset.wca-readonly select:disabled, .wca-page fieldset.wca-readonly textarea:disabled { background-color: var(--surface-sunken); color: var(--wca-grey); cursor: not-allowed; }
+.wca-page fieldset.wca-readonly .wca-choice { cursor: not-allowed; }
+.wca-page fieldset.wca-readonly .wca-choice:hover { background: transparent; }
+.wca-banner .wca-notice-title { margin: 0 0 6px; }
+.wca-banner .wca-notice-link { margin: 8px 0 0; }
+.wca-stepper .wca-step-static { display: block; margin: 0; padding: 10px 12px; background: var(--surface); border: 1px solid var(--wca-line); border-radius: 10px; color: var(--wca-grey); opacity: .72; cursor: not-allowed; }

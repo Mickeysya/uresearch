@@ -224,6 +224,18 @@ class CandidacyAppealService
 
             $by = $appeal->returned_by_stage;
             $target = $by === CandidacyAppeal::STAGE_DEAN ? CandidacyAppeal::STAGE_CGS : $by;
+
+            // Confirmed rule: a resubmitted appeal goes back to THE SAME approver who returned it. The profile on the latest 'returned' decision at that
+            // stage is written into the stage's pointer, so a pointer that was changed since (for example by a re-routing) cannot send it to someone else.
+            // The one exception: a returner with no login (a demo profile) cannot act, so the pointer stays as it is. A Dean return still goes to CGS first;
+            // CGS is a role, so there is nothing to write for it.
+            if (in_array($by, [CandidacyAppeal::STAGE_SUPERVISOR, CandidacyAppeal::STAGE_CHAIR, CandidacyAppeal::STAGE_DEAN], true)) {
+                $returnerId = CandidacyAppealApproval::where('candidacy_appeal_id', $appeal->id)->where('stage', $by)->where('decision', 'returned')->orderByDesc('id')->value('profile_id');
+
+                if ($returnerId && CandidacyStaffProfile::whereKey($returnerId)->whereNotNull('user_id')->exists()) {
+                    $appeal->{['supervisor' => 'supervisor_profile_id', 'chair' => 'chair_profile_id', 'dean' => 'dean_profile_id'][$by]} = $returnerId;
+                }
+            }
             $from = $appeal->status;
 
             $appeal->round = $appeal->round + 1;

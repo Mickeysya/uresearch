@@ -28,7 +28,7 @@ appeal, allowance 0..12. Files live on the private `local` disk under `candidacy
 
 `draft -> with_supervisor -> with_chair -> with_cgs -> with_dean -> approved | rejected`; any stage can send the appeal to `returned`;
 `returned -> (resubmit) -> the returning stage`, except a **Dean return**, which resubmits to `with_cgs` (flag `needs_cgs_recheck`) and then
-goes back to the Dean; a returned appeal whose candidacy has expired (today is AFTER the expiry date) is set to `closed_expired` by the daily job; it can still be resubmitted on the expiry date itself. `approved`, `rejected`
+goes back to the Dean; **a resubmitted appeal always goes back to the approver who returned it** (the profile on the latest `returned` decision is written into the stage's pointer in `resubmit()`; the only exception is a returner with no login, see `docs/known-demo-exceptions.md`); a returned appeal whose candidacy has expired (today is AFTER the expiry date) is set to `closed_expired` by the daily job; it can still be resubmitted on the expiry date itself. `approved`, `rejected`
 (final) and `closed_expired` are end states. There is **no withdraw** anywhere. Only `CandidacyAppealService` writes `status` / `current_stage`.
 
 | Stage | Who | Actions |
@@ -46,7 +46,7 @@ Dean rejection is final and needs at least one reason from the Dean's list ("Oth
 
 | Rule | Where |
 |---|---|
-| eligibility: active candidacy; **inside the appeal window: from `appeal_window_months` (3) calendar months before the expiry date, same arithmetic as the reminder milestones, until the end of the expiry date** (requested by CGS 2026-11-08; before the window New Appeal is disabled and the server refuses with "You can submit an appeal from <date>, 3 months before your expiry date."; resubmitting a returned appeal is allowed up to the expiry date; the expiry day itself is still a valid day; compared as Asia/Kuala_Lumpur calendar dates, not UTC; the day after is refused); no open appeal; no earlier final rejection; at least 1 month left; 1..remaining months | `CandidacyAppealService::eligibilityProblems()` |
+| eligibility: active candidacy; **Appeal window effective 2026-11-08; earlier appeals not affected.** **inside the appeal window: from `appeal_window_months` (3) calendar months before the expiry date, same arithmetic as the reminder milestones, until the end of the expiry date** (requested by CGS 2026-11-08; before the window New Appeal is disabled and the server refuses with "You can submit an appeal from <date>, 3 months before your expiry date."; resubmitting a returned appeal is allowed up to the expiry date; the expiry day itself is still a valid day; compared as Asia/Kuala_Lumpur calendar dates, not UTC; the day after is refused); no open appeal; no earlier final rejection; at least 1 month left; 1..remaining months | `CandidacyAppealService::eligibilityProblems()` |
 | allowance 12 months | `config('candidacy.max_extension_months')` |
 | waiting markers: gold dot from 5 days, red from 10 (no reminders, no escalation) | `config('candidacy.waiting_marker')` |
 | CGS roles (view every appeal, act at the CGS stage): `cgs`, `non_exec_cgs`, `senior_exec_cgs`, `manager_cgs`, `senior_director_cgs` | `config('candidacy.cgs_roles')` (the four are `Role::cgsTeam()`, the roles the Workstation CGS routes accept) |
@@ -156,7 +156,8 @@ config change (it keeps the old config in memory).
 
 ## 8. Track My Application: decision
 
-The sidebar item "Track My Applications" has two sub-items. **Overview** is Core's (`applications.index`). **My Candidacy** is the route
+The sidebar item "Track My Applications" has one sub-item, **Overview** (Core's `applications.index`). **My Study Candidacy** is its own top-level
+sidebar item, directly below Workstation (before 2026-11-09 it was "My Candidacy" under Track My Applications). It is the route
 `candidacy.status`, which belongs to this module, so priority 1 applied: our page renders the summary list (appeal number, status, current step,
 requested and approved months, last updated, "View full details"). Core's Overview is untouched and still lists the one legacy engine appeal
 (see limitations).
@@ -400,3 +401,8 @@ page to a domain: `docs/candidacy-assistant.md`. The old "coming soon" placehold
 - **Supervisor / Programme Manager** is fixed at enrolment for every programme type. `candidacy_student_supervisors` (module-owned) maps a student (a login account or a demo profile) to a `candidacy_staff_profiles` row; `candidacy:backfill-supervisors` fills only the missing rows (a lecturer of the student's own department; a research student gets a Supervisor, a coursework student a Programme Manager shared per programme; a student who already has an appeal keeps the person it was routed to). New Appeal step 1 shows department, programme, Supervisor / Programme Manager, Department Chair and Dean of PGR read-only. With no record the student cannot start an appeal ("Your Supervisor / Programme Manager is not recorded yet. Please contact CGS."). The appeal copies the person onto itself at submission, so a later change of the record does not re-route an appeal already submitted. `candidacy:demo-seed` runs the backfill at its end.
 - **Dean adjusts the approved months**: see "Dean approval" above. The student's months list is a dropdown of 1 to the remaining allowance; the server validates the same range.
 - **Wording**: "Study Candidacy" wherever the bare word was user-facing text in this module, and "Supervisor / Programme Manager" for the label of the first approval step (the stage key `supervisor` and the role code are unchanged).
+
+
+## 9. The "Study Candidacy Appeal" menu item (My Application)
+
+It links to `candidacy.appeals.new` (`CandidacyAppealWorkflow::createRoute()`), which decides: a returned appeal goes to its edit and resubmit form; an unfinished draft goes to the draft; an eligible student goes to the editable form (step 1); anybody else gets the same form read-only (`mode = readonly`, a disabled fieldset and no `<form>`) with a notice that lists the reasons from `eligibilityProblems()`, or "Your appeal <number> is with <step>" when an appeal is in progress. Opening the form writes nothing: the draft row is created by the first Save draft / Next (`saveStep`). The sidebar highlights this item on `candidacy.appeals.new`, `.draft*`, `.edit` and `.resubmit`; My Study Candidacy on `candidacy.status*` and `candidacy.appeals.show`.

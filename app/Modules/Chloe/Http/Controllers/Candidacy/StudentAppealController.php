@@ -70,16 +70,41 @@ class StudentAppealController extends Controller
 
     // ---------------------------------------------------------------- the draft form
 
+    /**
+     * The "Study Candidacy Appeal" menu item. It decides what the student sees and writes nothing itself:
+     * a returned appeal -> its edit and resubmit form; an unfinished draft -> the draft; an eligible student -> the
+     * editable form (the draft row is created by the first Save draft / Next, not by opening the page);
+     * anybody else -> the same form, read-only, with the real reasons.
+     */
     public function start(Request $request)
     {
-        $candidacy = StudyCandidacy::where('student_id', $request->user()->id)->first();
-        $draft = CandidacyAppeal::where('student_id', $request->user()->id)->where('status', 'draft')->first();
+        $user = $request->user();
+        $candidacy = StudyCandidacy::where('student_id', $user->id)->first();
+        $appeals = CandidacyAppeal::where('student_id', $user->id)->with(['supervisorProfile', 'chairProfile', 'deanProfile'])->orderByDesc('id')->get();
 
-        if (! $draft && ($problems = $this->service->eligibilityProblems($candidacy))) {
-            return redirect()->route('candidacy.status')->withErrors(['appeal' => implode(' ', $problems)]);
+        if ($returned = $appeals->first(fn ($a) => $a->status === CandidacyAppeal::STATUS_RETURNED)) {
+            return redirect()->route('candidacy.appeals.edit', $returned);
         }
 
-        return redirect()->route('candidacy.appeals.draft', ['step' => 1]);
+        if ($appeals->first(fn ($a) => $a->isDraft())) {
+            return redirect()->route('candidacy.appeals.draft', ['step' => 1]);
+        }
+
+        $problems = $this->service->eligibilityProblems($candidacy);
+
+        if (! $problems) {
+            return redirect()->route('candidacy.appeals.draft', ['step' => 1]);
+        }
+
+        // Read-only: nothing is created here. An appeal already in progress is named instead of listing reasons.
+        $open = $appeals->first(fn ($a) => $a->isOpen());
+        $notice = $open
+            ? ['tone' => 'note', 'title' => "Your appeal {$open->appeal_no} is with ".CandidacyAppealPresenter::currentStep($open).'.', 'reasons' => []]
+            : ['tone' => 'error', 'title' => 'You cannot submit an appeal now.', 'reasons' => $problems];
+
+        $blank = new CandidacyAppeal(['student_id' => $user->id, 'status' => CandidacyAppeal::STATUS_DRAFT, 'round' => 1]);
+
+        return view('chloe::candidacy.wca.form', $this->formData($blank, $candidacy, 1, 'readonly') + ['notice' => $notice]);
     }
 
     public function draft(Request $request, int $step = 1)
@@ -89,12 +114,19 @@ class StudentAppealController extends Controller
         $candidacy = StudyCandidacy::where('student_id', $user->id)->first();
         $appeal = CandidacyAppeal::where('student_id', $user->id)->where('status', 'draft')->first();
 
-        if (! $appeal && ($problems = $this->service->eligibilityProblems($candidacy))) {
-            return redirect()->route('candidacy.status')->withErrors(['appeal' => implode(' ', $problems)]);
+        if (! $appeal && $this->service->eligibilityProblems($candidacy)) {
+            return redirect()->route('candidacy.appeals.new');
         }
 
-        // The first visit creates the (empty) draft so documents can be attached at step 3.
-        $appeal ??= $this->service->saveDraft($user, []);
+        if (! $appeal) {
+            // Opening the form writes nothing: steps 1 and 2 show a blank, unsaved appeal and the first Save draft /
+            // Next creates the draft. Steps 3 and 4 need a saved draft (documents attach to it), so start at step 1.
+            if ($step > 2) {
+                return redirect()->route('candidacy.appeals.draft', ['step' => 1]);
+            }
+
+            $appeal = new CandidacyAppeal(['student_id' => $user->id, 'status' => CandidacyAppeal::STATUS_DRAFT, 'round' => 1]);
+        }
 
         return view('chloe::candidacy.wca.form', $this->formData($appeal, $candidacy, $step, 'draft'));
     }

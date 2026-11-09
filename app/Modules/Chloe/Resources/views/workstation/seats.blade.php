@@ -35,7 +35,7 @@
             // Already ordered and filtered to Available in the controller
             // query; re-sorting here is just a safeguard, cheap insurance
             // against this list ever being built differently upstream.
-            $availableSeats = $availableSeats->sortBy(fn ($seat) => (int) $seat->seat_code)->values();
+            $availableSeats = \App\Modules\Chloe\Support\SeatOrder::sort($availableSeats, fn ($seat) => ['', '', $seat->seat_code, $seat->id]);
         @endphp
 
         <div class="ws-room-summary">

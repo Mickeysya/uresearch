@@ -31,3 +31,7 @@ Run `workstation:demo-seed`, `workstation:demo-clear`, `workstation:demo-login`,
 ## Snapshot
 
 All numbers were measured on 3 November 2026 (Asia/Kuala_Lumpur) on the demo database `uresearch`.
+
+## Known demo exceptions
+
+See [known-demo-exceptions.md](known-demo-exceptions.md): `student2@utp.edu.my` is planted inconsistent by the shared `DatabaseSeeder` (a 4th termination notice is expected after the 07:30 run), and `SCA-21010038-01` is the one returned appeal that goes to the real chair, not to the returner.

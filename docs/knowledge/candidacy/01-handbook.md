@@ -19,6 +19,8 @@ Source: Postgraduate Student Handbook 2025, section 2.1, p.7 (and pp.7-8 for the
 A student who needs more than the maximum period applies to CGS for an extension, on the recommendation of the supervisor or programme manager, or the Chair of
 Department. The application is made before or on the day the candidacy ends. The Graduate Studies Academic Committee deliberates, and the University may approve or reject.
 
+In UResearch an appeal can be started from 3 calendar months before the expiry date up to and including the expiry day (this rule applies from 2026-11-08), and the total extension is at most {{cand_max_extension_months}} months. The Dean of PGR decides the appeal in the system.
+
 Source: Postgraduate Student Handbook 2025, section 2.1.1, p.8.
 
 ## cand_deferment_mode_programme

@@ -39,7 +39,10 @@ class WorkstationSeatCatalogue
 
         return DB::transaction(function () use ($location, $count) {
             $counter = DB::table('workstation_seat_counter')->where('id', 1)->lockForUpdate()->first();
-            $first = ((int) $counter->last_number) + 1;
+            // The counter is the source of numbers. As a second line of defence against a counter that was ever behind (an import, a restore, a seeder),
+            // a batch also starts after the highest number that exists in ANY room, retired seats included, so a number is never handed out twice.
+            $highest = (int) DB::table('workstations')->max(DB::raw('CAST(seat_code AS UNSIGNED)'));
+            $first = max((int) $counter->last_number, $highest) + 1;
             $last = $first + $count - 1;
 
             // Incremented, never decremented, and written before the seats so a failed insert rolls both back together.

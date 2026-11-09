@@ -315,7 +315,7 @@ final class WorkstationStatistics
             ->with('location')
             ->get()
             ->groupBy(fn (Workstation $seat) => $seat->location->room_code)
-            ->map(fn ($seats) => $seats->pluck('seat_code')->sort(fn ($a, $b) => (int) $a <=> (int) $b)->values()->all())
+            ->map(fn ($seats) => SeatOrder::sort($seats, fn ($s) => ['', '', $s->seat_code, $s->id])->pluck('seat_code')->all())
             ->all();
     }
 

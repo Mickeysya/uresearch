@@ -10,6 +10,7 @@ use App\Modules\Chloe\Models\WorkstationBlock;
 use App\Modules\Chloe\Models\WorkstationHistory;
 use App\Modules\Chloe\Models\WorkstationLocation;
 use App\Modules\Chloe\Models\WorkstationRequest;
+use App\Modules\Chloe\Support\SeatOrder;
 use App\Modules\Chloe\Services\WorkstationAllocator;
 use App\Modules\Chloe\Support\StudentDirectory;
 use App\Modules\Chloe\Support\WorkstationEligibility;
@@ -146,9 +147,8 @@ class WorkstationController extends Controller
         // already scoped to this room via workstation_location_id, so a
         // room can never surface another room's seat.
         $availableSeats = $workstationLocation->workstations()
-            ->where('status', Workstation::STATUS_AVAILABLE)
-            ->orderByRaw('CAST(seat_code AS UNSIGNED) ASC')
-            ->get();
+            ->where('status', Workstation::STATUS_AVAILABLE);
+        $availableSeats = SeatOrder::query($availableSeats)->get();
 
         return view('chloe::workstation.seats', compact('workstationLocation', 'availableSeats', 'activeRequest'));
     }

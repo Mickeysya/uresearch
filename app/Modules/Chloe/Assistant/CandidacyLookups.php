@@ -37,11 +37,12 @@ final class CandidacyLookups
     {
         return [
             'cand_my_expiry' => 'myExpiry', 'cand_my_extension' => 'myExtension', 'cand_can_appeal' => 'canAppeal', 'cand_my_appeal' => 'myAppeal',
-            'cand_my_return_reason' => 'myReturnReason', 'cand_next_reminder' => 'nextReminder', 'cand_my_softbound' => 'mySoftbound',
+            'cand_my_return_reason' => 'myReturnReason', 'cand_next_reminder' => 'nextReminder', 'cand_my_softbound' => 'mySoftbound', 'cand_my_window' => 'myWindow',
             'cand_ap_pending' => 'approverPending', 'cand_ap_oldest' => 'approverOldest', 'cand_ap_waiting_days' => 'approverWaiting', 'cand_ap_decided_month' => 'approverDecided', 'cand_ap_ongoing' => 'approverOngoing',
             'cand_cgs_pending_by_step' => 'cgsPendingByStep', 'cand_cgs_outcome_counts' => 'cgsOutcomes', 'cand_cgs_oldest' => 'cgsOldest', 'cand_cgs_waiting_10' => 'cgsWaiting10',
             'cand_cgs_avg_waiting' => 'cgsAverageWaiting', 'cand_cgs_expiring' => 'cgsExpiring', 'cand_cgs_no_action' => 'cgsNoAction', 'cand_cgs_twelve_of_twelve' => 'cgsTwelve',
             'cand_cgs_by_department' => 'cgsByDepartment', 'cand_cgs_reminders_sent' => 'cgsRemindersSent', 'cand_cgs_reminder_response' => 'cgsReminderResponse',
+            'cand_cgs_window_not_open' => 'cgsWindowNotOpen', 'cand_cgs_student_eligibility' => 'cgsStudentEligibility',
             'cand_cgs_dismissal_candidates' => 'cgsDismissalCandidates', 'cand_cgs_dismissed' => 'cgsDismissed', 'cand_cgs_in_progress' => 'cgsInProgress',
         ];
     }
@@ -255,6 +256,31 @@ final class CandidacyLookups
         return self::done("Your next reminder is the {$next[0]}-month reminder, on {$next[1]->format('j M Y')} at 08:00, by e-mail and bell.".$paused, [], 1);
     }
 
+    protected static function myWindow(User $user, array $p): array
+    {
+        $c = self::candidacy($user);
+
+        if (! $c) {
+            return self::noRecord();
+        }
+
+        [$expiry, $days] = self::expiryOf($c);
+        $opens = CandidacyAppealService::windowOpens($expiry);
+        $links = [self::link('My candidacy', 'candidacy.status')];
+
+        if ($days < 0) {
+            return self::done("Your study candidacy expired on {$expiry->format('j M Y')}, so the appeal window has closed. Please contact CGS about what happens next.", $links, 1);
+        }
+
+        if (self::today()->toDateString() < $opens->toDateString()) {
+            $wait = (int) self::today()->diffInDays($opens);
+
+            return self::done("Your appeal window is not open yet. It opens on {$opens->format('j M Y')} ({$wait} day(s) from today), 3 calendar months before your expiry date of {$expiry->format('j M Y')}, and closes at the end of the expiry day. Until then New Appeal stays disabled.", $links, 1);
+        }
+
+        return self::done("Your appeal window is open now. It opened on {$opens->format('j M Y')} and closes at the end of {$expiry->format('j M Y')}, your expiry date. For the full check (open appeal, months left, supervisor) ask \"Can I still submit an appeal?\".", $links, 1);
+    }
+
     protected static function mySoftbound(User $user, array $p): array
     {
         $status = StudentStatusReader::for(StudentDirectory::fromUser($user));
@@ -443,6 +469,42 @@ final class CandidacyLookups
         $n = Stats::population()->filter(fn ($r) => $r['monthsUsed'] >= $max)->count();
 
         return self::done(self::plural($n, 'student has', 'students have')." used all {$max} of {$max} months of extension, so no further appeal is possible.", [self::link('Study Candidacy Insights', 'candidacy.cgs.insights')], $n);
+    }
+
+    protected static function cgsWindowNotOpen(User $user, array $p): array
+    {
+        $today = self::today()->toDateString();
+        $n = Stats::population()->filter(fn ($r) => $today < CandidacyAppealService::windowOpens(CarbonImmutable::parse($r['expiry']))->toDateString())->count();
+
+        return self::done(self::plural($n, 'student has', 'students have').' not reached the appeal window yet (the window opens 3 calendar months before the expiry date). (Research students with an active candidacy.)', [self::link('Study Candidacy Insights', 'candidacy.cgs.insights')], $n);
+    }
+
+    protected static function cgsStudentEligibility(User $user, array $p): array
+    {
+        $id = $p['student_id'] ?? null;
+
+        if (! is_string($id) || ! preg_match('/^\d{8}$/', $id)) {
+            return ['outcome' => 'asked_back', 'text' => 'Which student? Please give the 8-digit student ID.'];
+        }
+
+        $identity = StudentDirectory::findByStudentId($id);
+        $candidacy = $identity?->user ? StudyCandidacy::where('student_id', $identity->user->id)->first() : null;
+
+        if ($identity === null || $candidacy === null) {
+            return self::done("I cannot find a study candidacy record for student ID {$id}. Please check the ID.", [self::link('Operations', 'candidacy.cgs.operations')], 0, true);
+        }
+
+        $problems = app(CandidacyAppealService::class)->eligibilityProblems($candidacy);
+        $links = [self::link('Operations', 'candidacy.cgs.operations')];
+
+        if ($problems === []) {
+            return self::done("Student {$id} can submit an appeal now: the appeal window is open, they have no appeal in progress and have months left.", $links, 0);
+        }
+
+        $swap = ['/^Your /' => "The student's ", '/^You /' => 'They ', '/\bfor you\b/' => 'for this student', '/\byour expiry date\b/' => 'their expiry date', '/\bYou can submit\b/' => 'They can submit', '/\bYou can request\b/' => 'They can request'];
+        $lines = array_map(fn ($t) => '- '.preg_replace(array_keys($swap), array_values($swap), $t), $problems);
+
+        return self::done("Student {$id} cannot appeal at the moment:\n".implode("\n", $lines), $links, count($problems));
     }
 
     protected static function cgsByDepartment(User $user, array $p): array

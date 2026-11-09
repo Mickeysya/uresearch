@@ -78,7 +78,7 @@ final class GuidanceLibrary
             ...array_map(fn ($spec) => $spec['description'], CandidacyAssistant::topicSpecsPublic()),
             'select_seat' => 'How to browse and select a workstation seat.',
             'visibility_rules' => 'Why some rooms or seats are not shown to this student.',
-            'confirmation' => 'What happens if a seat selection is not confirmed in time.',
+            'confirmation' => 'What happens when a student presses Select Seat and Confirm (the seat is theirs at once; there is no time window and no confirmation e-mail), and what if someone else took the seat first.',
             'change_or_return' => 'How to change or return an already-assigned workstation.',
             'locker_key_request' => 'How to request a locker key.',
             'locker_key_collect_return' => 'How a student collects or returns a locker key. E.g. "How do I mark a key as collected?" -- a student cannot mark it themselves; this explains that CGS does.',
@@ -90,7 +90,7 @@ final class GuidanceLibrary
             'student_return_reasons' => 'Which reason to choose when a student returns their own workstation.',
             'student_system_guide' => 'The whole student journey in order: eligibility, browsing, selecting, confirming, the locker key, returning/changing, termination, and which emails are sent when.',
             'student_status_glossary' => 'Every seat status and every locker key status a student can see, with a one-line meaning and what can happen next.',
-            'student_timeline' => 'Every time limit in the system in one place (confirmation minutes, key collection/return days, vacate working days, office/access hours).',
+            'student_timeline' => 'Every time limit in the system in one place (key collection/return days, vacate working days, the candidacy extension limit, office/access hours; seat selection has no waiting time).',
 
             'cgs_reassign' => 'How CGS reassigns a seat to a different student (the how-to, not the action itself).',
             'cgs_release' => 'How CGS releases a seat (the how-to). E.g. "How do I release a seat?" is guidance; "Release seat 252" is an action_request instead, because it names a seat to act on.',

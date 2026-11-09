@@ -40,6 +40,18 @@ class AssignSharedAccounts extends Command
         'Management' => 'Management & Humanities',
     ];
 
+    /** Decision 4 (2026-11-08): only these may be added to candidacy_departments, and only when the shared data has a real chair user for them. */
+    protected const NEW_DEPARTMENT_CODES = [
+        'Foundation in Business Management & Computing' => 'FBM',
+        'Foundation in Engineering & Science' => 'FES',
+        'Integrated Engineering' => 'INT',
+    ];
+
+    protected const FACULTIES = ['FOE' => 'Faculty of Engineering', 'FSMC' => 'Faculty of Science, Management & Computing', 'CFS' => 'Centre for Foundation Studies'];
+
+    /** Decision 1 (2026-11-08): the appeal window applies from this date; appeals submitted before it keep their dates and are not checked. */
+    protected const WINDOW_EFFECTIVE = '2026-11-08';
+
     protected CarbonImmutable $today;
 
     /** @var array<int, array<string,mixed>> */
@@ -58,12 +70,6 @@ class AssignSharedAccounts extends Command
 
     public function handle(): int
     {
-        if ($this->option('apply')) {
-            $this->error('--apply is disabled in this build: the plan must be approved first. Nothing was changed.');
-
-            return self::FAILURE;
-        }
-
         $this->today = CandidacyDismissalList::today();
         $seed = (string) $this->option('seed');
         $this->loadProfiles();
@@ -83,8 +89,19 @@ class AssignSharedAccounts extends Command
         $this->writeMarkdown($dir.'/account-assignment-plan.md', $seed);
 
         $failed = collect($this->checks)->where('ok', false)->count();
+
+        if ($this->option('apply')) {
+            if ($failed > 0) {
+                $this->error("Refusing to apply: {$failed} rule check(s) fail. Nothing was changed.");
+
+                return self::FAILURE;
+            }
+
+            $this->applyPlan();
+        }
+
         $this->info('Mapped '.count($this->map).' of '.count($this->profiles).' demo identities onto '.count($this->accounts).' accounts. Rule checks: '.(count($this->checks) - $failed).' pass, '.$failed.' fail (see the plan).');
-        $this->line("Wrote {$dir}/account-assignment-plan.md and .csv. Nothing was changed in the database.");
+        $this->line("Wrote {$dir}/account-assignment-plan.md and .csv.".($this->option('apply') ? '' : ' Nothing was changed in the database.'));
 
         return self::SUCCESS;
     }
@@ -98,7 +115,7 @@ class AssignSharedAccounts extends Command
         foreach ($p as $id => $d) {
             $this->profiles[$id] = [
                 'id' => $id, 'matric' => $d->matric_no, 'name' => $d->name, 'gender' => $d->gender, 'programme' => (string) $d->programme, 'status' => $d->status,
-                'expiry' => $d->candidacy_expiry_date, 'start' => $d->programme_start_date, 'coursework' => str_contains(mb_strtolower((string) $d->programme), 'coursework'),
+                'expiry' => $d->candidacy_expiry_date, 'start' => $d->programme_start_date, 'dismissed_at' => $d->dismissed_at, 'dismissed_by_id' => $d->dismissed_by_id, 'coursework' => str_contains(mb_strtolower((string) $d->programme), 'coursework'),
                 'seat' => null, 'seat_status' => null, 'room_gender' => null, 'request_ids' => [], 'key' => null, 'notice' => null, 'appeals' => [],
                 'overlay' => [], 'reminders' => 0, 'exported' => false, 'imported' => false, 'candidate' => false, 'class' => 'candidacy',
             ];
@@ -157,18 +174,21 @@ class AssignSharedAccounts extends Command
     protected function loadAccounts(): void
     {
         $departments = DB::table('candidacy_departments')->pluck('id', 'name');
+        $chairDepartments = DB::table('users')->where('role', 'chair')->pluck('department')->all();
 
         $users = DB::table('users as u')->join('student_genders as g', 'g.student_id', '=', 'u.id')
             ->where('u.role', 'student')->where('u.matric_no', 'like', '2410%')->orderBy('u.matric_no')
-            ->get(['u.id', 'u.matric_no', 'u.name', 'u.email', 'u.programme', 'u.department', 'u.supervisor_id', 'g.gender']);
+            ->get(['u.id', 'u.matric_no', 'u.name', 'u.email', 'u.programme', 'u.department', 'u.faculty', 'u.supervisor_id', 'g.gender']);
 
         $supervisors = DB::table('users')->whereIn('id', $users->pluck('supervisor_id')->filter())->pluck('name', 'id');
 
         foreach ($users as $u) {
-            $moduleDept = self::DEPARTMENT_MAP[$u->department] ?? null;
+            $moduleDept = self::DEPARTMENT_MAP[$u->department] ?? $u->department;
+            $known = isset($departments[$moduleDept]);
+            $creatable = ! $known && isset(self::NEW_DEPARTMENT_CODES[$u->department]) && in_array($u->department, $chairDepartments, true);
             $this->accounts[$u->id] = [
                 'id' => $u->id, 'matric' => $u->matric_no, 'name' => $u->name, 'email' => $u->email, 'programme' => (string) $u->programme, 'department' => $u->department,
-                'module_department' => $moduleDept && isset($departments[$moduleDept]) ? $moduleDept : null, 'supervisor' => $supervisors[$u->supervisor_id] ?? null,
+                'module_department' => $known || $creatable ? $moduleDept : null, 'department_new' => $creatable, 'supervisor_id' => $u->supervisor_id, 'faculty' => $u->faculty, 'supervisor' => $supervisors[$u->supervisor_id] ?? null,
                 'gender' => $u->gender, 'part_time' => str_contains(mb_strtolower((string) $u->programme), 'part-time'),
             ];
         }
@@ -258,8 +278,8 @@ class AssignSharedAccounts extends Command
         $this->check('Seat holders are active (not dismissed, completed or inactive)', $badStatus->isEmpty(), $badStatus->count().' not active');
 
         $labelled = $occ->filter(fn ($m) => $m['p']['overlay'] !== []);
-        $this->check('No seat holder carries a Softbound / Completed / Inactive label (a labelled student has no active candidacy)', $labelled->isEmpty(),
-            $labelled->count().' seat holders carry a label today: '.$labelled->map(fn ($m) => $m['p']['matric'].' '.implode('+', array_keys($m['p']['overlay'])))->implode(', ').' (the label cannot move with them; see "Decisions")');
+        $this->check('No seat holder carries a Softbound / Completed / Inactive label (decision 2: the label is dropped, the account is simply active)', true,
+            $labelled->count().' seat holders carried a label ('.collect($labelled->flatMap(fn ($m) => array_keys($m['p']['overlay'])))->countBy()->map(fn ($n, $l) => "{$n} {$l}")->implode(', ').'); it is not moved, so their accounts are active');
 
         $this->check('A former occupant with an unreturned key holds no seat and has the key return_pending', $former->every(fn ($m) => $m['p']['key'] === 'return_pending'), $former->count().' former occupants');
 
@@ -283,17 +303,35 @@ class AssignSharedAccounts extends Command
         });
         $this->check('No appeal after a Dean rejection', $afterRejection->isEmpty(), $afterRejection->count().' students with a later appeal');
 
-        $sumBad = $mapped->filter(function ($m) {
-            $sum = collect($m['p']['appeals'])->where('status', 'approved')->sum('approved_months');
+        $chainBad = collect();
+        foreach ($mapped as $m) {
+            $approved = collect($m['p']['appeals'])->where('status', 'approved')->sortBy('id')->values();
 
-            return $sum > 12;
-        });
-        $this->check('Approved months per student never exceed 12; extension_months_used = sum of approved months and expiry = original + approved (both derived from the identity, so equal by construction)', $sumBad->isEmpty(), $sumBad->count().' students over 12');
+            if ($approved->isEmpty()) {
+                continue;
+            }
+
+            $sum = $approved->sum('approved_months');
+            $cursor = CarbonImmutable::parse($approved->first()['expiry_at_submission']);
+            $ok = $sum <= 12;
+
+            foreach ($approved as $a) {
+                $ok = $ok && $cursor->toDateString() === CarbonImmutable::parse($a['expiry_at_submission'])->toDateString();
+                $cursor = $cursor->addMonthsNoOverflow((int) $a['approved_months']);
+            }
+
+            if (! $ok || $cursor->toDateString() !== CarbonImmutable::parse($m['p']['expiry'])->toDateString()) {
+                $chainBad->push($m['p']['matric']);
+            }
+        }
+        $this->check('extension_months_used = sum of approved months (at most 12), and the expiry = the original expiry + the approved months, appeal after appeal', $chainBad->isEmpty(),
+            $mapped->filter(fn ($m) => collect($m['p']['appeals'])->contains('status', 'approved'))->count().' students with an approval checked; '.$chainBad->count().' broken'.($chainBad->isEmpty() ? '' : ': '.$chainBad->implode(', ')));
 
         $routable = $mapped->filter(fn ($m) => $m['p']['appeals'] !== [] && ! ($m['a']['module_department'] && $m['a']['supervisor']));
         $this->check('Every account carrying an appeal has a module department, a supervisor (users.supervisor_id) and a chair', $routable->isEmpty(), $mapped->filter(fn ($m) => $m['p']['appeals'] !== [])->count().' appeal-bearing accounts, '.$routable->count().' not routable');
 
         $window = collect();
+        $skipped = 0;
         foreach ($mapped as $m) {
             foreach ($m['p']['appeals'] as $a) {
                 if ($a['status'] === 'draft' || ! $a['submitted_at'] || ! $a['expiry_at_submission']) {
@@ -301,6 +339,13 @@ class AssignSharedAccounts extends Command
                 }
                 $exp = CarbonImmutable::parse($a['expiry_at_submission']);
                 $sub = CarbonImmutable::parse($a['submitted_at'])->startOfDay();
+
+                if ($sub->lt(CarbonImmutable::parse(self::WINDOW_EFFECTIVE))) {
+                    $skipped++;
+
+                    continue;
+                }
+
                 $opens = $exp->subMonthsNoOverflow((int) config('candidacy.appeal_window_months', 3))->startOfDay();
 
                 if ($sub->lt($opens) || $sub->gt($exp)) {
@@ -309,8 +354,8 @@ class AssignSharedAccounts extends Command
             }
         }
         $this->windowViolations = $window;
-        $this->check('Every submitted appeal was submitted inside the 3-month window of the expiry that applied then', $window->isEmpty(),
-            $window->count().' submitted appeals fall outside it ('.$window->countBy('dir')->map(fn ($n, $d) => "{$n} {$d}")->implode(', ').'; by status: '.$window->countBy('status')->map(fn ($n, $d) => "{$n} {$d}")->implode(', ').'). Listed in the CSV column "window".');
+        $this->check('Every appeal submitted on or after '.self::WINDOW_EFFECTIVE.' was submitted inside the 3-month window of the expiry that applied then (appeal window effective '.self::WINDOW_EFFECTIVE.'; earlier appeals not affected)', $window->isEmpty(),
+            $skipped.' appeals submitted before '.self::WINDOW_EFFECTIVE.' skipped (they keep their dates; no expiry is moved); '.$window->count().' appeals on or after it are outside the window.');
 
         $keep = collect($this->profiles)->reject(fn ($p) => isset($this->map[$p['id']]));
         $this->check('Coursework identities stay on clearly labelled demo profiles (the cohort has no coursework accounts)', $keep->where('coursework', true)->count() === collect($this->profiles)->where('coursework', true)->count(), $keep->where('coursework', true)->count().' kept');
@@ -327,6 +372,167 @@ class AssignSharedAccounts extends Command
         }
 
         return true;
+    }
+
+    // ------------------------------------------------------------------ apply
+
+    /** @return array<string,mixed> the numbers that must be identical before and after */
+    protected function numbers(): array
+    {
+        $by = fn (string $table, string $col) => DB::table($table)->select($col, DB::raw('count(*) c'))->groupBy($col)->orderBy($col)->pluck('c', $col)->all();
+
+        return [
+            'seats' => $by('workstations', 'status'), 'requests' => $by('workstation_requests', 'status'), 'keys' => $by('locker_keys', 'status'),
+            'notices' => DB::table('workstation_termination_notices')->orderBy('id')->get(['workstation_request_id', 'reason', 'status', 'vacate_by_date'])->map(fn ($n) => (array) $n)->all(),
+            'counter' => DB::table('workstation_seat_counter')->value('last_number'),
+            'appeals' => DB::table('candidacy_appeals')->select('status', 'current_stage', DB::raw('count(*) c'))->groupBy('status', 'current_stage')->orderBy('status')->get()->map(fn ($r) => (array) $r)->all(),
+            'approvals' => DB::table('candidacy_appeal_approvals')->orderBy('id')->get(['id', 'candidacy_appeal_id', 'stage', 'profile_id', 'decision', 'verification_code', 'decided_at'])->map(fn ($r) => (array) $r)->all(),
+            'reminder_log' => DB::table('candidacy_reminder_log')->count(), 'exports' => DB::table('candidacy_dismissal_exports')->count(), 'histories' => DB::table('workstation_histories')->count(),
+            'identities' => DB::table('candidacy_appeals')->count() + DB::table('workstation_requests')->count() + DB::table('locker_keys')->count(),
+        ];
+    }
+
+    protected function applyPlan(): void
+    {
+        $this->warn('Applying in one transaction. Mail and notifications are not touched (only table writes).');
+        $before = $this->numbers();
+        $now = now();
+
+        DB::transaction(function () use ($before, $now) {
+            // 1. departments (decision 4), real staff profiles, assignments
+            $deptId = DB::table('candidacy_departments')->pluck('id', 'name')->all();
+            $usedDepartments = collect($this->map)->map(fn ($uid) => $this->accounts[$uid])->unique('department');
+
+            foreach ($usedDepartments as $a) {
+                if (! isset($deptId[$a['module_department']])) {
+                    $deptId[$a['module_department']] = DB::table('candidacy_departments')->insertGetId([
+                        'code' => self::NEW_DEPARTMENT_CODES[$a['department']], 'name' => $a['module_department'], 'faculty' => self::FACULTIES[$a['faculty']] ?? $a['faculty'],
+                        'active' => 1, 'is_demo' => 0, 'created_at' => $now, 'updated_at' => $now,
+                    ]);
+                    $this->line("  + department {$a['module_department']}");
+                }
+            }
+
+            $profileOf = function (int $userId, string $role, ?string $department, ?int $deptModelId) use ($now) {
+                $existing = DB::table('candidacy_staff_profiles')->where('user_id', $userId)->value('id');
+
+                if ($existing) {
+                    return $existing;
+                }
+
+                $u = DB::table('users')->where('id', $userId)->first(['name', 'department']);
+
+                return DB::table('candidacy_staff_profiles')->insertGetId([
+                    'user_id' => $userId, 'full_name' => $u->name, 'designation' => "{$role}, ".($department ?? $u->department), 'is_demo' => 0, 'department_id' => $deptModelId,
+                    'created_at' => $now, 'updated_at' => $now,
+                ]);
+            };
+
+            $supervisorProfile = [];   // user id => profile id
+            $chairProfile = [];        // core department name => profile id
+
+            foreach ($usedDepartments as $a) {
+                $mid = $deptId[$a['module_department']];
+                $chairUser = DB::table('users')->where('role', 'chair')->where('department', $a['department'])->orderBy('id')->value('id');
+                $chairProfile[$a['department']] = $profileOf($chairUser, 'Chair', $a['department'], $mid);
+                DB::table('candidacy_staff_assignments')->where('department_id', $mid)->where('role', 'chair')->where('staff_profile_id', '!=', $chairProfile[$a['department']])->delete();
+                DB::table('candidacy_staff_assignments')->updateOrInsert(['department_id' => $mid, 'staff_profile_id' => $chairProfile[$a['department']], 'role' => 'chair'], ['created_at' => $now, 'updated_at' => $now]);
+            }
+
+            foreach (collect($this->map)->map(fn ($uid) => $this->accounts[$uid])->unique('supervisor_id') as $a) {
+                $dept = DB::table('users')->where('id', $a['supervisor_id'])->value('department');
+                $mid = $deptId[self::DEPARTMENT_MAP[$dept] ?? $dept] ?? $deptId[$a['module_department']];
+                $supervisorProfile[$a['supervisor_id']] = $profileOf($a['supervisor_id'], 'Lecturer', $dept, $mid);
+                DB::table('candidacy_staff_assignments')->updateOrInsert(['department_id' => $mid, 'staff_profile_id' => $supervisorProfile[$a['supervisor_id']], 'role' => 'lecturer'], ['created_at' => $now, 'updated_at' => $now]);
+            }
+
+            // 2. each identity -> its account
+            $reviewStatuses = ['with_supervisor', 'with_chair', 'with_cgs', 'with_dean', 'returned'];
+            $renumbered = $rerouted = 0;
+
+            foreach ($this->map as $pid => $uid) {
+                $p = $this->profiles[$pid];
+                $a = $this->accounts[$uid];
+                $mid = $deptId[$a['module_department']];
+                $approved = collect($p['appeals'])->where('status', 'approved')->sortBy('id')->values();
+                $sum = (int) $approved->sum('approved_months');
+                $rejected = collect($p['appeals'])->where('status', 'rejected')->last();
+                $keepsSeat = in_array($p['class'], ['occupant', 'former'], true);
+                $status = $p['status'] === 'dismissed' ? 'dismissed' : (! $keepsSeat && $p['overlay'] !== [] ? array_key_first($p['overlay']) : 'active');
+
+                $row = [
+                    'department_id' => $mid, 'programme_start_date' => $p['start'], 'candidacy_expiry_date' => $p['expiry'],
+                    'original_expiry_date' => $approved->isNotEmpty() ? $approved->first()['expiry_at_submission'] : $p['expiry'], 'status' => $status,
+                    'cumulative_extension_months' => $sum, 'extension_months_used' => $sum, 'last_rejection_at' => $rejected['closed_at'] ?? null,
+                    'dismissed_at' => $p['status'] === 'dismissed' ? $p['dismissed_at'] : null, 'dismissed_by_id' => $p['status'] === 'dismissed' ? $p['dismissed_by_id'] : null, 'updated_at' => $now,
+                ];
+
+                if (DB::table('study_candidacies')->where('student_id', $uid)->exists()) {
+                    DB::table('study_candidacies')->where('student_id', $uid)->update($row);
+                } else {
+                    DB::table('study_candidacies')->insert($row + ['student_id' => $uid, 'created_at' => $now]);
+                }
+
+                $cid = DB::table('study_candidacies')->where('student_id', $uid)->value('id');
+
+                DB::table('workstation_requests')->where('demo_profile_id', $pid)->update(['student_id' => $uid, 'demo_profile_id' => null]);
+                DB::table('locker_keys')->where('demo_profile_id', $pid)->update(['student_id' => $uid, 'demo_profile_id' => null]);
+                DB::table('candidacy_reminder_log')->where('demo_profile_id', $pid)->update(['candidacy_id' => $cid, 'student_id' => $uid, 'demo_profile_id' => null]);
+                DB::table('candidacy_dismissal_exports')->where('demo_profile_id', $pid)->update(['candidacy_id' => $cid, 'demo_profile_id' => null]);
+                DB::table('candidacy_dismissal_import_rows')->where('demo_profile_id', $pid)->update(['candidacy_id' => $cid, 'student_code' => $a['matric'], 'demo_profile_id' => null]);
+
+                foreach ($p['appeals'] as $ap) {
+                    $upd = ['student_id' => $uid, 'demo_profile_id' => null, 'study_candidacy_id' => $cid, 'department_id' => $mid, 'is_demo' => 0];
+                    $decided = DB::table('candidacy_appeal_approvals')->where('candidacy_appeal_id', $ap['id'])->exists();
+
+                    if ($ap['appeal_no'] && ! $decided) {
+                        $upd['appeal_no'] = sprintf('SCA-%s-%02d', $a['matric'], $ap['sequence_no']);
+                        $renumbered++;
+                    }
+
+                    $stage = $ap['status'] === 'returned' ? $ap['returned_by_stage'] : $ap['current_stage'];
+
+                    if (in_array($ap['status'], $reviewStatuses, true)) {
+                        if ($stage === 'supervisor') {
+                            $upd['supervisor_profile_id'] = $supervisorProfile[$a['supervisor_id']];
+                            $upd['chair_profile_id'] = $chairProfile[$a['department']];
+                            $rerouted++;
+                        } elseif ($stage === 'chair') {
+                            $upd['chair_profile_id'] = $chairProfile[$a['department']];
+                            $rerouted++;
+                        }
+                    }
+
+                    DB::table('candidacy_appeals')->where('id', $ap['id'])->update($upd);
+                }
+
+                DB::table('candidacy_demo_student_statuses')->where('demo_profile_id', $pid)->delete();
+                DB::table('candidacy_student_supervisors')->where('demo_profile_id', $pid)->delete();
+                DB::table('candidacy_student_supervisors')->updateOrInsert(['student_id' => $uid], ['demo_profile_id' => null, 'staff_profile_id' => $supervisorProfile[$a['supervisor_id']], 'kind' => 'supervisor', 'is_demo' => 0, 'created_at' => $now, 'updated_at' => $now]);
+            }
+
+            // 3. nothing may still point at a replaced identity before it is removed (the foreign keys would cascade)
+            $replaced = array_keys($this->map);
+
+            foreach (['workstation_requests', 'locker_keys', 'candidacy_appeals', 'candidacy_reminder_log', 'candidacy_dismissal_exports', 'candidacy_dismissal_import_rows', 'candidacy_demo_student_statuses', 'candidacy_student_supervisors'] as $t) {
+                if (DB::table($t)->whereIn('demo_profile_id', $replaced)->exists()) {
+                    throw new \RuntimeException("{$t} still points at a replaced identity; rolled back.");
+                }
+            }
+
+            DB::table('demo_student_profiles')->whereIn('id', $replaced)->delete();
+
+            // 4. the numbers that must not move
+            $after = $this->numbers();
+
+            foreach ($before as $k => $v) {
+                if ($v !== $after[$k]) {
+                    throw new \RuntimeException("'{$k}' changed during the move; rolled back.");
+                }
+            }
+
+            $this->info('Applied: '.count($replaced)." identities moved, {$renumbered} undecided appeals renumbered, {$rerouted} appeals re-routed. All before/after numbers identical.");
+        });
     }
 
     // ------------------------------------------------------------------ output
@@ -434,12 +640,12 @@ class AssignSharedAccounts extends Command
         $md[] = '- `candidacy_staff_profiles`: '.$supIds->diff($haveProfiles)->count().' new profiles for real supervisors ('.$supIds->count().' distinct supervisors used) and one per real department chair used (9 module departments); each needs an assignment in `candidacy_staff_assignments`. Signatures: real supervisors and chairs have none uploaded (only the Dean has), so memos of rewritten approvals would carry the kept snapshot image of the replaced demo approver (see Decisions).';
         $md[] = '- `study_candidacies`: '.count($uids).' rows rewritten from the identity (expiry, start, status, extension months, original expiry, dismissed date); `candidacy_appeals`, `candidacy_appeal_approvals`, `candidacy_appeal_events`, `candidacy_reminder_log`, `candidacy_dismissal_exports`, `candidacy_dismissal_import_rows`, `workstation_requests`, `locker_keys`: identity columns re-pointed from `demo_profile_id` to `student_id`. `workstation_histories` is append-only and untouched (it keeps the old name text; new rows would carry the new name).';
         $md[] = '';
-        $md[] = '## Decisions I need from you before apply';
+        $md[] = '## Decisions applied (2026-11-08)';
         $md[] = '';
-        $md[] = '1. **Appeals outside the 3-month window ('.($this->windowViolations->count()).').** The demo appeals were created before the window rule: '.$this->windowViolations->countBy('dir')->map(fn ($n, $d) => "{$n} {$d}")->implode(', ').'. A "too early" submission cannot be moved forward in time, so inside the window it needs the expiry moved (and with it the expiry bands, the reminder milestones and some Insights numbers), which breaks "keep the reminder milestones and Insights". Options: (a) keep them as they are and mark the rule "from today on" (recommended: the rule is about new submissions; the check becomes a warning); (b) shift each affected student\'s expiry so the submission falls in the window (changes numbers, listed in the CSV column `window`).';
-        $md[] = '2. **Seat holders who carry a Softbound / Completed / Inactive label (13).** A real account\'s label is its `study_candidacies.status`, and a seat holder must be `active`. Options: (a) seat holder keeps the seat, the label is dropped, and the label scenarios are carried by candidacy-only students (recommended; Softbound / completed / inactive counts in Insights fall by up to 13); (b) keep those 13 on demo profiles (seat count stays 157 but 13 seat holders remain demo).';
-        $md[] = '3. **Approvals signed by demo staff (87 of 179).** Real routing needs real supervisors and chairs. Options: (a) rewrite the approver on the approval rows to the real supervisor / chair and keep the old signature snapshot (what you asked; the memo then shows a real person\'s name with a demo signature image); (b) leave finished approvals as signed by the demo staff and re-route only appeals still in review (the memo stays truthful; routing for finished appeals names demo staff).';
-        $md[] = '4. **Departments the module does not know** (Foundation in Business Management & Computing, Foundation in Engineering & Science, Integrated Engineering: 45 accounts) cannot carry an appeal; they are used for seat holders only. Adding those three departments to `candidacy_departments` (this module\'s own table) would free them; say if you want that.';
+        $md[] = '1. Appeal window effective 2026-11-08; earlier appeals not affected. No expiry is moved.';
+        $md[] = '2. The Softbound / Completed / Inactive label of the 13 seat holders is dropped; the stop-rule examples stay on candidacy-only students.';
+        $md[] = '3. Finished decisions (approved, rejected, returned) stay exactly as signed, with memos, appeal numbers and verification codes unchanged (the code is derived from the appeal number, the approver profile and the decision time, so an appeal that already carries a decision keeps its number). Only the stages still to come on appeals in review, and on returned appeals (whose next stage would otherwise land on a demo approver), are pointed at the real Supervisor / Programme Manager and the real chair of the department. Appeals with no decision yet are renumbered SCA-<matric_no>-<NN>.';
+        $md[] = '4. Foundation in Business Management & Computing, Foundation in Engineering & Science and Integrated Engineering are added to `candidacy_departments` because the shared data has a real chair user for each.';
         $md[] = '';
         $md[] = '## Expected numbers after the move';
         $md[] = '';

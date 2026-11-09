@@ -116,7 +116,9 @@ class CandidacyAppealWorkflow implements WorkflowModule, DecidesOneAtATime, Supp
 
     public function createRoute(): ?string
     {
-        return 'candidacy-appeal.create';
+        // The appeal form page itself (it decides editable / read-only / continue / resubmit). The old
+        // candidacy-appeal.create URL still redirects here.
+        return 'candidacy.appeals.new';
     }
 
     public function queueRoute(): string
