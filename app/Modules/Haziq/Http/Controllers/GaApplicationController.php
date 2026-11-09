@@ -10,6 +10,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Stage;
 use App\Modules\Haziq\Http\Controllers\Concerns\HandlesApplicationCorrections;
 use App\Modules\Haziq\Models\AcademicQualification;
 use App\Modules\Haziq\Models\ApplicationCorrectionRequest;
@@ -488,7 +489,19 @@ class GaApplicationController extends Controller
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
-        $queue = $this->queueFor($request, $engine, ['documents']);
+        // The engine's queue is role-scoped, not person-scoped -- any
+        // Supervisor would otherwise see every student's application
+        // waiting at this stage, not only their own supervisees. Confirmed
+        // explicitly 2026-11-10: "bukan semua supervisor approve for any
+        // student." Same pattern as Nureen's SupervisionController.
+        $queue = $this->queueFor($request, $engine, ['documents'],
+            function ($query, Stage $stage) use ($request) {
+                if ($stage->key !== 'supervisor') {
+                    return;
+                }
+
+                $query->whereHas('student', fn ($s) => $s->where('supervisor_id', $request->user()->id));
+            });
 
         $details = GaApplicationDetail::whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()->keyBy('application_id');
@@ -550,6 +563,13 @@ class GaApplicationController extends Controller
 
         $stage = $engine->currentStage($application);
         $detail = GaApplicationDetail::where('application_id', $application->id)->first();
+
+        // The queue above already hides another supervisor's students, but
+        // that filters a list, not this direct POST -- a crafted request
+        // naming someone else's application id still needs its own guard.
+        if ($stage?->key === 'supervisor' && $application->student?->supervisor_id !== $request->user()->id) {
+            abort(403, 'This student is not under your supervision.');
+        }
 
         if ($stage?->key === 'admin_verify') {
             $data = $request->validate(['decision' => ['required', 'in:approve']]);
