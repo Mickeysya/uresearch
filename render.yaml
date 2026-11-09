@@ -1,0 +1,66 @@
+# Render Blueprint: one free web service running Apache, the queue worker
+# and the scheduler (see docker/supervisord.conf). Values marked sync: false
+# are secrets — Render asks for them when the Blueprint is first applied.
+services:
+  - type: web
+    name: uresearch
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /up
+    envVars:
+      - key: APP_NAME
+        value: UResearch 2.0
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        sync: false            # php artisan key:generate --show
+      - key: APP_URL
+        sync: false            # https://uresearch.onrender.com
+      - key: APP_TIMEZONE
+        value: Asia/Kuala_Lumpur
+      - key: LOG_CHANNEL
+        value: stderr
+
+      # Supabase: Connect > Session pooler (IPv4). The direct host is IPv6-only.
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_URL
+        sync: false            # postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres
+
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+
+      # Brevo SMTP relay on 2525 — Render free blocks 25/465/587.
+      - key: MAIL_MAILER
+        value: smtp
+      - key: MAIL_HOST
+        value: smtp-relay.brevo.com
+      - key: MAIL_PORT
+        value: "2525"
+      - key: MAIL_USERNAME
+        sync: false            # Brevo SMTP login, e.g. 9xxxxx001@smtp-brevo.com
+      - key: MAIL_PASSWORD
+        sync: false            # Brevo SMTP key (not the API key)
+      - key: MAIL_FROM_ADDRESS
+        sync: false            # a sender verified in Brevo
+      - key: MAIL_FROM_NAME
+        value: UResearch 2.0
+
+      # Cloudflare R2 — only takes effect once config/filesystems.php reads UPLOADS_DISK.
+      - key: UPLOADS_DISK
+        value: r2
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false            # https://<account-id>.r2.cloudflarestorage.com
