@@ -36,13 +36,14 @@ trait SavesDrafts
     abstract protected function form(Request $request, ?Application $draft);
 
     /**
-     * Document fields that take one file only, as a plain file input.
-     * Every other document field takes several, through the same
-     * multi-file picker as Nureen's forms.
+     * Document fields that keep Core's own single-document limits
+     * (DocumentStore::rules(): its type list, 10 MB). Every other field
+     * keeps the limits it already had: PDF/JPG/PNG/DOCX (or the module's
+     * narrower list), 5 MB.
      *
      * @return array<int, string>
      */
-    protected function singleFileDocuments(): array
+    protected function coreLimitDocuments(): array
     {
         return [];
     }
@@ -53,17 +54,16 @@ trait SavesDrafts
         return [];
     }
 
-    /** Extensions a multi-file field accepts, if narrower than Core's own list. */
+    /** Extensions a document field accepts, if narrower than the list above. */
     protected function documentExtensions(): ?array
     {
         return null;
     }
 
     /**
-     * Rules for every document field. On submit a required field must end up
-     * with at least one file, counting those the draft already holds; on a
-     * draft save nothing is required. Either way the files already attached
-     * count towards the limit.
+     * Rules for every document field. Each field takes exactly one file.
+     * On submit a required field must end up with its file, counting one
+     * the draft already holds; on a draft save nothing is required.
      *
      * @return array{0: array<string, array>, 1: array<string, string>} rules, messages
      */
@@ -71,34 +71,22 @@ trait SavesDrafts
     {
         $attached = Drafts::attached($draft, $removing);
         $rules = $messages = [];
+        $extensions = $this->documentExtensions() ?? DocumentStore::MULTI_ALLOWED;
 
         foreach ($this->draftDocuments() as $field => $label) {
-            $already = $attached->get($label)?->count() ?? 0;
-            $required = $submitting && $already === 0 && ! in_array($field, $this->optionalDocuments(), true);
+            $required = $submitting
+                && ! $attached->has($label)
+                && ! in_array($field, $this->optionalDocuments(), true);
 
-            if (in_array($field, $this->singleFileDocuments(), true)) {
-                $rules[$field] = DocumentStore::rules($required);
+            $rules[$field] = in_array($field, $this->coreLimitDocuments(), true)
+                ? DocumentStore::rules($required)
+                : [$required ? 'required' : 'nullable', 'file', 'mimes:'.implode(',', $extensions), 'max:'.DocumentStore::MULTI_MAX_FILE_KB];
 
-                continue;
-            }
-
-            $rules += DocumentStore::manyRules($field, $required);
-            $rules[$field][] = function (string $attribute, $value, \Closure $fail) use ($already) {
-                if ($already + count((array) $value) > DocumentStore::MULTI_MAX_FILES) {
-                    $fail('You may attach at most '.DocumentStore::MULTI_MAX_FILES." files of this type ({$already} already attached).");
-                }
-            };
-
-            if ($extensions = $this->documentExtensions()) {
-                $rules["{$field}.*"] = ['file', 'mimes:'.implode(',', $extensions), 'max:'.DocumentStore::MULTI_MAX_FILE_KB];
-            }
-
-            $messages += DocumentStore::manyMessages($field);
             $messages["{$field}.required"] = "Attach the {$label}.";
-
-            if ($extensions) {
-                $messages["{$field}.*.mimes"] = 'Each file must be one of: '.strtoupper(implode(', ', $extensions)).'.';
-            }
+            // Posting several files under one field (field[]) lands here.
+            $messages["{$field}.file"] = "Attach one file only for the {$label}.";
+            $messages["{$field}.mimes"] = "The {$label} must be one of: ".strtoupper(implode(', ', $extensions)).'.';
+            $messages["{$field}.max"] = "The {$label} must be ".(DocumentStore::MULTI_MAX_FILE_KB / 1024).' MB or smaller.';
         }
 
         return [$rules, $messages];
@@ -107,27 +95,9 @@ trait SavesDrafts
     /** Validate a submit: the module's own rules plus its document rules, in one pass. */
     protected function validateWithDocuments(Request $request, ?Application $draft, array $removing, array $rules, array $messages = []): array
     {
-        $this->normaliseDocumentFiles($request);
         [$fileRules, $fileMessages] = $this->documentRules($draft, $removing, submitting: true);
 
         return $request->validate($rules + $fileRules, $messages + $fileMessages);
-    }
-
-    /**
-     * A multi-file field posted as a single file (an older page, a script,
-     * a test) is treated as a list of one, so both shapes validate alike.
-     */
-    protected function normaliseDocumentFiles(Request $request): void
-    {
-        foreach (array_keys($this->draftDocuments()) as $field) {
-            // Read the raw bag: $request->file() would cache the converted
-            // files before this change could reach validation.
-            $file = $request->files->get($field);
-
-            if ($file !== null && ! is_array($file) && ! in_array($field, $this->singleFileDocuments(), true)) {
-                $request->files->set($field, [$file]);
-            }
-        }
     }
 
     public function editDraft(Request $request, Application $application)
@@ -157,7 +127,6 @@ trait SavesDrafts
         }
 
         $removing = $this->draftRemoving($request, $application);
-        $this->normaliseDocumentFiles($request);
         [$fileRules, $fileMessages] = $this->documentRules($application, $removing, submitting: false);
 
         $data = $request->validate(['draft_step' => ['nullable', 'integer', 'min:0', 'max:20']] + $fileRules, $fileMessages);
@@ -254,9 +223,8 @@ trait SavesDrafts
     }
 
     /**
-     * Attach the newly picked files. A multi-file field adds to what the
-     * draft already holds (the student removes files with the tick boxes);
-     * a single-file field replaces its earlier file.
+     * Attach each newly picked file. One file per document: a new pick
+     * replaces whatever the draft already held under that document.
      */
     protected function attachDraftFiles(Request $request, Application $application, DocumentStore $documents): void
     {
@@ -265,15 +233,8 @@ trait SavesDrafts
                 continue;
             }
 
-            if (in_array($field, $this->singleFileDocuments(), true)) {
-                Drafts::removeDocuments($application, $application->documents()->where('doc_type', $label)->pluck('id')->all());
-                $documents->attach($application, $request->file($field), $label);
-
-                continue;
-            }
-
-            $files = $request->file($field);
-            $documents->attachMany($application, array_filter(is_array($files) ? $files : [$files]), $label);
+            Drafts::removeDocuments($application, $application->documents()->where('doc_type', $label)->pluck('id')->all());
+            $documents->attach($application, $request->file($field), $label);
         }
     }
 

@@ -121,7 +121,7 @@ class TravelController extends Controller
             'ta_plan_dates.*' => ['date'],
         ], [
             'travel_start_date.after_or_equal' => 'Travel cannot start in the past.',
-            'travel_end_date.after_or_equal' => 'The end date must fall on or after the start date.',
+            'travel_end_date.after_or_equal' => 'The end date must be on or after the start date.',
             'other_request_specify.required_if' => 'Please describe the request when choosing "Others".',
             'is_international.required' => 'Choose whether the travel is local or international.',
             'supporting_document.required' => 'Upload the supporting document.',

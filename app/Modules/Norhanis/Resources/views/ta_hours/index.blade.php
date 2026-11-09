@@ -14,9 +14,9 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header title="TA Hours" />
+
     <div class="card card-wide">
-        <h2>TA Hours</h2>
-        <div class="card-divider"></div>
 
         @if ($student)
             <p class="queue-meta">In lieu of the waived tuition fee. Total logged: <b>{{ number_format($total, 2) }} hrs</b>
@@ -71,7 +71,7 @@
         @else
             @if ($byStudentThisMonth->isNotEmpty())
                 @include('core::dashboard.partials.chartjs')
-                <p class="queue-meta" style="margin-top: 4px; margin-bottom: 14px;">This month's hours per student, against the 21hr cap — check before logging more for someone near it.</p>
+                <p class="queue-meta" style="margin-top: 4px; margin-bottom: 14px;">This month's hours per student, against the 21hr cap. Check before logging more for someone near it.</p>
                 <div style="height: {{ 50 + $byStudentThisMonth->count() * 32 }}px;">
                     <canvas id="ta-hours-by-student" role="img"
                             aria-label="Hours this month by student: {{ $byStudentThisMonth->map(fn ($r) => $r['student']->name.' '.$r['hours'].' hrs')->implode(', ') }}"></canvas>

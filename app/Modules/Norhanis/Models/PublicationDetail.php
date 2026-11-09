@@ -51,9 +51,26 @@ class PublicationDetail extends Model
     public const COST_CENTRES = [
         'cgs_pay_and_claims' => 'CGS – Pay and Claims',
         'cgs_letter_of_undertaking' => 'CGS – Letter of Undertaking',
-        'split_memo' => 'Split Memo',
+        'split_memo' => 'CGS & Grant - Split Memo',
         'others' => 'Others',
     ];
+
+    /** The only cost centre a conference request may use, as CGS asked. */
+    public const CONFERENCE_COST_CENTRE = 'others';
+
+    /**
+     * The cost centres a request of this type may choose: a conference
+     * uses "Others" only, a journal any of the four. The keys are stored
+     * in rows, so only the labels above may be reworded.
+     *
+     * @return array<string, string>
+     */
+    public static function costCentresFor(?string $typeOfRequest): array
+    {
+        return $typeOfRequest === 'publication_conference'
+            ? array_intersect_key(self::COST_CENTRES, [self::CONFERENCE_COST_CENTRE => true])
+            : self::COST_CENTRES;
+    }
 
     /**
      * "CGS – Pay and Claims", or the student's own words for "Others".

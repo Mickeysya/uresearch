@@ -15,7 +15,8 @@ use App\Modules\Norhanis\Models\PublicationDetail;
  */
 trait HasApprovedPublication
 {
-    protected function approvedPublication(User $student, string $status = Application::STATUS_APPROVED): Application
+    /** @param  array<string, mixed>  $detail  overrides for the publication_details row */
+    protected function approvedPublication(User $student, string $status = Application::STATUS_APPROVED, array $detail = []): Application
     {
         $application = Application::create([
             'student_id' => $student->id,
@@ -24,7 +25,7 @@ trait HasApprovedPublication
             'submitted_at' => now()->subDays(20),
         ]);
 
-        PublicationDetail::create([
+        PublicationDetail::create($detail + [
             'application_id' => $application->id,
             'type_of_request' => 'publication_journal',
             'title_of_paper' => 'Reservoir Simulation with Graph Networks',

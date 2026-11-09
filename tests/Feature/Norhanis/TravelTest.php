@@ -88,6 +88,30 @@ class TravelTest extends TestCase
             ->assertSessionHasErrors('supporting_document');
     }
 
+    public function test_the_supporting_document_takes_exactly_one_file(): void
+    {
+        $pdf = fn (string $name) => \Illuminate\Http\UploadedFile::fake()->create($name, 20, 'application/pdf');
+
+        $this->actingAs($this->student())
+            ->post(route('travel.store'), $this->payload(['supporting_document' => [$pdf('a.pdf'), $pdf('b.pdf')]]))
+            ->assertSessionHasErrors(['supporting_document' => 'Attach one file only for the Supporting Document.']);
+        $this->assertSame(0, Application::where('module_type', 'travel')->count());
+
+        // A plain single-file input, and no Publication-only compile note.
+        $this->get(route('travel.create'))->assertOk()
+            ->assertSee('<input type="file" name="supporting_document" id="supporting_document"', false)
+            ->assertDontSee('name="supporting_document[]"', false)
+            ->assertDontSee('multiple', false)
+            ->assertDontSee('Compile the file into 1');
+    }
+
+    public function test_a_single_supporting_document_is_stored_once(): void
+    {
+        $application = $this->submit();
+
+        $this->assertSame(1, $application->documents()->where('doc_type', 'Supporting Document')->count());
+    }
+
     public function test_the_cost_centre_is_optional_and_saved_when_given(): void
     {
         $with = $this->submitAs($this->student('22001001', 'a@test.my'), ['cost_centre' => 'YUTP-015LC0-123']);
@@ -162,9 +186,50 @@ class TravelTest extends TestCase
         $this->post(route('travel.store'), $this->payload([
             'travel_start_date' => now()->addDays(10)->toDateString(),
             'travel_end_date' => now()->addDays(3)->toDateString(),
-        ]))->assertSessionHasErrors('travel_end_date');
+        ]))->assertSessionHasErrors(['travel_end_date' => 'The end date must be on or after the start date.']);
 
         $this->assertSame(0, Application::where('module_type', 'travel')->count());
+    }
+
+    public function test_a_same_day_trip_is_accepted(): void
+    {
+        $day = now()->addDays(20);
+
+        $application = $this->submit([
+            'travel_start_date' => $day->toDateString(),
+            'travel_end_date' => $day->toDateString(),
+        ]);
+
+        $detail = \App\Modules\Norhanis\Models\TravelDetail::where('application_id', $application->id)->sole();
+        $this->assertSame($day->toDateString(), $detail->travel_end_date->toDateString());
+    }
+
+    public function test_an_end_date_after_the_start_is_accepted(): void
+    {
+        $application = $this->submit([
+            'travel_start_date' => now()->addDays(20)->toDateString(),
+            'travel_end_date' => now()->addDays(25)->toDateString(),
+        ]);
+
+        $detail = \App\Modules\Norhanis\Models\TravelDetail::where('application_id', $application->id)->sole();
+        $this->assertSame(now()->addDays(25)->toDateString(), $detail->travel_end_date->toDateString());
+    }
+
+    public function test_the_end_date_cannot_be_picked_before_the_start_date_in_the_form(): void
+    {
+        $this->actingAs($this->student())->get(route('travel.create'))->assertOk()
+            // Before a start date is chosen the end date's floor is today, like the start's.
+            ->assertSee('id="travel_end_date" required'."\n".'                   min="'.now()->toDateString().'"', false);
+
+        // Coming back from a failed submit, the floor is the start date that was chosen.
+        $this->post(route('travel.store'), $this->payload([
+            'travel_start_date' => now()->addDays(30)->toDateString(),
+            'travel_end_date' => now()->addDays(29)->toDateString(),
+        ]));
+        $this->get(route('travel.create'))
+            ->assertSee('min="'.now()->addDays(30)->toDateString().'"', false)
+            ->assertSee("getElementById(\"travel_start_date\")", false)
+            ->assertSee("getElementById(\"travel_end_date\")", false);
     }
 
     public function test_a_ga_gra_student_must_provide_the_ta_plan(): void

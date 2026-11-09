@@ -87,6 +87,238 @@ class PublicationTest extends TestCase
             ->assertSessionHasErrors('cost_centre_other');
     }
 
+    // ---- Conference / publication dates --------------------------------------
+
+    public function test_an_end_date_before_the_start_date_is_rejected(): void
+    {
+        $this->actingAs($this->student())
+            ->post(route('publication.store'), $this->payload([
+                'conference_start_date' => now()->addDays(30)->toDateString(),
+                'conference_end_date' => now()->addDays(29)->toDateString(),
+            ]))
+            ->assertSessionHasErrors(['conference_end_date' => 'The end date must be on or after the start date.']);
+
+        $this->assertSame(0, PublicationDetail::count());
+    }
+
+    public function test_a_same_day_conference_is_accepted(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+        $day = now()->addDays(30)->toDateString();
+
+        $this->actingAs($this->student())
+            ->post(route('publication.store'), $this->payload(['conference_start_date' => $day, 'conference_end_date' => $day]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($day, PublicationDetail::sole()->conference_end_date->toDateString());
+    }
+
+    public function test_an_end_date_after_the_start_date_is_accepted(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $this->actingAs($this->student())
+            ->post(route('publication.store'), $this->payload([
+                'conference_start_date' => now()->addDays(30)->toDateString(),
+                'conference_end_date' => now()->addDays(33)->toDateString(),
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(now()->addDays(33)->toDateString(), PublicationDetail::sole()->conference_end_date->toDateString());
+    }
+
+    public function test_the_form_keeps_the_end_date_from_going_before_the_start_date(): void
+    {
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload([
+                'conference_start_date' => now()->addDays(30)->toDateString(),
+                'conference_end_date' => now()->addDays(29)->toDateString(),
+            ]));
+
+        $this->get(route('publication.create'))->assertOk()
+            ->assertSee('min="'.now()->addDays(30)->toDateString().'"', false)
+            ->assertSee('getElementById("conference_start_date")', false)
+            ->assertSee('getElementById("conference_end_date")', false);
+    }
+
+    // ---- Authors -----------------------------------------------------------
+
+    public function test_every_author_field_is_required_for_every_author(): void
+    {
+        $student = $this->student();
+        $fields = ['author_name', 'email', 'designation', 'organisation', 'role_contribution'];
+
+        foreach ($fields as $field) {
+            foreach ([0, 1] as $index) {
+                $payload = $this->payload(['authors' => [
+                    ['author_name' => 'Ahmad Danial', 'email' => 'student@test.my'],
+                    ['author_name' => 'Dr. Co Author', 'email' => 'co.author@example.edu'],
+                ]]);
+                $payload['authors'][$index][$field] = '';
+
+                $this->actingAs($student)
+                    ->post(route('publication.store'), $payload)
+                    ->assertSessionHasErrors("authors.{$index}.{$field}");
+            }
+        }
+
+        $this->assertSame(0, PublicationDetail::count());
+    }
+
+    public function test_author_one_is_prefilled_from_the_students_account_and_the_rest_start_empty(): void
+    {
+        $student = $this->student(attributes: ['programme' => 'PhD in Chemical Engineering (Full-Time)']);
+
+        $response = $this->actingAs($student)->get(route('publication.create'))->assertOk();
+
+        // Author 1: name, email, designation and organisation filled, all editable.
+        foreach ([
+            'author_0_name' => $student->name,
+            'author_0_email' => $student->email,
+            'author_0_designation' => 'PhD Student',
+            'author_0_organisation' => 'Universiti Teknologi PETRONAS',
+        ] as $id => $value) {
+            $response->assertSee('id="'.$id.'" required maxlength', false)
+                ->assertSee('value="'.e($value).'"', false);
+        }
+        $response->assertDontSee('id="author_0_designation" readonly', false);
+
+        // Role / Contribution is the student's to say; no Author 2 row until added,
+        // and the row added from the template starts blank.
+        $response->assertSee('id="author_0_role" required maxlength="150" value=""', false)
+            ->assertDontSee('id="author_1_name"', false)
+            ->assertSee('name="authors[__INDEX__][designation]" required id="author___INDEX___designation" placeholder', false);
+    }
+
+    public function test_the_designation_follows_the_programme_and_falls_back_to_postgraduate_student(): void
+    {
+        $designation = fn (?string $programme) => \App\Modules\Norhanis\Support\ApplicantAuthor::designation($programme);
+
+        $this->assertSame('PhD Student', $designation('PhD Part-Time'));
+        $this->assertSame("Master's Student", $designation('MSc Full-Time'));
+        $this->assertSame("Master's Student", $designation('Master of Science in Petroleum Engineering (Full-Time)'));
+        $this->assertSame('Postgraduate Student', $designation(null));
+    }
+
+    public function test_an_edited_author_one_is_saved_as_typed(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $this->actingAs($this->student())
+            ->post(route('publication.store'), $this->payload(['authors' => [[
+                'author_name' => 'Ahmad Danial bin Rahman', 'email' => 'student@test.my',
+                'designation' => 'Graduate Research Assistant', 'organisation' => 'UTP, Department of Computing',
+                'role_contribution' => 'Lead author',
+            ]]]))
+            ->assertSessionHasNoErrors();
+
+        $author = PublicationDetail::sole()->authors()->sole();
+        $this->assertSame('Graduate Research Assistant', $author->designation);
+        $this->assertSame('UTP, Department of Computing', $author->organisation);
+    }
+
+    // ---- One file per document -------------------------------------------
+
+    public function test_each_publication_document_takes_exactly_one_file(): void
+    {
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload(['invoice' => [$this->pdf('a.pdf'), $this->pdf('b.pdf')]]))
+            ->assertSessionHasErrors(['invoice' => 'Attach one file only for the Invoice.']);
+        $this->assertSame(0, PublicationDetail::count());
+
+        $page = $this->get(route('publication.create'))->assertOk()
+            ->assertSee('Compile the file into 1 if have more than 1 file.')
+            ->assertDontSee('multiple', false)
+            ->assertDontSee('name="invoice[]"', false);
+
+        // The allowed types and size are as before.
+        $page->assertSee('One file, PDF, JPG, JPEG, PNG or DOCX, 5&nbsp;MB max.', false);
+    }
+
+    public function test_one_file_per_document_is_stored_and_listed_once(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $this->actingAs($this->student())
+            ->post(route('publication.store'), $this->payload())
+            ->assertSessionHasNoErrors();
+
+        $application = Application::where('module_type', 'publication')->sole();
+        $counts = $application->documents()->get()->countBy('doc_type');
+
+        foreach (['Invoice', 'Index Proof', 'Turnitin Report', 'Letter of Acceptance', 'Conference/Journal Details'] as $type) {
+            $this->assertSame(1, $counts[$type] ?? 0, $type);
+        }
+    }
+
+    /** A conference request's only allowed cost centre, with the words "Others" needs. */
+    protected const CONFERENCE_COST = ['cost_centre' => 'others', 'cost_centre_other' => 'FRG research grant'];
+
+    public function test_a_conference_may_use_only_the_others_cost_centre(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $student = $this->student();
+        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'local'];
+
+        // Every other option is refused, even posted from an edited form.
+        foreach (['cgs_pay_and_claims', 'cgs_letter_of_undertaking', 'split_memo'] as $costCentre) {
+            $this->actingAs($student)
+                ->post(route('publication.store'), $this->payload($conference + ['cost_centre' => $costCentre]))
+                ->assertSessionHasErrors(['cost_centre' => 'A conference request can only use the "Others" cost centre.']);
+        }
+        $this->assertSame(0, PublicationDetail::count());
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload($conference + self::CONFERENCE_COST))
+            ->assertSessionHasNoErrors();
+
+        $detail = PublicationDetail::sole();
+        $this->assertSame('others', $detail->cost_centre);
+        $this->assertSame('Others: FRG research grant', $detail->costCentreLabel());
+    }
+
+    public function test_a_journal_may_use_any_of_the_four_cost_centres(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $choices = ['cgs_pay_and_claims', 'cgs_letter_of_undertaking', 'split_memo', 'others'];
+
+        foreach ($choices as $i => $costCentre) {
+            $email = "journal{$i}@test.my";
+
+            $this->actingAs($this->student('2200200'.$i, $email))
+                ->post(route('publication.store'), $this->payload([
+                    'cost_centre' => $costCentre,
+                    'cost_centre_other' => 'Department fund',
+                    'authors' => [['author_name' => 'Journal Student', 'email' => $email]],
+                ]))
+                ->assertSessionHasNoErrors();
+        }
+
+        $this->assertEqualsCanonicalizing($choices, PublicationDetail::pluck('cost_centre')->all());
+    }
+
+    public function test_the_form_lists_the_renamed_split_memo_and_marks_the_journal_only_options(): void
+    {
+        $this->actingAs($this->student())->get(route('publication.create'))
+            ->assertOk()
+            ->assertSee('CGS &amp; Grant - Split Memo', false)
+            ->assertDontSee('>Split Memo<', false)
+            ->assertSee('<option value="split_memo"', false)
+            ->assertSee('data-journal-only', false);
+    }
+
     public function test_the_letter_of_undertaking_and_split_memo_come_from_the_cost_centre(): void
     {
         Storage::fake('local');
@@ -111,7 +343,7 @@ class PublicationTest extends TestCase
         // so only the student's own certification and the reviewers remain.
         $split = PublicationDetail::where('cost_centre', 'split_memo')->sole();
         $this->assertFalse($split->wants_letter_of_undertaking);
-        $this->assertSame('Split Memo', $split->costCentreLabel());
+        $this->assertSame('CGS & Grant - Split Memo', $split->costCentreLabel());
     }
 
     public function test_a_journal_is_filed_with_two_reviewers_and_waits_for_them(): void
@@ -149,7 +381,7 @@ class PublicationTest extends TestCase
     public function test_a_conference_must_say_whether_it_is_local_or_international(): void
     {
         $this->actingAs($this->student())
-            ->post(route('publication.store'), $this->payload(['type_of_request' => 'publication_conference']))
+            ->post(route('publication.store'), $this->payload(['type_of_request' => 'publication_conference'] + self::CONFERENCE_COST))
             ->assertSessionHasErrors('conference_scope');
     }
 
@@ -159,7 +391,7 @@ class PublicationTest extends TestCase
         Notification::fake();
 
         $student = $this->student();
-        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'international'];
+        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'international'] + self::CONFERENCE_COST;
 
         $this->actingAs($student)
             ->post(route('publication.store'), $this->payload($conference))
@@ -186,7 +418,7 @@ class PublicationTest extends TestCase
                 'type_of_request' => 'publication_conference',
                 'conference_scope' => 'local',
                 'reviewers' => $this->reviewers(3),
-            ]))
+            ] + self::CONFERENCE_COST))
             ->assertSessionHasNoErrors();
 
         $this->assertSame(2, PublicationDetail::sole()->activeEvaluations()->count());

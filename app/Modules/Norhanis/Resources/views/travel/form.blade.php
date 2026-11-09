@@ -56,7 +56,10 @@
             <p class="message-warning" id="lead-time-warning" hidden></p>
 
             <label for="travel_end_date">End Date</label>
+            {{-- Never before the start date (same day is fine): the min follows
+                 it, see partials/date-range. --}}
             <input type="date" name="travel_end_date" id="travel_end_date" required
+                   min="{{ old('travel_start_date') ?: now()->toDateString() }}"
                    value="{{ old('travel_end_date') }}"
                    class="@error('travel_end_date') is-invalid @enderror">
             @error('travel_end_date') <p class="field-error">{{ $message }}</p> @enderror
@@ -102,8 +105,7 @@
                    class="@error('contact_person_email') is-invalid @enderror">
             @error('contact_person_email') <p class="field-error">{{ $message }}</p> @enderror
 
-            <x-nureen::multi-file-upload name="supporting_document" label="Supporting Document" :required="true"
-                :existing="$attached->get('Supporting Document', collect())" />
+            @include('norhanis::partials.file-field', ['name' => 'supporting_document', 'label' => 'Supporting Document'])
             </fieldset>
 
             {{-- The GA/GRA module says whether this student holds an appointment
@@ -284,6 +286,7 @@
     })();
 </script>
 
+@include('norhanis::partials.date-range', ['start' => 'travel_start_date', 'end' => 'travel_end_date'])
 @include('core::partials.form-stepper')
 @includeIf('nureen::partials.draft-form-script')
 @include('norhanis::partials.file-remove')
