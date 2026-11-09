@@ -19,6 +19,9 @@
             <label for="type_of_request">Type of Request</label>
             <select name="type_of_request" id="type_of_request" required
                     class="@error('type_of_request') is-invalid @enderror">
+                {{-- Blank first, as on the other selects: without it the first
+                     type showed as chosen and a student could skip past it. --}}
+                <option value="">-- Select --</option>
                 @foreach ($requestTypes as $value => $labelText)
                     <option value="{{ $value }}" @selected(old('type_of_request') === $value)>{{ $labelText }}</option>
                 @endforeach

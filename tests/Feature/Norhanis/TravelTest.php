@@ -179,6 +179,17 @@ class TravelTest extends TestCase
         $this->assertSame(5, $detail->duration_days, 'Duration must be computed from the dates, inclusive.');
     }
 
+    public function test_type_of_request_starts_on_select_and_must_be_chosen(): void
+    {
+        $this->actingAs($this->student());
+
+        $this->get(route('travel.create'))->assertOk()
+            ->assertSeeInOrder(['id="type_of_request"', '<option value="">-- Select --</option>', 'value="research_attachment"'], false);
+
+        $this->post(route('travel.store'), $this->payload(['type_of_request' => '']))
+            ->assertSessionHasErrors('type_of_request');
+    }
+
     public function test_an_end_date_before_the_start_is_rejected(): void
     {
         $this->actingAs($this->student());
