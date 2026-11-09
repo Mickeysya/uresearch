@@ -556,16 +556,34 @@ class AllowanceController extends Controller
                 $displayStatus = $rowConfirmed || $monthsAccumulating === 0
                     ? 'eligible'
                     : ($row->status === 'withheld' ? 'withheld' : 'payment_pending');
-                // Confirmed explicitly 2026-11-06: a 'withheld' month is
-                // still money the student is owed for a period CGS simply
-                // hasn't paid out yet — the *label* reads 'withheld'
-                // (Stage 1 is overdue) but CGS can still mark it complete
-                // month by month, exactly like 'payment_pending'. Waiting
-                // for Stage 1 itself to be marked complete is no longer a
-                // precondition for confirming the accumulating total —
-                // only an *unconfirmed* row (nothing accumulated yet, or
-                // already paid this round) blocks the action.
-                $confirmable = $displayStatus !== 'eligible';
+                // Confirmed explicitly 2026-11-08, replacing the
+                // 2026-11-06 decision this comment used to describe:
+                // only the FIRST withheld month is confirmable. Its own
+                // payment is still for service from before Stage 1
+                // actually went overdue (the payroll lag), so it's
+                // legitimately payable on its own; every withheld month
+                // after that stays locked until Stage 1 is actually
+                // marked complete — at which point recordCompletion()'s
+                // back-pay flips every withheld row to 'backdated' in
+                // one go, confirmable as a batch from there.
+                //
+                // Corrected same day: "the first one is confirmable"
+                // means the first month of a *fresh* overdue episode —
+                // the one right after a normal 'eligible' month, whose
+                // own payment is for service from before Stage 1 went
+                // overdue. It does NOT mean "whatever row happens to
+                // follow something other than 'withheld'". A resumption
+                // row after a termination (previous status 'forfeited',
+                // or 'review_required' mid-termination-entry) is still
+                // carrying an *unresolved* Stage 1 debt forward, not
+                // starting a new case — "firts month tuk case baru je
+                // withold sebab tak complete stage 1, tak masuk stage 2
+                // period lagi." That row stays locked like any other
+                // non-first withheld month, even though the row right
+                // before it isn't itself 'withheld'.
+                $freshOverdueEpisode = $previousStatus === null || $previousStatus === 'eligible';
+                $confirmable = $displayStatus !== 'eligible'
+                    && ($row->status !== 'withheld' || $freshOverdueEpisode);
 
                 // A reinstatement month resumed immediately by
                 // StageGateEngine::resumeReinstatementMonth() still lets
@@ -596,7 +614,18 @@ class AllowanceController extends Controller
                     $monthsAccumulating = 0;
                     $monthsAccruing = 0;
                     $laggedMode = false;
-                    $heldBack = 0.0;
+                    // $heldBack is deliberately left alone here. Confirmed
+                    // live 2026-11-08: confirming THIS row's shown figure
+                    // only pays what's shown — if this row was itself
+                    // mid-defer, $heldBack already holds its own
+                    // contribution, set a few lines up, earmarked for the
+                    // row right after. Zeroing it here silently wrote off
+                    // that month's allowance instead of letting it keep
+                    // following "next month pays for the month before,
+                    // same cycle" like every other deferred amount until
+                    // it's actually paid — user's own words, confirming
+                    // nothing in the cycle should vanish just because an
+                    // earlier figure in the chain got settled.
                 }
             } elseif ($row->status === 'forfeited') {
                 // An ongoing terminated month — never shown as a number,

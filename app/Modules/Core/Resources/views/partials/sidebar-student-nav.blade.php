@@ -11,17 +11,13 @@
 
     Expects: $submittable, $myApplicationOpen
 --}}
-{{-- Track My Applications (Core) + My Candidacy (Chloe) nested under it --
-     candidacy.status's own "View" link and this tree's Overview sub-item
-     land on the exact same applications.show/index screens now
-     (CandidacyAppealWorkflow's SuppliesApplicationDetail hook), so a
-     second top-level entry for My Candidacy was two names for one place.
-     Overview is a real sub-item, not a redundant parent link, because
+{{-- Track My Applications (Core). My Study Candidacy (Chloe) is its own
+     top-level item below Workstation. Overview is a real sub-item, not a redundant parent link, because
      every nav-tree trigger here is a <button> that only toggles -- same
      reason Attendance has its own "Overview" below. --}}
-<div class="nav-tree @if(request()->routeIs('applications.*') || request()->routeIs('candidacy.status')) open @endif">
+<div class="nav-tree @if(request()->routeIs('applications.*')) open @endif">
     <button type="button" class="nav-item nav-tree-trigger" title="Track My Applications"
-            aria-expanded="@if(request()->routeIs('applications.*') || request()->routeIs('candidacy.status')) true @else false @endif">
+            aria-expanded="@if(request()->routeIs('applications.*')) true @else false @endif">
         <span class="nav-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         </span>
@@ -33,7 +29,6 @@
     <div class="nav-tree-panel">
         <div class="nav-tree-items">
             <a href="{{ route('applications.index') }}" class="nav-subitem @if(request()->routeIs('applications.*')) active @endif">Overview</a>
-            <a href="{{ route('candidacy.status') }}" class="nav-subitem @if(request()->routeIs('candidacy.status')) active @endif">My Candidacy</a>
         </div>
     </div>
 </div>
@@ -46,6 +41,14 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
     </span>
     <span class="nav-label">Workstation</span>
+</a>
+
+{{-- My Study Candidacy (Chloe) -- a fixed link, directly below Workstation. --}}
+<a href="{{ route('candidacy.status') }}" class="nav-item @if(request()->routeIs('candidacy.status*') || request()->routeIs('candidacy.appeals.show') || request()->routeIs('candidacy.appeals.region')) active @endif" title="My Study Candidacy">
+    <span class="nav-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/></svg>
+    </span>
+    <span class="nav-label">My Study Candidacy</span>
 </a>
 
 <div class="nav-tree @if(request()->routeIs('attendance.*')) open @endif">
@@ -67,9 +70,10 @@
     </div>
 </div>
 
-<div class="nav-tree @if($myApplicationOpen) open @endif">
+@php $caFormPage = request()->routeIs('candidacy.appeals.draft*', 'candidacy.appeals.edit', 'candidacy.appeals.resubmit'); @endphp
+<div class="nav-tree @if($myApplicationOpen || $caFormPage) open @endif">
     <button type="button" class="nav-item nav-tree-trigger" title="My Application"
-            aria-expanded="@if($myApplicationOpen) true @else false @endif">
+            aria-expanded="@if($myApplicationOpen || $caFormPage) true @else false @endif">
         <span class="nav-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
         </span>
@@ -81,7 +85,7 @@
     <div class="nav-tree-panel">
         <div class="nav-tree-items">
             @foreach ($submittable as $module)
-                <a href="{{ route($module->createRoute()) }}" title="{{ $module->label() }}" class="nav-subitem @if(request()->routeIs($module->createRoute())) active @endif">{{ $module->label() }}</a>
+                <a href="{{ route($module->createRoute()) }}" title="{{ $module->label() }}" class="nav-subitem @if(request()->routeIs($module->createRoute()) || ($caFormPage && $module->createRoute() === 'candidacy.appeals.new')) active @endif">{{ $module->label() }}</a>
             @endforeach
         </div>
     </div>

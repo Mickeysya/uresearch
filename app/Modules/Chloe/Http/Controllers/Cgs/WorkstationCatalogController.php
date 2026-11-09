@@ -21,17 +21,66 @@ use Illuminate\Validation\Rule;
  */
 class WorkstationCatalogController extends Controller
 {
-    public function index(WorkstationSeatCatalogue $catalogue)
+    public function index(Request $request, WorkstationSeatCatalogue $catalogue)
     {
+        $selection = $this->selection($request);
+
+        $allRooms = WorkstationLocation::orderBy('block')->orderBy('room_code')->get(['id', 'block', 'room_code', 'name']);
+        $blocks = $allRooms->pluck('block')->unique()->values();
+
         $locations = WorkstationLocation::withCount('workstations')
-            ->with(['workstations' => fn ($q) => $q->orderByRaw('CAST(seat_code AS UNSIGNED) ASC')])
+            ->with(['workstations' => fn ($q) => \App\Modules\Chloe\Support\SeatOrder::query($q)])
             ->orderBy('block')
             ->orderBy('room_code')
             ->get();
 
         $nextSeatNumber = $catalogue->nextNumber();
+        // The room list offers only the rooms of the chosen block (all rooms when no block is chosen).
+        $roomChoices = $selection['block'] === '' ? $allRooms : $allRooms->where('block', $selection['block'])->values();
+        // Every room is rendered; the rooms outside the selection carry the `hidden` attribute, so the filter works without JavaScript (Apply) and the
+        // script can show and hide sections in the browser without a reload. The result line counts only the rooms in the selection.
+        $inSelection = fn (WorkstationLocation $l) => ($selection['block'] === '' || $l->block === $selection['block']) && ($selection['room'] === '' || $l->room_code === $selection['room']);
+        $summary = ['rooms' => $locations->filter($inSelection)->count(), 'seats' => (int) $locations->filter($inSelection)->sum('workstations_count')];
+        $roomsForScript = $allRooms->map(fn ($r) => ['b' => $r->block, 'r' => $r->room_code])->values();
 
-        return view('chloe::workstation.cgs.catalog', compact('locations', 'nextSeatNumber'));
+        return view('chloe::workstation.cgs.catalog', compact('locations', 'nextSeatNumber', 'selection', 'blocks', 'allRooms', 'roomChoices', 'summary', 'roomsForScript'));
+    }
+
+    /**
+     * The Block / Room filter, from the URL (?block=J2&room=J2-01-03). Anything that does not exist falls back to "all", without an error:
+     * an unknown block becomes All blocks, an unknown room (or one that is not in the chosen block) becomes All rooms. A room on its own
+     * selects its block too, so the two dropdowns never disagree.
+     *
+     * @return array{block: string, room: string}
+     */
+    protected function selection(Request $request, string $blockKey = 'block', string $roomKey = 'room'): array
+    {
+        $block = is_string($request->input($blockKey)) ? trim($request->input($blockKey)) : '';
+        $room = is_string($request->input($roomKey)) ? trim($request->input($roomKey)) : '';
+
+        if ($block !== '' && ! WorkstationLocation::where('block', $block)->exists()) {
+            $block = '';
+        }
+
+        if ($room !== '') {
+            $found = WorkstationLocation::where('room_code', $room)->first(['block']);
+
+            if (! $found || ($block !== '' && $found->block !== $block)) {
+                $room = '';
+            } elseif ($block === '') {
+                $block = $found->block;
+            }
+        }
+
+        return ['block' => $block, 'room' => $room];
+    }
+
+    /** Back to the catalogue, in the same filtered view the admin came from (the forms carry filter_block / filter_room). */
+    protected function backToCatalogue(Request $request, ?array $selection = null)
+    {
+        $selection ??= $this->selection($request, 'filter_block', 'filter_room');
+
+        return redirect()->route('workstation.cgs.catalog', array_filter($selection, fn ($v) => $v !== ''));
     }
 
     /** Add Location: Block, Room and n creates the room and its n seats in one transaction. */
@@ -58,7 +107,7 @@ class WorkstationCatalogController extends Controller
             return $catalogue->addSeats($location, (int) $data['quantity']);
         });
 
-        return redirect()->route('workstation.cgs.catalog')->with('status', $this->addedMessage($range));
+        return $this->backToCatalogue($request, ['block' => $data['block'], 'room' => $data['room_code']])->with('status', $this->addedMessage($range));
     }
 
     /** Add n more seats to an existing room. */
@@ -71,13 +120,13 @@ class WorkstationCatalogController extends Controller
 
         $range = $catalogue->addSeats(WorkstationLocation::findOrFail($data['workstation_location_id']), (int) $data['quantity']);
 
-        return redirect()->route('workstation.cgs.catalog')->with('status', $this->addedMessage($range));
+        return $this->backToCatalogue($request)->with('status', $this->addedMessage($range));
     }
 
     public function updateSeat(Request $request, Workstation $workstation)
     {
         if ($workstation->status === Workstation::STATUS_OCCUPIED) {
-            return redirect()->route('workstation.cgs.catalog')
+            return $this->backToCatalogue($request)
                 ->with('error', 'This seat is occupied — force-release it from the operations screen before editing.');
         }
 
@@ -90,7 +139,7 @@ class WorkstationCatalogController extends Controller
 
         $workstation->update($data);
 
-        return redirect()->route('workstation.cgs.catalog')->with('status', 'Seat updated.');
+        return $this->backToCatalogue($request)->with('status', 'Seat updated.');
     }
 
     public function destroySeat(Request $request, Workstation $workstation, WorkstationSeatCatalogue $catalogue)
@@ -98,10 +147,10 @@ class WorkstationCatalogController extends Controller
         $label = 'Seat '.$workstation->seat_code;
 
         if ($message = $catalogue->retire($workstation, $request->user())) {
-            return redirect()->route('workstation.cgs.catalog')->with('error', $message);
+            return $this->backToCatalogue($request)->with('error', $message);
         }
 
-        return redirect()->route('workstation.cgs.catalog')->with('status', $label.' deleted.');
+        return $this->backToCatalogue($request)->with('status', $label.' deleted.');
     }
 
     /** Upload or replace the room layout image. */
@@ -130,17 +179,17 @@ class WorkstationCatalogController extends Controller
             Storage::disk('local')->delete($old);
         }
 
-        return redirect()->route('workstation.cgs.catalog')->with('status', 'Layout image saved for '.$workstationLocation->name.'.');
+        return $this->backToCatalogue($request)->with('status', 'Layout image saved for '.$workstationLocation->name.'.');
     }
 
-    public function destroyLayout(WorkstationLocation $workstationLocation)
+    public function destroyLayout(Request $request, WorkstationLocation $workstationLocation)
     {
         if ($workstationLocation->layout_image_path) {
             Storage::disk('local')->delete($workstationLocation->layout_image_path);
             $workstationLocation->update(['layout_image_path' => null, 'layout_image_mime' => null]);
         }
 
-        return redirect()->route('workstation.cgs.catalog')->with('status', 'Layout image removed from '.$workstationLocation->name.'.');
+        return $this->backToCatalogue($request)->with('status', 'Layout image removed from '.$workstationLocation->name.'.');
     }
 
     public function layout(WorkstationLocation $workstationLocation)

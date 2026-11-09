@@ -6,7 +6,6 @@ use App\Modules\Chloe\Models\LockerKey;
 use App\Modules\Chloe\Models\StudentGender;
 use App\Modules\Chloe\Models\Workstation;
 use App\Modules\Chloe\Models\WorkstationHistory;
-use App\Modules\Chloe\Models\WorkstationPendingSelection;
 use App\Modules\Chloe\Models\WorkstationRequest;
 use App\Modules\Chloe\Models\WorkstationTerminationNotice;
 use App\Modules\Chloe\Notifications\WorkstationSeatSelected;
@@ -134,10 +133,8 @@ class WorkstationAllocator
                 }
 
                 $hasSeat = WorkstationRequest::where('student_id', $student->id)->where('status', WorkstationRequest::STATUS_CONFIRMED)->exists();
-                $holdsPending = WorkstationPendingSelection::where('student_id', $student->id)
-                    ->where('status', WorkstationPendingSelection::STATUS_PENDING)->where('expires_at', '>', now())->exists();
 
-                if ($hasSeat || $holdsPending) {
+                if ($hasSeat) {
                     return ['selected' => false, 'reason' => 'has_seat', 'workstation' => null];
                 }
 
@@ -175,128 +172,6 @@ class WorkstationAllocator
         }
 
         return $result;
-    }
-
-    /**
-     * Step 2: the confirm link. Only this method ever turns a Pending seat
-     * into an Occupied one — clicking the link is what actually grants it,
-     * not clicking Select. `already` tells the caller which non-success
-     * case it was (expired vs. already used) so the result page can say so.
-     *
-     * @return array{confirmed: bool, already: ?string, workstation: ?Workstation}
-     */
-    public function confirmPendingSelection(WorkstationPendingSelection $selection): array
-    {
-        $result = DB::transaction(function () use ($selection) {
-            $locked = WorkstationPendingSelection::whereKey($selection->id)->lockForUpdate()->first();
-
-            if (! $locked || $locked->status !== WorkstationPendingSelection::STATUS_PENDING) {
-                return ['confirmed' => false, 'already' => $locked?->status, 'workstation' => null];
-            }
-
-            if ($locked->expires_at->isPast()) {
-                $expiredSeat = Workstation::whereKey($locked->workstation_id)->lockForUpdate()->first();
-
-                $locked->update(['status' => WorkstationPendingSelection::STATUS_EXPIRED]);
-                $expiredSeat->update(['status' => Workstation::STATUS_AVAILABLE]);
-
-                WorkstationHistory::record(
-                    seat: $expiredSeat,
-                    actorType: WorkstationHistory::ACTOR_SYSTEM,
-                    actorName: 'System',
-                    action: WorkstationHistory::ACTION_PENDING_EXPIRED,
-                    beforeState: Workstation::STATUS_PENDING,
-                    afterState: Workstation::STATUS_AVAILABLE,
-                    student: $locked->student,
-                );
-
-                return ['confirmed' => false, 'already' => 'expired', 'workstation' => null];
-            }
-
-            $seat = Workstation::whereKey($locked->workstation_id)->lockForUpdate()->first();
-            $seat->update(['status' => Workstation::STATUS_OCCUPIED]);
-
-            $locked->update([
-                'status' => WorkstationPendingSelection::STATUS_CONFIRMED,
-                'confirmed_at' => now(),
-            ]);
-
-            WorkstationRequest::create([
-                'workstation_id' => $seat->id,
-                'student_id' => $locked->student_id,
-                'status' => WorkstationRequest::STATUS_CONFIRMED,
-                'requested_at' => now(),
-                // PART 4 #3: clicking this link is the acceptance -- there
-                // is deliberately no separate checkbox.
-                'terms_accepted_at' => now(),
-                'terms_edition' => 'First Edition',
-            ]);
-
-            WorkstationHistory::record(
-                seat: $seat,
-                actorType: WorkstationHistory::ACTOR_STUDENT,
-                actorName: $locked->student->name,
-                action: WorkstationHistory::ACTION_SEAT_CONFIRMED_TERMS,
-                beforeState: Workstation::STATUS_PENDING,
-                afterState: Workstation::STATUS_OCCUPIED,
-                student: $locked->student,
-            );
-
-            return ['confirmed' => true, 'already' => null, 'workstation' => $seat, 'student' => $locked->student];
-        });
-
-        if ($result['confirmed']) {
-            $result['student']->notify(new WorkstationSeatSelected($result['workstation']));
-        }
-
-        return $result;
-    }
-
-    /**
-     * The safety net behind the 5-minute hold: a student who never clicks
-     * the link must not keep the seat forever. Called by the scheduled
-     * `workstation:release-expired-selections` command (every minute) AND
-     * inline whenever seats are listed or a token is used, so an expired
-     * hold is cleared immediately rather than waiting for the next minute's
-     * run. Idempotent — each row is only ever flipped once, from the
-     * lockForUpdate re-read, so running it from two places at once is safe.
-     */
-    public function releaseExpiredSelections(): int
-    {
-        $expiredIds = WorkstationPendingSelection::where('status', WorkstationPendingSelection::STATUS_PENDING)
-            ->where('expires_at', '<=', now())
-            ->pluck('id');
-
-        $released = 0;
-
-        foreach ($expiredIds as $id) {
-            DB::transaction(function () use ($id, &$released) {
-                $locked = WorkstationPendingSelection::whereKey($id)->lockForUpdate()->first();
-
-                if (! $locked || $locked->status !== WorkstationPendingSelection::STATUS_PENDING || ! $locked->expires_at->isPast()) {
-                    return;
-                }
-
-                $seat = Workstation::whereKey($locked->workstation_id)->lockForUpdate()->first();
-
-                $locked->update(['status' => WorkstationPendingSelection::STATUS_EXPIRED]);
-                $seat->update(['status' => Workstation::STATUS_AVAILABLE]);
-
-                WorkstationHistory::record(
-                    seat: $seat,
-                    actorType: WorkstationHistory::ACTOR_SYSTEM,
-                    actorName: 'System',
-                    action: WorkstationHistory::ACTION_PENDING_EXPIRED,
-                    beforeState: Workstation::STATUS_PENDING,
-                    afterState: Workstation::STATUS_AVAILABLE,
-                    student: $locked->student,
-                );
-
-                $released++;
-            });
-        }
-
-        return $released;
     }
 
     /**

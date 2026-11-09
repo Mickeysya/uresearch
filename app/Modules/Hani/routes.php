@@ -213,11 +213,19 @@ Route::middleware('auth')->group(function () {
     });
 
     // ---- Examiner pool admin -------------------------------------------
-    // Senior Executive CGS (Puan Waheeda) since 2026-11-03. Non-Executive CGS
-    // (Encik Syahmi, who sends the letters) reads the pool and may keep an
-    // examiner's EMAIL current, nothing else (2026-11-03).
+    // Both CGS desks manage the pool since 2026-11-07: reading it, adding an
+    // examiner, marking one Unavailable or Active, and keeping emails current.
+    // The Senior Executive alone has the group further down. The Academic
+    // Executive reads the whole pool (2026-11-08) and emails CGS to change
+    // it; a supervisor reads the pool on /examiner-nomination/new.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS.','.Role::ACADEMIC_EXEC)
+        ->get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
+
     Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
-        Route::get('/examiners', [ExaminerAdminController::class, 'index'])->name('examiner-admin.index');
+        Route::get('/examiners/new', [ExaminerAdminController::class, 'create'])->name('examiner-admin.create');
+        Route::post('/examiners', [ExaminerAdminController::class, 'store'])->name('examiner-admin.store');
+        Route::post('/examiners/{examiner}/toggle-active', [ExaminerAdminController::class, 'toggleActive'])
+            ->name('examiner-admin.toggle-active');
         Route::get('/examiners/{examiner}/email', [ExaminerContactController::class, 'editEmail'])->whereNumber('examiner')->name('examiner-admin.email.edit');
         Route::put('/examiners/{examiner}/email', [ExaminerContactController::class, 'updateEmail'])->whereNumber('examiner')->name('examiner-admin.email.update');
         Route::post('/examiners/{examiner}/confirm-email', [ExaminerContactController::class, 'confirmEmail'])->whereNumber('examiner')->name('examiner-admin.email.confirm');
@@ -233,11 +241,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/examiners/{examiner}/report-email', [ExaminerContactController::class, 'reportEmail'])->whereNumber('examiner')->name('examiner-admin.report-email');
     });
 
+    // Senior Executive only: the full edit form, "Not the same person", import
+    // and the review list.
     Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
-        Route::get('/examiners/new', [ExaminerAdminController::class, 'create'])->name('examiner-admin.create');
-        Route::post('/examiners', [ExaminerAdminController::class, 'store'])->name('examiner-admin.store');
-        Route::post('/examiners/{examiner}/toggle-active', [ExaminerAdminController::class, 'toggleActive'])
-            ->name('examiner-admin.toggle-active');
         Route::post('/examiners/duplicates/dismiss', [ExaminerAdminController::class, 'dismissDuplicate'])
             ->name('examiner-admin.dismiss-duplicate');
         Route::get('/examiners/{examiner}/edit', [ExaminerAdminController::class, 'edit'])->name('examiner-admin.edit');

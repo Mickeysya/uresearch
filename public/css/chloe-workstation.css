@@ -300,42 +300,43 @@
 .ws-count-line { margin: 0; font-size: var(--text-xs); color: var(--text-grey); }
 .ws-count-line span { color: var(--text-dark); font-weight: var(--weight-semi); }
 
-.cgs-seat-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: var(--space-3);
-    margin-top: var(--space-2);
-}
+.cgs-seat-list { display: flex; flex-direction: column; gap: 16px; margin-top: 12px; }
 
+/* One full-width row per seat: photo left, text middle, solid button right.
+   Restored from d91cd6e. flex-wrap lets the photo / text / button stack at
+   390 px instead of overflowing. */
 .cgs-seat-card {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    min-width: 0;
-    padding: var(--space-4);
-    border: 1px solid var(--border-subtle);
-    border-left: 4px solid var(--border-grey);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    transition: box-shadow var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 178px;
+    border-radius: 20px;
+    background: var(--surface-sunken, #F8F9FB);
+    padding: 14px 20px;
+    gap: 16px;
 }
-.cgs-seat-card:hover { box-shadow: var(--shadow-sm); border-color: var(--border-grey); }
-/* The left edge says the state at a glance, before the badge is read. */
-.cgs-seat-card.cgs-seat-available { border-left-color: var(--success-fg); }
-.cgs-seat-card.cgs-seat-occupied { border-left-color: var(--navy); }
-.cgs-seat-card.cgs-seat-disabled { border-left-color: var(--danger-fg); }
-.cgs-seat-card.cgs-seat-pending,
-.cgs-seat-card.cgs-seat-awaiting_key_return { border-left-color: var(--warning-fg); }
+.cgs-seat-image { width: 204px; height: 153px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: #fff; }
+.cgs-seat-text { flex: 1 1 160px; min-width: 0; max-width: 100%; }
+.cgs-seat-badges .status-badge { white-space: normal; max-width: 100%; box-sizing: border-box; }
+.cgs-seat-title { font-weight: 700; font-size: 17px; }
+.cgs-seat-sub { color: var(--text-grey); font-size: 13px; margin-top: 2px; }
+.cgs-seat-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.cgs-seat-sub-label { margin-top: 8px; font-size: 12px; color: var(--text-grey); text-transform: uppercase; letter-spacing: .03em; font-weight: 600; }
+.cgs-seat-lines { margin-top: 4px; min-width: 0; max-width: 360px; }
+.cgs-seat-line { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cgs-seat-line:nth-child(2), .cgs-seat-line:nth-child(3) { font-size: 13px; font-weight: 400; color: var(--text-grey); margin-top: 2px; }
+.cgs-seat-button { flex-shrink: 0; }
+.cgs-seat-button button { width: 132px; height: 50px; margin: 0; padding: 0; }
 
-.cgs-seat-text { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; flex: 1 1 auto; }
-.cgs-seat-title { font-size: var(--text-lg); font-weight: var(--weight-semi); color: var(--text-dark); }
-.cgs-seat-sub { font-size: var(--text-xs); color: var(--text-grey); }
-.cgs-seat-badges { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.cgs-seat-badges .status-badge { white-space: normal; max-width: 100%; }
-.cgs-seat-sub-label { font-size: var(--text-xs); font-weight: var(--weight-semi); color: var(--text-grey); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
-.cgs-seat-lines { min-width: 0; padding-top: var(--space-2); border-top: 1px solid var(--border-subtle); }
-.cgs-seat-line { font-size: var(--text-sm); color: var(--text-grey); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cgs-seat-line:first-child { color: var(--text-dark); font-weight: var(--weight-semi); }
-.cgs-seat-button { display: block; margin-top: auto; }
-.cgs-seat-button button { width: 100%; margin: 0; min-height: 40px; }
-.cgs-seat-card:hover .cgs-seat-button button { background: var(--accent-solid); color: var(--text-on-accent); border-color: var(--accent-solid); }
+@media (max-width: 519px) {
+    .cgs-seat-image { width: 100%; height: auto; aspect-ratio: 4 / 3; }
+    .cgs-seat-text { flex-basis: 100%; }
+    .cgs-seat-button { flex: 1 1 100%; }
+    .cgs-seat-button button { width: 100%; }
+}
+
+/* Gender tag: one rule, two colours (as before the Nov 5 refactor:
+   male = the amber "pending" badge colours, female = the red "rejected" ones). */
+.ws-chip.ws-gender-male   { background: var(--warning-bg); color: var(--warning-fg); border: 1px solid var(--warning-border); }
+.ws-chip.ws-gender-female { background: var(--danger-bg);  color: var(--danger-fg);  border: 1px solid var(--danger-border); }

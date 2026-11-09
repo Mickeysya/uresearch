@@ -179,7 +179,9 @@ class SidebarQueuesTest extends TestCase
         // sidebar-student-nav render $extraLinks, listing every link twice.
         $this->assertSame(1, substr_count($sidebar, 'href="'.route('nureen.drafts').'"'));
         $this->assertSame(1, substr_count($sidebar, 'href="'.route('nureen.expected-dates').'"'));
-        // Chloe's study-candidacy link keeps its own name, once.
-        $this->assertSame(1, substr_count($sidebar, '>My Candidacy<'));
+        // Chloe's study-candidacy link is its own top-level item, once, and
+        // no longer sits under Track My Applications.
+        $this->assertSame(1, substr_count($sidebar, '>My Study Candidacy<'));
+        $this->assertSame(0, substr_count($sidebar, '>My Candidacy<'));
     }
 }

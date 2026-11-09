@@ -148,7 +148,7 @@ you can ask me about the questions below." with the asking role's own suggested 
 | `cand_cgs_dismissal_candidates` (data) | not for this role | not for this role | yes |
 | `cand_cgs_dismissed` (data) | not for this role | not for this role | yes |
 
-Verified against the code: page names (Track My Applications > My Candidacy, "My Study Candidacy", Approval Portal with the tabs Pending my action, Ongoing, History; for CGS Pending my action, Decided by me and the "View all appeals" link; Candidacy Management > Operations,
+Verified against the code: page names (sidebar item "My Study Candidacy", Approval Portal with the tabs Pending my action, Ongoing, History; for CGS Pending my action, Decided by me and the "View all appeals" link; Candidacy Management > Operations,
 Insights, Dismissal List, Dismissal Upload; My Signature), buttons (Submit an Appeal, Edit and resubmit, Download memo, Review, Approve, Return to student, Verify, Reject (final) and Confirm rejection, Save signature, Remove my signature, Export to Excel, Preview,
 Confirm and dismiss), the four New Appeal steps and Sections A to D, the document limits (placeholders), the reason lists in `config/candidacy.php`, the waiting-day dots (grey under 5, amber from 5, red from 10), and the memo file name.
 

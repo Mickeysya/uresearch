@@ -46,6 +46,8 @@ trait BuildsCandidacyWorld
         Storage::fake('local');
         Notification::fake();
         Carbon::setTestNow('2026-11-01 10:00:00');
+        // The appeal-window rule (3 months before expiry) has its own tests (CandidacyAppealWindowTest); everything else builds its world with the window wide open.
+        config(['candidacy.appeal_window_months' => 36]);
 
         $this->service = app(CandidacyAppealService::class);
         $dept = CandidacyDepartment::create(['code' => 'CIS', 'name' => 'Computer & Information Sciences', 'faculty' => 'Faculty of Science, Management & Computing']);

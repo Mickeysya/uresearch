@@ -27,7 +27,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_my_signature
 
-Open My Signature (the link on the Approval Portal), upload a PNG or JPEG (up to 1 MB) and press Save signature; Remove my signature removes it. For CGS the
+Open My Signatures (the link in the sidebar and on the Approval Portal), find the Study Candidacy Appeal section, upload a PNG or JPEG (up to 1 MB) and press Upload signature (Replace signature when one is on file); Remove deletes it. For CGS the
 signature is optional: without one, a text-only stamp is used.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -35,7 +35,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_when_how_appeal
 
 Students ask for more time with Submit an Appeal on My Study Candidacy: Step 1 Department and Supervisor / Programme Manager (read-only, from the student record), Step 2 Research and extension (Sections A to D), Step 3
-Documents, Step 4 Review and submit. It must be submitted on or before the expiry date, and the total extension is at most {{cand_max_extension_months}} months. The
+Documents, Step 4 Review and submit. It must be submitted inside the appeal window (from 3 months before the expiry date until the end of the expiry date), and the total extension is at most {{cand_max_extension_months}} months. The
 appeal then goes Supervisor / Programme Manager, Department Chair, CGS Verification, Dean.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -57,7 +57,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_return_effect
 
-A return from CGS Verification goes to the student with your reasons and remark. After the student resubmits, it comes back to CGS Verification. If the student does
+A return from CGS Verification goes to the student with your reasons and remark. After the student resubmits, it comes back to CGS Verification (CGS is a role, so any CGS officer can handle it). When the Dean returns an appeal it goes to CGS for a re-check first, then back to the Dean. If the student does
 not resubmit before the candidacy expires, the appeal is closed as expired.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -79,7 +79,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_resubmit
 
-When a student resubmits a returned appeal it returns to the step that returned it. If it was a Dean return, CGS Verification re-checks it before it goes back to the Dean.
+When a student resubmits a returned appeal it returns to the same approver who returned it (CGS is a role, so any CGS officer can handle it). If it was a Dean return, CGS Verification re-checks it before it goes back to the Dean.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
@@ -166,7 +166,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_cgs_process_summary
 
-1. Students appeal on or before the expiry date: Supervisor / Programme Manager, Department Chair, CGS Verification, Dean; maximum {{cand_max_extension_months}} months in total; a Dean rejection is final.
+1. Students appeal inside the window (3 months before the expiry date until the end of the expiry date): Supervisor / Programme Manager, Department Chair, CGS Verification, Dean; maximum {{cand_max_extension_months}} months in total; a Dean rejection is final.
 2. After approval the expiry date is recalculated and the memo is e-mailed.
 3. Reminders at 3, 2 and 1 month; they stop at Softbound submission.
 4. After expiry with no Softbound and no appeal in review the student is on the Dismissal List; CGS exports it, the Registry processes it, CGS uploads the result.
@@ -178,5 +178,23 @@ Source: UResearch Study Candidacy design (confirmed with CGS); Postgraduate Stud
 
 Not available yet: Excel export of the Operations list, a reminder log page, 3-day and 1-day urgent reminders, and a page where CGS changes an expiry date by hand. Today
 expiry dates change through an approved appeal; for deferment, change of mode or change of programme the Registrar approves and CGS updates the date.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_dean_adjusts_months
+
+The Dean may approve fewer months than the student requested: at least 1 and no more than the student's remaining months. When the number differs from the request the Dean must give a short reason (at least 5 characters). CGS and the approvers can see the requested and approved months and the Dean's reason in the appeal details; the student does not see the reason and it is not printed on the memo.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_approver_remarks
+
+At CGS Verification you confirm that the documents are complete to verify, or you return the appeal. A return needs at least one reason, and a remark is required when you tick "Other". An approval may carry an optional remark. The student sees the reasons and remark of a return. There is no separate comment thread on an appeal.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_dashboard_tiles
+
+The four cards on Study Candidacy Operations count appeals by status: In Progress (with the Supervisor / Programme Manager, Chair, CGS or Dean), Returned, Approved and Rejected. Clicking a card filters the table below to that group. The Workstation Operations cards count seats: Total, Available, Occupied, Maintenance, Awaiting Key Return, Key Pending Collection (requested, not yet collected) and Key Return Overdue. Study Candidacy Insights shows how many students expire within 1, 2 and 3 months and what action each has taken.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).

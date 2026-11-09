@@ -46,7 +46,7 @@
                     <div class="ws-photo-body">
                         <div class="ws-photo-head">
                             <span class="ws-photo-name">{{ $room->name }}</span>
-                            <span class="ws-chip">{{ $room->genderLabel() }}</span>
+                            <span class="ws-chip ws-gender-{{ $room->gender === 'female' ? 'female' : 'male' }}">{{ $room->genderLabel() }}</span>
                         </div>
                         <div class="ws-meter-label">
                             <span><b>{{ $room->available_count }}</b> of {{ $room->workstations_count }} seats available</span>

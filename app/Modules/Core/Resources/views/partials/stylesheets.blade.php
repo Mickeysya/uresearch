@@ -21,6 +21,7 @@
       profile.css         the /profile screen
       charts.css          every Chart.js surface, shared by all dashboards
       sidebar-identity.css the sidebar's identity card
+      help.css            Help and Support (/help), scoped to .help
 
     ?v=<file mtime> so a change always reaches the browser instead of
     silently serving a stale cached copy.
@@ -41,6 +42,7 @@
     'profile',
     'charts',
     'sidebar-identity',
+    'help',
 ] as $sheet)
     <link rel="stylesheet" href="{{ asset("css/{$sheet}.css") }}?v={{ @filemtime(public_path("css/{$sheet}.css")) ?: 1 }}">
 @endforeach

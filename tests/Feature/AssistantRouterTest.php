@@ -497,7 +497,7 @@ class AssistantRouterTest extends TestCase
         $seat = $this->seat('252', Workstation::STATUS_OCCUPIED);
         FakeModel::forceUnavailable();
 
-        $result = $this->pipeline()->ask($cgs, "pls release seat {$seat->id} lah", []);
+        $result = $this->pipeline()->ask($cgs, "pls release seat {$seat->seat_code} lah", []);
 
         $this->assertSame('action_release', $this->lastLog()->lookup);
         $this->assertSame(Pipeline::ACTION_REFUSED_MESSAGE, $result['answer']);

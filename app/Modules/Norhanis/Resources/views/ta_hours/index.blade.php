@@ -37,7 +37,9 @@
 
                         var hours = @json($monthlyTrend->pluck('hours'));
                         var colors = hours.map(function (h) {
-                            return h > 21 ? '#D0342C' : (h >= 18 ? '#C28E40' : '#07794A');
+                            return h > 21 ? Chart.uresearchToken('--danger-fg', '#D0342C')
+                                : h >= 18 ? Chart.uresearchToken('--warning-fg', '#C28E40')
+                                : Chart.uresearchToken('--success-fg', '#07794A');
                         });
 
                         new Chart(el, {
@@ -57,10 +59,10 @@
                                 animation: { duration: 650, easing: 'easeOutQuart' },
                                 plugins: {
                                     legend: { display: false },
-                                    datalabels: { display: true, anchor: 'end', align: 'top', offset: 2, color: '#23283A', font: { size: 11, weight: '700' } },
+                                    datalabels: { display: true, anchor: 'end', align: 'top', offset: 2, color: function () { return Chart.uresearchToken('--text-body', '#23283A'); }, font: { size: 11, weight: '700' } },
                                 },
                                 scales: {
-                                    y: { beginAtZero: true, max: 24, grid: { color: '#F1F3F7' }, border: { display: false } },
+                                    y: { beginAtZero: true, max: 24, grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } }, border: { display: false } },
                                     x: { grid: { display: false }, border: { display: false } },
                                 },
                             },
@@ -85,7 +87,9 @@
 
                             var hours = @json($byStudentThisMonth->pluck('hours'));
                             var colors = hours.map(function (h) {
-                                return h > 21 ? '#D0342C' : (h >= 18 ? '#C28E40' : '#07794A');
+                                return h > 21 ? Chart.uresearchToken('--danger-fg', '#D0342C')
+                                    : h >= 18 ? Chart.uresearchToken('--warning-fg', '#C28E40')
+                                    : Chart.uresearchToken('--success-fg', '#07794A');
                             });
 
                             new Chart(el, {
@@ -105,10 +109,10 @@
                                     animation: { duration: 650, easing: 'easeOutQuart' },
                                     plugins: {
                                         legend: { display: false },
-                                        datalabels: { display: true, anchor: 'end', align: 'end', color: '#23283A', font: { size: 11, weight: '700' } },
+                                        datalabels: { display: true, anchor: 'end', align: 'end', color: function () { return Chart.uresearchToken('--text-body', '#23283A'); }, font: { size: 11, weight: '700' } },
                                     },
                                     scales: {
-                                        x: { beginAtZero: true, max: 24, grid: { color: '#F1F3F7' }, border: { display: false } },
+                                        x: { beginAtZero: true, max: 24, grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } }, border: { display: false } },
                                         y: { grid: { display: false }, border: { display: false } },
                                     },
                                 },

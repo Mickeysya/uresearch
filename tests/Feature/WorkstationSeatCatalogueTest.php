@@ -62,7 +62,7 @@ class WorkstationSeatCatalogueTest extends TestCase
 
         $this->actingAs($this->cgs())->post(route('workstation.cgs.catalog.locations.store'), [
             'block' => 'J2', 'room_code' => 'J2-01', 'gender' => 'female', 'quantity' => 4,
-        ])->assertRedirect(route('workstation.cgs.catalog'))
+        ])->assertRedirect(route('workstation.cgs.catalog', ['block' => 'J2', 'room' => 'J2-01'])) // shows the new room, whatever filter was on
             ->assertSessionHas('status', 'Added 4 seats: Seat 316 to Seat 319.');
 
         $room = WorkstationLocation::where('room_code', 'J2-01')->first();
@@ -91,6 +91,91 @@ class WorkstationSeatCatalogueTest extends TestCase
 
         $this->assertSame(['first' => 1, 'last' => $n, 'count' => $n], $range);
         $this->assertSame($n, $room->workstations()->count());
+    }
+
+    // ---- batch numbering (CGS adds N seats at once) ----------------------------------------------------------------
+
+    public function test_a_batch_of_ten_continues_the_highest_number_and_the_next_batch_of_five_continues_right_after(): void
+    {
+        $existing = $this->room('female', 'J2-01-03');
+        $this->setCounter(315);
+        foreach (range(1, 315, 105) as $n) { // a few existing seats so "highest number" is real data, not just the counter
+            Workstation::create(['workstation_location_id' => $existing->id, 'seat_code' => (string) $n, 'status' => Workstation::STATUS_AVAILABLE]);
+        }
+        Workstation::create(['workstation_location_id' => $existing->id, 'seat_code' => '315', 'status' => Workstation::STATUS_AVAILABLE]);
+        $cgs = $this->cgs();
+        $highest = (int) Workstation::max(DB::raw('CAST(seat_code AS UNSIGNED)'));
+        $this->assertSame(315, $highest);
+
+        $this->actingAs($cgs)->post(route('workstation.cgs.catalog.seats.store'), ['workstation_location_id' => $existing->id, 'quantity' => 10])
+            ->assertSessionHas('status', 'Added 10 seats: Seat 316 to Seat 325.');
+
+        $first = Workstation::where('workstation_location_id', $existing->id)->where('seat_code', '>=', '316')->orderBy('id')->pluck('seat_code')->map(fn ($c) => (int) $c)->all();
+        $this->assertSame(range($highest + 1, $highest + 10), $first, 'exactly next..next+9, in the order created, no gaps, no duplicates');
+        $this->assertSame(326, $this->catalogue()->nextNumber());
+
+        $this->actingAs($cgs)->post(route('workstation.cgs.catalog.seats.store'), ['workstation_location_id' => $existing->id, 'quantity' => 5])
+            ->assertSessionHas('status', 'Added 5 seats: Seat 326 to Seat 330.');
+
+        $all = Workstation::where('workstation_location_id', $existing->id)->orderBy('id')->pluck('seat_code')->map(fn ($c) => (int) $c)->all();
+        $this->assertSame(range(316, 330), array_slice($all, -15), 'the second batch continues right after the first');
+        $this->assertSame(count($all), count(array_unique($all)), 'no duplicate numbers anywhere in the room');
+        $this->assertSame(331, $this->catalogue()->nextNumber());
+        $this->assertSame(330, (int) DB::table('workstation_seat_counter')->value('last_number'));
+    }
+
+    public function test_a_batch_in_a_second_room_continues_the_same_global_counter(): void
+    {
+        $a = $this->room('male', 'N2-02-01');
+        $b = $this->room('female', 'J2-01-03');
+        $one = $this->catalogue()->addSeats($a, 3);
+        $two = $this->catalogue()->addSeats($b, 4);
+        $three = $this->catalogue()->addSeats($a, 2);
+
+        $this->assertSame([1, 3], [$one['first'], $one['last']]);
+        $this->assertSame([4, 7], [$two['first'], $two['last']]);
+        $this->assertSame([8, 9], [$three['first'], $three['last']], 'one counter for every room, not one per room');
+    }
+
+    public function test_a_batch_never_reuses_a_number_even_if_the_counter_was_ever_behind_the_seats(): void
+    {
+        $room = $this->room();
+        $this->catalogue()->addSeats($room, 5); // 1..5
+        $this->setCounter(2);                    // a counter that fell behind (restore, import, seeder)
+
+        $range = $this->catalogue()->addSeats($room, 3);
+
+        $this->assertSame([6, 8], [$range['first'], $range['last']]);
+        $this->assertSame(8, (int) DB::table('workstation_seat_counter')->value('last_number'));
+        $this->assertSame(8, $room->workstations()->count());
+    }
+
+    public function test_a_retired_seat_number_is_still_counted_when_the_counter_is_behind(): void
+    {
+        $room = $this->room();
+        $this->catalogue()->addSeats($room, 3); // 1..3
+        $room->workstations()->where('seat_code', '3')->first()->delete(); // retired (soft delete), the number is gone for good
+        $this->setCounter(1);
+
+        $this->assertSame(4, $this->catalogue()->addSeats($room, 1)['first']);
+    }
+
+    public function test_the_add_forms_have_no_seat_number_field_and_a_typed_number_is_ignored(): void
+    {
+        $room = $this->room();
+        $this->setCounter(315);
+        $cgs = $this->cgs();
+
+        $html = $this->actingAs($cgs)->get(route('workstation.cgs.catalog'))->assertOk()->getContent();
+        $this->assertDoesNotMatchRegularExpression('/name="(seat_code|seat_number|number|first|start|from)"/', $html, 'the admin cannot type a seat number');
+        $this->assertMatchesRegularExpression('/name="quantity"[^>]*min="1"/', $html, 'only a quantity, at least 1');
+
+        // a crafted request that tries to pick numbers, an existing number or one below the counter
+        $this->actingAs($cgs)->post(route('workstation.cgs.catalog.seats.store'), [
+            'workstation_location_id' => $room->id, 'quantity' => 2, 'seat_code' => '5', 'seat_number' => '1', 'first' => '1', 'start' => '1',
+        ])->assertSessionHas('status', 'Added 2 seats: Seat 316 to Seat 317.');
+
+        $this->assertSame(['316', '317'], $room->workstations()->orderBy('id')->pluck('seat_code')->all());
     }
 
     public function test_deleting_seats_never_changes_the_next_number(): void

@@ -76,6 +76,31 @@ class AllowanceProjectionTest extends TestCase
         $this->assertSame(6000.0, $projected);
     }
 
+    /**
+     * Real bug, caught live 2026-11-08: three real unconfirmed months in
+     * a row, each stored as its own flat RM2,000 (never a single row
+     * carrying the accumulated figure directly -- that's how
+     * ensureMonthlyLogs() actually writes them). Walked total through
+     * November is RM6,000 (2000+2000+2000); the first version of this
+     * method used $log->amount directly (November's own RM2,000) and
+     * told the student next month would be RM4,000 -- one month's rate
+     * short of correct, silently dropping September and October's own
+     * unconfirmed contribution entirely.
+     */
+    public function test_three_real_unconfirmed_months_in_a_row_project_correctly_not_just_the_last_rows_own_amount(): void
+    {
+        $application = $this->application(rate: 2000);
+        $this->log($application, '2026-09-01', 'eligible', 2000);
+        $this->log($application, '2026-10-01', 'eligible', 2000);
+        $this->log($application, '2026-11-01', 'eligible', 2000);
+
+        $currentTotal = AllowanceLedger::withheldTotalThrough($application->id, Carbon::parse('2026-11-01'));
+        $projected = AllowanceLedger::projectedNextMonthIfUnconfirmed($application->id, Carbon::parse('2026-11-01'), 2000);
+
+        $this->assertSame(6000.0, $currentTotal);
+        $this->assertSame(8000.0, $projected);
+    }
+
     public function test_an_eligible_unconfirmed_month_also_projects(): void
     {
         $application = $this->application(rate: 1500);
@@ -161,5 +186,22 @@ class AllowanceProjectionTest extends TestCase
 
         $this->assertStringContainsString('Monthly rate once eligible: RM2,000.00', $context);
         $this->assertStringNotContainsString('running total would be', $context);
+    }
+
+    /** The exact scenario reported live 2026-11-08 -- see the Ledger test above for the isolated version. */
+    public function test_the_assistant_context_reports_the_true_walked_total_across_three_unconfirmed_months(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-08'));
+
+        $application = $this->application(rate: 2000);
+        $student = $application->student;
+        $this->log($application, '2026-09-01', 'eligible', 2000);
+        $this->log($application, '2026-10-01', 'eligible', 2000);
+        $this->log($application, '2026-11-01', 'eligible', 2000);
+
+        $context = AssistantContext::forStudent($student);
+
+        $this->assertStringContainsString('amount=RM6,000.00', $context);
+        $this->assertStringContainsString("next month's running total would be RM8,000.00", $context);
     }
 }

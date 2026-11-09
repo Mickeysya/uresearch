@@ -101,6 +101,10 @@ return [
         'inactive_values' => [],      // inactive / deferred
     ],
 
+    // The appeal window (requested by CGS 2026-11-08): a student may submit a Study Candidacy appeal from this many calendar months before the
+    // expiry date (same month arithmetic as the reminder milestones, no month overflow) until the end of the expiry date (Asia/Kuala_Lumpur).
+    'appeal_window_months' => 3,
+
     // Automatic expiry reminders (Support\CandidacyReminderEngine, command candidacy:send-reminders, daily 08:00 Asia/Kuala_Lumpur).
     'reminders' => [
         // Programme types that get reminders. "research" = Full-Time and Part-Time research; Coursework is excluded.

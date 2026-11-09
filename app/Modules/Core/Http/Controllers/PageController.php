@@ -18,10 +18,6 @@ class PageController extends Controller
 {
     /** @var array<string, array{0: string, 1: string}> key => [title, description] */
     private const PAGES = [
-        'help' => [
-            'Help and Support',
-            'Guides and a way to reach CGS support directly will appear here.',
-        ],
         'settings' => [
             'Settings',
             'Notification preferences, attendance thresholds and workflow reminder '

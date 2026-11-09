@@ -30,7 +30,7 @@ re-run it whenever the demo should look fresh.
 |---|---|---|
 | Six-stage nomination chain, with "send back to department" (reason required) | Supervisor → AE → Senior Exec → Senior Director → Dean → Senior Exec | `/examiner-nomination/new`, queues |
 | "Finalise and release": one Approve records `cgs_final` and `cgs_release`; Non-Exec notified | Senior Exec | nomination queue |
-| Examiner pool: internal/external lists, derived state (Available, On Gap 90 days, Assigned, Unavailable), edit page, expertise and publications | Senior Exec (Non-Exec: emails only) | `/examiners` |
+| Examiner pool: internal/external lists, derived state (Available, On Gap 90 days, Assigned, Unavailable), edit page, expertise and publications | Senior Exec, Non-Exec (add, Unavailable or Active, emails). Full edit and import: Senior Exec only. AE: read-only, whole pool | `/examiners` |
 | Pool import from CGS's workbook or the UResearch template, with a preview before anything is written | Senior Exec | `/examiners/import` |
 | **Suggested examiners** per seat, explained | Supervisor, AE, Senior Exec | nomination form |
 | **Duplicate examiner** flags, "Not the same person" | Senior Exec | pool, import preview, `cgs_compile` |
@@ -249,8 +249,14 @@ described under "Demo data" below. A suggested walkthrough:
   nominated by more than one department. Read-only; never auto-rejects. The
   same check runs inline on the compiled report, which is where CGS sees it
   at the `cgs_compile` stage.
-- **Examiner admin** — `/examiners` (Non-Exec CGS): add an examiner, toggle
-  Unavailable. Internal and external are kept as two lists behind a tab
+- **Examiner admin** — `/examiners` (Senior Exec and Non-Exec CGS): add an
+  examiner, toggle Unavailable. The full edit form, import, the review list and
+  "Not the same person" are the Senior Executive's. The Academic Executive
+  reads the whole pool there, every department and external, with no write
+  actions, and a note naming the CGS contacts to email to add or remove an
+  examiner (`hani.cgs.contacts`). Sidebar: Actions → Examiner Pool. A supervisor reads
+  the pool on `/examiner-nomination/new` (tabs, filters and the same badges; no
+  emails, students, actions or duplicate warnings) and cannot change it. Internal and external are kept as two lists behind a tab
   strip, because CGS keeps two spreadsheets and the external one carries nine
   columns the internal one has no equivalent of: faculty approval reference,
   institution, technical or research, UTP cluster, area of expertise, years
@@ -279,8 +285,9 @@ described under "Demo data" below. A suggested walkthrough:
 
 ### Examiner emails (who keeps them current)
 
-- **Non-Executive CGS** reads the pool and may change an examiner's email,
-  and nothing else. A reason is required.
+- **Non-Executive CGS** may change an existing examiner's email (a reason is
+  required), add an examiner, and mark one Unavailable or Active, but not edit
+  their other details.
 - **The Senior Executive** edits everything on the full form.
 - **Every change is logged** in `examiner_contact_history`, shown on the
   examiner page (`/examiners/{id}`), whether it came from the form, the

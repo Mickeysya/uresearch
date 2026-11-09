@@ -26,6 +26,7 @@
                     if (! el || typeof Chart === 'undefined') return;
 
                     var stageKeys = @json($bottleneck->pluck('key'));
+                    var selectedStage = @json($selectedStage);
                     var baseUrl = @json(route('gra-application.index'));
 
                     new Chart(el, {
@@ -35,7 +36,11 @@
                             datasets: [{
                                 label: 'Pending',
                                 data: @json($bottleneck->pluck('count')),
-                                backgroundColor: @json($bottleneck->pluck('key')->map(fn ($k) => $k === $selectedStage ? '#284B80' : '#C28E40')),
+                                backgroundColor: stageKeys.map(function (k) {
+                                    return k === selectedStage
+                                        ? Chart.uresearchToken('--navy', '#284B80')
+                                        : Chart.uresearchToken('--gold', '#C28E40');
+                                }),
                                 borderRadius: 5,
                                 borderSkipped: false,
                                 maxBarThickness: 64,
@@ -57,7 +62,7 @@
                                 y: {
                                     beginAtZero: true,
                                     border: { display: false },
-                                    grid: { color: '#F1F3F7' },
+                                    grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } },
                                     ticks: { precision: 0 },
                                 },
                             },
@@ -67,7 +72,7 @@
                                     anchor: 'end',
                                     align: 'top',
                                     offset: 2,
-                                    color: '#23283A',
+                                    color: function () { return Chart.uresearchToken('--text-body', '#23283A'); },
                                     font: { size: 11, weight: '700' },
                                 },
                                 tooltip: {

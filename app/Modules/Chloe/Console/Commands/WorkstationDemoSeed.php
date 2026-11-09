@@ -189,7 +189,7 @@ class WorkstationDemoSeed extends Command
 
             if ($profile->status !== DemoStudentProfile::STATUS_ACTIVE
                 || ! $profile->candidacy_expiry_date
-                || $profile->candidacy_expiry_date->isPast()) {
+                || \App\Modules\Chloe\Support\ExpiryRule::hasPassed($profile->candidacy_expiry_date)) {
                 $changes['status'] = DemoStudentProfile::STATUS_ACTIVE;
                 $changes['candidacy_expiry_date'] = $expiry;
             }

@@ -35,7 +35,7 @@
             // Already ordered and filtered to Available in the controller
             // query; re-sorting here is just a safeguard, cheap insurance
             // against this list ever being built differently upstream.
-            $availableSeats = $availableSeats->sortBy(fn ($seat) => (int) $seat->seat_code)->values();
+            $availableSeats = \App\Modules\Chloe\Support\SeatOrder::sort($availableSeats, fn ($seat) => ['', '', $seat->seat_code, $seat->id]);
         @endphp
 
         <div class="ws-room-summary">
@@ -50,7 +50,7 @@
                     <div><dt>Open seats</dt><dd>{{ $availableSeats->count() }}</dd></div>
                 </dl>
                 <p class="ws-room-desc">
-                    <span class="ws-chip">{{ $workstationLocation->genderLabel() }}</span>
+                    <span class="ws-chip ws-gender-{{ $workstationLocation->gender === 'female' ? 'female' : 'male' }}">{{ $workstationLocation->genderLabel() }}</span>
                     @if ($workstationLocation->description)
                         &nbsp;{{ $workstationLocation->description }}
                     @endif

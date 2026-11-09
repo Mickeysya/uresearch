@@ -173,6 +173,11 @@ class CandidacyAppeal extends Model
     /** @return array<string, string> */
     public static function phases(): array
     {
-        return CandidacyAppealDetail::phases();
+        return [
+            'writing' => 'Writing',
+            'simulation' => 'Simulation',
+            'experiment' => 'Experiment',
+            'data_analysis' => 'Data Analysis',
+        ];
     }
 }

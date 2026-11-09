@@ -30,7 +30,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_my_signature
 
-Open My Signature (the link on the Approval Portal), upload a PNG or JPEG of your signature (up to 1 MB) and press Save signature; Remove my signature takes it
+Open My Signatures (the link in the sidebar and on the Approval Portal), find the Study Candidacy Appeal section, upload a PNG or JPEG of your signature (up to 1 MB) and press Upload signature (Replace signature when one is on file); Remove takes it
 away. Your signature is stamped on your decisions and on the approval memo. Supervisors / Programme Managers, Department Chairs and the Dean must have one to approve.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
@@ -45,7 +45,7 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 ## cand_return_effect
 
 When you return an appeal it goes to the student with your reasons and remark. The student fixes it and resubmits and it
-comes back to your step. If the student does not resubmit before the candidacy expires it is closed as expired.
+comes back to you, the same approver who returned it (a Dean return goes to CGS for a re-check first, then back to the Dean). If the student does not resubmit before the candidacy expires it is closed as expired.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
@@ -67,8 +67,8 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 ## cand_resubmit
 
-After a student resubmits a returned appeal it comes back to the step that returned it and shows again in your Pending my action. After a Dean return CGS
-re-checks first.
+After a student resubmits a returned appeal it comes back to the same approver who returned it and shows again in your Pending my action. After a Dean return CGS
+re-checks first, then it goes back to the Dean.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).
 
@@ -101,5 +101,17 @@ Source: UResearch Study Candidacy design (confirmed with CGS).
 
 After the Dean approves (for the months the Dean chose, which may differ from the months requested), the student's expiry date is recalculated and the memo "Memo - Appeal for Extension" is e-mailed to the student; it carries the signatures of
 the approvers. The appeal moves to History.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_dean_adjusts_months
+
+The Dean, and only the Dean, may approve fewer months than the student requested: at least 1 and no more than the student's remaining months. When the number differs from the request the Dean must give a short reason (at least 5 characters). You can see the requested and approved months and the reason in the appeal details; the student does not see the reason and it is not printed on the memo.
+
+Source: UResearch Study Candidacy design (confirmed with CGS).
+
+## cand_approver_remarks
+
+When you approve you may add an optional remark. When you return or reject you tick at least one reason, and a remark is required when you tick "Other". The student sees the reasons and remark of a return. There is no separate comment thread on an appeal.
 
 Source: UResearch Study Candidacy design (confirmed with CGS).

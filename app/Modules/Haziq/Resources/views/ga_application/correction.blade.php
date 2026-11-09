@@ -146,10 +146,10 @@
             @foreach ($documentTypes as $field => $label)
                 @php($flaggedDoc = $flaggedDocuments->contains($label))
                 @php($existing = ($existingDocuments ?? collect())->get($label))
-                <label for="{{ $field }}">{{ $label }} @if ($flaggedDoc)<span style="color: #D0342C;">— flagged, please replace</span>@endif</label>
+                <label for="{{ $field }}">{{ $label }} @if ($flaggedDoc)<span style="color: var(--danger-fg);">— flagged, please replace</span>@endif</label>
                 @if ($existing)
                     <p class="queue-meta" style="margin: 2px 0 4px;">
-                        <span style="color: {{ $flaggedDoc ? '#D0342C' : '#07794A' }};">Already uploaded: {{ $existing->original_name }}</span>
+                        <span style="color: {{ $flaggedDoc ? 'var(--danger-fg)' : 'var(--success-fg)' }};">Already uploaded: {{ $existing->original_name }}</span>
                         — <a href="{{ $existing->url() }}" target="_blank" rel="noopener">view</a>
                     </p>
                 @endif

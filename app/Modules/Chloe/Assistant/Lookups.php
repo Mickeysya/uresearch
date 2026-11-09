@@ -105,7 +105,7 @@ final class Lookups
 
             'seat_availability' => ['description' => 'Available/Occupied/Maintenance/Awaiting-Key-Return counts per room.', 'parameters' => ['block' => 'optional, "N2" or "J2"', 'room_code' => 'optional']],
             'overall_stats' => ['description' => 'Total seat counts across the whole catalogue.', 'parameters' => []],
-            'seat_lookup' => ['description' => 'Status, occupant and key status for one seat number.', 'parameters' => ['seat_number' => 'integer 1-315']],
+            'seat_lookup' => ['description' => 'Status, occupant and key status for one seat number.', 'parameters' => ['seat_number' => 'integer, the seat number']],
             'student_lookup' => ['description' => "One student's seat, key status and loan-valid-until date, by 8-digit student ID.", 'parameters' => ['student_id' => '8 digits']],
             'keys_pending_collection' => ['description' => 'How many locker keys are waiting to be collected.', 'parameters' => []],
             'keys_pending_return' => ['description' => 'How many locker keys are waiting to be returned, and how many are overdue.', 'parameters' => []],
@@ -377,11 +377,11 @@ final class Lookups
     {
         $seatNumber = self::toInt($parameters['seat_number'] ?? null);
 
-        if ($seatNumber === null || $seatNumber < 1 || $seatNumber > 315) {
-            return ['outcome' => 'asked_back', 'text' => 'Which seat number do you mean (1 to 315)?'];
+        if ($seatNumber === null || $seatNumber < 1) {
+            return ['outcome' => 'asked_back', 'text' => 'Which seat number do you mean?'];
         }
 
-        $seat = Workstation::with(['location', 'activeRequest.student', 'activeRequest.demoProfile', 'activeRequest.lockerKey', 'activeRequest.activeTerminationNotice'])->find($seatNumber);
+        $seat = Workstation::with(['location', 'activeRequest.student', 'activeRequest.demoProfile', 'activeRequest.lockerKey', 'activeRequest.activeTerminationNotice'])->where('seat_code', (string) $seatNumber)->first(); // by the seat NUMBER users see, never the database id; retired seats are soft deleted, so they are not found
 
         if (! $seat) {
             return ['outcome' => 'answered', 'text' => "Seat {$seatNumber} does not exist.", 'links' => [], 'resultCount' => 0];
