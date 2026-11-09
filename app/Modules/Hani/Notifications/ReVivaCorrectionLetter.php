@@ -54,7 +54,7 @@ class ReVivaCorrectionLetter extends Notification implements ShouldQueue
 
         return $mail
             ->line('Please find attached the Centre for Graduate Studies\' letter on the corrected thesis of '.$student->name.'.')
-            ->line('The corrected thesis and the Summary of Corrections are available through the button below. No login is needed. The link works until '.$expires->format('j F Y').'.')
+            ->line('The corrected thesis and the Summary of Corrections are available through the button below. You will be asked to confirm this email address and enter a one-time code. The link works until '.$expires->format('j F Y').'.')
             ->action('Open the corrected thesis', ReVivaLetters::panelLink($detail, $examiner, $expires))
             ->line('Please return the Thesis Re-evaluation Report (UTP/CGS/024) by '.ReVivaLetters::reviewDue($sentAt)->format('j F Y').', as the letter explains.')
             ->line('Sent by the Centre for Graduate Studies through UResearch 2.0.')

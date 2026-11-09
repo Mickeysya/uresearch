@@ -30,15 +30,19 @@ use Illuminate\Support\Facades\Route;
 */
 
 // The examiner's link from a re-viva correction letter, outside `auth`:
-// examiners have no account. ValidPanelLink is Laravel's `signed` check that
-// tells a tampered URL (403) from an expired one (410, with the CGS contacts)
-// before the controller runs; the controller re-checks the seat.
+// examiners have no account, so the controller signs them in with the email
+// on their letter and a one-time code. ValidPanelLink is Laravel's `signed`
+// check that tells a tampered URL (403) from an expired one (410, with the
+// CGS contacts) before the controller runs; the controller re-checks the seat.
 Route::middleware([ValidPanelLink::class, 'throttle:30,1'])->group(function () {
     Route::get('/re-viva/panel/{detail}/{examiner}', [ReVivaPanelLinkController::class, 'documents'])
         ->whereNumber(['detail', 'examiner'])->name('reviva.panel.documents');
     Route::get('/re-viva/panel/{detail}/{examiner}/documents/{document}', [ReVivaPanelLinkController::class, 'download'])
         ->whereNumber(['detail', 'examiner', 'document'])->name('reviva.panel.download');
 });
+Route::middleware([ValidPanelLink::class, 'throttle:10,1'])
+    ->post('/re-viva/panel/{detail}/{examiner}', [ReVivaPanelLinkController::class, 'act'])
+    ->whereNumber(['detail', 'examiner'])->name('reviva.panel.act');
 
 Route::middleware('auth')->group(function () {
 
