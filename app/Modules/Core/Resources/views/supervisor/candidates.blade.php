@@ -22,7 +22,8 @@
         @endif
     </x-core::page-header>
 
-    <div class="card card-wide">
+    {{-- A list screen: the table fills the page width, like the other lists. --}}
+    <div class="card card-wide" style="max-width: none; width: 100%;">
         @if (isset($unavailable['candidates']))
             <p class="message-warning">Your candidates could not be loaded just now. Please refresh the page.</p>
         @elseif ($total === 0)
