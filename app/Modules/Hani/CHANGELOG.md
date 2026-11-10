@@ -1,5 +1,12 @@
 # Changelog: Hani's modules
 
+## 2026-11-11: Quieter student emails, demo supervisor, re-viva tracker
+
+- **Changed** A viva student no longer gets the engine's "Examiner Nomination … Progress Update" email at each approved stage. They see the nomination's status in the app; the return email (generic remarks, no names) still goes.
+- **Changed** The re-viva demo students (`reviva.a@` to `reviva.l@`) have their own supervisor, `reviva.supervisor@example.com` (Dr Rahimah binti Yusof), so `nurul.aziz@`'s Students' Viva Progress shows only her scenario students.
+- **Fixed** The student re-viva page names the round once, and a tracker of more than seven steps shares the card's width instead of running off it.
+- **Fixed** The demo seeder replaces a Dean signature row whose image is missing, instead of failing at Dean approval.
+
 ## 2026-11-09: Re-viva rebuilt on the official CGS re-examination process
 
 - Student submits three PDFs and downloads blank and example forms. The Senior Executive checks them, the Dean of PGR approves the letters, and the pack goes to the panel with a 20-working-day deadline.
