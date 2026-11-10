@@ -96,12 +96,15 @@ class ModuleProvider extends ServiceProvider
     }
 
     /**
-     * Re-viva sends its own student emails at the milestones (submitted,
-     * returned, accepted, sent to the examiners, result), so the engine's
-     * stage emails to the student ("approved at the Dean Approval stage")
-     * are cancelled for re-viva only, through Laravel's NotificationSending
-     * event. Other modules and other recipients (the Senior Executive told
-     * of a Dean's return) are untouched.
+     * Engine stage emails to the student that Hani cancels, through
+     * Laravel's NotificationSending event:
+     * - re-viva: every stage email. Re-viva sends its own milestone emails
+     *   (submitted, returned, accepted, sent to the examiners, result).
+     * - examiner nomination: the "Progress Update" at each approved stage.
+     *   Six of them per list told the student nothing they need; they see
+     *   the nomination's status in the app, never the examiners. The
+     *   return email (generic remarks, no names) still goes.
+     * Other modules and other recipients are untouched.
      */
     protected function quietEngineEmailsToReVivaStudents(): void
     {
@@ -115,7 +118,18 @@ class ModuleProvider extends ServiceProvider
 
             $application = (fn () => $this->application ?? null)->call($notification);
 
-            return $application?->module_type === 're_viva' && $event->notifiable->id === $application->student_id ? false : null;
+            if (! $application || ($event->notifiable->id ?? null) !== $application->student_id) {
+                return null;
+            }
+
+            if ($application->module_type === 're_viva') {
+                return false;
+            }
+
+            $progressUpdate = $notification instanceof \App\Modules\Core\Notifications\ApplicationDecided
+                && (fn () => $this->approved && $this->outcome !== 'returned')->call($notification);
+
+            return $application->module_type === \App\Modules\Hani\Support\VivaProgress::NOMINATION && $progressUpdate ? false : null;
         });
     }
 }
