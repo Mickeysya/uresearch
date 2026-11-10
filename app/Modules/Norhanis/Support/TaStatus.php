@@ -49,10 +49,15 @@ class TaStatus
         ];
     }
 
-    /** TA hours logged for the student with an activity date from $from to $to, inclusive. */
+    /**
+     * TA hours the course lecturer has approved for the student, with an
+     * activity date from $from to $to, inclusive. Drafts and rows still
+     * waiting for the lecturer do not count, so a student about to travel
+     * submits their log first.
+     */
     public static function hoursBetween(User $student, CarbonInterface $from, CarbonInterface $to): float
     {
-        return (float) TaHourLog::where('student_id', $student->id)
+        return (float) TaHourLog::approved()->where('student_id', $student->id)
             ->whereDate('activity_date', '>=', $from)
             ->whereDate('activity_date', '<=', $to)
             ->sum('hours');

@@ -259,8 +259,45 @@ class PublicationTest extends TestCase
         }
     }
 
-    /** A conference request's only allowed cost centre, with the words "Others" needs. */
-    protected const CONFERENCE_COST = ['cost_centre' => 'others', 'cost_centre_other' => 'FRG research grant'];
+    /**
+     * What a conference request needs beyond a journal's: its venue, and its
+     * only allowed cost centre with the words "Others" needs.
+     */
+    protected const CONFERENCE_FIELDS = ['venue' => 'Kuala Lumpur Convention Centre', 'cost_centre' => 'others', 'cost_centre_other' => 'FRG research grant'];
+
+    public function test_a_conference_needs_a_venue_and_a_journal_keeps_none(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $student = $this->student();
+        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'local'] + self::CONFERENCE_FIELDS;
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload(['venue' => ''] + $conference))
+            ->assertSessionHasErrors('venue');
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload($conference))
+            ->assertSessionHasNoErrors();
+        $this->assertSame('Kuala Lumpur Convention Centre', PublicationDetail::sole()->venue);
+
+        // A journal: no venue needed, and one posted anyway is not kept.
+        PublicationDetail::query()->delete();
+        Application::query()->delete();
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload(['venue' => 'Somewhere']))
+            ->assertSessionHasNoErrors();
+        $this->assertNull(PublicationDetail::sole()->venue);
+    }
+
+    public function test_the_venue_label_has_no_conference_only_note(): void
+    {
+        $this->actingAs($this->student())->get(route('publication.create'))
+            ->assertOk()
+            ->assertSee('<label for="venue" data-conference-only>Venue</label>', false)
+            ->assertDontSee('conference only, e.g. the city and hall');
+    }
 
     public function test_a_conference_may_use_only_the_others_cost_centre(): void
     {
@@ -279,7 +316,7 @@ class PublicationTest extends TestCase
         $this->assertSame(0, PublicationDetail::count());
 
         $this->actingAs($student)
-            ->post(route('publication.store'), $this->payload($conference + self::CONFERENCE_COST))
+            ->post(route('publication.store'), $this->payload($conference + self::CONFERENCE_FIELDS))
             ->assertSessionHasNoErrors();
 
         $detail = PublicationDetail::sole();
@@ -361,7 +398,7 @@ class PublicationTest extends TestCase
 
         $this->assertSame(Application::STATUS_DRAFT, $application->status);
         $this->assertNull($detail->conference_scope);
-        $this->assertSame('Online', $detail->venue);
+        $this->assertNull($detail->venue); // a journal has no venue
         $this->assertSame([1, 2], $detail->activeEvaluations->pluck('position')->all());
         $this->assertSame(1, $application->documents()->where('doc_type', 'Manuscript for Review')->count());
         $this->assertSame('CGS – Pay and Claims', $detail->costCentreLabel());
@@ -381,7 +418,7 @@ class PublicationTest extends TestCase
     public function test_a_conference_must_say_whether_it_is_local_or_international(): void
     {
         $this->actingAs($this->student())
-            ->post(route('publication.store'), $this->payload(['type_of_request' => 'publication_conference'] + self::CONFERENCE_COST))
+            ->post(route('publication.store'), $this->payload(['type_of_request' => 'publication_conference'] + self::CONFERENCE_FIELDS))
             ->assertSessionHasErrors('conference_scope');
     }
 
@@ -391,7 +428,7 @@ class PublicationTest extends TestCase
         Notification::fake();
 
         $student = $this->student();
-        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'international'] + self::CONFERENCE_COST;
+        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'international'] + self::CONFERENCE_FIELDS;
 
         $this->actingAs($student)
             ->post(route('publication.store'), $this->payload($conference))
@@ -418,7 +455,7 @@ class PublicationTest extends TestCase
                 'type_of_request' => 'publication_conference',
                 'conference_scope' => 'local',
                 'reviewers' => $this->reviewers(3),
-            ] + self::CONFERENCE_COST))
+            ] + self::CONFERENCE_FIELDS))
             ->assertSessionHasNoErrors();
 
         $this->assertSame(2, PublicationDetail::sole()->activeEvaluations()->count());

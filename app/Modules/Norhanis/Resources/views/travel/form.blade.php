@@ -119,7 +119,8 @@
             <fieldset class="fstep" data-label="Teaching Assistant (TA) Plan">
             @if ($ta['known'])
                 <p class="message-info">You hold an active {{ $ta['type'] }} appointment, so this TA plan is required.
-                   Your TA hours completed this semester are taken from your TA Hours record.</p>
+                   Your TA hours completed this semester are the hours your course lecturer has approved on your
+                   <a href="{{ route('ta-hours.index') }}">Daily Log TA Hours</a>. Submit any hours not yet logged, and have them approved, before you apply.</p>
             @else
             <p class="fstep-hint">This section is compulsory for GA/GRA students.</p>
 
@@ -145,7 +146,7 @@
                 @if ($ta['known'])
                     {{-- Shown, never posted: store() reads the same figure itself. --}}
                     <input type="text" id="ta_hours_completed" readonly
-                           value="{{ rtrim(rtrim(number_format($ta['hoursCompleted'], 2, '.', ''), '0'), '.') }} hours (logged since {{ $ta['from']->format('j M Y') }})">
+                           value="{{ rtrim(rtrim(number_format($ta['hoursCompleted'], 2, '.', ''), '0'), '.') }} hours (approved since {{ $ta['from']->format('j M Y') }})">
                 @else
                 <input type="number" name="ta_hours_completed" id="ta_hours_completed"
                        min="0" max="{{ $taHoursRequired }}" step="0.5" value="{{ old('ta_hours_completed') }}"

@@ -118,7 +118,7 @@ class PublicationController extends Controller
             'title_of_paper' => ['required', 'string', 'max:255'],
             'title_of_conference_journal' => ['required', 'string', 'max:255'],
             'organizer_publisher' => ['required', 'string', 'max:255'],
-            'venue' => ['nullable', 'string', 'max:255'],
+            'venue' => ['nullable', 'required_if:type_of_request,publication_conference', 'string', 'max:255'],
             'conference_journal_fee' => ['required', 'numeric', 'min:0'],
             'currency_type' => ['required', 'string', 'max:10'],
             // One choice from the list agreed with CGS: a conference may use
@@ -213,7 +213,8 @@ class PublicationController extends Controller
                 'title_of_paper' => $data['title_of_paper'],
                 'title_of_conference_journal' => $data['title_of_conference_journal'],
                 'organizer_publisher' => $data['organizer_publisher'],
-                'venue' => $data['venue'] ?? null,
+                // Likewise no venue for a journal.
+                'venue' => $data['type_of_request'] === 'publication_conference' ? ($data['venue'] ?? null) : null,
                 'conference_journal_fee' => $data['conference_journal_fee'],
                 'currency_type' => $data['currency_type'],
                 'cost_centre' => $data['cost_centre'],

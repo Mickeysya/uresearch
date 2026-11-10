@@ -67,8 +67,10 @@
                    class="@error('organizer_publisher') is-invalid @enderror">
             @error('organizer_publisher') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="venue">Venue <span style="color: var(--text-grey)">(conference only, e.g. the city and hall)</span></label>
-            <input type="text" name="venue" id="venue" value="{{ old('venue') }}"
+            {{-- Conference only: a journal has no venue. Shown and required
+                 with the scope question above, by the same script. --}}
+            <label for="venue" data-conference-only>Venue</label>
+            <input type="text" name="venue" id="venue" value="{{ old('venue') }}" data-conference-only
                    class="@error('venue') is-invalid @enderror">
             @error('venue') <p class="field-error">{{ $message }}</p> @enderror
 

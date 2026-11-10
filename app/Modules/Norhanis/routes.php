@@ -8,8 +8,10 @@ use App\Modules\Norhanis\Http\Controllers\ClaimsController;
 use App\Modules\Norhanis\Http\Controllers\PublicationCertificationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationController;
 use App\Modules\Norhanis\Http\Controllers\PublicationEvaluationController;
+use App\Modules\Norhanis\Http\Controllers\TaHourApprovalController;
 use App\Modules\Norhanis\Http\Controllers\TaHourController;
 use App\Modules\Norhanis\Http\Controllers\TravelController;
+use App\Modules\Norhanis\Support\Roles;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -143,13 +145,28 @@ Route::middleware('auth')->group(function () {
         Route::post('/publication/{application}/decide', [PublicationController::class, 'decide'])->name('publication.decide');
     });
 
-    // ---- TA Hours (handed over from Haziq's module) ----------------------
-    // Every role: a student sees their own total, staff record entries for
-    // their scope. Enforced inside TaHourController, not by route middleware,
-    // because "my own" vs "my supervisees" needs the signed-in user's row.
-    // Same URL and route names as before, so every existing link still works.
+    // ---- Daily Log TA Hours ---------------------------------------------
+    // Every role reaches the index: a GA/GRA student logs their own hours,
+    // a course lecturer is sent to their approvals, supervisors and CGS see
+    // hours in their scope. Scoped inside TaHourController, because "my own"
+    // vs "my supervisees" needs the signed-in user's row.
     Route::get('/ta-hours', [TaHourController::class, 'index'])->name('ta-hours.index');
-    Route::post('/ta-hours', [TaHourController::class, 'store'])->name('ta-hours.store');
+
+    Route::middleware('role:'.Role::STUDENT)->group(function () {
+        Route::get('/ta-hours/log/{year}/{month}', [TaHourController::class, 'sheet'])
+            ->whereNumber(['year', 'month'])->name('ta-hours.sheet');
+        Route::post('/ta-hours/log/{year}/{month}', [TaHourController::class, 'store'])
+            ->whereNumber(['year', 'month'])->name('ta-hours.store');
+        Route::post('/ta-hours/log/{year}/{month}/submit', [TaHourController::class, 'submit'])
+            ->whereNumber(['year', 'month'])->name('ta-hours.submit');
+        Route::delete('/ta-hours/rows/{log}', [TaHourController::class, 'destroy'])->name('ta-hours.destroy');
+    });
+
+    // The course lecturer, for rows naming them only (TaHourApprovalController).
+    Route::middleware('role:'.Roles::LECTURER)->group(function () {
+        Route::get('/ta-hours/approvals', [TaHourApprovalController::class, 'index'])->name('ta-hours.approvals');
+        Route::post('/ta-hours/approvals', [TaHourApprovalController::class, 'decide'])->name('ta-hours.decide');
+    });
 });
 
 // ---- Publication: sign-offs from people without an account ---------------

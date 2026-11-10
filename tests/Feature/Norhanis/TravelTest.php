@@ -411,7 +411,7 @@ class TravelTest extends TestCase
         $this->get(route('travel.create'))
             ->assertOk()
             ->assertSee('You hold an active GA appointment')
-            ->assertSee('40 hours (logged since', false)
+            ->assertSee('40 hours (approved since', false)
             ->assertDontSee('Are you a GA/GRA recipient?');
     }
 
@@ -433,6 +433,39 @@ class TravelTest extends TestCase
         ]);
 
         $this->assertEquals(12, \App\Modules\Norhanis\Models\TravelTaPlan::where('application_id', $application->id)->value('hours_completed'));
+    }
+
+    public function test_the_student_sees_the_expected_decision_date_on_view_details_and_the_dates_page(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow('2026-11-10 09:00'); // a Tuesday
+        $student = $this->student();
+        $application = $this->submitAs($student, ['is_international' => 0]);
+
+        // Local travel: 4 stages at 1 working day each (Config/charter.php),
+        // from Tuesday 9am: Monday 16 November, the weekend skipped.
+        $expected = app(\App\Modules\Norhanis\Support\StageDurations::class)->estimate($application)['expected'];
+        $this->assertSame('2026-11-16', $expected->toDateString());
+
+        $this->actingAs($student)->get(route('applications.show', $application))
+            ->assertOk()
+            ->assertSee('Expected decision by')
+            ->assertSee($expected->format('j M Y'));
+
+        $this->get(route('nureen.expected-dates'))
+            ->assertOk()
+            ->assertSee('When to expect an outcome on your applications, based on the CGS Client Charter.')
+            ->assertSee('data-expected-for="'.$application->id.'"', false)
+            ->assertSee($expected->format('l, j F Y'))
+            ->assertDontSee('You have no applications awaiting a decision.');
+
+        \Illuminate\Support\Carbon::setTestNow();
+    }
+
+    public function test_the_dates_page_says_so_when_nothing_is_awaiting_a_decision(): void
+    {
+        $this->actingAs($this->student())->get(route('nureen.expected-dates'))
+            ->assertOk()
+            ->assertSee('You have no applications awaiting a decision.');
     }
 
     /* ---------------- helpers ---------------- */
@@ -458,6 +491,7 @@ class TravelTest extends TestCase
                         'activity_type' => 'Lab session',
                         'activity_date' => now()->toDateString(),
                         'hours' => $this->hours,
+                        'state' => TaHourLog::APPROVED,
                     ]);
                 }
 
