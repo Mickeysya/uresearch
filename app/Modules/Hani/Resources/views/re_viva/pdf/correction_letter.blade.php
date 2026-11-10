@@ -39,7 +39,7 @@
 </style>
 </head>
 <body>
-    @if ($draft)<div class="watermark">DRAFT — pending Dean approval</div>@endif
+    @if ($draft)<div class="watermark">DRAFT: pending Dean approval</div>@endif
     <div class="logo"><img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/UTP_logo.png'))) }}" alt="Universiti Teknologi PETRONAS"></div>
 
     <p>Our ref: {{ $reference }}</p>
