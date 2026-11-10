@@ -265,8 +265,9 @@ class GaApplicationController extends Controller
      * Mirrors GraApplicationController::store() — Save Draft (keeps
      * status DRAFT, never calls engine->submit()) and Submit Application
      * behind the same route, with Section D/E/F repeatables now saved
-     * too (the old version never did). Documents stay optional until
-     * Submit — see missingRequiredDocuments().
+     * too (the old version never did). Documents are never required to
+     * Submit, same as GRA's own store() — missingRequiredDocuments() only
+     * folds a note into the confirmation message now.
      */
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
@@ -362,16 +363,14 @@ class GaApplicationController extends Controller
 
         $missing = $this->missingRequiredDocuments($application);
 
-        if ($missing->isNotEmpty()) {
-            return redirect()->route('ga-application.create')
-                ->with('error', 'Saved your progress, but still missing: '.$missing->implode(', ').'. Upload the rest, then Submit.');
-        }
-
         $engine->submit($application);
         $application->student?->notify(new ApplicationSubmitted($application));
 
-        return redirect()->route('applications.index')
-            ->with('status', "GA application #{$application->id} submitted. Admin has been notified for document verification.");
+        $status = $missing->isEmpty()
+            ? "GA application #{$application->id} submitted. Admin has been notified for document verification."
+            : "GA application #{$application->id} submitted, but still missing: {$missing->implode(', ')}. Admin can't verify until you upload the rest; you'll get a weekly reminder until then.";
+
+        return redirect()->route('applications.index')->with('status', $status);
     }
 
     /** @return \Illuminate\Support\Collection<int, string> labels of document types with no file attached yet */

@@ -10,6 +10,7 @@ use App\Modules\Haziq\Models\DocumentCompletenessReminder;
 use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\GraGaStudentProfile;
+use App\Modules\Haziq\Models\TermsAcceptance;
 use App\Modules\Haziq\Notifications\IncompleteDocumentsReminder;
 use App\Modules\Haziq\Support\DocumentCompleteness;
 use Carbon\Carbon;
@@ -186,6 +187,67 @@ class DocumentCompletenessTest extends TestCase
         $this->assertCount(1, DocumentCompleteness::trackedApplications('gra_application'));
         $this->assertCount(1, DocumentCompleteness::trackedApplications('ga_application'));
         $this->assertCount(2, DocumentCompleteness::trackedApplications());
+    }
+
+    /* -----------------------------------------------------------------
+     | Submit itself is never gated, only Admin's own verify is -- the
+     | real store() route, not the direct-fixture helpers above.
+     |------------------------------------------------------------------*/
+
+    protected function studentWithTermsAccepted(string $matric = '22001001', string $email = 'student@test.my'): User
+    {
+        $student = $this->student($matric, $email);
+        TermsAcceptance::create(['user_id' => $student->id, 'scheme' => TermsAcceptance::GRA, 'accepted_at' => now()]);
+        TermsAcceptance::create(['user_id' => $student->id, 'scheme' => TermsAcceptance::GA, 'accepted_at' => now()]);
+
+        return $student;
+    }
+
+    public function test_submitting_a_gra_application_with_no_documents_still_goes_to_admin_verify(): void
+    {
+        $student = $this->studentWithTermsAccepted();
+
+        $response = $this->actingAs($student)->post(route('gra-application.store'), [
+            'project_leader_name' => 'Dr. Lim',
+            'project_title' => 'Reservoir Simulation under Uncertainty',
+            'funding_source' => 'UTP Internal Grant',
+            'service_start_date' => '2026-12-01',
+            'level_of_study' => 'phd',
+            'programme' => 'PhD Petroleum Engineering',
+            'admission_date' => '2024-09-01',
+            'bank_name' => 'Maybank',
+            'bank_account_no' => '1234567890',
+        ]);
+
+        $response->assertRedirect(route('applications.index'));
+        $response->assertSessionHas('status', fn ($status) => str_contains($status, 'submitted, but still missing'));
+
+        $application = Application::where('module_type', 'gra_application')->where('student_id', $student->id)->latest('id')->firstOrFail();
+        $this->assertSame(Application::STATUS_PENDING, $application->status);
+        $this->assertSame('admin_verify', $application->current_stage);
+        $this->assertFalse(DocumentCompleteness::isComplete($application));
+    }
+
+    public function test_submitting_a_ga_application_with_no_documents_still_goes_to_admin_verify(): void
+    {
+        $student = $this->studentWithTermsAccepted();
+
+        $response = $this->actingAs($student)->post(route('ga-application.store'), [
+            'service_start_date' => '2026-12-01',
+            'service_end_date' => '2027-06-01',
+            'proposed_allowance' => '1500',
+            'level_of_study' => 'master',
+            'programme' => 'MSc Data Science',
+            'admission_date' => '2025-09-01',
+        ]);
+
+        $response->assertRedirect(route('applications.index'));
+        $response->assertSessionHas('status', fn ($status) => str_contains($status, 'submitted, but still missing'));
+
+        $application = Application::where('module_type', 'ga_application')->where('student_id', $student->id)->latest('id')->firstOrFail();
+        $this->assertSame(Application::STATUS_PENDING, $application->status);
+        $this->assertSame('admin_verify', $application->current_stage);
+        $this->assertFalse(DocumentCompleteness::isComplete($application));
     }
 
     /* -----------------------------------------------------------------

@@ -593,10 +593,12 @@ class GraApplicationController extends Controller
      * behaviour). Project details, GRA details and service_start_date stay
      * required either way — they're needed to even construct a valid
      * detail/profile row, and were already always on the form. Documents
-     * are the one thing genuinely optional for a draft save; they're only
-     * actually enforced at Submit time, checking both this request's
-     * uploads and whatever was already attached from an earlier draft
-     * save — see missingRequiredDocuments().
+     * are never required to Submit, same for a draft save — confirmed
+     * explicitly 2026-11-10: "apply gra pun boleh submit en without
+     * document complete." missingRequiredDocuments() still runs, only to
+     * fold a note into the confirmation message; Admin's own admin_verify
+     * decision is the one place that actually blocks on this, see
+     * DocumentCompleteness.
      */
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
@@ -660,16 +662,14 @@ class GraApplicationController extends Controller
 
         $missing = $this->missingRequiredDocuments($application);
 
-        if ($missing->isNotEmpty()) {
-            return redirect()->route('gra-application.create')
-                ->with('error', 'Saved your progress, but still missing: '.$missing->implode(', ').'. Upload the rest, then Submit.');
-        }
-
         $engine->submit($application);
         $application->student?->notify(new ApplicationSubmitted($application));
 
-        return redirect()->route('applications.index')
-            ->with('status', "GRA application #{$application->id} submitted. Admin has been notified for document verification.");
+        $status = $missing->isEmpty()
+            ? "GRA application #{$application->id} submitted. Admin has been notified for document verification."
+            : "GRA application #{$application->id} submitted, but still missing: {$missing->implode(', ')}. Admin can't verify until you upload the rest; you'll get a weekly reminder until then.";
+
+        return redirect()->route('applications.index')->with('status', $status);
     }
 
     /** @return \Illuminate\Support\Collection<int, string> labels of document types with no file attached yet */
