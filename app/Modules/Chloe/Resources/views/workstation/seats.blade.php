@@ -78,17 +78,25 @@
         @elseif ($availableSeats->isEmpty())
             <div class="empty-state">No seats are available in this room right now.</div>
         @else
-            <div class="ws-seat-grid">
+            {{-- Same row card as the CGS room page (cgs/_seat-card.blade.php): photo left, text middle,
+                 button right. Students are only ever shown AVAILABLE seats, so there is no occupant line here. --}}
+            <div class="cgs-seat-list">
                 @foreach ($availableSeats as $seat)
-                    <div class="ws-seat-tile">
-                        <div>
-                            <div class="ws-seat-num">Seat {{ $seat->seat_code }}</div>
-                            <div class="ws-seat-state">Available</div>
+                    <div class="cgs-seat-card">
+                        <img src="{{ $workstationLocation->seatIconUrl() }}" alt="" aria-hidden="true" class="cgs-seat-image">
+
+                        <div class="cgs-seat-text">
+                            <div class="cgs-seat-title">Seat {{ $seat->seat_code }}</div>
+                            <div class="cgs-seat-sub">Block {{ $workstationLocation->block }} &middot; {{ $workstationLocation->room_code }}</div>
+                            <div class="cgs-seat-badges">
+                                <span class="status-badge approved">Available</span>
+                            </div>
                         </div>
+
                         <form method="POST" action="{{ route('workstation.register', $seat) }}"
-                              class="js-seat-select-form" data-seat="{{ $seat->seat_code }}">
+                              class="cgs-seat-button js-seat-select-form" data-seat="{{ $seat->seat_code }}">
                             @csrf
-                            <button type="submit" class="btn-secondary" aria-label="Select Seat {{ $seat->seat_code }}">Select</button>
+                            <button type="submit" aria-label="Select Seat {{ $seat->seat_code }}">Select</button>
                         </form>
                     </div>
                 @endforeach
