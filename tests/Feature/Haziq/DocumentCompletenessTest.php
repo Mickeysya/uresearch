@@ -19,10 +19,14 @@ use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
- * Document completeness never gates the approval chain -- confirmed
- * explicitly 2026-11-07: "application boleh terus ke approver lain even
- * document tak complete." It is a parallel tracking + reminder concern
- * only, see Support\DocumentCompleteness's own docblock.
+ * Document completeness never gates the approval chain for most of it --
+ * confirmed explicitly 2026-11-07: "application boleh terus ke approver
+ * lain even document tak complete." It is a parallel tracking + reminder
+ * concern only, see Support\DocumentCompleteness's own docblock. The one
+ * deliberate exception, added 2026-11-10 ("admin taleh tekan verify
+ * selagi document semua tak complete"): Admin's own admin_verify decision
+ * specifically IS blocked while something required is still missing --
+ * every later stage still isn't.
  */
 class DocumentCompletenessTest extends TestCase
 {
@@ -185,23 +189,85 @@ class DocumentCompletenessTest extends TestCase
     }
 
     /* -----------------------------------------------------------------
-     | Never gates routing
+     | Admin's own verify is gated; nothing after it is
      |------------------------------------------------------------------*/
 
-    public function test_an_incomplete_application_still_advances_through_its_approval_chain(): void
+    public function test_admin_cannot_verify_a_gra_application_while_documents_are_still_missing(): void
     {
         $admin = $this->admin();
         $application = $this->graApplication($this->student(), Application::STATUS_PENDING);
-        $application->update(['status' => Application::STATUS_PENDING, 'current_stage' => 'admin_verify']);
 
         $this->assertFalse(DocumentCompleteness::isComplete($application));
 
         $this->actingAs($admin)->post(route('gra-application.decide', $application), ['decision' => 'approve'])
             ->assertRedirect();
 
+        $this->assertSame('admin_verify', $application->fresh()->current_stage);
+    }
+
+    public function test_admin_can_verify_a_gra_application_once_every_document_is_attached(): void
+    {
+        $admin = $this->admin();
+        $application = $this->graApplication($this->student(), Application::STATUS_PENDING);
+        foreach (array_keys(DocumentCompleteness::requiredDocuments('gra_application')) as $key) {
+            $this->attach($application, $key);
+        }
+
+        $this->actingAs($admin)->post(route('gra-application.decide', $application), ['decision' => 'approve'])
+            ->assertRedirect();
+
         $this->assertSame('cgs_review', $application->fresh()->current_stage);
-        // Still incomplete -- the decision did not require or check documents.
+    }
+
+    public function test_admin_cannot_verify_a_ga_application_while_documents_are_still_missing(): void
+    {
+        $admin = $this->admin();
+        $application = $this->gaApplication($this->student(), Application::STATUS_PENDING);
+
+        $this->actingAs($admin)->post(route('ga-application.decide', $application), ['decision' => 'approve'])
+            ->assertRedirect();
+
+        $this->assertSame('admin_verify', $application->fresh()->current_stage);
+    }
+
+    public function test_a_gra_extension_is_never_gated_on_documents_at_admin_verify(): void
+    {
+        $admin = $this->admin();
+        $student = $this->student();
+        $this->graApplication($student, Application::STATUS_APPROVED, 'new');
+        $extension = $this->graApplication($student, Application::STATUS_PENDING, 'extension');
+
+        // Never gated on these documents at Submit either -- see
+        // DocumentCompleteness's own docblock -- so Admin's own stage
+        // doesn't start requiring them here just because it does for a
+        // 'new' application.
+        $this->actingAs($admin)->post(route('gra-application.decide', $extension), ['decision' => 'approve'])
+            ->assertRedirect();
+
+        $this->assertSame('cgs_review', $extension->fresh()->current_stage);
+    }
+
+    public function test_an_incomplete_application_still_advances_through_every_later_stage(): void
+    {
+        $application = $this->graApplication($this->student(), Application::STATUS_PENDING);
+        foreach (array_keys(DocumentCompleteness::requiredDocuments('gra_application')) as $key) {
+            $this->attach($application, $key);
+        }
+        $this->actingAs($this->admin())->post(route('gra-application.decide', $application), ['decision' => 'approve']);
+        // Delete one attached document back out, so the application moves
+        // on with something missing again -- proving only Admin's own
+        // stage actually checks this.
+        ApplicationDocument::where('application_id', $application->id)
+            ->where('doc_type', DocumentCompleteness::requiredDocuments('gra_application')['resume'])
+            ->delete();
+
         $this->assertFalse(DocumentCompleteness::isComplete($application->fresh()));
+
+        $this->actingAs($this->cgs())
+            ->post(route('gra-application.decide', $application), ['decision' => 'approve', 'proposed_allowance' => 1000])
+            ->assertRedirect();
+
+        $this->assertSame('supervisor', $application->fresh()->current_stage);
     }
 
     /* -----------------------------------------------------------------
@@ -288,12 +354,26 @@ class DocumentCompletenessTest extends TestCase
         $this->actingAs($this->student())->get(route('document-completeness.index'))->assertForbidden();
     }
 
-    public function test_admin_cgs_supervisor_and_senior_director_can_all_view_the_report(): void
+    public function test_only_admin_can_view_the_report(): void
     {
         $this->graApplication($this->student());
 
-        foreach ([$this->admin(), $this->cgs(), $this->supervisor(), $this->seniorDirector()] as $viewer) {
-            $this->actingAs($viewer)->get(route('document-completeness.index'))->assertOk();
+        $this->actingAs($this->admin())->get(route('document-completeness.index'))->assertOk();
+
+        // Confirmed explicitly 2026-11-10: "document completeness analysis
+        // ni boleh tengok by admin je user lain taleh tengok" -- narrower
+        // than Stage Gate/Allowance's shared monitoring audience.
+        foreach ([$this->cgs(), $this->supervisor(), $this->seniorDirector()] as $viewer) {
+            $this->actingAs($viewer)->get(route('document-completeness.index'))->assertForbidden();
+        }
+    }
+
+    public function test_only_admin_can_send_a_reminder_to_all(): void
+    {
+        $this->graApplication($this->student());
+
+        foreach ([$this->cgs(), $this->supervisor(), $this->seniorDirector()] as $viewer) {
+            $this->actingAs($viewer)->post(route('document-completeness.remind-all'))->assertForbidden();
         }
     }
 

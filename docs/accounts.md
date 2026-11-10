@@ -4,7 +4,7 @@ Every login the seeders create. **Password for all: `password`.**
 
 | How you got your database | What you have |
 |---|---|
-| `./sync.sh` (any time, keeps your data) | the **245 base accounts** below |
+| `./sync.sh` (any time, keeps your data) | the **246 base accounts** below |
 | `./sync.sh --fresh` (wipes, then rebuilds) | the base accounts **plus 80 demo accounts** made by the module demo seeders (last section) |
 
 Source of truth: `database/seeders/DatabaseSeeder.php` (`ACADEMIC_EXECS`, `CHAIRS`, `SUPERVISORS`, `CGS_OFFICERS`, `COHORT`). Change an account there, never by hand in phpMyAdmin, or the next `./sync.sh` puts it back. Generated 2026-11-08 from a fresh seed; if you change the seeder, regenerate this file.
@@ -17,8 +17,8 @@ Source of truth: `database/seeders/DatabaseSeeder.php` (`ACADEMIC_EXECS`, `CHAIR
 | Supervisor | 24 | 33 |
 | Academic Executive | 12 | 13 |
 | Chair | 12 | 12 |
-| Non-Executive CGS | 7 | 7 |
-| Senior Executive CGS | 1 | 1 |
+| Non-Executive CGS | 5 | 5 |
+| Senior Executive CGS | 4 | 4 |
 | Manager CGS | 1 | 1 |
 | Senior Director CGS | 1 | 1 |
 | Dean of PGR | 1 | 1 |
@@ -26,7 +26,7 @@ Source of truth: `database/seeders/DatabaseSeeder.php` (`ACADEMIC_EXECS`, `CHAIR
 | Registry | 1 | 1 |
 | Research Centre | 1 | 1 |
 | Admin | 1 | 1 |
-| **Total** | **245** | **325** |
+| **Total** | **246** | **326** |
 
 ## University and CGS staff
 
@@ -42,18 +42,19 @@ Source of truth: `database/seeders/DatabaseSeeder.php` (`ACADEMIC_EXECS`, `CHAIR
 | `researchcentre@utp.edu.my` | Research Centre | Research Centre Officer | Research Centre |
 | `admin@utp.edu.my` | Admin | System Admin | – |
 
-### CGS officers, one per team member
+### CGS officers
 
-All six are Non-Executive CGS. Core routes queues by role, so each one **sees every** Non-Executive CGS queue; a module that emails only its own officer configures that itself (Norhanis' `Config/cgs.php` does). `cgs@utp.edu.my` above is the general Non-Executive account.
+Roles follow the CGS Staff Directory: its Senior Executives are Senior Executive CGS, its Senior Assistants Non-Executive CGS. Six are one per team member; Aqil is the directory's third Senior Executive. Core routes queues by role, so each one **sees every** queue of their role; a module that emails only its own officer configures that itself (Norhanis' `Config/cgs.php` does). `cgs@utp.edu.my` and `seniorexec@utp.edu.my` above are the general accounts for those two roles.
 
-| Email | Name | Team member's modules |
-|---|---|---|
-| `waheda.cgs@utp.edu.my` | Waheda | Hani — Examiner Nomination · Conflict Detection · Re-viva |
-| `akmar.cgs@utp.edu.my` | Akmar | Haziq — GRA · GA · Stage Gates · Allowance Eligibility |
-| `norshahira.cgs@utp.edu.my` | Norshahira | Norhanis — Travel · Publication · Claims |
-| `amirul.cgs@utp.edu.my` | Amirul | Chloe — Workstation · Study Candidacy |
-| `zulkifly.cgs@utp.edu.my` | Zulkifly | Nureen — Attendance · GA Extension · Supervision · Certification |
-| `syahmi.cgs@utp.edu.my` | Syahmi | Jason — Hardbound · Appeal Hardbound · Appointment Letters |
+| Email | Name | Role | Team member's modules |
+|---|---|---|---|
+| `waheda.cgs@utp.edu.my` | Waheda | Senior Executive CGS | Hani — Examiner Nomination · Conflict Detection · Re-viva |
+| `akmar.cgs@utp.edu.my` | Akmar | Senior Executive CGS | Haziq — GRA · GA · Stage Gates · Allowance Eligibility |
+| `aqil.cgs@utp.edu.my` | Aqil | Senior Executive CGS | – |
+| `norshahira.cgs@utp.edu.my` | Norshahira | Non-Executive CGS | Norhanis — Travel · Publication · Claims |
+| `amirul.cgs@utp.edu.my` | Amirul | Non-Executive CGS | Chloe — Workstation · Study Candidacy |
+| `zulkifly.cgs@utp.edu.my` | Zulkifly | Non-Executive CGS | Nureen — Attendance · GA Extension · Supervision · Certification |
+| `syahmi.cgs@utp.edu.my` | Syahmi | Non-Executive CGS | Jason — Hardbound · Appeal Hardbound · Appointment Letters |
 
 ## Departments: Chair, Academic Executive and Supervisors
 

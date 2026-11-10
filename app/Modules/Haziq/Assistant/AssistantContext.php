@@ -38,6 +38,21 @@ class AssistantContext
             $lines[] = $history;
         }
 
+        // Just the name -- confirmed explicitly 2026-11-10: "siapa
+        // supervisor akan approve... tak confidential... tapi detail
+        // lebih supervisor taleh." Who a student's own supervisor is
+        // isn't gated on the application having actually reached that
+        // stage yet; it's a plain fact of the student's own record, the
+        // same one gra_application/show.blade.php and ga_application/
+        // show.blade.php already show regardless of current_stage.
+        // Nothing else about that supervisor -- their other supervisees,
+        // how long they take, any internal note -- belongs here; see
+        // KnowledgeBase's own "WHAT A STUDENT'S OWN RECORDS NEVER
+        // INCLUDE" section for the line that keeps that boundary.
+        if ($student->supervisor) {
+            $lines[] = "Your assigned supervisor: {$student->supervisor->name}.";
+        }
+
         $applications = Application::whereIn('module_type', ['gra_application', 'ga_application'])
             ->where('student_id', $student->id)
             ->orderByDesc('submitted_at')

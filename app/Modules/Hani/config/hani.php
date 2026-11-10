@@ -336,6 +336,11 @@ return [
         // slack for a late report.
         'link_days' => 35,
 
+        // The examiner's sign-in to that link: how long the emailed code
+        // works, and how long the sign-in lasts in that browser.
+        'panel_code_minutes' => 10,
+        'panel_session_minutes' => 60,
+
         // The "Correction of Master's/Doctoral Thesis" letter
         // (Resources/views/re_viva/pdf/correction_letter.blade.php).
         // PROVISIONAL: fictional names and example.com addresses for the FYP.

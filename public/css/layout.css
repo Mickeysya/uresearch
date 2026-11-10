@@ -623,6 +623,23 @@ button[value="rejected"]:hover {
     border-color: var(--warning-border);
 }
 
+/* GRA/GA Application's own appointment lifecycle (GraApplicationDetail /
+   GaApplicationDetail::serviceStatus()) -- 'active' reuses the same tone
+   as 'approved' since both are healthy states, just at different points
+   in the appointment's own timeline. 'inactive' (service window lapsed,
+   no termination involved) stays neutral rather than alarming red. */
+.status-badge.active {
+    background: var(--success-bg);
+    color: var(--success-fg);
+    border-color: var(--success-border);
+}
+
+.status-badge.inactive {
+    background: var(--surface-sunken);
+    color: var(--text-grey);
+    border-color: var(--border-grey);
+}
+
 /* ============================================================
    7 · Flash messages
 

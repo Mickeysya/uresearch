@@ -19,6 +19,24 @@
             @if ($stage) &middot; currently with <b>{{ $stage->label }}</b> @endif
         </p>
 
+        {{-- The appointment's own lifecycle, separate from the application's
+             workflow status above -- approved, then active once
+             service_start_date arrives, then inactive once
+             service_end_date passes with no approved extension covering
+             today. Confirmed explicitly 2026-11-10. Skipped once
+             terminated: the banner below already covers that case. --}}
+        @php($serviceStatus = $application->status === \App\Modules\Core\Models\Application::STATUS_APPROVED ? $detail->serviceStatus() : null)
+        @if ($serviceStatus && $serviceStatus !== 'terminated')
+            <p class="queue-meta">
+                Appointment status: <x-core::status-badge :status="$serviceStatus" />
+                @if ($serviceStatus === 'approved')
+                    Starts {{ $detail->service_start_date->format('j M Y') }}.
+                @elseif ($serviceStatus === 'inactive')
+                    Service ended {{ $detail->service_end_date->format('j M Y') }}.
+                @endif
+            </p>
+        @endif
+
         @if ($terminated ?? false)
             <div class="haziq-repeatable-row" style="border-color: var(--danger-fg); background: var(--danger-bg);">
                 <p style="grid-column: 1 / -1;">

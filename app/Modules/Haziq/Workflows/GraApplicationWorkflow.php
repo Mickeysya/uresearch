@@ -180,8 +180,14 @@ class GraApplicationWorkflow implements WorkflowModule, ProvidesLinks
             $links[] = ['label' => 'GRA Applicants', 'route' => 'gra-application.index'];
             $links[] = ['label' => 'Stage Gate Monitoring', 'route' => 'stage-gate.index'];
             $links[] = ['label' => 'Allowance Eligibility', 'route' => 'allowance.index'];
-            $links[] = ['label' => 'Document Completeness', 'route' => 'document-completeness.index'];
             $links[] = ['label' => 'Candidature Appeals', 'route' => 'candidature-appeal.queue'];
+        }
+
+        // Admin only — see the route's own middleware. Confirmed
+        // explicitly 2026-11-10: "document completeness analysis ni
+        // boleh tengok by admin je user lain taleh tengok."
+        if ($user->isAdmin()) {
+            $links[] = ['label' => 'Document Completeness', 'route' => 'document-completeness.index'];
         }
 
         // Spans both GRA and GA, so every actor in either chain gets it —

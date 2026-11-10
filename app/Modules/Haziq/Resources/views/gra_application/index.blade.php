@@ -8,6 +8,16 @@
 
 @section('content')
 <div class="card-container-inline">
+    {{-- Always exactly one tab active, never a combined view -- same
+         rule and same style as GA Applicants' own Application/Extension
+         tabs. Confirmed explicitly 2026-11-10: "buat sama cam ga." --}}
+    <div class="haziq-filter-bar" style="margin-bottom: -8px;">
+        <a href="{{ route('gra-application.index') }}" class="{{ $selectedType === 'new' ? 'btn' : 'btn-secondary' }}"
+           @if ($selectedType === 'new') style="pointer-events: none; background: var(--accent-solid); color: var(--text-on-accent);" @endif>Application</a>
+        <a href="{{ route('gra-application.index', ['type' => 'extension']) }}" class="{{ $selectedType === 'extension' ? 'btn' : 'btn-secondary' }}"
+           @if ($selectedType === 'extension') style="pointer-events: none; background: var(--accent-solid); color: var(--text-on-accent);" @endif>Extension</a>
+    </div>
+
     <div class="card card-wide">
         <h2>Pending by Stage</h2>
         <div class="card-divider"></div>
@@ -96,7 +106,7 @@
             <div class="card-divider"></div>
             <p class="queue-meta">
                 Only students currently at this stage.
-                <a href="{{ route('gra-application.index') }}">Clear filter — show everyone</a>
+                <a href="{{ route('gra-application.index', ['type' => $selectedType]) }}">Clear filter, show every stage</a>
             </p>
         @else
             <h2>GRA Applicants</h2>

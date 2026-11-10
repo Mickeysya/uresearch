@@ -59,6 +59,40 @@ class GraApplicationDetail extends Model
     }
 
     /**
+     * A display-only concept, never persisted and never confused with
+     * `status` (Core's own column, WorkflowEngine's alone to write) or
+     * `candidature_status` (Stage Gate's own termination concern, read
+     * as-is here, not recomputed). Confirmed explicitly 2026-11-10: once
+     * approved, an appointment reads "approved" until its own
+     * service_start_date actually arrives, then "active" for as long as
+     * today falls within [service_start_date, service_end_date]. Once
+     * service_end_date passes with nothing covering today, it reads
+     * "inactive" -- not terminated, just not currently in service -- and
+     * an approved extension (a new Application row with its own, later
+     * service_end_date) is what brings it back to "active", purely by
+     * this same date check running against the new row. Meaningless
+     * before approval, so callers only use this once status is approved.
+     */
+    public function serviceStatus(): string
+    {
+        if ($this->isTerminated()) {
+            return 'terminated';
+        }
+
+        $today = Carbon::today();
+
+        if ($today->lt($this->service_start_date)) {
+            return 'approved';
+        }
+
+        if ($today->gt($this->service_end_date)) {
+            return 'inactive';
+        }
+
+        return 'active';
+    }
+
+    /**
      * Extension can be requested any time once the current appointment is
      * approved — no longer gated on the service period having actually run
      * out. Confirmed explicitly 2026-11-07, reversing the earlier

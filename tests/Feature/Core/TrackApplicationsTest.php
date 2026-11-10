@@ -178,15 +178,18 @@ class TrackApplicationsTest extends TestCase
         preg_match_all('/<article class="trk-card.*?<\/article>/s', $html, $cards);
         [$second, $first] = $cards[0]; // newest activity first: $director, then $cgs
 
-        // 'cgs' mode: Submitted, Supervisor, then CGS decides; no director.
+        // 'cgs' mode: Submitted, Admin, Supervisor, then CGS decides; no
+        // director. GaExtensionWorkflow::chainFor() gained its own Admin
+        // stage 2026-11-10, one position ahead of every stage below --
+        // see that class's own docblock.
         $this->assertStringContainsString('Endorsed 13 Oct', $second);
         $this->assertStringNotContainsString('Senior Director CGS', $second);
-        $this->assertStringContainsString('Step 3 of 3, current:', $second);
+        $this->assertStringContainsString('Step 4 of 4, current:', $second);
 
-        // 'senior_director' mode: a fourth step, still to come.
+        // 'senior_director' mode: a fifth step, still to come.
         $this->assertStringContainsString('Endorsed 14 Oct', $first);
         $this->assertStringContainsString('Senior Director CGS', $first);
-        $this->assertStringContainsString('Step 4 of 4, next:', $first);
+        $this->assertStringContainsString('Step 5 of 5, next:', $first);
         // Reached CGS on 14 Oct: 13 working days to Monday 2 Nov.
         $this->assertStringContainsString('Waiting 13 working days', $first);
     }

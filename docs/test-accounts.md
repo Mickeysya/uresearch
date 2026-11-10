@@ -1,6 +1,6 @@
 # Test accounts
 
-> **Superseded for the account list by [`accounts.md`](accounts.md)** (2026-11-08): all 245 base accounts (12 Chairs, 24 supervisors, the six CGS officers, the 180-student cohort) plus the `--fresh` demo accounts. The walkthrough notes below are still useful; their counts and the "no Electrical Chair" gap are out of date.
+> **Superseded for the account list by [`accounts.md`](accounts.md)** (2026-11-08): all 246 base accounts (12 Chairs, 24 supervisors, the seven CGS officers, the 180-student cohort) plus the `--fresh` demo accounts. The walkthrough notes below are still useful; their counts and the "no Electrical Chair" gap are out of date.
 
 Every account in the local database, so you can sign in as any of them without
 opening phpMyAdmin. **The password is `password` for all of them**, set by

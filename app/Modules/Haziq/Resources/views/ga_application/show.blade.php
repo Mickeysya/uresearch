@@ -19,6 +19,21 @@
             @if ($stage) &middot; currently with <b>{{ $stage->label }}</b> @endif
         </p>
 
+        {{-- Same appointment-lifecycle concept as GRA's own show page --
+             see GraApplicationDetail::serviceStatus()'s docblock.
+             Confirmed explicitly 2026-11-10. --}}
+        @php($serviceStatus = $application->status === \App\Modules\Core\Models\Application::STATUS_APPROVED ? $detail->serviceStatus() : null)
+        @if ($serviceStatus && $serviceStatus !== 'terminated')
+            <p class="queue-meta">
+                Appointment status: <x-core::status-badge :status="$serviceStatus" />
+                @if ($serviceStatus === 'approved')
+                    Starts {{ $detail->service_start_date->format('j M Y') }}.
+                @elseif ($serviceStatus === 'inactive')
+                    Service ended {{ $detail->service_end_date->format('j M Y') }}.
+                @endif
+            </p>
+        @endif
+
         @if ($openCorrections->isNotEmpty())
             <div class="haziq-repeatable-row" style="border-color: var(--danger-fg);">
                 <p style="grid-column: 1 / -1;"><b>Awaiting student action:</b></p>

@@ -19,9 +19,27 @@ class DelayReportController extends Controller
     {
         abort_if($request->user()->isStudent(), 403);
 
-        $module = $request->query('module') ?: null;
+        // One of DelayByActorReport::SCOPES, always -- "theres no such
+        // thing as both, kene choose either one" -- confirmed explicitly
+        // 2026-11-10. Defaults to the first scope on first visit, since
+        // the Role filter (not this one) is the one allowed an "any"
+        // choice.
+        $module = $request->query('module') ?: array_key_first(DelayByActorReport::SCOPES);
+        abort_unless(array_key_exists($module, DelayByActorReport::SCOPES), 404);
+
+        $narrowableRoles = DelayByActorReport::narrowableRolesFor($module);
+
         $role = $request->query('role') ?: null;
         $actorId = $request->query('actor') ? (int) $request->query('actor') : null;
+
+        // Confirmed explicitly 2026-11-10: a role that anyone can pick up
+        // (Admin, CGS, Senior Director) can't be narrowed down to "which
+        // person" -- see DelayByActorReport::NARROWABLE_ROLES's own
+        // docblock for why. A role query string naming one of those is
+        // dropped rather than honoured.
+        if ($role && ! $narrowableRoles->contains($role)) {
+            $role = null;
+        }
 
         $rows = DelayByActorReport::rows($module);
 
@@ -42,12 +60,18 @@ class DelayReportController extends Controller
             'module' => $module,
             'role' => $role,
             'actorId' => $actorId,
-            'roles' => DelayByActorReport::rolesFor($module),
+            'roles' => $narrowableRoles,
             'actors' => DelayByActorReport::actorsFor($module, $role),
             'chartBars' => DelayByActorReport::chartBars($rows, $role, $actorId),
             'bottleneck' => DelayByActorReport::bottleneckRole($byRole),
             'byRole' => $byRole,
-            'byActor' => DelayByActorReport::byActor($rows, $rows),
+            // Only the roles a person-level number is actually meaningful
+            // for -- the role-level "By role" table above already covers
+            // Admin/CGS/Senior Director, unrestricted.
+            'byActor' => DelayByActorReport::byActor(
+                $rows->whereIn('approver_role', $narrowableRoles->all()),
+                $rows
+            ),
             'rows' => $rows->sortByDesc('decided_at')->values(),
         ]);
     }

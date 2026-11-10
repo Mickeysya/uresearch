@@ -160,12 +160,30 @@ class NureenClientCharterDemoSeeder extends Seeder
                 $detail($application);
                 app(DemoDocuments::class)->attachRequired($application);
                 $this->engine->submit($application);
+
+                // GA Extension's Admin paperwork-verification stage, added
+                // 2026-11-10, didn't exist when every $gaExtension step
+                // below was written against "submit lands at supervisor" --
+                // cleared the same day as submission here rather than
+                // renumbering every scenario's days-ago keys, since a
+                // same-day paperwork check is realistic anyway.
+                if ($module === 'ga_extension') {
+                    $this->engine->decide($application, $this->adminUser(), 'approve');
+                }
             } else {
                 $this->engine->decide($application->refresh(), $actor, 'approve');
             }
         }
 
         Carbon::setTestNow();
+    }
+
+    protected function adminUser(): User
+    {
+        return User::firstOrCreate(
+            ['email' => 'admin@utp.edu.my'],
+            ['name' => 'Admin Office', 'role' => Role::ADMIN, 'password' => Hash::make('password')]
+        );
     }
 
     /** 10am on the latest working day exactly $days working days before today. */

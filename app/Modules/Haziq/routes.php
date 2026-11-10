@@ -143,14 +143,15 @@ Route::middleware('auth')->group(function () {
 
     // ---- Document Completeness ---------------------------------------
     // "Document completeness never blocks routing" -- a report plus one
-    // manual action, same approver audience as Stage Gate/Allowance's own
-    // monitoring routes above (no Student here -- see the student's own
-    // missing-documents box on gra-application.mine/ga-application.mine
-    // instead).
-    Route::middleware('role:'.implode(',', array_merge(
-        [Role::ADMIN, Role::SUPERVISOR],
-        Role::cgsTeam(),
-    )))->group(function () {
+    // manual action. Narrower than Stage Gate/Allowance's own monitoring
+    // routes above -- confirmed explicitly 2026-11-10: "document
+    // completeness analysis ni boleh tengok by admin je user lain taleh
+    // tengok... so yeang leh send reminder to all at any time admin
+    // sahaja." Admin alone chases paperwork; Supervisor/CGS/Senior
+    // Director never see this screen at all (no Student here either --
+    // see the student's own missing-documents box on
+    // gra-application.mine/ga-application.mine instead).
+    Route::middleware('role:'.Role::ADMIN)->group(function () {
         Route::get('/document-completeness', [DocumentCompletenessController::class, 'index'])->name('document-completeness.index');
         Route::post('/document-completeness/remind-all', [DocumentCompletenessController::class, 'remindAll'])->name('document-completeness.remind-all');
     });

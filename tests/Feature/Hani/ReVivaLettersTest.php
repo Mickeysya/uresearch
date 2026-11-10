@@ -9,14 +9,17 @@ use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ReVivaDetail;
 use App\Modules\Hani\Models\ReVivaStaffDocument;
 use App\Modules\Hani\Notifications\ReVivaCorrectionLetter;
+use App\Modules\Hani\Notifications\ReVivaPanelCode;
 use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Support\Pdf\PdfReader;
 use App\Modules\Hani\Support\ReVivaLetters;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Tests\Feature\Hani\Concerns\BuildsReVivas;
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\Support\MakesUsers;
@@ -108,7 +111,8 @@ class ReVivaLettersTest extends TestCase
         $this->assertStringContainsString('Thesis of 22001001', $text);
         $this->assertStringContainsString('twenty (20) working days', $text);
         $this->assertStringContainsString('Dean, Postgraduate & Research', $text);
-        $this->assertStringContainsString('Encik Syahmi', $text);
+        $this->assertStringContainsString('Puan Waheeda', $text);
+        $this->assertStringContainsString('syahmi.cgs@example.com', $text);
         // 1 Oct 2027 + 20 working days, skipping Deepavali (28 Oct, in the holiday list) = 1 Nov 2027.
         $this->assertStringContainsString('that is by 1 November 2027', $text);
     }
@@ -155,6 +159,10 @@ class ReVivaLettersTest extends TestCase
 
         $link = ReVivaLetters::panelLink($round, $examiner);
 
+        // Logged out, the link shows only the sign-in: nothing about the candidate.
+        $this->get($link)->assertOk()->assertSee('Examiner sign-in')->assertDontSee($viva['student']->name)->assertDontSee('Summary of Corrections');
+        $this->signIn($link, $examiner);
+
         $page = $this->get($link)->assertOk()
             ->assertSee($viva['student']->name)
             ->assertSee('Summary of Corrections')
@@ -197,6 +205,65 @@ class ReVivaLettersTest extends TestCase
         }
     }
 
+    /** Signs this test client in the way an examiner does; returns nothing. */
+    protected function signIn(string $link, Examiner $examiner): void
+    {
+        $code = null;
+        Notification::fake();
+        $this->post($link, ['step' => 'email', 'email' => strtoupper($examiner->email)])->assertRedirect($link);
+        Notification::assertSentOnDemand(ReVivaPanelCode::class, function (ReVivaPanelCode $n) use (&$code) {
+            $code = $n->code;
+
+            return true;
+        });
+        $this->post($link, ['step' => 'code', 'code' => $code])->assertRedirect($link);
+    }
+
+    public function test_the_sign_in_refuses_a_wrong_email_a_wrong_code_and_an_unsigned_download(): void
+    {
+        $viva = $this->roundAtStageOne();
+        $this->send($viva);
+        $round = $viva['round']->fresh();
+        $examiner = Examiner::find($viva['panel']->external_main_id);
+        $link = ReVivaLetters::panelLink($round, $examiner);
+        Notification::fake();
+
+        // A wrong email gets the same answer and no code.
+        $this->post($link, ['step' => 'email', 'email' => 'someone.else@example.org'])
+            ->assertRedirect($link)->assertSessionHas('status');
+        Notification::assertNothingSent();
+
+        // A download link without the sign-in goes back to the sign-in.
+        $document = $round->application->documents()->first();
+        $download = URL::temporarySignedRoute('reviva.panel.download', now()->addDay(), ['detail' => $round->id, 'examiner' => $examiner->id, 'document' => $document->id]);
+        $this->get($download)->assertRedirect();
+
+        // Five wrong codes burn the code, even if the sixth is right.
+        Cache::flush();
+        $this->post($link, ['step' => 'email', 'email' => $examiner->email]);
+        $code = null;
+        Notification::assertSentOnDemand(ReVivaPanelCode::class, function (ReVivaPanelCode $n) use (&$code) {
+            $code = $n->code;
+
+            return true;
+        });
+        $wrong = $code === '111111' ? '222222' : '111111';
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        foreach (range(1, 5) as $i) {
+            $this->post($link, ['step' => 'code', 'code' => $wrong])->assertSessionHasErrors('code');
+        }
+        $this->post($link, ['step' => 'code', 'code' => $code])->assertSessionHasErrors('code');
+        $this->get($link)->assertSee('Examiner sign-in')->assertDontSee($viva['student']->name);
+
+        // Signing out ends it.
+        $this->post($link, ['step' => 'restart']);
+        Cache::flush();
+        $this->signIn($link, $examiner);
+        $this->get($link)->assertSee($viva['student']->name);
+        $this->post($link, ['step' => 'sign_out'])->assertRedirect($link);
+        $this->get($link)->assertSee('Examiner sign-in');
+    }
+
     /**
      * The bug from the seeded demo: a round sent to the panel weeks before
      * the email is actually built (the seeder backdates the send; the queue
@@ -226,7 +293,7 @@ class ReVivaLettersTest extends TestCase
         // The reply-by date still counts from the send, as the letter says.
         $this->assertStringContainsString('by 1 November 2027', implode(' ', $mail->outroLines));
 
-        $this->get($mail->actionUrl)->assertOk()->assertSee($viva['student']->name);
+        $this->get($mail->actionUrl)->assertOk()->assertSee('Examiner sign-in');
 
         // And for the full link_days from then.
         Carbon::setTestNow('2027-12-21 23:00');

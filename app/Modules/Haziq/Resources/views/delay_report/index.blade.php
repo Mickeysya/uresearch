@@ -10,11 +10,23 @@
 <div class="card-container-inline">
     <x-core::page-header
         title="Delay by Actor"
-        subtitle="How long an actor takes once a GRA or GA application actually reaches them, read off the real approval history. Not a workflow, just a read." />
+        subtitle="How long an actor takes once an application actually reaches them, read off the real approval history. Not a workflow, just a read — pick one scope below, GRA/GA Application or GRA/GA Extension never average together." />
 
     @if ($bottleneck)
         <div class="card card-wide" style="border-left: 4px solid var(--warning-fg);">
-            <h3 style="margin-top: 0;">Predicted bottleneck{{ $module ? ' ('.($module === 'gra_application' ? 'GRA' : 'GA').')' : '' }}</h3>
+            <h3 style="margin-top: 0;">Predicted bottleneck ({{ \App\Modules\Haziq\Support\DelayByActorReport::SCOPES[$module]['label'] }})</h3>
+            {{-- Confirmed explicitly 2026-11-10: "boleh je predict even
+                 baru ada satu application approved or rejected... jangan
+                 tunggu banyak application baru predict, nak cegah awal
+                 kan" -- one completed application is a real, clean signal
+                 now that rows() only ever counts a finished journey
+                 (approved or rejected), never a still-pending one. The
+                 earlier "Admin predicted to cause delay" case that looked
+                 wrong wasn't really a sample-size problem -- it was a
+                 still-pending application's partial history being
+                 counted at all, which rows() no longer does. The decision
+                 count is still shown plainly, so "based on 1 decision" is
+                 visible, not hidden -- just not suppressed outright. --}}
             <p class="queue-meta" style="margin-bottom: 0;">
                 <b>{{ \App\Modules\Core\Support\Role::label($bottleneck['role']) }}</b> is the role predicted to
                 cause the most delay for an application right now, averaging
@@ -22,7 +34,7 @@
                 ({{ $bottleneck['avg_days'] }} {{ Str::plural('day', $bottleneck['avg_days']) }} on average).
                 @unless ($bottleneck['decisions'] >= \App\Modules\Haziq\Support\DelayByActorReport::RELIABLE_SAMPLE)
                     Based on only {{ $bottleneck['decisions'] }} {{ Str::plural('decision', $bottleneck['decisions']) }}
-                    so far, so treat this as a rough guide, not a guarantee.
+                    so far, so treat this as an early signal, not a guarantee.
                 @endunless
             </p>
         </div>
@@ -31,9 +43,9 @@
     <div class="card card-wide">
         <form method="GET" action="{{ route('delay-report.index') }}" class="haziq-filter-bar">
             <select name="module" data-autosubmit>
-                <option value="">GRA and GA</option>
-                <option value="gra_application" @selected($module === 'gra_application')>GRA Application</option>
-                <option value="ga_application" @selected($module === 'ga_application')>GA Application</option>
+                @foreach (\App\Modules\Haziq\Support\DelayByActorReport::SCOPES as $key => $scope)
+                    <option value="{{ $key }}" @selected($module === $key)>{{ $scope['label'] }}</option>
+                @endforeach
             </select>
 
             <select name="role" data-autosubmit>
@@ -171,6 +183,12 @@
     <div class="card card-wide">
         <h3 style="margin-top: 0;">By individual actor</h3>
         <p class="queue-meta" style="margin-bottom: 14px;">
+            Supervisor and Research Centre only: each student has one specific
+            person in these roles, so a person-level number here actually predicts
+            something about that student's next application. Admin, CGS, and
+            Senior Director are general: any member can pick up any application,
+            so there is nobody specific to predict for; the table above already
+            covers those at the role level.
             "vs role average" is how much slower (positive) or faster (negative) this
             person runs compared to everyone else who has ever held the same role.
         </p>

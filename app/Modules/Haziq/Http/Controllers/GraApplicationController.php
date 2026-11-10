@@ -160,10 +160,19 @@ class GraApplicationController extends Controller
         abort_unless($user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR, 403);
 
         $selectedStage = $request->query('stage');
+        // Always exactly one of 'new' or 'extension', never both at once
+        // -- confirmed explicitly 2026-11-10, same rule as Delay by
+        // Actor's own scopes: "gra pun sama taknak both application and
+        // extention, is either both... buat sama cam ga" (GA's own tab
+        // toggle never offers a combined view either). Defaults to 'new'
+        // on first visit, same as GA Applicants defaulting to the
+        // Application tab.
+        $selectedType = $request->query('type') === 'extension' ? 'extension' : 'new';
 
         $applications = Application::where('module_type', $this->moduleKey())
             ->where('status', '!=', Application::STATUS_DRAFT)
             ->when($selectedStage, fn ($q) => $q->where('status', Application::STATUS_PENDING)->where('current_stage', $selectedStage))
+            ->when($selectedType, fn ($q, $type) => $q->whereIn('id', GraApplicationDetail::where('application_type', $type)->pluck('application_id')))
             ->with('student')
             ->latest('submitted_at')
             ->paginate(25)
@@ -180,11 +189,12 @@ class GraApplicationController extends Controller
             'applications' => $applications,
             'profiles' => $profiles,
             'selectedStage' => $selectedStage,
+            'selectedType' => $selectedType,
             'selectedStageLabel' => $selectedStage
                 ? collect((new \App\Modules\Haziq\Workflows\GraApplicationWorkflow())->stages())
                     ->firstWhere('key', $selectedStage)?->label
                 : null,
-            'bottleneck' => $this->pendingByStage(),
+            'bottleneck' => $this->pendingByStage($selectedType),
             'canViewDetail' => fn (Application $application) => $this->canViewDetail($application, $viewerStageIndex, $user),
         ]);
     }
@@ -322,12 +332,14 @@ class GraApplicationController extends Controller
      * Carries each stage's key so the chart's click handler can turn "bar 2"
      * into `?stage=cgs_review`.
      *
+     * @param  'new'|'extension'|null  $type  same filter as index()'s own, so the chart never disagrees with the list below it.
      * @return \Illuminate\Support\Collection<int, array{key: string, label: string, count: int}>
      */
-    protected function pendingByStage(): \Illuminate\Support\Collection
+    protected function pendingByStage(?string $type = null): \Illuminate\Support\Collection
     {
         $counts = Application::where('module_type', $this->moduleKey())
             ->where('status', Application::STATUS_PENDING)
+            ->when($type, fn ($q, $t) => $q->whereIn('id', GraApplicationDetail::where('application_type', $t)->pluck('application_id')))
             ->selectRaw('current_stage, count(*) as total')
             ->groupBy('current_stage')
             ->pluck('total', 'current_stage');
@@ -520,12 +532,29 @@ class GraApplicationController extends Controller
             ?->application;
     }
 
+    /** Same as draftApplication(), for the 'extension' type instead of 'new'. */
+    protected function draftExtensionApplication(Request $request): ?Application
+    {
+        return GraApplicationDetail::where('application_type', 'extension')
+            ->whereHas('application', fn ($q) => $q
+                ->where('student_id', $request->user()->id)
+                ->where('module_type', $this->moduleKey())
+                ->where('status', Application::STATUS_DRAFT))
+            ->with('application')
+            ->latest('id')
+            ->first()
+            ?->application;
+    }
+
     /**
      * "My Drafts" (Nureen\Support\Drafts::of()) Continue link. There is at
-     * most one 'new'-type draft per student (store() either updates it or
-     * creates the only one, activeNewApplication() blocks a second), so
-     * this just re-enters create() — which already finds and pre-fills it
-     * — once ownership of $application itself is confirmed.
+     * most one draft of each type per student (store()/storeExtension()
+     * each either update their own or create the only one), so this just
+     * re-enters create() or createExtension() — whichever already finds
+     * and pre-fills it — once ownership of $application itself is
+     * confirmed. Added the branch 2026-11-10: before the extension draft
+     * existed, every draft here was a 'new' one by definition, so this
+     * always went to create() unconditionally.
      */
     public function editDraft(Request $request, Application $application)
     {
@@ -533,7 +562,9 @@ class GraApplicationController extends Controller
         abort_unless($application->student_id === $request->user()->id, 403, 'This draft is not yours.');
         abort_unless($application->status === Application::STATUS_DRAFT, 404, 'This application has already been submitted.');
 
-        return $this->create($request);
+        $detail = GraApplicationDetail::where('application_id', $application->id)->first();
+
+        return $detail?->isExtension() ? $this->createExtension($request) : $this->create($request);
     }
 
     /** "My Drafts" Delete — the draft, its detail row and its attached files, gone completely. */
@@ -678,14 +709,32 @@ class GraApplicationController extends Controller
             'You can only apply for an extension once your current GRA application has been approved.'
         );
 
+        // The form's own "Save Draft" button already posted here against
+        // this same route/view before this draft lookup existed -- the
+        // button just had nothing on the backend to resume into. Confirmed
+        // explicitly 2026-11-10: "sav draft feature pun ada... for both."
+        $draft = $this->draftExtensionApplication($request);
+        $draftDetail = $draft ? GraApplicationDetail::where('application_id', $draft->id)->first() : null;
+
         return view('haziq::gra_application.form', [
             'profile' => $profile,
             'extension' => true,
             'parent' => $parent,
             'parentDetail' => $parentDetail,
+            'draft' => $draft,
+            'draftDetail' => $draftDetail,
+            'draftDocuments' => $draft ? ApplicationDocument::where('application_id', $draft->id)->get() : collect(),
         ]);
     }
 
+    /**
+     * Two actions behind one route, same shape as store(): Save Draft
+     * (keeps status DRAFT, never calls engine->submit()) and Submit
+     * Extension (the original behaviour). Confirmed explicitly
+     * 2026-11-10: the form already had a "Save Draft" button wired to
+     * this route before this existed on the backend to receive it --
+     * "sav draft feature pun ada jangan lupa for both."
+     */
     public function storeExtension(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
         abort_unless($this->hasAcceptedTerms($request->user()), 403, 'Accept the GRA Scheme Terms and Conditions first.');
@@ -708,13 +757,26 @@ class GraApplicationController extends Controller
             'You can only apply for an extension once your current GRA application has been approved.'
         );
 
+        $action = $request->input('action') === 'save_draft' ? 'save_draft' : 'submit';
+        $draft = $request->filled('draft_id')
+            ? Application::where('id', $request->integer('draft_id'))
+                ->where('student_id', $request->user()->id)
+                ->where('module_type', $this->moduleKey())
+                ->where('status', Application::STATUS_DRAFT)
+                ->firstOrFail()
+            : $this->draftExtensionApplication($request);
+
+        // Section B is re-entered rather than silently copied from the
+        // parent appointment — the official Extension Form asks whether
+        // the extension is on the same grant or a new one
+        // (funding_continuation), and "existing" grant details can
+        // genuinely change between appointments (new cost centre, a
+        // different project leader, etc.), 2026-11. Unlike store()'s own
+        // "everything except documents" draft philosophy, this one also
+        // relaxes requested_new_end_date/extension_reason -- the whole
+        // point of a draft is a form that isn't decided on either of
+        // those yet.
         $data = $request->validate([
-            // Section B is re-entered rather than silently copied from the
-            // parent appointment — the official Extension Form asks whether
-            // the extension is on the same grant or a new one
-            // (funding_continuation), and "existing" grant details can
-            // genuinely change between appointments (new cost centre, a
-            // different project leader, etc.), 2026-11.
             'project_leader_name' => ['required', 'string', 'max:150'],
             'project_leader_contact' => ['nullable', 'string', 'max:30'],
             'project_title' => ['required', 'string', 'max:255'],
@@ -723,25 +785,23 @@ class GraApplicationController extends Controller
             'grant_name' => ['nullable', 'string', 'max:150'],
             'cost_centre' => ['nullable', 'string', 'max:50'],
             'centre_name' => ['nullable', 'string', 'max:150'],
-            'requested_new_end_date' => ['required', 'date', 'after:today'],
-            'extension_reason' => ['required', 'string', 'max:2000'],
+            'requested_new_end_date' => [$action === 'submit' ? 'required' : 'nullable', 'date', 'after:today'],
+            'extension_reason' => [$action === 'submit' ? 'required' : 'nullable', 'string', 'max:2000'],
             // No proposed_allowance here either — same as a new application,
             // CGS sets it when they approve the extension's cgs_review stage.
             'evidence_document' => DocumentStore::rules(),
         ]);
 
-        $application = DB::transaction(function () use ($request, $data, $engine, $documents, $profile, $parent, $parentDetail) {
-            $application = Application::create([
-                'student_id' => $request->user()->id,
-                'module_type' => $this->moduleKey(),
-                'status' => Application::STATUS_DRAFT,
-            ]);
+        // service_end_date is NOT NULL in the DB, same column a 'new'
+        // application's own computeServiceEndDate() always fills -- an
+        // extension draft with no requested_new_end_date yet falls back
+        // to the parent's own current end date (or whatever this draft
+        // last had saved) rather than leaving the column null, same
+        // "never actually null, just not decided yet" idea.
+        $existingDetail = $draft ? GraApplicationDetail::where('application_id', $draft->id)->first() : null;
 
-            GraApplicationDetail::create([
-                'application_id' => $application->id,
-                'profile_id' => $profile->id,
-                'application_type' => 'extension',
-                'parent_application_id' => $parent->id,
+        $application = DB::transaction(function () use ($request, $data, $documents, $profile, $parent, $parentDetail, $draft, $existingDetail) {
+            $detailAttributes = [
                 'project_leader_name' => $data['project_leader_name'],
                 'project_leader_contact' => $data['project_leader_contact'] ?? null,
                 'project_title' => $data['project_title'],
@@ -751,19 +811,43 @@ class GraApplicationController extends Controller
                 'cost_centre' => $data['cost_centre'] ?? null,
                 'centre_name' => $data['centre_name'] ?? null,
                 'service_start_date' => $parentDetail->service_end_date,
-                'service_end_date' => $data['requested_new_end_date'],
-                // proposed_allowance stays null — CGS sets it when they approve.
-                'previous_allowance' => $parentDetail->proposed_allowance,
-                'extension_reason' => $data['extension_reason'],
-            ]);
+                'service_end_date' => $data['requested_new_end_date'] ?? $existingDetail?->service_end_date ?? $parentDetail->service_end_date,
+                'extension_reason' => $data['extension_reason'] ?? null,
+            ];
+
+            if ($draft) {
+                $application = $draft;
+                GraApplicationDetail::where('application_id', $application->id)->update($detailAttributes);
+            } else {
+                $application = Application::create([
+                    'student_id' => $request->user()->id,
+                    'module_type' => $this->moduleKey(),
+                    'status' => Application::STATUS_DRAFT,
+                ]);
+
+                GraApplicationDetail::create([
+                    'application_id' => $application->id,
+                    'profile_id' => $profile->id,
+                    'application_type' => 'extension',
+                    'parent_application_id' => $parent->id,
+                    // proposed_allowance stays null — CGS sets it when they approve.
+                    'previous_allowance' => $parentDetail->proposed_allowance,
+                ] + $detailAttributes);
+            }
 
             if ($request->hasFile('evidence_document')) {
                 $this->replaceDocument($application, $request->file('evidence_document'), 'Stage Gate Evidence / Publication Proof', $documents);
             }
 
-            return $engine->submit($application);
+            return $application;
         });
 
+        if ($action === 'save_draft') {
+            return redirect()->route('gra-application.extension.create')
+                ->with('status', 'Draft saved — your progress is kept, come back anytime to finish it.');
+        }
+
+        $application = $engine->submit($application);
         $application->student?->notify(new ApplicationSubmitted($application));
 
         return redirect()->route('applications.index')
@@ -830,12 +914,23 @@ class GraApplicationController extends Controller
             ->get()
             ->groupBy('application_id');
 
+        // Only meaningful at admin_verify, and only for a 'new' application
+        // -- see decide()'s own identical gate for why extensions are left
+        // out. Computed here too so the button itself can say why it's
+        // disabled, not just bounce the click back with an error.
+        $missingDocuments = $queue['applications']->mapWithKeys(fn ($application) => [
+            $application->id => ($details[$application->id]?->application_type === 'new')
+                ? DocumentCompleteness::missingFor($application)
+                : collect(),
+        ]);
+
         return view('haziq::gra_application.queue', $queue + [
             'details' => $details,
             'openCorrections' => $openCorrections,
             'documentTypes' => $this->documentTypes(),
             'sectionLabels' => $this->sectionLabels(),
             'sectionFieldLabels' => $this->sectionFieldLabels(),
+            'missingDocuments' => $missingDocuments,
         ]);
     }
 
@@ -874,6 +969,22 @@ class GraApplicationController extends Controller
 
         if ($currentStage?->key === 'admin_verify' && $data['decision'] === 'reject') {
             return back()->with('error', 'Admin does not reject applications — use "Request Correction" on the section or document that needs fixing instead.');
+        }
+
+        // Confirmed explicitly 2026-11-10: Admin specifically can't say
+        // "verified" while a required document is still missing -- that is
+        // the one thing Admin's own stage exists to check. This narrows,
+        // rather than reverses, DocumentCompleteness's own "never gates
+        // routing" rule (see its docblock): the student can still submit
+        // and sit at any later stage with documents missing, only Admin's
+        // own advance-to-next-stage action is blocked by it. Scoped to
+        // 'new' applications only, same as DocumentCompleteness itself --
+        // a GRA Extension was never gated on these documents at Submit, so
+        // it is not gated on them here either.
+        if ($currentStage?->key === 'admin_verify' && $data['decision'] === 'approve'
+            && GraApplicationDetail::where('application_id', $application->id)->value('application_type') === 'new'
+            && ! DocumentCompleteness::isComplete($application)) {
+            return back()->with('error', 'All required documents must be uploaded before this application can be verified and advanced.');
         }
 
         // CGS sets the GRA allowance the moment they approve their stage —

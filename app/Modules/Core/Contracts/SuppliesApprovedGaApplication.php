@@ -32,4 +32,20 @@ interface SuppliesApprovedGaApplication
      * @return array{application: Application, service_end_date: Carbon}|null
      */
     public function approvedFor(User $student): ?array;
+
+    /**
+     * The write side of the same relationship, added 2026-11-10 for GA
+     * Extension: once an extension is finally approved, the student's
+     * currently-approved GA application's own service period needs to
+     * actually move to the new end date -- otherwise anything reading
+     * approvedFor() (this module's own "is this student still an active
+     * GA" checks, Norhanis' Travel TA plan) keeps seeing the *original*
+     * end date forever, and the student reads as no longer an active GA
+     * the moment that original date passes, extension or not.
+     *
+     * Returns false (does nothing) if the student has no currently
+     * approved GA application to extend -- same fail-closed shape as
+     * approvedFor() returning null.
+     */
+    public function extendEndDate(User $student, Carbon $newEndDate): bool;
 }

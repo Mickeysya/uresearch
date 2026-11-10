@@ -510,6 +510,13 @@ return [
     // nothing to an expected decision date.
     'charter_days' => [
         'ga_extension' => [
+            // Placeholder, added 2026-11-10 alongside the Admin stage
+            // itself -- matches cgs_verify's own figure as a reasonable
+            // paperwork-verification turnaround, since this chain's real
+            // CGS Client Charter diagram does not (yet) name one for
+            // Admin specifically. Confirm the real figure and replace
+            // this before relying on it for an actual SLA report.
+            'admin_verify' => 2,
             'supervisor' => 3,
             'cgs_verify' => 2,
             'senior_director' => null,

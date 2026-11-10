@@ -2,8 +2,10 @@
 
 namespace App\Modules\Haziq\Workflows;
 
+use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Haziq\Models\GaApplicationDetail;
@@ -31,8 +33,48 @@ use App\Modules\Haziq\Support\Roles;
  * GA extension is out of scope for this module entirely — that stays
  * Nureen's ga_extension.
  */
-class GaApplicationWorkflow implements WorkflowModule
+class GaApplicationWorkflow implements WorkflowModule, ProvidesLinks
 {
+    /**
+     * "GA Applicants" (the full index — every applicant, the Pending by
+     * Stage bottleneck chart — not just this viewer's own queue) had no
+     * sidebar entry anywhere, unlike GraApplicationWorkflow's own
+     * identical "GRA Applicants" link -- a page that works once you know
+     * the URL, but nothing in Actions pointed at it. Confirmed explicitly
+     * 2026-11-10: "kat actions nampak gra applicants je, patut leh
+     * nampak jugak ga applicants." Research Centre included alongside
+     * Admin/CGS/Supervisor since it is a real approver on this chain,
+     * unlike GRA's.
+     */
+    public function links(User $user): array
+    {
+        if ($user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR || $user->role === Roles::RESEARCH_CENTRE) {
+            return [['label' => 'GA Applicants', 'route' => 'ga-application.index']];
+        }
+
+        // "My GA Application" -- same gap as "GA Applicants" above, same
+        // fix: GraApplicationWorkflow::links() has had the GRA equivalent
+        // ("My GRA Application") all along, this module just never had
+        // its own. Without it, a student's only way back to a submitted
+        // GA application was knowing the URL. Confirmed explicitly
+        // 2026-11-10. GA has no application_type of its own to filter on
+        // (see this class's own docblock), unlike GRA's 'new' vs
+        // 'extension' split.
+        if ($user->isStudent()) {
+            $mine = Application::where('student_id', $user->id)
+                ->where('module_type', 'ga_application')
+                ->where('status', '!=', Application::STATUS_DRAFT)
+                ->latest('id')
+                ->first();
+
+            if ($mine) {
+                return [['label' => 'My GA Application', 'route' => 'ga-application.mine', 'params' => ['application' => $mine->id]]];
+            }
+        }
+
+        return [];
+    }
+
     public function key(): string
     {
         return 'ga_application';
