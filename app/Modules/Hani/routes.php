@@ -13,6 +13,8 @@ use App\Modules\Hani\Http\Controllers\PanelController;
 use App\Modules\Hani\Http\Controllers\ProcessAnalyticsController;
 use App\Modules\Hani\Http\Controllers\ReVivaController;
 use App\Modules\Hani\Http\Controllers\ReVivaCyclesController;
+use App\Modules\Hani\Http\Controllers\ReVivaExaminerController;
+use App\Modules\Hani\Http\Controllers\ReVivaSignatureController;
 use App\Modules\Hani\Http\Controllers\ReVivaPanelLinkController;
 use App\Modules\Hani\Http\Controllers\ReVivaStaffDocumentController;
 use App\Modules\Hani\Http\Controllers\ReVivaStudentController;
@@ -28,6 +30,10 @@ use Illuminate\Support\Facades\Route;
 | Nur Hani Sofia (22001418)
 | Viva Voce · Examiner Nomination · Conflict Detection · Re-viva Monitoring
 */
+
+// An examiner's new account: set the first password. Signed, works once.
+Route::middleware(['web', 'signed', 'throttle:10,1'])->match(['get', 'post'], '/re-viva/account/{user}', [ReVivaExaminerController::class, 'setup'])
+    ->whereNumber('user')->name('reviva.account.setup');
 
 // The examiner's link from a re-viva correction letter, outside `auth`:
 // examiners have no account, so the controller signs them in with the email
@@ -267,56 +273,55 @@ Route::middleware('auth')->group(function () {
     // ->missing(ReVivaController::gone(...)): a round, application or file
     // that no longer exists when a form is submitted goes back to the list
     // with a message, not a bare 404 at a POST-only URL.
-    // Logged by CGS Staff, not the student: the corrected thesis reaches CGS
-    // through the same channel the rest of the re-viva process is informally
-    // run through today, so CGS is the one who records the formal
-    // resubmission timestamp -- not a self-service student upload.
-    // The student's own rounds: outcome level, deadline, final thesis upload.
+    // Students submit their own round; every re-viva route refuses the AE.
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         Route::get('/re-viva/mine', [ReVivaStudentController::class, 'mine'])->name('reviva.mine');
-        Route::get('/re-viva/summary', [ReVivaStudentController::class, 'summary'])->name('reviva.summary.edit');
-        Route::post('/re-viva/summary', [ReVivaStudentController::class, 'saveSummary'])->name('reviva.summary.save');
-        Route::get('/re-viva/summary/pdf', [ReVivaStudentController::class, 'summaryPdf'])->name('reviva.summary.pdf');
+        Route::get('/re-viva/forms/{form}/{variant}', [ReVivaStudentController::class, 'form'])
+            ->whereIn('variant', ['blank', 'example'])->name('reviva.forms');
+        Route::post('/re-viva/submit', [ReVivaStudentController::class, 'submit'])->name('reviva.submit');
+        Route::post('/re-viva/{detail}/resubmit', [ReVivaStudentController::class, 'resubmit'])
+            ->whereNumber('detail')->name('reviva.resubmit')->missing(ReVivaController::gone('reviva.mine'));
         Route::post('/re-viva/{detail}/final-thesis', [ReVivaStudentController::class, 'submitFinalThesis'])
             ->whereNumber('detail')->name('reviva.final-thesis.store')->missing(ReVivaController::gone('reviva.mine'));
     });
 
-    // Senior Executive CGS logs re-vivas (CGS practice). Non-Executive CGS is
-    // read-only in re-viva since Prompt 3: Re-viva Cycles, no actions.
-    Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
-        Route::get('/re-viva/new', [ReVivaController::class, 'create'])->name('reviva.create');
-        Route::post('/re-viva', [ReVivaController::class, 'store'])->name('reviva.store');
+    // Any examiner's own login; the controller limits it to their rounds.
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('/re-viva/my-re-evaluations', [ReVivaExaminerController::class, 'index'])->name('reviva.examiner.index');
+        Route::post('/re-viva/my-re-evaluations/{detail}', [ReVivaExaminerController::class, 'upload'])->whereNumber('detail')->name('reviva.examiner.upload');
+        Route::get('/re-viva/my-re-evaluations/{detail}/files/{document}', [ReVivaExaminerController::class, 'download'])->whereNumber(['detail', 'document'])->name('reviva.examiner.download');
+        Route::get('/re-viva/my-re-evaluations/{detail}/student-files/{document}', [ReVivaExaminerController::class, 'studentDocument'])->whereNumber(['detail', 'document'])->name('reviva.examiner.student-file');
     });
 
     Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)->group(function () {
         Route::get('/re-viva/cycles', [ReVivaCyclesController::class, 'index'])->name('reviva.cycles.index');
     });
 
-    // Staff-only re-viva files (letters, UTP/CGS/024, Confirmation of
-    // Correction). The Non-Executive is a return contact on the letter, so
-    // may download them; the controller narrows an AE to their department.
-    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS)
+    // Staff-only files: letters, forms and examiner returns. The Dean reads the pack.
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::NON_EXEC_CGS.','.Role::DEAN_PGR)
         ->get('/re-viva/staff-documents/{document}', [ReVivaStaffDocumentController::class, 'download'])
         ->name('reviva.staff-documents.download')->missing(ReVivaController::gone('dashboard'));
 
-    // "Resend letter": the same letter with a fresh link, while the round is
-    // Under Panel Review. Not the Non-Executive (read-only).
-    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SENIOR_EXEC_CGS)
-        ->post('/re-viva/staff-documents/{document}/resend', [ReVivaStaffDocumentController::class, 'resend'])
-        ->name('reviva.letters.resend')->missing(ReVivaController::gone('dashboard'));
+    Route::middleware('role:'.Role::DEAN_PGR)->group(function () {
+        Route::post('/re-viva/signature', [ReVivaSignatureController::class, 'store'])->name('reviva.signature.store');
+        Route::get('/re-viva/signature/image', [ReVivaSignatureController::class, 'image'])->name('reviva.signature.image');
+    });
 
-    Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS.','.Role::DEAN_PGR)->group(function () {
         Route::get('/re-viva/queue', [ReVivaController::class, 'queue'])->name('reviva.queue');
-        Route::post('/re-viva/{application}/decide', [ReVivaController::class, 'decide'])->name('reviva.decide')->missing(ReVivaController::gone('reviva.queue'));
-        Route::post('/re-viva/{application}/send-to-panel', [ReVivaController::class, 'sendToPanel'])->name('reviva.send-to-panel')->missing(ReVivaController::gone('reviva.queue'));
+        Route::post('/re-viva/{application}/act/{action}', [ReVivaController::class, 'act'])->name('reviva.act')->missing(ReVivaController::gone('reviva.queue'));
+    });
+
+    Route::middleware('role:'.Role::SENIOR_EXEC_CGS)->group(function () {
+        Route::post('/re-viva/staff-documents/{document}/resend', [ReVivaStaffDocumentController::class, 'resend'])
+            ->name('reviva.letters.resend')->missing(ReVivaController::gone('dashboard'));
         Route::post('/re-viva/{application}/evaluations/{seat}', [ReVivaController::class, 'recordEvaluation'])
             ->whereIn('seat', ['internal_main_id', 'external_main_id'])->name('reviva.evaluations.record')->missing(ReVivaController::gone('reviva.queue'));
-
         Route::get('/re-viva/outcomes', [ReVivaController::class, 'outcomesIndex'])->name('reviva.outcomes.index');
-        Route::post('/re-viva/outcomes/{detail}', [ReVivaController::class, 'recordOutcome'])
-            ->name('reviva.outcomes.record')->missing(ReVivaController::gone('reviva.outcomes.index'));
         Route::post('/re-viva/outcomes/{detail}/accept-corrections', [ReVivaController::class, 'acceptCorrections'])
             ->name('reviva.corrections.accept')->missing(ReVivaController::gone('reviva.outcomes.index'));
+        Route::get('/re-viva/settings', [ReVivaController::class, 'settings'])->name('reviva.settings');
+        Route::post('/re-viva/settings', [ReVivaController::class, 'saveSettings'])->name('reviva.settings.save');
     });
 
 });

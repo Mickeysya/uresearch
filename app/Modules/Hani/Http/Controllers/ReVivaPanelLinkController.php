@@ -19,8 +19,8 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 
 /**
- * The examiner's link from their correction letter: the corrected thesis and
- * the Summary of Corrections, behind a sign-in.
+ * The examiner's link from their correction letter: the student's three
+ * documents, behind a sign-in.
  *
  * Examiners have no UResearch account, so the sign-in is the email the letter
  * went to and a one-time code sent to that address. The link alone shows
@@ -30,7 +30,7 @@ use Illuminate\Validation\ValidationException;
  * this runs. This then re-checks that the examiner was sent a letter for this
  * round and still holds a main seat (a declined examiner's link stops
  * working), that this browser has signed in for this examiner and round, and
- * that only those two documents of the round are served. Every sign-in and
+ * that only those three documents of the round are served. Every sign-in and
  * download is logged.
  */
 class ReVivaPanelLinkController extends Controller
@@ -226,9 +226,6 @@ class ReVivaPanelLinkController extends Controller
 
     protected function documentsOf(ReVivaDetail $detail)
     {
-        return $detail->application->documents()
-            ->whereIn('doc_type', [ReVivaController::DOC_THESIS, ReVivaController::DOC_SUMMARY])
-            ->orderBy('id')
-            ->get();
+        return $detail->studentDocuments()->values();
     }
 }

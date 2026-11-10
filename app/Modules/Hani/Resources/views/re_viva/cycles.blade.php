@@ -4,16 +4,7 @@
 
 @section('content')
 <div class="card-container-inline">
-    {{-- Read-only for everyone. The Academic Executive runs the stages and
-         the outcome elsewhere; the only link here, for the Senior Executive,
-         goes to the logging form. --}}
-    <x-core::page-header
-        title="Re-viva Cycles"
-        subtitle="Every re-viva round across CGS: where it stands, its deadlines and its outcome, open rounds sorted by deadline risk. This page is read-only.">
-        @if ($canLog)
-            <a href="{{ route('reviva.create') }}" class="btn">Log Re-viva Submission</a>
-        @endif
-    </x-core::page-header>
+    <x-core::page-header title="Re-viva Cycles" subtitle="Every re-viva round across CGS. This page is read-only." />
 
     @foreach ($sections as $key => [$heading, $hint])
         @php($rows = $groups->get($key, collect()))
@@ -66,7 +57,7 @@
                                         Resubmitted {{ $detail->resubmission_at->format('j M Y') }}
                                         @if ($detail->windowLabel())
                                             <br>Window {{ $detail->windowLabel() }}
-                                            @if ($detail->logged_outside_window) <span class="status-badge returned">Logged outside window</span> @endif
+                                            @if ($detail->logged_outside_window) <span class="status-badge returned">Outside window</span> @endif
                                         @endif
                                         @if ($detail->correction_deadline)
                                             <br>{{ $detail->outcome_level ? 'Final thesis' : 'Corrections' }} due {{ $detail->correction_deadline->format('j M Y') }}
@@ -85,13 +76,9 @@
                                     <td>
                                         @if ($detail->hasOutcome())
                                             <b>{{ $detail->outcomeLabel() }}</b>
-                                            @if ($detail->nextCycle) <br><span class="fstep-hint">Round {{ $detail->nextCycle->cycle_number }} logged.</span> @endif
+                                            @if ($detail->nextCycle) <br><span class="fstep-hint">Round {{ $detail->nextCycle->cycle_number }} opened.</span> @endif
                                         @else
                                             Not recorded yet
-                                        @endif
-                                        {{-- The one action on this page, Senior Executive only. --}}
-                                        @if ($canLog && $key === 'next_round')
-                                            <br><a href="{{ route('reviva.create', ['student' => $student->id]) }}" class="btn">Log round {{ $detail->cycle_number + 1 }}</a>
                                         @endif
                                     </td>
                                 </tr>

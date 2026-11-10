@@ -4,11 +4,11 @@
 
     Layout and wording follow CGS's real letter. To restyle, edit
     the <style> block only: every element below uses one of its classes.
-    Signatory, address and return contacts come from hani.reviva.letter.
+    Signatory, address and return contacts come from hani.reviva.
 
     Data: $reference, $date, $examiner, $examinerPlace, $student, $degreeWord,
-    $degreeName, $programme, $thesisTitle, $workingDays, $dueDate,
-    $letter (config), $round
+    $degreeName, $programme, $thesisTitle, $workingDays, $workingDaysWords,
+    $letter, $contacts, $signatory (config), $round, $draft, $signatureImage (the Dean's, once approved)
 --}}
 <!DOCTYPE html>
 <html lang="en">
@@ -34,10 +34,12 @@
     .contact b { display: block; }
     .email { font-style: italic; }
     .signature { height: 28pt; }
+    .watermark { position: fixed; top: 105mm; left: 0; right: 0; text-align: center; font-size: 34pt; font-weight: bold; color: #cccccc; transform: rotate(-35deg); }
     .footer { position: fixed; bottom: 0; left: 0; font-size: 7.5pt; }
 </style>
 </head>
 <body>
+    @if ($draft)<div class="watermark">DRAFT — pending Dean approval</div>@endif
     <div class="logo"><img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/UTP_logo.png'))) }}" alt="Universiti Teknologi PETRONAS"></div>
 
     <p>Our ref: {{ $reference }}</p>
@@ -61,21 +63,17 @@
         <tr><td class="label">Degree</td><td class="colon">:</td><td>{{ $degreeName }}</td></tr>
         <tr><td class="label">Programme</td><td class="colon">:</td><td>{{ $programme }}</td></tr>
         <tr><td class="label">Title of the Thesis</td><td class="colon">:</td><td>{{ $thesisTitle }}</td></tr>
-        @if ($round > 1)
-            <tr><td class="label">Re-viva Round</td><td class="colon">:</td><td>{{ $round }}</td></tr>
-        @endif
+        <tr><td class="label">Re-viva round</td><td class="colon">:</td><td>{{ $round }}</td></tr>
     </table>
 
     <table class="numbered">
-        <tr><td class="n">2.</td><td>Upon receiving the thesis, the examiners are given a maximum of {{ $workingDaysWords }} ({{ $workingDays }}) working days to examine the thesis, that is by {{ $dueDate->format('j F Y') }}.</td></tr>
+        <tr><td class="n">2.</td><td>Upon receiving the thesis, the examiners are given a maximum of {{ $workingDaysWords }} ({{ $workingDays }}) working days to examine the thesis.</td></tr>
     </table>
 
     <table class="numbered">
         <tr><td class="n">3.</td><td>
-            We sincerely hope that you will return the Thesis Re-evaluation Report (UTP/CGS/024) to our office at the address or email to the below personnels.
-            @php
-                $first = $letter['return_contacts'][0] ?? null;
-            @endphp
+            We sincerely hope that you will return the attached reevaluation form to our office at the address or email to the below personnels.
+            @php $first = $contacts[0] ?? null; @endphp
             @if ($first)
                 <div class="contact">
                     <b>{{ $first['name'] }}</b>
@@ -84,8 +82,8 @@
                     @foreach ($letter['address'] as $line)
                         {{ $line }}<br>
                     @endforeach
-                    @if (! empty($first['phone'])) Tel: {{ $first['phone'] }}<br> @endif
-                    Email: <span class="email">{{ collect($letter['return_contacts'])->pluck('email')->implode(' or ') }}</span>
+                    Tel: {{ $first['tel'] }} Mobile: {{ $first['mobile'] }}<br>
+                    Email : <span class="email">{{ collect($contacts)->pluck('email')->implode(' or ') }}</span>
                 </div>
             @endif
         </td></tr>
@@ -93,12 +91,18 @@
 
     <p>Thank you.</p>
     <p>Best regards,</p>
-    <div class="signature"></div>
-    <p><b>{{ $letter['signatory_name'] }}</b><br>
-        @foreach (explode(', ', $letter['signatory_title'], 2) as $i => $part)
-            {{ $part }}{{ $i === 0 && str_contains($letter['signatory_title'], ', ') ? ',' : '' }}<br>
-        @endforeach
-    </p>
+    @if (! empty($signatureImage))
+        <div><img src="{{ $signatureImage }}" alt="Signature" style="height: 28pt"></div>
+    @else
+        <div class="signature"></div>
+    @endif
+    @unless ($draft)
+        <p><b>{{ $signatory['name'] }}</b><br>
+            @foreach ($signatory['title'] as $line)
+                {{ $line }}<br>
+            @endforeach
+        </p>
+    @endunless
 
     <div class="footer">Open</div>
 </body>
