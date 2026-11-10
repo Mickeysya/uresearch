@@ -230,12 +230,19 @@ class SupervisorScopingTest extends TestCase
         $student = $this->studentInDepartment('Computer Science');
         $application = $this->gaApplicationAtResearchCentreStage($student);
 
+        $interview = [
+            'interview_date' => now()->addDay()->format('Y-m-d'),
+            'interview_start_hour' => '2', 'interview_start_minute' => '00', 'interview_start_meridiem' => 'PM',
+            'interview_end_hour' => '3', 'interview_end_minute' => '00', 'interview_end_meridiem' => 'PM',
+        ];
+
         $this->actingAs($other)
-            ->post(route('ga-application.schedule-interview', $application), ['interview_date' => now()->addDay()->format('Y-m-d\TH:i')])
+            ->post(route('ga-application.schedule-interview', $application), $interview)
             ->assertForbidden();
 
         $this->actingAs($own)
-            ->post(route('ga-application.schedule-interview', $application), ['interview_date' => now()->addDay()->format('Y-m-d\TH:i')])
-            ->assertRedirect();
+            ->post(route('ga-application.schedule-interview', $application), $interview)
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
     }
 }

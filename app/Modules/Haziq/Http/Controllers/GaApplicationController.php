@@ -24,6 +24,7 @@ use App\Modules\Haziq\Notifications\ApplicationCorrectionResubmitted;
 use App\Modules\Haziq\Notifications\ApplicationRejected;
 use App\Modules\Haziq\Notifications\ApplicationSubmitted;
 use App\Modules\Haziq\Notifications\GaInterviewFailed;
+use App\Modules\Haziq\Notifications\GaInterviewPassed;
 use App\Modules\Haziq\Notifications\GaInterviewScheduled;
 use App\Modules\Haziq\Notifications\LetterIssued;
 use App\Modules\Haziq\Notifications\StageAwaitingReview;
@@ -32,6 +33,7 @@ use App\Modules\Haziq\Support\Roles;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -469,7 +471,10 @@ class GaApplicationController extends Controller
         return view('haziq::ga_application.show', $this->detailViewData($application) + [
             'stage' => $stage,
             'canDecide' => $stage && $stage->role === $user->role,
-            'canCorrect' => $this->canStillFlag($user, $application),
+            // Viewing show() is open to Research Centre too (role check
+            // above), but correcting is not -- see
+            // canRequestCorrectionRole()'s own docblock.
+            'canCorrect' => $this->canRequestCorrectionRole($user) && $this->canStillFlag($user, $application),
             'canEdit' => false,
             'viewerIsStudent' => false,
         ]);
@@ -586,6 +591,10 @@ class GaApplicationController extends Controller
             'sectionLabels' => $this->sectionLabels(),
             'sectionFieldLabels' => $this->sectionFieldLabels(),
             'missingDocuments' => $missingDocuments,
+            // The queue is shared with Research Centre, who can view it
+            // but never correct -- see canRequestCorrectionRole()'s own
+            // docblock. Confirmed explicitly 2026-11-10.
+            'canCorrect' => $this->canRequestCorrectionRole($request->user()),
         ]);
     }
 
@@ -604,10 +613,55 @@ class GaApplicationController extends Controller
         abort_unless($request->user()->role === Roles::RESEARCH_CENTRE, 403);
         abort_unless($application->student?->department === $request->user()->department, 403, 'This student is not in your department.');
 
-        $data = $request->validate(['interview_date' => ['required', 'date']]);
+        // One date, two times on it -- not two independent timestamps that
+        // could land on different days. Confirmed explicitly 2026-11-10:
+        // "date taleh sampai 2 hari set satu date je, timing je set from
+        // what time end what time." Measurement only (see
+        // researchCentreDelayHours()), not a hard gate on decide() --
+        // confirmed the same day. Hour/minute/AM-PM instead of a raw 24h
+        // <input type="time"> -- confirmed explicitly 2026-11-10: "set
+        // timing tu cam tak user friendly je, buat lah am pm features
+        // terima 1-12 tu." Minute is any value 0-59, not stepped -- "yang
+        // minit tu tak kisah lah nak tulis berapa pun," confirmed the
+        // same day.
+        $data = $request->validate([
+            'interview_date' => ['required', 'date_format:Y-m-d'],
+            'interview_start_hour' => ['required', 'integer', 'between:1,12'],
+            // 'numeric', not 'integer' -- PHP's filter_var(FILTER_VALIDATE_INT)
+            // rejects a leading zero ("00".."09") as looking like octal,
+            // which a typed-in minute legitimately is. is_numeric() has no
+            // such quirk.
+            'interview_start_minute' => ['required', 'numeric', 'between:0,59'],
+            'interview_start_meridiem' => ['required', 'in:AM,PM'],
+            'interview_end_hour' => ['required', 'integer', 'between:1,12'],
+            'interview_end_minute' => ['required', 'numeric', 'between:0,59'],
+            'interview_end_meridiem' => ['required', 'in:AM,PM'],
+        ]);
+
+        $interviewDate = Carbon::parse(sprintf(
+            '%s %d:%02d %s',
+            $data['interview_date'], $data['interview_start_hour'], $data['interview_start_minute'], $data['interview_start_meridiem']
+        ));
+        $interviewEndsAt = Carbon::parse(sprintf(
+            '%s %d:%02d %s',
+            $data['interview_date'], $data['interview_end_hour'], $data['interview_end_minute'], $data['interview_end_meridiem']
+        ));
+
+        if ($interviewEndsAt->lessThanOrEqualTo($interviewDate)) {
+            return back()->with('error', 'The interview must end after it starts.')->withInput();
+        }
 
         $detail = GaApplicationDetail::where('application_id', $application->id)->firstOrFail();
-        $detail->update(['interview_date' => $data['interview_date']]);
+        // interview_scheduled_at is set once, here, the moment Research
+        // Centre actually does this task -- never touched again, even if
+        // the date is later rescheduled, since that is a different
+        // question (DelayByActorReport::rows() reads it as "when the
+        // scheduling task itself was done").
+        $detail->update([
+            'interview_date' => $interviewDate,
+            'interview_ends_at' => $interviewEndsAt,
+            'interview_scheduled_at' => $detail->interview_scheduled_at ?? now(),
+        ]);
 
         $application->student?->notify(new GaInterviewScheduled($application, $detail));
 
@@ -719,6 +773,15 @@ class GaApplicationController extends Controller
             }
         } elseif ($decided->status === Application::STATUS_PENDING) {
             $this->notifyNextApprover($decided, $engine);
+
+            // A Fail already tells the student outright (ApplicationRejected
+            // above); a Pass used to leave them to find out only by
+            // checking the page -- notifyNextApprover() above only reaches
+            // CGS. Confirmed explicitly 2026-11-10. See GaInterviewPassed's
+            // own docblock.
+            if ($stage?->key === 'research_centre_interview') {
+                $application->student?->notify(new GaInterviewPassed($decided));
+            }
         }
 
         $verb = $data['decision'] === 'approve' ? 'approved' : 'rejected';

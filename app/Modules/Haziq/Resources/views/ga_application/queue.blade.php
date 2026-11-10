@@ -44,13 +44,15 @@
             </div>
         @endif
 
-        @include('haziq::partials.correction_form', [
-            'application' => $application,
-            'documentTypes' => $documentTypes,
-            'sectionLabels' => $sectionLabels,
-            'sectionFieldLabels' => $sectionFieldLabels ?? [],
-            'requestRoute' => 'ga-application.request-correction',
-        ])
+        @if ($canCorrect ?? false)
+            @include('haziq::partials.correction_form', [
+                'application' => $application,
+                'documentTypes' => $documentTypes,
+                'sectionLabels' => $sectionLabels,
+                'sectionFieldLabels' => $sectionFieldLabels ?? [],
+                'requestRoute' => 'ga-application.request-correction',
+            ])
+        @endif
 
         @if ($stage->key === 'admin_verify')
             @php($missing = ($missingDocuments ?? collect())[$application->id] ?? collect())
@@ -72,11 +74,13 @@
                 <form method="POST" action="{{ route('ga-application.schedule-interview', $application) }}">
                     @csrf
                     <label for="interview_date-{{ $application->id }}">Interview Date</label>
-                    <input type="datetime-local" name="interview_date" id="interview_date-{{ $application->id }}" required>
+                    <input type="date" name="interview_date" id="interview_date-{{ $application->id }}" required>
+                    @include('haziq::partials.time_picker', ['name' => 'interview_start', 'label' => 'Starts', 'idSuffix' => '-'.$application->id])
+                    @include('haziq::partials.time_picker', ['name' => 'interview_end', 'label' => 'Ends', 'idSuffix' => '-'.$application->id])
                     <button type="submit" data-confirm="Schedule this interview? The student will be notified.">Schedule Interview</button>
                 </form>
             @else
-                <p class="queue-meta">Scheduled for {{ $detail->interview_date->format('j M Y, g:ia') }}.</p>
+                <p class="queue-meta">Scheduled for {{ $detail->interview_date->format('j M Y, g:ia') }} to {{ $detail->interview_ends_at?->format('g:ia') ?? '?' }}.</p>
                 <form method="POST" action="{{ route('ga-application.decide', $application) }}" enctype="multipart/form-data">
                     @csrf
                     <label for="interview_notes-{{ $application->id }}">Interview Notes <span style="color: var(--text-grey)">(required to fail)</span></label>

@@ -62,7 +62,7 @@
 
         <h3>Interview</h3>
         <div class="haziq-repeatable-row">
-            <p><b>Scheduled</b><br>{{ $detail->interview_date?->format('j M Y, g:ia') ?? 'Not yet scheduled' }}</p>
+            <p><b>Scheduled</b><br>{{ $detail->interview_date ? $detail->interview_date->format('j M Y, g:ia').' to '.($detail->interview_ends_at?->format('g:ia') ?? '?') : 'Not yet scheduled' }}</p>
             <p><b>Result</b><br>{{ ucfirst($detail->interview_result) }}</p>
             @if ($detail->interview_notes)
                 <p style="grid-column: 1 / -1;"><b>Notes</b><br>{{ $detail->interview_notes }}</p>
@@ -162,11 +162,13 @@
                 <form method="POST" action="{{ route('ga-application.schedule-interview', $application) }}">
                     @csrf
                     <label for="interview_date">Interview Date</label>
-                    <input type="datetime-local" name="interview_date" id="interview_date" required>
+                    <input type="date" name="interview_date" id="interview_date" required>
+                    @include('haziq::partials.time_picker', ['name' => 'interview_start', 'label' => 'Starts'])
+                    @include('haziq::partials.time_picker', ['name' => 'interview_end', 'label' => 'Ends'])
                     <button type="submit" data-confirm="Schedule this interview? The student will be notified.">Schedule Interview</button>
                 </form>
             @else
-                <p class="queue-meta">Scheduled for {{ $detail->interview_date->format('j M Y, g:ia') }}.</p>
+                <p class="queue-meta">Scheduled for {{ $detail->interview_date->format('j M Y, g:ia') }} to {{ $detail->interview_ends_at?->format('g:ia') ?? '?' }}.</p>
                 <form method="POST" action="{{ route('ga-application.decide', $application) }}" enctype="multipart/form-data">
                     @csrf
                     <label for="interview_notes">Interview Notes <span style="color: var(--text-grey)">(required to fail)</span></label>

@@ -188,7 +188,13 @@ Route::middleware('auth')->group(function () {
     // Every actor in either chain, not just one role -- confirmed explicitly
     // 2026-11-06: "i want all of the actors to see this." Never the student --
     // this is about who holds an application up, not their own progress,
-    // which they already see on the ordinary tracking page.
+    // which they already see on the ordinary tracking page. Research Centre
+    // is let in too, but DelayReportController::index() locks it to the
+    // ga_application scope -- confirmed explicitly 2026-11-10: "boleh je
+    // tengok delay by actor tapi yang role die related sahaja ah which is
+    // ga application," since Research Centre is itself one of the actors
+    // that scope's own chain can be slow at (see
+    // DelayByActorReport::researchCentreDelayHours()).
     Route::middleware('role:'.implode(',', array_merge(
         [Role::ADMIN, Roles::RESEARCH_CENTRE, Role::SUPERVISOR], Role::cgsTeam()
     )))->group(function () {

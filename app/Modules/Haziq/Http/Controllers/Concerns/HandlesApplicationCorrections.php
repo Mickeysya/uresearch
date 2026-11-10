@@ -72,6 +72,21 @@ trait HandlesApplicationCorrections
     abstract protected function canStillFlag(User $user, Application $application): bool;
 
     /**
+     * Admin, CGS and Supervisor only -- never Research Centre, confirmed
+     * explicitly 2026-11-10: "research centre takde ni au, mark correction
+     * au, set interview je, cuma boleh tengok detail students ah." GA's
+     * approver route group (routes.php) shares one middleware list with
+     * Research Centre for queue/show/decide, so this is the one place
+     * that actually draws the line -- both requestCorrection() itself and
+     * every view deciding whether to render the form read off this same
+     * method, so there is nowhere left for the two to drift apart again.
+     */
+    protected function canRequestCorrectionRole(User $user): bool
+    {
+        return $user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR;
+    }
+
+    /**
      * One submission, many flags: tick as many fields, sections and
      * documents as are wrong, write one reason, send one notification
      * listing all of them. Each ticked item still gets its own
@@ -86,7 +101,7 @@ trait HandlesApplicationCorrections
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
         $user = $request->user();
-        abort_unless($user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR, 403);
+        abort_unless($this->canRequestCorrectionRole($user), 403);
         abort_unless(
             $this->canStillFlag($user, $application),
             403,

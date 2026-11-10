@@ -73,13 +73,22 @@ class KnowledgeBase
             GA APPLICATION
             Routed Student -> Admin (verifies) -> Research Centre (conducts an
             interview, Pass or Fail) -> CGS Staff -> Supervisor -> Senior Director.
+            The interview has a start AND an end time, confirmed explicitly
+            2026-11-10, not just one timestamp -- the student is told both.
             Which Research Centre reviewer handles this is never the student's
             own choice -- it is always whoever holds that role in the SAME
             department the student's own profile is set to, confirmed
             explicitly 2026-11-10: a Research Centre reviewer only ever sees
             and interviews students in their own department, never any other
             department's applicants. A Research Centre Fail rejects outright
-            right there; CGS never even sees it. A GA appointment does NOT get
+            right there; CGS never even sees it, and the student is emailed
+            immediately that it failed. A Pass emails the student too,
+            confirmed explicitly 2026-11-10, before it moves on to CGS -- the
+            student is never left to find out an interview result only by
+            checking the page, either way. The interview date Research
+            Centre sets also appears on the student's own Calendar page
+            (not only in the email), confirmed explicitly 2026-11-10. A GA
+            appointment does NOT get
             a Stage Gate schedule and is
             NOT tracked by the Allowance cycle at all -- those two only ever apply
             to GRA. Approval issues the Offer and Program Offer Letters. Same
@@ -200,18 +209,22 @@ class KnowledgeBase
             they mean rather than guessing.
 
             CORRECTION REQUESTS
-            Any approver can flag one section, one field, or one document as
-            wrong without rejecting the whole application. The target and the
-            remarks explaining what is wrong are shown to the student precisely
-            so they know what to fix -- never hidden from them. This is open at
-            any stage the application is still pending at, not only the
-            flagging approver's own current turn -- Admin can still flag
-            something after Supervisor's stage, for instance. The one
-            exception: once a specific approver has already recorded their own
-            decision on this application, that same person specifically can no
-            longer flag anything further -- confirmed explicitly 2026-11-10,
-            and true for both GRA and GA alike. Someone else further along the
-            chain who has not yet decided can still flag.
+            Admin, CGS Staff, or the student's own Supervisor can flag one
+            section, one field, or one document as wrong without rejecting the
+            whole application. The target and the remarks explaining what is
+            wrong are shown to the student precisely so they know what to fix
+            -- never hidden from them. This is open at any stage the
+            application is still pending at, not only the flagging approver's
+            own current turn -- Admin can still flag something after
+            Supervisor's stage, for instance. The one exception: once a
+            specific approver has already recorded their own decision on this
+            application, that same person specifically can no longer flag
+            anything further -- confirmed explicitly 2026-11-10, and true for
+            both GRA and GA alike. Someone else further along the chain who
+            has not yet decided can still flag. Research Centre, GA's own
+            fifth role, is NOT in this list -- confirmed explicitly
+            2026-11-10: its only actions on a GA application are scheduling
+            the interview and deciding Pass/Fail, nothing else.
 
             WHAT THIS ASSISTANT DOES NOT COVER
             Only GRA Application (new and Extension), GA Application, Document

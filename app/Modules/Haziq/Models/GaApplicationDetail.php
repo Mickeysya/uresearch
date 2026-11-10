@@ -17,7 +17,7 @@ class GaApplicationDetail extends Model
         'application_id', 'profile_id', 'candidature_status', 'department_unit', 'purpose',
         'proposed_hours_per_week',
         'service_start_date', 'service_end_date', 'proposed_allowance', 'eligibility_notes',
-        'interview_result', 'interview_date', 'interview_notes', 'interviewed_by',
+        'interview_result', 'interview_date', 'interview_ends_at', 'interview_scheduled_at', 'interview_notes', 'interviewed_by',
     ];
 
     protected function casts(): array
@@ -27,6 +27,8 @@ class GaApplicationDetail extends Model
             'service_end_date' => 'date',
             'proposed_allowance' => 'decimal:2',
             'interview_date' => 'datetime',
+            'interview_ends_at' => 'datetime',
+            'interview_scheduled_at' => 'datetime',
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace App\Modules\Haziq\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -10,6 +11,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Support\Roles;
+use Carbon\CarbonInterface;
 
 /**
  * GA Application. Same profile/document shape as GRA (Section D/E/F via
@@ -33,7 +35,7 @@ use App\Modules\Haziq\Support\Roles;
  * GA extension is out of scope for this module entirely — that stays
  * Nureen's ga_extension.
  */
-class GaApplicationWorkflow implements WorkflowModule, ProvidesLinks
+class GaApplicationWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
 {
     /**
      * "GA Applicants" (the full index — every applicant, the Pending by
@@ -49,7 +51,19 @@ class GaApplicationWorkflow implements WorkflowModule, ProvidesLinks
     public function links(User $user): array
     {
         if ($user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR || $user->role === Roles::RESEARCH_CENTRE) {
-            return [['label' => 'GA Applicants', 'route' => 'ga-application.index']];
+            $links = [['label' => 'GA Applicants', 'route' => 'ga-application.index']];
+
+            // Admin/CGS/Supervisor already get the general, pick-any-scope
+            // Delay by Actor link from GraApplicationWorkflow::links() --
+            // Research Centre gets its own, locked to this module.
+            // Confirmed explicitly 2026-11-10: "boleh je tengok delay by
+            // actor tapi yang role die related sahaja ah which is ga
+            // application." See DelayReportController::index().
+            if ($user->role === Roles::RESEARCH_CENTRE) {
+                $links[] = ['label' => 'Delay by Actor', 'route' => 'delay-report.index'];
+            }
+
+            return $links;
         }
 
         // "My GA Application" -- same gap as "GA Applicants" above, same
@@ -145,5 +159,46 @@ class GaApplicationWorkflow implements WorkflowModule, ProvidesLinks
     public function queueRoute(): string
     {
         return 'ga-application.queue';
+    }
+
+    /**
+     * The interview date Research Centre sets via scheduleInterview() --
+     * confirmed explicitly 2026-11-10: "die yang set interview bile and
+     * keluar noti, and mark terus kat calender student." GaInterviewScheduled
+     * already emails it; this is the same date landing on the Calendar page
+     * too, same "every date lives in a teammate's table" shape as every
+     * other SuppliesCalendarEvents implementer. Shown to the student (their
+     * own interview) and to Research Centre (whoever is actually conducting
+     * it, scoped to their own department, same as scheduleInterview()/
+     * decide() themselves) -- nobody else's business until a decision is
+     * actually made on it.
+     */
+    public function calendarEvents(User $user, CarbonInterface $from, CarbonInterface $to): array
+    {
+        if (! in_array($user->role, [Role::STUDENT, Roles::RESEARCH_CENTRE], true)) {
+            return [];
+        }
+
+        $details = GaApplicationDetail::with('application.student')
+            ->whereNotNull('interview_date')
+            ->whereBetween('interview_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
+            ->when(
+                $user->role === Role::STUDENT,
+                fn ($q) => $q->whereHas('application', fn ($a) => $a->where('student_id', $user->id)),
+                fn ($q) => $q->whereHas('application.student', fn ($s) => $s->where('department', $user->department)),
+            )
+            ->get();
+
+        return $details->map(fn (GaApplicationDetail $detail) => [
+            'date' => $detail->interview_date,
+            'title' => $user->role === Role::STUDENT
+                ? 'Your GA interview'
+                : 'GA interview: '.$detail->application->student?->name,
+            'tone' => 'critical',
+            'meta' => $detail->interview_date->format('g:i a').' to '.($detail->interview_ends_at?->format('g:i a') ?? '?'),
+            'url' => $user->role === Role::STUDENT
+                ? route('ga-application.mine', $detail->application_id)
+                : route('ga-application.show', $detail->application_id),
+        ])->all();
     }
 }

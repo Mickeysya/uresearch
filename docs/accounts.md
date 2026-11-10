@@ -4,10 +4,10 @@ Every login the seeders create. **Password for all: `password`.**
 
 | How you got your database | What you have |
 |---|---|
-| `./sync.sh` (any time, keeps your data) | the **246 base accounts** below |
+| `./sync.sh` (any time, keeps your data) | the **257 base accounts** below |
 | `./sync.sh --fresh` (wipes, then rebuilds) | the base accounts **plus 80 demo accounts** made by the module demo seeders (last section) |
 
-Source of truth: `database/seeders/DatabaseSeeder.php` (`ACADEMIC_EXECS`, `CHAIRS`, `SUPERVISORS`, `CGS_OFFICERS`, `COHORT`). Change an account there, never by hand in phpMyAdmin, or the next `./sync.sh` puts it back. Generated 2026-11-08 from a fresh seed; if you change the seeder, regenerate this file.
+Source of truth: `database/seeders/DatabaseSeeder.php` (`ACADEMIC_EXECS`, `CHAIRS`, `RESEARCH_CENTRES`, `SUPERVISORS`, `CGS_OFFICERS`, `COHORT`). Change an account there, never by hand in phpMyAdmin, or the next `./sync.sh` puts it back. Generated 2026-11-08 from a fresh seed, updated 2026-11-10 for `RESEARCH_CENTRES`; if you change the seeder, regenerate this file.
 
 ## Summary
 
@@ -24,9 +24,9 @@ Source of truth: `database/seeders/DatabaseSeeder.php` (`ACADEMIC_EXECS`, `CHAIR
 | Dean of PGR | 1 | 1 |
 | Faculty | 1 | 1 |
 | Registry | 1 | 1 |
-| Research Centre | 1 | 1 |
+| Research Centre | 12 | 12 |
 | Admin | 1 | 1 |
-| **Total** | **246** | **326** |
+| **Total** | **257** | **337** |
 
 ## University and CGS staff
 
@@ -39,7 +39,6 @@ Source of truth: `database/seeders/DatabaseSeeder.php` (`ACADEMIC_EXECS`, `CHAIR
 | `dean@utp.edu.my` | Dean of PGR | Prof. Dr. Hafiz Osman | PGR |
 | `faculty@utp.edu.my` | Faculty | Faculty Office | Faculty of Engineering |
 | `registry@utp.edu.my` | Registry | Registry Officer | Registry |
-| `researchcentre@utp.edu.my` | Research Centre | Research Centre Officer | Research Centre |
 | `admin@utp.edu.my` | Admin | System Admin | – |
 
 ### CGS officers
@@ -56,24 +55,24 @@ Roles follow the CGS Staff Directory: its Senior Executives are Senior Executive
 | `zulkifly.cgs@utp.edu.my` | Zulkifly | Non-Executive CGS | Nureen — Attendance · GA Extension · Supervision · Certification |
 | `syahmi.cgs@utp.edu.my` | Syahmi | Non-Executive CGS | Jason — Hardbound · Appeal Hardbound · Appointment Letters |
 
-## Departments: Chair, Academic Executive and Supervisors
+## Departments: Chair, Academic Executive, Research Centre and Supervisors
 
-A Chair and an Academic Executive see **only their own department's** queue, so every department has one of each. Two supervisors per department: 24 in all.
+A Chair, an Academic Executive and a Research Centre reviewer each see **only their own department's** queue (Research Centre's is GA Application's `research_centre_interview` stage), so every department has one of each. Two supervisors per department: 24 in all.
 
-| # | Department | Faculty | Chair | Academic Executive | Supervisors |
-|---|---|---|---|---|---|
-| 1 | Foundation in Business Management & Computing | CFS | Dr. Rosnah Abdul Karim<br>`chair.foundation.business@utp.edu.my` | Puan Raihanah Mokhtar<br>`ae.foundation.business@utp.edu.my` | Dr. Hasliza Omar<br>`hasliza.omar@utp.edu.my`<br>Mr. Daniel Lee Chee Wai<br>`daniel.lee@utp.edu.my` |
-| 2 | Foundation in Engineering & Science | CFS | Dr. Kamarul Ariffin<br>`chair.foundation.engineering@utp.edu.my` | En Faizal Ramli<br>`ae.foundation.engineering@utp.edu.my` | Dr. Suhaimi Yahya<br>`suhaimi.yahya@utp.edu.my`<br>Dr. Kalaivani Murugan<br>`kalaivani.murugan@utp.edu.my` |
-| 3 | Chemical Engineering | FOE | Dr. Mei Ling Tan<br>`meiling.tan@utp.edu.my` | Puan Hafizah Malik<br>`ae.chemical@utp.edu.my` | Dr. Farid Kamal<br>`farid.kamal@utp.edu.my`<br>Dr. Lau Kok Keong<br>`lau.kokkeong@utp.edu.my` |
-| 4 | Civil & Environmental Engineering | FOE | Dr. Hisham Mohamad<br>`chair.civil@utp.edu.my` | En Khairul Anuar<br>`ae.civil@utp.edu.my` | Dr. Noor Azlina Hamid<br>`azlina.hamid@utp.edu.my`<br>Dr. Teo Wee Liang<br>`teo.weeliang@utp.edu.my` |
-| 5 | Electrical & Electronics Engineering | FOE | Dr. Rajesh Kumar Nair<br>`chair.electrical@utp.edu.my` | Puan Suraya Ismail<br>`ae.electrical@utp.edu.my` | Dr. Siti Nurhaliza<br>`siti.nurhaliza@utp.edu.my`<br>Dr. Balachandran Ramasamy<br>`bala.ramasamy@utp.edu.my` |
-| 6 | Integrated Engineering | FOE | Dr. Azlan Shah Ibrahim<br>`chair.integrated@utp.edu.my` | En Yusri Abdullah<br>`ae.integrated@utp.edu.my` | Dr. Khairil Anwar Rosli<br>`khairil.rosli@utp.edu.my`<br>Dr. Ooi Mei Fong<br>`ooi.meifong@utp.edu.my` |
-| 7 | Mechanical Engineering | FOE | Dr. Tan Boon Huat<br>`chair.mechanical@utp.edu.my` | En Danial Hakimi<br>`ae.mechanical@utp.edu.my` | Dr. Faizal Mustapha<br>`faizal.mustapha@utp.edu.my`<br>Dr. Ng Siew Ling<br>`ng.siewling@utp.edu.my` |
-| 8 | Petroleum Engineering | FOE | Dr. Nurul Huda Zainal<br>`chair.petroleum@utp.edu.my` | Puan Norazlina Samad<br>`ae.petroleum@utp.edu.my` | Dr. Zulkifli Hamzah<br>`zulkifli.hamzah@utp.edu.my`<br>Dr. Anitha Pillai<br>`anitha.pillai@utp.edu.my` |
-| 9 | Applied Sciences | FSMC | Dr. Lakshmi Devi Subramaniam<br>`chair.applied@utp.edu.my` | Puan Vimala Krishnan<br>`ae.applied@utp.edu.my` | Dr. Rohana Ismail<br>`rohana.ismail@utp.edu.my`<br>Dr. Chua Boon Leng<br>`chua.boonleng@utp.edu.my` |
-| 10 | Computing | FSMC | Dr. Lim Wei Chun<br>`chair@utp.edu.my` | Siti Academic Exec<br>`ae@utp.edu.my` | Dr. Aisyah Rahman<br>`supervisor@utp.edu.my`<br>Prof. Dr. Kumaran Vellu<br>`kumaran.vellu@utp.edu.my` |
-| 11 | Geosciences | FSMC | Dr. Mohd Fauzi Hassan<br>`chair.geosciences@utp.edu.my` | En Amirul Hakim<br>`ae.geosciences@utp.edu.my` | Dr. Mohd Rizal Ahmad<br>`rizal.ahmad@utp.edu.my`<br>Dr. Yeap Siew Hoon<br>`yeap.siewhoon@utp.edu.my` |
-| 12 | Management | FSMC | Dr. Wong Pei Shan<br>`chair.management@utp.edu.my` | Puan Lee Siew Mei<br>`ae.management@utp.edu.my` | Dr. Nor Hafizah Aziz<br>`hafizah.aziz@utp.edu.my`<br>Dr. Sanjay Menon<br>`sanjay.menon@utp.edu.my` |
+| # | Department | Faculty | Chair | Academic Executive | Research Centre | Supervisors |
+|---|---|---|---|---|---|---|
+| 1 | Foundation in Business Management & Computing | CFS | Dr. Rosnah Abdul Karim<br>`chair.foundation.business@utp.edu.my` | Puan Raihanah Mokhtar<br>`ae.foundation.business@utp.edu.my` | Puan Zarina Mohd Yusof<br>`rc.foundation.business@utp.edu.my` | Dr. Hasliza Omar<br>`hasliza.omar@utp.edu.my`<br>Mr. Daniel Lee Chee Wai<br>`daniel.lee@utp.edu.my` |
+| 2 | Foundation in Engineering & Science | CFS | Dr. Kamarul Ariffin<br>`chair.foundation.engineering@utp.edu.my` | En Faizal Ramli<br>`ae.foundation.engineering@utp.edu.my` | En Shahrul Nizam<br>`rc.foundation.engineering@utp.edu.my` | Dr. Suhaimi Yahya<br>`suhaimi.yahya@utp.edu.my`<br>Dr. Kalaivani Murugan<br>`kalaivani.murugan@utp.edu.my` |
+| 3 | Chemical Engineering | FOE | Dr. Mei Ling Tan<br>`meiling.tan@utp.edu.my` | Puan Hafizah Malik<br>`ae.chemical@utp.edu.my` | Dr. Noraini Zalina<br>`rc.chemical@utp.edu.my` | Dr. Farid Kamal<br>`farid.kamal@utp.edu.my`<br>Dr. Lau Kok Keong<br>`lau.kokkeong@utp.edu.my` |
+| 4 | Civil & Environmental Engineering | FOE | Dr. Hisham Mohamad<br>`chair.civil@utp.edu.my` | En Khairul Anuar<br>`ae.civil@utp.edu.my` | En Hafizuddin Rashid<br>`rc.civil@utp.edu.my` | Dr. Noor Azlina Hamid<br>`azlina.hamid@utp.edu.my`<br>Dr. Teo Wee Liang<br>`teo.weeliang@utp.edu.my` |
+| 5 | Electrical & Electronics Engineering | FOE | Dr. Rajesh Kumar Nair<br>`chair.electrical@utp.edu.my` | Puan Suraya Ismail<br>`ae.electrical@utp.edu.my` | Puan Kalsom Ibrahim<br>`rc.electrical@utp.edu.my` | Dr. Siti Nurhaliza<br>`siti.nurhaliza@utp.edu.my`<br>Dr. Balachandran Ramasamy<br>`bala.ramasamy@utp.edu.my` |
+| 6 | Integrated Engineering | FOE | Dr. Azlan Shah Ibrahim<br>`chair.integrated@utp.edu.my` | En Yusri Abdullah<br>`ae.integrated@utp.edu.my` | En Shamsul Bahrin<br>`rc.integrated@utp.edu.my` | Dr. Khairil Anwar Rosli<br>`khairil.rosli@utp.edu.my`<br>Dr. Ooi Mei Fong<br>`ooi.meifong@utp.edu.my` |
+| 7 | Mechanical Engineering | FOE | Dr. Tan Boon Huat<br>`chair.mechanical@utp.edu.my` | En Danial Hakimi<br>`ae.mechanical@utp.edu.my` | Dr. Choo Yew Weng<br>`rc.mechanical@utp.edu.my` | Dr. Faizal Mustapha<br>`faizal.mustapha@utp.edu.my`<br>Dr. Ng Siew Ling<br>`ng.siewling@utp.edu.my` |
+| 8 | Petroleum Engineering | FOE | Dr. Nurul Huda Zainal<br>`chair.petroleum@utp.edu.my` | Puan Norazlina Samad<br>`ae.petroleum@utp.edu.my` | Puan Rozita Mansor<br>`rc.petroleum@utp.edu.my` | Dr. Zulkifli Hamzah<br>`zulkifli.hamzah@utp.edu.my`<br>Dr. Anitha Pillai<br>`anitha.pillai@utp.edu.my` |
+| 9 | Applied Sciences | FSMC | Dr. Lakshmi Devi Subramaniam<br>`chair.applied@utp.edu.my` | Puan Vimala Krishnan<br>`ae.applied@utp.edu.my` | Dr. Geetha Balasubramaniam<br>`rc.applied@utp.edu.my` | Dr. Rohana Ismail<br>`rohana.ismail@utp.edu.my`<br>Dr. Chua Boon Leng<br>`chua.boonleng@utp.edu.my` |
+| 10 | Computing | FSMC | Dr. Lim Wei Chun<br>`chair@utp.edu.my` | Siti Academic Exec<br>`ae@utp.edu.my` | Research Centre Officer<br>`researchcentre@utp.edu.my` | Dr. Aisyah Rahman<br>`supervisor@utp.edu.my`<br>Prof. Dr. Kumaran Vellu<br>`kumaran.vellu@utp.edu.my` |
+| 11 | Geosciences | FSMC | Dr. Mohd Fauzi Hassan<br>`chair.geosciences@utp.edu.my` | En Amirul Hakim<br>`ae.geosciences@utp.edu.my` | En Azmi Shah Rahman<br>`rc.geosciences@utp.edu.my` | Dr. Mohd Rizal Ahmad<br>`rizal.ahmad@utp.edu.my`<br>Dr. Yeap Siew Hoon<br>`yeap.siewhoon@utp.edu.my` |
+| 12 | Management | FSMC | Dr. Wong Pei Shan<br>`chair.management@utp.edu.my` | Puan Lee Siew Mei<br>`ae.management@utp.edu.my` | Puan Yap Wan Ling<br>`rc.management@utp.edu.my` | Dr. Nor Hafizah Aziz<br>`hafizah.aziz@utp.edu.my`<br>Dr. Sanjay Menon<br>`sanjay.menon@utp.edu.my` |
 
 ## Students
 

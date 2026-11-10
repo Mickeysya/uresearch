@@ -8,6 +8,7 @@ use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Support\Role;
+use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -80,9 +81,23 @@ class DelayByActorReport
      * scope) and Research Centre (ga_application only, the only chain
      * that has it) are the opposite: a given student's own supervisor
      * and department Research Centre are who will keep handling their
-     * applications, so a person-level number there is actually
-     * predictive. Role-level comparison (byRole(), the bottleneck card)
-     * is untouched by this -- only the individual drill-down is scoped.
+     * applications, so a narrowed number there is actually predictive.
+     *
+     * The two are narrowed differently, though -- confirmed explicitly
+     * 2026-11-10: "research centre... bila specific akan tahu department
+     * mana ah, die takde by individual... supervisor ada by individual
+     * sebab narrow down supervisor is individual." A student's own
+     * supervisor really is one specific named person
+     * (`users.supervisor_id`), so Supervisor's narrowed row is a person.
+     * A student's own Research Centre reviewer is specific only by
+     * department (`GaApplicationController` matches on
+     * `student->department === reviewer->department`, see its queue()/
+     * decide()/scheduleInterview()) -- the seeder gives each department
+     * its own officer today, but the predictive unit is the department,
+     * not whichever named person currently staffs it, so byActor() groups
+     * Research Centre rows by department instead of by person. Role-level
+     * comparison (byRole(), the bottleneck card) is untouched by any of
+     * this -- only the individual/department drill-down is scoped.
      */
     public const NARROWABLE_ROLES = [Role::SUPERVISOR, Roles::RESEARCH_CENTRE];
 
@@ -117,7 +132,7 @@ class DelayByActorReport
             ->get(['id', 'module_type', 'student_id', 'submitted_at']);
 
         $historyByApplication = ApprovalHistory::whereIn('application_id', $applications->pluck('id'))
-            ->with('approver:id,name,role')
+            ->with('approver:id,name,role,department')
             ->orderBy('application_id')
             ->orderBy('created_at')
             ->get()
@@ -139,6 +154,14 @@ class DelayByActorReport
             ? self::documentCompleteTimestamps($applications)
             : collect();
 
+        // Only ga_application ever reaches this stage. Confirmed explicitly
+        // 2026-11-10: see researchCentreDelayHours()'s own docblock.
+        $interviewDetails = $scope === 'ga_application'
+            ? GaApplicationDetail::whereIn('application_id', $applications->pluck('id'))
+                ->get(['application_id', 'interview_date', 'interview_ends_at', 'interview_scheduled_at'])
+                ->keyBy('application_id')
+            : collect();
+
         $rows = collect();
 
         foreach ($applications as $application) {
@@ -147,6 +170,7 @@ class DelayByActorReport
             foreach ($historyByApplication->get($application->id, collect()) as $entry) {
                 $decidedAt = $entry->created_at;
                 $effectiveReceivedAt = $receivedAt;
+                $delayHours = null;
 
                 if ($entry->stage_key === 'admin_verify' && $receivedAt) {
                     $completedAt = $documentCompleteAt->get($application->id);
@@ -154,6 +178,12 @@ class DelayByActorReport
                     if ($completedAt && $completedAt->gt($receivedAt)) {
                         $effectiveReceivedAt = $completedAt;
                     }
+                }
+
+                if ($entry->stage_key === 'research_centre_interview' && $receivedAt && $decidedAt) {
+                    $delayHours = self::researchCentreDelayHours(
+                        $receivedAt, $decidedAt, $interviewDetails->get($application->id)
+                    );
                 }
 
                 if ($effectiveReceivedAt && $decidedAt) {
@@ -167,9 +197,10 @@ class DelayByActorReport
                         'approver_id' => $entry->approver_id,
                         'approver_name' => $entry->approver?->name ?? 'Unknown',
                         'approver_role' => $entry->approver?->role,
+                        'approver_department' => $entry->approver?->department,
                         'received_at' => $effectiveReceivedAt,
                         'decided_at' => $decidedAt,
-                        'delay_hours' => $effectiveReceivedAt->floatDiffInHours($decidedAt),
+                        'delay_hours' => $delayHours ?? $effectiveReceivedAt->floatDiffInHours($decidedAt),
                     ]);
                 }
 
@@ -228,6 +259,47 @@ class DelayByActorReport
     }
 
     /**
+     * Research Centre's one stage is really two separate tasks --
+     * confirmed explicitly 2026-11-10: "ade 2 task die, dah set
+     * interview, after interview date kene start counting second task
+     * pulak en mark pass or fail, so machine learning delay by actor
+     * kene consider bende ni." A plain received-to-decided window
+     * counts the calendar gap waiting for the scheduled interview date
+     * to actually arrive as if Research Centre were sitting on the
+     * application the whole time, when most of that gap is simply the
+     * interview not having happened yet -- not anyone's delay. Measures
+     * the two tasks on their own instead and sums them:
+     *
+     *   1. how long to schedule the interview at all (received -> the
+     *      moment scheduleInterview() was actually called)
+     *   2. how long to record the outcome once the interview has
+     *      actually FINISHED (interview_ends_at -> decided), floored at
+     *      0 for the (normal) case of deciding on or after that time
+     *      rather than reading as a negative "delay" -- confirmed
+     *      explicitly 2026-11-10: "timing interview kena ada from what
+     *      time end at what time, habis je time tu start counting next
+     *      phase of task." Falls back to interview_date (the start) for
+     *      a row from before interview_ends_at existed.
+     *
+     * Falls back to null (the plain received-to-decided window) when
+     * the timestamps this needs are missing -- old data from before
+     * this existed, or a row this report otherwise can't explain.
+     */
+    protected static function researchCentreDelayHours(Carbon $receivedAt, Carbon $decidedAt, ?GaApplicationDetail $detail): ?float
+    {
+        if (! $detail?->interview_scheduled_at || ! $detail?->interview_date) {
+            return null;
+        }
+
+        $interviewOver = $detail->interview_ends_at ?? $detail->interview_date;
+
+        $schedulingHours = max(0, ($detail->interview_scheduled_at->getTimestamp() - $receivedAt->getTimestamp()) / 3600);
+        $markingHours = max(0, ($decidedAt->getTimestamp() - $interviewOver->getTimestamp()) / 3600);
+
+        return (float) ($schedulingHours + $markingHours);
+    }
+
+    /**
      * Every role this scope's chain can reach, for the Role filter's
      * options -- "senang citer boleh choose either one [module], role
      * je leh filter by spesific or all" (the Role filter itself keeps
@@ -258,12 +330,44 @@ class DelayByActorReport
         return self::rolesFor($scope)->intersect(self::NARROWABLE_ROLES)->values();
     }
 
-    /** Every user who holds a role this scope's chain can reach, optionally narrowed to one role. */
-    public static function actorsFor(string $scope, ?string $role = null): Collection
+    /**
+     * The Actor select's own options, for a specific role. Every
+     * narrowable role except Research Centre gets one option per person
+     * who holds it -- picking one shows that one person's own number.
+     * Research Centre gets one option per DEPARTMENT instead, never per
+     * officer -- confirmed explicitly 2026-11-10: "dalam research centre
+     * can be multiple email in the department... anyone in the
+     * department can be responsible... analysis by keseluruhan
+     * department, not individual in every department." A department can
+     * have more than one officer (today's seed happens to have exactly
+     * one each -- see DatabaseSeeder::RESEARCH_CENTRES -- but that is
+     * incidental, not a rule), so the option -- and the number it shows,
+     * see chartBars() -- has to be the whole department's, not whichever
+     * one officer a user id happened to point at.
+     *
+     * @return Collection<int, array{key: string, label: string}>
+     */
+    public static function actorOptionsFor(?string $role): Collection
     {
-        $roles = $role ? [$role] : self::rolesFor($scope)->all();
+        if (! $role) {
+            return collect();
+        }
 
-        return User::whereIn('role', $roles)->orderBy('name')->get(['id', 'name', 'role']);
+        if ($role === Roles::RESEARCH_CENTRE) {
+            return User::where('role', $role)
+                ->whereNotNull('department')
+                ->distinct()
+                ->orderBy('department')
+                ->pluck('department')
+                ->map(fn ($department) => ['key' => $department, 'label' => $department])
+                ->values();
+        }
+
+        return User::where('role', $role)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (User $user) => ['key' => (string) $user->id, 'label' => $user->name])
+            ->values();
     }
 
     /**
@@ -341,11 +445,20 @@ class DelayByActorReport
      * out its own members are. Both role and individual selected:
      * that one person's bar alone.
      */
-    public static function chartBars(Collection $rows, ?string $role, ?int $actorId): Collection
+    public static function chartBars(Collection $rows, ?string $role, ?string $actorKey): Collection
     {
-        if ($role && $actorId) {
-            $actorRows = $rows->where('approver_role', $role)->where('approver_id', $actorId);
-            $bar = self::predict($actorRows, $actorRows->first()['approver_name'] ?? 'Selected actor', $rows);
+        if ($role && $actorKey) {
+            // Research Centre's key is the department itself (every
+            // officer in it combined); every other narrowable role's key
+            // is one person's id -- see actorOptionsFor()'s own docblock.
+            $actorRows = $role === Roles::RESEARCH_CENTRE
+                ? $rows->where('approver_role', $role)->where('approver_department', $actorKey)
+                : $rows->where('approver_role', $role)->where('approver_id', (int) $actorKey);
+
+            $label = $role === Roles::RESEARCH_CENTRE
+                ? $actorKey
+                : ($actorRows->first()['approver_name'] ?? 'Selected actor');
+            $bar = self::predict($actorRows, $label, $rows);
 
             return $bar ? collect([$bar]) : collect();
         }
@@ -415,9 +528,11 @@ class DelayByActorReport
     }
 
     /**
-     * One row per individual actor. `vs_role_percent` is how much
-     * slower (positive) or faster (negative) this person runs compared
-     * to everyone else who has ever held their role in the given rows.
+     * One row per individual actor -- except Research Centre, which is
+     * one row per department instead, see NARROWABLE_ROLES's own
+     * docblock for why. `vs_role_percent` is how much slower (positive)
+     * or faster (negative) this person/department runs compared to
+     * everyone else who has ever held the same role in the given rows.
      * Reads as 0% whenever a role currently has only one member, since
      * there is nobody else in the role to compare against yet.
      * `$allRows` drives `share_percent`, same as byRole().
@@ -430,7 +545,10 @@ class DelayByActorReport
         // that role's "average" is nothing but this one person's figure.
         $rawRoleAverages = $rows->groupBy('approver_role')->map(fn (Collection $roleRows) => $roleRows->avg('delay_hours'));
 
-        return $rows->groupBy('approver_id')
+        return $rows
+            ->groupBy(fn (array $row) => $row['approver_role'] === Roles::RESEARCH_CENTRE
+                ? 'department:'.($row['approver_department'] ?? 'Unknown')
+                : 'actor:'.$row['approver_id'])
             ->map(function (Collection $actorRows) use ($rawRoleAverages, $allRows) {
                 $first = $actorRows->first();
                 $avgHours = $actorRows->avg('delay_hours');
@@ -439,7 +557,9 @@ class DelayByActorReport
 
                 return [
                     'approver_id' => $first['approver_id'],
-                    'approver_name' => $first['approver_name'],
+                    'approver_name' => $role === Roles::RESEARCH_CENTRE
+                        ? ($first['approver_department'] ?? 'Unknown department')
+                        : $first['approver_name'],
                     'role' => $role,
                     'decisions' => $actorRows->count(),
                     'avg_hours' => round($avgHours, 1),
