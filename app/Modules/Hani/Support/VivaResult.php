@@ -88,7 +88,7 @@ class VivaResult
                     "{$notice->student?->name}'s viva result is category 4 (re-examination). The candidate resubmits between {$detail->resubmission_opens_at->format('j M Y')} and {$detail->resubmission_closes_at->format('j M Y')}.",
                     'Please log the re-viva when the corrected thesis arrives. The same main examiners stay assigned for it.',
                 ],
-                'Log the re-viva', route('reviva.create', ['student' => $notice->student_id]),
+                'Open Re-viva Cycles', route('reviva.cycles.index'),
             ));
         }
 

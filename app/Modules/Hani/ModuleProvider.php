@@ -87,9 +87,35 @@ class ModuleProvider extends ServiceProvider
                 ->withoutOverlapping();
         });
 
+        $this->quietEngineEmailsToReVivaStudents();
+
         $registry->register(new ExaminerNominationWorkflow());
         $registry->register(new ReVivaWorkflow());
         $registry->register(new VivaVoceWorkflow());
         $registry->register(new VivaSoftboundWorkflow());
+    }
+
+    /**
+     * Re-viva sends its own student emails at the milestones (submitted,
+     * returned, accepted, sent to the examiners, result), so the engine's
+     * stage emails to the student ("approved at the Dean Approval stage")
+     * are cancelled for re-viva only, through Laravel's NotificationSending
+     * event. Other modules and other recipients (the Senior Executive told
+     * of a Dean's return) are untouched.
+     */
+    protected function quietEngineEmailsToReVivaStudents(): void
+    {
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Notifications\Events\NotificationSending::class, function ($event) {
+            $notification = $event->notification;
+
+            if (! $notification instanceof \App\Modules\Core\Notifications\ApplicationDecided
+                && ! $notification instanceof \App\Modules\Core\Notifications\ApplicationReturned) {
+                return null;
+            }
+
+            $application = (fn () => $this->application ?? null)->call($notification);
+
+            return $application?->module_type === 're_viva' && $event->notifiable->id === $application->student_id ? false : null;
+        });
     }
 }

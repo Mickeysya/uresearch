@@ -112,13 +112,10 @@ final class ReVivaRisk
         $application = $detail->application;
         $limits = (array) config('hani.reviva.risk.stage_limits');
         $stage = $application->status === Application::STATUS_APPROVED ? 'outcome' : $application->current_stage;
-        $labels = [
-            'report_sent' => 'Report Sent', 'under_panel_review' => 'Under Panel Review',
-            'report_received' => 'Report Received', 'consolidation_scheduled' => 'Consolidation Scheduled', 'outcome' => 'awaiting the outcome',
-        ];
+        $labels = collect(app(\App\Modules\Core\Services\ModuleRegistry::class)->get('re_viva')->stages())->mapWithKeys(fn ($st) => [$st->key => $st->label])->put('outcome', 'awaiting the outcome')->all();
 
         $entered = match ($stage) {
-            'report_sent' => $application->submitted_at ?? $detail->resubmission_at,
+            'student_submitted' => $application->submitted_at ?? $detail->resubmission_at,
             'under_panel_review' => $detail->sent_to_panel_at,
             // The latest decision is when the round entered this stage.
             default => $application->history->sortByDesc('created_at')->first()?->created_at,

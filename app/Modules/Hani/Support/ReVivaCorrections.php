@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Levels 1-3 after the outcome: the student's final thesis, the AE's
+ * Levels 1-3 after the outcome: the student's final thesis, the Senior Executive's
  * "Corrections accepted", and the pre-filled Confirmation of Correction
  * (examiners 1 and 2 and the chairman sign it), stored staff-only.
  */
@@ -43,7 +43,7 @@ class ReVivaCorrections
             return $locked;
         });
 
-        $this->tell(VivaProgress::academicExecsFor($student), new ReVivaUpdate(
+        $this->tell(\App\Modules\Core\Models\User::where('role', \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
             'final_thesis_submitted', $detail->application,
             'Final thesis submitted: '.$student->name,
             ["{$student->name} has submitted the final thesis for re-viva round {$detail->cycle_number} ({$detail->outcomeLabel()})."],
@@ -88,7 +88,7 @@ class ReVivaCorrections
         $this->tell(array_filter([$detail->application->student, $detail->application->student->supervisor]), new ReVivaUpdate(
             'corrections_accepted', $detail->application,
             'Re-viva corrections accepted',
-            ["The Academic Executive has accepted the final thesis for {$detail->application->student->name}'s re-viva (round {$detail->cycle_number}). The re-viva is complete."],
+            ["CGS has accepted the final thesis for {$detail->application->student->name}'s re-viva (round {$detail->cycle_number}). The re-viva is complete."],
             'View the re-viva', route('applications.show', $detail->application),
         ));
 

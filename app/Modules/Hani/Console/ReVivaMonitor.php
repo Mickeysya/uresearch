@@ -10,10 +10,11 @@ use App\Modules\Hani\Models\ReVivaReminderLog;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaReminderLog;
 use App\Modules\Hani\Support\PanelSeats;
+use App\Modules\Hani\Support\ReVivaExaminerAccounts;
 use App\Modules\Hani\Support\ReVivaOutcome;
+use App\Modules\Hani\Support\ReVivaSettings;
 use Carbon\CarbonInterface;
 use App\Modules\Hani\Notifications\ReVivaUpdate;
-use App\Modules\Hani\Support\VivaProgress;
 use App\Modules\Hani\Support\WorkingDays;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
@@ -22,10 +23,11 @@ use Illuminate\Support\Facades\Notification;
 /**
  * `re-viva:monitor`: the re-viva clocks nobody should have to watch by hand.
  *
- *   panel_chase      Under Panel Review for hani.reviva.panel_chase_working_days
- *                    (20): remind the AE to chase the panel
- *   panel_escalate   ... for panel_escalate_working_days (25): tell the
- *                    Senior Executive
+ *   doc_check        documents not checked within doc_check_sla_days: the
+ *                    Senior Executive, once
+ *   examiner_reminder_{n}  each examiner who has not returned, n working days
+ *                    before the deadline (Re-viva Settings or config)
+ *   panel_overdue    the deadline passed: the Senior Executive, once
  *   window_{30,7}d   the student, before the resubmission window closes:
  *                    a category-4 viva with no round logged (logged in
  *                    viva_reminder_logs, against the viva), or a level-4
@@ -47,7 +49,7 @@ class ReVivaMonitor extends Command
     protected $signature = 're-viva:monitor
                             {--dry-run : List what would be sent without sending or logging anything}';
 
-    protected $description = 'Re-viva reminders and escalations: panel time limits, resubmission windows, final-thesis deadlines';
+    protected $description = 'Re-viva reminders: document check, examiner deadlines, resubmission windows, final-thesis deadlines';
 
     public function handle(): int
     {
@@ -116,6 +118,7 @@ class ReVivaMonitor extends Command
     /** @return iterable<int, array{0: ReVivaDetail|Application, 1: string, 2: string, 3: iterable<User>, 4: ReVivaUpdate, 5?: callable}> */
     protected function due(): iterable
     {
+        yield from $this->documentChecks();
         yield from $this->panelTimeLimits();
         yield from $this->vivaWindows();
         yield from $this->nextRoundWindows();
@@ -182,11 +185,11 @@ class ReVivaMonitor extends Command
             if ($daysLeft < 0) {
                 $panel = $detail->panel();
 
-                yield [$detail, 'next_round_window_closed', '', VivaProgress::academicExecsFor($student)->merge(User::where('role', Role::SENIOR_EXEC_CGS)->get()), new ReVivaUpdate(
+                yield [$detail, 'next_round_window_closed', '', User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
                     'next_round_window_closed', $detail->application,
                     'Re-viva window closed: '.$student->name,
                     [
-                        "The window for {$student->name} to resubmit for re-viva round ".($detail->cycle_number + 1)." closed on {$closes->format('j M Y')}, and no round was logged.",
+                        "The window for {$student->name} to resubmit for re-viva round ".($detail->cycle_number + 1)." closed on {$closes->format('j M Y')}, and no new round was submitted.",
                         'The two main examiners have been freed, without a gap, since they did not examine again.',
                     ],
                     'Open Re-viva Cycles', route('reviva.cycles.index'),
@@ -214,7 +217,7 @@ class ReVivaMonitor extends Command
             'Corrected thesis due to CGS by '.$closes->format('j M Y'),
             [
                 "Your corrected thesis for re-viva round {$round} is due to CGS by {$closes->format('j M Y')} ({$daysLeft} days from today).",
-                'Send it to the Centre for Graduate Studies with the Summary of Corrections endorsed by your supervisor.',
+                'Submit your documents on Re-viva in UResearch.',
             ],
         );
     }
@@ -235,7 +238,7 @@ class ReVivaMonitor extends Command
             $daysLeft = (int) today()->diffInDays($due, false);
 
             if ($daysLeft < 0) {
-                yield [$detail, 'final_overdue', '', VivaProgress::academicExecsFor($student)->merge(User::where('role', Role::SENIOR_EXEC_CGS)->get()), new ReVivaUpdate(
+                yield [$detail, 'final_overdue', '', User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
                     'final_overdue', $detail->application,
                     'Re-viva final thesis overdue: '.$student->name,
                     [
@@ -255,7 +258,7 @@ class ReVivaMonitor extends Command
                     'Final thesis due by '.$due->format('j M Y'),
                     [
                         "Your final thesis after re-viva round {$detail->cycle_number} is due by {$due->format('j M Y')} ({$daysLeft} days from today).",
-                        'Upload it on My Re-viva in UResearch.',
+                        'Upload it on Re-viva in UResearch.',
                     ],
                     'Open My Re-viva', route('reviva.mine'),
                 )];
@@ -263,13 +266,32 @@ class ReVivaMonitor extends Command
         }
     }
 
+    protected function documentChecks(): iterable
+    {
+        $limit = (int) config('hani.reviva.doc_check_sla_days', 5);
+        $details = ReVivaDetail::with('application.student')
+            ->whereHas('application', fn ($q) => $q->where('module_type', 're_viva')->where('status', Application::STATUS_PENDING)->where('current_stage', 'student_submitted'))
+            ->get();
+
+        foreach ($details as $detail) {
+            $name = $detail->application->student->name;
+            $days = WorkingDays::between($detail->application->submitted_at ?? $detail->resubmission_at, today());
+
+            if ($days >= $limit) {
+                yield [$detail, 'doc_check', (string) $detail->application->submitted_at?->timestamp, User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
+                    'doc_check', $detail->application, "Re-viva documents waiting to be checked: {$name}",
+                    ["{$name}'s re-viva documents have waited {$days} working days for a check."],
+                    'Open Document Check', route('reviva.queue', ['stage' => 'student_submitted']),
+                )];
+            }
+        }
+    }
+
     protected function panelTimeLimits(): iterable
     {
-        $chase = (int) config('hani.reviva.panel_chase_working_days', 20);
-        $escalate = (int) config('hani.reviva.panel_escalate_working_days', 25);
-
+        $thresholds = ReVivaSettings::reminderDays();
         $details = ReVivaDetail::with('application.student')
-            ->whereNotNull('sent_to_panel_at')
+            ->whereNotNull('panel_deadline')
             ->whereHas('application', fn ($q) => $q->where('module_type', 're_viva')
                 ->where('status', Application::STATUS_PENDING)
                 ->where('current_stage', 'under_panel_review'))
@@ -277,30 +299,41 @@ class ReVivaMonitor extends Command
 
         foreach ($details as $detail) {
             $student = $detail->application->student;
-            $days = WorkingDays::between($detail->sent_to_panel_at, today());
-            $sent = $detail->sent_to_panel_at->format('j M Y');
+            $due = $detail->panel_deadline;
+            $left = WorkingDays::between(today(), $due);
+            $evaluations = $detail->currentEvaluations();
 
-            if ($days >= $chase) {
-                yield [$detail, 'panel_chase', '', VivaProgress::academicExecsFor($student), new ReVivaUpdate(
-                    'panel_chase', $detail->application,
-                    "Re-viva panel review at {$days} working days: {$student->name}",
-                    [
-                        "The correction letters for {$student->name}'s re-viva (round {$detail->cycle_number}) went to the panel on {$sent}, {$days} working days ago. The panel was given {$chase} working days.",
-                        'Please chase both examiners for their Thesis Re-evaluation Reports (UTP/CGS/024). The Senior Executive is told if nothing has come back after '.$escalate.' working days.',
-                    ],
-                    'Open the re-viva queue', route('reviva.queue', ['stage' => 'under_panel_review']),
+            if (today()->gt($due)) {
+                yield [$detail, 'panel_overdue', '', User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
+                    'panel_overdue', $detail->application, "Re-viva panel overdue: {$student->name}",
+                    ["The panel's re-evaluation for {$student->name} (round {$detail->cycle_number}) was due on {$due->format('j M Y')}."],
+                    'Open Under Panel Review', route('reviva.queue', ['stage' => 'under_panel_review']),
                 )];
+
+                continue;
             }
 
-            if ($days >= $escalate) {
-                yield [$detail, 'panel_escalate', '', User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
-                    'panel_escalate', $detail->application,
-                    "Re-viva panel overdue ({$days} working days): {$student->name}",
-                    [
-                        "The panel for {$student->name}'s re-viva (round {$detail->cycle_number}, {$student->department}) has had the corrected thesis for {$days} working days, since {$sent}, against a limit of {$chase}.",
-                        'The Academic Executive was reminded at '.$chase.' working days. Please follow up with the department.',
-                    ],
-                    'Open Re-viva Cycles', route('reviva.cycles.index'),
+            $threshold = null;
+            foreach ($thresholds as $i => $days) {
+                if ($left <= $days && $left > ($thresholds[$i + 1] ?? -1)) {
+                    $threshold = $days;
+                }
+            }
+            if ($threshold === null) {
+                continue;
+            }
+
+            foreach ($detail->currentMains() as $seat => $examiner) {
+                $account = ReVivaExaminerAccounts::find($examiner);
+
+                if ($evaluations->has($seat) || ! $account || ! $examiner->usableEmail()) {
+                    continue;
+                }
+
+                yield [$detail, "examiner_reminder_{$threshold}", $seat, [$account], new ReVivaUpdate(
+                    'examiner_reminder', $detail->application, "Reminder: re-evaluation due {$due->format('j F Y')}",
+                    ["The Thesis Re-evaluation Report for {$student->name} is due on {$due->format('j F Y')}, {$left} working days from today."],
+                    'Open My Re-evaluations', route('reviva.examiner.index'),
                 )];
             }
         }
