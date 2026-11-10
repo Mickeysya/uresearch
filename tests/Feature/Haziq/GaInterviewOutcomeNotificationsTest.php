@@ -12,7 +12,9 @@ use App\Modules\Haziq\Notifications\GaInterviewFailed;
 use App\Modules\Haziq\Notifications\GaInterviewPassed;
 use App\Modules\Haziq\Support\Roles;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -70,6 +72,65 @@ class GaInterviewOutcomeNotificationsTest extends TestCase
         $this->assertSame('cgs_review', $application->fresh()->current_stage);
         Notification::assertSentTo($student, GaInterviewPassed::class);
         Notification::assertNotSentTo($student, ApplicationRejected::class);
+    }
+
+    /**
+     * Confirmed explicitly 2026-11-10: "kenapa email tak keluar
+     * attachment with notes remark research centre letak... student
+     * pun boleh download interview result tu." The notes and the
+     * uploaded report both reach the student's own email, the report
+     * as a real attachment (same as LetterIssued), not just a link.
+     */
+    public function test_passing_with_notes_and_a_report_includes_both_in_the_email(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        $reviewer = $this->researchCentreUser('Computing');
+        $application = $this->gaApplicationAtResearchCentreStage('Computing');
+        $student = $application->student;
+
+        $this->actingAs($reviewer)
+            ->post(route('ga-application.decide', $application), [
+                'decision' => 'approve',
+                'interview_notes' => 'Great communication skills',
+                'interview_report' => UploadedFile::fake()->create('result.pdf', 100, 'application/pdf'),
+            ])
+            ->assertRedirect();
+
+        Notification::assertSentTo($student, GaInterviewPassed::class, function ($notification) use ($student) {
+            $mail = $notification->toMail($student);
+
+            $this->assertStringContainsString('Great communication skills', implode(' ', $mail->introLines));
+            // Attachment::fromStorageDisk() always resolves through the
+            // data strategy (reads the file's bytes), landing in
+            // rawAttachments, not the path-based attachments array.
+            $this->assertCount(1, $mail->rawAttachments);
+            $this->assertSame('result.pdf', $mail->rawAttachments[0]['name']);
+
+            return true;
+        });
+    }
+
+    public function test_passing_with_neither_notes_nor_a_report_sends_a_plain_congratulatory_email(): void
+    {
+        Notification::fake();
+        $reviewer = $this->researchCentreUser('Computing');
+        $application = $this->gaApplicationAtResearchCentreStage('Computing');
+        $student = $application->student;
+
+        $this->actingAs($reviewer)
+            ->post(route('ga-application.decide', $application), ['decision' => 'approve'])
+            ->assertRedirect();
+
+        Notification::assertSentTo($student, GaInterviewPassed::class, function ($notification) use ($student) {
+            $mail = $notification->toMail($student);
+
+            $this->assertStringContainsString('Congratulations', $mail->greeting);
+            $this->assertCount(0, $mail->attachments);
+            $this->assertCount(0, $mail->rawAttachments);
+
+            return true;
+        });
     }
 
     public function test_failing_the_interview_rejects_outright_and_notifies_student_and_stakeholders(): void

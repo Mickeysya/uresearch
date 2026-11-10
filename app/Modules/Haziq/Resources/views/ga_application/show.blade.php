@@ -67,6 +67,13 @@
             @if ($detail->interview_notes)
                 <p style="grid-column: 1 / -1;"><b>Notes</b><br>{{ $detail->interview_notes }}</p>
             @endif
+            {{-- Already in the generic Documents list below too; repeated
+                 here so it sits right next to the result it belongs to,
+                 instead of making the student go hunting for it. --}}
+            @php($interviewReport = $application->documents->firstWhere('doc_type', 'Interview Report'))
+            @if ($interviewReport)
+                <p style="grid-column: 1 / -1;"><b>Interview Report</b><br><a href="{{ $interviewReport->url() }}">{{ $interviewReport->original_name }}</a></p>
+            @endif
         </div>
 
         <h3>Section D — Academic Qualification</h3>

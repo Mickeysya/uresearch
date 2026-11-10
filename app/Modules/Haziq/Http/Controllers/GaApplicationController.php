@@ -780,7 +780,7 @@ class GaApplicationController extends Controller
             // CGS. Confirmed explicitly 2026-11-10. See GaInterviewPassed's
             // own docblock.
             if ($stage?->key === 'research_centre_interview') {
-                $application->student?->notify(new GaInterviewPassed($decided));
+                $application->student?->notify(new GaInterviewPassed($decided, $detail));
             }
         }
 
