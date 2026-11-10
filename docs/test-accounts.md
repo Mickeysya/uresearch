@@ -24,7 +24,8 @@ From `DatabaseSeeder`, recreated by `./setup.sh`, `./sync.sh` and
 | `supervisor@utp.edu.my` | Supervisor | Dr. Aisyah Rahman | Computing |
 | `chair@utp.edu.my` | Chair | Dr. Lim Wei Chun | Computing |
 | `cgs@utp.edu.my` | Non-Executive CGS | M Syahmi Ifwat M Jafri | CGS |
-| `seniorexec@utp.edu.my` | Senior Executive CGS | Puan Waheeda | CGS |
+| `waheda.cgs@utp.edu.my` | Senior Executive CGS | Puan Waheeda | CGS |
+| `seniorexec@utp.edu.my` | Senior Executive CGS | Puan Waheeda (general account; still works) | CGS |
 | `manager@utp.edu.my` | Manager CGS | Norshahirah | CGS |
 | `director@utp.edu.my` | Senior Director CGS | En Zulkifly | CGS |
 | `dean@utp.edu.my` | Dean of PGR | Prof. Dr. Hafiz Osman | PGR |
@@ -43,7 +44,7 @@ From `DatabaseSeeder`, recreated by `./setup.sh`, `./sync.sh` and
   `director@` approves.
 - **Examiner nomination** — `supervisor@` nominates for a candidate, that
   candidate's own Academic Executive approves (`ae@` for Computing, otherwise
-  the one for their department below), `seniorexec@` compiles the faculty
+  the one for their department below), `waheda.cgs@` compiles the faculty
   list, `cgs@` releases it.
 - **RPD dismissal** — `cgs@` opens it, `dean@` endorses, `faculty@` signs,
   `registry@` closes the candidacy.

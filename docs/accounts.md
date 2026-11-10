@@ -48,7 +48,7 @@ Roles follow the CGS Staff Directory: its Senior Executives are Senior Executive
 
 | Email | Name | Role | Team member's modules |
 |---|---|---|---|
-| `waheda.cgs@utp.edu.my` | Waheda | Senior Executive CGS | Hani — Examiner Nomination · Conflict Detection · Re-viva |
+| `waheda.cgs@utp.edu.my` | Puan Waheeda | Senior Executive CGS | Hani — Examiner Nomination · Conflict Detection · Re-viva (use this one for Hani's demos) |
 | `akmar.cgs@utp.edu.my` | Akmar | Senior Executive CGS | Haziq — GRA · GA · Stage Gates · Allowance Eligibility |
 | `aqil.cgs@utp.edu.my` | Aqil | Senior Executive CGS | – |
 | `norshahira.cgs@utp.edu.my` | Norshahira | Non-Executive CGS | Norhanis — Travel · Publication · Claims |

@@ -482,7 +482,7 @@ class ExaminerPoolTest extends TestCase
             ->assertSee('To add or remove an examiner, email CGS:')
             ->assertSee('href="mailto:syahmi.cgs@utp.edu.my"', false)
             ->assertSee('Encik Syahmi')
-            ->assertSee('href="mailto:seniorexec@utp.edu.my"', false)
+            ->assertSee('href="mailto:waheda.cgs@utp.edu.my"', false)
             ->assertSee('Puan Waheeda');
 
         config(['hani.cgs.contacts' => [['name' => 'Someone Else', 'role' => 'Non-Executive CGS', 'email' => 'else.cgs@utp.edu.my']]]);

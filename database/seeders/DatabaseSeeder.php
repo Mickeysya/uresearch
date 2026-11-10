@@ -231,7 +231,7 @@ class DatabaseSeeder extends Seeder
      * (Norhanis' Config/cgs.php).
      */
     protected const CGS_OFFICERS = [
-        ['Waheda', 'waheda.cgs', Role::SENIOR_EXEC_CGS],       // Hani
+        ['Puan Waheeda', 'waheda.cgs', Role::SENIOR_EXEC_CGS], // Hani
         ['Akmar', 'akmar.cgs', Role::SENIOR_EXEC_CGS],         // Haziq
         ['Aqil', 'aqil.cgs', Role::SENIOR_EXEC_CGS],
         ['Norshahira', 'norshahira.cgs', Role::NON_EXEC_CGS], // Norhanis

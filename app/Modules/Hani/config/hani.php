@@ -465,7 +465,7 @@ return [
         // listed at the top of their read-only Examiner Pool.
         'contacts' => [
             ['name' => 'Encik Syahmi', 'role' => 'Non-Executive CGS', 'email' => 'syahmi.cgs@utp.edu.my'],
-            ['name' => 'Puan Waheeda', 'role' => 'Senior Executive CGS', 'email' => 'seniorexec@utp.edu.my'],
+            ['name' => 'Puan Waheeda', 'role' => 'Senior Executive CGS', 'email' => 'waheda.cgs@utp.edu.my'],
         ],
     ],
 

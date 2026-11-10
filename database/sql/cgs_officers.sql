@@ -2,7 +2,7 @@
 -- one for each team member's modules; Aqil is the third Senior Executive.
 --
 --   Officer     Email                      Role           Team member
---   Waheda      waheda.cgs@utp.edu.my      Senior Exec    Hani      Examiner Nomination · Conflict Detection · Re-viva
+--   Puan Waheeda waheda.cgs@utp.edu.my      Senior Exec    Hani      Examiner Nomination · Conflict Detection · Re-viva
 --   Akmar       akmar.cgs@utp.edu.my       Senior Exec    Haziq     GRA · GA · Stage Gates · Allowance Eligibility
 --   Aqil        aqil.cgs@utp.edu.my        Senior Exec    -
 --   Norshahira  norshahira.cgs@utp.edu.my  Non-Executive  Norhanis  Travel · Publication · Claims
@@ -26,7 +26,7 @@
 -- says so itself -- Norhanis's does, in app/Modules/Norhanis/Config/cgs.php.
 
 INSERT INTO users (name, email, password, role, department, created_at, updated_at) VALUES
-    ('Waheda',     'waheda.cgs@utp.edu.my',     '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'senior_exec_cgs', 'CGS', NOW(), NOW()),
+    ('Puan Waheeda', 'waheda.cgs@utp.edu.my',     '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'senior_exec_cgs', 'CGS', NOW(), NOW()),
     ('Akmar',      'akmar.cgs@utp.edu.my',      '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'senior_exec_cgs', 'CGS', NOW(), NOW()),
     ('Aqil',       'aqil.cgs@utp.edu.my',       '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'senior_exec_cgs', 'CGS', NOW(), NOW()),
     ('Norshahira', 'norshahira.cgs@utp.edu.my', '$2y$12$y50l/yrPnbWVkzjkoyH8X.DMWijPPVn1quNFZGDVbEgKxOWgSaFr6', 'non_exec_cgs', 'CGS', NOW(), NOW()),
