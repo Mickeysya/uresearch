@@ -292,7 +292,7 @@ return [
 
         // Months from the re-viva outcome date to the final thesis, by level
         // (UTP/CGS/024: within 1 month, up to 3, 3 to 6). Provisional.
-        'final_thesis_months' => [1 => 1, 2 => 3, 3 => 6],
+        'final_deadline_months' => [1 => 1, 2 => 3, 3 => 6],
 
         // Logging a re-viva keeps the two main examiners Assigned until at
         // most this many months later; the outcome releases them sooner.
@@ -301,13 +301,21 @@ return [
 
         // CONFIRMED (the real letter): "examiners are given a maximum of
         // twenty (20) working days". The letter prints the date this falls on.
-        'review_working_days' => 20,
+        'panel_working_days' => 20,
 
-        // Stage 2, Under Panel Review, counted in working days from the
-        // letters: remind the AE to chase the panel, then tell the Senior
-        // Executive. Provisional (20 is the letter's limit; 25 is ours).
-        'panel_chase_working_days' => 20,
-        'panel_escalate_working_days' => 25,
+        // Senior Executive's document check (client charter 2 to 5 days): one reminder after this many working days.
+        'doc_check_sla_days' => 5,
+
+        // Examiner reminders, in working days before the deadline. Senior
+        // Executives can override this on Re-viva Settings (re_viva_settings).
+        'external_reminders' => [10, 3],
+
+        // Over this total, an examiner's email carries the letter and the
+        // report form, and a signed link for the student's documents.
+        'attachment_limit_mb' => 20,
+
+        // PDF size limit for the student's three uploads and examiner returns. Provisional.
+        'upload_max_mb' => 20,
 
         // Re-viva Cycles' deadline risk score (Support\ReVivaRisk), 0-100.
         // Rule-based and explained factor by factor. ALL PROVISIONAL: our
@@ -318,8 +326,8 @@ return [
             'expected_round_working_days' => 45,
             // Working days each stage should take; 20 is the panel's limit.
             'stage_limits' => [
-                'report_sent' => 5, 'under_panel_review' => 20, 'report_received' => 5,
-                'consolidation_scheduled' => 10, 'outcome' => 5,
+                'student_submitted' => 5, 'pack_preparation' => 5, 'dean_approval' => 5, 'ready_to_send' => 3,
+                'under_panel_review' => 20, 'reports_received' => 5, 'cgs_review' => 5, 'meeting_scheduled' => 10, 'outcome' => 5,
             ],
             // This many earlier rounds count the full "previous rounds" weight.
             'rounds_for_full' => 2,
@@ -334,27 +342,32 @@ return [
         // How long the examiner's signed link to the corrected thesis and the
         // Summary of Corrections works. Provisional: the 20 working days plus
         // slack for a late report.
-        'link_days' => 35,
+        'signed_link_days' => 35,
 
         // The examiner's sign-in to that link: how long the emailed code
         // works, and how long the sign-in lasts in that browser.
         'panel_code_minutes' => 10,
         'panel_session_minutes' => 60,
 
-        // The "Correction of Master's/Doctoral Thesis" letter
-        // (Resources/views/re_viva/pdf/correction_letter.blade.php).
-        // PROVISIONAL: fictional names and example.com addresses for the FYP.
-        // Replace with the real signatory and CGS contacts before go-live.
+        // The "Correction of Master's/Doctoral Thesis" letter. Phone numbers
+        // and emails are PROVISIONAL demo values; correct them before go-live.
         'letter' => [
             'reference_prefix' => 'UTP/PGS/AD/',
             'institution' => 'Universiti Teknologi PETRONAS',
-            'address' => ['32610 Seri Iskandar', 'Perak Darul Ridzuan, Malaysia'],
-            'signatory_name' => 'Professor Dr. Example Signatory',
-            'signatory_title' => 'Dean, Postgraduate & Research',
-            'return_contacts' => [
-                ['name' => 'Puan Waheeda', 'role' => 'Senior Executive, Centre for Graduate Studies', 'email' => 'waheeda.cgs@example.com', 'phone' => '+60 5-000 0001'],
-                ['name' => 'Encik Syahmi', 'role' => 'Executive, Centre for Graduate Studies', 'email' => 'syahmi.cgs@example.com', 'phone' => '+60 5-000 0002'],
-            ],
+            'address' => ['Bandar Seri Iskandar', '31750 Tronoh Perak', 'Darul Ridzuan'],
+        ],
+        'signatory' => ['name' => 'Prof. Ts. Dr. M Fadzil Hassan', 'title' => ['Dean,', 'Postgraduate & Research']],
+        'return_contacts' => [
+            ['name' => 'Waheda Rahayu Bt Rashid', 'role' => 'Senior Executive CGS', 'email' => 'waheda.cgs@utp.edu.my', 'tel' => '+605 000 0001', 'mobile' => '+6012 000 0001'],
+            ['name' => 'M Syahmi Ifwat M Jafri', 'role' => 'Non-Executive CGS', 'email' => 'syahmi.cgs@utp.edu.my', 'tel' => '+605 000 0002', 'mobile' => '+6012 000 0002'],
+        ],
+
+        // Programme Learning Outcomes on UTP/CGS/024. PLACEHOLDER wording: correct it here.
+        'plo_texts' => [
+            'Engineering' => [1 => 'Apply advanced engineering knowledge.', 2 => 'Investigate complex engineering problems.', 6 => 'Communicate research effectively.', 7 => 'Uphold professional and ethical practice.'],
+            'Science' => [1 => 'Apply advanced scientific knowledge.', 2 => 'Investigate complex scientific problems.', 6 => 'Communicate research effectively.', 7 => 'Uphold professional and ethical practice.'],
+            'Computing' => [1 => 'Apply advanced computing knowledge.', 2 => 'Investigate complex computing problems.', 3 => 'Design and evaluate computing solutions.', 6 => 'Uphold professional and ethical practice.'],
+            'Business' => [2 => 'Apply appropriate research methods.', 4 => 'Analyse and interpret findings.', 5 => 'Contribute to practice and scholarship.', 6 => 'Demonstrate advanced business knowledge.'],
         ],
     ],
 
@@ -397,16 +410,20 @@ return [
                 'softbound_check' => ['days' => [5, 10], 'working_days' => true],
             ],
             're_viva' => [
-                'report_sent' => ['days' => [5, 10], 'working_days' => true],
-                'report_received' => ['days' => [5, 10], 'working_days' => true],
-                'consolidation_scheduled' => ['days' => [10, 15], 'working_days' => true],
+                'pack_preparation' => ['days' => [5, 10], 'working_days' => true],
+                'dean_approval' => ['days' => [5, 10], 'working_days' => true],
+                'ready_to_send' => ['days' => [3, 5], 'working_days' => true],
+                'reports_received' => ['days' => [5, 10], 'working_days' => true],
+                'cgs_review' => ['days' => [5, 10], 'working_days' => true],
+                'meeting_scheduled' => ['days' => [10, 15], 'working_days' => true],
             ],
         ],
 
         // Stages another command already chases, with the reason. Never
         // reminded by `hani:sla-reminders`, and left out of "overdue now".
         'skip' => [
-            're_viva.under_panel_review' => 're-viva:monitor already reminds the AE at 20 working days and tells the Senior Executive at 25 (hani.reviva.panel_*_working_days).',
+            're_viva.student_submitted' => 're-viva:monitor reminds the Senior Executive (hani.reviva.doc_check_sla_days).',
+            're_viva.under_panel_review' => 're-viva:monitor reminds the examiners and reports overdue panels to the Senior Executive.',
         ],
     ],
 
