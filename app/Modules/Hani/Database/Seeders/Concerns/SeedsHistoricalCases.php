@@ -430,8 +430,8 @@ trait SeedsHistoricalCases
      * A walkthrough panel stays held (the same panel re-examines), so it
      * keeps clear of every examiner a live scenario panel names: otherwise
      * Conflict Detection would show clashes the scenarios never set up (S09
-     * is meant to show exactly one). Falls back to the whole pool only if
-     * nothing is free.
+     * picked up extra ones). Falls back to the whole pool only if nothing
+     * is free.
      *
      * @return array<string, ?int>
      */
