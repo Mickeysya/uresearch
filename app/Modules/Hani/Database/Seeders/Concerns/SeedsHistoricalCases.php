@@ -9,8 +9,6 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ReVivaDetail;
-use App\Modules\Hani\Models\ReVivaEvaluation;
-use App\Modules\Hani\Models\ReVivaStaffDocument;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaEligibility;
 use App\Modules\Hani\Models\VivaSoftboundDetail;
@@ -18,8 +16,6 @@ use App\Modules\Hani\Support\Demo\FictionalPdfs;
 use App\Modules\Hani\Support\Departments;
 use App\Modules\Hani\Support\ExaminerProgress;
 use App\Modules\Hani\Support\PanelSeats;
-use App\Modules\Hani\Support\ReVivaLetters;
-use App\Modules\Hani\Support\ReVivaOutcome;
 use App\Modules\Hani\Support\VivaChecklist;
 use App\Modules\Hani\Support\VivaProgress;
 use Carbon\Carbon;
@@ -104,6 +100,11 @@ trait SeedsHistoricalCases
     /** @var array<int, User> */
     protected array $historyStudents = [];
 
+    /** @var array<int, User> */
+    protected array $reVivaDemoStudents = [];
+
+    protected const REVIVA_BASE = 100;
+
     protected function historicalCases(): void
     {
         $real = Notification::getFacadeRoot();
@@ -121,6 +122,11 @@ trait SeedsHistoricalCases
 
             foreach (array_keys(self::HISTORY_NAMES) as $i) {
                 DB::transaction(fn () => $this->historicalCase($i));
+            }
+
+            // Viva results for the re-viva walkthrough students (part 5).
+            foreach (array_keys($this->reVivaDemoStudents) as $k) {
+                DB::transaction(fn () => $this->historicalCase(self::REVIVA_BASE + $k));
             }
         } finally {
             // The pool exactly as parts 1-3 left it.
@@ -143,6 +149,15 @@ trait SeedsHistoricalCases
             ->map(fn ($row) => $departments->resolve($row['department'])['name'] ?? $row['department'])
             ->unique()->values()->all();
         $supervisors = collect($this->demoUsers)->filter(fn (User $u) => $u->role === Role::SUPERVISOR);
+
+        foreach (self::REVIVA_DEMO as $k => [$letter, $name]) {
+            $department = $names[$k % max(1, count($names))] ?? 'Computing';
+            $this->reVivaDemoStudents[$k] = $this->historyStudents[self::REVIVA_BASE + $k] = User::updateOrCreate(['email' => "reviva.{$letter}@example.com"], [
+                'name' => $name, 'password' => 'password', 'role' => Role::STUDENT, 'matric_no' => 'RV2500'.strtoupper($letter),
+                'programme' => $k % 3 === 1 ? 'PhD Full-Time' : 'MSc Full-Time', 'department' => $department,
+                'supervisor_id' => $supervisors->first(fn (User $s) => $s->department === $department)?->id,
+            ]);
+        }
 
         foreach (self::HISTORY_NAMES as $i => $name) {
             $department = $names[$i % max(1, count($names))] ?? 'Computing';
@@ -177,7 +192,9 @@ trait SeedsHistoricalCases
         mt_srand(crc32('hani-history-'.$i));
 
         $student = $this->historyStudents[$i];
-        $category = self::HISTORY_CATEGORIES[$i];
+        $walkthrough = $i >= self::REVIVA_BASE;
+        $i %= count(self::HISTORY_NAMES);
+        $category = $walkthrough ? VivaDetail::REEXAMINATION : self::HISTORY_CATEGORIES[$i];
         $phd = VivaChecklist::levelFor($student) === VivaChecklist::PHD;
         $plan = $this->historyPlan($i, $category, $phd);
         $at = fn (string $event) => $plan['t0']->copy()->addMinutes((int) round($plan['events'][$event] * 60));
@@ -284,33 +301,22 @@ trait SeedsHistoricalCases
             return;
         }
 
+        if ($walkthrough) {
+            VivaDetail::where('application_id', $notice->id)->update(['resubmission_opens_at' => today()->subMonth(), 'resubmission_closes_at' => today()->addMonths(5)]);
+
+            return;
+        }
+
         // ---- Re-viva round 1 to its outcome ---------------------------------
         $level = self::HISTORY_REVIVA[$i];
         $detail = $this->at($at('logged'), fn () => $this->logRound($student));
-        $this->at($at('letters'), fn () => app(ReVivaLetters::class)->send($detail->application, $ae));
-        $this->at($at('reviewed'), fn () => $engine->decide($detail->application->refresh(), $ae, 'approve', 'Both examiners confirmed receipt of the corrected thesis.'));
-        $this->at($at('evaluated'), function () use ($detail, $ae, $engine, $level) {
+        $this->at($at('letters'), fn () => $this->throughDean($detail));
+        $this->at($at('letters'), fn () => $this->sendPack($detail));
+        $this->at($at('evaluated'), function () use ($detail, $level) {
             $category = $level === 5 ? 4 : $level;
-            foreach ($detail->currentMains() as $seat => $examiner) {
-                $path = 'hani/reviva-reports/'.Str::random(40).'.pdf';
-                Storage::disk('local')->put($path, FictionalPdfs::document('Thesis Re-evaluation Report UTP/CGS/024 (fictional)', [
-                    'Examiner: '.$examiner->name, 'Recommendation: '.$category.($level === 5 ? ', required to attend the viva again: NO' : ''),
-                ]));
-                $report = ReVivaStaffDocument::create([
-                    're_viva_detail_id' => $detail->id, 'kind' => ReVivaStaffDocument::RE_EVALUATION,
-                    'seat' => $seat, 'examiner_id' => $examiner->id, 'path' => $path,
-                    'original_name' => 'utp-cgs-024-'.Str::slug($examiner->name).'.pdf', 'created_by_id' => $ae->id,
-                ]);
-                ReVivaEvaluation::create([
-                    're_viva_detail_id' => $detail->id, 'seat' => $seat, 'examiner_id' => $examiner->id,
-                    'category' => $category, 'viva_again' => $level === 5 ? false : null,
-                    'report_document_id' => $report->id, 'recorded_by_id' => $ae->id,
-                ]);
-            }
-            $engine->decide($detail->application->refresh(), $ae, 'approve');
+            $this->recordBoth($detail, $category, $level === 5 ? false : null, $category, $level === 5 ? false : null);
         });
-        $this->at($at('consolidated'), fn () => $engine->decide($detail->application->refresh(), $ae, 'approve', 'Consolidation meeting held with both examiners.'));
-        $this->at($at('outcome'), fn () => app(ReVivaOutcome::class)->record($detail->refresh(), $level, 'Both examiners agreed.', $ae));
+        $this->at($at('outcome'), fn () => $this->finishRound($detail, $level, $level === 5 ? 'Both examiners agreed.' : null));
 
         if ($level !== 5) {
             ReVivaDetail::whereKey($detail->id)->update([
