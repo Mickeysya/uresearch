@@ -6,6 +6,7 @@ use App\Modules\Haziq\Http\Controllers\AssistantController;
 use App\Modules\Haziq\Http\Controllers\CandidatureAppealController;
 use App\Modules\Haziq\Http\Controllers\DelayReportController;
 use App\Modules\Haziq\Http\Controllers\DocumentCompletenessController;
+use App\Modules\Haziq\Http\Controllers\GaAllowanceController;
 use App\Modules\Haziq\Http\Controllers\GaApplicationController;
 use App\Modules\Haziq\Http\Controllers\GraApplicationController;
 use App\Modules\Haziq\Http\Controllers\StageGateController;
@@ -163,6 +164,31 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.implode(',', [Role::ADMIN, Role::NON_EXEC_CGS]))->group(function () {
         Route::post('/allowance/{application}/confirm-payment', [AllowanceController::class, 'confirmPayment'])->name('allowance.confirm-payment');
         Route::post('/allowance/{application}/set-review-amount', [AllowanceController::class, 'setReviewAmount'])->name('allowance.set-review-amount');
+    });
+
+    // ---- GA Allowance Eligibility ---------------------------------------
+    // GA's own, deliberately separate from GRA's allowance.* routes above
+    // -- confirmed explicitly 2026-11-10: "ga ni letak actions lain.
+    // jangan sekali kan dengan allowance gra satu excel. navigation bar
+    // asing. with different names." Never Research Centre -- GA's
+    // allowance is none of its business, same as Delay by Actor's own
+    // ga_application-only scoping doesn't extend to this screen either.
+    Route::middleware('role:'.implode(',', array_merge(
+        [Role::ADMIN, Role::SUPERVISOR, Role::STUDENT],
+        Role::cgsTeam(),
+    )))->group(function () {
+        Route::get('/ga-allowance', [GaAllowanceController::class, 'index'])->name('ga-allowance.index');
+    });
+
+    Route::middleware('role:'.implode(',', array_merge(
+        [Role::ADMIN, Role::SUPERVISOR],
+        Role::cgsTeam(),
+    )))->group(function () {
+        Route::get('/ga-allowance/export', [GaAllowanceController::class, 'export'])->name('ga-allowance.export');
+    });
+
+    Route::middleware('role:'.implode(',', [Role::ADMIN, Role::NON_EXEC_CGS]))->group(function () {
+        Route::post('/ga-allowance/{log}/confirm-payment', [GaAllowanceController::class, 'confirmPayment'])->name('ga-allowance.confirm-payment');
     });
 
     // ---- Candidature Appeal -----------------------------------------------

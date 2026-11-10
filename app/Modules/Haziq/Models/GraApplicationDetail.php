@@ -93,6 +93,37 @@ class GraApplicationDetail extends Model
     }
 
     /**
+     * The extension chain's own current end -- confirmed explicitly
+     * 2026-11-10: "gra applicants, kene buat status kat stage gate tu
+     * tukar active after extention... connect with id kat application
+     * gra to with application id asal." Stage Gates only ever live on
+     * the FIRST application in a chain (generateSchedule() is a no-op
+     * for every extension after it -- see
+     * GraApplicationController::onApproved()), so Stage Gate
+     * Monitoring's own status column, keyed by that same first
+     * application's id, would otherwise keep reading this appointment's
+     * OWN now-lapsed window forever, even once an approved extension is
+     * what is actually carrying the student forward. Walks forward
+     * through every approved extension in the chain (there can be more
+     * than one, one after another) and returns whichever row is current
+     * -- this same row, unchanged, if no extension exists yet.
+     */
+    public function currentInChain(): self
+    {
+        $current = $this;
+
+        while ($next = self::where('parent_application_id', $current->application_id)
+            ->where('application_type', 'extension')
+            ->whereHas('application', fn ($q) => $q->where('status', Application::STATUS_APPROVED))
+            ->latest('id')
+            ->first()) {
+            $current = $next;
+        }
+
+        return $current;
+    }
+
+    /**
      * Extension can be requested any time once the current appointment is
      * approved — no longer gated on the service period having actually run
      * out. Confirmed explicitly 2026-11-07, reversing the earlier

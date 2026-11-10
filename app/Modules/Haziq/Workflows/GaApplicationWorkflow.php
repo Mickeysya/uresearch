@@ -53,6 +53,18 @@ class GaApplicationWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCa
         if ($user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR || $user->role === Roles::RESEARCH_CENTRE) {
             $links = [['label' => 'GA Applicants', 'route' => 'ga-application.index']];
 
+            // No separate "GA Allowance Eligibility" link for
+            // Admin/CGS/Supervisor -- they already get the shared
+            // "Allowance Eligibility" link from
+            // GraApplicationWorkflow::links(), which now carries a module
+            // filter (GRA/GA) on the one screen. Confirmed explicitly
+            // 2026-11-10, revising the same day's earlier "navigation bar
+            // asing" version: "ga allowoance eleigability masuk je dekat
+            // page allowance eligability... apply for admin dah ke atas."
+            // The export stays two separate files/routes regardless (see
+            // AllowanceController::index()'s own docblock) -- Research
+            // Centre still gets neither, same as before.
+
             // Admin/CGS/Supervisor already get the general, pick-any-scope
             // Delay by Actor link from GraApplicationWorkflow::links() --
             // Research Centre gets its own, locked to this module.
@@ -81,9 +93,21 @@ class GaApplicationWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCa
                 ->latest('id')
                 ->first();
 
-            if ($mine) {
-                return [['label' => 'My GA Application', 'route' => 'ga-application.mine', 'params' => ['application' => $mine->id]]];
+            if (! $mine) {
+                return [];
             }
+
+            $links = [['label' => 'My GA Application', 'route' => 'ga-application.mine', 'params' => ['application' => $mine->id]]];
+
+            // Only once actually approved -- own GA Allowance Eligibility
+            // link, own name, confirmed explicitly 2026-11-10. The
+            // controller itself scopes a student to their own row only,
+            // same split as GRA's "My Allowance" above.
+            if (Application::where('student_id', $user->id)->where('module_type', 'ga_application')->where('status', Application::STATUS_APPROVED)->exists()) {
+                $links[] = ['label' => 'My GA Allowance', 'route' => 'ga-allowance.index'];
+            }
+
+            return $links;
         }
 
         return [];

@@ -206,4 +206,123 @@ class ServiceStatusTest extends TestCase
             ->assertOk()
             ->assertSee('status-badge approved', false);
     }
+
+    /**
+     * Confirmed explicitly 2026-11-10: "gra applicants, kene buat status
+     * kat stage gate tu tukar active after extention... connect with id
+     * kat application gra to with application id asal." Stage Gates
+     * only ever live on the FIRST application in a chain -- an
+     * extension (a brand new Application row, GraApplicationDetail::
+     * isExtension()) never gets its own (GraApplicationController::
+     * onApproved() returns early for one). Without
+     * GraApplicationDetail::currentInChain(), this row would keep
+     * reading its own now-lapsed service_end_date forever, even once an
+     * approved extension is what is actually carrying the student
+     * forward.
+     */
+    public function test_stage_gate_monitoring_reads_active_through_an_approved_extension_not_the_lapsed_original(): void
+    {
+        $this->travelTo(Carbon::parse('2026-08-01'));
+        $student = $this->user('student');
+
+        // The original appointment: already lapsed as of today.
+        $original = $this->graDetail($student, Carbon::parse('2026-01-01'), Carbon::parse('2026-06-01'));
+        $this->assertSame('inactive', $original->fresh()->serviceStatus());
+
+        \App\Modules\Haziq\Models\StageGate::create([
+            'application_id' => $original->application_id,
+            'stage_order' => 1, 'stage_name' => 'RPD Completion',
+            'requirement_description' => 'Research Progress Defense (RPD) completed.',
+            'deadline_date' => Carbon::parse('2027-06-01'),
+            'grace_end_date' => Carbon::parse('2027-07-01'),
+            'completion_status' => 'pending', 'timeline_status' => 'upcoming', 'allowance_status' => 'eligible',
+        ]);
+
+        // The extension: a brand new Application row, picking up exactly
+        // where the original left off, currently covering today.
+        $extensionApplication = Application::create([
+            'student_id' => $student->id, 'module_type' => 'gra_application',
+            'status' => Application::STATUS_APPROVED, 'current_stage' => null, 'submitted_at' => now(),
+        ]);
+        GraApplicationDetail::create([
+            'application_id' => $extensionApplication->id, 'profile_id' => $original->profile_id,
+            'application_type' => 'extension', 'parent_application_id' => $original->application_id,
+            'candidature_status' => 'active',
+            'project_leader_name' => 'Dr. Lim', 'project_title' => 'Test', 'funding_source' => 'Internal',
+            'service_start_date' => '2026-06-01', 'service_end_date' => '2026-12-01',
+        ]);
+
+        $this->assertSame('active', $original->currentInChain()->serviceStatus());
+
+        foreach (['admin', 'non_exec_cgs', 'senior_director_cgs'] as $role) {
+            $this->actingAs($this->user($role))->get(route('stage-gate.index'))
+                ->assertOk()
+                ->assertSee('status-badge active', false)
+                ->assertDontSee('status-badge inactive', false);
+        }
+
+        $this->actingAs($student)->get(route('stage-gate.index'))
+            ->assertOk()
+            ->assertSee('status-badge active', false)
+            ->assertDontSee('status-badge inactive', false);
+    }
+
+    public function test_current_in_chain_walks_through_more_than_one_extension(): void
+    {
+        $student = $this->user('student');
+        $original = $this->graDetail($student, Carbon::parse('2026-01-01'), Carbon::parse('2026-06-01'));
+
+        $firstExtensionApp = Application::create([
+            'student_id' => $student->id, 'module_type' => 'gra_application',
+            'status' => Application::STATUS_APPROVED, 'current_stage' => null, 'submitted_at' => now(),
+        ]);
+        $firstExtension = GraApplicationDetail::create([
+            'application_id' => $firstExtensionApp->id, 'profile_id' => $original->profile_id,
+            'application_type' => 'extension', 'parent_application_id' => $original->application_id,
+            'candidature_status' => 'active',
+            'project_leader_name' => 'Dr. Lim', 'project_title' => 'Test', 'funding_source' => 'Internal',
+            'service_start_date' => '2026-06-01', 'service_end_date' => '2026-09-01',
+        ]);
+
+        $secondExtensionApp = Application::create([
+            'student_id' => $student->id, 'module_type' => 'gra_application',
+            'status' => Application::STATUS_APPROVED, 'current_stage' => null, 'submitted_at' => now(),
+        ]);
+        GraApplicationDetail::create([
+            'application_id' => $secondExtensionApp->id, 'profile_id' => $original->profile_id,
+            'application_type' => 'extension', 'parent_application_id' => $firstExtension->application_id,
+            'candidature_status' => 'active',
+            'project_leader_name' => 'Dr. Lim', 'project_title' => 'Test', 'funding_source' => 'Internal',
+            'service_start_date' => '2026-09-01', 'service_end_date' => '2027-03-01',
+        ]);
+
+        $this->assertSame($secondExtensionApp->id, $original->currentInChain()->application_id);
+    }
+
+    public function test_current_in_chain_is_itself_when_no_extension_exists(): void
+    {
+        $original = $this->graDetail($this->user('student'), Carbon::parse('2026-01-01'), Carbon::parse('2026-06-01'));
+
+        $this->assertSame($original->application_id, $original->currentInChain()->application_id);
+    }
+
+    public function test_current_in_chain_ignores_an_unapproved_extension(): void
+    {
+        $student = $this->user('student');
+        $original = $this->graDetail($student, Carbon::parse('2026-01-01'), Carbon::parse('2026-06-01'));
+
+        $pendingExtensionApp = Application::create([
+            'student_id' => $student->id, 'module_type' => 'gra_application',
+            'status' => Application::STATUS_PENDING, 'current_stage' => 'supervisor', 'submitted_at' => now(),
+        ]);
+        GraApplicationDetail::create([
+            'application_id' => $pendingExtensionApp->id, 'profile_id' => $original->profile_id,
+            'application_type' => 'extension', 'parent_application_id' => $original->application_id,
+            'candidature_status' => 'active',
+            'project_leader_name' => 'Dr. Lim', 'project_title' => 'Test', 'funding_source' => 'Internal',
+            'service_start_date' => '2026-06-01', 'service_end_date' => '2026-12-01',
+        ]);
+
+        $this->assertSame($original->application_id, $original->currentInChain()->application_id);
+    }
 }

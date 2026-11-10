@@ -8,6 +8,7 @@ use App\Modules\Haziq\Models\AllowancePaymentLog;
 use App\Modules\Haziq\Models\ApplicationCorrectionRequest;
 use App\Modules\Haziq\Models\AssistantLog;
 use App\Modules\Haziq\Models\CandidatureAppeal;
+use App\Modules\Haziq\Models\GaAllowancePaymentLog;
 use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\StageGate;
@@ -69,6 +70,11 @@ class AssistantContext
         $allowance = self::allowanceSummary($student);
         if ($allowance) {
             $lines[] = $allowance;
+        }
+
+        $gaAllowance = self::gaAllowanceSummary($student);
+        if ($gaAllowance) {
+            $lines[] = $gaAllowance;
         }
 
         // The TA hours log moved to Norhanis' module; read it through her helper, not her table.
@@ -220,8 +226,11 @@ class AssistantContext
         $line = "Allowance, most recent record ({$log->payment_month->format('M Y')}): status={$log->status}, amount=RM"
             .number_format($displayAmount, 2).'.';
 
-        // GA has no allowance tracking at all (GraApplicationDetail only),
-        // so a null rate here is routine for a GA student, not a data gap.
+        // This whole method only ever reads GRA's own AllowancePaymentLog
+        // -- a GA student's allowance comes from gaAllowanceSummary()
+        // below instead, a completely separate table and rule. A null
+        // rate here is still routine (a GRA row with no detail row is a
+        // genuine data gap, but a different one), not evidence of either.
         $rate = GraApplicationDetail::where('application_id', $log->application_id)->value('proposed_allowance');
 
         if ($rate !== null) {
@@ -240,5 +249,32 @@ class AssistantContext
         }
 
         return $line;
+    }
+
+    /**
+     * GA's own allowance cycle -- deliberately separate from the GRA
+     * one above, confirmed explicitly 2026-11-10: "ga ni letak actions
+     * lain. jangan sekali kan dengan allowance gra satu excel." Much
+     * simpler to summarise too: nothing accumulates, so there is no
+     * running total or "if unconfirmed" projection to compute, just the
+     * most recent month's own flat figure and whether CGS/Admin has
+     * marked it paid yet.
+     */
+    protected static function gaAllowanceSummary(User $student): ?string
+    {
+        $month = Carbon::today()->startOfMonth();
+
+        $log = GaAllowancePaymentLog::where('student_id', $student->id)
+            ->where('payment_month', '<=', $month)
+            ->orderByDesc('payment_month')
+            ->first();
+
+        if (! $log) {
+            return null;
+        }
+
+        return "GA Allowance, most recent record ({$log->payment_month->format('M Y')}): "
+            .($log->isConfirmed() ? 'paid' : 'pending confirmation by CGS/Admin')
+            .', amount=RM'.number_format((float) $log->amount, 2).'.';
     }
 }

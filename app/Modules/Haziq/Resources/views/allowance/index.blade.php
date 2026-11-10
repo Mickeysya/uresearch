@@ -28,6 +28,15 @@
         </p>
 
         <form method="GET" action="{{ route('allowance.index') }}" class="haziq-filter-bar">
+            {{-- GRA and GA share this one screen and nav entry, each with
+                 its own rules/table/export underneath -- confirmed
+                 explicitly 2026-11-10: "ga allowoance eleigability masuk
+                 je dekat page allowance eligability. cuma page tu leh
+                 filter tuk ga or gra." --}}
+            <select name="module" data-autosubmit>
+                <option value="gra" @selected(($module ?? 'gra') === 'gra')>GRA</option>
+                <option value="ga" @selected(($module ?? 'gra') === 'ga')>GA</option>
+            </select>
             <input type="month" name="month" value="{{ $month->format('Y-m') }}" data-autosubmit>
             <select name="status" data-autosubmit>
                 <option value="">Any Status</option>

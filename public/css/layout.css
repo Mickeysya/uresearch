@@ -640,6 +640,15 @@ button[value="rejected"]:hover {
     border-color: var(--border-grey);
 }
 
+/* GA Allowance Eligibility's own two states -- 'paid' reuses 'approved'
+   tone, 'pending' here means "not yet marked complete by CGS", same
+   tone as the pending workflow status above. */
+.status-badge.paid {
+    background: var(--success-bg);
+    color: var(--success-fg);
+    border-color: var(--success-border);
+}
+
 /* ============================================================
    7 · Flash messages
 

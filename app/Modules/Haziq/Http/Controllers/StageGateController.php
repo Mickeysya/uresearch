@@ -195,6 +195,16 @@ class StageGateController extends Controller
      * role that reaches this screen, not just candidature_status's own
      * plain active/terminated.
      *
+     * GRA reads through currentInChain() rather than calling
+     * serviceStatus() on $detail directly -- this screen's own rows are
+     * always keyed by the FIRST application in an extension chain (the
+     * only one with real Stage Gates), so without it, an approved
+     * extension carrying the student forward would still read as
+     * "Inactive" here once the original's own window lapsed, confirmed
+     * explicitly 2026-11-10. GA never chains this way (an approved GA
+     * Extension updates the same row in place instead), so it has no
+     * equivalent call.
+     *
      * @param  \Illuminate\Support\Collection<int, int>  $applicationIds
      * @return array<int, string>
      */
@@ -202,7 +212,7 @@ class StageGateController extends Controller
     {
         $gra = GraApplicationDetail::whereIn('application_id', $applicationIds)
             ->get()
-            ->mapWithKeys(fn (GraApplicationDetail $detail) => [$detail->application_id => $detail->serviceStatus()]);
+            ->mapWithKeys(fn (GraApplicationDetail $detail) => [$detail->application_id => $detail->currentInChain()->serviceStatus()]);
         $ga = GaApplicationDetail::whereIn('application_id', $applicationIds)
             ->get()
             ->mapWithKeys(fn (GaApplicationDetail $detail) => [$detail->application_id => $detail->serviceStatus()]);

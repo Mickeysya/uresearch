@@ -31,8 +31,26 @@ use Maatwebsite\Excel\Facades\Excel;
  */
 class AllowanceController extends Controller
 {
-    public function index(Request $request)
+    /**
+     * One shared "Allowance Eligibility" screen and nav entry for
+     * Admin/CGS/Supervisor, with a module filter choosing GRA or GA --
+     * confirmed explicitly 2026-11-10: "ga allowoance eleigability masuk
+     * je dekat page allowance eligability. cuma page tu leh filter tuk
+     * ga or gra... apply for admin dah ke atas." GA's own logic
+     * (GaAllowanceController) is untouched and still independently
+     * reachable at ga-allowance.index -- this just delegates to it
+     * rather than duplicating it, so there is exactly one place either
+     * module's rules live. The export stays two separate files/routes
+     * either way, confirmed the same day as the original ask: "jangan
+     * sekali kan dengan allowance gra satu excel" -- only the browsing
+     * screen is shared, never the download.
+     */
+    public function index(Request $request, GaAllowanceController $gaAllowance)
     {
+        if ($request->query('module') === 'ga') {
+            return $gaAllowance->index($request, app(\App\Modules\Haziq\Support\GaAllowanceEngine::class));
+        }
+
         $user = $request->user();
 
         $month = $request->filled('month')
@@ -78,6 +96,7 @@ class AllowanceController extends Controller
         }
 
         return view('haziq::allowance.index', [
+            'module' => 'gra',
             'rows' => $rows->values(),
             'month' => $month,
             'serviceMonth' => $serviceMonth,

@@ -88,10 +88,12 @@ class KnowledgeBase
             checking the page, either way. The interview date Research
             Centre sets also appears on the student's own Calendar page
             (not only in the email), confirmed explicitly 2026-11-10. A GA
-            appointment does NOT get
-            a Stage Gate schedule and is
-            NOT tracked by the Allowance cycle at all -- those two only ever apply
-            to GRA. Approval issues the Offer and Program Offer Letters. Same
+            appointment does NOT get a Stage Gate schedule, and is NOT
+            tracked by GRA's own Allowance cycle -- that one only ever
+            applies to GRA. GA has its own, separate GA ALLOWANCE CYCLE
+            instead, confirmed explicitly 2026-11-10 -- see that section
+            below; it is never the same screen, export, or rule as GRA's.
+            Approval issues the Offer and Program Offer Letters. Same
             editing rule as GRA: the student can edit every section any time it
             is pending, or approved and not terminated, not only once flagged.
             Same in-flight rule too: only one GA application at a time while
@@ -169,6 +171,25 @@ class KnowledgeBase
             combined with anything Stage 1 itself still owes if it was not yet
             complete.
 
+            GA ALLOWANCE CYCLE (GA only -- separate screen, separate
+            download, separate from everything in THE ALLOWANCE CYCLE
+            above, confirmed explicitly 2026-11-10: "ga ni letak actions
+            lain. jangan sekali kan dengan allowance gra satu excel.")
+            Much simpler than GRA's: GA has no Stage Gates and nothing
+            accumulates. Every month stands completely on its own. The
+            same one-month payroll lag still applies -- a GA appointment's
+            service period only starts showing an amount the month after
+            it begins, and every month after that shows last month's
+            service, including one final month right after service ends
+            (whatever GaApplicationDetail.service_end_date currently is --
+            an approved GA Extension already moves that date in place, so
+            there is nothing extra to account for). Admin or CGS still has
+            to separately mark each month's payment complete, with proof,
+            same action shape as GRA's own -- but a month nobody confirms
+            simply stays "pending" on its own, by itself; it never adds
+            onto the next month's total the way GRA's unconfirmed months
+            do, because nothing here ever accumulates in the first place.
+
             TA HOURS
             A plain monthly activity log, capped at 21 hours per calendar month
             (per single entry; there is no separate running monthly total that
@@ -228,7 +249,8 @@ class KnowledgeBase
 
             WHAT THIS ASSISTANT DOES NOT COVER
             Only GRA Application (new and Extension), GA Application, Document
-            Completeness, Stage Gate monitoring, the Allowance cycle, TA Hours,
+            Completeness, Stage Gate monitoring, the Allowance cycle (GRA's)
+            and the GA Allowance Cycle (GA's own, separate), TA Hours,
             and Candidature Appeal (the termination appeal above). Everything
             else belongs to a different module and a different team member --
             Study Candidacy status/reminder/appeal/dismissal, Workstation seats
