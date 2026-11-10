@@ -40,7 +40,7 @@
     @forelse ($rounds as $round)
         <div class="card card-wide">
             <h3>Re-viva round {{ $round->cycle_number }}</h3>
-            @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::reviva($round), ])
+            @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::reviva($round), 'hideTitle' => true])
 
             @if ($round->application->status === \App\Modules\Core\Models\Application::STATUS_RETURNED && ($return = $round->documentReturns->first()))
                 <p class="message-error">Returned on {{ $return->created_at->format('j M Y') }}: {{ implode(', ', $return->documents) }}. {{ $return->reason }}</p>

@@ -350,6 +350,15 @@ class ReVivaProcessTest extends TestCase
         Notification::assertSentTo($viva['student'], ReVivaUpdate::class, fn ($n) => $n->kind === 'sent_to_examiners');
     }
 
+    public function test_the_student_page_names_the_round_once_and_fits_the_ten_step_tracker(): void
+    {
+        $viva = $this->roundSubmitted();
+        $html = $this->actingAs($viva['student'])->get(route('reviva.mine'))->assertOk()->getContent();
+
+        $this->assertSame(1, substr_count($html, 'Re-viva round 1'));
+        $this->assertStringContainsString('stepper stepper-dense', $html);
+    }
+
     public function test_the_engine_stage_emails_to_a_re_viva_student_are_cancelled(): void
     {
         $viva = $this->roundSubmitted();
