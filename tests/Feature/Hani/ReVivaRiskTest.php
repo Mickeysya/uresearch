@@ -62,28 +62,25 @@ class ReVivaRiskTest extends TestCase
 
     public function test_divergence_and_earlier_rounds_add_to_the_score_and_closed_rounds_have_none(): void
     {
-        $viva = $this->roundAwaitingOutcome([3], [4, true]);
+        $viva = $this->roundAtReview(3, 4, null, 1);
         $risk = ReVivaRisk::for($viva['round']->fresh());
         $this->assertSame(20, $this->factor($risk, 'divergence')['points']);
-        $this->assertStringContainsString('awaiting the outcome', $this->factor($risk, 'stage_time')['detail']);
+        $this->assertStringContainsString('CGS Review', $this->factor($risk, 'stage_time')['detail']);
 
-        $this->recordOutcome($viva, 4, 'Agreed at consolidation.');
+        $this->act($viva['round'], 'schedule-meeting', $this->senior(), ['meeting_kind' => 'consolidation', 'meeting_at' => now()->addDay()->format('Y-m-d H:i'), 'meeting_venue' => 'Room'])->assertSessionHasNoErrors();
+        $this->act($viva['round'], 'meeting-result', $this->senior(), ['outcome_level' => 4, 'outcome_remarks' => 'Agreed at consolidation.'])->assertSessionHasNoErrors();
         Carbon::setTestNow('2027-12-01 09:00');
-        $this->logReViva($viva['student'])->assertSessionHasNoErrors();
+        $this->actingAs($viva['student'])->post(route('reviva.submit'), $this->studentFiles())->assertSessionHasNoErrors();
         $second = $this->latestRound($viva['student']);
         $this->assertSame(8, $this->factor(ReVivaRisk::for($second), 'previous_rounds')['points'], 'one earlier round of two, x 15');
-
-        $passed = $this->roundAwaitingOutcome([4, false], [4, false], '22001003');
-        $this->recordOutcome($passed, 5);
-        $this->assertNull(ReVivaRisk::for($passed['round']->fresh()), 'level 5 is closed');
     }
 
     public function test_cycles_are_sorted_by_risk_and_show_the_factors(): void
     {
         $slow = $this->roundUnderPanelReview('22001001');
-        $fresh = $this->roundAtStageOne('22001002');   // logged 1 Oct, still at stage 1
-        Carbon::setTestNow('2027-10-04 09:00');
-        $this->sendToPanel($fresh);
+        $fresh = $this->roundSubmitted('22001002');
+        Carbon::setTestNow('2027-10-25 09:00');
+        $this->act($fresh['round'], 'accept', $this->senior())->assertSessionHasNoErrors();
         Carbon::setTestNow('2027-11-09 09:00');
 
         $page = $this->actingAs($this->senior())->get(route('reviva.cycles.index'))

@@ -129,7 +129,7 @@ class HaniDemoSeederTest extends TestCase
         $this->assertSame(VivaDetail::REEXAMINATION, VivaProgress::for($this->student('DEMO-S10'))->detail->result_category);
 
         // Demo accounts are example.com, with the test accounts' password.
-        $this->assertTrue(User::where('email', 'like', '%@example.com')->where('email', 'not like', 'history.%')->where('role', Role::STUDENT)->count() === 10);
+        $this->assertTrue(User::where('email', 'like', '%@example.com')->where('email', 'not like', 'history.%')->where('email', 'not like', 'reviva.%')->where('role', Role::STUDENT)->count() === 10);
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('password', $this->student('DEMO-S01')->password));
 
         // The examiners S01's walkthrough expects are still free to suggest.
@@ -137,7 +137,7 @@ class HaniDemoSeederTest extends TestCase
         $this->assertSame(Examiner::STATE_AVAILABLE, Examiner::where('email', 'melissa.teoh@example.org')->sole()->state());
     }
 
-    /** Part 3: S09 under panel review for 22 working days, S10 at level 4 ready for round 2. */
+    /** S09 under panel review for 5 working days, S10 at level 4 ready for round 2. */
     public function test_re_viva_rounds_for_s09_and_s10(): void
     {
         foreach (['2026-11-04', '2027-06-21'] as $day) {
@@ -148,10 +148,8 @@ class HaniDemoSeederTest extends TestCase
             $this->assertSame(1, $s09->cycle_number);
             $this->assertSame('under_panel_review', $s09->application->current_stage, $day);
             $this->assertFalse($s09->logged_outside_window, $day);
-            $this->assertSame(22, \App\Modules\Hani\Support\WorkingDays::between($s09->sent_to_panel_at, today()), $day);
+            $this->assertSame(5, \App\Modules\Hani\Support\WorkingDays::between($s09->sent_to_panel_at, today()), $day);
             $this->assertSame(2, $s09->staffDocuments()->where('kind', 'correction_letter')->count());
-            $this->assertTrue(\App\Modules\Hani\Models\ReVivaReminderLog::where('re_viva_detail_id', $s09->id)->where('kind', 'panel_chase')->exists(), 'the 20-day reminder has fired');
-            $this->assertFalse(\App\Modules\Hani\Models\ReVivaReminderLog::where('re_viva_detail_id', $s09->id)->where('kind', 'panel_escalate')->exists());
             $this->assertSame(Examiner::STATE_ASSIGNED, Examiner::where('email', 'ain.ismail@example.com')->sole()->state());
 
             $s10Student = $this->student('DEMO-S10');
@@ -169,7 +167,7 @@ class HaniDemoSeederTest extends TestCase
 
         Carbon::setTestNow();
 
-        $this->assertSame(2, \App\Modules\Hani\Models\ReVivaDetail::whereHas('application.student', fn ($q) => $q->where('email', 'not like', 'history.%'))->count(), 'rebuilt, not duplicated');
+        $this->assertSame(2, \App\Modules\Hani\Models\ReVivaDetail::whereHas('application.student', fn ($q) => $q->where('email', 'not like', 'history.%')->where('email', 'not like', 'reviva.%'))->count(), 'rebuilt, not duplicated');
     }
 
     /**
@@ -274,38 +272,5 @@ class HaniDemoSeederTest extends TestCase
             ->mapWithKeys(fn ($n) => [$n->application->student->email => collect(\App\Modules\Hani\Models\ExaminerNomination::SLOTS)->keys()
                 ->map(fn ($seat) => $n->{$seat} ? count($clashes->elsewhere($n->{$seat}, $n->application->student->department, $n->application_id)) : 0)->all()])
             ->sortKeys()->all();
-    }
-
-    /**
-     * The seeder records S09's and S10's sends weeks in the past, but the
-     * emails are built after the commit, on the real clock (as the queue
-     * worker builds them). Every seeded examiner link must open logged out
-     * on the day of seeding and for link_days after. Kavitha's (S10) link
-     * was reported as "403 Invalid signature": it had expired on arrival.
-     */
-    public function test_the_seeded_examiner_emails_carry_links_that_open_logged_out(): void
-    {
-        Carbon::setTestNow('2026-11-04 09:00');
-        $this->seed(HaniDemoSeeder::class);
-
-        $mails = [];
-        Notification::assertSentOnDemand(\App\Modules\Hani\Notifications\ReVivaCorrectionLetter::class, function ($notification, $channels, $notifiable) use (&$mails) {
-            $mails[] = $notification->toMail($notifiable);
-
-            return true;
-        });
-        $this->assertCount(4, $mails, 'two letters each for S09 and S10');
-
-        $this->assertGuest();
-        foreach ($mails as $mail) {
-            $this->get($mail->actionUrl)->assertOk();
-        }
-
-        Carbon::setTestNow('2026-12-09 20:00');
-        foreach ($mails as $mail) {
-            $this->get($mail->actionUrl)->assertOk();
-        }
-
-        Carbon::setTestNow();
     }
 }

@@ -9,8 +9,6 @@ use App\Modules\Hani\Models\ExaminerNomination;
 use App\Modules\Hani\Models\ReVivaDetail;
 use App\Modules\Hani\Support\ModuleTracker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
@@ -26,31 +24,23 @@ class ModuleTrackerTest extends TestCase
 
     protected function cycle(): ReVivaDetail
     {
-        Storage::fake('local');
-
-        $this->actingAs($this->seniorExec())->post(route('reviva.store'), [
-            'student_id' => $this->student()->id,
-            'thesis' => UploadedFile::fake()->create('thesis.pdf', 64, 'application/pdf'),
-            'viva_result_date' => now()->subMonths(7)->toDateString(),
-            'summary_of_corrections' => UploadedFile::fake()->create('summary.pdf', 20, 'application/pdf'),
-        ]);
+        $application = Application::create(['student_id' => $this->student()->id, 'module_type' => 're_viva', 'status' => Application::STATUS_DRAFT]);
+        ReVivaDetail::create(['application_id' => $application->id, 'cycle_number' => 1, 'resubmission_at' => now()]);
+        app(\App\Modules\Core\Services\WorkflowEngine::class)->submit($application);
 
         return ReVivaDetail::with('application')->sole();
     }
 
-    public function test_a_new_cycle_is_at_panel_review_in_round_one(): void
+    public function test_a_new_round_waits_for_the_document_check(): void
     {
         $tracker = ModuleTracker::reviva($this->cycle());
 
         $this->assertSame('Re-viva round 1', $tracker['title']);
-        $this->assertSame(['completed', 'current', 'upcoming', 'upcoming'], array_column($tracker['steps'], 'state'));
-        $this->assertStringContainsString('panel', $tracker['now']);
+        $this->assertCount(10, $tracker['steps']);
+        $this->assertSame('current', $tracker['steps'][0]['state']);
+        $this->assertStringContainsString('checking', $tracker['now']);
 
-        // And it renders on the AE's queue.
-        $this->actingAs($this->academicExec())->get(route('reviva.queue'))
-            ->assertOk()
-            ->assertSee('Re-viva round 1')
-            ->assertSee('Panel Review');
+        $this->actingAs($this->seniorExec())->get(route('reviva.queue'))->assertOk()->assertSee('Re-viva round 1');
     }
 
     public function test_outcome_levels(): void
@@ -63,8 +53,8 @@ class ModuleTrackerTest extends TestCase
 
         $detail->update(['outcome_level' => ReVivaDetail::OUTCOME_LOOP_BACK]);
         $tracker = ModuleTracker::reviva($detail);
-        $this->assertStringContainsString('re-viva round 2', $tracker['now']);
-        $this->assertSame('rejected', $tracker['steps'][3]['state']);
+        $this->assertStringContainsString('Round 2', $tracker['now']);
+        $this->assertSame('rejected', $tracker['steps'][9]['state']);
 
         $detail->update(['outcome_level' => ReVivaDetail::OUTCOME_DISMISSED]);
         $this->assertStringContainsString('no further action', ModuleTracker::reviva($detail)['now']);
