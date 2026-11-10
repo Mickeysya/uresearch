@@ -12,7 +12,6 @@ use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\GraGaStudentProfile;
 use App\Modules\Haziq\Models\StageGate;
-use App\Modules\Haziq\Support\Roles;
 
 /**
  * GRA Application — new appointments and extensions alike.
@@ -180,15 +179,24 @@ class GraApplicationWorkflow implements WorkflowModule, ProvidesLinks
             $links[] = ['label' => 'GRA Applicants', 'route' => 'gra-application.index'];
             $links[] = ['label' => 'Stage Gate Monitoring', 'route' => 'stage-gate.index'];
             $links[] = ['label' => 'Allowance Eligibility', 'route' => 'allowance.index'];
-            $links[] = ['label' => 'Document Completeness', 'route' => 'document-completeness.index'];
             $links[] = ['label' => 'Candidature Appeals', 'route' => 'candidature-appeal.queue'];
         }
 
-        // Spans both GRA and GA, so every actor in either chain gets it —
-        // Research Centre included, which the block above doesn't cover
-        // since it has no business with GRA-specific screens. Confirmed
-        // explicitly 2026-11-06: "i want all of the actors to see this."
-        if ($user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR || $user->role === Roles::RESEARCH_CENTRE) {
+        // Admin only — see the route's own middleware. Confirmed
+        // explicitly 2026-11-10: "document completeness analysis ni
+        // boleh tengok by admin je user lain taleh tengok."
+        if ($user->isAdmin()) {
+            $links[] = ['label' => 'Document Completeness', 'route' => 'document-completeness.index'];
+        }
+
+        // Spans both GRA and GA, so every actor in either chain gets it,
+        // confirmed explicitly 2026-11-06: "i want all of the actors to
+        // see this" -- except Research Centre, confirmed explicitly
+        // 2026-11-10: "untuk research centre die leh tengok ga
+        // application nye part je, lain tak leh tengok." Research Centre
+        // stays visible to this screen as a row of data (see
+        // DelayByActorReport::NARROWABLE_ROLES), just not as a viewer.
+        if ($user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR) {
             $links[] = ['label' => 'Delay by Actor', 'route' => 'delay-report.index'];
         }
 

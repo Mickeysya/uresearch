@@ -133,4 +133,124 @@ class GraExtensionEligibilityTest extends TestCase
 
         $this->assertSame(1, Application::where('module_type', 'gra_application')->count());
     }
+
+    /* -----------------------------------------------------------------
+     | Save Draft -- confirmed explicitly 2026-11-10: the form already had
+     | this button wired to this route; storeExtension() never implemented
+     | the backend for it. "sav draft feature pun ada jangan lupa for both."
+     |------------------------------------------------------------------*/
+
+    public function test_saving_a_draft_never_calls_submit_and_keeps_status_draft(): void
+    {
+        $student = $this->studentWithTermsAccepted();
+        $parent = $this->graApplication($student, Application::STATUS_APPROVED);
+
+        $this->actingAs($student)->post(route('gra-application.extension.store'), [
+            'action' => 'save_draft',
+            'parent_application_id' => $parent->id,
+            'project_leader_name' => 'Dr. Lim',
+            'project_title' => 'Reservoir Simulation under Uncertainty',
+            'funding_source' => 'UTP Internal Grant',
+            'funding_continuation' => 'existing',
+            // Deliberately missing: requested_new_end_date, extension_reason.
+        ])->assertRedirect(route('gra-application.extension.create'));
+
+        $draft = Application::where('module_type', 'gra_application')->where('status', Application::STATUS_DRAFT)->sole();
+        $detail = GraApplicationDetail::where('application_id', $draft->id)->sole();
+
+        $this->assertSame('extension', $detail->application_type);
+        $this->assertSame($parent->id, $detail->parent_application_id);
+        $this->assertNull($draft->current_stage, 'never submitted, so never entered the workflow');
+        // NOT NULL in the DB -- falls back to the parent's own current end
+        // date rather than ever being left null while undecided.
+        $this->assertNotNull($detail->service_end_date);
+    }
+
+    public function test_my_drafts_lists_it_and_continuing_it_shows_the_saved_values(): void
+    {
+        $student = $this->studentWithTermsAccepted();
+        $parent = $this->graApplication($student, Application::STATUS_APPROVED);
+
+        $this->actingAs($student)->post(route('gra-application.extension.store'), [
+            'action' => 'save_draft',
+            'parent_application_id' => $parent->id,
+            'project_leader_name' => 'Dr. Lim',
+            'project_title' => 'Reservoir Simulation under Uncertainty',
+            'funding_source' => 'UTP Internal Grant',
+            'funding_continuation' => 'existing',
+        ]);
+
+        $draft = Application::where('module_type', 'gra_application')->where('status', Application::STATUS_DRAFT)->sole();
+
+        $this->actingAs($student)->get(route('nureen.drafts'))
+            ->assertOk()
+            ->assertSee(route('gra-application.draft.edit', $draft), false);
+
+        // editDraft() has to route an 'extension' draft to createExtension(),
+        // not create() (the 'new' form) -- it used to go there
+        // unconditionally, since every draft was a 'new' one by definition
+        // before this existed.
+        $this->actingAs($student)->get(route('gra-application.draft.edit', $draft))
+            ->assertOk()
+            ->assertSee('Continuing your saved draft')
+            ->assertSee('Dr. Lim');
+    }
+
+    public function test_submitting_a_continued_draft_reuses_it_and_enters_the_workflow(): void
+    {
+        $student = $this->studentWithTermsAccepted();
+        $parent = $this->graApplication($student, Application::STATUS_APPROVED);
+
+        $this->actingAs($student)->post(route('gra-application.extension.store'), [
+            'action' => 'save_draft',
+            'parent_application_id' => $parent->id,
+            'project_leader_name' => 'Dr. Lim',
+            'project_title' => 'Reservoir Simulation under Uncertainty',
+            'funding_source' => 'UTP Internal Grant',
+            'funding_continuation' => 'existing',
+        ]);
+
+        $draft = Application::where('module_type', 'gra_application')->where('status', Application::STATUS_DRAFT)->sole();
+
+        $this->actingAs($student)->post(route('gra-application.extension.store'), [
+            'action' => 'submit',
+            'draft_id' => $draft->id,
+            'parent_application_id' => $parent->id,
+            'project_leader_name' => 'Dr. Lim',
+            'project_title' => 'Reservoir Simulation under Uncertainty',
+            'funding_source' => 'UTP Internal Grant',
+            'funding_continuation' => 'existing',
+            'requested_new_end_date' => now()->addMonths(50)->toDateString(),
+            'extension_reason' => 'Fieldwork slipped two semesters and needs the assistantship to continue.',
+        ])->assertRedirect(route('applications.index'));
+
+        // Reused, not duplicated -- still just the parent plus this one.
+        $this->assertSame(2, Application::where('module_type', 'gra_application')->count());
+
+        $application = $draft->fresh();
+        $this->assertSame(Application::STATUS_PENDING, $application->status);
+        $this->assertSame('admin_verify', $application->current_stage);
+    }
+
+    public function test_deleting_a_draft_removes_it_and_its_detail_row(): void
+    {
+        $student = $this->studentWithTermsAccepted();
+        $parent = $this->graApplication($student, Application::STATUS_APPROVED);
+
+        $this->actingAs($student)->post(route('gra-application.extension.store'), [
+            'action' => 'save_draft',
+            'parent_application_id' => $parent->id,
+            'project_leader_name' => 'Dr. Lim',
+            'project_title' => 'Reservoir Simulation under Uncertainty',
+            'funding_source' => 'UTP Internal Grant',
+            'funding_continuation' => 'existing',
+        ]);
+
+        $draft = Application::where('module_type', 'gra_application')->where('status', Application::STATUS_DRAFT)->sole();
+
+        $this->actingAs($student)->delete(route('gra-application.draft.destroy', $draft))->assertRedirect();
+
+        $this->assertSame(0, Application::whereKey($draft->id)->count());
+        $this->assertSame(0, GraApplicationDetail::where('application_id', $draft->id)->count());
+    }
 }

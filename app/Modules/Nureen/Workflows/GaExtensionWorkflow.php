@@ -149,6 +149,20 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
     /** @return array<int, Stage> */
     protected function chainFor(string $mode): array
     {
+        // Added 2026-11-10 to align with how GRA/GA's own extension flow
+        // already works: an Admin stage verifying the request's paperwork
+        // before it reaches a Supervisor, same role and same "never
+        // rejects outright" rule as GraApplicationController/
+        // GaApplicationController's own admin_verify -- see
+        // GaExtensionController::decide().
+        $adminStage = new Stage(
+            key: 'admin_verify',
+            label: 'Admin',
+            role: Role::ADMIN,
+            decision: 'verified',
+            queueTitle: 'Pending Document Verification',
+        );
+
         $supervisorStage = new Stage(
             key: 'supervisor',
             label: 'Lecturer/Supervisor',
@@ -159,6 +173,7 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
 
         if ($mode === 'senior_director') {
             return [
+                $adminStage,
                 $supervisorStage,
                 new Stage(
                     key: 'cgs_verify',
@@ -178,6 +193,7 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
         }
 
         return [
+            $adminStage,
             $supervisorStage,
             new Stage(
                 key: 'cgs_verify',
@@ -266,19 +282,40 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
      * Nureen's approval modules (GA Extension, Supervision, Certification)
      * -- declared here only because a link has to belong to one module.
      * See Http\Controllers\ExpectedDecisionController.
+     *
+     * "GA Extension" (student) was missing entirely until now -- a
+     * student had no way to find the apply form without already knowing
+     * the URL. Confirmed explicitly 2026-11-10: "kat actions student
+     * mana my ga extention."
+     *
+     * The approver side deliberately does NOT get its own "GA Extension"
+     * sidebar entry, even though the student side does -- confirmed
+     * explicitly the same day, right after adding one: "buaag ga
+     * extentions dekat actions, buat je kat page ga boleh filter
+     * application or extention, tapi taknak ada both [as separate
+     * things]." An approver reaches GA Extension's own queue (with its
+     * own Pending by Stage chart) as a tab on "GA Applicants" instead --
+     * see ga_application/index.blade.php and ga_extension/queue.blade.php.
      */
     public function links(User $user): array
     {
-        return match ($user->role) {
-            Role::STUDENT => [
+        if ($user->isStudent()) {
+            return [
+                ['label' => 'GA Extension', 'route' => 'ga-extension.create'],
                 ['label' => 'Expected Decision Dates', 'route' => 'nureen.expected-dates'],
                 // Saved GA Extension and Certification drafts -- Support\Drafts.
                 ['label' => 'My Drafts', 'route' => 'nureen.drafts'],
-            ],
-            // Requests no account can act on -- Support\StuckSupervisorStages.
-            Role::NON_EXEC_CGS => [['label' => 'Stuck Reviews', 'route' => 'nureen.stuck-reviews']],
-            default => [],
-        };
+            ];
+        }
+
+        $links = [];
+
+        // Requests no account can act on -- Support\StuckSupervisorStages.
+        if ($user->role === Role::NON_EXEC_CGS) {
+            $links[] = ['label' => 'Stuck Reviews', 'route' => 'nureen.stuck-reviews'];
+        }
+
+        return $links;
     }
 
     /**

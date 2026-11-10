@@ -214,7 +214,7 @@ class DraftsTest extends TestCase
         $this->assertSame(1, Application::where('module_type', 'ga_extension')->count());
         $application = $draft->fresh();
         $this->assertSame(Application::STATUS_PENDING, $application->status);
-        $this->assertSame('supervisor', $application->current_stage);
+        $this->assertSame('admin_verify', $application->current_stage);
         $this->assertNotNull($application->submitted_at);
 
         $detail = GaExtensionDetail::where('application_id', $application->id)->sole();

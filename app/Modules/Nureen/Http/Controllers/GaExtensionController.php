@@ -646,7 +646,37 @@ class GaExtensionController extends Controller
             // incomplete application back to the supervisor rather than
             // rejecting it outright -- see returnToSupervisor().
             'canReturn' => $queue['stage']->key === 'cgs_verify',
+            'bottleneck' => $this->pendingByStage(),
         ]);
+    }
+
+    /**
+     * "Where is the bottleneck" for GA Extension, same pattern as
+     * GraApplicationController/GaApplicationController's own
+     * pendingByStage() -- added 2026-11-10, confirmed explicitly: "pending
+     * stage analysis... kat gra extention and ga extention... rasanya buat
+     * bagus." allStages() (no application) is the superset of both
+     * approval-mode chains, so a student mid-way through either mode still
+     * counts correctly against whichever stage key they're actually at.
+     *
+     * @return \Illuminate\Support\Collection<int, array{key: string, label: string, count: int}>
+     */
+    protected function pendingByStage(): \Illuminate\Support\Collection
+    {
+        $counts = Application::where('module_type', $this->moduleKey())
+            ->where('status', Application::STATUS_PENDING)
+            ->selectRaw('current_stage, count(*) as total')
+            ->groupBy('current_stage')
+            ->pluck('total', 'current_stage');
+
+        return collect(app(GaExtensionWorkflow::class)->stages())
+            ->unique(fn (Stage $stage) => $stage->key)
+            ->map(fn (Stage $stage) => [
+                'key' => $stage->key,
+                'label' => $stage->label,
+                'count' => (int) ($counts[$stage->key] ?? 0),
+            ])
+            ->values();
     }
 
     /**
@@ -710,6 +740,15 @@ class GaExtensionController extends Controller
         $stage = $engine->currentStage($application);
         $mode = app(GaExtensionWorkflow::class)->modeFor($application);
 
+        // Admin's stage is paperwork verification only, same rule as
+        // GraApplicationController/GaApplicationController's own
+        // admin_verify -- a problem there is a correction request sent
+        // back to the student, never an outright rejection. Added
+        // 2026-11-10 alongside the stage itself.
+        if ($stage?->key === 'admin_verify' && $data['decision'] === 'reject') {
+            return back()->with('error', 'Admin does not reject applications — resolve the issue with the student directly instead.');
+        }
+
         // The engine only checks the role. At the 'supervisor' stage that
         // is every supervisor in the university; this application is
         // addressed to one of them -- see queue().
@@ -728,6 +767,32 @@ class GaExtensionController extends Controller
 
         if ($stage && $decided->status !== Application::STATUS_PENDING) {
             $this->notifyFinalDecision($decided, $stage, $data['decision'] === 'approve', $mode);
+        } elseif ($decided->status === Application::STATUS_PENDING) {
+            // Admin clearing the paperwork is the one stage SubmissionNotifier
+            // never names an individual for -- it's "whoever acts first",
+            // which used to always mean the named supervisor at submission
+            // time. Added 2026-11-10 alongside the Admin stage: this is a
+            // no-op for every later transition (recipients() still only
+            // ever names the supervisor, whose role won't match cgs_verify
+            // or senior_director), so it only actually fires here.
+            app(SubmissionNotifier::class)->notify($decided);
+        }
+
+        // The extension's whole point is a new end date for the GA
+        // appointment itself -- approving it here has to actually move
+        // that date on the real ga_application, or everything that reads
+        // SuppliesApprovedGaApplication::approvedFor() (this module's own
+        // active-GA checks, Norhanis' Travel TA plan) keeps seeing the
+        // original end date forever. Confirmed explicitly 2026-11-10.
+        if ($decided->status === Application::STATUS_APPROVED && app()->bound(SuppliesApprovedGaApplication::class)) {
+            $extensionDetail = GaExtensionDetail::where('application_id', $decided->id)->first();
+
+            if ($extensionDetail) {
+                app(SuppliesApprovedGaApplication::class)->extendEndDate(
+                    $decided->student,
+                    $extensionDetail->requested_new_end_date
+                );
+            }
         }
 
         $verb = $data['decision'] === 'approve' ? 'approved' : 'rejected';

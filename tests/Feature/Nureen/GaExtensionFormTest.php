@@ -54,13 +54,25 @@ class GaExtensionFormTest extends TestCase
         $this->approveGaApplication($this->student);
     }
 
+    /**
+     * Clears the Admin paperwork-verification stage added 2026-11-10
+     * automatically -- every test in this file is about what happens from
+     * the Supervisor stage onward (Section E/J, masking, letters), never
+     * about admin_verify itself, so there is no reason to make each one
+     * act as Admin first just to get there.
+     */
     protected function submit(array $overrides = [], ?User $as = null): Application
     {
         $this->actingAs($as ?? $this->student)
             ->post(route('ga-extension.store'), $this->gaExtensionFields($overrides) + $this->gaExtensionDocuments())
             ->assertSessionHasNoErrors();
 
-        return Application::where('module_type', 'ga_extension')->latest('id')->firstOrFail();
+        $application = Application::where('module_type', 'ga_extension')->latest('id')->firstOrFail();
+
+        $this->actingAs($this->admin())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        return $application->fresh();
     }
 
     protected function detail(Application $application): GaExtensionDetail
@@ -349,6 +361,7 @@ class GaExtensionFormTest extends TestCase
         $this->assertSame([false, false, false, false], array_column($checklist, 'cgs'));
         $this->assertSame(['Proof of Journal Article Acceptance'], $checklist[3]['attached']);
 
+        $this->actingAs($this->admin())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
         $this->actingAs($this->supervisor)->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
         $this->actingAs($this->cgs())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 

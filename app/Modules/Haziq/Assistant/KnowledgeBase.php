@@ -63,14 +63,37 @@ class KnowledgeBase
             "current" appointment being extended is always whichever GRA
             application was approved most recently, extension or not, so there is
             no limit on how many times in a row an appointment can be extended.
+            Save Draft works here exactly like it does on a new GRA application --
+            everything can be left half-filled and saved, picked up again later
+            from My Drafts, with only the evidence document genuinely optional
+            until Submit. Confirmed explicitly 2026-11-10: the form's own Save
+            Draft button existed before this, this assistant should not say
+            otherwise.
 
             GA APPLICATION
             Routed Student -> Admin (verifies) -> Research Centre (conducts an
             interview, Pass or Fail) -> CGS Staff -> Supervisor -> Senior Director.
-            A Research Centre Fail rejects outright right there; CGS never even
-            sees it. A GA appointment does NOT get a Stage Gate schedule and is
-            NOT tracked by the Allowance cycle at all -- those two only ever apply
-            to GRA. Approval issues the Offer and Program Offer Letters. Same
+            The interview has a start AND an end time, confirmed explicitly
+            2026-11-10, not just one timestamp -- the student is told both.
+            Which Research Centre reviewer handles this is never the student's
+            own choice -- it is always whoever holds that role in the SAME
+            department the student's own profile is set to, confirmed
+            explicitly 2026-11-10: a Research Centre reviewer only ever sees
+            and interviews students in their own department, never any other
+            department's applicants. A Research Centre Fail rejects outright
+            right there; CGS never even sees it, and the student is emailed
+            immediately that it failed. A Pass emails the student too,
+            confirmed explicitly 2026-11-10, before it moves on to CGS -- the
+            student is never left to find out an interview result only by
+            checking the page, either way. The interview date Research
+            Centre sets also appears on the student's own Calendar page
+            (not only in the email), confirmed explicitly 2026-11-10. A GA
+            appointment does NOT get a Stage Gate schedule, and is NOT
+            tracked by GRA's own Allowance cycle -- that one only ever
+            applies to GRA. GA has its own, separate GA ALLOWANCE CYCLE
+            instead, confirmed explicitly 2026-11-10 -- see that section
+            below; it is never the same screen, export, or rule as GRA's.
+            Approval issues the Offer and Program Offer Letters. Same
             editing rule as GRA: the student can edit every section any time it
             is pending, or approved and not terminated, not only once flagged.
             Same in-flight rule too: only one GA application at a time while
@@ -80,6 +103,27 @@ class KnowledgeBase
             calculation for GA, since there is no Stage Gate schedule to match it
             to. GA has no extension of its own through this assistant at all --
             see the "DO NOT CONFUSE" note below.
+
+            APPOINTMENT STATUS (GRA and GA both, shown on "My GRA/GA
+            Application" and on Stage Gate Monitoring for every role)
+            Separate from the application's own workflow status (Pending /
+            Approved / Rejected) above, which never changes once a decision is
+            made. Once Approved, the appointment itself goes through its own
+            further lifecycle, read fresh off today's date against the
+            appointment's own service_start_date/service_end_date, never
+            stored or decided by a person: "Approved" until service_start_date
+            actually arrives, then "Active" for as long as today falls within
+            the service period, then "Inactive" once service_end_date passes
+            with nothing currently covering it. This is not a termination --
+            an Inactive appointment is simply between periods, not forfeited.
+            An approved extension is what brings it back to "Active": the
+            moment the extension's own new, later end date is in place, the
+            same date check reads "Active" again immediately, even if the old
+            end date had already passed and it had been reading "Inactive" for
+            a while. If a student asks why their status still says "Approved"
+            when they expected "Active", check whether today has actually
+            reached their service_start_date yet -- it only flips exactly
+            then, never earlier.
 
             STAGE GATE MONITORING (GRA only)
             A Master's student has THREE milestones; a PhD student has FOUR -- one
@@ -127,6 +171,39 @@ class KnowledgeBase
             combined with anything Stage 1 itself still owes if it was not yet
             complete.
 
+            GA ALLOWANCE CYCLE (GA only, but shares GRA's own "Allowance
+            Eligibility" screen and sidebar link for Admin/CGS/Supervisor
+            via a module filter -- confirmed explicitly 2026-11-10,
+            revising an earlier fully-separate-nav-bar version the same
+            day. The download stays two separate files regardless: "ga
+            ni letak actions lain. jangan sekali kan dengan allowance gra
+            satu excel." A student never sees that filter at all -- they
+            reach this only through their own "My Allowance"/"My GA
+            Allowance" link, confirmed explicitly 2026-11-10: "kenapa
+            student boleh filter lagi ga sedangkan ga application die
+            tak approve pun lagi" -- so there is nothing for them to
+            toggle to a module they may not even have approved.)
+            Simpler than GRA's in one respect only -- no Stage Gates, no
+            termination, no partial-month judgement calls -- but it
+            accumulates the exact same way GRA's own does, confirmed
+            explicitly 2026-11-10, reversing an earlier "resets every
+            month" version from the same day: "ga pun sama ah, kalau ada
+            accumulated amount on service end month, month after payment
+            accumulated amount tu." The same one-month payroll lag still
+            applies -- a GA appointment's service period only starts
+            showing an amount the month after it begins, and every month
+            after that shows last month's service, including one final
+            month right after service ends (whatever GaApplicationDetail.
+            service_end_date currently is -- an approved GA Extension
+            already moves that date in place, so there is nothing extra
+            to account for). Admin or CGS still has to separately mark
+            each month's payment complete, with proof, same action shape
+            as GRA's own -- but a month nobody confirms adds onto the
+            NEXT month's running total instead of standing alone, and
+            confirming has to happen in order, oldest unconfirmed month
+            first, same reason GRA locks a second consecutive withheld
+            month the same way.
+
             TA HOURS
             A plain monthly activity log, capped at 21 hours per calendar month
             (per single entry; there is no separate running monthly total that
@@ -136,18 +213,25 @@ class KnowledgeBase
 
             DOCUMENT COMPLETENESS (GRA and GA, 'new' applications only -- never a
             GRA Extension, which was never gated on these at Submit)
-            A missing required document NEVER blocks an application from moving to
-            its next approver -- it is a parallel tracking concern only, never a
-            gate. GRA needs eight: Resume/CV, Academic Transcript, Visa/IC, UTP
-            Admission Offer Letter, Bank Account Details Letter, Study Plan (Gantt
-            Chart), Grant Utilization Approval, and a GRA Supporting Letter from
-            Supervisor. GA needs three: Resume/CV, Academic Transcript, Visa/IC.
-            While anything required is still missing and the application is not
-            yet rejected, the student is reminded automatically once a week (and
-            may also be reminded on demand by Admin/CGS/Supervisor/Senior
-            Director) listing exactly what is still missing, by name -- this never
-            means anything is wrong with the application itself, only that a file
-            has not been uploaded yet.
+            A missing required document never blocks the STUDENT from submitting,
+            and never blocks any stage after Admin's own. The one deliberate
+            exception, added 2026-11-10: Admin's own admin_verify decision
+            specifically cannot say "verified" while something required is still
+            missing -- that check is the whole point of Admin's own stage. Every
+            later stage (CGS, Supervisor, Senior Director, Research Centre) still
+            never gates on this at all. GRA needs eight: Resume/CV, Academic
+            Transcript, Visa/IC, UTP Admission Offer Letter, Bank Account Details
+            Letter, Study Plan (Gantt Chart), Grant Utilization Approval, and a
+            GRA Supporting Letter from Supervisor. GA needs three: Resume/CV,
+            Academic Transcript, Visa/IC. While anything required is still
+            missing and the application is not yet rejected, the student is
+            reminded automatically once a week, listing exactly what is still
+            missing, by name -- this never means anything is wrong with the
+            application itself, only that a file has not been uploaded yet. The
+            Document Completeness report, and its on-demand "Send Reminder to
+            All" action, are Admin-only -- CGS, Supervisor, and Senior Director
+            cannot see that screen at all, unlike Stage Gate and Allowance
+            Eligibility, which that wider group does share.
 
             CANDIDATURE APPEAL
             The only way back from a Stage 2/3 termination. A terminated student
@@ -160,14 +244,27 @@ class KnowledgeBase
             they mean rather than guessing.
 
             CORRECTION REQUESTS
-            Any approver can flag one section, one field, or one document as
-            wrong without rejecting the whole application. The target and the
-            remarks explaining what is wrong are shown to the student precisely
-            so they know what to fix -- never hidden from them.
+            Admin, CGS Staff, or the student's own Supervisor can flag one
+            section, one field, or one document as wrong without rejecting the
+            whole application. The target and the remarks explaining what is
+            wrong are shown to the student precisely so they know what to fix
+            -- never hidden from them. This is open at any stage the
+            application is still pending at, not only the flagging approver's
+            own current turn -- Admin can still flag something after
+            Supervisor's stage, for instance. The one exception: once a
+            specific approver has already recorded their own decision on this
+            application, that same person specifically can no longer flag
+            anything further -- confirmed explicitly 2026-11-10, and true for
+            both GRA and GA alike. Someone else further along the chain who
+            has not yet decided can still flag. Research Centre, GA's own
+            fifth role, is NOT in this list -- confirmed explicitly
+            2026-11-10: its only actions on a GA application are scheduling
+            the interview and deciding Pass/Fail, nothing else.
 
             WHAT THIS ASSISTANT DOES NOT COVER
             Only GRA Application (new and Extension), GA Application, Document
-            Completeness, Stage Gate monitoring, the Allowance cycle, TA Hours,
+            Completeness, Stage Gate monitoring, the Allowance cycle (GRA's)
+            and the GA Allowance Cycle (GA's own, separate), TA Hours,
             and Candidature Appeal (the termination appeal above). Everything
             else belongs to a different module and a different team member --
             Study Candidacy status/reminder/appeal/dismissal, Workstation seats
@@ -183,11 +280,13 @@ class KnowledgeBase
             near-identical name these are two unrelated things owned by two
             different people. "GRA Extension" (covered above, in scope) extends
             a GRA appointment and reuses this module's own gra_application chain.
-            "GA Extension" is a completely different, separate module (Supervisor
-            -> CGS Staff -> Senior Director CGS, a wholly different chain and
-            team) that happens to share the word "extension" and nothing else --
-            it is out of scope, same as every other module in the list above. If
-            a student's wording is ambiguous between the two, ask which one they
+            "GA Extension" is a completely different, separate module (Admin ->
+            Supervisor -> CGS Staff -> Senior Director CGS, a wholly different
+            chain and team -- updated 2026-11-10 to add its own Admin
+            verification step, matching GRA/GA Application's own shape) that
+            happens to share the word "extension" and nothing else -- it is out
+            of scope, same as every other module in the list above. If a
+            student's wording is ambiguous between the two, ask which one they
             mean rather than guessing.
 
             WHO DOES WHAT
@@ -205,6 +304,17 @@ class KnowledgeBase
             suspend/terminate/back-pay rules above against real deadlines, never
             invents a new rule of its own.
 
+            WHAT A STUDENT CAN AND CANNOT KNOW ABOUT THEIR OWN SUPERVISOR
+            Confirmed explicitly 2026-11-10: who a student's own assigned
+            supervisor IS -- their name -- is not confidential, and answering
+            it is never gated on the application having actually reached the
+            Supervisor stage yet; it is a plain fact of the student's own
+            record, same as their own department or programme. Nothing
+            FURTHER about that person is ever shared, even if asked directly:
+            not their other supervisees, not how long they typically take to
+            decide, not any internal note or performance figure. The line
+            between the two is identity versus everything else about them.
+
             WHAT A STUDENT'S OWN RECORDS NEVER INCLUDE, EVEN IF ASKED
             A pending application's allowance amount is set by CGS but is NOT
             shown to the student until the application is actually approved --
@@ -215,7 +325,11 @@ class KnowledgeBase
             such as how long an approver takes, which role or individual causes
             delay, or any other actor-performance analysis -- that is CGS/Admin
             internal monitoring, never a student-facing topic, and must be
-            declined even if directly asked.
+            declined even if directly asked. This is exactly why a
+            supervisor's NAME is fine (see the section just above) but any
+            further detail about them is not: a name identifies who they are,
+            everything past that starts being an actor-performance or
+            internal-monitoring fact about them.
             TEXT;
     }
 }

@@ -19,6 +19,32 @@
             @if ($stage) &middot; currently with <b>{{ $stage->label }}</b> @endif
         </p>
 
+        {{-- The appointment's own lifecycle, separate from the application's
+             workflow status above -- approved, then active once
+             service_start_date arrives, then inactive once
+             service_end_date passes with no approved extension covering
+             today. Confirmed explicitly 2026-11-10. Skipped once
+             terminated: the banner below already covers that case.
+             Reads through currentInChain(), not $detail directly, same
+             fix as Stage Gate Monitoring's own -- this is still the
+             ORIGINAL application's own page (its sections, documents,
+             corrections all stay this one's), only the status/dates
+             shown here defer to the current extension once one is
+             approved, confirmed explicitly 2026-11-10: "pastu sama
+             jugak status shown kat my gra application tu." --}}
+        @php($currentDetail = $detail->currentInChain())
+        @php($serviceStatus = $application->status === \App\Modules\Core\Models\Application::STATUS_APPROVED ? $currentDetail->serviceStatus() : null)
+        @if ($serviceStatus && $serviceStatus !== 'terminated')
+            <p class="queue-meta">
+                Appointment status: <x-core::status-badge :status="$serviceStatus" />
+                @if ($serviceStatus === 'approved')
+                    Starts {{ $currentDetail->service_start_date->format('j M Y') }}.
+                @elseif ($serviceStatus === 'inactive')
+                    Service ended {{ $currentDetail->service_end_date->format('j M Y') }}.
+                @endif
+            </p>
+        @endif
+
         @if ($terminated ?? false)
             <div class="haziq-repeatable-row" style="border-color: var(--danger-fg); background: var(--danger-bg);">
                 <p style="grid-column: 1 / -1;">

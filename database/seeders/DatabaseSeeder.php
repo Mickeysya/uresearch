@@ -14,6 +14,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Faculty;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
+use App\Modules\Haziq\Support\Roles;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -69,7 +70,16 @@ class DatabaseSeeder extends Seeder
         ]);
         $this->user('Registry Officer', 'registry@utp.edu.my', Role::REGISTRY, ['department' => 'Registry']);
         // Haziq's GA interview stage; the role lives in his module, not Role.
-        $this->user('Research Centre Officer', 'researchcentre@utp.edu.my', \App\Modules\Haziq\Support\Roles::RESEARCH_CENTRE, ['department' => 'Research Centre']);
+        // Department scoped like Chair/Academic Executive (confirmed
+        // explicitly 2026-11-10: a Research Centre reviewer only sees GA
+        // interviews for their own department) -- this roster account
+        // covers Computing, same pattern as ae@utp.edu.my/chair@utp.edu.my;
+        // every other department gets its own account below, see
+        // RESEARCH_CENTRES.
+        $this->user('Research Centre Officer', 'researchcentre@utp.edu.my', Roles::RESEARCH_CENTRE, [
+            'department' => 'Computing',
+            'faculty' => Faculty::FSMC,
+        ]);
         $this->user('System Admin', 'admin@utp.edu.my', Role::ADMIN);
 
         // Students, all attached to the supervisor above so the supervisee
@@ -202,6 +212,29 @@ class DatabaseSeeder extends Seeder
     ];
 
     /**
+     * One Research Centre reviewer per department, same reason as the
+     * Academic Executives and Chairs above: GaApplicationWorkflow's
+     * research_centre_interview stage is department-scoped (confirmed
+     * explicitly 2026-11-10), so a department with nobody on this desk
+     * strands every GA application at Interview with nobody able to pick
+     * it up. Computing is not here -- researchcentre@utp.edu.my, the
+     * roster account above, covers it.
+     */
+    protected const RESEARCH_CENTRES = [
+        'Foundation in Business Management & Computing' => ['Puan Zarina Mohd Yusof', 'rc.foundation.business'],
+        'Foundation in Engineering & Science' => ['En Shahrul Nizam', 'rc.foundation.engineering'],
+        'Chemical Engineering' => ['Dr. Noraini Zalina', 'rc.chemical'],
+        'Civil & Environmental Engineering' => ['En Hafizuddin Rashid', 'rc.civil'],
+        'Electrical & Electronics Engineering' => ['Puan Kalsom Ibrahim', 'rc.electrical'],
+        'Integrated Engineering' => ['En Shamsul Bahrin', 'rc.integrated'],
+        'Mechanical Engineering' => ['Dr. Choo Yew Weng', 'rc.mechanical'],
+        'Petroleum Engineering' => ['Puan Rozita Mansor', 'rc.petroleum'],
+        'Applied Sciences' => ['Dr. Geetha Balasubramaniam', 'rc.applied'],
+        'Geosciences' => ['En Azmi Shah Rahman', 'rc.geosciences'],
+        'Management' => ['Puan Yap Wan Ling', 'rc.management'],
+    ];
+
+    /**
      * Two supervisors per department (24). Computing's first is the roster's
      * supervisor@utp.edu.my; Kumaran, Farid and Siti are DemoDataSeeder's,
      * kept on the same addresses so the two seeders agree.
@@ -275,7 +308,7 @@ class DatabaseSeeder extends Seeder
     {
         $facultyOf = $this->facultyOf();
 
-        foreach ([Role::ACADEMIC_EXEC => self::ACADEMIC_EXECS, Role::CHAIR => self::CHAIRS] as $role => $staff) {
+        foreach ([Role::ACADEMIC_EXEC => self::ACADEMIC_EXECS, Role::CHAIR => self::CHAIRS, Roles::RESEARCH_CENTRE => self::RESEARCH_CENTRES] as $role => $staff) {
             foreach ($staff as $department => [$name, $handle]) {
                 $this->user($name, $handle.'@utp.edu.my', $role, [
                     'department' => $department,
