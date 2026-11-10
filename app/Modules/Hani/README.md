@@ -134,8 +134,8 @@ Every value CGS has not confirmed is marked **Provisional** in the file.
 | `examiner_progress.criteria`, `.sections` | rating labels | Provisional wording |
 | `scheduling.*` | clash hours, slots, public holidays | Provisional |
 | `result.*` | correction months, resubmission window, reminder days | Provisional |
-| `reviva.review_working_days`, `reviva.link_days` | 20 working days; 35-day link | Confirmed (20 days) |
-| `reviva.next_round_window_months`, `final_thesis_months`, `hold_months`, `panel_*_working_days`, `risk.*` | | Provisional |
+| `reviva.panel_working_days`, `reviva.signed_link_days` | 20 working days; 35-day link | Confirmed (20 days) |
+| `reviva.next_round_window_months`, `final_deadline_months`, `hold_months`, `panel_*_working_days`, `risk.*` | | Provisional |
 | `reviva.letter.*` | signatory and CGS contacts | Provisional (fictional) |
 | `reminders.*`, `sweep.*`, `sla.daily_at` | run times and reminder spacing | Provisional |
 | `sla.stages` | per-stage limits, e.g. 5 and 10 working days | Provisional |
@@ -424,7 +424,7 @@ Settings in `config/hani.php` under `reviva`; unconfirmed values are marked
   (`Resources/views/re_viva/pdf/correction_letter.blade.php`, styles in one
   block), stored staff-only, emailed with a signed link (no login, expiring,
   throttled) to the corrected thesis and Summary of Corrections. The link
-  works for `hani.reviva.link_days` from when the email is built, not from a
+  works for `hani.reviva.signed_link_days` from when the email is built, not from a
   backdated send. `Http/Middleware/ValidPanelLink` answers a tampered link
   with 403 and an expired one with a 410 page giving the CGS contacts.
   Flagged emails are skipped and named. The stage completes in the same
@@ -616,3 +616,9 @@ Hani/
    `WorkflowEngine::submit()`, `::decide()` or `::returnTo()`.
 
 See `docs/adding-a-module.md` for the full walkthrough.
+
+## Re-viva (official CGS re-examination process, 2026-11-09)
+
+Student submits three PDFs on Re-viva, the Senior Executive checks them and generates one letter and one UTP/CGS/024 per main examiner, the Dean of PGR approves or returns them, and the Senior Executive sends the pack. Examiners, internal and external, return their forms on My Re-evaluations (an account is created at send); the Senior Executive can record a return on their behalf. "Start review" moves the round to CGS Review, where it passes, is dismissed, or goes to a meeting. Level 4 opens the next round when the student submits again.
+
+The Academic Executive has no re-viva access. Non-Executive CGS has read-only Re-viva Cycles. Reminders go to examiners who have not returned, at the working days on Re-viva Settings (default 10 and 3). The examiner's signed link still requires the email code sign-in.

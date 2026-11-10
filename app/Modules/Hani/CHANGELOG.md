@@ -1,5 +1,12 @@
 # Changelog: Hani's modules
 
+## 2026-11-09: Re-viva rebuilt on the official CGS re-examination process
+
+- Student submits three PDFs and downloads blank and example forms. The Senior Executive checks them, the Dean of PGR approves the letters, and the pack goes to the panel with a 20-working-day deadline.
+- New stages: `student_submitted`, `pack_preparation`, `dean_approval`, `ready_to_send`, `under_panel_review`, `reports_received`, `cgs_review`, `meeting_scheduled`. Old rows are demo data, reset by the seeder.
+- The Academic Executive has no re-viva access. Internal and external examiners get accounts and use My Re-evaluations.
+- Reminder days are set on Re-viva Settings, with `hani.reviva.external_reminders` as the default.
+
 ## 2026-11-08: The Academic Executive reads the examiner pool
 
 - **Added** `/examiners` for the AE, read-only, with "Examiner Pool" in their
