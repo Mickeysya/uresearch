@@ -153,12 +153,18 @@ trait SeedsHistoricalCases
         // One department for every walkthrough student: their panels stay
         // held for the re-viva, and a clash is only counted across
         // departments, so they can share examiners without adding one.
+        // Their own supervisor, so they do not fill the scenario
+        // supervisor's Students' Viva Progress.
+        $reVivaSupervisor = User::updateOrCreate(['email' => 'reviva.supervisor@example.com'], [
+            'name' => 'Dr Rahimah binti Yusof', 'password' => 'password', 'role' => Role::SUPERVISOR,
+            'department' => $names[0] ?? 'Computing',
+        ]);
         foreach (self::REVIVA_DEMO as $k => [$letter, $name]) {
             $department = $names[0] ?? 'Computing';
             $this->reVivaDemoStudents[$k] = $this->historyStudents[self::REVIVA_BASE + $k] = User::updateOrCreate(['email' => "reviva.{$letter}@example.com"], [
                 'name' => $name, 'password' => 'password', 'role' => Role::STUDENT, 'matric_no' => 'RV2500'.strtoupper($letter),
                 'programme' => $k % 3 === 1 ? 'PhD Full-Time' : 'MSc Full-Time', 'department' => $department,
-                'supervisor_id' => $supervisors->first(fn (User $s) => $s->department === $department)?->id,
+                'supervisor_id' => $reVivaSupervisor->id,
             ]);
         }
 

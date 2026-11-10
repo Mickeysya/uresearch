@@ -130,6 +130,9 @@ class HaniDemoSeederTest extends TestCase
 
         // Demo accounts are example.com, with the test accounts' password.
         $this->assertTrue(User::where('email', 'like', '%@example.com')->where('email', 'not like', 'history.%')->where('email', 'not like', 'reviva.%')->where('role', Role::STUDENT)->count() === 10);
+        // The re-viva walkthrough students have their own supervisor.
+        $reVivaSupervisors = User::where('email', 'like', 'reviva.%')->where('role', Role::STUDENT)->pluck('supervisor_id')->unique();
+        $this->assertEquals([User::where('email', 'reviva.supervisor@example.com')->value('id')], $reVivaSupervisors->values()->all());
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('password', $this->student('DEMO-S01')->password));
 
         // The examiners S01's walkthrough expects are still free to suggest.

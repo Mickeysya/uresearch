@@ -177,9 +177,12 @@ trait SeedsReVivaScenarios
     /** The seeded approvals are signed with a placeholder; the live Dean uploads their own. */
     protected function demoSignature(User $dean): void
     {
-        if (\App\Modules\Hani\Models\ReVivaSignature::forUser($dean->id)) {
+        // A row whose image is gone (deleted by hand, or by another seed
+        // run) is replaced, not trusted: the Dean cannot approve without it.
+        if (\App\Modules\Hani\Models\ReVivaSignature::forUser($dean->id)?->dataUri()) {
             return;
         }
+        \App\Modules\Hani\Models\ReVivaSignature::where('user_id', $dean->id)->delete();
         \Illuminate\Support\Facades\Storage::disk('local')->put($path = 'hani/reviva-signatures/demo-'.$dean->id.'.png', base64_decode(self::DEMO_SIGNATURE));
         \App\Modules\Hani\Models\ReVivaSignature::create(['user_id' => $dean->id, 'path' => $path]);
         $this->demoSignatures[] = $dean->id;
