@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class GaAllowancePaymentLog extends Model
 {
     protected $fillable = [
-        'application_id', 'student_id', 'payment_month', 'amount',
+        'application_id', 'student_id', 'payment_month', 'amount', 'confirmed_amount',
         'proof_document_id', 'confirmed_by', 'confirmed_at',
     ];
 
@@ -21,6 +21,7 @@ class GaAllowancePaymentLog extends Model
         return [
             'payment_month' => 'date',
             'amount' => 'decimal:2',
+            'confirmed_amount' => 'decimal:2',
             'confirmed_at' => 'datetime',
         ];
     }

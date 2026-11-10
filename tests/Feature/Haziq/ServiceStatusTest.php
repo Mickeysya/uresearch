@@ -162,6 +162,44 @@ class ServiceStatusTest extends TestCase
             ->assertSee('active', false);
     }
 
+    /**
+     * Confirmed explicitly 2026-11-10: "pastu sama jugak status shown
+     * kat my gra application tu." The sidebar's own "My GRA Application"
+     * link always points at the ORIGINAL ('new') application
+     * (GraApplicationWorkflow::links()), never the extension -- so
+     * without currentInChain(), this page would show "Inactive" even
+     * while Stage Gate Monitoring (now fixed) correctly shows "Active"
+     * for the exact same student. Dates shown (service_end_date here)
+     * also defer to the current one, not the lapsed original's.
+     */
+    public function test_my_gra_application_page_shows_active_through_an_approved_extension_not_the_lapsed_original(): void
+    {
+        $this->travelTo(Carbon::parse('2026-08-01'));
+        $student = $this->user('student');
+        $original = $this->graDetail($student, Carbon::parse('2026-01-01'), Carbon::parse('2026-06-01'));
+
+        $extensionApplication = Application::create([
+            'student_id' => $student->id, 'module_type' => 'gra_application',
+            'status' => Application::STATUS_APPROVED, 'current_stage' => null, 'submitted_at' => now(),
+        ]);
+        GraApplicationDetail::create([
+            'application_id' => $extensionApplication->id, 'profile_id' => $original->profile_id,
+            'application_type' => 'extension', 'parent_application_id' => $original->application_id,
+            'candidature_status' => 'active',
+            'project_leader_name' => 'Dr. Lim', 'project_title' => 'Test', 'funding_source' => 'Internal',
+            'service_start_date' => '2026-06-01', 'service_end_date' => '2026-12-01',
+        ]);
+
+        // The sidebar link always points at the ORIGINAL's own id -- the
+        // page it reaches still has to read through the chain.
+        $this->actingAs($student)->get(route('gra-application.mine', $original->application_id))
+            ->assertOk()
+            ->assertSee('Appointment status', false)
+            ->assertSee('status-badge active', false)
+            ->assertDontSee('status-badge inactive', false)
+            ->assertDontSee('Service ended', false);
+    }
+
     public function test_my_ga_application_page_shows_the_appointment_status(): void
     {
         $this->travelTo(Carbon::parse('2026-09-01'));

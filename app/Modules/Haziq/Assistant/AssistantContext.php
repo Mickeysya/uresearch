@@ -254,11 +254,14 @@ class AssistantContext
     /**
      * GA's own allowance cycle -- deliberately separate from the GRA
      * one above, confirmed explicitly 2026-11-10: "ga ni letak actions
-     * lain. jangan sekali kan dengan allowance gra satu excel." Much
-     * simpler to summarise too: nothing accumulates, so there is no
-     * running total or "if unconfirmed" projection to compute, just the
-     * most recent month's own flat figure and whether CGS/Admin has
-     * marked it paid yet.
+     * lain. jangan sekali kan dengan allowance gra satu excel." It does
+     * accumulate the same way GRA's does though, confirmed the same
+     * day, reversing an earlier "resets every month" version: "ga pun
+     * sama ah, kalau ada accumulated amount on service end month, month
+     * after payment accumulated amount tu." No Stage Gates and no
+     * termination to account for, though, so there is no "if
+     * unconfirmed, next month would be" projection the way GRA's own
+     * summary gives -- just the real running total as of now.
      */
     protected static function gaAllowanceSummary(User $student): ?string
     {
@@ -273,8 +276,12 @@ class AssistantContext
             return null;
         }
 
+        $amount = $log->isConfirmed()
+            ? (float) $log->confirmed_amount
+            : \App\Modules\Haziq\Support\GaAllowanceLedger::accumulatedTotalThrough((int) $log->application_id, Carbon::parse($log->payment_month));
+
         return "GA Allowance, most recent record ({$log->payment_month->format('M Y')}): "
             .($log->isConfirmed() ? 'paid' : 'pending confirmation by CGS/Admin')
-            .', amount=RM'.number_format((float) $log->amount, 2).'.';
+            .', amount=RM'.number_format($amount, 2).'.';
     }
 }

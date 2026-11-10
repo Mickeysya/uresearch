@@ -24,15 +24,23 @@
              service_start_date arrives, then inactive once
              service_end_date passes with no approved extension covering
              today. Confirmed explicitly 2026-11-10. Skipped once
-             terminated: the banner below already covers that case. --}}
-        @php($serviceStatus = $application->status === \App\Modules\Core\Models\Application::STATUS_APPROVED ? $detail->serviceStatus() : null)
+             terminated: the banner below already covers that case.
+             Reads through currentInChain(), not $detail directly, same
+             fix as Stage Gate Monitoring's own -- this is still the
+             ORIGINAL application's own page (its sections, documents,
+             corrections all stay this one's), only the status/dates
+             shown here defer to the current extension once one is
+             approved, confirmed explicitly 2026-11-10: "pastu sama
+             jugak status shown kat my gra application tu." --}}
+        @php($currentDetail = $detail->currentInChain())
+        @php($serviceStatus = $application->status === \App\Modules\Core\Models\Application::STATUS_APPROVED ? $currentDetail->serviceStatus() : null)
         @if ($serviceStatus && $serviceStatus !== 'terminated')
             <p class="queue-meta">
                 Appointment status: <x-core::status-badge :status="$serviceStatus" />
                 @if ($serviceStatus === 'approved')
-                    Starts {{ $detail->service_start_date->format('j M Y') }}.
+                    Starts {{ $currentDetail->service_start_date->format('j M Y') }}.
                 @elseif ($serviceStatus === 'inactive')
-                    Service ended {{ $detail->service_end_date->format('j M Y') }}.
+                    Service ended {{ $currentDetail->service_end_date->format('j M Y') }}.
                 @endif
             </p>
         @endif

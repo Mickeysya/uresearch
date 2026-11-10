@@ -22,9 +22,12 @@ use Tests\TestCase;
  * GA's own allowance cycle, deliberately separate from GRA's --
  * confirmed explicitly 2026-11-10: "allowance feature kena tambah lah
  * untuk ga en... bulan pertama start service takkan dapat allowance,
- * next month dapat allowance untuk bulan sebelumnya... sampailah die
- * tak active dah reset je every month... ga ni letak actions lain.
- * jangan sekali kan dengan allowance gra satu excel."
+ * next month dapat allowance untuk bulan sebelumnya... ga ni letak
+ * actions lain. jangan sekali kan dengan allowance gra satu excel." It
+ * does accumulate the same way GRA's own does, confirmed later the
+ * same day, reversing an earlier "resets every month" version: "ga pun
+ * sama ah, kalau ada accumulated amount on service end month, month
+ * after payment accumulated amount tu."
  */
 class GaAllowanceEligibilityTest extends TestCase
 {
@@ -87,7 +90,15 @@ class GaAllowanceEligibilityTest extends TestCase
             ->assertSee('1,500.00');
     }
 
-    public function test_every_month_is_independent_nothing_accumulates(): void
+    /**
+     * Generation itself always writes one FLAT row per month -- the
+     * accumulating running total is a separate, display/confirm-time
+     * concern (GaAllowanceLedger), never baked into the stored rows
+     * themselves. See the "Accumulation" tests below for the actual
+     * running-total behaviour, confirmed explicitly 2026-11-10: "ga pun
+     * sama ah, kalau ada accumulated amount..."
+     */
+    public function test_generation_always_writes_one_flat_row_per_month(): void
     {
         $this->travelTo(Carbon::parse('2026-09-15'));
         $application = $this->gaApplication($this->student(), '2026-06-01', '2030-01-01', 1500);
@@ -101,6 +112,91 @@ class GaAllowanceEligibilityTest extends TestCase
             $this->assertSame('1500.00', $log->amount);
             $this->assertFalse($log->isConfirmed());
         }
+    }
+
+    /* -----------------------------------------------------------------
+     | Accumulation -- confirmed explicitly 2026-11-10: "ga pun sama ah,
+     | kalau ada accumulated amount on service end month, month after
+     | payment accumulated amount tu kan"
+     |------------------------------------------------------------------*/
+
+    public function test_unconfirmed_months_accumulate_onto_the_next(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-01'));
+        $application = $this->gaApplication($this->student(), '2026-06-01', '2030-01-01', 1500);
+        app(GaAllowanceEngine::class)->ensureMonthlyLogs($application);
+
+        // June, July, August all unconfirmed -- the running total through
+        // August is all three months added together, not just August's own.
+        $august = \App\Modules\Haziq\Support\GaAllowanceLedger::accumulatedTotalThrough(
+            $application->id, Carbon::parse('2026-08-01')
+        );
+
+        $this->assertSame(4500.0, $august);
+    }
+
+    public function test_confirming_a_month_resets_the_running_total_for_the_next(): void
+    {
+        Storage::fake('local');
+        $this->travelTo(Carbon::parse('2026-08-01'));
+        $admin = $this->admin();
+        $application = $this->gaApplication($this->student(), '2026-06-01', '2030-01-01', 1500);
+        app(GaAllowanceEngine::class)->ensureMonthlyLogs($application);
+
+        $june = GaAllowancePaymentLog::where('application_id', $application->id)->whereDate('payment_month', '2026-06-01')->firstOrFail();
+        $this->actingAs($admin)->post(route('ga-allowance.confirm-payment', $june), [
+            'proof' => UploadedFile::fake()->create('proof.pdf', 50, 'application/pdf'),
+        ])->assertRedirect();
+
+        // June confirmed -- July is the only thing accumulating now.
+        $july = \App\Modules\Haziq\Support\GaAllowanceLedger::accumulatedTotalThrough(
+            $application->id, Carbon::parse('2026-07-01')
+        );
+
+        $this->assertSame(1500.0, $july);
+    }
+
+    public function test_confirming_a_month_out_of_order_is_refused(): void
+    {
+        Storage::fake('local');
+        $this->travelTo(Carbon::parse('2026-08-01'));
+        $admin = $this->admin();
+        $application = $this->gaApplication($this->student(), '2026-06-01', '2030-01-01', 1500);
+        app(GaAllowanceEngine::class)->ensureMonthlyLogs($application);
+
+        // June is still unconfirmed -- July cannot be confirmed first.
+        $july = GaAllowancePaymentLog::where('application_id', $application->id)->whereDate('payment_month', '2026-07-01')->firstOrFail();
+        $this->actingAs($admin)->post(route('ga-allowance.confirm-payment', $july), [
+            'proof' => UploadedFile::fake()->create('proof.pdf', 50, 'application/pdf'),
+        ])->assertNotFound();
+
+        $this->assertFalse($july->fresh()->isConfirmed());
+    }
+
+    public function test_the_confirmed_amount_is_the_real_accumulated_total_not_just_that_months_own_flat_rate(): void
+    {
+        Notification::fake();
+        Storage::fake('local');
+        $this->travelTo(Carbon::parse('2026-08-01'));
+        $admin = $this->admin();
+        $application = $this->gaApplication($this->student(), '2026-06-01', '2030-01-01', 1500);
+        app(GaAllowanceEngine::class)->ensureMonthlyLogs($application);
+
+        // June, July both unconfirmed by the time August's row exists --
+        // confirming June first just settles June alone (1500); the
+        // REAL test is that confirming July later rolls up July's own
+        // flat row correctly once June is out of the way.
+        $june = GaAllowancePaymentLog::where('application_id', $application->id)->whereDate('payment_month', '2026-06-01')->firstOrFail();
+        $this->actingAs($admin)->post(route('ga-allowance.confirm-payment', $june), [
+            'proof' => UploadedFile::fake()->create('proof.pdf', 50, 'application/pdf'),
+        ]);
+        $this->assertSame('1500.00', $june->fresh()->confirmed_amount);
+
+        $july = GaAllowancePaymentLog::where('application_id', $application->id)->whereDate('payment_month', '2026-07-01')->firstOrFail();
+        $this->actingAs($admin)->post(route('ga-allowance.confirm-payment', $july), [
+            'proof' => UploadedFile::fake()->create('proof.pdf', 50, 'application/pdf'),
+        ]);
+        $this->assertSame('1500.00', $july->fresh()->confirmed_amount);
     }
 
     public function test_generation_is_idempotent(): void
@@ -161,9 +257,22 @@ class GaAllowanceEligibilityTest extends TestCase
 
     public function test_the_trailing_payment_is_visible_the_month_after_service_ends(): void
     {
-        $this->travelTo(Carbon::parse('2026-08-10'));
+        Storage::fake('local');
+        $this->travelTo(Carbon::parse('2026-07-01'));
+        $admin = $this->admin();
         $student = $this->student();
         $application = $this->gaApplication($student, '2026-06-01', '2026-07-31', 1500);
+        app(GaAllowanceEngine::class)->ensureMonthlyLogs($application);
+
+        // Confirm June first, so July's own trailing payment is the only
+        // thing left accumulating -- isolating the "is it visible at
+        // all" question from the separate accumulation behaviour above.
+        $june = GaAllowancePaymentLog::where('application_id', $application->id)->whereDate('payment_month', '2026-06-01')->firstOrFail();
+        $this->actingAs($admin)->post(route('ga-allowance.confirm-payment', $june), [
+            'proof' => UploadedFile::fake()->create('proof.pdf', 50, 'application/pdf'),
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-08-10'));
         app(GaAllowanceEngine::class)->ensureMonthlyLogs($application);
 
         // Viewing in August (the month after service ended in July) still
@@ -415,9 +524,12 @@ class GaAllowanceEligibilityTest extends TestCase
 
         $context = \App\Modules\Haziq\Assistant\AssistantContext::forStudent($student);
 
+        // June and July both unconfirmed by now -- the assistant has to
+        // report the real accumulated total (3,000), not just July's
+        // own flat 1,500, same as GRA's own summary already does.
         $this->assertStringContainsString('GA Allowance', $context);
         $this->assertStringContainsString('pending confirmation by CGS/Admin', $context);
-        $this->assertStringContainsString('1,500.00', $context);
+        $this->assertStringContainsString('3,000.00', $context);
     }
 
     public function test_the_assistant_shows_paid_once_cgs_confirms_it(): void
@@ -428,12 +540,17 @@ class GaAllowanceEligibilityTest extends TestCase
         $student = $this->student();
         $application = $this->gaApplication($student, '2026-06-01', '2030-01-01', 1500);
         app(GaAllowanceEngine::class)->ensureMonthlyLogs($application);
-        // gaAllowanceSummary() reads the most recent month <= today
-        // (July here, since today is 2026-07-01) -- confirm that exact
-        // row, not whichever one ->first() happens to return.
-        $log = GaAllowancePaymentLog::where('application_id', $application->id)->whereDate('payment_month', '2026-07-01')->firstOrFail();
 
-        $this->actingAs($admin)->post(route('ga-allowance.confirm-payment', $log), [
+        // Confirming has to happen in order -- June first, then the July
+        // row gaAllowanceSummary() actually reads (most recent month <=
+        // today, July here since today is 2026-07-01).
+        $june = GaAllowancePaymentLog::where('application_id', $application->id)->whereDate('payment_month', '2026-06-01')->firstOrFail();
+        $this->actingAs($admin)->post(route('ga-allowance.confirm-payment', $june), [
+            'proof' => UploadedFile::fake()->create('proof.pdf', 50, 'application/pdf'),
+        ])->assertRedirect();
+
+        $july = GaAllowancePaymentLog::where('application_id', $application->id)->whereDate('payment_month', '2026-07-01')->firstOrFail();
+        $this->actingAs($admin)->post(route('ga-allowance.confirm-payment', $july), [
             'proof' => UploadedFile::fake()->create('proof.pdf', 50, 'application/pdf'),
         ])->assertRedirect();
 
@@ -442,5 +559,42 @@ class GaAllowanceEligibilityTest extends TestCase
         $this->assertStringContainsString('GA Allowance', $context);
         $this->assertStringContainsString(': paid,', $context);
         $this->assertStringNotContainsString('pending confirmation', $context);
+    }
+
+    /* -----------------------------------------------------------------
+     | Module filter is admin+/approver only -- never shown to a student
+     |------------------------------------------------------------------*/
+
+    /**
+     * Confirmed explicitly 2026-11-10: "kenapa student boleh filter
+     * lagi ga sedangkan ga application die tak approve pun lagi." A
+     * student reaches this shared page only through their own "My
+     * Allowance"/"My GA Allowance" link, which already gates on
+     * approval -- they should never get a toggle letting them poke at
+     * the other module regardless.
+     */
+    public function test_a_student_never_sees_the_module_filter_on_the_shared_page(): void
+    {
+        $this->travelTo(Carbon::parse('2026-07-01'));
+        $student = $this->student();
+        $application = $this->gaApplication($student, '2026-06-01', '2030-01-01');
+        app(GaAllowanceEngine::class)->ensureMonthlyLogs($application);
+
+        $this->actingAs($student)->get(route('allowance.index', ['module' => 'ga']))
+            ->assertOk()
+            ->assertDontSee('<select name="module"', false);
+
+        $this->actingAs($student)->get(route('allowance.index'))
+            ->assertOk()
+            ->assertDontSee('<select name="module"', false);
+    }
+
+    public function test_an_admin_still_sees_the_module_filter(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->get(route('allowance.index'))
+            ->assertOk()
+            ->assertSee('<select name="module"', false);
     }
 }

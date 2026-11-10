@@ -40,7 +40,7 @@ class GaAllowancePaymentConfirmed extends Notification implements ShouldQueue
                 : "{$student->name} — GA allowance payment confirmed",
             'body' => sprintf(
                 'RM %s confirmed paid by %s.',
-                number_format((float) $this->log->amount, 2),
+                number_format((float) $this->log->confirmed_amount, 2),
                 $this->log->confirmedBy->name,
             ),
         ];
@@ -50,7 +50,7 @@ class GaAllowancePaymentConfirmed extends Notification implements ShouldQueue
     {
         $this->log->loadMissing('application.student', 'confirmedBy', 'proofDocument');
         $student = $this->log->application->student;
-        $amount = number_format((float) $this->log->amount, 2);
+        $amount = number_format((float) $this->log->confirmed_amount, 2);
         $proofUrl = $this->log->proofDocument?->url();
 
         if ($this->forStudent) {

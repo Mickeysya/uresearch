@@ -11,6 +11,7 @@ use App\Modules\Haziq\Exports\GaAllowanceEligibilityExport;
 use App\Modules\Haziq\Models\GaAllowancePaymentLog;
 use App\Modules\Haziq\Notifications\GaAllowancePaymentConfirmed;
 use App\Modules\Haziq\Support\GaAllowanceEngine;
+use App\Modules\Haziq\Support\GaAllowanceLedger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -21,10 +22,15 @@ use Maatwebsite\Excel\Facades\Excel;
  * GA Allowance Eligibility -- GA's own reporting view, deliberately
  * separate from GRA's AllowanceController (own nav entry, own export,
  * own table), confirmed explicitly 2026-11-10: "ga ni letak actions
- * lain. jangan sekali kan dengan allowance gra satu excel. navigation
- * bar asing. with different names." Much simpler than GRA's: no Stage
- * Gates, no termination, nothing accumulates -- see GaAllowanceEngine's
- * own docblock for the cycle rule.
+ * lain. jangan sekali kan dengan allowance gra satu excel." Simpler
+ * than GRA's in one respect -- no Stage Gates, no termination, no
+ * partial-month judgement calls -- but accumulates the same way GRA's
+ * does: a month nobody confirms adds onto the next month's running
+ * total (GaAllowanceLedger::accumulatedTotalThrough()), confirmed
+ * explicitly 2026-11-10, reversing an earlier "resets every month"
+ * version from the same day: "ga pun sama ah, kalau ada accumulated
+ * amount on service end month, month after payment accumulated amount
+ * tu."
  */
 class GaAllowanceController extends Controller
 {
@@ -96,12 +102,20 @@ class GaAllowanceController extends Controller
         $user = $request->user();
         abort_unless($user->isAdmin() || $user->role === Role::NON_EXEC_CGS, 403);
         abort_if($log->isConfirmed(), 404, 'This month has already been marked complete.');
+        abort_unless(GaAllowanceLedger::isOldestUnconfirmed($log), 404, 'An earlier month is still unconfirmed -- confirm that one first.');
 
         $request->validate(['proof' => DocumentStore::rules(true)]);
 
         $document = $documents->attach($log->application, $request->file('proof'), 'Proof of Payment');
 
+        // Snapshotted now -- GaAllowanceLedger::accumulatedTotalThrough()
+        // would read back as 0 for this exact month once confirmed_at is
+        // set, same reason GRA keeps its own confirmed figure separate
+        // from the running-total walk.
+        $accumulated = GaAllowanceLedger::accumulatedTotalThrough($log->application_id, $log->payment_month);
+
         $log->update([
+            'confirmed_amount' => $accumulated,
             'proof_document_id' => $document->id,
             'confirmed_by' => $user->id,
             'confirmed_at' => now(),
@@ -113,18 +127,22 @@ class GaAllowanceController extends Controller
             fn (User $u) => $u->notify(new GaAllowancePaymentConfirmed($log, forStudent: false))
         );
 
-        return back()->with('status', 'Payment marked complete. RM'.number_format((float) $log->amount, 2).' confirmed paid.');
+        return back()->with('status', 'Payment marked complete. RM'.number_format($accumulated, 2).' confirmed paid.');
     }
 
     /** @return array{student: User, application: Application, amount: float, confirmed: bool, confirmable: bool} */
     protected function rowFor(GaAllowancePaymentLog $log): array
     {
+        $amount = $log->isConfirmed()
+            ? (float) $log->confirmed_amount
+            : GaAllowanceLedger::accumulatedTotalThrough($log->application_id, $log->payment_month);
+
         return [
             'student' => $log->student,
             'application' => $log->application,
-            'amount' => (float) $log->amount,
+            'amount' => $amount,
             'confirmed' => $log->isConfirmed(),
-            'confirmable' => ! $log->isConfirmed(),
+            'confirmable' => GaAllowanceLedger::isOldestUnconfirmed($log),
             'log' => $log,
         ];
     }

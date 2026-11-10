@@ -171,24 +171,38 @@ class KnowledgeBase
             combined with anything Stage 1 itself still owes if it was not yet
             complete.
 
-            GA ALLOWANCE CYCLE (GA only -- separate screen, separate
-            download, separate from everything in THE ALLOWANCE CYCLE
-            above, confirmed explicitly 2026-11-10: "ga ni letak actions
-            lain. jangan sekali kan dengan allowance gra satu excel.")
-            Much simpler than GRA's: GA has no Stage Gates and nothing
-            accumulates. Every month stands completely on its own. The
-            same one-month payroll lag still applies -- a GA appointment's
-            service period only starts showing an amount the month after
-            it begins, and every month after that shows last month's
-            service, including one final month right after service ends
-            (whatever GaApplicationDetail.service_end_date currently is --
-            an approved GA Extension already moves that date in place, so
-            there is nothing extra to account for). Admin or CGS still has
-            to separately mark each month's payment complete, with proof,
-            same action shape as GRA's own -- but a month nobody confirms
-            simply stays "pending" on its own, by itself; it never adds
-            onto the next month's total the way GRA's unconfirmed months
-            do, because nothing here ever accumulates in the first place.
+            GA ALLOWANCE CYCLE (GA only, but shares GRA's own "Allowance
+            Eligibility" screen and sidebar link for Admin/CGS/Supervisor
+            via a module filter -- confirmed explicitly 2026-11-10,
+            revising an earlier fully-separate-nav-bar version the same
+            day. The download stays two separate files regardless: "ga
+            ni letak actions lain. jangan sekali kan dengan allowance gra
+            satu excel." A student never sees that filter at all -- they
+            reach this only through their own "My Allowance"/"My GA
+            Allowance" link, confirmed explicitly 2026-11-10: "kenapa
+            student boleh filter lagi ga sedangkan ga application die
+            tak approve pun lagi" -- so there is nothing for them to
+            toggle to a module they may not even have approved.)
+            Simpler than GRA's in one respect only -- no Stage Gates, no
+            termination, no partial-month judgement calls -- but it
+            accumulates the exact same way GRA's own does, confirmed
+            explicitly 2026-11-10, reversing an earlier "resets every
+            month" version from the same day: "ga pun sama ah, kalau ada
+            accumulated amount on service end month, month after payment
+            accumulated amount tu." The same one-month payroll lag still
+            applies -- a GA appointment's service period only starts
+            showing an amount the month after it begins, and every month
+            after that shows last month's service, including one final
+            month right after service ends (whatever GaApplicationDetail.
+            service_end_date currently is -- an approved GA Extension
+            already moves that date in place, so there is nothing extra
+            to account for). Admin or CGS still has to separately mark
+            each month's payment complete, with proof, same action shape
+            as GRA's own -- but a month nobody confirms adds onto the
+            NEXT month's running total instead of standing alone, and
+            confirming has to happen in order, oldest unconfirmed month
+            first, same reason GRA locks a second consecutive withheld
+            month the same way.
 
             TA HOURS
             A plain monthly activity log, capped at 21 hours per calendar month
