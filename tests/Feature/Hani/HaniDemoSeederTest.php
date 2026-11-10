@@ -213,7 +213,14 @@ class HaniDemoSeederTest extends TestCase
 
         // Invisible to the live scenarios.
         $this->assertSame($states, Examiner::orderBy('id')->get()->map(fn ($e) => [$e->email, $e->state()])->all(), 'pool states unchanged');
-        $this->assertSame($clashes, $this->liveClashes(), 'no clash from a finished panel');
+        // The scenario panels clash exactly as before (S09 shows one), and
+        // the walkthrough re-viva panels, which stay held, add no clash.
+        $after = $this->liveClashes();
+        $this->assertSame($clashes, array_intersect_key($after, $clashes), 'no clash from a finished or walkthrough panel');
+        foreach (array_diff_key($after, $clashes) as $email => $seats) {
+            $this->assertStringStartsWith('reviva.', $email);
+            $this->assertSame([0, 0, 0, 0], $seats, "{$email}'s panel clashes with another department");
+        }
         foreach (['viva:reminders', 're-viva:monitor', 'examiners:sweep', 'hani:sla-reminders'] as $command) {
             \Illuminate\Support\Facades\Artisan::call($command, ['--dry-run' => true]);
             $output = \Illuminate\Support\Facades\Artisan::output();

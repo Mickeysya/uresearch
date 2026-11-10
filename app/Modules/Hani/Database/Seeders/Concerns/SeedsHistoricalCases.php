@@ -150,8 +150,11 @@ trait SeedsHistoricalCases
             ->unique()->values()->all();
         $supervisors = collect($this->demoUsers)->filter(fn (User $u) => $u->role === Role::SUPERVISOR);
 
+        // One department for every walkthrough student: their panels stay
+        // held for the re-viva, and a clash is only counted across
+        // departments, so they can share examiners without adding one.
         foreach (self::REVIVA_DEMO as $k => [$letter, $name]) {
-            $department = $names[$k % max(1, count($names))] ?? 'Computing';
+            $department = $names[0] ?? 'Computing';
             $this->reVivaDemoStudents[$k] = $this->historyStudents[self::REVIVA_BASE + $k] = User::updateOrCreate(['email' => "reviva.{$letter}@example.com"], [
                 'name' => $name, 'password' => 'password', 'role' => Role::STUDENT, 'matric_no' => 'RV2500'.strtoupper($letter),
                 'programme' => $k % 3 === 1 ? 'PhD Full-Time' : 'MSc Full-Time', 'department' => $department,
@@ -222,7 +225,7 @@ trait SeedsHistoricalCases
         $this->at($at('ack'), fn () => $engine->decide($notice, $ae, 'approve'));
 
         // ---- Examiner nomination: the six-stage chain -----------------------
-        $panel = $this->historyPanel($i, $student);
+        $panel = $this->historyPanel($i, $student, $walkthrough);
         $application = $this->at($at('nominated'), function () use ($student, $title, $panel, $engine) {
             $application = Application::create([
                 'student_id' => $student->id, 'submitted_by_id' => $student->supervisor_id,
@@ -424,13 +427,25 @@ trait SeedsHistoricalCases
      * nomination form requires; externals round the pool. Inactive and
      * Unavailable examiners are left out.
      *
+     * A walkthrough panel stays held (the same panel re-examines), so it
+     * keeps clear of every examiner a live scenario panel names: otherwise
+     * Conflict Detection would show clashes the scenarios never set up (S09
+     * is meant to show exactly one). Falls back to the whole pool only if
+     * nothing is free.
+     *
      * @return array<string, ?int>
      */
-    protected function historyPanel(int $i, User $student): array
+    protected function historyPanel(int $i, User $student, bool $walkthrough = false): array
     {
         $departments = app(Departments::class);
-        $usable = fn ($q) => $q->where('is_active', true)->orderBy('id')->get()
-            ->filter(fn (Examiner $e) => $e->state() !== Examiner::STATE_UNAVAILABLE)->values();
+        $taken = $walkthrough ? $this->scenarioExaminerIds() : [];
+        $usable = function ($q) use ($taken) {
+            $pool = $q->where('is_active', true)->orderBy('id')->get()
+                ->filter(fn (Examiner $e) => $e->state() !== Examiner::STATE_UNAVAILABLE)->values();
+            $free = $pool->reject(fn (Examiner $e) => in_array($e->id, $taken, true))->values();
+
+            return $free->isEmpty() ? $pool : $free;
+        };
 
         $internal = $usable(Examiner::where('type', Examiner::TYPE_INTERNAL))
             ->filter(fn (Examiner $e) => $departments->same($e->department, $student->department))->values();
@@ -446,5 +461,15 @@ trait SeedsHistoricalCases
             'external_main_id' => $pick($external, $i * 3),
             'external_backup_id' => $externalBackup,
         ];
+    }
+
+    /** @return array<int, int> examiners named by the live scenario panels (not history, not walkthrough) */
+    protected function scenarioExaminerIds(): array
+    {
+        return ExaminerNomination::whereHas('application.student', fn ($q) => $q
+            ->where('email', 'not like', 'history.%')->where('email', 'not like', 'reviva.%'))
+            ->get()
+            ->flatMap(fn (ExaminerNomination $n) => collect(array_keys(ExaminerNomination::SLOTS))->map(fn ($seat) => $n->{$seat}))
+            ->filter()->unique()->values()->all();
     }
 }
