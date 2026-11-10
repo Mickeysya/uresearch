@@ -4,6 +4,9 @@ namespace App\Modules\Norhanis\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\SuppliesDecisionDates;
+use App\Modules\Core\Contracts\SuppliesOverdueStatus;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -13,6 +16,7 @@ use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\TravelDetail;
 use Carbon\CarbonInterface;
 use App\Modules\Norhanis\Support\Drafts;
+use App\Modules\Norhanis\Workflows\Concerns\ExpectsDecisionByCharter;
 
 /**
  * Travel requests.
@@ -26,8 +30,11 @@ use App\Modules\Norhanis\Support\Drafts;
  * a chain instead means the student's stepper shows the correct number of
  * steps from the moment they submit, and nothing has to be kept in sync.
  */
-class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents
+class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus
 {
+    /** expectedDecisionDate() and decisionIsOverdue(): see the trait. */
+    use ExpectsDecisionByCharter;
+
     /** @var array<int, bool> memoised per application, keyed by id */
     protected array $internationalCache = [];
 
@@ -113,15 +120,8 @@ class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
     /** "Travel Applications": everyone who has applied, for those who approve travel. */
     public function links(User $user): array
     {
-        $links = ApplicationOverviewController::link($this, $user);
-
-        // TA Hours (handed over from Haziq's module) sits with Travel, whose
-        // TA plan reads it. Only for the roles TaHourController lets in.
-        if ($user->isStudent() || $user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR) {
-            $links[] = ['label' => 'TA Hours', 'route' => 'ta-hours.index'];
-        }
-
-        return $links;
+        // The TA Hours link lives on ClaimsWorkflow, as in UCampus's Research Claims.
+        return ApplicationOverviewController::link($this, $user);
     }
 
     protected function isInternational(Application $application): bool

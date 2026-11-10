@@ -41,8 +41,8 @@ class PublicationController extends Controller
         'manuscript' => PublicationSignOffs::MANUSCRIPT,
     ];
 
-    /** The paper itself stays one file: reviewers and co-authors read that one copy. */
-    protected function singleFileDocuments(): array
+    /** The paper for the reviewers keeps Core's own limits, as it always had. */
+    protected function coreLimitDocuments(): array
     {
         return ['manuscript'];
     }
@@ -87,6 +87,7 @@ class PublicationController extends Controller
             'requestTypes' => PublicationDetail::requestTypes(),
             'conferenceScopes' => PublicationDetail::conferenceScopes(),
             'costCentres' => PublicationDetail::COST_CENTRES,
+            'conferenceCostCentre' => PublicationDetail::CONFERENCE_COST_CENTRE,
         ] + $this->draftViewData($request, $draft));
     }
 
@@ -117,13 +118,16 @@ class PublicationController extends Controller
             'title_of_paper' => ['required', 'string', 'max:255'],
             'title_of_conference_journal' => ['required', 'string', 'max:255'],
             'organizer_publisher' => ['required', 'string', 'max:255'],
-            'venue' => ['nullable', 'string', 'max:255'],
+            'venue' => ['nullable', 'required_if:type_of_request,publication_conference', 'string', 'max:255'],
             'conference_journal_fee' => ['required', 'numeric', 'min:0'],
             'currency_type' => ['required', 'string', 'max:10'],
-            // One choice from the list agreed with CGS. A split memo is not
-            // handled here: CGS emails the template and the supervisor
-            // completes it outside UResearch.
-            'cost_centre' => ['required', 'in:'.implode(',', array_keys(PublicationDetail::COST_CENTRES))],
+            // One choice from the list agreed with CGS: a conference may use
+            // "Others" only, a journal any of the four. The CGS & Grant split
+            // memo is not handled here: CGS emails the template and the
+            // supervisor completes it outside UResearch.
+            'cost_centre' => ['required', 'in:'.implode(',', array_keys(PublicationDetail::costCentresFor(
+                is_string($request->input('type_of_request')) ? $request->input('type_of_request') : null,
+            )))],
             'cost_centre_other' => ['nullable', 'required_if:cost_centre,others', 'string', 'max:150'],
             'conference_start_date' => ['required', 'date'],
             'conference_end_date' => ['required', 'date', 'after_or_equal:conference_start_date'],
@@ -132,9 +136,9 @@ class PublicationController extends Controller
             // Each author signs from a link sent here, so one address cannot
             // stand for two authors.
             'authors.*.email' => ['required', 'email', 'max:255', 'distinct:ignore_case'],
-            'authors.*.designation' => ['nullable', 'string', 'max:150'],
-            'authors.*.organisation' => ['nullable', 'string', 'max:150'],
-            'authors.*.role_contribution' => ['nullable', 'string', 'max:150'],
+            'authors.*.designation' => ['required', 'string', 'max:150'],
+            'authors.*.organisation' => ['required', 'string', 'max:150'],
+            'authors.*.role_contribution' => ['required', 'string', 'max:150'],
             'applicant_certifies' => ['accepted'],
             'applicant_signature' => ['required'],
             'applicant_conflict_disclosure' => ['nullable', 'string', 'max:2000'],
@@ -147,12 +151,19 @@ class PublicationController extends Controller
                 'ends_with:'.PublicationEvaluation::REVIEWER_EMAIL_DOMAIN,
             ],
         ], [
-            'conference_end_date.after_or_equal' => 'The end date must fall on or after the start date.',
+            'conference_end_date.after_or_equal' => 'The end date must be on or after the start date.',
             'cost_centre.required' => 'Choose the cost centre to be utilized.',
+            'cost_centre.in' => $request->input('type_of_request') === 'publication_conference'
+                ? 'A conference request can only use the "Others" cost centre.'
+                : 'Choose one of the listed cost centres.',
             'cost_centre_other.required_if' => 'Say which cost centre, as you chose "Others".',
             'authors.required' => 'Add at least one author.',
             'authors.max' => 'A publication cannot list more than 50 authors.',
+            'authors.*.author_name.required' => 'Enter this author\'s name.',
             'authors.*.email.required' => 'Every author needs an email address to receive their signing link.',
+            'authors.*.designation.required' => 'Enter this author\'s designation, e.g. PhD Student or Co-Supervisor.',
+            'authors.*.organisation.required' => 'Enter this author\'s organisation.',
+            'authors.*.role_contribution.required' => 'Say what this author contributed to the paper.',
             'authors.*.email.distinct' => 'Each author needs their own email address.',
             'applicant_certifies.accepted' => 'Tick the box to certify the authorship.',
             'applicant_signature.required' => 'Sign in the box, or upload an image of your signature.',
@@ -202,7 +213,8 @@ class PublicationController extends Controller
                 'title_of_paper' => $data['title_of_paper'],
                 'title_of_conference_journal' => $data['title_of_conference_journal'],
                 'organizer_publisher' => $data['organizer_publisher'],
-                'venue' => $data['venue'] ?? null,
+                // Likewise no venue for a journal.
+                'venue' => $data['type_of_request'] === 'publication_conference' ? ($data['venue'] ?? null) : null,
                 'conference_journal_fee' => $data['conference_journal_fee'],
                 'currency_type' => $data['currency_type'],
                 'cost_centre' => $data['cost_centre'],

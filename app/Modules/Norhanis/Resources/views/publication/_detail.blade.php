@@ -12,7 +12,7 @@
     <p><b>Fee:</b> {{ $detail->currency_type }} {{ number_format($detail->conference_journal_fee, 2) }}</p>
     <p><b>Cost Centre to be Utilized:</b> {{ $detail->costCentreLabel() }}</p>
     @if ($detail->cost_centre === 'split_memo')
-        <p style="color: var(--text-grey);">CGS will email the split memo template; the supervisor completes it outside UResearch.</p>
+        <p style="color: var(--text-grey);">CGS will email the CGS &amp; Grant - Split Memo template; the supervisor completes it outside UResearch.</p>
     @endif
     @include('norhanis::partials.stage-estimate', ['application' => $application])
     @include('norhanis::pack._buttons', ['application' => $application])

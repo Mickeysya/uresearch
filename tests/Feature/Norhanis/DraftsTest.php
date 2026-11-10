@@ -111,6 +111,18 @@ class DraftsTest extends TestCase
         $this->assertSame(Application::STATUS_DRAFT, $draft->refresh()->status);
     }
 
+    public function test_a_new_file_replaces_the_one_a_draft_already_holds(): void
+    {
+        $this->actingAs($this->student())->post(route('travel.draft.save'), ['supporting_document' => $this->pdf('first.pdf')]);
+        $draft = Application::sole();
+
+        $this->post(route('travel.draft.update', $draft), ['supporting_document' => $this->pdf('second.pdf')])
+            ->assertSessionHasNoErrors();
+
+        // Still one file for the document: the newer one.
+        $this->assertSame(['second.pdf'], $draft->documents()->where('doc_type', 'Supporting Document')->pluck('original_name')->all());
+    }
+
     public function test_only_the_owner_can_open_or_delete_a_draft(): void
     {
         $this->actingAs($this->student())->post(route('travel.draft.save'), ['reason_for_travel' => 'Mine']);

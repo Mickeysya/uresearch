@@ -78,7 +78,7 @@ class ClaimsTest extends TestCase
             ->post(route('claims.store'), $this->claim([
                 'invoice' => UploadedFile::fake()->create('notes.txt', 10, 'text/plain'),
             ]))
-            ->assertSessionHasErrors('invoice.0');
+            ->assertSessionHasErrors('invoice');
 
         $this->assertSame(0, ClaimsDetail::count());
     }
@@ -90,10 +90,10 @@ class ClaimsTest extends TestCase
         $this->actingAs($this->student())
             ->post(route('claims.store'), $this->claim([
                 // 5 MB a file (DocumentStore::MULTI_MAX_FILE_KB), checked per
-                // file, so the error lands on proof_of_payment.0.
+                // file, unchanged by the one-file rule.
                 'proof_of_payment' => UploadedFile::fake()->create('payment.pdf', 5121, 'application/pdf'),
             ]))
-            ->assertSessionHasErrors('proof_of_payment.0');
+            ->assertSessionHasErrors('proof_of_payment');
 
         $this->assertSame(0, ClaimsDetail::count());
     }
@@ -145,11 +145,12 @@ class ClaimsTest extends TestCase
     {
         Storage::fake('local');
 
-        $student = $this->student();
+        // The student's own supervisor: only they may decide the supervisor stage.
+        $supervisor = $this->supervisor();
+        $student = $this->student(attributes: ['supervisor_id' => $supervisor->id]);
         $application = $this->submitAs($student);
         $document = $application->documents()->where('doc_type', 'Receipt')->sole();
 
-        $supervisor = $this->supervisor();
         $chair = $this->chair();
         $cgs = $this->cgs();
         $manager = $this->manager();
@@ -185,6 +186,124 @@ class ClaimsTest extends TestCase
             ->assertDontSee('value="'.$theirs->id.'"', false);
     }
 
+    public function test_each_claims_document_takes_exactly_one_file(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $publication = $this->approvedPublication($student);
+        $pdf = fn (string $name) => UploadedFile::fake()->create($name, 100, 'application/pdf');
+
+        foreach (['receipt' => 'Receipt', 'proof_of_payment' => 'Proof of Payment', 'invoice' => 'Invoice', 'passport' => 'Passport'] as $field => $label) {
+            $this->actingAs($student)
+                ->post(route('claims.store'), $this->claim([
+                    'publication_application_id' => $publication->id,
+                    $field => [$pdf('one.pdf'), $pdf('two.pdf')],
+                ]))
+                ->assertSessionHasErrors([$field => "Attach one file only for the {$label}."]);
+        }
+        $this->assertSame(0, ClaimsDetail::count());
+
+        // Plain single-file inputs, the same PDF/JPG/PNG limit, no compile note.
+        $this->get(route('claims.create'))->assertOk()
+            ->assertSee('<input type="file" name="receipt" id="receipt"', false)
+            ->assertSee('One file, PDF, JPG, JPEG or PNG, 5&nbsp;MB max.', false)
+            ->assertDontSee('multiple', false)
+            ->assertDontSee('Compile the file into 1');
+    }
+
+    public function test_a_claim_stores_one_file_per_document(): void
+    {
+        Storage::fake('local');
+
+        $application = $this->submitAs($this->student(attributes: ['supervisor_id' => $this->supervisor()->id]));
+
+        $this->assertEquals(
+            ['Receipt' => 1, 'Proof of Payment' => 1, 'Invoice' => 1],
+            $application->documents()->get()->countBy('doc_type')->all(),
+        );
+    }
+
+    public function test_a_conference_publication_is_not_listed_but_a_journal_is(): void
+    {
+        $student = $this->student();
+        $journal = $this->approvedPublication($student);
+        $conference = $this->approvedPublication($student, detail: [
+            'type_of_request' => 'publication_conference',
+            'conference_scope' => 'local',
+            'title_of_paper' => 'A Conference Paper',
+        ]);
+
+        $this->actingAs($student)->get(route('claims.create'))
+            ->assertOk()
+            ->assertSee('value="'.$journal->id.'"', false)
+            ->assertDontSee('value="'.$conference->id.'"', false)
+            ->assertDontSee('A Conference Paper');
+    }
+
+    public function test_a_conference_publication_is_refused_even_from_an_edited_request(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $conference = $this->approvedPublication($student, detail: [
+            'type_of_request' => 'publication_conference',
+            'conference_scope' => 'international',
+        ]);
+
+        $this->actingAs($student)
+            ->post(route('claims.store'), $this->claim(['publication_application_id' => $conference->id]))
+            ->assertSessionHasErrors(['publication_application_id' => 'Choose one of your own approved journal publications.']);
+
+        $this->assertSame(0, ClaimsDetail::count());
+    }
+
+    public function test_an_approved_journal_of_the_students_own_is_accepted(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student(attributes: ['supervisor_id' => $this->supervisor()->id]);
+        $application = $this->submitAs($student);
+
+        $this->assertSame(Application::STATUS_PENDING, $application->status);
+        $this->assertSame('publication_journal', ClaimsDetail::sole()->publication->type_of_request);
+    }
+
+    public function test_another_students_approved_journal_is_refused(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $theirs = $this->approvedPublication($this->student('22009999', 'other-student@test.my'));
+
+        $this->actingAs($student)->get(route('claims.create'))
+            ->assertDontSee('value="'.$theirs->id.'"', false);
+
+        $this->actingAs($student)
+            ->post(route('claims.store'), $this->claim(['publication_application_id' => $theirs->id]))
+            ->assertSessionHasErrors('publication_application_id');
+
+        $this->assertSame(0, ClaimsDetail::count());
+    }
+
+    public function test_the_chosen_publication_carries_what_the_summary_box_and_rm_prefill_need(): void
+    {
+        $student = $this->student();
+        $this->approvedPublication($student, detail: ['currency_type' => 'USD', 'conference_journal_fee' => 1200]);
+
+        $this->actingAs($student)->get(route('claims.create'))
+            ->assertOk()
+            ->assertSee('data-publication-summary', false)
+            ->assertSee('data-title="Reservoir Simulation with Graph Networks"', false)
+            ->assertSee('data-journal="Journal of Petroleum Science"', false)
+            ->assertSee('data-publisher="Elsevier"', false)
+            ->assertSee('data-currency="USD"', false)
+            ->assertSee('data-fee="1200.00"', false)
+            ->assertSee('data-cost-centre="CGS – Pay and Claims"', false)
+            // The amount stays the student's to type: never readonly.
+            ->assertDontSee('readonly', false);
+    }
+
     public function test_with_no_approved_publication_there_is_nothing_to_claim_for(): void
     {
         $student = $this->student();
@@ -192,7 +311,7 @@ class ClaimsTest extends TestCase
 
         $this->actingAs($student)->get(route('claims.create'))
             ->assertOk()
-            ->assertSee('You have no approved publication yet')
+            ->assertSee('You have no approved journal publication yet')
             ->assertDontSee('name="total_claims"', false);
     }
 

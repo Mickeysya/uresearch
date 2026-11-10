@@ -3,11 +3,7 @@
 @section('title', 'Travel Application #' . $application->id)
 
 @section('content')
-    <x-core::page-header title="Travel Application #{{ $application->id }}">
-        @if ($canUpdateDocument)
-            <a href="{{ route('travel.document.edit', $application) }}" class="btn-secondary">Update Supporting Document</a>
-        @endif
-    </x-core::page-header>
+    <x-core::page-header title="Travel Application #{{ $application->id }}" />
 
     <p class="queue-meta">
         <x-core::status-badge :status="$application->status" />
