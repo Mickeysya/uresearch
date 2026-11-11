@@ -129,6 +129,14 @@ return [
         ],
     ],
 
+    // The Notice of Thesis Submission's automatic document checks (UAT
+    // 11 Nov 2026). Advisory only. No indexed-journal list yet: indexing is
+    // always "Needs manual check" until a class implementing
+    // Support\Indexing\IndexingSource is named here.
+    'notice_checks' => [
+        'indexing_source' => \App\Modules\Hani\Support\Indexing\ManualCheckSource::class,
+    ],
+
     'notice' => [
         // The abstract and keywords on the Notice of Thesis Submission, which
         // feed the examiner suggestions. Provisional: our own bounds, not a

@@ -210,6 +210,9 @@ class VivaController extends Controller
             report($e);
         }
 
+        // The papers' automatic checks run on the queue, after the commit.
+        \App\Modules\Hani\Jobs\RunNoticeChecks::dispatch($application->id);
+
         VivaProgress::notifyAcademicExecs($student,
             new VivaAwaitingAcademicExec($application, 'Notice of Thesis Submission', 'viva.queue'));
 

@@ -284,6 +284,7 @@ trait SeedsVivaScenarios
 
         $engine->submit($notice);
         $this->backdate($notice, $filedDaysAgo);
+        \App\Modules\Hani\Jobs\RunNoticeChecks::dispatchSync($notice->id);
 
         if ($acknowledge) {
             // Acknowledged two days after filing, not today: approval_history

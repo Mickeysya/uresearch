@@ -35,6 +35,11 @@ class ModuleProvider extends ServiceProvider
         // say) can be bound here instead -- see README.md.
         $this->app->bind(ExaminerMatcher::class, TfIdfMatcher::class);
 
+        // Journal indexing for the notice's document checks. No CGS list yet,
+        // so ManualCheckSource ("Needs manual check"); see hani.notice_checks.
+        $this->app->bind(\App\Modules\Hani\Support\Indexing\IndexingSource::class,
+            fn ($app) => $app->make(config('hani.notice_checks.indexing_source', \App\Modules\Hani\Support\Indexing\ManualCheckSource::class)));
+
         // Where a softbound thesis's similarity figures come from; see
         // config('hani.similarity.source') and Support\Similarity.
         $this->app->bind(SimilaritySource::class, fn ($app) => $app->make(match (config('hani.similarity.source')) {
