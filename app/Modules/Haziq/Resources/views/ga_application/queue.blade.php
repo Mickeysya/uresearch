@@ -28,7 +28,7 @@
                RM {{ number_format($detail->proposed_allowance, 2) }}</p>
         @endif
 
-        @php($queueDocuments = $application->documents->where('doc_type', '!=', 'Candidature Appeal Letter'))
+        @php($queueDocuments = $application->documents->whereIn('doc_type', array_values($documentTypes)))
         @if ($queueDocuments->isNotEmpty())
             <ul class="doc-list">
                 @foreach ($queueDocuments as $doc)

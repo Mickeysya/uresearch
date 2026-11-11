@@ -154,11 +154,12 @@
         @endforelse
 
         <h3>Documents</h3>
-        {{-- A Candidature Appeal Letter belongs to the appeal's own queue/
-             detail page, not this application's own document list — it is
-             a different action (CandidatureAppealController), not part of
-             what the student submitted here. --}}
-        @php($applicationDocuments = $application->documents->where('doc_type', '!=', 'Candidature Appeal Letter'))
+        {{-- Exactly the Section A checklist, same scope as the correction
+             form's own upload loop — not the generated Offer/Admission
+             letters (Mailpit has those), not Proof of Payment (Allowance
+             Eligibility has that), not a Candidature Appeal Letter (the
+             appeal's own queue/detail page has that). --}}
+        @php($applicationDocuments = $application->documents->whereIn('doc_type', array_values($documentTypes)))
         @if ($applicationDocuments->isNotEmpty())
             <ul class="doc-list">
                 @foreach ($applicationDocuments as $doc)

@@ -113,10 +113,11 @@
         @endforelse
 
         <h3>Documents</h3>
-        {{-- A Candidature Appeal Letter belongs to the appeal's own queue/
-             detail page, not this application's own document list — see
-             GraApplicationController::show.blade.php's identical note. --}}
-        @php($applicationDocuments = $application->documents->where('doc_type', '!=', 'Candidature Appeal Letter'))
+        {{-- Exactly the Section A checklist — see
+             GraApplicationController::show.blade.php's identical note for
+             why the generated letters, Proof of Payment and a Candidature
+             Appeal Letter are all left out here. --}}
+        @php($applicationDocuments = $application->documents->whereIn('doc_type', array_values($documentTypes)))
         @if ($applicationDocuments->isNotEmpty())
             <ul class="doc-list">
                 @foreach ($applicationDocuments as $doc)

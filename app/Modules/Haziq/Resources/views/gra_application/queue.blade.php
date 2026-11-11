@@ -25,7 +25,7 @@
 
         @include('haziq::gra_application._detail', ['application' => $application])
 
-        @php($queueDocuments = $application->documents->where('doc_type', '!=', 'Candidature Appeal Letter'))
+        @php($queueDocuments = $application->documents->whereIn('doc_type', array_values($documentTypes)))
         @if ($queueDocuments->isNotEmpty())
             <ul class="doc-list">
                 @foreach ($queueDocuments as $doc)
