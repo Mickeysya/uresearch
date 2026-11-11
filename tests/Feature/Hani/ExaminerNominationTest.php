@@ -9,6 +9,7 @@ use App\Modules\Hani\Models\Examiner;
 use App\Modules\Hani\Models\ExaminerNomination;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Hani\Concerns\DecidesNominations;
 use Tests\TestCase;
 
 /**
@@ -26,6 +27,7 @@ use Tests\TestCase;
  */
 class ExaminerNominationTest extends TestCase
 {
+    use DecidesNominations;
     use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
@@ -120,8 +122,7 @@ class ExaminerNominationTest extends TestCase
                 return;
             }
 
-            $this->actingAs($actor)
-                ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve'])
+            $this->decideNomination($actor, $application, ['decision' => 'approve'])
                 ->assertSessionHasNoErrors();
         }
     }
@@ -190,7 +191,7 @@ class ExaminerNominationTest extends TestCase
 
         $application = Application::sole();
 
-        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->decideNomination($ae, $application, ['decision' => 'approve']);
 
         // Five stages still to go: nobody is tied up yet.
         $this->assertSame('cgs_compile', $application->fresh()->current_stage);
@@ -223,7 +224,7 @@ class ExaminerNominationTest extends TestCase
         ] + $panel);
 
         $application = Application::sole();
-        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->decideNomination($ae, $application, ['decision' => 'approve']);
         $this->advanceTo($application, 'dean');
 
         $this->assertSame('dean', $application->fresh()->current_stage);
@@ -257,7 +258,7 @@ class ExaminerNominationTest extends TestCase
         ] + $this->panel());
 
         $application = Application::sole();
-        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->decideNomination($ae, $application, ['decision' => 'approve']);
         $this->advanceTo($application, 'senior_director');
 
         $this->actingAs($this->actorFor('senior_director'))
@@ -297,10 +298,7 @@ class ExaminerNominationTest extends TestCase
             'thesis_title' => 'A Study of Something',
         ] + $panel);
 
-        $this->actingAs($ae)->post(
-            route('examiner-nomination.decide', Application::sole()),
-            ['decision' => 'reject', 'remarks' => 'Conflict of interest.']
-        );
+        $this->decideNomination($ae, Application::sole(), ['decision' => 'reject', 'remarks' => 'Conflict of interest.']);
 
         $this->assertNull(Examiner::find($panel['internal_main_id'])->assigned_until);
     }
@@ -371,7 +369,7 @@ class ExaminerNominationTest extends TestCase
         ] + $this->panel());
 
         $application = Application::sole();
-        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->decideNomination($ae, $application, ['decision' => 'approve']);
         $this->advanceTo($application, $stageKey);
 
         return $application->fresh();
@@ -382,8 +380,7 @@ class ExaminerNominationTest extends TestCase
         $application = $this->filedAndAdvancedTo('cgs_final');
         $this->assertSame('cgs_final', $application->current_stage);
 
-        $this->actingAs($this->actorFor('cgs_final'))
-            ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve', 'remarks' => 'Final list.'])
+        $this->decideNomination($this->actorFor('cgs_final'), $application, ['decision' => 'approve', 'remarks' => 'Final list.'])
             ->assertSessionHasNoErrors()
             ->assertSessionHas('status', "Application #{$application->id} finalised and released to CGS operations.");
 
@@ -401,8 +398,7 @@ class ExaminerNominationTest extends TestCase
         $this->assertSame([$this->actorFor('cgs_final')->id], $history->pluck('approver_id')->unique()->values()->all());
 
         // A second click (another tab) is refused, not recorded twice.
-        $this->actingAs($this->actorFor('cgs_final'))
-            ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve'])
+        $this->decideNomination($this->actorFor('cgs_final'), $application, ['decision' => 'approve'])
             ->assertSessionHas('error');
 
         $this->assertSame(2, \App\Modules\Core\Models\ApprovalHistory::where('application_id', $application->id)
@@ -437,8 +433,7 @@ class ExaminerNominationTest extends TestCase
         $this->actingAs($nonExec)->get(route('examiner-nomination.export', ['format' => 'csv']))->assertOk();
 
         $this->actingAs($nonExec)->get(route('examiner-nomination.queue'))->assertForbidden();
-        $this->actingAs($nonExec)
-            ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve'])
+        $this->decideNomination($nonExec, $application, ['decision' => 'approve'])
             ->assertForbidden();
         $this->actingAs($nonExec)->get(route('conflict-detection.index'))->assertForbidden();
     }

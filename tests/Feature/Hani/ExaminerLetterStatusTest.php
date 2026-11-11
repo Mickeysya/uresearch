@@ -156,6 +156,7 @@ class ExaminerLetterStatusTest extends TestCase
             'Internal Main Letter Status', 'Internal Backup Letter Status',
             'External Main Letter Status', 'External Backup Letter Status',
             'Letter Needed For', 'Replaced Examiners',
+            'DAC Endorsed',
         ], array_slice($headings, 19));
 
         // Jason's importer now reads the six new columns on purpose (the letter
@@ -166,8 +167,11 @@ class ExaminerLetterStatusTest extends TestCase
 
         $this->assertSame($original, array_intersect_key($mapped, $original),
             'A new column must not claim one of the importer\'s headings.');
-        $this->assertSame(range(19, count($headings) - 1), array_values(array_diff_key($mapped, $original)),
+        // "DAC Endorsed" (the last column, 2026-11-12) is for people to read;
+        // Jason's importer ignores it, and it claims none of his headings.
+        $this->assertSame(range(19, count($headings) - 2), array_values(array_diff_key($mapped, $original)),
             'Each new column maps to a key of its own.');
+        $this->assertNotContains(count($headings) - 1, $mapped, 'DAC Endorsed claims no importer key.');
     }
 
     public function test_without_the_binding_the_entered_date_decides_and_sent_seats_are_not_flagged(): void

@@ -311,6 +311,13 @@ class ExaminerNominationController extends Controller
             'remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        // Stage 1 is decided on DAC Compilation, never here: nothing reaches
+        // CGS without a DAC record (UAT 11 Nov 2026).
+        if ($application->current_stage === ExaminerDacController::STAGE && $application->status === Application::STATUS_PENDING) {
+            return redirect()->route('examiner-nomination.dac')
+                ->with('error', 'Nominations at the department stage are decided on DAC Compilation, with the DAC meeting date.');
+        }
+
         $finalising = $data['decision'] === 'approve' && $application->current_stage === self::FINALISE_STAGE;
 
         try {
@@ -353,7 +360,7 @@ class ExaminerNominationController extends Controller
      * reasons and a link to Conflict Detection. Best effort and after commit -- a mail
      * failure must never undo the decision that has just been recorded.
      */
-    protected function notifyCompileFindings(Application $application): void
+    public function notifyCompileFindings(Application $application): void
     {
         $application->refresh();
 

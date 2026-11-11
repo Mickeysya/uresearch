@@ -146,6 +146,19 @@ Route::middleware('auth')->group(function () {
             ->name('examiner-nomination.return');
     });
 
+    // DAC Compilation (UAT 11 Nov 2026): the AE compiles her department's
+    // nominations for the DAC and records its outcome. See ExaminerDacController.
+    Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
+        Route::get('/examiner-nomination/dac', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'index'])->name('examiner-nomination.dac');
+        Route::get('/examiner-nomination/dac/export', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'export'])->name('examiner-nomination.dac.export');
+        Route::post('/examiner-nomination/dac/endorse', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'endorse'])->name('examiner-nomination.dac.endorse');
+        Route::post('/examiner-nomination/dac/not-endorsed', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'notEndorsed'])->name('examiner-nomination.dac.not-endorsed');
+    });
+    Route::middleware('role:'.implode(',', [
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR, Role::NON_EXEC_CGS,
+    ]))->get('/examiner-nomination/dac/minutes/{record}', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'minutes'])
+        ->name('examiner-nomination.dac.minutes');
+
     Route::middleware('role:'.implode(',', [
         Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS,
         Role::DEAN_PGR, Role::NON_EXEC_CGS,

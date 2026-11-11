@@ -347,7 +347,9 @@ trait SeedsVivaScenarios
             $stage = $application->current_stage;
             $step += $stage === 'cgs_release' ? 0 : 1;
             $this->at(now()->subDays(30 - 4 * $step)->setTime(10, 0)->addMinutes($stage === 'cgs_release' ? 30 : 0),
-                fn () => $engine->decide($application, $desks[$stage](), 'approve'));
+                fn () => $stage === 'academic_exec'
+                    ? $this->dacEndorse($application, $desks[$stage]())
+                    : $engine->decide($application, $desks[$stage](), 'approve'));
             $application->refresh();
         }
 
@@ -479,6 +481,18 @@ trait SeedsVivaScenarios
     }
 
     /** The CGS desk for a role from the test accounts, or a demo one. */
+    /** Stage 1 as the AE now decides it: a DAC record (fictional reference), then the engine's approve. */
+    protected function dacEndorse(Application $application, User $ae): void
+    {
+        $nomination = ExaminerNomination::where('application_id', $application->id)->first();
+        \App\Modules\Hani\Models\ExaminerDacRecord::create([
+            'nomination_id' => $nomination?->id, 'application_id' => $application->id,
+            'outcome' => \App\Modules\Hani\Models\ExaminerDacRecord::ENDORSED, 'meeting_date' => now()->toDateString(),
+            'reference' => 'DAC/DEMO/'.now()->format('Y/m'), 'recorded_by_id' => $ae->id,
+        ]);
+        app(WorkflowEngine::class)->decide($application, $ae, 'approve', 'Endorsed by the DAC on '.now()->format('j M Y').', ref DAC/DEMO/'.now()->format('Y/m').'.');
+    }
+
     protected function desk(string $role, string $name): User
     {
         return User::where('role', $role)->orderBy('id')->first()

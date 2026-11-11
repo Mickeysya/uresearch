@@ -253,7 +253,7 @@ trait SeedsHistoricalCases
                 $application->refresh();
                 $returnTo
                     ? $engine->returnTo($application, $actor, 'academic_exec', 'The internal backup examiner is from another department; please nominate one from the candidate\'s own department.')
-                    : $engine->decide($application, $actor, 'approve');
+                    : ($stage === 'academic_exec' ? $this->dacEndorse($application, $actor) : $engine->decide($application, $actor, 'approve'));
             });
         }
         $nomination = ExaminerNomination::where('application_id', $application->id)->sole();

@@ -16,6 +16,7 @@ use App\Modules\Hani\Support\ReleasedExaminerProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Hani\Concerns\DecidesNominations;
 use Tests\TestCase;
 
 /**
@@ -25,6 +26,7 @@ use Tests\TestCase;
  */
 class ReleasedExaminerProviderTest extends TestCase
 {
+    use DecidesNominations;
     use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
@@ -155,15 +157,15 @@ class ReleasedExaminerProviderTest extends TestCase
         ]);
         $application = Application::sole();
 
-        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
-        $this->actingAs($senior)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
-        $this->actingAs($this->seniorDirector())->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
-        $this->actingAs($this->dean())->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->decideNomination($ae, $application, ['decision' => 'approve']);
+        $this->decideNomination($senior, $application, ['decision' => 'approve']);
+        $this->decideNomination($this->seniorDirector(), $application, ['decision' => 'approve']);
+        $this->decideNomination($this->dean(), $application, ['decision' => 'approve']);
 
         // Not before release: the engine's own emails to the candidate are not this.
         Notification::assertNotSentTo($nonExecs, ExaminersReleased::class);
 
-        $this->actingAs($senior)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->decideNomination($senior, $application, ['decision' => 'approve']);
 
         foreach ($nonExecs as $nonExec) {
             Notification::assertSentTo($nonExec, ExaminersReleased::class,

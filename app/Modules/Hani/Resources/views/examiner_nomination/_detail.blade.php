@@ -4,6 +4,10 @@
     @include('hani::partials.module_stepper', ['tracker' => \App\Modules\Hani\Support\ModuleTracker::nomination($application)])
 
     <p>Filed by: {{ $application->submittedBy?->name ?? 'Unknown' }}</p>
+    @if ($dac = \App\Modules\Hani\Models\ExaminerDacRecord::endorsementFor($application->id))
+        <p><span class="status-badge approved">{{ $dac->label() }}</span>
+            @if ($dac->minutes_path) <a href="{{ route('examiner-nomination.dac.minutes', $dac) }}" target="_blank" rel="noopener">Minutes</a> @endif</p>
+    @endif
     <p>Thesis: {{ $nomination->thesis_title }}</p>
 
     <table class="recent-activity-table">

@@ -479,6 +479,7 @@ both scopes (`Exports/ExaminerListExport.php`).
 | 20–23 | Internal Main, Internal Backup, External Main, External Backup **Letter Status** | `Not sent`, `Sent 01 Nov 2026 (letter module)`, `Sent 01 Nov 2026 (entered by AE)`, or `Replaced 05 Nov 2026`. Blank before release, and for a seat that has never had a letter and is empty. |
 | 24 | **Letter Needed For** | Awaiting scope only: the main seats still `Not sent`, as `External Main: Dr Name`. A seat already sent is never listed. Several are separated by `; `. |
 | 25 | **Replaced Examiners** | Everyone who had a letter and has left the panel, as `Internal Main: Dr Name, Replaced 05 Nov 2026`. |
+| 26 | **DAC Endorsed** | The latest DAC endorsement, as `DAC endorsed on 12 Nov 2026 (ref DAC/CS/2026/11)`; blank before the DAC has endorsed it. Added 2026-11-12. |
 
 **Where "Sent" comes from** (`Support/AppointmentLetters`): Jason's `packSentAt()`
 and the date on the examiner progress page both count, and Jason's wins where
