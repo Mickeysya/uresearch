@@ -26,7 +26,7 @@ use Illuminate\Validation\UnauthorizedException;
 
 /**
  * Softbound thesis (CGS Online Form #019, UTP/CGS/V3/VV/019): the student files it once their
- * notice is acknowledged; the Academic Executive verifies it or returns it.
+ * notice is verified; the Academic Executive verifies it or returns it.
  */
 class VivaSoftboundController extends Controller
 {
@@ -117,7 +117,7 @@ class VivaSoftboundController extends Controller
             // Section 2: Submission Details
             'session' => ['required', 'in:'.implode(',', VivaSoftboundDetail::SESSIONS)],
             'year' => ['required', 'integer', 'in:'.implode(',', VivaSoftboundDetail::years())],
-            'thesis_title' => ['required', 'string', 'max:255'],
+            'thesis_title' => ['required', 'string', 'max:255', \App\Modules\Hani\Models\VivaDetail::titleWordsRule()],
             'similarity_percent' => ['required', 'numeric', 'min:0', 'max:'.VivaSoftboundDetail::SIMILARITY_MAX],
             'word_count' => ['required', 'integer', 'min:1', 'max:'.$wordLimit],
             // Section 3: Approval & Notifications

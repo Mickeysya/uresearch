@@ -120,8 +120,9 @@
                     <fieldset class="fstep" data-label="Thesis" id="notice">
                         <label for="thesis_title">Thesis Title</label>
                         <input type="text" name="thesis_title" id="thesis_title" required maxlength="255"
-                               value="{{ old('thesis_title') }}"
+                               value="{{ old('thesis_title') }}" data-title-words data-max="{{ $titleMaxWords }}"
                                class="@error('thesis_title') is-invalid @enderror">
+                        <p class="fstep-hint">At most {{ $titleMaxWords }} words. <span data-title-count>0</span> of {{ $titleMaxWords }} words.</p>
                         @error('thesis_title') <p class="field-error">{{ $message }}</p> @enderror
 
                         <label for="abstract">Abstract</label>
@@ -153,21 +154,31 @@
                         <p class="fstep-hint">Earliest allowed: {{ $earliestSoftbound->format('j M Y') }}.</p>
                         @error('expected_softbound_date') <p class="field-error">{{ $message }}</p> @enderror
 
-                        <label for="publication_proof">Publication Proof</label>
-                        <input type="file" name="publication_proof" id="publication_proof" required
-                               accept="application/pdf,.pdf"
-                               class="@error('publication_proof') is-invalid @enderror">
+                        <label for="publication_papers">Publication papers</label>
+                        <input type="file" name="publication_papers[]" id="publication_papers" required multiple
+                               accept="application/pdf,.pdf" data-papers data-max-files="{{ $papersMax }}"
+                               class="@error('publication_papers') is-invalid @enderror @error('publication_papers.*') is-invalid @enderror">
                         <p class="fstep-hint">
-                            PDF, up to {{ $proofMaxMb }} MB. The acceptance letter or the published article.
-                            @if ($level === VivaChecklist::PHD)
-                                If you are using two articles, combine them into one PDF.
-                            @endif
+                            1 to {{ $papersMax }} PDFs, up to {{ $docMaxMb }} MB each: the published article or the acceptance letter for each paper.
+                            {{ $level === VivaChecklist::PHD ? 'PhD: one Q1/Q2 WoS paper, or two WoS/ERA/Scopus papers.' : 'MSc: one paper.' }}
+                        </p>
+                        @error('publication_papers') <p class="field-error">{{ $message }}</p> @enderror
+                        @foreach ($errors->get('publication_papers.*') as $messages)
+                            <p class="field-error">{{ $messages[0] }}</p>
+                        @endforeach
+
+                        <label for="research_methodology_result">Research Methodology result</label>
+                        <input type="file" name="research_methodology_result" id="research_methodology_result" required
+                               accept="application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg" data-methodology
+                               class="@error('research_methodology_result') is-invalid @enderror">
+                        <p class="fstep-hint">
+                            PDF, PNG or JPG, up to {{ $docMaxMb }} MB.
                             @if ($errors->any())
-                                Choose the file again: browsers do not keep a chosen file after an error.
+                                Choose the files again: browsers do not keep a chosen file after an error.
                             @endif
                         </p>
-                        @error('publication_proof') <p class="field-error">{{ $message }}</p> @enderror
-                        <p class="fstep-hint" data-continue-hint>Confirm every requirement and choose your publication proof to submit.</p>
+                        @error('research_methodology_result') <p class="field-error">{{ $message }}</p> @enderror
+                        <p class="fstep-hint" data-continue-hint>Confirm every requirement and choose your publication papers and Research Methodology result to submit.</p>
                     </fieldset>
 
                     {{-- The real submit must come first: the stepper moves the
@@ -305,8 +316,9 @@
 
 @push('scripts')
     <script @cspNonce>
-        // Unlocks "Submit" once every box is ticked and a PDF under the limit
-        // is chosen, and counts the abstract's words. A convenience only:
+        // Unlocks "Submit" once every box is ticked and the papers and the
+        // Research Methodology result are chosen, and counts the title's and
+        // the abstract's words. A convenience only:
         // VivaController::storeNotice() is the actual rule.
         (function () {
             var form = document.getElementById('viva-checklist');
@@ -316,10 +328,13 @@
             var button = form.querySelector('[data-continue]');
             var hint = form.querySelector('[data-continue-hint]');
             var count = form.querySelector('[data-count]');
-            var proof = document.getElementById('publication_proof');
+            var papers = form.querySelector('[data-papers]');
+            var methodology = form.querySelector('[data-methodology]');
+            var title = form.querySelector('[data-title-words]');
+            var titleCount = form.querySelector('[data-title-count]');
             var abstract = form.querySelector('[data-words]');
             var wordCount = form.querySelector('[data-word-count]');
-            var maxBytes = {{ (int) $proofMaxMb }} * 1024 * 1024;
+            var maxBytes = {{ (int) $docMaxMb }} * 1024 * 1024;
 
             function words(text) {
                 var m = text.match(/[\p{L}\p{N}]+(?:['\-’][\p{L}\p{N}]+)*/gu);
@@ -331,11 +346,17 @@
                 count.textContent = ticked;
                 if (!button) return;
 
-                var file = proof && proof.files[0];
-                var fileOk = !!file && /\.pdf$/i.test(file.name) && file.size <= maxBytes;
-                if (proof) proof.setCustomValidity(file && !fileOk ? 'Choose a PDF of {{ (int) $proofMaxMb }} MB or smaller.' : '');
+                var picked = papers ? Array.prototype.slice.call(papers.files) : [];
+                var maxFiles = papers ? +papers.dataset.maxFiles : 0;
+                var papersOk = picked.length >= 1 && picked.length <= maxFiles
+                    && picked.every(function (f) { return /\.pdf$/i.test(f.name) && f.size <= maxBytes; });
+                if (papers) papers.setCustomValidity(picked.length && !papersOk ? 'Choose 1 to ' + maxFiles + ' PDFs of {{ (int) $docMaxMb }} MB or smaller each.' : '');
 
-                var ready = ticked === boxes.length && fileOk;
+                var rm = methodology && methodology.files[0];
+                var rmOk = !!rm && /\.(pdf|png|jpe?g)$/i.test(rm.name) && rm.size <= maxBytes;
+                if (methodology) methodology.setCustomValidity(rm && !rmOk ? 'Choose a PDF, PNG or JPG of {{ (int) $docMaxMb }} MB or smaller.' : '');
+
+                var ready = ticked === boxes.length && papersOk && rmOk;
                 button.disabled = !ready;
                 if (hint) hint.hidden = ready;
             }
@@ -365,7 +386,16 @@
             }
 
             boxes.forEach(function (b) { b.addEventListener('change', sync); });
-            if (proof) proof.addEventListener('change', function () { sync(); proof.reportValidity(); });
+            if (papers) papers.addEventListener('change', function () { sync(); papers.reportValidity(); });
+            if (methodology) methodology.addEventListener('change', function () { sync(); methodology.reportValidity(); });
+            function syncTitle() {
+                if (!title) return;
+                var n = words(title.value), max = +title.dataset.max;
+                titleCount.textContent = n;
+                title.setCustomValidity(n > max ? 'The thesis title must be ' + max + ' words or fewer.' : '');
+            }
+            if (title) title.addEventListener('input', syncTitle);
+            syncTitle();
             if (abstract) abstract.addEventListener('input', syncWords);
             sync();
             syncWords();

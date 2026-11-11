@@ -21,7 +21,7 @@
                         @foreach ($progress as $p)
                             <tr>
                                 <td>{{ $p->notice->student->name }}<br><span class="fstep-hint">{{ $p->detail?->thesis_title }}</span></td>
-                                <td>{{ $p->notice->status === \App\Modules\Core\Models\Application::STATUS_APPROVED ? 'Acknowledged' : 'With the Academic Executive' }}</td>
+                                <td>{{ $p->notice->status === \App\Modules\Core\Models\Application::STATUS_APPROVED ? 'Verified' : 'With the Academic Executive' }}</td>
                                 <td>{{ $p->nominationLabel() }}</td>
                                 <td>{{ $p->softboundLabel() }}</td>
                                 <td>

@@ -56,7 +56,7 @@ class VivaSoftboundChecksTest extends TestCase
 
         $this->actingAs($this->student)->post(route('viva.notice.store'), $this->noticeFields(['thesis_title' => self::TITLE]))
             ->assertSessionHasNoErrors();
-        $this->actingAs($this->ae)->post(route('viva.decide', Application::where('module_type', 'viva_voce')->sole()), ['decision' => 'approve']);
+        $this->verifyNotice($this->ae, Application::where('module_type', 'viva_voce')->sole());
     }
 
     protected function form(array $overrides = []): array

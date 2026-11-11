@@ -11,6 +11,7 @@ class VivaDetail extends Model
 {
     protected $fillable = [
         'application_id', 'programme_level', 'thesis_title', 'abstract', 'keywords', 'expected_softbound_date',
+        'ae_item_checks', 'ae_checked_by_id', 'ae_checked_at',
         'viva_at', 'venue', 'chair_name', 'chair_email',
         'co_supervisor_name', 'co_supervisor_email', 'scheduled_by_id', 'schedule_sequence',
         'result_category', 'result_recorded_at', 'result_recorded_by_id', 'corrections_due_at',
@@ -23,6 +24,8 @@ class VivaDetail extends Model
         return [
             'keywords' => 'array',
             'expected_softbound_date' => 'date',
+            'ae_item_checks' => 'array',
+            'ae_checked_at' => 'datetime',
             'viva_at' => 'datetime',
             'result_category' => 'integer',
             'result_recorded_at' => 'datetime',
@@ -49,6 +52,28 @@ class VivaDetail extends Model
      * Words in a piece of text, the way a reader counts them: runs of letters
      * or digits (hyphenated and apostrophised words count once), in any script.
      */
+    /** Document types on a Notice of Thesis Submission (DocumentStore doc_type). */
+    public const DOC_PAPER = 'Publication Paper';
+
+    public const DOC_METHODOLOGY = 'Research Methodology Result';
+
+    /** Before the UAT change, one proof PDF. Old notices keep it. */
+    public const DOC_LEGACY_PROOF = 'Publication Proof';
+
+    /** Thesis title limit, in words (UAT 11 Nov 2026), on the notice and the softbound form. */
+    public const TITLE_MAX_WORDS = 15;
+
+    /** A validation rule: the thesis title has at most TITLE_MAX_WORDS words. */
+    public static function titleWordsRule(): \Closure
+    {
+        return function ($attribute, $value, $fail) {
+            $words = self::wordCount($value);
+            if ($words > self::TITLE_MAX_WORDS) {
+                $fail('The thesis title must be '.self::TITLE_MAX_WORDS." words or fewer; it has {$words}.");
+            }
+        };
+    }
+
     public static function wordCount(?string $text): int
     {
         return preg_match_all("/[\\p{L}\\p{N}]+(?:['\\-’][\\p{L}\\p{N}]+)*/u", (string) $text);

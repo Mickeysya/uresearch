@@ -42,7 +42,7 @@ final class ModuleTracker
 
         $now = [
             'notice' => match (true) {
-                $notice?->status === Application::STATUS_PENDING => 'Your Academic Executive is reviewing your Notice of Thesis Submission. Nothing to do until they acknowledge it.',
+                $notice?->status === Application::STATUS_PENDING => 'Your Academic Executive is reviewing your Notice of Thesis Submission. Nothing to do until they verify it.',
                 $eligible => 'Submit your Notice of Thesis Submission to continue.',
                 default => 'Tick every requirement on the eligibility checklist, then submit your Notice of Thesis Submission.',
             },

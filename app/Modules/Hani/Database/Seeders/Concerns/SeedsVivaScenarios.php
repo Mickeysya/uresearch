@@ -267,9 +267,20 @@ trait SeedsVivaScenarios
             'keywords' => VivaDetail::parseKeywords($row['keywords']),
             'expected_softbound_date' => today()->subDays($filedDaysAgo)->addMonthsNoOverflow(3)->addDays(7),
         ]);
+        // Fictional documents only: a paper whose author list names the
+        // student, with a made-up DOI and ISSN, and a Research Methodology result.
         app(DocumentStore::class)->storeGenerated($notice,
-            FictionalPdfs::document('Letter of Acceptance (fictional)', ['Manuscript: '.$row['thesis_title'], 'Journal of Example Studies, accepted for publication.']),
-            'publication-proof.pdf', 'Publication Proof');
+            FictionalPdfs::document('Journal of Example Studies (fictional)', [
+                $row['thesis_title'],
+                'Authors: '.$student->name.', '.($student->supervisor?->name ?? 'A. Supervisor'),
+                'Journal of Example Studies, Vol. 12, 2026. ISSN 1234-5679',
+                'DOI: 10.5555/example.'.Str::slug($student->matric_no ?: (string) $student->id),
+                'This manuscript has been accepted for publication.',
+            ]),
+            'publication-paper-1.pdf', VivaDetail::DOC_PAPER);
+        app(DocumentStore::class)->storeGenerated($notice,
+            FictionalPdfs::document('Research Methodology result (fictional)', ['Student: '.$student->name, 'Research Methodology: Pass']),
+            'research-methodology-result.pdf', VivaDetail::DOC_METHODOLOGY);
 
         $engine->submit($notice);
         $this->backdate($notice, $filedDaysAgo);
@@ -280,6 +291,10 @@ trait SeedsVivaScenarios
             $ae = $this->academicExecFor($student);
             $this->at(now()->subDays(max(0, $filedDaysAgo - 2)), fn () => $engine->decide($notice, $ae, 'approve'));
             VivaEligibility::where('student_id', $student->id)->update(['verified_by_id' => $ae->id, 'verified_at' => now()->subDays(max(0, $filedDaysAgo - 2))]);
+            VivaDetail::where('application_id', $notice->id)->update([
+                'ae_item_checks' => json_encode(array_fill_keys(array_keys(VivaChecklist::itemsFor($student)), 'verified')),
+                'ae_checked_by_id' => $ae->id, 'ae_checked_at' => now()->subDays(max(0, $filedDaysAgo - 2)),
+            ]);
         }
 
         return $notice;

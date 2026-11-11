@@ -17,7 +17,7 @@ use App\Modules\Hani\Support\Eligibility\EligibilitySource;
  * candidacy period, from the candidature start date) are checked by the
  * system instead: a verified item needs no tick, and an item the system finds
  * not met blocks the notice whatever was ticked. The AE confirms the lot on
- * acknowledgement (viva_eligibility.verified_by_id / verified_at).
+ * verification (viva_eligibility.verified_by_id / verified_at).
  */
 final class VivaChecklist
 {

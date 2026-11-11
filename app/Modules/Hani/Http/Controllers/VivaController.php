@@ -12,6 +12,7 @@ use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaEligibility;
 use App\Modules\Hani\Notifications\VivaAwaitingAcademicExec;
 use App\Modules\Hani\Notifications\VivaNominateExaminers;
+use App\Modules\Hani\Notifications\VivaNoticeDecision;
 use App\Modules\Hani\Notifications\VivaNoticeSubmitted;
 use App\Modules\Hani\Support\Eligibility\EligibilityResult;
 use App\Modules\Hani\Support\ModuleTracker;
@@ -26,8 +27,11 @@ class VivaController extends Controller
 {
     use ApprovesApplications;
 
-    /** Publication proof: PDF only, 5 MB. Tighter than DocumentStore's default. */
-    protected const PROOF_MAX_KB = 5120;
+    /** Each notice document: 10 MB (UAT 11 Nov 2026). */
+    protected const DOC_MAX_KB = 10240;
+
+    /** Publication papers on one notice. */
+    protected const PAPERS_MAX = 5;
 
     protected function moduleKey(): string
     {
@@ -64,7 +68,9 @@ class VivaController extends Controller
             'progress' => $progress,
             'tracker' => ModuleTracker::viva($progress, $eligible),
             'earliestSoftbound' => $this->earliestSoftbound(),
-            'proofMaxMb' => self::PROOF_MAX_KB / 1024,
+            'docMaxMb' => self::DOC_MAX_KB / 1024,
+            'papersMax' => self::PAPERS_MAX,
+            'titleMaxWords' => VivaDetail::TITLE_MAX_WORDS,
             'limits' => config('hani.notice'),
         ]);
     }
@@ -129,7 +135,7 @@ class VivaController extends Controller
         $maxKeywords = (int) $limits['keywords_max'];
 
         $data = $request->validate([
-            'thesis_title' => ['required', 'string', 'max:255'],
+            'thesis_title' => ['required', 'string', 'max:255', VivaDetail::titleWordsRule()],
             'abstract' => ['required', 'string', 'max:6000', function ($attribute, $value, $fail) use ($minWords, $maxWords) {
                 $words = VivaDetail::wordCount($value);
                 if ($words < $minWords || $words > $maxWords) {
@@ -145,12 +151,19 @@ class VivaController extends Controller
                 }
             }],
             'expected_softbound_date' => ['required', 'date', 'after_or_equal:'.$this->earliestSoftbound()->toDateString()],
-            'publication_proof' => ['required', 'file', 'mimes:pdf', 'max:'.self::PROOF_MAX_KB],
+            'publication_papers' => ['required', 'array', 'min:1', 'max:'.self::PAPERS_MAX],
+            'publication_papers.*' => ['file', 'mimes:pdf', 'max:'.self::DOC_MAX_KB],
+            'research_methodology_result' => ['required', 'file', 'mimes:pdf,png,jpg,jpeg', 'max:'.self::DOC_MAX_KB],
         ], [
             'expected_softbound_date.after_or_equal' => 'The notice must be submitted at least 3 months before softbound submission, so the earliest date is '
                 .$this->earliestSoftbound()->format('j M Y').'.',
-            'publication_proof.mimes' => 'Publication proof must be a PDF.',
-            'publication_proof.max' => 'Publication proof must be 5 MB or smaller.',
+            'publication_papers.required' => 'Attach at least one publication paper.',
+            'publication_papers.max' => 'Attach at most '.self::PAPERS_MAX.' publication papers.',
+            'publication_papers.*.mimes' => 'Each publication paper must be a PDF.',
+            'publication_papers.*.max' => 'Each publication paper must be 10 MB or smaller.',
+            'research_methodology_result.required' => 'Attach your Research Methodology result.',
+            'research_methodology_result.mimes' => 'The Research Methodology result must be a PDF, PNG or JPG.',
+            'research_methodology_result.max' => 'The Research Methodology result must be 10 MB or smaller.',
         ]);
 
         $application = DB::transaction(function () use ($request, $student, $data, $engine, $documents, $checks) {
@@ -180,7 +193,10 @@ class VivaController extends Controller
                 'expected_softbound_date' => $data['expected_softbound_date'],
             ]);
 
-            $documents->attach($application, $request->file('publication_proof'), 'Publication Proof');
+            foreach ($request->file('publication_papers') as $paper) {
+                $documents->attach($application, $paper, VivaDetail::DOC_PAPER);
+            }
+            $documents->attach($application, $request->file('research_methodology_result'), VivaDetail::DOC_METHODOLOGY);
 
             return $engine->submit($application);
         });
@@ -248,26 +264,49 @@ class VivaController extends Controller
     // ---- Academic Executive queue -----------------------------------------
 
     /**
-     * The shared decide, plus the guideline's next step: once the AE has
-     * acknowledged the notice, the supervisor is asked to nominate examiners.
-     * Acknowledging also confirms the eligibility summary on the card
-     * (verified_by_id / verified_at); that is not a stage of its own.
+     * The AE's Verification, matching UCampus (UAT 11 Nov 2026):
+     *   Verified  every eligibility item marked Verified; the engine's
+     *             approve, stamping verified_by_id / verified_at, and the
+     *             supervisor is asked to nominate examiners.
+     *   Rejected  comment required; the engine's reject, and the student is
+     *             emailed the comment (VivaNoticeDecision). The checklist
+     *             unlocks and a new notice may be filed.
+     * The per-item marks are kept on the notice (viva_details.ae_item_checks).
      * Authorisation and the stage move stay the engine's.
      */
     public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
 
+        $student = $application->student;
+        $items = $student ? VivaChecklist::itemsFor($student) : [];
+
         $data = $request->validate([
-            'decision' => ['required', 'in:approve,reject'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
+            'verification' => ['required', 'in:verified,rejected'],
+            'items' => ['nullable', 'array'],
+            'items.*' => ['nullable', 'in:verified,not_met'],
+            'comment' => ['nullable', 'required_if:verification,rejected', 'string', 'max:2000'],
+        ], [
+            'verification.required' => 'Choose Verified or Rejected.',
+            'comment.required_if' => 'Give a comment: the student is emailed it with the rejection.',
         ]);
 
+        $marks = collect($items)->keys()->mapWithKeys(fn ($column) => [$column => $data['items'][$column] ?? null])->all();
+        $verifying = $data['verification'] === 'verified';
+
+        if ($verifying && collect($marks)->contains(fn ($mark) => $mark !== 'verified')) {
+            return back()->withInput()->withErrors(['items' => 'Mark every eligibility item Verified before verifying the notice.']);
+        }
+
         try {
-            DB::transaction(function () use ($application, $request, $engine, $data) {
+            DB::transaction(function () use ($application, $request, $engine, $data, $marks, $verifying) {
                 $eligibility = VivaEligibility::where('student_id', $application->student_id)->lockForUpdate()->first();
 
-                $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
+                VivaDetail::where('application_id', $application->id)->update([
+                    'ae_item_checks' => json_encode($marks), 'ae_checked_by_id' => $request->user()->id, 'ae_checked_at' => now(),
+                ]);
+
+                $engine->decide($application, $request->user(), $verifying ? 'approve' : 'reject', $data['comment'] ?? null);
 
                 if ($application->status === Application::STATUS_APPROVED && $eligibility) {
                     $eligibility->forceFill(['verified_by_id' => $request->user()->id, 'verified_at' => now()])->save();
@@ -280,10 +319,16 @@ class VivaController extends Controller
         }
 
         if ($application->status !== Application::STATUS_APPROVED) {
-            return back()->with('status', "Notice #{$application->id} rejected.");
+            try {
+                $student?->notify(new VivaNoticeDecision($application, VivaNoticeDecision::REJECTED, (string) $data['comment'], $request->user()->name));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            return back()->with('status', "Notice #{$application->id} rejected. {$student?->name} has been emailed your comment and may file a new notice.");
         }
 
-        $supervisor = $application->student?->supervisor;
+        $supervisor = $student?->supervisor;
 
         if ($supervisor) {
             try {
@@ -297,22 +342,18 @@ class VivaController extends Controller
             }
         }
 
-        return back()->with('status', "Notice #{$application->id} acknowledged and eligibility confirmed."
+        return back()->with('status', "Notice #{$application->id} verified."
             .($supervisor ? " {$supervisor->name} has been asked to nominate examiners." : ' No supervisor is recorded for this student, so nobody was asked to nominate examiners.'));
     }
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
-        $queue = $this->queueFor($request, $engine, ['documents']);
+        $queue = $this->queueFor($request, $engine, ['documents', 'student.supervisor']);
+        $ids = $queue['applications']->pluck('id');
 
-        $details = VivaDetail::whereIn('application_id', $queue['applications']->pluck('id'))
-            ->get()
-            ->keyBy('application_id');
-
-        $eligibility = VivaEligibility::whereIn('student_id', $queue['applications']->pluck('student_id'))
-            ->get()
-            ->keyBy('student_id');
-
-        return view('hani::viva.queue', $queue + ['details' => $details, 'eligibility' => $eligibility]);
+        return view('hani::viva.notice_queue', $queue + [
+            'details' => VivaDetail::whereIn('application_id', $ids)->get()->keyBy('application_id'),
+            'eligibility' => VivaEligibility::whereIn('student_id', $queue['applications']->pluck('student_id'))->get()->keyBy('student_id'),
+        ]);
     }
 }

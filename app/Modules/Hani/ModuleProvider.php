@@ -106,6 +106,8 @@ class ModuleProvider extends ServiceProvider
      *   Six of them per list told the student nothing they need; they see
      *   the nomination's status in the app, never the examiners. The
      *   return email (generic remarks, no names) still goes.
+     * - viva notice: the engine's "not approved" email, which says the
+     *   outcome is final; VivaNoticeDecision sends the comment instead.
      * Other modules and other recipients are untouched.
      */
     protected function quietEngineEmailsToReVivaStudents(): void
@@ -136,6 +138,14 @@ class ModuleProvider extends ServiceProvider
 
             $progressUpdate = $notification instanceof \App\Modules\Core\Notifications\ApplicationDecided
                 && (fn () => $this->approved && $this->outcome !== 'returned')->call($notification);
+
+            // A rejected or returned notice: VivaNoticeDecision tells the
+            // student, with the comment. The engine's says it is final; it is not.
+            if ($application->module_type === \App\Modules\Hani\Support\VivaProgress::NOTICE
+                && $notification instanceof \App\Modules\Core\Notifications\ApplicationDecided
+                && ! (fn () => $this->approved)->call($notification)) {
+                return false;
+            }
 
             return $application->module_type === \App\Modules\Hani\Support\VivaProgress::NOMINATION && $progressUpdate ? false : null;
         });

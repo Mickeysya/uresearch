@@ -13,7 +13,7 @@ use Illuminate\Notifications\Notification;
  * The student's receipt for their Notice of Thesis Submission.
  *
  * WorkflowEngine only notifies on decisions, so without this the student
- * hears nothing until the Academic Executive acknowledges the notice. The
+ * hears nothing until the Academic Executive verifies the notice. The
  * notice starts the 3-month clock to softbound, so the date they committed
  * to is repeated back to them.
  */
@@ -41,7 +41,7 @@ class VivaNoticeSubmitted extends Notification implements ShouldQueue
             ->line('Your Notice of Thesis Submission has been received.')
             ->line('Thesis: '.$this->detail->thesis_title)
             ->line('Expected softbound submission: '.$this->detail->expected_softbound_date->format('j M Y'))
-            ->line('Your Academic Executive will review it and contact your supervisor about appointing examiners.')
+            ->line('Your Academic Executive will verify it, and your supervisor will then be asked to nominate examiners.')
             ->action('Track your notice', route('applications.show', $this->application))
             ->line('Thank you for using UResearch 2.0.');
     }

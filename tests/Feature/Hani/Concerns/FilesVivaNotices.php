@@ -25,7 +25,16 @@ trait FilesVivaNotices
             'abstract' => $this->abstractOf(150),
             'keywords' => 'examiner matching; constraint satisfaction; expertise ranking',
             'expected_softbound_date' => now()->addMonths(4)->toDateString(),
-            'publication_proof' => UploadedFile::fake()->create('accepted.pdf', 100, 'application/pdf'),
+            'publication_papers' => [UploadedFile::fake()->create('accepted.pdf', 100, 'application/pdf')],
+            'research_methodology_result' => UploadedFile::fake()->create('rm-result.pdf', 50, 'application/pdf'),
         ];
+    }
+
+    /** The AE's Verification with every eligibility item marked Verified. */
+    protected function verifyNotice(\App\Modules\Core\Models\User $ae, \App\Modules\Core\Models\Application $notice, array $overrides = [])
+    {
+        $items = array_fill_keys(array_keys(\App\Modules\Hani\Support\VivaChecklist::itemsFor($notice->student)), 'verified');
+
+        return $this->actingAs($ae)->post(route('viva.decide', $notice), $overrides + ['verification' => 'verified', 'items' => $items]);
     }
 }

@@ -80,7 +80,7 @@ final class VivaProgress
     {
         return match (true) {
             $this->notice === null => 'Submit your Notice of Thesis Submission first.',
-            $this->notice->status === Application::STATUS_PENDING => 'Your notice is still waiting for your Academic Executive to acknowledge it.',
+            $this->notice->status === Application::STATUS_PENDING => 'Your notice is still waiting for your Academic Executive to verify it.',
             $this->softbound?->status === Application::STATUS_PENDING => 'Your softbound thesis is already with your Academic Executive.',
             $this->softbound?->status === Application::STATUS_APPROVED => 'Your softbound thesis has already been verified.',
             default => null,
@@ -105,7 +105,7 @@ final class VivaProgress
     public function waitingFor(): array
     {
         return array_values(array_filter([
-            $this->notice?->status !== Application::STATUS_APPROVED ? 'Notice not acknowledged yet' : null,
+            $this->notice?->status !== Application::STATUS_APPROVED ? 'Notice not verified yet' : null,
             $this->softbound?->status !== Application::STATUS_APPROVED ? 'Softbound thesis not verified' : null,
             $this->nomination?->status !== Application::STATUS_APPROVED ? 'Examiner nomination '.lcfirst($this->nominationLabel()) : null,
         ]));
