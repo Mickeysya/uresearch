@@ -22,6 +22,7 @@
             <div class="haziq-repeatable-row">
                 <p><b>Programme</b><br>{{ $profile->programme }} ({{ ucfirst($profile->level_of_study) }})</p>
                 <p><b>Admission Date</b><br>{{ $profile->admission_date->format('j M Y') }}</p>
+                <p><b>Period Candidature</b><br>{{ $profile->candidature_period ?? '—' }}</p>
                 <p><b>Current Service Period</b><br>{{ $parentDetail->service_start_date->format('j M Y') }} – {{ $parentDetail->service_end_date->format('j M Y') }}</p>
                 <p><b>Previous Allowance</b><br>RM {{ $parentDetail->proposed_allowance !== null ? number_format($parentDetail->proposed_allowance, 2) : '—' }}</p>
             </div>
@@ -186,6 +187,9 @@
                 <input type="date" name="admission_date" id="admission_date" required
                        value="{{ old('admission_date', $profile?->admission_date?->format('Y-m-d')) }}">
                 <p class="queue-meta" style="margin-top: -8px;">Your academic admission date; a different date from Service Start Date below, which is what your Stage Gate schedule is actually built from.</p>
+
+                <label for="candidature_period">Period Candidature</label>
+                <input type="text" name="candidature_period" id="candidature_period" value="{{ old('candidature_period', $profile?->candidature_period) }}">
 
                 <label for="thesis_title">Thesis Title</label>
                 <input type="text" name="thesis_title" id="thesis_title" value="{{ old('thesis_title', $profile?->thesis_title) }}">

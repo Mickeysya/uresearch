@@ -150,6 +150,12 @@
                        class="{{ $isFlagged('section_c', 'admission_date') ? 'haziq-flagged' : '' }}">
                 @if ($r = $fieldReason('section_c', 'admission_date'))<p class="haziq-flag-reason">⚠ {{ $r }}</p>@endif
 
+                <label for="candidature_period">Period Candidature</label>
+                <input type="text" name="candidature_period" id="candidature_period"
+                       value="{{ old('candidature_period', $profile->candidature_period) }}"
+                       class="{{ $isFlagged('section_c', 'candidature_period') ? 'haziq-flagged' : '' }}">
+                @if ($r = $fieldReason('section_c', 'candidature_period'))<p class="haziq-flag-reason">⚠ {{ $r }}</p>@endif
+
                 <label for="thesis_title">Thesis Title</label>
                 <input type="text" name="thesis_title" id="thesis_title"
                        value="{{ old('thesis_title', $profile->thesis_title) }}"

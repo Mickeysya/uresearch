@@ -87,6 +87,7 @@
             <div class="haziq-repeatable-row">
                 <p><b>Programme</b><br>{{ $profile->programme }} ({{ strtoupper($profile->level_of_study) }})</p>
                 <p><b>Admission Date</b><br>{{ $profile->admission_date->format('j M Y') }}</p>
+                <p><b>Period Candidature</b><br>{{ $profile->candidature_period ?? '—' }}</p>
                 <p><b>Mode of Study</b><br>{{ $profile->mode_of_study ?? '—' }}</p>
                 <p><b>Thesis Title</b><br>{{ $profile->thesis_title ?? '—' }}</p>
                 <p><b>Co-Supervisor</b><br>{{ $profile->coSupervisor?->name ?? '—' }}</p>
