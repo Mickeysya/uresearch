@@ -123,6 +123,9 @@ class ReVivaController extends Controller
             'meeting_kind' => ['required', Rule::in([ReVivaProcess::CONSOLIDATION, ReVivaProcess::RE_VIVA])],
             'meeting_at' => ['required', 'date', 'after:now'],
             'meeting_venue' => ['required', 'string', 'max:255'],
+            // Only when the linked viva has no chairman on record.
+            'meeting_chair_name' => ['nullable', 'required_with:meeting_chair_email', 'string', 'max:150'],
+            'meeting_chair_email' => ['nullable', 'required_with:meeting_chair_name', 'email', 'max:150'],
         ]));
 
         return 'Meeting scheduled and invitations sent.';
@@ -176,21 +179,37 @@ class ReVivaController extends Controller
 
     public function settings()
     {
-        return view('hani::re_viva.settings', ['days' => ReVivaSettings::reminderDays(), 'configured' => (array) config('hani.reviva.external_reminders')]);
+        $levels = collect(ReVivaSettings::LEVELS)->map(fn ($label, $level) => [
+            'label' => $label,
+            'days' => ReVivaSettings::reminderDays($level),
+            'configured' => ReVivaSettings::configured($level),
+            'limit' => (int) config("hani.reviva.panel_working_days.{$level}", 20),
+        ])->all();
+
+        return view('hani::re_viva.settings', ['levels' => $levels]);
     }
 
     public function saveSettings(Request $request)
     {
-        $max = (int) config('hani.reviva.panel_working_days', 20);
-        $data = $request->validate([
-            'days' => ['required', 'array', 'min:1', 'max:5'],
-            'days.*' => ['nullable', 'integer', 'between:1,'.$max],
-        ]);
-        $days = collect($data['days'])->filter()->map(fn ($d) => (int) $d)->unique()->sortDesc()->values()->all();
-        abort_if($days === [], 422, 'Enter at least one reminder.');
-        ReVivaSettings::saveReminderDays($days, $request->user()->id);
+        $rules = [];
+        foreach (array_keys(ReVivaSettings::LEVELS) as $level) {
+            $max = (int) config("hani.reviva.panel_working_days.{$level}", 20);
+            $rules["days.{$level}"] = ['required', 'array', 'min:1', 'max:5'];
+            $rules["days.{$level}.*"] = ['nullable', 'integer', 'between:1,'.$max];
+        }
+        $data = $request->validate($rules);
 
-        return back()->with('status', 'Reminders will go '.implode(' and ', $days).' working days before the deadline.');
+        $saved = [];
+        foreach (ReVivaSettings::LEVELS as $level => $label) {
+            $days = collect($data['days'][$level])->filter()->map(fn ($d) => (int) $d)->unique()->sortDesc()->values()->all();
+            if ($days === []) {
+                return back()->withErrors(["days.{$level}" => "Enter at least one reminder for a {$label} thesis."])->withInput();
+            }
+            ReVivaSettings::saveReminderDays($level, $days, $request->user()->id);
+            $saved[] = "{$label}: ".implode(', ', $days);
+        }
+
+        return back()->with('status', 'Reminders saved, in working days before the deadline. '.implode('. ', $saved).'.');
     }
 
     /** For a route's ->missing(): the record in the URL no longer exists. */

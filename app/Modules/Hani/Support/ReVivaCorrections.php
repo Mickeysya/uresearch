@@ -36,6 +36,9 @@ class ReVivaCorrections
             if (! $locked->needsFinalThesis() || $locked->corrections_accepted_at !== null) {
                 throw ValidationException::withMessages(['final_thesis' => 'There is no final thesis to submit for this re-viva.']);
             }
+            if (! $locked->finalThesisOpen()) {
+                throw ValidationException::withMessages(['final_thesis' => 'You may submit your final thesis from '.$locked->finalOpensOn()->format('j M Y').'.']);
+            }
 
             $this->documents->attach($locked->application, $thesis, self::DOC_FINAL);
             $locked->update(['final_thesis_submitted_at' => now()]);
@@ -43,12 +46,12 @@ class ReVivaCorrections
             return $locked;
         });
 
-        $this->tell(\App\Modules\Core\Models\User::where('role', \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
+        $this->tell(ReVivaRecipients::cgs($detail->application), (new ReVivaUpdate(
             'final_thesis_submitted', $detail->application,
             'Final thesis submitted: '.$student->name,
             ["{$student->name} has submitted the final thesis for re-viva round {$detail->cycle_number} ({$detail->outcomeLabel()})."],
             'Open Re-viva Outcomes', route('reviva.outcomes.index'),
-        ));
+        ))->forCgs());
 
         return $detail;
     }

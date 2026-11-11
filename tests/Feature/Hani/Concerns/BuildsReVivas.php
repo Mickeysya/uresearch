@@ -21,7 +21,7 @@ trait BuildsReVivas
     protected function senior(): User
     {
         return $this->seniorExecUser ??= User::firstOrCreate(
-            ['email' => 'waheeda@test.my'],
+            ['email' => 'waheda.cgs@utp.edu.my'],
             ['name' => 'Puan Waheeda', 'password' => 'password', 'role' => Role::SENIOR_EXEC_CGS],
         );
     }
@@ -74,10 +74,10 @@ trait BuildsReVivas
     }
 
     /** Round 1 submitted by the student on 1 Oct 2027. */
-    protected function roundSubmitted(string $matric = '22001001'): array
+    protected function roundSubmitted(string $matric = '22001001', string $programme = 'MSc Full-Time'): array
     {
         \Carbon\Carbon::setTestNow('2027-03-15 09:00');
-        $viva = $this->categoryFourViva($matric);
+        $viva = $this->categoryFourViva($matric, '2027-03-01 10:00', $programme);
         \Carbon\Carbon::setTestNow('2027-10-01 09:00');
         $this->actingAs($viva['student'])->post(route('reviva.submit'), $this->studentFiles())->assertSessionHasNoErrors();
         $viva['round'] = $this->latestRound($viva['student']);
@@ -85,9 +85,9 @@ trait BuildsReVivas
         return $viva;
     }
 
-    protected function roundReadyToSend(string $matric = '22001001'): array
+    protected function roundReadyToSend(string $matric = '22001001', string $programme = 'MSc Full-Time'): array
     {
-        $viva = $this->roundSubmitted($matric);
+        $viva = $this->roundSubmitted($matric, $programme);
         $this->act($viva['round'], 'accept', $this->senior())->assertSessionHasNoErrors();
         $this->act($viva['round'], 'send-to-dean', $this->senior())->assertSessionHasNoErrors();
         $this->deanSigns();
@@ -97,9 +97,9 @@ trait BuildsReVivas
     }
 
     /** Sent on Fri 1 Oct 2027. */
-    protected function roundUnderPanelReview(string $matric = '22001001'): array
+    protected function roundUnderPanelReview(string $matric = '22001001', string $programme = 'MSc Full-Time'): array
     {
-        $viva = $this->roundReadyToSend($matric);
+        $viva = $this->roundReadyToSend($matric, $programme);
         $this->act($viva['round'], 'send-to-panel', $this->senior())->assertSessionHasNoErrors();
         $viva['round']->refresh();
 

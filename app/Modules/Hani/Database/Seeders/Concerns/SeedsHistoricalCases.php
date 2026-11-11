@@ -210,7 +210,7 @@ trait SeedsHistoricalCases
 
         $engine = app(WorkflowEngine::class);
         $ae = $this->academicExecFor($student);
-        $senior = $this->desk(Role::SENIOR_EXEC_CGS, 'Puan Waheeda (demo)');
+        $senior = $this->reVivaSenior();
         $title = self::HISTORY_TITLES[$i];
 
         // ---- Notice of Thesis Submission ---------------------------------

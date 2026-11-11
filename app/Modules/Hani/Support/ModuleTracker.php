@@ -163,7 +163,7 @@ final class ModuleTracker
                 $level === ReVivaDetail::OUTCOME_DISMISSED => 'Level 5: dismissed. This is the final outcome; there is no further action.',
                 $level === ReVivaDetail::OUTCOME_LOOP_BACK => 'Level 4: another round is needed. Round '.($detail->cycle_number + 1).' opens when the student submits again.',
                 $detail->corrections_accepted_at !== null => 'Level '.$level.': final thesis accepted on '.$detail->corrections_accepted_at->format('j M Y').'. The re-viva is complete.',
-                default => 'Level '.$level.': passed with corrections'.($detail->correction_deadline ? ', due by '.$detail->correction_deadline->format('j M Y') : '').'.',
+                default => 'Level '.$level.': passed with corrections'.($detail->finalWindowText() ? ', final thesis due '.$detail->finalWindowText() : '').'.',
             };
         }
 

@@ -66,7 +66,7 @@
                     @if ($round->corrections_accepted_at)
                         <p class="message-success">Your final thesis was accepted on {{ $round->corrections_accepted_at->format('j M Y') }}. Your re-viva is complete.</p>
                     @else
-                        <p>Final thesis due: <b>{{ $round->correction_deadline?->format('j M Y') }}</b>
+                        <p>Final thesis due <b>{{ $round->finalWindowText() }}</b>
                             @if ($round->finalThesisOverdue()) <span class="status-badge rejected">Overdue</span> @endif
                         </p>
                         @if ($round->final_thesis_submitted_at)
@@ -75,9 +75,14 @@
                         <form method="POST" action="{{ route('reviva.final-thesis.store', $round) }}" enctype="multipart/form-data">
                             @csrf
                             <label for="final_thesis-{{ $round->id }}">Final thesis (PDF)</label>
-                            <input type="file" name="final_thesis" id="final_thesis-{{ $round->id }}" accept="application/pdf,.pdf" required>
+                            <input type="file" name="final_thesis" id="final_thesis-{{ $round->id }}" accept="application/pdf,.pdf" required @disabled(! $round->finalThesisOpen())>
                             @error('final_thesis') <p class="field-error">{{ $message }}</p> @enderror
-                            <button type="submit">Upload Final Thesis</button>
+                            @if ($round->finalThesisOpen())
+                                <button type="submit">Upload Final Thesis</button>
+                            @else
+                                <button type="submit" disabled aria-describedby="final-opens-{{ $round->id }}">Upload Final Thesis</button>
+                                <p class="fstep-hint" id="final-opens-{{ $round->id }}">You may submit your final thesis from {{ $round->finalOpensOn()->format('j M Y') }}.</p>
+                            @endif
                         </form>
                     @endif
                 @elseif ($round->requiresLoopBack())

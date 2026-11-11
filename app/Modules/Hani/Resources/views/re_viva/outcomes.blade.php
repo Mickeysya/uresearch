@@ -30,7 +30,7 @@
                             @php($final = $d->application->documents->where('doc_type', \App\Modules\Hani\Support\ReVivaCorrections::DOC_FINAL)->last())
                             <tr>
                                 <td>{{ $d->application->student->name }}<br><span class="fstep-hint">Round {{ $d->cycle_number }}</span></td>
-                                <td>{{ $d->outcomeLabel() }}<br>Due {{ $d->correction_deadline?->format('j M Y') }}
+                                <td>{{ $d->outcomeLabel() }}<br>Due {{ $d->finalWindowText() ?? $d->correction_deadline?->format('j M Y') }}
                                     @if ($d->finalThesisOverdue()) <span class="status-badge rejected">Overdue</span> @endif</td>
                                 <td>
                                     @if ($final)

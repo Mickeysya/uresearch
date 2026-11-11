@@ -77,8 +77,8 @@ trait SeedsReVivaScenarios
         $this->command?->table(['Point', 'Student login'], [
             ['(a) eligible', 'reviva.a@example.com'], ['(b) submitted', 'reviva.b@example.com'], ['(c) returned, re-uploaded', 'reviva.c@example.com'],
             ['(d) pack prepared', 'reviva.d@example.com'], ['(e) with the Dean', 'reviva.e@example.com'], ['(f) ready to send', 'reviva.f@example.com'],
-            ['(g) panel review, examiner with an account', ($s09?->email ?? '-').' / examiner ain.ismail@example.com'], ['(h) at the 10-day reminder', 'reviva.h@example.com'],
-            ['(i) reports in, diverging', 'reviva.i@example.com'], ['(j) meeting scheduled', 'reviva.j@example.com'], ['(k) passed level 2', 'reviva.k@example.com'],
+            ['(g) panel review, examiner with an account', ($s09?->email ?? '-').' / examiner ain.ismail@example.com'], ['(h) MSc, at the 10-working-day reminder', 'reviva.h@example.com'],
+            ['(i) reports in, diverging', 'reviva.i@example.com'], ['(j) meeting scheduled', 'reviva.j@example.com'], ['(k) passed level 2 (final thesis opens in 1 month)', 'reviva.k@example.com'],
             ['(l) dismissed', 'reviva.l@example.com'], ['(m) level 4, round 2 open', $s10?->email ?? '-'],
         ]);
     }
@@ -87,7 +87,7 @@ trait SeedsReVivaScenarios
     {
         $by = collect($this->reVivaDemoStudents)->mapWithKeys(fn ($student, $k) => [self::REVIVA_DEMO[$k][0] => $student]);
         $process = app(ReVivaProcess::class);
-        $senior = $this->desk(Role::SENIOR_EXEC_CGS, 'Puan Waheeda (demo)');
+        $senior = $this->reVivaSenior();
 
         if ($s09) {
             $t = $this->reVivaTimeline()['DEMO-S09'];
@@ -158,6 +158,12 @@ trait SeedsReVivaScenarios
         }
     }
 
+    /** The re-viva runs as Puan Waheda (waheda.cgs@, hani.reviva.cgs_recipients), never another Senior Executive. */
+    protected function reVivaSenior(): User
+    {
+        return \App\Modules\Hani\Support\ReVivaRecipients::seniorExec() ?? $this->desk(Role::SENIOR_EXEC_CGS, 'Puan Waheeda (demo)');
+    }
+
     /** The student submits, with fictional PDFs. */
     protected function logRound(User $student): ReVivaDetail
     {
@@ -201,7 +207,7 @@ trait SeedsReVivaScenarios
     {
         $this->demoSignature($this->desk(Role::DEAN_PGR, 'Dean of PGR (demo)'));
         $process = app(ReVivaProcess::class);
-        $senior = $this->desk(Role::SENIOR_EXEC_CGS, 'Puan Waheeda (demo)');
+        $senior = $this->reVivaSenior();
         $process->accept($detail->application->refresh(), $senior);
         $process->sendToDean($detail->application->refresh(), $senior);
         $process->deanApprove($detail->application->refresh(), $this->desk(Role::DEAN_PGR, 'Dean of PGR (demo)'));
@@ -209,7 +215,7 @@ trait SeedsReVivaScenarios
 
     protected function sendPack(ReVivaDetail $detail): void
     {
-        app(ReVivaLetters::class)->send($detail->application->refresh(), $this->desk(Role::SENIOR_EXEC_CGS, 'Puan Waheeda (demo)'));
+        app(ReVivaLetters::class)->send($detail->application->refresh(), $this->reVivaSenior());
 
         foreach ($detail->refresh()->currentMains() as $examiner) {
             ReVivaExaminerAccounts::find($examiner)?->forceFill(['password' => 'password', 'email_verified_at' => now()])->save();
@@ -219,7 +225,7 @@ trait SeedsReVivaScenarios
     protected function recordBoth(ReVivaDetail $detail, int $internal, ?bool $internalViva, int $external, ?bool $externalViva): void
     {
         $process = app(ReVivaProcess::class);
-        $senior = $this->desk(Role::SENIOR_EXEC_CGS, 'Puan Waheeda (demo)');
+        $senior = $this->reVivaSenior();
 
         foreach ([['internal_main_id', $internal, $internalViva], ['external_main_id', $external, $externalViva]] as [$seat, $category, $viva]) {
             $process->recordEvaluation($detail->refresh(), $seat, ['category' => $category, 'viva_again' => $viva],
@@ -232,7 +238,7 @@ trait SeedsReVivaScenarios
 
     protected function finishRound(ReVivaDetail $detail, int $level, ?string $remarks): void
     {
-        app(ReVivaProcess::class)->decideWithoutMeeting($detail->application->refresh(), $this->desk(Role::SENIOR_EXEC_CGS, 'Puan Waheeda (demo)'), $level, $remarks);
+        app(ReVivaProcess::class)->decideWithoutMeeting($detail->application->refresh(), $this->reVivaSenior(), $level, $remarks);
     }
 
     protected function tempPdf(string $bytes, string $name): UploadedFile

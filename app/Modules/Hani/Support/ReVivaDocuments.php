@@ -66,7 +66,7 @@ class ReVivaDocuments
     public function letter(ReVivaDetail $detail, Examiner $examiner, bool $draft, ?string $signature = null, ?User $approver = null): string
     {
         $data = self::candidate($detail->application->student, $detail->vivaDetail(), $detail);
-        $days = (int) config('hani.reviva.panel_working_days', 20);
+        $days = ReVivaLetters::panelWorkingDays($detail);
 
         return $this->pdf('correction_letter', $data + [
             'reference' => config('hani.reviva.letter.reference_prefix').($data['student']->matric_no ?: $data['student']->id),

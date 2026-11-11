@@ -263,8 +263,9 @@ class ReVivaProcessTest extends TestCase
     public function test_reminders_use_the_system_setting_and_send_once(): void
     {
         $viva = $this->roundUnderPanelReview();
-        ReVivaSettings::saveReminderDays([15, 4], $this->senior()->id);
-        $this->assertSame([15, 4], ReVivaSettings::reminderDays());
+        ReVivaSettings::saveReminderDays('master', [15, 4], $this->senior()->id);
+        $this->assertSame([15, 4], ReVivaSettings::reminderDays('master'));
+        $this->assertSame([5, 3, 1], ReVivaSettings::reminderDays('doctoral'), 'the other level keeps its config default');
 
         $at = function (int $left) use ($viva) {
             $day = $viva['round']->panel_deadline->copy();
@@ -288,8 +289,10 @@ class ReVivaProcessTest extends TestCase
 
     public function test_settings_page_saves_reminders(): void
     {
-        $this->actingAs($this->senior())->post(route('reviva.settings.save'), ['days' => [7, 2, '']])->assertSessionHasNoErrors();
-        $this->assertSame([7, 2], ReVivaSettings::reminderDays());
+        $this->actingAs($this->senior())->post(route('reviva.settings.save'), ['days' => ['master' => [7, 2, ''], 'doctoral' => [6, 2, 1]]])->assertSessionHasNoErrors();
+        $this->assertSame([7, 2], ReVivaSettings::reminderDays('master'));
+        $this->assertSame([6, 2, 1], ReVivaSettings::reminderDays('doctoral'));
+        $this->actingAs($this->senior())->post(route('reviva.settings.save'), ['days' => ['master' => [25], 'doctoral' => [3]]])->assertSessionHasErrors('days.master.0');
     }
 
     public function test_start_review_needs_both_reports_then_agreeing_pass_records_the_deadline(): void
@@ -377,7 +380,7 @@ class ReVivaProcessTest extends TestCase
         $this->assertStringContainsString('stepper stepper-dense', $html);
     }
 
-    public function test_the_engine_stage_emails_to_a_re_viva_student_are_cancelled(): void
+    public function test_the_engine_stage_emails_on_a_re_viva_are_cancelled_for_everyone(): void
     {
         $viva = $this->roundSubmitted();
         $application = $viva['round']->application;
@@ -385,7 +388,7 @@ class ReVivaProcessTest extends TestCase
         $send = fn ($to) => \Illuminate\Support\Facades\Event::until(new \Illuminate\Notifications\Events\NotificationSending($to, new \App\Modules\Core\Notifications\ApplicationDecided($application, $stage, true), 'mail'));
 
         $this->assertFalse($send($viva['student']));
-        $this->assertNotFalse($send($this->senior()));
+        $this->assertFalse($send($this->senior()), 'CGS hears from the module, through ReVivaRecipients');
         Notification::assertSentTo($viva['student'], ReVivaUpdate::class, fn ($n) => $n->kind === 'student_submitted');
     }
 

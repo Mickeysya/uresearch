@@ -68,7 +68,8 @@ class ReVivaLetters
         if ($letters->every(fn (ReVivaStaffDocument $l) => $l->fresh()->emailed_at !== null)) {
             DB::transaction(function () use ($application, $actor, $letters) {
                 $sentAt = now();
-                ReVivaDetail::where('application_id', $application->id)->update(['sent_to_panel_at' => $sentAt, 'sent_to_panel_by_id' => $actor->id, 'panel_deadline' => self::reviewDue($sentAt)]);
+                $detail = ReVivaDetail::where('application_id', $application->id)->firstOrFail();
+                $detail->update(['sent_to_panel_at' => $sentAt, 'sent_to_panel_by_id' => $actor->id, 'panel_deadline' => self::reviewDue($sentAt, $detail)]);
                 // No examiner names: the student reads the remarks on their tracking page.
                 $this->engine->decide($application->refresh(), $actor, 'approve', 'Sent to the '.$letters->count().' main examiners.');
 
@@ -106,18 +107,41 @@ class ReVivaLetters
      */
     public static function panelLinkExpiry(ReVivaDetail $detail): Carbon
     {
-        return self::linkExpiry(now()->max($detail->sent_to_panel_at ?? now()));
+        return self::linkExpiry(now()->max($detail->sent_to_panel_at ?? now()), $detail);
     }
 
-    public static function linkExpiry(\DateTimeInterface $sentAt): Carbon
+    /** The panel's deadline from $sentAt, plus signed_link_slack_days for a late report. */
+    public static function linkExpiry(\DateTimeInterface $sentAt, ?ReVivaDetail $detail = null): Carbon
     {
-        return Carbon::parse($sentAt)->addDays((int) config('hani.reviva.signed_link_days', 35))->endOfDay();
+        return self::reviewDue($sentAt, $detail)->addDays((int) config('hani.reviva.signed_link_slack_days', 10))->endOfDay();
     }
 
-    /** When the panel's working days run out. */
-    public static function reviewDue(\DateTimeInterface $sentAt): Carbon
+    /** When the panel's working days run out: 20 for a Master's thesis, 30 for a Doctoral one. */
+    public static function reviewDue(\DateTimeInterface $sentAt, ?ReVivaDetail $detail = null): Carbon
     {
-        return WorkingDays::add(Carbon::parse($sentAt), (int) config('hani.reviva.panel_working_days', 20));
+        return WorkingDays::add(Carbon::parse($sentAt), self::panelWorkingDays($detail));
+    }
+
+    public const MASTER = 'master';
+
+    public const DOCTORAL = 'doctoral';
+
+    /** 'master' or 'doctoral', the same test the letter uses for "Master's" / "Doctoral". */
+    public static function level(?ReVivaDetail $detail): string
+    {
+        if (! $detail || ! $detail->application?->student) {
+            return self::MASTER;
+        }
+
+        return ReVivaDocuments::candidate($detail->application->student, $detail->vivaDetail(), $detail)['phd'] ? self::DOCTORAL : self::MASTER;
+    }
+
+    /** The panel's time limit in working days (hani.reviva.panel_working_days). */
+    public static function panelWorkingDays(?ReVivaDetail $detail): int
+    {
+        $days = config('hani.reviva.panel_working_days');
+
+        return (int) (is_array($days) ? ($days[self::level($detail)] ?? $days[self::MASTER] ?? 20) : ($days ?: 20));
     }
 
     /** "twenty" for 20: the letter spells the number out, as the real one does. */

@@ -98,8 +98,10 @@ class ModuleProvider extends ServiceProvider
     /**
      * Engine stage emails to the student that Hani cancels, through
      * Laravel's NotificationSending event:
-     * - re-viva: every stage email. Re-viva sends its own milestone emails
-     *   (submitted, returned, accepted, sent to the examiners, result).
+     * - re-viva: every stage email, to the student AND to staff. Re-viva
+     *   sends its own milestone emails (submitted, returned, accepted, sent
+     *   to the examiners, result); CGS-bound ones go only to
+     *   ReVivaRecipients::cgs() (UAT 11 Nov 2026).
      * - examiner nomination: the "Progress Update" at each approved stage.
      *   Six of them per list told the student nothing they need; they see
      *   the nomination's status in the app, never the examiners. The
@@ -118,12 +120,18 @@ class ModuleProvider extends ServiceProvider
 
             $application = (fn () => $this->application ?? null)->call($notification);
 
-            if (! $application || ($event->notifiable->id ?? null) !== $application->student_id) {
+            if (! $application) {
                 return null;
             }
 
+            // Re-viva: no engine stage email to anyone. Its own emails go to
+            // the student and, for CGS, only to ReVivaRecipients::cgs().
             if ($application->module_type === 're_viva') {
                 return false;
+            }
+
+            if (($event->notifiable->id ?? null) !== $application->student_id) {
+                return null;
             }
 
             $progressUpdate = $notification instanceof \App\Modules\Core\Notifications\ApplicationDecided
