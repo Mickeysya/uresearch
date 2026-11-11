@@ -6,7 +6,6 @@ use App\Modules\Core\Models\Application;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 class GraApplicationDetail extends Model
@@ -133,11 +132,6 @@ class GraApplicationDetail extends Model
     public function canBeExtended(): bool
     {
         return $this->application->status === Application::STATUS_APPROVED;
-    }
-
-    public function allowanceNotes(): HasMany
-    {
-        return $this->hasMany(AllowanceRecommendationNote::class, 'application_id', 'application_id');
     }
 
     /**

@@ -7,13 +7,8 @@
     </p>
     <p>Project Leader: {{ $detail->project_leader_name }} &middot; Funding: {{ $detail->funding_source }}</p>
     <p>Service: {{ $detail->service_start_date->format('j M Y') }} to {{ $detail->service_end_date->format('j M Y') }}</p>
-    <p>Proposed Allowance:
-        @if ($detail->proposed_allowance === null)
-            <span style="color: var(--text-grey);">not yet set by CGS</span>
-        @else
-            RM {{ number_format($detail->proposed_allowance, 2) }}
-        @endif
-        @if ($detail->isExtension()) (was RM {{ number_format($detail->previous_allowance, 2) }}) @endif
+    <p>Proposed Allowance: RM {{ number_format($detail->proposed_allowance, 2) }}
+        @if ($detail->isExtension() && $detail->previous_allowance !== null) (was RM {{ number_format($detail->previous_allowance, 2) }}) @endif
     </p>
     @if ($detail->isExtension() && $detail->extension_reason)
         <p>Reason: {{ $detail->extension_reason }}</p>
@@ -27,7 +22,7 @@
     <div class="haziq-repeatable-row" style="border-color: var(--danger-fg);">
         <p style="grid-column: 1 / -1;"><b>Awaiting student action:</b></p>
         @foreach ($open as $req)
-            <p>{{ $req->target_label }} — <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>
+            <p>{{ $req->target_label }}: <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>
         @endforeach
     </div>
 @endif

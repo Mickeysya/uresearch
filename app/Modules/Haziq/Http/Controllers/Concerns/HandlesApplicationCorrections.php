@@ -72,14 +72,18 @@ trait HandlesApplicationCorrections
     abstract protected function canStillFlag(User $user, Application $application): bool;
 
     /**
-     * Admin, CGS and Supervisor only -- never Research Centre, confirmed
-     * explicitly 2026-11-10: "research centre takde ni au, mark correction
-     * au, set interview je, cuma boleh tengok detail students ah." GA's
-     * approver route group (routes.php) shares one middleware list with
-     * Research Centre for queue/show/decide, so this is the one place
-     * that actually draws the line -- both requestCorrection() itself and
+     * Admin, CGS (all four CGS ranks, Senior Director CGS included) and
+     * Supervisor only -- never Research Centre, confirmed explicitly
+     * 2026-11-10: "research centre takde ni au, mark correction au, set
+     * interview je, cuma boleh tengok detail students ah." GA's approver
+     * route group (routes.php) shares one middleware list with Research
+     * Centre for queue/show/decide, so this is the one place that
+     * actually draws the line -- both requestCorrection() itself and
      * every view deciding whether to render the form read off this same
      * method, so there is nowhere left for the two to drift apart again.
+     * This is now the ONE way any approver pushes back on a figure it
+     * disagrees with, the student's own proposed allowance included --
+     * there is no more separate CGS-set / internal-note mechanism for it.
      */
     protected function canRequestCorrectionRole(User $user): bool
     {

@@ -80,6 +80,7 @@ class GraExtensionEligibilityTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'funding_source' => 'UTP Internal Grant',
             'funding_continuation' => 'existing',
+            'proposed_allowance' => '1500',
             'requested_new_end_date' => now()->addMonths(50)->toDateString(),
             'extension_reason' => 'Fieldwork slipped two semesters and needs the assistantship to continue.',
         ])->assertRedirect(route('applications.index'));
@@ -109,6 +110,7 @@ class GraExtensionEligibilityTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'funding_source' => 'UTP Internal Grant',
             'funding_continuation' => 'existing',
+            'proposed_allowance' => '1500',
             'requested_new_end_date' => now()->addMonths(50)->toDateString(),
             'extension_reason' => 'Attempting to extend a pending application directly.',
         ])->assertForbidden();
@@ -127,6 +129,7 @@ class GraExtensionEligibilityTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'funding_source' => 'UTP Internal Grant',
             'funding_continuation' => 'existing',
+            'proposed_allowance' => '1500',
             'requested_new_end_date' => now()->addMonths(50)->toDateString(),
             'extension_reason' => 'Attempting to extend a rejected application directly.',
         ])->assertForbidden();
@@ -152,6 +155,7 @@ class GraExtensionEligibilityTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'funding_source' => 'UTP Internal Grant',
             'funding_continuation' => 'existing',
+            'proposed_allowance' => '1500',
             // Deliberately missing: requested_new_end_date, extension_reason.
         ])->assertRedirect(route('gra-application.extension.create'));
 
@@ -178,6 +182,7 @@ class GraExtensionEligibilityTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'funding_source' => 'UTP Internal Grant',
             'funding_continuation' => 'existing',
+            'proposed_allowance' => '1500',
         ]);
 
         $draft = Application::where('module_type', 'gra_application')->where('status', Application::STATUS_DRAFT)->sole();
@@ -208,6 +213,7 @@ class GraExtensionEligibilityTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'funding_source' => 'UTP Internal Grant',
             'funding_continuation' => 'existing',
+            'proposed_allowance' => '1500',
         ]);
 
         $draft = Application::where('module_type', 'gra_application')->where('status', Application::STATUS_DRAFT)->sole();
@@ -220,6 +226,7 @@ class GraExtensionEligibilityTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'funding_source' => 'UTP Internal Grant',
             'funding_continuation' => 'existing',
+            'proposed_allowance' => '1500',
             'requested_new_end_date' => now()->addMonths(50)->toDateString(),
             'extension_reason' => 'Fieldwork slipped two semesters and needs the assistantship to continue.',
         ])->assertRedirect(route('applications.index'));
@@ -244,6 +251,7 @@ class GraExtensionEligibilityTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'funding_source' => 'UTP Internal Grant',
             'funding_continuation' => 'existing',
+            'proposed_allowance' => '1500',
         ]);
 
         $draft = Application::where('module_type', 'gra_application')->where('status', Application::STATUS_DRAFT)->sole();
