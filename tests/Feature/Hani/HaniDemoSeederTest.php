@@ -54,6 +54,16 @@ class HaniDemoSeederTest extends TestCase
         return User::where('email', $email)->sole();
     }
 
+    public function test_it_gives_the_dean_demo_account_the_deans_name(): void
+    {
+        $dean = $this->user(Role::DEAN_PGR, ['name' => 'Prof. Dr. Hafiz Osman', 'email' => 'dean@utp.edu.my']);
+
+        $this->seed(HaniDemoSeeder::class);
+
+        $this->assertSame('Prof. Ts. Dr. M. Fadzil Hassan', $dean->refresh()->name);
+        $this->assertSame('dean@utp.edu.my', $dean->email);
+    }
+
     public function test_it_loads_the_pool_through_the_import_and_is_idempotent(): void
     {
         $before = md5_file(HaniDemoSeeder::DATASET);

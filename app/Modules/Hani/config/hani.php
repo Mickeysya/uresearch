@@ -356,7 +356,10 @@ return [
             'institution' => 'Universiti Teknologi PETRONAS',
             'address' => ['Bandar Seri Iskandar', '31750 Tronoh Perak', 'Darul Ridzuan'],
         ],
-        'signatory' => ['name' => 'Prof. Ts. Dr. M Fadzil Hassan', 'title' => ['Dean,', 'Postgraduate & Research']],
+        // FALLBACK only: a letter prints the Dean of PGR who approved it
+        // (approval_history), and this name only before anyone has. The demo
+        // seeder also gives dean@utp.edu.my this name.
+        'signatory' => ['name' => 'Prof. Ts. Dr. M. Fadzil Hassan', 'title' => ['Dean, Postgraduate & Research (PGR)']],
         'return_contacts' => [
             ['name' => 'Waheda Rahayu Bt Rashid', 'role' => 'Senior Executive CGS', 'email' => 'waheda.cgs@utp.edu.my', 'tel' => '+605 000 0001', 'mobile' => '+6012 000 0001'],
             ['name' => 'M Syahmi Ifwat M Jafri', 'role' => 'Non-Executive CGS', 'email' => 'syahmi.cgs@utp.edu.my', 'tel' => '+605 000 0002', 'mobile' => '+6012 000 0002'],

@@ -139,7 +139,7 @@ class ReVivaProcess
 
         DB::transaction(function () use ($application, $actor, $detail, $signature) {
             $detail->update(['dean_approved_at' => now()]);
-            $this->pack->renderLetters($detail, false, $signature);
+            $this->pack->renderLetters($detail, false, $signature, $actor);
             $this->engine->decide($application, $actor, 'approve', 'Approved by the Dean of PGR.');
         });
 

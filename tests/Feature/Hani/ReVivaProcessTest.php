@@ -142,6 +142,24 @@ class ReVivaProcessTest extends TestCase
         $this->assertNotNull($round->refresh()->dean_approved_at);
     }
 
+    public function test_letters_print_the_dean_who_approved_them_not_the_config_name(): void
+    {
+        $round = $this->roundSubmitted()['round'];
+        $this->assertSame('Prof. Ts. Dr. M. Fadzil Hassan', ReVivaDocuments::signatory($round)['name'], 'fallback before approval');
+        $this->assertSame(['Dean, Postgraduate & Research (PGR)'], ReVivaDocuments::signatory($round)['title']);
+
+        $acting = User::firstOrCreate(['email' => 'acting.dean@test.my'], ['name' => 'Prof. Dr. Acting Dean', 'password' => 'password', 'role' => Role::DEAN_PGR]);
+        \Illuminate\Support\Facades\Storage::disk('local')->put('hani/reviva-signatures/acting.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='));
+        \App\Modules\Hani\Models\ReVivaSignature::updateOrCreate(['user_id' => $acting->id], ['path' => 'hani/reviva-signatures/acting.png']);
+
+        $this->act($round, 'accept', $this->senior());
+        $this->act($round, 'send-to-dean', $this->senior());
+        $this->act($round, 'dean-approve', $acting)->assertSessionHasNoErrors();
+
+        $this->assertSame('ready_to_send', $this->stage($round));
+        $this->assertSame('Prof. Dr. Acting Dean', ReVivaDocuments::signatory($round->refresh())['name']);
+    }
+
     public function test_letter_view_has_the_required_content(): void
     {
         $viva = $this->roundSubmitted();
@@ -156,9 +174,9 @@ class ReVivaProcessTest extends TestCase
 
         $draft = $render(true);
         $this->assertStringContainsString('DRAFT', $draft);
-        $this->assertStringNotContainsString('M Fadzil Hassan', $draft);
+        $this->assertStringNotContainsString('M. Fadzil Hassan', $draft);
         $final = $render(false);
-        $this->assertStringContainsString('M Fadzil Hassan', $final);
+        $this->assertStringContainsString('M. Fadzil Hassan', $final);
         foreach (['UTP/PGS/AD/22001001', $examiner->name, $round->application->student->name, 'twenty (20) working days', 'waheda.cgs@utp.edu.my', 'syahmi.cgs@utp.edu.my', $data['degreeName']] as $text) {
             $this->assertStringContainsString(e($text), $final);
         }

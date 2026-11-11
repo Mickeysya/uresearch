@@ -107,6 +107,14 @@ trait SeedsVivaScenarios
             ]);
         }
 
+        // The Dean of PGR's demo account carries his name, so the re-viva
+        // letters the demo approves print the right approver. The shared
+        // DatabaseSeeder still seeds the old name (SHARED_CHANGES.md item 12).
+        $deanName = (string) config('hani.reviva.signatory.name');
+        if (User::where('email', 'dean@utp.edu.my')->where('role', Role::DEAN_PGR)->update(['name' => $deanName])) {
+            $this->command?->info("  Dean of PGR demo account (dean@utp.edu.my) renamed to {$deanName}.");
+        }
+
         $this->command?->info(sprintf('  Demo people: %d supervisors, %d students (password "password").',
             count($this->dataset()['supervisors'] ?? []), count($this->dataset()['students'] ?? [])));
     }

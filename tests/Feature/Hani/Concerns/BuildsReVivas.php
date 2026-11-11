@@ -44,7 +44,7 @@ trait BuildsReVivas
 
     protected function deanUser(): User
     {
-        return User::firstOrCreate(['email' => 'dean@test.my'], ['name' => 'Dean Test', 'password' => 'password', 'role' => Role::DEAN_PGR]);
+        return User::firstOrCreate(['email' => 'dean@test.my'], ['name' => 'Prof. Ts. Dr. M. Fadzil Hassan', 'password' => 'password', 'role' => Role::DEAN_PGR]);
     }
 
     /** The Dean's re-viva signature on file (Approve needs it). */

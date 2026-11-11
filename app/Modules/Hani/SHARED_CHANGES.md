@@ -23,6 +23,7 @@ optional.** The modules work today with none of them applied.
 | 9 | `TODO.md` | Hani's section is out of date | Yes |
 | 10 | Chloe's `study_candidacies` table | read-only, guarded read | Yes |
 | 11 | Jason's appointment import | skip an Application No. + examiner already sent | Yes, but a part-sent row can still produce a second letter |
+| 12 | `database/seeders/DatabaseSeeder.php`, `tests/Support/MakesUsers.php` | the Dean of PGR's name: Prof. Ts. Dr. M. Fadzil Hassan | Yes (Hani's demo seeder renames the account) |
 
 ---
 
@@ -607,3 +608,46 @@ if (count($kinds) < 2 && ! ctype_digit($cell('nomination_id'))) {
 under a record later merged by Conflict Detection does not match the record
 kept. Hani's report counts it as sent because it knows about the merge
 (`examiner_merges`). The import would not, so that one examiner is still at risk.
+
+---
+
+## 12. The Dean of PGR's name (shared seeder and test helper)
+
+**Reason.** At the UAT session on 11 Nov 2026, CGS confirmed that the Dean of
+PGR is **Prof. Ts. Dr. M. Fadzil Hassan**, "Dean, Postgraduate & Research
+(PGR)". The shared seeder still names the `dean@utp.edu.my` account
+"Prof. Dr. Hafiz Osman", so letters and emails show the wrong Dean.
+
+**What Hani's module already does (no shared file touched).**
+- Re-viva letters print the name of the Dean who **approved** them, read from
+  `approval_history`. The `hani.reviva.signatory` config is only the fallback.
+- `HaniDemoSeeder` (the `people` step) **renames the `dean@utp.edu.my` account
+  to Prof. Ts. Dr. M. Fadzil Hassan** each time it runs. The email stays the
+  same; his real email is not used anywhere. **This is why the Dean's name
+  changes after a Hani demo seed.** A plain `migrate:fresh --seed` without the
+  Hani demo still shows the old name until this item is applied.
+
+**Snippet.**
+
+```php
+// database/seeders/DatabaseSeeder.php, line 62
+$this->user('Prof. Ts. Dr. M. Fadzil Hassan', 'dean@utp.edu.my', Role::DEAN_PGR, ['department' => 'PGR']);
+
+// tests/Support/MakesUsers.php, dean()
+return $this->user(Role::DEAN_PGR, ['name' => 'Prof. Ts. Dr. M. Fadzil Hassan', 'email' => 'dean@test.my']);
+```
+
+**Impact: other members' tests assert the old name** and must change in the
+same commit:
+- Nureen: `tests/Feature/Nureen/SupervisionHandbookTest.php:288` expects
+  "following approval by the Dean of PGR, Prof. Dr. Hafiz Osman".
+- Chloe: `tests/Feature/CandidacyDemoDataTest.php:36` creates the dean with
+  the old name.
+- Jason: `tests/Feature/JasonAppointmentLetterTest.php` (lines 441, 550, 592).
+- Core: `tests/Feature/AssistantPrivacyMaskingTest.php` (lines 79, 119) uses it
+  as a sample name to mask; it can stay as it is.
+- `docs/test-accounts.md` and `docs/accounts.md` list the old name.
+
+**Works without it?** Yes. Hani's letters already use the approver's name, and
+the demo seeder renames the account.
+
