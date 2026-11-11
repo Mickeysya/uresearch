@@ -1,14 +1,16 @@
 @extends('core::layouts.app')
 
-@section('title', 'GA Application — ' . $stage->queueTitle())
+@section('title', 'GA Application: ' . $stage->queueTitle())
 
 @push('head')
     @include('haziq::partials.styles')
 @endpush
 
 @section('content')
-<h2>GA Application — {{ $stage->queueTitle() }}</h2>
-<p class="queue-meta">{{ $applications->count() }} {{ Str::plural('application', $applications->count()) }} awaiting your decision.</p>
+<div class="card-container-inline">
+    <x-core::page-header
+        title="GA Application: {{ $stage->queueTitle() }}"
+        subtitle="{{ $applications->count() }} {{ Str::plural('application', $applications->count()) }} awaiting your decision." />
 
 @forelse ($applications as $application)
     @php($detail = $details[$application->id] ?? null)
@@ -26,10 +28,11 @@
                RM {{ number_format($detail->proposed_allowance, 2) }}</p>
         @endif
 
-        @if ($application->documents->isNotEmpty())
+        @php($queueDocuments = $application->documents->where('doc_type', '!=', 'Candidature Appeal Letter'))
+        @if ($queueDocuments->isNotEmpty())
             <ul class="doc-list">
-                @foreach ($application->documents as $doc)
-                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }} — {{ $doc->original_name }}</a></li>
+                @foreach ($queueDocuments as $doc)
+                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
                 @endforeach
             </ul>
         @endif
@@ -39,7 +42,7 @@
             <div class="haziq-repeatable-row" style="border-color: var(--danger-fg);">
                 <p style="grid-column: 1 / -1;"><b>Awaiting student action:</b></p>
                 @foreach ($open as $req)
-                    <p>{{ $req->target_label }} — <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>
+                    <p>{{ $req->target_label }}: <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>
                 @endforeach
             </div>
         @endif
@@ -56,7 +59,7 @@
 
         @if ($stage->key === 'admin_verify')
             @php($missing = ($missingDocuments ?? collect())[$application->id] ?? collect())
-            <p class="queue-meta">Admin verifies or requests correction (above) — there is no reject at this stage.</p>
+            <p class="queue-meta">Admin verifies or requests correction (above); there is no reject at this stage.</p>
             @if ($missing->isNotEmpty())
                 <p class="queue-meta" style="color: var(--danger-fg);">
                     Still missing: {{ $missing->implode(', ') }}. Can't verify until every required document is uploaded.
@@ -102,4 +105,5 @@
 @empty
     <div class="empty-state">Nothing is waiting on you right now.</div>
 @endforelse
+</div>
 @endsection

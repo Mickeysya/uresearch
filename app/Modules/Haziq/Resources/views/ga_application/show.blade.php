@@ -8,10 +8,9 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>{{ $application->student->name }} — GA Application #{{ $application->id }}</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header title="{{ $application->student->name }}: GA Application #{{ $application->id }}" />
 
+    <div class="card card-wide">
         <x-core::stepper :application="$application" />
 
         <p class="queue-meta" style="margin-top: 16px;">
@@ -38,12 +37,12 @@
             <div class="haziq-repeatable-row" style="border-color: var(--danger-fg);">
                 <p style="grid-column: 1 / -1;"><b>Awaiting student action:</b></p>
                 @foreach ($openCorrections as $req)
-                    <p>{{ $req->target_label }} — <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>
+                    <p>{{ $req->target_label }}: <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>
                 @endforeach
             </div>
         @endif
 
-        <h3>Section B — GA Details</h3>
+        <h3>Section B: GA Details</h3>
         <div class="haziq-repeatable-row">
             <p><b>Department / Unit</b><br>{{ $detail->department_unit ?? '—' }}</p>
             <p><b>Purpose</b><br>{{ $detail->purpose ?? '—' }}</p>
@@ -52,7 +51,7 @@
             <p><b>Proposed Allowance</b><br>RM {{ number_format($detail->proposed_allowance, 2) }}</p>
         </div>
 
-        <h3>Section C — Candidate Details</h3>
+        <h3>Section C: Candidate Details</h3>
         @if ($profile)
             <div class="haziq-repeatable-row">
                 <p><b>Programme</b><br>{{ $profile->programme }} ({{ strtoupper($profile->level_of_study) }})</p>
@@ -76,7 +75,7 @@
             @endif
         </div>
 
-        <h3>Section D — Academic Qualification</h3>
+        <h3>Section D: Academic Qualification</h3>
         @forelse ($academics as $row)
             <div class="haziq-repeatable-row">
                 <p>{{ $row->level_of_study }}</p>
@@ -89,7 +88,7 @@
             <p style="color: var(--text-grey);">None on record.</p>
         @endforelse
 
-        <h3>Section E — Working Experience</h3>
+        <h3>Section E: Working Experience</h3>
         @forelse ($experiences as $row)
             <div class="haziq-repeatable-row">
                 <p>{{ $row->company_name }}</p>
@@ -101,7 +100,7 @@
             <p style="color: var(--text-grey);">None on record.</p>
         @endforelse
 
-        <h3>Section F — Publications</h3>
+        <h3>Section F: Publications</h3>
         @forelse ($publications as $row)
             <div class="haziq-repeatable-row">
                 <p>{{ $row->publication_type }}</p>
@@ -114,10 +113,14 @@
         @endforelse
 
         <h3>Documents</h3>
-        @if ($application->documents->isNotEmpty())
+        {{-- A Candidature Appeal Letter belongs to the appeal's own queue/
+             detail page, not this application's own document list — see
+             GraApplicationController::show.blade.php's identical note. --}}
+        @php($applicationDocuments = $application->documents->where('doc_type', '!=', 'Candidature Appeal Letter'))
+        @if ($applicationDocuments->isNotEmpty())
             <ul class="doc-list">
-                @foreach ($application->documents as $doc)
-                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }} — {{ $doc->original_name }}</a></li>
+                @foreach ($applicationDocuments as $doc)
+                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
                 @endforeach
             </ul>
         @else
@@ -135,7 +138,7 @@
         <h3>Approval History</h3>
         @forelse ($application->history as $entry)
             <p>
-                <b>{{ $entry->stage_label }}</b> — {{ $entry->decision }} by {{ $entry->approver?->name ?? '—' }}
+                <b>{{ $entry->stage_label }}</b>: {{ $entry->decision }} by {{ $entry->approver?->name ?? '—' }}
                 <span style="color: var(--text-grey);">({{ $entry->created_at->format('j M Y, g:ia') }})</span>
                 @if ($entry->remarks) <br><span style="color: var(--text-grey);">"{{ $entry->remarks }}"</span> @endif
             </p>
@@ -146,14 +149,14 @@
         @if ($resolvedCorrections->isNotEmpty())
             <h3>Resolved Corrections</h3>
             @foreach ($resolvedCorrections as $req)
-                <p>{{ $req->target_label }} — requested {{ $req->requested_at->format('j M Y') }},
+                <p>{{ $req->target_label }}: requested {{ $req->requested_at->format('j M Y') }},
                    resolved {{ $req->resolved_at->format('j M Y') }}</p>
             @endforeach
         @endif
 
         @if ($canCorrect)
             <h3>Request Correction</h3>
-            <p class="queue-meta">Any approver can flag a section or document — this doesn't reject the application, it just sends the student back to fix the one thing flagged.</p>
+            <p class="queue-meta">Any approver can flag a section or document; this doesn't reject the application, it just sends the student back to fix the one thing flagged.</p>
             @include('haziq::partials.correction_form', [
                 'application' => $application,
                 'documentTypes' => $documentTypes,
@@ -196,7 +199,7 @@
             <form method="POST" action="{{ route('ga-application.decide', $application) }}">
                 @csrf
                 <input type="hidden" name="decision" value="approve">
-                <p class="queue-meta">Admin verifies or requests correction (above) — there is no reject at this stage.</p>
+                <p class="queue-meta">Admin verifies or requests correction (above); there is no reject at this stage.</p>
                 <button type="submit" data-confirm="Verify and advance this application to Research Centre?">Verify &amp; Advance</button>
             </form>
         @elseif ($canDecide)

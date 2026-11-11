@@ -154,9 +154,14 @@
         @endforelse
 
         <h3>Documents</h3>
-        @if ($application->documents->isNotEmpty())
+        {{-- A Candidature Appeal Letter belongs to the appeal's own queue/
+             detail page, not this application's own document list — it is
+             a different action (CandidatureAppealController), not part of
+             what the student submitted here. --}}
+        @php($applicationDocuments = $application->documents->where('doc_type', '!=', 'Candidature Appeal Letter'))
+        @if ($applicationDocuments->isNotEmpty())
             <ul class="doc-list">
-                @foreach ($application->documents as $doc)
+                @foreach ($applicationDocuments as $doc)
                     <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
                 @endforeach
             </ul>
