@@ -12,6 +12,7 @@
     $mode = str_contains(strtolower($programme), 'part') ? 'Part Time' : (str_contains(strtolower($programme), 'full') ? 'Full Time' : '—');
     $waiting = (int) ($application->submitted_at?->diffInDays() ?? 0);
     $verifying = $verifying ?? false;
+    $endorsing = $endorsing ?? false;
 @endphp
 
 <details class="queue-row" @if ($loop->first ?? false) open @endif>
@@ -119,6 +120,24 @@
                 @error('comment') <p class="field-error">{{ $message }}</p> @enderror
                 <p class="fstep-hint">Verified needs every eligibility item marked Verified. The supervisor is then asked to nominate examiners.</p>
                 <button type="submit">Submit verification</button>
+            </form>
+        @endif
+        @if ($endorsing)
+            {{-- The supervisor endorses or returns; the per-item check stays with the AE. --}}
+            <form method="POST" action="{{ route('viva.endorse', $application) }}" class="notice-verify">
+                @csrf
+                <h3>Supervisor</h3>
+                <fieldset>
+                    <legend>Endorsement</legend>
+                    <label><input type="radio" name="endorsement" value="endorsed" required @checked(old('endorsement') === 'endorsed')> Endorse</label>
+                    <label><input type="radio" name="endorsement" value="returned" @checked(old('endorsement') === 'returned')> Return to the student</label>
+                </fieldset>
+                @error('endorsement') <p class="field-error">{{ $message }}</p> @enderror
+                <label for="sv-comment-{{ $application->id }}">Comment <span class="fstep-hint">(required to return; emailed to the student)</span></label>
+                <textarea id="sv-comment-{{ $application->id }}" name="comment" rows="3" maxlength="2000">{{ old('comment') }}</textarea>
+                @error('comment') <p class="field-error">{{ $message }}</p> @enderror
+                <p class="fstep-hint">Endorsed notices go to the Academic Executive to verify. A returned notice comes back to you once the student resubmits it.</p>
+                <button type="submit">Submit endorsement</button>
             </form>
         @endif
     </div>

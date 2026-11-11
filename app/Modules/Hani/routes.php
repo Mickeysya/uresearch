@@ -75,8 +75,14 @@ Route::middleware('auth')->group(function () {
             ->name('viva.softbound.similarity-preview');
     });
 
+    // The notice queue: the supervisor's endorsement stage, then the AE's
+    // verification. queueFor() shows each only their own stage and rows.
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SUPERVISOR)
+        ->get('/viva/queue', [VivaController::class, 'queue'])->name('viva.queue');
+    Route::middleware('role:'.Role::SUPERVISOR)
+        ->post('/viva/{application}/endorse', [VivaController::class, 'endorse'])->name('viva.endorse');
+
     Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
-        Route::get('/viva/queue', [VivaController::class, 'queue'])->name('viva.queue');
         Route::post('/viva/{application}/decide', [VivaController::class, 'decide'])->name('viva.decide');
 
         Route::get('/viva/softbound/queue', [VivaSoftboundController::class, 'queue'])->name('viva.softbound.queue');

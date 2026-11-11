@@ -117,10 +117,17 @@
                 </fieldset>
 
                 @if (! $openNotice)
+                    @if ($returned)
+                        <div class="message-warning" role="alert">
+                            <p><b>Your supervisor returned your notice for changes.</b> Edit it below and submit it again; it goes back to your supervisor.</p>
+                            @if ($returnComment) <p>Comment: {{ $returnComment }}</p> @endif
+                            <p class="fstep-hint">Attach the papers and the Research Methodology result again: they replace the ones on the returned notice.</p>
+                        </div>
+                    @endif
                     <fieldset class="fstep" data-label="Thesis" id="notice">
                         <label for="thesis_title">Thesis Title</label>
                         <input type="text" name="thesis_title" id="thesis_title" required maxlength="255"
-                               value="{{ old('thesis_title') }}" data-title-words data-max="{{ $titleMaxWords }}"
+                               value="{{ old('thesis_title', $draft?->thesis_title) }}" data-title-words data-max="{{ $titleMaxWords }}"
                                class="@error('thesis_title') is-invalid @enderror">
                         <p class="fstep-hint">At most {{ $titleMaxWords }} words. <span data-title-count>0</span> of {{ $titleMaxWords }} words.</p>
                         @error('thesis_title') <p class="field-error">{{ $message }}</p> @enderror
@@ -128,7 +135,7 @@
                         <label for="abstract">Abstract</label>
                         <textarea name="abstract" id="abstract" rows="8" required maxlength="6000"
                                   data-words data-min="{{ $limits['abstract_min_words'] }}" data-max="{{ $limits['abstract_max_words'] }}"
-                                  class="@error('abstract') is-invalid @enderror">{{ old('abstract') }}</textarea>
+                                  class="@error('abstract') is-invalid @enderror">{{ old('abstract', $draft?->abstract) }}</textarea>
                         <p class="fstep-hint">
                             {{ $limits['abstract_min_words'] }} to {{ $limits['abstract_max_words'] }} words.
                             <span data-word-count>0</span> words so far. It is used to suggest examiners whose expertise matches your thesis.
@@ -137,7 +144,7 @@
 
                         <label for="keywords">Keywords</label>
                         <input type="text" name="keywords" id="keywords" required maxlength="1000"
-                               value="{{ old('keywords') }}" placeholder="e.g. anomaly detection; time series; sensor data"
+                               value="{{ old('keywords', $draft ? implode('; ', $draft->keywords ?? []) : null) }}" placeholder="e.g. anomaly detection; time series; sensor data"
                                class="@error('keywords') is-invalid @enderror">
                         <p class="fstep-hint">{{ $limits['keywords_min'] }} to {{ $limits['keywords_max'] }} keywords, separated by semicolons.</p>
                         @error('keywords') <p class="field-error">{{ $message }}</p> @enderror
@@ -149,7 +156,7 @@
                              catches it before the server does. --}}
                         <input type="date" name="expected_softbound_date" id="expected_softbound_date" required
                                min="{{ $earliestSoftbound->toDateString() }}"
-                               value="{{ old('expected_softbound_date') }}"
+                               value="{{ old('expected_softbound_date', $draft?->expected_softbound_date?->toDateString()) }}"
                                class="@error('expected_softbound_date') is-invalid @enderror">
                         <p class="fstep-hint">Earliest allowed: {{ $earliestSoftbound->format('j M Y') }}.</p>
                         @error('expected_softbound_date') <p class="field-error">{{ $message }}</p> @enderror

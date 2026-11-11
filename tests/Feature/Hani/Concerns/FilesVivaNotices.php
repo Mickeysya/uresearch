@@ -33,6 +33,11 @@ trait FilesVivaNotices
     /** The AE's Verification with every eligibility item marked Verified. */
     protected function verifyNotice(\App\Modules\Core\Models\User $ae, \App\Modules\Core\Models\Application $notice, array $overrides = [])
     {
+        if (($notice = $notice->fresh())->current_stage === 'sv_endorsement' && $notice->status === \App\Modules\Core\Models\Application::STATUS_PENDING) {
+            $this->actingAs($notice->student->supervisor)->post(route('viva.endorse', $notice), ['endorsement' => 'endorsed'])->assertSessionHasNoErrors();
+            $notice->refresh();
+        }
+
         $items = array_fill_keys(array_keys(\App\Modules\Hani\Support\VivaChecklist::itemsFor($notice->student)), 'verified');
 
         return $this->actingAs($ae)->post(route('viva.decide', $notice), $overrides + ['verification' => 'verified', 'items' => $items]);

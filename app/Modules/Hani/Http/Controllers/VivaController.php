@@ -11,6 +11,7 @@ use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaEligibility;
 use App\Modules\Hani\Notifications\VivaAwaitingAcademicExec;
+use App\Modules\Hani\Workflows\VivaVoceWorkflow;
 use App\Modules\Hani\Notifications\VivaNominateExaminers;
 use App\Modules\Hani\Notifications\VivaNoticeDecision;
 use App\Modules\Hani\Notifications\VivaNoticeSubmitted;
@@ -72,6 +73,9 @@ class VivaController extends Controller
             'papersMax' => self::PAPERS_MAX,
             'titleMaxWords' => VivaDetail::TITLE_MAX_WORDS,
             'limits' => config('hani.notice'),
+            'returned' => $returned = VivaChecklist::returnedNotice($student),
+            'draft' => $returned ? VivaDetail::where('application_id', $returned->id)->first() : null,
+            'returnComment' => $returned?->history()->where('decision', 'returned')->latest('id')->value('remarks'),
         ]);
     }
 
@@ -178,14 +182,16 @@ class VivaController extends Controller
                 'verified_at' => null,
             ]);
 
-            $application = Application::create([
+            // Returned by the supervisor: the same notice, edited and
+            // resubmitted to the same stage (WorkflowEngine::resubmit()).
+            $returned = VivaChecklist::returnedNotice($student);
+            $application = $returned ?? Application::create([
                 'student_id' => $student->id,
                 'module_type' => $this->moduleKey(),
                 'status' => Application::STATUS_DRAFT,
             ]);
 
-            VivaDetail::create([
-                'application_id' => $application->id,
+            VivaDetail::updateOrCreate(['application_id' => $application->id], [
                 'programme_level' => VivaChecklist::levelFor($student),
                 'thesis_title' => $data['thesis_title'],
                 'abstract' => trim($data['abstract']),
@@ -193,12 +199,19 @@ class VivaController extends Controller
                 'expected_softbound_date' => $data['expected_softbound_date'],
             ]);
 
+            if ($returned) {
+                // The new files replace the returned notice's.
+                $old = $application->documents()->whereIn('doc_type', [VivaDetail::DOC_PAPER, VivaDetail::DOC_METHODOLOGY, VivaDetail::DOC_LEGACY_PROOF])->get();
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($old->pluck('path')->all());
+                $old->each->delete();
+            }
+
             foreach ($request->file('publication_papers') as $paper) {
                 $documents->attach($application, $paper, VivaDetail::DOC_PAPER);
             }
             $documents->attach($application, $request->file('research_methodology_result'), VivaDetail::DOC_METHODOLOGY);
 
-            return $engine->submit($application);
+            return $returned ? $engine->resubmit($application) : $engine->submit($application);
         });
 
         // After the commit and best effort, for the reasons in
@@ -213,12 +226,26 @@ class VivaController extends Controller
         // The papers' automatic checks run on the queue, after the commit.
         \App\Modules\Hani\Jobs\RunNoticeChecks::dispatch($application->id);
 
-        VivaProgress::notifyAcademicExecs($student,
-            new VivaAwaitingAcademicExec($application, 'Notice of Thesis Submission', 'viva.queue'));
+        // With the supervisor first (UAT 11 Nov 2026); the AE hears of it
+        // only once the supervisor endorses it. No supervisor on record: AE.
+        $withSupervisor = $application->current_stage === VivaVoceWorkflow::SUPERVISOR_STAGE;
+
+        if ($withSupervisor && $student->supervisor) {
+            try {
+                $student->supervisor->notify(new VivaAwaitingAcademicExec($application, 'Notice of Thesis Submission to endorse', 'viva.queue', $application->history()->where('decision', 'returned')->exists()));
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        } else {
+            VivaProgress::notifyAcademicExecs($student,
+                new VivaAwaitingAcademicExec($application, 'Notice of Thesis Submission', 'viva.queue'));
+        }
 
         return redirect()
             ->route('viva.eligibility')
-            ->with('status', "Notice of Thesis Submission #{$application->id} submitted. Your Academic Executive has been notified, and a confirmation has been sent to your email.");
+            ->with('status', "Notice of Thesis Submission #{$application->id} submitted. "
+                .($withSupervisor ? 'It is with your supervisor to endorse first' : 'Your Academic Executive has been notified')
+                .', and a confirmation has been sent to your email.');
     }
 
     /**
@@ -349,12 +376,70 @@ class VivaController extends Controller
             .($supervisor ? " {$supervisor->name} has been asked to nominate examiners." : ' No supervisor is recorded for this student, so nobody was asked to nominate examiners.'));
     }
 
+    /**
+     * The supervisor's endorsement (UAT 11 Nov 2026), before the AE's
+     * verification. Their own students only: the engine checks the role,
+     * not which supervisor a notice names, so that is checked here.
+     *   endorsed  the engine's approve; the AE is told now, not on submission
+     *   returned  comment required; the engine's return, so the student
+     *             edits the same notice and resubmits it to the supervisor
+     */
+    public function endorse(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
+    {
+        abort_unless($application->module_type === $this->moduleKey(), 404);
+        abort_unless($application->student?->supervisor_id === $request->user()->id, 403, 'Only the student\'s own supervisor endorses this notice.');
+
+        $data = $request->validate([
+            'endorsement' => ['required', 'in:endorsed,returned'],
+            'comment' => ['nullable', 'required_if:endorsement,returned', 'string', 'max:2000'],
+        ], [
+            'endorsement.required' => 'Choose Endorse or Return.',
+            'comment.required_if' => 'Give a comment: the student is emailed it and edits the notice.',
+        ]);
+
+        if ($application->current_stage !== VivaVoceWorkflow::SUPERVISOR_STAGE || $application->status !== Application::STATUS_PENDING) {
+            return back()->with('error', 'That notice is no longer waiting for your endorsement.');
+        }
+
+        $endorsing = $data['endorsement'] === 'endorsed';
+
+        try {
+            $engine->decide($application, $request->user(), $endorsing ? 'approve' : 'return', $data['comment'] ?? null);
+        } catch (UnauthorizedException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\LogicException $e) {
+            return back()->with('error', 'That notice has already been decided.');
+        }
+
+        $student = $application->student;
+
+        if ($endorsing) {
+            VivaProgress::notifyAcademicExecs($student, new VivaAwaitingAcademicExec($application, 'Notice of Thesis Submission', 'viva.queue'));
+
+            return back()->with('status', "Notice #{$application->id} endorsed. {$student->name}'s Academic Executive has been asked to verify it.");
+        }
+
+        try {
+            $student->notify(new VivaNoticeDecision($application, VivaNoticeDecision::RETURNED, (string) $data['comment'], $request->user()->name));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return back()->with('status', "Notice #{$application->id} returned to {$student->name} with your comment.");
+    }
+
     public function queue(Request $request, WorkflowEngine $engine)
     {
-        $queue = $this->queueFor($request, $engine, ['documents', 'student.supervisor']);
+        $user = $request->user();
+        $queue = $this->queueFor($request, $engine, ['documents', 'student.supervisor'],
+            // A supervisor sees their own students' notices only.
+            fn ($query) => $user->role === \App\Modules\Core\Support\Role::SUPERVISOR
+                ? $query->whereHas('student', fn ($s) => $s->where('supervisor_id', $user->id))
+                : null);
         $ids = $queue['applications']->pluck('id');
 
         return view('hani::viva.notice_queue', $queue + [
+            'endorsing' => $queue['stage']->key === VivaVoceWorkflow::SUPERVISOR_STAGE,
             'details' => VivaDetail::whereIn('application_id', $ids)->get()->keyBy('application_id'),
             'eligibility' => VivaEligibility::whereIn('student_id', $queue['applications']->pluck('student_id'))->get()->keyBy('student_id'),
         ]);

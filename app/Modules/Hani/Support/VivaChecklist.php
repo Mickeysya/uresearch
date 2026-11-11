@@ -189,6 +189,17 @@ final class VivaChecklist
      * A notice already in the chain or finished. A rejected one does not
      * count, so the student can file again after a rejection.
      */
+    /** A notice the supervisor returned for changes, which the student edits and resubmits. */
+    public static function returnedNotice(User $student): ?Application
+    {
+        return Application::query()
+            ->where('module_type', 'viva_voce')
+            ->where('student_id', $student->id)
+            ->where('status', Application::STATUS_RETURNED)
+            ->latest('id')
+            ->first();
+    }
+
     public static function openNotice(User $student): ?Application
     {
         return Application::query()

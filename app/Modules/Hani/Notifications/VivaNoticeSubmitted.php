@@ -41,7 +41,9 @@ class VivaNoticeSubmitted extends Notification implements ShouldQueue
             ->line('Your Notice of Thesis Submission has been received.')
             ->line('Thesis: '.$this->detail->thesis_title)
             ->line('Expected softbound submission: '.$this->detail->expected_softbound_date->format('j M Y'))
-            ->line('Your Academic Executive will verify it, and your supervisor will then be asked to nominate examiners.')
+            ->line($this->application->current_stage === \App\Modules\Hani\Workflows\VivaVoceWorkflow::SUPERVISOR_STAGE
+                ? 'Status: With supervisor. Your supervisor endorses it first, then your Academic Executive verifies it.'
+                : 'Your Academic Executive will verify it, and your supervisor will then be asked to nominate examiners.')
             ->action('Track your notice', route('applications.show', $this->application))
             ->line('Thank you for using UResearch 2.0.');
     }

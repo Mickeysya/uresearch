@@ -228,7 +228,13 @@ trait SeedsHistoricalCases
 
             return $engine->submit($notice);
         });
-        $this->at($at('ack'), fn () => $engine->decide($notice, $ae, 'approve'));
+        $this->at($at('ack'), function () use ($engine, $notice, $ae, $student) {
+            // The supervisor endorses before the AE verifies (UAT 11 Nov 2026).
+            if ($notice->current_stage === \App\Modules\Hani\Workflows\VivaVoceWorkflow::SUPERVISOR_STAGE) {
+                $engine->decide($notice, $student->supervisor, 'approve', 'Endorsed.');
+            }
+            $engine->decide($notice, $ae, 'approve');
+        });
 
         // ---- Examiner nomination: the six-stage chain -----------------------
         $panel = $this->historyPanel($i, $student, $walkthrough);

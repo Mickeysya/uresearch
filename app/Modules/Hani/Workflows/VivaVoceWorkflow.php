@@ -52,9 +52,27 @@ class VivaVoceWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalenda
         return 'Notice of Thesis Submission';
     }
 
+    public const SUPERVISOR_STAGE = 'sv_endorsement';
+
+    /**
+     * The supervisor endorses the notice first (UAT 11 Nov 2026), then the
+     * Academic Executive verifies it. A student with no supervisor on record
+     * goes straight to the AE, so the notice is never stuck on nobody.
+     * Notices filed before the change are already at notice_received and
+     * stay there.
+     */
     public function stages(?Application $application = null): array
     {
+        $supervisor = new Stage(
+            key: self::SUPERVISOR_STAGE,
+            label: 'Supervisor endorsement',
+            role: Role::SUPERVISOR,
+            decision: 'endorsed',
+            queueTitle: 'Notice of Thesis Submission',
+        );
+
         return [
+            ...($application && ! $application->student?->supervisor_id ? [] : [$supervisor]),
             new Stage(
                 key: 'notice_received',
                 label: 'Academic Executive verification',

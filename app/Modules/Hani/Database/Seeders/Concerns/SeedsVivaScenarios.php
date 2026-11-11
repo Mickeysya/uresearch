@@ -286,6 +286,12 @@ trait SeedsVivaScenarios
         $this->backdate($notice, $filedDaysAgo);
         \App\Modules\Hani\Jobs\RunNoticeChecks::dispatchSync($notice->id);
 
+        // The supervisor endorses first (UAT 11 Nov 2026), a day after filing,
+        // so every seeded notice is past that stage: waiting for the AE or verified.
+        if ($notice->current_stage === \App\Modules\Hani\Workflows\VivaVoceWorkflow::SUPERVISOR_STAGE) {
+            $this->at(now()->subDays(max(0, $filedDaysAgo - 1)), fn () => $engine->decide($notice, $student->supervisor, 'approve', 'Endorsed.'));
+        }
+
         if ($acknowledge) {
             // Acknowledged two days after filing, not today: approval_history
             // feeds Process Analytics, and a 150-day "wait" would be invented.

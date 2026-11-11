@@ -80,6 +80,7 @@ final class VivaProgress
     {
         return match (true) {
             $this->notice === null => 'Submit your Notice of Thesis Submission first.',
+            $this->notice->status === Application::STATUS_PENDING && $this->notice->current_stage === \App\Modules\Hani\Workflows\VivaVoceWorkflow::SUPERVISOR_STAGE => 'Your notice is still with your supervisor to endorse.',
             $this->notice->status === Application::STATUS_PENDING => 'Your notice is still waiting for your Academic Executive to verify it.',
             $this->softbound?->status === Application::STATUS_PENDING => 'Your softbound thesis is already with your Academic Executive.',
             $this->softbound?->status === Application::STATUS_APPROVED => 'Your softbound thesis has already been verified.',

@@ -16,7 +16,7 @@
     @endphp
 
     <x-core::page-header :title="'Viva Voce: '.$stage->queueTitle()"
-        :subtitle="$total === 0 ? 'Nothing is waiting on you right now.' : number_format($total).' '.Str::plural('notice', $total).' awaiting your verification.'" />
+        :subtitle="$total === 0 ? 'Nothing is waiting on you right now.' : number_format($total).' '.Str::plural('notice', $total).' awaiting your '.($endorsing ? 'endorsement' : 'verification').'.'" />
 
     @if ($total > 0 || $filters['q'] !== '')
         <form method="GET" class="queue-tools">
@@ -34,7 +34,7 @@
     @else
         <div class="queue-list">
             @foreach ($applications as $application)
-                @include('hani::viva._notice_card', ['application' => $application, 'detail' => $details[$application->id] ?? null, 'record' => $eligibility->get($application->student_id), 'verifying' => true])
+                @include('hani::viva._notice_card', ['application' => $application, 'detail' => $details[$application->id] ?? null, 'record' => $eligibility->get($application->student_id), 'verifying' => ! $endorsing, 'endorsing' => $endorsing])
             @endforeach
         </div>
         @include('core::partials.pagination', ['paginator' => $applications, 'label' => 'Queue pages'])

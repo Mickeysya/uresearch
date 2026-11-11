@@ -42,6 +42,8 @@ final class ModuleTracker
 
         $now = [
             'notice' => match (true) {
+                $notice?->status === Application::STATUS_PENDING && $notice->current_stage === \App\Modules\Hani\Workflows\VivaVoceWorkflow::SUPERVISOR_STAGE
+                    => 'With supervisor: your supervisor endorses your Notice of Thesis Submission first, then your Academic Executive verifies it.',
                 $notice?->status === Application::STATUS_PENDING => 'Your Academic Executive is reviewing your Notice of Thesis Submission. Nothing to do until they verify it.',
                 $eligible => 'Submit your Notice of Thesis Submission to continue.',
                 default => 'Tick every requirement on the eligibility checklist, then submit your Notice of Thesis Submission.',

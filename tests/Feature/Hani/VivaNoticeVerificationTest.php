@@ -57,8 +57,12 @@ class VivaNoticeVerificationTest extends TestCase
     protected function file(): Application
     {
         $this->actingAs($this->student)->post(route('viva.notice.store'), $this->noticeFields())->assertSessionHasNoErrors();
+        $notice = Application::where('module_type', 'viva_voce')->latest('id')->first();
 
-        return Application::where('module_type', 'viva_voce')->latest('id')->first();
+        // The supervisor endorses it first (item E); then it is the AE's.
+        $this->actingAs($this->student->supervisor)->post(route('viva.endorse', $notice), ['endorsement' => 'endorsed'])->assertSessionHasNoErrors();
+
+        return $notice->fresh();
     }
 
     public function test_the_card_shows_the_ucampus_sections_and_the_verification(): void
