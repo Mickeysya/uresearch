@@ -38,6 +38,18 @@ class VivaEligibilityTest extends TestCase
         return $this->noticeFields($overrides);
     }
 
+    public function test_item_three_reads_active_student_and_the_fees_item_stays_separate(): void
+    {
+        $student = $this->user(\App\Modules\Core\Support\Role::STUDENT, ['programme' => 'MSc Full-Time']);
+
+        $this->actingAs($student)->get(route('viva.eligibility'))->assertOk()
+            ->assertSee('I am an active student for this semester')
+            ->assertSee('Registered for Research Progress or Active Enrolment Status (AES) this semester.')
+            ->assertDontSee('zero outstanding dues')
+            ->assertDontSee('I am registered for the current semester')
+            ->assertSee('I have no outstanding fees');
+    }
+
     public function test_one_page_holds_the_checklist_and_the_notice_and_one_submit_files_it(): void
     {
         Storage::fake('local');

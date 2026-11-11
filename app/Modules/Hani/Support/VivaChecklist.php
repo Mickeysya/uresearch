@@ -97,8 +97,9 @@ final class VivaChecklist
 
         return $items + [
             'registered_current_semester' => [
-                'label' => 'I am registered for the current semester',
-                'hint' => 'Check your registration status on the student portal.',
+                // Label only (UAT 11 Nov 2026); the column name is unchanged.
+                'label' => 'I am an active student for this semester',
+                'hint' => 'Registered for Research Progress or Active Enrolment Status (AES) this semester.',
             ],
             'no_outstanding_fees' => [
                 'label' => 'I have no outstanding fees',
