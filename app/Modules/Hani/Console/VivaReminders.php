@@ -321,7 +321,7 @@ class VivaReminders extends Command
                     'Your softbound thesis is due by '.$date,
                     [
                         "You told CGS you would submit your softbound thesis by {$date}.",
-                        'When it is ready, file it through Form #019 in UResearch, with your thesis, the format confirmation form and your Turnitin report from ULearn.',
+                        'When it is ready, file it through Form #019 in UResearch, with your thesis, the format confirmation form and your Turnitin report from ULearnX.',
                     ],
                     'Open your viva page', route('viva.eligibility'),
                 )];

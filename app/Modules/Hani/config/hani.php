@@ -145,9 +145,10 @@ return [
         // (stub, needs a UTP licence) | simulated (demo figures, labelled).
         'source' => 'uploaded',
 
-        // Where students get the report. CONFIRMED: students download it
-        // from ULearn. The address itself is provisional.
-        'ulearn_url' => 'https://ulearn.utp.edu.my',
+        // Where students get the report. CONFIRMED (UAT 11 Nov 2026):
+        // postgraduate students download it from ULearnX. The key keeps its
+        // old name.
+        'ulearn_url' => 'https://ulearnx.utp.edu.my',
 
         // Flag any single primary source above this percentage. Provisional.
         'single_source_warn' => 5,

@@ -77,7 +77,7 @@
 
                 <div class="message-info" id="turnitin-guidance">
                     <p><b>Your Turnitin report.</b> Download it from
-                        <a href="{{ $ulearnUrl }}" target="_blank" rel="noopener noreferrer">ULearn</a>:
+                        <a href="{{ $ulearnUrl }}" target="_blank" rel="noopener noreferrer">ULearnX (postgraduate students)</a>:
                         open your thesis submission and download the <b>full similarity report</b> as a PDF
                         (the Originality Report, with the similarity index and the list of primary sources).
                         The Digital Receipt on its own is not enough.</p>

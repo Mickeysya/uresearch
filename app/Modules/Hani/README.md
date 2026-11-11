@@ -382,7 +382,7 @@ All settings are in `config/hani.php`. Values CGS has not confirmed are marked
   date (`Support/Eligibility/CandidacyPeriodSource`, read-only). The other
   items are self-declared because no data source exists for them.
 - **Softbound System checks:**
-  - `Support/SimilaritySource` reads the ULearn Turnitin report.
+  - `Support/SimilaritySource` reads the ULearnX Turnitin report.
   - `Support/Pdf/PdfReader` is the built-in reader; smalot is used if
     installed.
   - `Jobs/RunSoftboundChecks` checks both PDFs. The AE sees Pass /
