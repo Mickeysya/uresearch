@@ -8,10 +8,9 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Appeal Candidature Termination — {{ $application->reference() }}</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header title="Appeal Candidature Termination: {{ $application->reference() }}" />
 
+    <div class="card card-wide">
         @if ($pending)
             <p class="queue-meta">
                 You already have an appeal for this application pending a Senior Director's
@@ -21,7 +20,7 @@
             <p class="queue-meta">
                 Your candidature on this appointment was terminated after a Stage Gate
                 requirement's grace period lapsed without completion being recorded. Upload a
-                letter explaining your appeal — it goes to CGS, your Supervisor and Admin, and
+                letter explaining your appeal: it goes to CGS, your Supervisor and Admin, and
                 only a Senior Director can approve or reject it.
             </p>
 

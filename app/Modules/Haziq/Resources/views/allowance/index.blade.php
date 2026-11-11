@@ -8,23 +8,17 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="Allowance Eligibility: {{ $month->format('F Y') }}"
+        subtitle="A reporting view, not a workflow: every row here is written by the daily Stage Gate evaluation, not entered by hand. Updates on the first of every month. Completing a Stage Gate only ever reveals what's owed; Admin or CGS still have to separately mark the actual payment complete, with proof, before the running total stops growing." />
+
     <div class="card card-wide">
-        <h2>Allowance Eligibility — {{ $month->format('F Y') }}</h2>
-        <div class="card-divider"></div>
-
-        <p class="queue-meta">
-            A reporting view, not a workflow — every row here is written by the daily Stage Gate
-            evaluation, not entered by hand. Updates on the first of every month. Completing a
-            Stage Gate only ever reveals what's owed — Admin or CGS still have to separately mark
-            the actual payment complete, with proof, before the running total stops growing.
-        </p>
-
         <p class="queue-meta" style="color: var(--navy); font-weight: 600;">
             Payable in {{ $month->format('F Y') }} is ordinarily for service completed in
-            {{ $serviceMonth->format('F Y') }} — same as any payroll, this month's wage is last month's
+            {{ $serviceMonth->format('F Y') }}: same as any payroll, this month's wage is last month's
             completed work. A student whose service only started this month shows nothing yet; it lands
             next month. The one exception: a termination entering, or an appeal just approved, surfaces
-            immediately — each row's own "for {month}" label says which period it's actually showing.
+            immediately; each row's own "for {month}" label says which period it's actually showing.
         </p>
 
         <form method="GET" action="{{ route('allowance.index') }}" class="haziq-filter-bar">
@@ -72,7 +66,7 @@
 
         @if ($trend ?? false)
             @include('core::dashboard.partials.chartjs')
-            <p class="queue-meta" style="margin-top: 14px;">Your allowance over the last 6 months, at a glance — each point is labelled by the month it's paid out in, one month after the service it covers.</p>
+            <p class="queue-meta" style="margin-top: 14px;">Your allowance over the last 6 months, at a glance: each point is labelled by the month it's paid out in, one month after the service it covers.</p>
             <div style="height: 200px;">
                 <canvas id="my-allowance-trend" role="img"
                         aria-label="My allowance trend: {{ $trend->map(fn ($t) => $t['month'].' '.($t['amount'] ?? 'blank'))->implode(', ') }}"></canvas>
@@ -134,7 +128,7 @@
             @endforeach
 
             @include('core::dashboard.partials.chartjs')
-            <p class="queue-meta" style="margin-top: 14px;">How many months of allowance each student is currently sitting on, grouped by months actually accruing — not real ML, just a threshold flag, but it surfaces who to look at first. A debt frozen by a termination doesn't count against a student here even if it's been outstanding a long time; see the table below for that total.</p>
+            <p class="queue-meta" style="margin-top: 14px;">How many months of allowance each student is currently sitting on, grouped by months actually accruing, not real ML, just a threshold flag, but it surfaces who to look at first. A debt frozen by a termination doesn't count against a student here even if it's been outstanding a long time; see the table below for that total.</p>
             <div style="height: 180px;">
                 <canvas id="allowance-anomaly" role="img"
                         aria-label="Students by months accruing: {{ collect($buckets)->map(fn ($c, $l) => "$l: $c")->implode(', ') }}"></canvas>
@@ -211,7 +205,7 @@
                             <td>
                                 {{ $row['monthsAccruing'] > 0 ? $row['monthsAccruing'] : '—' }}
                                 @if ($row['monthsAccruing'] >= $anomalyThreshold)
-                                    <span title="{{ $anomalyThreshold }}+ months accruing — flagged for attention" style="color: var(--danger-fg); font-weight: 700;">⚠</span>
+                                    <span title="{{ $anomalyThreshold }}+ months accruing, flagged for attention" style="color: var(--danger-fg); font-weight: 700;">⚠</span>
                                 @endif
                                 @if ($row['monthsAccumulating'] > $row['monthsAccruing'])
                                     <br><span style="color: var(--text-grey); font-size: 11px;">
@@ -234,13 +228,13 @@
                                             {{-- CGS/Admin only — the student never sees this until it
                                                  actually shows up on next month's row. --}}
                                             <p class="queue-meta" style="margin: 0 0 4px; color: var(--navy);">
-                                                Queued for next month: <b>RM {{ number_format($row['pendingForNextMonth'], 2) }}</b> — editable until then.
+                                                Queued for next month: <b>RM {{ number_format($row['pendingForNextMonth'], 2) }}</b>, editable until then.
                                             </p>
                                         @endif
                                         <form method="POST" action="{{ route('allowance.set-review-amount', $row['application']) }}">
                                             @csrf
                                             <p class="queue-meta" style="margin: 0 0 4px;">
-                                                {{ $row['amount'] === null ? 'Terminated or reinstated mid-month — decide how much is actually owed, if anything. Shows on next month\'s row.' : 'Reinstated mid-month — how much extra this partial month is worth. Shows on next month\'s row, not this one.' }}
+                                                {{ $row['amount'] === null ? 'Terminated or reinstated mid-month: decide how much is actually owed, if anything. Shows on next month\'s row.' : 'Reinstated mid-month: how much extra this partial month is worth. Shows on next month\'s row, not this one.' }}
                                             </p>
                                             <input type="number" step="0.01" min="0" name="amount" placeholder="RM"
                                                    value="{{ $row['pendingInput'] !== null ? number_format($row['pendingInput'], 2, '.', '') : '' }}"

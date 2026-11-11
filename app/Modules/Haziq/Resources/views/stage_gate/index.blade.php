@@ -8,10 +8,13 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="{{ ($isStudent ?? false) ? 'My Stage Gate Progress' : 'Stage Gate Monitoring' }}"
+        subtitle="{{ ($isStudent ?? false) ? 'Deadlines and grace periods are fixed from your admission date and never move; this always reflects what the daily evaluation last computed.' : 'Deadlines and grace periods are fixed from each student\'s admission date and never move; this list only ever reflects what the daily evaluation already computed.' }}" />
+
     @unless ($isStudent ?? false)
     <div class="card card-wide">
         <h2>Stage Gate Bottleneck</h2>
-        <div class="card-divider"></div>
         <p class="queue-meta">Which stage has the most students sitting past their deadline right now.</p>
 
         @include('core::dashboard.partials.chartjs')
@@ -117,13 +120,6 @@
 
     <div class="card card-wide">
         @if ($isStudent ?? false)
-            <h2>My Stage Gate Progress</h2>
-            <div class="card-divider"></div>
-            <p class="queue-meta">
-                Deadlines and grace periods are fixed from your admission date and never move —
-                this always reflects what the daily evaluation last computed.
-            </p>
-
             @php($openGates = $gates->filter(fn ($g) => $g->completion_status !== 'completed'))
             @if ($openGates->isNotEmpty())
                 @include('core::dashboard.partials.chartjs')
@@ -222,13 +218,6 @@
                 @endforeach
             @endif
         @else
-            <h2>Stage Gate Monitoring</h2>
-            <div class="card-divider"></div>
-            <p class="queue-meta">
-                Deadlines and grace periods are fixed from each student's admission date and never
-                move — this list only ever reflects what the daily evaluation already computed.
-            </p>
-
             <form method="GET" action="{{ route('stage-gate.index') }}" class="haziq-filter-bar">
                 <select name="stage" data-autosubmit>
                     <option value="">All Stages</option>
@@ -314,12 +303,12 @@
                             @if ($canAct)
                                 <td>
                                     @if ($gate->completion_status === 'completed')
-                                        <span style="color: var(--text-grey); font-size: 12.5px;">Completed — final, cannot be changed.</span>
+                                        <span style="color: var(--text-grey); font-size: 12.5px;">Completed; final, cannot be changed.</span>
                                     @else
                                         <div class="haziq-actions">
                                             <form method="POST" action="{{ route('stage-gate.complete', $gate) }}">
                                                 @csrf
-                                                <button type="submit" data-confirm="Mark Stage {{ $gate->stage_order }} ({{ $gate->stage_name }}) complete? This is final — it cannot be changed back afterward.">Mark Complete</button>
+                                                <button type="submit" data-confirm="Mark Stage {{ $gate->stage_order }} ({{ $gate->stage_name }}) complete? This is final; it cannot be changed back afterward.">Mark Complete</button>
                                             </form>
                                             <form method="POST" action="{{ route('stage-gate.not-complete', $gate) }}">
                                                 @csrf

@@ -8,6 +8,8 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header title="GA Applicants" subtitle="Every GA application in play, and where it's piling up." />
+
     @if ($showExtensionTab ?? false)
         <div class="haziq-filter-bar" style="margin-bottom: -8px;">
             <a href="{{ route('ga-application.index') }}" class="btn" style="pointer-events: none; background: var(--accent-solid); color: var(--text-on-accent);">Application</a>
@@ -17,7 +19,6 @@
 
     <div class="card card-wide">
         <h2>Pending by Stage</h2>
-        <div class="card-divider"></div>
         <p class="queue-meta">Where applications are piling up right now. Click a bar to see who's there.</p>
 
         @include('core::dashboard.partials.chartjs')
@@ -99,15 +100,13 @@
 
     <div class="card card-wide">
         @if ($selectedStage)
-            <h2>{{ $selectedStageLabel }} — {{ $applications->total() }} {{ Str::plural('student', $applications->total()) }}</h2>
-            <div class="card-divider"></div>
+            <h2>{{ $selectedStageLabel }}: {{ $applications->total() }} {{ Str::plural('student', $applications->total()) }}</h2>
             <p class="queue-meta">
                 Only students currently at this stage.
-                <a href="{{ route('ga-application.index') }}">Clear filter — show everyone</a>
+                <a href="{{ route('ga-application.index') }}">Clear filter; show everyone</a>
             </p>
         @else
             <h2>GA Applicants</h2>
-            <div class="card-divider"></div>
             <p class="queue-meta">Every applicant. Click a bar above to narrow this to one stage.</p>
         @endif
 

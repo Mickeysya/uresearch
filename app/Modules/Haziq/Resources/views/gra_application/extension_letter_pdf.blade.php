@@ -13,7 +13,7 @@
     <p>Ref: UResearch/GRA-EXT/{{ $application->id }}</p>
     <p>Date: {{ now()->format('j F Y') }}</p>
 
-    <div class="title">GRADUATE RESEARCH ASSISTANT (GRA) — EXTENSION APPROVAL LETTER</div>
+    <div class="title">GRADUATE RESEARCH ASSISTANT (GRA): EXTENSION APPROVAL LETTER</div>
 
     <div class="body">
         <p>This is to confirm that the Graduate Research Assistant (GRA) appointment of

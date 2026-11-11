@@ -10,7 +10,7 @@
 <div class="card-container-inline">
     <x-core::page-header
         title="Delay by Actor"
-        subtitle="How long an actor takes once an application actually reaches them, read off the real approval history. Not a workflow, just a read — pick one scope below, GRA/GA Application or GRA/GA Extension never average together." />
+        subtitle="How long an actor takes once an application actually reaches them, read off the real approval history. Not a workflow, just a read; pick one scope below, GRA/GA Application or GRA/GA Extension never average together." />
 
     @if ($bottleneck)
         <div class="card card-wide" style="border-left: 4px solid var(--warning-fg);">

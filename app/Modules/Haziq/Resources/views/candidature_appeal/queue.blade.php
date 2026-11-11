@@ -7,19 +7,15 @@
 @endpush
 
 @section('content')
-<h2>Candidature Appeals</h2>
-<p class="queue-meta">
-    @if ($canDecide)
-        Appeals against a Stage Gate termination. Only a Senior Director can approve or reject.
-    @else
-        Appeals against a Stage Gate termination — view only; only a Senior Director can decide.
-    @endif
-</p>
+<div class="card-container-inline">
+    <x-core::page-header
+        title="Candidature Appeals"
+        subtitle="{{ $canDecide ? 'Appeals against a Stage Gate termination. Only a Senior Director can approve or reject.' : 'Appeals against a Stage Gate termination, view only; only a Senior Director can decide.' }}" />
 
 @forelse ($appeals as $appeal)
     <div class="app-item">
         <div class="app-item-header">
-            <p><b>{{ $appeal->application->reference() }}</b> — {{ $appeal->application->student->name }}
+            <p><b>{{ $appeal->application->reference() }}</b>: {{ $appeal->application->student->name }}
                 @if ($appeal->application->student->matric_no) ({{ $appeal->application->student->matric_no }}) @endif
             </p>
             <span style="color: var(--text-grey); font-size: 12.5px;">Submitted {{ $appeal->created_at->diffForHumans() }}</span>
@@ -29,7 +25,7 @@
 
         @php $letter = $appeal->application->documents->firstWhere('doc_type', 'Candidature Appeal Letter'); @endphp
         @if ($letter)
-            <p><a href="{{ $letter->url() }}">View appeal letter — {{ $letter->original_name }}</a></p>
+            <p><a href="{{ $letter->url() }}">View appeal letter: {{ $letter->original_name }}</a></p>
         @endif
 
         @if ($appeal->status !== 'pending')
@@ -50,6 +46,7 @@
 @endforelse
 
 <div style="margin-top: 16px;">{{ $appeals->links() }}</div>
+</div>
 
 @include('haziq::partials.confirm_scripts')
 @endsection
