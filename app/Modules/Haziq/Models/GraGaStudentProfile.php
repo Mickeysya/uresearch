@@ -14,7 +14,7 @@ class GraGaStudentProfile extends Model
 
     protected $fillable = [
         'user_id', 'level_of_study', 'programme', 'mode_of_study', 'admission_date',
-        'thesis_title', 'co_supervisor_id', 'ic_passport_no', 'visa_expiry_date',
+        'candidature_period', 'thesis_title', 'co_supervisor_id', 'ic_passport_no', 'visa_expiry_date',
         'bank_name', 'bank_account_no', 'previous_sponsorship_name', 'previous_sponsorship_duration',
         'scholarship_name', 'scholarship_duration',
     ];
