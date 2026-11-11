@@ -88,7 +88,8 @@
             <tr>
                 <th>Module</th>
                 @foreach ($stages as $stageRole => $stageLabel)
-                    <th>{{ $stageLabel }}@if ($stageRole === $role) (you)@endif</th>
+                    <th>{{ $stageLabel }}@if ($stageRole === $role) (you)@endif
+                        @isset ($actions[$stageRole])<br><span class="queue-meta">{{ $actions[$stageRole]->label() }}</span>@endisset</th>
                 @endforeach
             </tr>
             @foreach ($modules as $slug => $label)
@@ -114,8 +115,9 @@
         <table class="recent-activity-table" style="margin-top: 12px;">
             <tr>
                 <th>Module</th>
-                @foreach ($stages as $stageLabel)
-                    <th>{{ $stageLabel }}</th>
+                @foreach ($stages as $stageRole => $stageLabel)
+                    <th>{{ $stageLabel }}
+                        @isset ($actions[$stageRole])<br><span class="queue-meta">{{ $actions[$stageRole]->label() }}</span>@endisset</th>
                 @endforeach
             </tr>
             @foreach ($modules as $slug => $label)

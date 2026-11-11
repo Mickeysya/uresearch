@@ -49,7 +49,8 @@
             <td>{{ $detail->title_of_paper }}</td>
         </tr>
         <tr>
-            <td>Title of Conference:</td>
+            {{-- "Title of Conference" or "Title of Journal", by the request type. --}}
+            <td>{{ $detail->titleLabel() }}:</td>
             <td>{{ $detail->title_of_conference_journal }}</td>
         </tr>
     </table>

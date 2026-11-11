@@ -140,14 +140,19 @@
                         @unless ($scope) <td>{{ $module->label() }}</td> @endunless
                         <td>{{ $module->summary($application) }}</td>
                         <td><x-core::status-badge :status="$application->status" /></td>
-                        <td>{{ $stage?->label ?? 'Closed' }}</td>
+                        <td>
+                            {{ $stage?->label ?? 'Closed' }}
+                            @if ($stage)
+                                <br><span style="color: var(--text-grey);">Awaiting {{ \App\Modules\Norhanis\Support\StageAction::forStage($stage)->noun() }}</span>
+                            @endif
+                        </td>
                         <td>{{ $application->submitted_at?->format('j M Y') }}</td>
                         <td>
                             {{-- Only when it is on this reader's own stage: that
                                  is the one place they can act on it. --}}
                             <span style="display: inline-flex; flex-wrap: wrap; gap: 6px;">
                                 @if ($stage && $stage->role === $role)
-                                    <a href="{{ route($module->queueRoute(), ['stage' => $stage->key, 'q' => '#'.$application->id]) }}" class="btn-secondary">Review</a>
+                                    <a href="{{ route($module->queueRoute(), ['stage' => $stage->key, 'q' => '#'.$application->id]) }}" class="btn-secondary">{{ \App\Modules\Norhanis\Support\StageAction::forStage($stage)->label() }}</a>
                                 @endif
                                 <x-core::doc-link class="btn-secondary" title="Summary of the application as a PDF" data-region-swap-ignore
                                     :url="route('norhanis.pack.pdf', [$application, 'inline' => 1])"

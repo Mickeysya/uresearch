@@ -253,7 +253,7 @@ class ClaimsTest extends TestCase
 
         $this->actingAs($student)
             ->post(route('claims.store'), $this->claim(['publication_application_id' => $conference->id]))
-            ->assertSessionHasErrors(['publication_application_id' => 'Choose one of your own approved journal publications.']);
+            ->assertSessionHasErrors(['publication_application_id' => 'Choose one of your own approved journal publications that used the Pay and Claims cost centre and has not been claimed yet.']);
 
         $this->assertSame(0, ClaimsDetail::count());
     }
@@ -311,8 +311,63 @@ class ClaimsTest extends TestCase
 
         $this->actingAs($student)->get(route('claims.create'))
             ->assertOk()
-            ->assertSee('You have no approved journal publication yet')
+            ->assertSee('You have no publication you can claim for yet')
+            ->assertSee('Only approved journal publications that used the Pay and Claims cost centre can be claimed, once each')
             ->assertDontSee('name="total_claims"', false);
+    }
+
+    // ---- Pay and Claims only (UAT, 11 Nov 2026) ---------------------------
+
+    public function test_only_pay_and_claims_journals_are_listed(): void
+    {
+        $student = $this->student();
+        $pay = $this->approvedPublication($student, detail: ['title_of_paper' => 'Paid By Claim']);
+        $lou = $this->approvedPublication($student, detail: ['cost_centre' => 'cgs_letter_of_undertaking', 'title_of_paper' => 'LOU Paper']);
+        $split = $this->approvedPublication($student, detail: ['cost_centre' => 'split_memo', 'title_of_paper' => 'Split Paper']);
+        $others = $this->approvedPublication($student, detail: ['cost_centre' => 'others', 'cost_centre_other' => 'Dept fund', 'title_of_paper' => 'Others Paper']);
+
+        $this->actingAs($student)->get(route('claims.create'))
+            ->assertOk()
+            ->assertSee('value="'.$pay->id.'"', false)
+            ->assertDontSee('value="'.$lou->id.'"', false)
+            ->assertDontSee('value="'.$split->id.'"', false)
+            ->assertDontSee('value="'.$others->id.'"', false)
+            ->assertDontSee('LOU Paper')
+            ->assertSee('Only approved journal publications that used the Pay and Claims cost centre can be claimed.');
+    }
+
+    public function test_a_journal_on_another_cost_centre_is_refused_even_from_an_edited_request(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+
+        foreach (['cgs_letter_of_undertaking', 'split_memo', 'others'] as $costCentre) {
+            $publication = $this->approvedPublication($student, detail: ['cost_centre' => $costCentre, 'cost_centre_other' => 'Dept fund']);
+
+            $this->actingAs($student)
+                ->post(route('claims.store'), $this->claim(['publication_application_id' => $publication->id]))
+                ->assertSessionHasErrors(['publication_application_id' => 'Choose one of your own approved journal publications that used the Pay and Claims cost centre and has not been claimed yet.']);
+        }
+
+        $this->assertSame(0, ClaimsDetail::count());
+    }
+
+    public function test_a_pay_and_claims_publication_not_yet_finally_approved_is_refused(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+
+        foreach ([Application::STATUS_PENDING, Application::STATUS_REJECTED, Application::STATUS_DRAFT] as $status) {
+            $publication = $this->approvedPublication($student, $status);
+
+            $this->actingAs($student)
+                ->post(route('claims.store'), $this->claim(['publication_application_id' => $publication->id]))
+                ->assertSessionHasErrors('publication_application_id');
+        }
+
+        $this->assertSame(0, ClaimsDetail::count());
     }
 
     public function test_a_claim_must_name_one_of_the_students_own_approved_publications(): void

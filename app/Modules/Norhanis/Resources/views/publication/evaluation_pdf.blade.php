@@ -33,9 +33,9 @@
     <table class="detail">
         <tr><td class="key">TITLE</td><td>{{ $detail->title_of_paper }}</td></tr>
         <tr><td class="key">AUTHOR</td><td>{{ $detail->authors->pluck('author_name')->implode(', ') }}</td></tr>
-        <tr><td class="key">CONFERENCE</td><td>{{ $detail->title_of_conference_journal }}</td></tr>
-        <tr><td class="key">VENUE</td><td>{{ $detail->venue }}</td></tr>
-        <tr><td class="key">DATE</td><td>{{ $detail->conference_start_date->format('j M Y') }} to {{ $detail->conference_end_date->format('j M Y') }}</td></tr>
+        {{-- CONFERENCE or JOURNAL, by the request type. The sheet's VENUE and
+             DATE lines went with those fields (UAT, 11 Nov 2026). --}}
+        <tr><td class="key">{{ $detail->isConference() ? 'CONFERENCE' : 'JOURNAL' }}</td><td>{{ $detail->title_of_conference_journal }}</td></tr>
     </table>
 
     @foreach (\App\Modules\Norhanis\Models\PublicationEvaluation::CRITERIA as $key => [$heading, $questions])

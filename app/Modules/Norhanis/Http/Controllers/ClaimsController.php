@@ -9,6 +9,8 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Norhanis\Support\ApproverNotifier;
+use App\Modules\Norhanis\Support\ClaimablePublications;
+use Illuminate\Validation\ValidationException;
 use App\Modules\Core\Models\User;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 use App\Modules\Norhanis\Models\PublicationDetail;
@@ -76,32 +78,34 @@ class ClaimsController extends Controller
 
     protected function form(Request $request, ?Application $draft)
     {
+        $publications = $this->approvedPublications($request->user());
+
+        // ?publication={id}, from the "Start your claim" button: chosen for
+        // the student when it is theirs to claim, quietly ignored otherwise
+        // (the list below is the student's own, so nothing leaks).
+        $asked = $request->query('publication');
+        $preselected = is_scalar($asked) && $publications->contains('application_id', (int) $asked) ? (int) $asked : null;
+
         return view('norhanis::claims.form', [
-            'publications' => $this->approvedPublications($request->user()),
+            'publications' => $publications,
+            'preselected' => $preselected,
+            'ignoredLink' => $asked !== null && $preselected === null,
         ] + $this->draftViewData($request, $draft));
     }
 
     /**
-     * The student's own approved journal publications, newest first: the
-     * only ones a claim may be linked to (claims are journal claims only;
-     * a conference is paid another way). Scoped here, and the same list
-     * validates store(), so a claim can never name someone else's
-     * publication, a conference, or one still in approval -- even from an
-     * edited request.
+     * The publications this student may still claim: see
+     * Support\ClaimablePublications (own, finally approved, journal, Pay
+     * and Claims, not already claimed). The same list validates store(), so
+     * a claim can never name someone else's publication, a conference,
+     * another cost centre, one still in approval or one already claimed --
+     * even from an edited request.
      *
      * @return \Illuminate\Support\Collection<int, PublicationDetail>
      */
     protected function approvedPublications(User $student)
     {
-        return PublicationDetail::query()
-            ->where('type_of_request', 'publication_journal')
-            ->whereIn('application_id', Application::query()
-                ->where('module_type', 'publication')
-                ->where('student_id', $student->id)
-                ->where('status', Application::STATUS_APPROVED)
-                ->select('id'))
-            ->latest('application_id')
-            ->get();
+        return app(ClaimablePublications::class)->for($student);
     }
 
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents, ApproverNotifier $notifier)
@@ -122,12 +126,21 @@ class ClaimsController extends Controller
 
         ], [
             'publication_application_id.required' => 'Choose the publication this claim is for.',
-            'publication_application_id.in' => 'Choose one of your own approved journal publications.',
+            'publication_application_id.in' => 'Choose one of your own approved journal publications that used the Pay and Claims cost centre and has not been claimed yet.',
         ]);
 
         $application = DB::transaction(function () use ($request, $data, $engine, $documents, $draft, $removing) {
             // Submitting a saved draft finishes that application rather than
             // starting a second one.
+            // One claim per publication, checked again under a row lock so
+            // two submits at once cannot both claim it.
+            PublicationDetail::where('application_id', $data['publication_application_id'])->lockForUpdate()->first();
+            if (! app(ClaimablePublications::class)->isClaimable($request->user(), $data['publication_application_id'])) {
+                throw ValidationException::withMessages([
+                    'publication_application_id' => 'This publication has already been claimed.',
+                ]);
+            }
+
             $application = $this->draftOrNewApplication($request, $draft, $removing);
 
             // total_claims is a direct student input, not derived from a

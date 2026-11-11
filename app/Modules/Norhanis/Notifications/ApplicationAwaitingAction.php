@@ -4,6 +4,8 @@ namespace App\Modules\Norhanis\Notifications;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Norhanis\Models\TravelDetail;
+use App\Modules\Norhanis\Support\StageAction;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -31,13 +33,20 @@ class ApplicationAwaitingAction extends Notification implements ShouldQueue
     {
         $student = $this->application->student;
 
-        return (new MailMessage)
+        $mail = (new MailMessage)
             ->subject($this->subject())
             ->greeting('Hi '.$notifiable->name.',')
-            ->line("A {$this->module()} application is waiting for you at the {$this->stage->label} stage.")
+            ->line("A {$this->module()} application is waiting for your {$this->action()->noun()} at the {$this->stage->label} stage.")
             ->line('Student: '.($student?->name ?? 'Unknown').($student?->matric_no ? " ({$student->matric_no})" : ''))
-            ->line('Application: '.$this->application->module()->summary($this->application))
-            ->action('Review the application', $this->url())
+            ->line('Application: '.$this->application->module()->summary($this->application));
+
+        if ($type = $this->travelRequestType()) {
+            $mail->line('Type of Request: '.$type);
+        }
+
+        return $mail
+            ->action('Open the application', $this->url())
+            ->line("You can {$this->verb()} or reject it from your queue.")
             ->line('Thank you for using UResearch 2.0.');
     }
 
@@ -55,7 +64,31 @@ class ApplicationAwaitingAction extends Notification implements ShouldQueue
     /** Worded like Core's ApplicationDecided, so a student's and an approver's inbox match. */
     protected function subject(): string
     {
-        return "{$this->module()} Application #{$this->application->id}: Awaiting your action";
+        return "{$this->module()} Application #{$this->application->id}: Awaiting your ".$this->action()->noun();
+    }
+
+    /** Travel's type of request, with the "Others" description only when there is one. */
+    protected function travelRequestType(): ?string
+    {
+        if ($this->application->module_type !== 'travel'
+            || ! $detail = TravelDetail::where('application_id', $this->application->id)->first()) {
+            return null;
+        }
+
+        $label = TravelDetail::requestTypes()[$detail->type_of_request] ?? $detail->type_of_request;
+
+        return $detail->other_request_specify ? "{$label} ({$detail->other_request_specify})" : $label;
+    }
+
+    /** What this stage does: endorse, review or approve. See Support\StageAction. */
+    protected function action(): StageAction
+    {
+        return StageAction::forStage($this->stage);
+    }
+
+    protected function verb(): string
+    {
+        return strtolower($this->action()->label());
     }
 
     protected function module(): string

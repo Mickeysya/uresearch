@@ -14,9 +14,7 @@
         <table class="recent-activity-table">
             <tr><th style="width: 30%;">Title</th><td>{{ $detail->title_of_paper }}</td></tr>
             <tr><th>Author</th><td>{{ $detail->authors->pluck('author_name')->implode(', ') }}</td></tr>
-            <tr><th>Conference / Journal</th><td>{{ $detail->title_of_conference_journal }}</td></tr>
-            <tr><th>Venue</th><td>{{ $detail->venue ?? '—' }}</td></tr>
-            <tr><th>Date</th><td>{{ $detail->conference_start_date->format('j M Y') }} to {{ $detail->conference_end_date->format('j M Y') }}</td></tr>
+            <tr><th>{{ $detail->titleLabel() }}</th><td>{{ $detail->title_of_conference_journal }}</td></tr>
         </table>
 
         @if ($evaluation->isReplaced())

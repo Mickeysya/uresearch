@@ -34,8 +34,6 @@ trait HasApprovedPublication
             'conference_journal_fee' => 2500,
             'currency_type' => 'MYR',
             'cost_centre' => 'cgs_pay_and_claims',
-            'conference_start_date' => now()->subDays(10),
-            'conference_end_date' => now()->subDays(8),
         ]);
 
         return $application;

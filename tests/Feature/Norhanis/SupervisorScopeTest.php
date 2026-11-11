@@ -166,8 +166,6 @@ class SupervisorScopeTest extends TestCase
                 'conference_journal_fee' => 2500,
                 'currency_type' => 'MYR',
                 'cost_centre' => 'cgs_pay_and_claims',
-                'conference_start_date' => now()->addDays(30),
-                'conference_end_date' => now()->addDays(32),
             ]),
             'claims_student' => ClaimsDetail::create([
                 'application_id' => $application->id,

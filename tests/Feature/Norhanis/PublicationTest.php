@@ -6,7 +6,9 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Norhanis\Models\PublicationDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use App\Modules\Norhanis\Support\TravelDates;
 use Tests\Feature\Norhanis\Concerns\FilesPublications;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
@@ -87,62 +89,213 @@ class PublicationTest extends TestCase
             ->assertSessionHasErrors('cost_centre_other');
     }
 
-    // ---- Conference / publication dates --------------------------------------
+    // ---- No venue, no publication dates (UAT, 11 Nov 2026) -------------------
 
-    public function test_an_end_date_before_the_start_date_is_rejected(): void
+    public function test_the_venue_and_the_old_dates_are_gone(): void
     {
-        $this->actingAs($this->student())
+        $student = $this->student();
+
+        Storage::fake('local');
+        Notification::fake();
+
+        $html = $this->actingAs($student)->get(route('publication.create'))->assertOk()->getContent();
+
+        foreach (['name="venue"', 'conference_start_date', 'conference_end_date', 'Conference / Publication Start Date', '>Venue<'] as $gone) {
+            $this->assertStringNotContainsString($gone, $html, $gone);
+        }
+
+        foreach (['venue', 'conference_start_date', 'conference_end_date'] as $column) {
+            $this->assertFalse(Schema::hasColumn('publication_details', $column), $column);
+        }
+
+        // Posted anyway (an old tab, an edited form): accepted without them.
+        $this->actingAs($student)
             ->post(route('publication.store'), $this->payload([
-                'conference_start_date' => now()->addDays(30)->toDateString(),
-                'conference_end_date' => now()->addDays(29)->toDateString(),
+                'venue' => 'Somewhere',
+                'conference_start_date' => now()->addDays(3)->toDateString(),
+                'conference_end_date' => now()->subDays(3)->toDateString(),
             ]))
-            ->assertSessionHasErrors(['conference_end_date' => 'The end date must be on or after the start date.']);
+            ->assertSessionHasNoErrors();
+    }
+
+    // ---- Travel Details: a conference only ------------------------------------
+
+    public function test_a_conference_requires_every_travel_detail(): void
+    {
+        $student = $this->student();
+
+        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'local'];
+
+        foreach (array_keys($this->travelDetails()) as $field) {
+            $this->actingAs($student)
+                ->post(route('publication.store'), $this->payload($conference + $this->conferenceFields([$field => ''])))
+                ->assertSessionHasErrors($field);
+        }
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload($conference + $this->conferenceFields(['contact_person_email' => 'not-an-email'])))
+            ->assertSessionHasErrors('contact_person_email');
 
         $this->assertSame(0, PublicationDetail::count());
     }
 
-    public function test_a_same_day_conference_is_accepted(): void
-    {
-        Storage::fake('local');
-        Notification::fake();
-        $day = now()->addDays(30)->toDateString();
-
-        $this->actingAs($this->student())
-            ->post(route('publication.store'), $this->payload(['conference_start_date' => $day, 'conference_end_date' => $day]))
-            ->assertSessionHasNoErrors();
-
-        $this->assertSame($day, PublicationDetail::sole()->conference_end_date->toDateString());
-    }
-
-    public function test_an_end_date_after_the_start_date_is_accepted(): void
+    public function test_a_conference_stores_its_travel_details_with_the_duration_worked_out(): void
     {
         Storage::fake('local');
         Notification::fake();
 
         $this->actingAs($this->student())
-            ->post(route('publication.store'), $this->payload([
-                'conference_start_date' => now()->addDays(30)->toDateString(),
-                'conference_end_date' => now()->addDays(33)->toDateString(),
-            ]))
+            ->post(route('publication.store'), $this->payload(['type_of_request' => 'publication_conference', 'conference_scope' => 'local']
+                + $this->conferenceFields([
+                    'travel_start_date' => now()->addDays(30)->toDateString(),
+                    'travel_end_date' => now()->addDays(33)->toDateString(),
+                    // A posted duration is never trusted.
+                    'duration_days' => '99',
+                ])))
             ->assertSessionHasNoErrors();
 
-        $this->assertSame(now()->addDays(33)->toDateString(), PublicationDetail::sole()->conference_end_date->toDateString());
+        $detail = PublicationDetail::sole();
+        $this->assertSame(now()->addDays(30)->toDateString(), $detail->travel_start_date->toDateString());
+        $this->assertSame(now()->addDays(33)->toDateString(), $detail->travel_end_date->toDateString());
+        $this->assertSame(4, $detail->duration_days);
+        $this->assertSame('Present the paper', $detail->reason_for_travel);
+        $this->assertSame('Kuala Lumpur Convention Centre', $detail->destination_address);
+        $this->assertSame(['Dr. Siti Mariam', '012-3456789', 'siti.mariam@utp.edu.my'], [$detail->contact_person_name, $detail->contact_person_no, $detail->contact_person_email]);
     }
 
-    public function test_the_form_keeps_the_end_date_from_going_before_the_start_date(): void
+    public function test_a_journal_ignores_any_travel_details_posted(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        // Even ones no rule would accept: a journal's are never validated.
+        $this->actingAs($this->student())
+            ->post(route('publication.store'), $this->payload($this->travelDetails([
+                'travel_start_date' => now()->subYear()->toDateString(),
+                'travel_end_date' => now()->subYears(2)->toDateString(),
+                'contact_person_email' => 'not-an-email',
+            ])))
+            ->assertSessionHasNoErrors();
+
+        $detail = PublicationDetail::sole();
+        foreach ([...PublicationDetail::TRAVEL_FIELDS, 'duration_days'] as $column) {
+            $this->assertNull($detail->{$column}, $column);
+        }
+        $this->assertSame([], $detail->travelDetailRows());
+    }
+
+    public function test_the_travel_end_date_must_be_on_or_after_the_start_date(): void
     {
         $student = $this->student();
 
-        $this->actingAs($student)
-            ->post(route('publication.store'), $this->payload([
-                'conference_start_date' => now()->addDays(30)->toDateString(),
-                'conference_end_date' => now()->addDays(29)->toDateString(),
-            ]));
+        Storage::fake('local');
+        Notification::fake();
 
-        $this->get(route('publication.create'))->assertOk()
-            ->assertSee('min="'.now()->addDays(30)->toDateString().'"', false)
-            ->assertSee('getElementById("conference_start_date")', false)
-            ->assertSee('getElementById("conference_end_date")', false);
+        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'local'];
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload($conference + $this->conferenceFields([
+                'travel_start_date' => now()->addDays(30)->toDateString(),
+                'travel_end_date' => now()->addDays(29)->toDateString(),
+            ])))
+            ->assertSessionHasErrors(['travel_end_date' => 'The end date must be on or after the start date.']);
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload($conference + $this->conferenceFields([
+                'travel_start_date' => now()->subDay()->toDateString(),
+                'travel_end_date' => now()->addDay()->toDateString(),
+            ])))
+            ->assertSessionHasErrors(['travel_start_date' => 'Travel cannot start in the past.']);
+
+        $this->assertSame(0, PublicationDetail::count());
+
+        // Same day: allowed, one day long.
+        $day = now()->addDays(30)->toDateString();
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload($conference + $this->conferenceFields(['travel_start_date' => $day, 'travel_end_date' => $day])))
+            ->assertSessionHasNoErrors();
+        $this->assertSame(1, PublicationDetail::sole()->duration_days);
+    }
+
+    public function test_the_duration_counts_both_days_like_travel(): void
+    {
+        $this->assertSame(1, TravelDates::durationDays('2026-12-01', '2026-12-01'));
+        $this->assertSame(3, TravelDates::durationDays('2026-12-01', '2026-12-03'));
+        $this->assertSame(32, TravelDates::durationDays('2026-12-31', '2027-01-31'));
+        // Across the end of February in a leap year.
+        $this->assertSame(3, TravelDates::durationDays('2028-02-28', '2028-03-01'));
+    }
+
+    public function test_the_travel_details_sit_in_the_paper_step_for_a_conference_only(): void
+    {
+        $html = $this->actingAs($this->student())->get(route('publication.create'))->assertOk()->getContent();
+
+        // No step of its own, so a journal never stops on it: a section of
+        // the Paper step, hidden for a journal by the conference-only switch.
+        $this->assertStringNotContainsString('data-label="Travel Details"', $html);
+        $paper = substr($html, strpos($html, 'data-label="Paper"'), strpos($html, 'data-label="Cost"') - strpos($html, 'data-label="Paper"'));
+        $this->assertStringContainsString('<div class="pub-travel" data-conference-only>', $paper);
+        $this->assertStringContainsString('<h3 class="pub-travel-head">Travel Details</h3>', $paper);
+        $this->assertStringContainsString('<h4 class="pub-travel-subhead">Contact Person While Travelling</h4>', $paper);
+
+        foreach (['Travel Start Date', 'Travel End Date', 'Duration of Travelling (Days)', 'Reason for Travelling', 'Destination Address', 'Contact No.', 'Email Address'] as $label) {
+            $this->assertStringContainsString($label, $paper, $label);
+        }
+        $this->assertMatchesRegularExpression('/<input type="text" id="duration_days" readonly/', $html);
+        $this->assertStringNotContainsString('name="duration_days"', $html);
+        $this->assertMatchesRegularExpression('/id="travel_start_date"[^>]*min="'.now()->toDateString().'"/s', $html);
+        // The shared date-range script locks the end to the start and fills the duration.
+        $this->assertStringContainsString('getElementById("travel_start_date")', $html);
+        $this->assertStringContainsString('getElementById("travel_end_date")', $html);
+        $this->assertStringContainsString('getElementById("duration_days")', $html);
+        // No cost centre in the travel section: it stays on the Cost step.
+        $travel = substr($paper, strpos($paper, 'class="pub-travel"'));
+        $this->assertStringNotContainsString('cost_centre', $travel);
+    }
+
+    public function test_a_conference_draft_refills_its_travel_details(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+        $this->actingAs($student)->post(route('publication.draft.save'), [
+            'type_of_request' => 'publication_conference',
+            'conference_scope' => 'local',
+        ] + $this->travelDetails())->assertRedirect();
+
+        $this->actingAs($student)
+            ->get(route('publication.draft.edit', Application::where('module_type', 'publication')->sole()))
+            ->assertOk()
+            ->assertSee('value="'.now()->addDays(30)->toDateString().'"', false)
+            ->assertSee('value="Present the paper"', false)
+            ->assertSee('value="012-3456789"', false);
+    }
+
+    // ---- Labels follow the request type ----------------------------------------
+
+    public function test_the_title_and_fee_labels_follow_the_request_type(): void
+    {
+        $html = $this->actingAs($this->student())->get(route('publication.create'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('data-label-conference="Title of Conference" data-label-journal="Title of Journal">Title of Journal</label>', $html);
+        $this->assertStringContainsString('data-label-conference="Conference Fee" data-label-journal="Journal Fee">Journal Fee</label>', $html);
+        $this->assertStringNotContainsString('Conference / Journal', $html);
+        $this->assertStringNotContainsString('Title of Conference / Journal', $html);
+
+        $this->assertSame(['Title of Conference', 'Conference Fee'], [PublicationDetail::venueTitleLabel('publication_conference'), PublicationDetail::feeLabel('publication_conference')]);
+        $this->assertSame(['Title of Journal', 'Journal Fee'], [PublicationDetail::venueTitleLabel('publication_journal'), PublicationDetail::feeLabel('publication_journal')]);
+    }
+
+    public function test_a_returned_conference_form_reads_title_of_conference(): void
+    {
+        $this->actingAs($this->student())
+            ->from(route('publication.create'))
+            ->post(route('publication.store'), $this->payload(['type_of_request' => 'publication_conference', 'conference_scope' => 'local', 'title_of_conference_journal' => '']))
+            ->assertSessionHasErrors(['title_of_conference_journal' => 'Enter the title of conference.']);
+
+        $this->get(route('publication.create'))
+            ->assertSee('>Title of Conference</label>', false)
+            ->assertSee('>Conference Fee</label>', false);
     }
 
     // ---- Authors -----------------------------------------------------------
@@ -259,69 +412,58 @@ class PublicationTest extends TestCase
         }
     }
 
-    /**
-     * What a conference request needs beyond a journal's: its venue, and its
-     * only allowed cost centre with the words "Others" needs.
-     */
-    protected const CONFERENCE_FIELDS = ['venue' => 'Kuala Lumpur Convention Centre', 'cost_centre' => 'others', 'cost_centre_other' => 'FRG research grant'];
-
-    public function test_a_conference_needs_a_venue_and_a_journal_keeps_none(): void
+    public function test_a_conference_types_its_cost_centre_and_any_dropdown_value_is_ignored(): void
     {
         Storage::fake('local');
         Notification::fake();
 
         $student = $this->student();
-        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'local'] + self::CONFERENCE_FIELDS;
+        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'local'] + $this->travelDetails();
 
+        // No text: refused, whatever the dropdown said.
         $this->actingAs($student)
-            ->post(route('publication.store'), $this->payload(['venue' => ''] + $conference))
-            ->assertSessionHasErrors('venue');
-
-        $this->actingAs($student)
-            ->post(route('publication.store'), $this->payload($conference))
-            ->assertSessionHasNoErrors();
-        $this->assertSame('Kuala Lumpur Convention Centre', PublicationDetail::sole()->venue);
-
-        // A journal: no venue needed, and one posted anyway is not kept.
-        PublicationDetail::query()->delete();
-        Application::query()->delete();
-        $this->actingAs($student)
-            ->post(route('publication.store'), $this->payload(['venue' => 'Somewhere']))
-            ->assertSessionHasNoErrors();
-        $this->assertNull(PublicationDetail::sole()->venue);
-    }
-
-    public function test_the_venue_label_has_no_conference_only_note(): void
-    {
-        $this->actingAs($this->student())->get(route('publication.create'))
-            ->assertOk()
-            ->assertSee('<label for="venue" data-conference-only>Venue</label>', false)
-            ->assertDontSee('conference only, e.g. the city and hall');
-    }
-
-    public function test_a_conference_may_use_only_the_others_cost_centre(): void
-    {
-        Storage::fake('local');
-        Notification::fake();
-
-        $student = $this->student();
-        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'local'];
-
-        // Every other option is refused, even posted from an edited form.
-        foreach (['cgs_pay_and_claims', 'cgs_letter_of_undertaking', 'split_memo'] as $costCentre) {
-            $this->actingAs($student)
-                ->post(route('publication.store'), $this->payload($conference + ['cost_centre' => $costCentre]))
-                ->assertSessionHasErrors(['cost_centre' => 'A conference request can only use the "Others" cost centre.']);
-        }
+            ->post(route('publication.store'), $this->payload($conference + ['cost_centre' => 'cgs_pay_and_claims']))
+            ->assertSessionHasErrors(['cost_centre_other' => 'Enter the cost centre to be utilized.'])
+            ->assertSessionDoesntHaveErrors('cost_centre');
         $this->assertSame(0, PublicationDetail::count());
 
+        // With the text, a dropdown value posted from an edited form is
+        // ignored: stored as "Others" with the student's words.
         $this->actingAs($student)
-            ->post(route('publication.store'), $this->payload($conference + self::CONFERENCE_FIELDS))
+            ->post(route('publication.store'), $this->payload($conference + [
+                'cost_centre' => 'split_memo',
+                'cost_centre_other' => 'FRG research grant',
+            ]))
             ->assertSessionHasNoErrors();
 
         $detail = PublicationDetail::sole();
         $this->assertSame('others', $detail->cost_centre);
-        $this->assertSame('Others: FRG research grant', $detail->costCentreLabel());
+        $this->assertSame('FRG research grant', $detail->cost_centre_other);
+        $this->assertSame('FRG research grant', $detail->costCentreLabel());
+        $this->assertFalse($detail->wants_letter_of_undertaking);
+        $this->assertFalse($detail->usesCostCentre(PublicationDetail::SPLIT_MEMO));
+    }
+
+    public function test_a_journal_must_choose_one_of_the_four_and_specify_others(): void
+    {
+        Storage::fake('local');
+        Notification::fake();
+
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload(['cost_centre' => null]))
+            ->assertSessionHasErrors(['cost_centre' => 'Choose the cost centre to be utilized.']);
+
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload(['cost_centre' => 'others']))
+            ->assertSessionHasErrors(['cost_centre_other' => 'Please specify the cost centre, as you chose "Others".']);
+
+        // A journal's "Please specify" is kept only for "Others".
+        $this->actingAs($student)
+            ->post(route('publication.store'), $this->payload(['cost_centre' => 'cgs_pay_and_claims', 'cost_centre_other' => 'stale text']))
+            ->assertSessionHasNoErrors();
+        $this->assertNull(PublicationDetail::sole()->cost_centre_other);
     }
 
     public function test_a_journal_may_use_any_of_the_four_cost_centres(): void
@@ -346,14 +488,61 @@ class PublicationTest extends TestCase
         $this->assertEqualsCanonicalizing($choices, PublicationDetail::pluck('cost_centre')->all());
     }
 
-    public function test_the_form_lists_the_renamed_split_memo_and_marks_the_journal_only_options(): void
+    public function test_the_form_offers_the_journal_list_with_its_help_and_a_typed_field_for_a_conference(): void
     {
-        $this->actingAs($this->student())->get(route('publication.create'))
+        $html = $this->actingAs($this->student())->get(route('publication.create'))
             ->assertOk()
             ->assertSee('CGS &amp; Grant - Split Memo', false)
             ->assertDontSee('>Split Memo<', false)
             ->assertSee('<option value="split_memo"', false)
-            ->assertSee('data-journal-only', false);
+            ->assertDontSee('data-journal-only', false)
+            // The helper text, styled as a hint, under the journal's dropdown.
+            ->assertSee('class="field-hint cost-centre-help" data-cost-journal', false)
+            ->assertSee('submit a claim in the Student Claims form after your publication has been approved.')
+            ->assertSee('<b>Letter of Undertaking (LOU):</b> processed directly by CGS.', false)
+            ->assertSee('after approval, you will receive an email with the memo template and the CGS contact to submit the signed memo to.')
+            ->assertSee('id="cost_centre_conference"', false)
+            ->getContent();
+
+        // A fresh form is a journal until the type says otherwise: the list
+        // shown, "Please specify" and the conference field hidden and off.
+        $this->assertLabel($html, 'cost_centre_other', hidden: true, text: 'Please specify');
+        $this->assertLabel($html, 'cost_centre_conference', hidden: true, text: 'Cost Centre to be Utilized');
+        $this->assertLabel($html, 'cost_centre', hidden: false, text: 'Cost Centre to be Utilized');
+        $this->assertMatchesRegularExpression('/id="cost_centre_conference"[^>]*hidden disabled/s', $html);
+    }
+
+    /** A <label for="$for"> holding $text, shown or hidden. */
+    protected function assertLabel(string $html, string $for, bool $hidden, string $text): void
+    {
+        $this->assertSame(1, preg_match('/<label for="'.preg_quote($for, '/').'"([^>]*)>\\s*'.preg_quote($text, '/').'\\s*<\\/label>/s', $html, $m), "No <label for=\"{$for}\">{$text}</label>");
+        $this->assertSame($hidden, (bool) preg_match('/\\bhidden\\b/', $m[1]), "<label for=\"{$for}\"> should be ".($hidden ? 'hidden' : 'shown'));
+    }
+
+    public function test_a_conference_draft_refills_the_typed_cost_centre_and_hides_the_list(): void
+    {
+        Storage::fake('local');
+
+        $student = $this->student();
+
+        $this->actingAs($student)->post(route('publication.draft.save'), [
+            'type_of_request' => 'publication_conference',
+            'conference_scope' => 'local',
+            'title_of_paper' => 'Draft Paper',
+            'cost_centre_other' => 'YUTP grant 015LC0-123',
+        ])->assertRedirect();
+
+        $draft = Application::where('module_type', 'publication')->sole();
+
+        $html = $this->actingAs($student)->get(route('publication.draft.edit', $draft))
+            ->assertOk()
+            ->assertSee('value="YUTP grant 015LC0-123"', false)
+            ->getContent();
+
+        $this->assertLabel($html, 'cost_centre_conference', hidden: false, text: 'Cost Centre to be Utilized');
+        $this->assertLabel($html, 'cost_centre', hidden: true, text: 'Cost Centre to be Utilized');
+        $this->assertMatchesRegularExpression('/id="cost_centre_conference"[^>]*\\brequired\\b/s', $html);
+        $this->assertMatchesRegularExpression('/id="cost_centre"[^>]*hidden disabled/s', $html);
     }
 
     public function test_the_letter_of_undertaking_and_split_memo_come_from_the_cost_centre(): void
@@ -389,7 +578,7 @@ class PublicationTest extends TestCase
         Notification::fake();
 
         $this->actingAs($student = $this->student())
-            ->post(route('publication.store'), $this->payload(['venue' => 'Online']))
+            ->post(route('publication.store'), $this->payload())
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('publication.sign-offs', Application::sole()));
 
@@ -398,7 +587,7 @@ class PublicationTest extends TestCase
 
         $this->assertSame(Application::STATUS_DRAFT, $application->status);
         $this->assertNull($detail->conference_scope);
-        $this->assertNull($detail->venue); // a journal has no venue
+        $this->assertNull($detail->travel_start_date); // a journal has no travel
         $this->assertSame([1, 2], $detail->activeEvaluations->pluck('position')->all());
         $this->assertSame(1, $application->documents()->where('doc_type', 'Manuscript for Review')->count());
         $this->assertSame('CGS – Pay and Claims', $detail->costCentreLabel());
@@ -418,7 +607,7 @@ class PublicationTest extends TestCase
     public function test_a_conference_must_say_whether_it_is_local_or_international(): void
     {
         $this->actingAs($this->student())
-            ->post(route('publication.store'), $this->payload(['type_of_request' => 'publication_conference'] + self::CONFERENCE_FIELDS))
+            ->post(route('publication.store'), $this->payload(['type_of_request' => 'publication_conference'] + $this->conferenceFields()))
             ->assertSessionHasErrors('conference_scope');
     }
 
@@ -428,7 +617,7 @@ class PublicationTest extends TestCase
         Notification::fake();
 
         $student = $this->student();
-        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'international'] + self::CONFERENCE_FIELDS;
+        $conference = ['type_of_request' => 'publication_conference', 'conference_scope' => 'international'] + $this->conferenceFields();
 
         $this->actingAs($student)
             ->post(route('publication.store'), $this->payload($conference))
@@ -455,7 +644,7 @@ class PublicationTest extends TestCase
                 'type_of_request' => 'publication_conference',
                 'conference_scope' => 'local',
                 'reviewers' => $this->reviewers(3),
-            ] + self::CONFERENCE_FIELDS))
+            ] + $this->conferenceFields()))
             ->assertSessionHasNoErrors();
 
         $this->assertSame(2, PublicationDetail::sole()->activeEvaluations()->count());

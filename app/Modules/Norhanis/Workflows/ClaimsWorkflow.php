@@ -4,17 +4,19 @@ namespace App\Modules\Norhanis\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\DescribesApplicationProgress;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\SuppliesOverdueStatus;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
-use App\Modules\Core\Support\Stage;
 use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 use App\Modules\Norhanis\Support\Drafts;
 use App\Modules\Norhanis\Workflows\Concerns\ExpectsDecisionByCharter;
+use App\Modules\Norhanis\Workflows\Concerns\NamesStageActions;
+use App\Modules\Norhanis\Support\StageAction;
 use App\Modules\Norhanis\Support\Roles;
 
 /**
@@ -33,10 +35,22 @@ use App\Modules\Norhanis\Support\Roles;
  * the Project Director happens after approval and outside this app, so it
  * is not modelled as a Stage.
  */
-class ClaimsWorkflow implements WorkflowModule, ProvidesLinks, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus
+class ClaimsWorkflow implements WorkflowModule, ProvidesLinks, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus, DescribesApplicationProgress
 {
     /** expectedDecisionDate() and decisionIsOverdue(): see the trait. */
     use ExpectsDecisionByCharter;
+    use NamesStageActions;
+
+    /**
+     * What each approver does: only the Manager CGS, the last, approves.
+     * The one place this module's wording lives; see Support\StageAction.
+     */
+    public const ACTIONS = [
+        'supervisor' => StageAction::Endorse,
+        'chair' => StageAction::Endorse,
+        'cgs_review' => StageAction::Review,
+        'manager' => StageAction::Approve,
+    ];
 
     public function key(): string
     {
@@ -51,10 +65,10 @@ class ClaimsWorkflow implements WorkflowModule, ProvidesLinks, DecidesOneAtATime
     public function stages(?Application $application = null): array
     {
         return [
-            new Stage('supervisor', 'Lecturer/Supervisor', Role::SUPERVISOR, 'endorsed'),
-            new Stage('chair', 'Chair of Department', Role::CHAIR, 'endorsed'),
-            new Stage('cgs_review', 'Non-Executive CGS', Role::NON_EXEC_CGS, 'reviewed'),
-            new Stage('manager', 'Manager CGS', Role::MANAGER_CGS, 'approved'),
+            $this->actionStage('supervisor', 'Lecturer/Supervisor', Role::SUPERVISOR),
+            $this->actionStage('chair', 'Chair of Department', Role::CHAIR),
+            $this->actionStage('cgs_review', 'Non-Executive CGS', Role::NON_EXEC_CGS),
+            $this->actionStage('manager', 'Manager CGS', Role::MANAGER_CGS),
         ];
     }
 

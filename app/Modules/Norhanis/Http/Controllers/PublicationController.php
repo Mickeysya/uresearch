@@ -14,6 +14,9 @@ use App\Modules\Norhanis\Models\PublicationEvaluation;
 use App\Modules\Norhanis\Models\SavedDraft;
 use App\Modules\Norhanis\Support\PublicationSignOffs;
 use App\Modules\Norhanis\Support\SignatureImage;
+use App\Modules\Norhanis\Support\PublicationFollowUp;
+use App\Modules\Norhanis\Support\TravelDates;
+use App\Modules\Core\Support\Stage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -56,8 +59,9 @@ class PublicationController extends Controller
     {
         return [
             'type_of_request', 'conference_scope', 'title_of_paper', 'title_of_conference_journal',
-            'organizer_publisher', 'venue', 'conference_start_date', 'conference_end_date',
-            'conference_journal_fee', 'currency_type', 'cost_centre', 'cost_centre_other',
+            'organizer_publisher', 'conference_journal_fee', 'currency_type', 'cost_centre', 'cost_centre_other',
+            // A conference's Travel Details.
+            ...PublicationDetail::TRAVEL_FIELDS,
             'authors', 'applicant_conflict_disclosure', 'reviewers',
         ];
     }
@@ -86,8 +90,7 @@ class PublicationController extends Controller
                 ->get(),
             'requestTypes' => PublicationDetail::requestTypes(),
             'conferenceScopes' => PublicationDetail::conferenceScopes(),
-            'costCentres' => PublicationDetail::COST_CENTRES,
-            'conferenceCostCentre' => PublicationDetail::CONFERENCE_COST_CENTRE,
+            'costCentres' => PublicationDetail::costCentresFor(PublicationDetail::JOURNAL),
         ] + $this->draftViewData($request, $draft));
     }
 
@@ -105,6 +108,10 @@ class PublicationController extends Controller
             is_string($request->input('conference_scope')) ? $request->input('conference_scope') : null,
         );
 
+        // Read before validate() as well: a conference types its cost centre
+        // into one field and ignores the dropdown, a journal picks from it.
+        $isConference = $request->input('type_of_request') === PublicationDetail::CONFERENCE;
+
         // The student signs the Authorship Certification on the form itself;
         // their co-authors are emailed a link afterwards.
         $signature = SignatureImage::capture($request, 'applicant_signature');
@@ -118,19 +125,27 @@ class PublicationController extends Controller
             'title_of_paper' => ['required', 'string', 'max:255'],
             'title_of_conference_journal' => ['required', 'string', 'max:255'],
             'organizer_publisher' => ['required', 'string', 'max:255'],
-            'venue' => ['nullable', 'required_if:type_of_request,publication_conference', 'string', 'max:255'],
             'conference_journal_fee' => ['required', 'numeric', 'min:0'],
             'currency_type' => ['required', 'string', 'max:10'],
-            // One choice from the list agreed with CGS: a conference may use
-            // "Others" only, a journal any of the four. The CGS & Grant split
-            // memo is not handled here: CGS emails the template and the
-            // supervisor completes it outside UResearch.
-            'cost_centre' => ['required', 'in:'.implode(',', array_keys(PublicationDetail::costCentresFor(
-                is_string($request->input('type_of_request')) ? $request->input('type_of_request') : null,
-            )))],
-            'cost_centre_other' => ['nullable', 'required_if:cost_centre,others', 'string', 'max:150'],
-            'conference_start_date' => ['required', 'date'],
-            'conference_end_date' => ['required', 'date', 'after_or_equal:conference_start_date'],
+            // A journal picks one of the four cost centres agreed with CGS,
+            // and says which if "Others". A conference has no dropdown: it
+            // types the cost centre in "Cost Centre to be Utilized" (kept in
+            // cost_centre_other), and any dropdown value posted is ignored.
+            'cost_centre' => $isConference
+                ? ['exclude']
+                : ['required', 'in:'.implode(',', array_keys(PublicationDetail::costCentresFor(PublicationDetail::JOURNAL)))],
+            'cost_centre_other' => $isConference
+                ? ['required', 'string', 'max:150']
+                : ['nullable', 'required_if:cost_centre,'.PublicationDetail::OTHERS, 'string', 'max:150'],
+            // Travel Details: a conference only. Required then, with the same
+            // date rules as a Travel application (Support\TravelDates); a
+            // journal's are dropped unvalidated, whatever was posted.
+            ...TravelDates::rules(['exclude_unless:type_of_request,'.PublicationDetail::CONFERENCE]),
+            'reason_for_travel' => ['exclude_unless:type_of_request,'.PublicationDetail::CONFERENCE, 'required', 'string', 'max:255'],
+            'destination_address' => ['exclude_unless:type_of_request,'.PublicationDetail::CONFERENCE, 'required', 'string', 'max:255'],
+            'contact_person_name' => ['exclude_unless:type_of_request,'.PublicationDetail::CONFERENCE, 'required', 'string', 'max:150'],
+            'contact_person_no' => ['exclude_unless:type_of_request,'.PublicationDetail::CONFERENCE, 'required', 'string', 'max:30'],
+            'contact_person_email' => ['exclude_unless:type_of_request,'.PublicationDetail::CONFERENCE, 'required', 'email', 'max:150'],
             'authors' => ['required', 'array', 'min:1', 'max:50'],
             'authors.*.author_name' => ['required', 'string', 'max:150'],
             // Each author signs from a link sent here, so one address cannot
@@ -151,12 +166,13 @@ class PublicationController extends Controller
                 'ends_with:'.PublicationEvaluation::REVIEWER_EMAIL_DOMAIN,
             ],
         ], [
-            'conference_end_date.after_or_equal' => 'The end date must be on or after the start date.',
+            ...TravelDates::messages(),
+            'title_of_conference_journal.required' => 'Enter the '.strtolower(PublicationDetail::venueTitleLabel($isConference ? PublicationDetail::CONFERENCE : PublicationDetail::JOURNAL)).'.',
+            'conference_journal_fee.required' => 'Enter the '.strtolower(PublicationDetail::feeLabel($isConference ? PublicationDetail::CONFERENCE : PublicationDetail::JOURNAL)).'.',
             'cost_centre.required' => 'Choose the cost centre to be utilized.',
-            'cost_centre.in' => $request->input('type_of_request') === 'publication_conference'
-                ? 'A conference request can only use the "Others" cost centre.'
-                : 'Choose one of the listed cost centres.',
-            'cost_centre_other.required_if' => 'Say which cost centre, as you chose "Others".',
+            'cost_centre.in' => 'Choose one of the listed cost centres.',
+            'cost_centre_other.required' => 'Enter the cost centre to be utilized.',
+            'cost_centre_other.required_if' => 'Please specify the cost centre, as you chose "Others".',
             'authors.required' => 'Add at least one author.',
             'authors.max' => 'A publication cannot list more than 50 authors.',
             'authors.*.author_name.required' => 'Enter this author\'s name.',
@@ -198,7 +214,7 @@ class PublicationController extends Controller
             'reviewers',
         );
 
-        $application = DB::transaction(function () use ($request, $data, $documents, $signOffs, $reviewers, $signature, $isApplicant, $draft, $removing) {
+        $application = DB::transaction(function () use ($request, $data, $documents, $signOffs, $reviewers, $signature, $isApplicant, $draft, $removing, $isConference) {
             // Submitting a saved draft finishes that application rather than
             // starting a second one; from here on it waits for sign-offs.
             $application = $this->draftOrNewApplication($request, $draft, $removing);
@@ -213,16 +229,17 @@ class PublicationController extends Controller
                 'title_of_paper' => $data['title_of_paper'],
                 'title_of_conference_journal' => $data['title_of_conference_journal'],
                 'organizer_publisher' => $data['organizer_publisher'],
-                // Likewise no venue for a journal.
-                'venue' => $data['type_of_request'] === 'publication_conference' ? ($data['venue'] ?? null) : null,
                 'conference_journal_fee' => $data['conference_journal_fee'],
                 'currency_type' => $data['currency_type'],
-                'cost_centre' => $data['cost_centre'],
-                'cost_centre_other' => $data['cost_centre'] === 'others' ? $data['cost_centre_other'] : null,
-                // Kept for reports: the LOU is now one of the cost centre choices.
-                'wants_letter_of_undertaking' => $data['cost_centre'] === 'cgs_letter_of_undertaking',
-                'conference_start_date' => $data['conference_start_date'],
-                'conference_end_date' => $data['conference_end_date'],
+                // A conference is stored as "Others" with the words it typed.
+                'cost_centre' => $isConference ? PublicationDetail::CONFERENCE_COST_CENTRE : $data['cost_centre'],
+                'cost_centre_other' => $isConference || $data['cost_centre'] === PublicationDetail::OTHERS
+                    ? $data['cost_centre_other']
+                    : null,
+                // Kept for reports: the LOU is one of a journal's cost centre choices.
+                'wants_letter_of_undertaking' => ! $isConference && $data['cost_centre'] === PublicationDetail::LETTER_OF_UNDERTAKING,
+                // Travel Details: a conference's, as typed; a journal has none.
+                ...$this->travelDetails($data, $isConference),
             ]);
 
             foreach ($data['authors'] as $author) {
@@ -273,6 +290,29 @@ class PublicationController extends Controller
             ->route('publication.sign-offs', $application)
             ->with('status', "Publication application #{$application->id} saved. Everyone who has to sign "
                 .'has been emailed a link. It goes to your supervisor once every one of them has signed.');
+    }
+
+    /**
+     * The Travel Details columns to store: a conference's own, with the
+     * duration worked out from the dates; all null for a journal.
+     *
+     * @return array<string, mixed>
+     */
+    protected function travelDetails(array $data, bool $isConference): array
+    {
+        if (! $isConference) {
+            return array_fill_keys([...PublicationDetail::TRAVEL_FIELDS, 'duration_days'], null);
+        }
+
+        return array_intersect_key($data, array_flip(PublicationDetail::TRAVEL_FIELDS)) + [
+            'duration_days' => TravelDates::durationDays($data['travel_start_date'], $data['travel_end_date']),
+        ];
+    }
+
+    /** Final approval of a journal: its cost centre's follow-up email (Support\PublicationFollowUp). */
+    protected function decided(Application $application, Stage $stage): void
+    {
+        app(PublicationFollowUp::class)->afterFinalApproval($application);
     }
 
     public function queue(Request $request, WorkflowEngine $engine)

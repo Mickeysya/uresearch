@@ -4,6 +4,7 @@ namespace App\Modules\Norhanis\Notifications;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Stage;
+use App\Modules\Norhanis\Support\StageAction;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -36,10 +37,10 @@ class StalledApplicationReminder extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject($this->subject())
             ->greeting('Hi '.$notifiable->name.',')
-            ->line("This {$this->module()} application has been waiting for you at the {$this->stage->label} stage for {$this->days()}.")
+            ->line("This {$this->module()} application has been waiting for your {$this->action()->noun()} at the {$this->stage->label} stage for {$this->days()}.")
             ->line('Student: '.($student?->name ?? 'Unknown').($student?->matric_no ? " ({$student->matric_no})" : ''))
             ->line('Application: '.$this->application->module()->summary($this->application))
-            ->action('Review the application', $this->url())
+            ->action('Open the application', $this->url())
             ->line('The student has been told that a reminder was sent.');
     }
 
@@ -57,7 +58,13 @@ class StalledApplicationReminder extends Notification implements ShouldQueue
     /** Worded like ApplicationAwaitingAction, so the two read as a pair in an inbox. */
     protected function subject(): string
     {
-        return "{$this->module()} Application #{$this->application->id}: Reminder, still awaiting your action";
+        return "{$this->module()} Application #{$this->application->id}: Reminder, still awaiting your ".$this->action()->noun();
+    }
+
+    /** What this stage does: endorse, review or approve. See Support\StageAction. */
+    protected function action(): StageAction
+    {
+        return StageAction::forStage($this->stage);
     }
 
     protected function days(): string

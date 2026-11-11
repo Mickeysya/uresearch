@@ -86,8 +86,8 @@
         <table class="fields">
             <tr><td class="label">Claim Type</td><td>Journal publication claim</td></tr>
             @if ($claim->publication)
-                <tr><td class="label">For Publication</td><td>#{{ $claim->publication->application_id }} &middot; {{ $claim->publication->title_of_paper }} ({{ $claim->publication->title_of_conference_journal }})</td></tr>
-                <tr><td class="label">Publication Fee</td><td>{{ $claim->publication->currency_type }} {{ number_format((float) $claim->publication->conference_journal_fee, 2) }}</td></tr>
+                <tr><td class="label">For Publication</td><td>#{{ $claim->publication->application_id }} &middot; {{ $claim->publication->title_of_paper }} ({{ $claim->publication->titleLabel() }}: {{ $claim->publication->title_of_conference_journal }})</td></tr>
+                <tr><td class="label">{{ $claim->publication->feeLabelText() }}</td><td>{{ $claim->publication->currency_type }} {{ number_format((float) $claim->publication->conference_journal_fee, 2) }}</td></tr>
             @endif
             <tr><td class="label">Total Claims</td><td><b>RM {{ number_format((float) $claim->total_claims, 2) }}</b></td></tr>
             <tr><td class="label">Bank Name</td><td>{{ $claim->bank_name }}</td></tr>
@@ -101,13 +101,21 @@
         <table class="fields">
             <tr><td class="label">Type of Request</td><td>{{ $publication->requestTypeLabel() }}</td></tr>
             <tr><td class="label">Title of Paper</td><td>{{ $publication->title_of_paper }}</td></tr>
-            <tr><td class="label">Conference / Journal</td><td>{{ $publication->title_of_conference_journal }}</td></tr>
+            <tr><td class="label">{{ $publication->titleLabel() }}</td><td>{{ $publication->title_of_conference_journal }}</td></tr>
             <tr><td class="label">Organizer / Publisher</td><td>{{ $publication->organizer_publisher }}</td></tr>
-            <tr><td class="label">Venue</td><td>{{ $publication->venue ?: '—' }}</td></tr>
-            <tr><td class="label">Dates</td><td>{{ $publication->conference_start_date?->format('j M Y') }} to {{ $publication->conference_end_date?->format('j M Y') }}</td></tr>
-            <tr><td class="label">Fee</td><td>{{ $publication->currency_type }} {{ number_format((float) $publication->conference_journal_fee, 2) }}</td></tr>
+            <tr><td class="label">{{ $publication->feeLabelText() }}</td><td>{{ $publication->currency_type }} {{ number_format((float) $publication->conference_journal_fee, 2) }}</td></tr>
             <tr><td class="label">Cost Centre to be Utilized</td><td>{{ $publication->costCentreLabel() }}</td></tr>
         </table>
+
+        {{-- A conference only: a journal has no travel. --}}
+        @if ($rows = $publication->travelDetailRows())
+            <h3>Travel Details</h3>
+            <table class="fields">
+                @foreach ($rows as $label => $value)
+                    <tr><td class="label">{{ $label }}</td><td>{{ $value }}</td></tr>
+                @endforeach
+            </table>
+        @endif
 
         <h3>Authors</h3>
         <table class="grid">
@@ -148,11 +156,19 @@
     {{-- ---- Approval ---------------------------------------------------- --}}
     <h3>Approval Chain</h3>
     <table class="grid">
-        <tr><th>Stage</th><th>State</th></tr>
+        <tr><th>Stage</th><th>Action</th><th>State</th></tr>
         @foreach ($application->progress() as $step)
+            {{-- Endorse / Review / Approve: the workflow's ACTIONS, see Support\StageAction. --}}
+            @php($action = \App\Modules\Norhanis\Support\StageAction::forStage($step['stage']))
             <tr>
                 <td>{{ $step['stage']->label }}</td>
-                <td>{{ ['completed' => 'Done', 'current' => 'Waiting here', 'rejected' => 'Rejected here', 'upcoming' => 'Not reached'][$step['state']] ?? ucfirst($step['state']) }}</td>
+                <td>{{ $action->label() }}</td>
+                <td>{{ [
+                    'completed' => $action->pastLabel(),
+                    'current' => 'Awaiting '.$action->noun(),
+                    'rejected' => 'Rejected here',
+                    'upcoming' => 'Not reached',
+                ][$step['state']] ?? ucfirst($step['state']) }}</td>
             </tr>
         @endforeach
     </table>
@@ -167,7 +183,7 @@
                 <tr>
                     <td>{{ $entry->created_at?->format('j M Y, g:ia') }}</td>
                     <td>{{ $entry->stage_label }}</td>
-                    <td>{{ ucfirst($entry->decision) }}</td>
+                    <td>{{ \App\Modules\Norhanis\Support\StageAction::decisionLabel($entry->decision) }}</td>
                     <td>{{ $entry->approver?->name ?? '—' }}</td>
                     <td>{{ $entry->remarks ?: '—' }}</td>
                 </tr>

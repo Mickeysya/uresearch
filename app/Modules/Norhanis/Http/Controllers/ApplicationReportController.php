@@ -8,6 +8,7 @@ use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Support\StageDurations;
 use Illuminate\Database\Eloquent\Builder;
+use App\Modules\Norhanis\Support\StageAction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -130,6 +131,10 @@ class ApplicationReportController extends ApplicationOverviewController
             ],
             'choices' => array_map(fn (string $key) => $registry->get($key)->label(), $this->allowedModules($request, $registry, null)),
             'stages' => $stages,
+            // What each stage's holder does there (Support\StageAction),
+            // keyed by role like $stages. A role does the same at every
+            // module's stage it holds.
+            'actions' => $this->actionsOf($registry, $shown),
             'totals' => $totals,
             'waiting' => $waiting,
             'median' => $median,
@@ -143,6 +148,25 @@ class ApplicationReportController extends ApplicationOverviewController
         ]);
     }
 
+    /**
+     * Role => what that role does at its stage, for the modules shown.
+     *
+     * @param  array<string, string>  $modules
+     * @return array<string, StageAction>
+     */
+    protected function actionsOf(ModuleRegistry $registry, array $modules): array
+    {
+        $actions = [];
+
+        foreach ($modules as $key) {
+            foreach ($registry->get($key)->stages() as $stage) {
+                $actions[$stage->role] ??= StageAction::forStage($stage);
+            }
+        }
+
+        return $actions;
+    }
+
     /** The rows behind the report, one line per application, as a CSV file. */
     public function export(Request $request, ModuleRegistry $registry, ?string $module = null)
     {
@@ -153,7 +177,7 @@ class ApplicationReportController extends ApplicationOverviewController
         return response()->streamDownload(function () use ($query) {
             $out = fopen('php://output', 'w');
 
-            fputcsv($out, ['Application No.', 'Student', 'Matric No.', 'Module', 'Application', 'Status', 'Now With', 'Submitted', 'Days Since Submitted']);
+            fputcsv($out, ['Application No.', 'Student', 'Matric No.', 'Module', 'Application', 'Status', 'Now With', 'Awaiting', 'Submitted', 'Days Since Submitted']);
 
             // cursor(), so a year of applications is never all in memory.
             foreach ($query()->with('student')->orderBy('id')->cursor() as $application) {
@@ -167,6 +191,7 @@ class ApplicationReportController extends ApplicationOverviewController
                     $application->module()->summary($application),
                     ucfirst($application->status),
                     $stage?->label ?? 'Closed',
+                    $stage ? ucfirst(StageAction::forStage($stage)->noun()) : '',
                     $application->submitted_at?->format('Y-m-d'),
                     $application->submitted_at ? (int) $application->submitted_at->diffInDays(now()) : '',
                 ]));

@@ -15,6 +15,7 @@ use App\Modules\Norhanis\Models\TravelDetail;
 use App\Modules\Norhanis\Models\TravelTaPlan;
 use App\Modules\Norhanis\Support\StageDurations;
 use App\Modules\Norhanis\Support\TaStatus;
+use App\Modules\Norhanis\Support\TravelDates;
 use App\Modules\Norhanis\Workflows\TravelWorkflow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -97,9 +98,11 @@ class TravelController extends Controller
 
         $data = $this->validateWithDocuments($request, $draft, $removing, [
             'type_of_request' => ['required', 'in:'.implode(',', array_keys(TravelDetail::requestTypes()))],
-            'other_request_specify' => ['nullable', 'string', 'max:255', 'required_if:type_of_request,others'],
-            'travel_start_date' => ['required', 'date', 'after_or_equal:today'],
-            'travel_end_date' => ['required', 'date', 'after_or_equal:travel_start_date'],
+            // Only for "Others": required then, and dropped (never validated
+            // or kept) for any other type, whatever the form posted.
+            'other_request_specify' => ['exclude_unless:type_of_request,others', 'required', 'string', 'max:255'],
+            // The same date rules as a Publication conference's Travel Details.
+            ...TravelDates::rules(),
             'reason_for_travel' => ['required', 'string', 'max:255'],
             'destination_address' => ['required', 'string', 'max:255'],
             // Chosen on the form (Local / International), no longer a tick
@@ -116,9 +119,8 @@ class TravelController extends Controller
             'ta_plan_dates' => ['required_if:ta_management_method,'.implode(',', TravelTaPlan::methodsNeedingDates()), 'array'],
             'ta_plan_dates.*' => ['date'],
         ], [
-            'travel_start_date.after_or_equal' => 'Travel cannot start in the past.',
-            'travel_end_date.after_or_equal' => 'The end date must be on or after the start date.',
-            'other_request_specify.required_if' => 'Please describe the request when choosing "Others".',
+            ...TravelDates::messages(),
+            'other_request_specify.required' => 'Please describe the request when choosing "Others".',
             'is_international.required' => 'Choose whether the travel is local or international.',
             'supporting_document.required' => 'Upload the supporting document.',
         ]);
@@ -138,10 +140,10 @@ class TravelController extends Controller
             TravelDetail::create([
                 'application_id' => $application->id,
                 'type_of_request' => $data['type_of_request'],
-                'other_request_specify' => $data['other_request_specify'] ?? null,
+                'other_request_specify' => $data['type_of_request'] === 'others' ? $data['other_request_specify'] : null,
                 'travel_start_date' => $start,
                 'travel_end_date' => $end,
-                'duration_days' => $start->diffInDays($end) + 1,
+                'duration_days' => TravelDates::durationDays($start, $end),
                 'reason_for_travel' => $data['reason_for_travel'],
                 'destination_address' => $data['destination_address'],
                 'cost_centre' => $data['cost_centre'] ?? null,

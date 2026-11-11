@@ -28,9 +28,15 @@
             </select>
             @error('type_of_request') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="other_request_specify">If "Others", please specify</label>
-            <input type="text" name="other_request_specify" id="other_request_specify"
+            {{-- Only for "Others": shown and required then, hidden, emptied and
+                 not submitted otherwise (script below). The server applies the
+                 same rule (TravelController::store()). A saved draft refills it
+                 through old(), and the server-side state below matches. --}}
+            @php($othersType = old('type_of_request') === 'others')
+            <label for="other_request_specify" data-travel-others @unless ($othersType) hidden @endunless>Please specify</label>
+            <input type="text" name="other_request_specify" id="other_request_specify" maxlength="255" data-travel-others
                    value="{{ old('other_request_specify') }}"
+                   @if ($othersType) required @else hidden disabled @endif
                    class="@error('other_request_specify') is-invalid @enderror">
             @error('other_request_specify') <p class="field-error">{{ $message }}</p> @enderror
 
@@ -260,6 +266,22 @@
 
         refreshRemoveButtons();
         }
+
+        // "If Others, please specify": only for Others. Hidden means emptied
+        // and disabled, so the browser neither checks nor submits it.
+        const requestType = document.getElementById('type_of_request');
+        const otherSpecify = document.getElementById('other_request_specify');
+
+        function syncOtherRequest() {
+            const on = requestType.value === 'others';
+            document.querySelectorAll('[data-travel-others]').forEach(function (el) { el.hidden = ! on; });
+            otherSpecify.disabled = ! on;
+            otherSpecify.required = on;
+            if (! on) otherSpecify.value = '';
+        }
+
+        requestType.addEventListener('change', syncOtherRequest);
+        syncOtherRequest();
 
         // Lead time: warn when the trip starts before approval is expected.
         // Dates are compared as YYYY-MM-DD strings, which sort correctly.
