@@ -4,7 +4,6 @@ namespace App\Modules\Hani\Support;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
-use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\ReVivaDetail;
 use App\Modules\Hani\Models\ReVivaEvaluation;
 use App\Modules\Hani\Notifications\ReVivaUpdate;
@@ -16,14 +15,14 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * The re-viva outcome: suggested from the two re-evaluations, confirmed by
- * the Academic Executive, and everything that follows from it. Module-side
+ * the Senior Executive, and everything that follows from it. Module-side
  * state; never applications.status (the chain already finished).
  *
  *   suggestion   both examiners map to the same level -> that level;
  *                otherwise "Consolidation needed", showing both
  *                (1 -> 1, 2 -> 2, 3 -> 3, 4 + viva YES -> 4, 4 + viva NO -> 5)
  *   levels 1-3   final thesis due 1 / 3 / 6 months from the outcome date
- *                (hani.reviva.final_thesis_months); the mains' evaluation is
+ *                (hani.reviva.final_deadline_months); the mains' evaluation is
  *                complete, so their 90-day gap starts
  *   level 4      an oral examination again: the mains stay held until the
  *                next round is logged or its window closes; the Senior
@@ -70,7 +69,7 @@ class ReVivaOutcome
                 throw ValidationException::withMessages(['outcome_level' => 'An outcome is already recorded for this round.']);
             }
             if ($locked->application->status !== Application::STATUS_APPROVED) {
-                throw ValidationException::withMessages(['outcome_level' => 'The outcome is recorded once consolidation is complete.']);
+                throw ValidationException::withMessages(['outcome_level' => 'The outcome is recorded when the review is complete.']);
             }
 
             $suggested = self::suggest($locked)['level'];
@@ -89,7 +88,7 @@ class ReVivaOutcome
                 'outcome_recorded_at' => now(),
                 'outcome_recorded_by_id' => $actor->id,
                 'correction_deadline' => in_array($level, ReVivaDetail::OUTCOME_CORRECTIONS, true)
-                    ? $today->copy()->addMonthsNoOverflow((int) config("hani.reviva.final_thesis_months.{$level}"))
+                    ? $today->copy()->addMonthsNoOverflow((int) config("hani.reviva.final_deadline_months.{$level}"))
                     : null,
             ])->save();
 
@@ -128,36 +127,24 @@ class ReVivaOutcome
         $level = $detail->outcome_level;
         $round = $detail->cycle_number;
 
-        $lines = match (true) {
-            $detail->needsFinalThesis() => [
-                "The outcome of {$student->name}'s re-viva (round {$round}) has been recorded: ".$detail->outcomeLabel().'.',
-                'The final thesis is due in UResearch by '.$detail->correction_deadline->format('j M Y').'.',
-            ],
-            $level === ReVivaDetail::OUTCOME_LOOP_BACK => [
-                "The outcome of {$student->name}'s re-viva (round {$round}) has been recorded: ".$detail->outcomeLabel().'.',
-                'An oral examination is required. Submit the corrected thesis to CGS by '.self::nextRoundCloses($detail)->format('j M Y').' for re-viva round '.($round + 1).'.',
-            ],
-            default => [
-                "The outcome of {$student->name}'s re-viva (round {$round}) has been recorded: ".$detail->outcomeLabel().'.',
-                'This is the final outcome. Contact your Academic Executive if you have questions.',
-            ],
+        [$subject, $lines] = match (true) {
+            $detail->needsFinalThesis() => ['Re-viva result: Passed', [
+                "We are pleased to inform you that you have passed the re-examination (round {$round}): ".$detail->outcomeLabel().'.',
+                'The final thesis must be submitted in UResearch by '.$detail->correction_deadline->format('j F Y').'.',
+            ]],
+            $level === ReVivaDetail::OUTCOME_LOOP_BACK => ['Re-viva result: another round required', [
+                "The result of re-viva round {$round} is: ".$detail->outcomeLabel().'.',
+                'A further round is required. Please submit the re-corrected thesis, Summary of Corrections and Confirmation of Correction in UResearch by '.self::nextRoundCloses($detail)->format('j F Y').' for round '.($round + 1).'.',
+            ]],
+            default => ['Re-viva result: Dismissed', [
+                "We regret to inform you that the result of re-viva round {$round} is: ".$detail->outcomeLabel().'.',
+                'This is the final outcome and no further action is available.',
+            ]],
         };
 
         $this->tell(array_filter([$student, $student->supervisor]), new ReVivaUpdate(
-            'outcome', $application, 'Re-viva outcome: '.$student->name, $lines,
-            'View the re-viva', route('applications.show', $application),
+            'outcome', $application, $subject, $lines, 'View the re-viva', route('applications.show', $application),
         ));
-
-        if ($level === ReVivaDetail::OUTCOME_LOOP_BACK) {
-            $this->tell(User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
-                'next_round_to_log', $application, 'Re-viva round '.($round + 1).' to log: '.$student->name,
-                [
-                    "The outcome of {$student->name}'s re-viva round {$round} is level 4: an oral examination is required.",
-                    'Please log round '.($round + 1).' when the corrected thesis arrives, by '.self::nextRoundCloses($detail)->format('j M Y').'. The same main examiners stay assigned.',
-                ],
-                'Log round '.($round + 1), route('reviva.create', ['student' => $student->id]),
-            ));
-        }
     }
 
     /** Best effort, after the commit: a mail failure never undoes the outcome. */

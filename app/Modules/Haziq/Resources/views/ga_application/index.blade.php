@@ -8,6 +8,13 @@
 
 @section('content')
 <div class="card-container-inline">
+    @if ($showExtensionTab ?? false)
+        <div class="haziq-filter-bar" style="margin-bottom: -8px;">
+            <a href="{{ route('ga-application.index') }}" class="btn" style="pointer-events: none; background: var(--accent-solid); color: var(--text-on-accent);">Application</a>
+            <a href="{{ route('ga-extension.queue') }}" class="btn-secondary">Extension</a>
+        </div>
+    @endif
+
     <div class="card card-wide">
         <h2>Pending by Stage</h2>
         <div class="card-divider"></div>

@@ -2,13 +2,13 @@
     "Correction of Master's / Doctoral Thesis": one letter per current main
     examiner, rendered by Hani\Support\ReVivaLetters with Dompdf.
 
-    Structure follows CGS's real letter; the wording is ours. To restyle, edit
+    Layout and wording follow CGS's real letter. To restyle, edit
     the <style> block only: every element below uses one of its classes.
-    Signatory, address and return contacts come from hani.reviva.letter.
+    Signatory, address and return contacts come from hani.reviva.
 
     Data: $reference, $date, $examiner, $examinerPlace, $student, $degreeWord,
-    $degreeName, $programme, $thesisTitle, $workingDays, $dueDate,
-    $letter (config), $round
+    $degreeName, $programme, $thesisTitle, $workingDays, $workingDaysWords,
+    $letter, $contacts, $signatory (config), $round, $draft, $signatureImage (the Dean's, once approved)
 --}}
 <!DOCTYPE html>
 <html lang="en">
@@ -16,39 +16,34 @@
 <meta charset="utf-8">
 <title>Correction of {{ $degreeWord }} Thesis</title>
 <style>
-    @page { margin: 28mm 22mm 24mm 22mm; }
-    body { font-family: "DejaVu Serif", serif; font-size: 10.5pt; line-height: 1.45; color: #111; }
-    .letterhead { border-bottom: 1.5pt solid #00577a; padding-bottom: 6pt; margin-bottom: 14pt; }
-    .letterhead .institution { font-size: 14pt; font-weight: bold; color: #00577a; }
-    .letterhead .unit { font-size: 9.5pt; color: #444; }
-    .meta { width: 100%; margin-bottom: 12pt; }
-    .meta td { padding: 0; vertical-align: top; }
-    .meta .right { text-align: right; }
-    .addressee { margin-bottom: 12pt; }
-    .subject { font-weight: bold; text-transform: uppercase; margin: 12pt 0 8pt; }
-    .details { margin: 6pt 0 10pt 0; border-collapse: collapse; }
-    .details td { padding: 2pt 8pt 2pt 0; vertical-align: top; }
-    .details .label { width: 32mm; font-weight: bold; }
-    .emphasis { font-weight: bold; }
-    .contacts { margin: 6pt 0 10pt 12pt; }
-    .contacts p { margin: 0 0 4pt 0; }
-    .signature { margin-top: 26pt; }
-    .signature .name { font-weight: bold; margin-top: 30pt; }
-    .footnote { margin-top: 18pt; font-size: 8.5pt; color: #555; border-top: 0.5pt solid #bbb; padding-top: 4pt; }
+    @page { margin: 16mm 24mm 16mm 24mm; }
+    body { font-family: "DejaVu Sans", sans-serif; font-size: 9.5pt; line-height: 1.24; color: #000; }
+    .logo { text-align: center; margin-bottom: 6pt; }
+    .logo img { height: 22mm; }
+    p { margin: 0 0 8pt 0; }
+    .addressee { margin: 10pt 0 12pt 0; }
+    .subject { font-weight: bold; text-transform: uppercase; }
+    .details { margin: 0 0 12pt 8pt; border-collapse: collapse; font-weight: bold; }
+    .details td { padding: 0 0 2pt 0; vertical-align: top; }
+    .details .label { width: 40mm; font-weight: normal; }
+    .details .colon { width: 7mm; font-weight: normal; }
+    .numbered { width: 100%; border-collapse: collapse; margin-bottom: 10pt; }
+    .numbered td { padding: 0; vertical-align: top; }
+    .numbered .n { width: 12mm; }
+    .contact { margin: 8pt 0 0 0; }
+    .contact b { display: block; }
+    .email { font-style: italic; }
+    .signature { height: 28pt; }
+    .watermark { position: fixed; top: 105mm; left: 0; right: 0; text-align: center; font-size: 34pt; font-weight: bold; color: #cccccc; transform: rotate(-35deg); }
+    .footer { position: fixed; bottom: 0; left: 0; font-size: 7.5pt; }
 </style>
 </head>
 <body>
-    <div class="letterhead">
-        <div class="institution">{{ $letter['institution'] }}</div>
-        <div class="unit">Centre for Graduate Studies · {{ implode(', ', $letter['address']) }}</div>
-    </div>
+    @if ($draft)<div class="watermark">DRAFT: pending Dean approval</div>@endif
+    <div class="logo"><img src="data:image/png;base64,{{ base64_encode(file_get_contents(public_path('images/UTP_logo.png'))) }}" alt="Universiti Teknologi PETRONAS"></div>
 
-    <table class="meta">
-        <tr>
-            <td>Our ref: {{ $reference }}</td>
-            <td class="right">{{ $date->format('j F Y') }}</td>
-        </tr>
-    </table>
+    <p>Our ref: {{ $reference }}</p>
+    <p>{{ $date->format('j') }}<sup>{{ $date->format('S') }}</sup> {{ $date->format('F Y') }}</p>
 
     <div class="addressee">
         {{ $examiner->name }}<br>
@@ -61,39 +56,54 @@
 
     <p class="subject">Correction of {{ $degreeWord }} Thesis</p>
 
+    <p>{{ $letter['institution'] }} is pleased to submit the revised thesis of the below mentioned postgraduate student for your further action. The candidate's details are as follows:</p>
+
     <table class="details">
-        <tr><td class="label">Candidate</td><td>{{ $student->name }}@if ($student->matric_no) ({{ $student->matric_no }})@endif</td></tr>
-        <tr><td class="label">Degree</td><td>{{ $degreeName }}</td></tr>
-        <tr><td class="label">Programme</td><td>{{ $programme }}</td></tr>
-        <tr><td class="label">Thesis title</td><td>{{ $thesisTitle }}</td></tr>
-        @if ($round > 1)
-            <tr><td class="label">Re-viva round</td><td>{{ $round }}</td></tr>
-        @endif
+        <tr><td class="label">Candidate's Name</td><td class="colon">:</td><td>{{ $student->name }}</td></tr>
+        <tr><td class="label">Degree</td><td class="colon">:</td><td>{{ $degreeName }}</td></tr>
+        <tr><td class="label">Programme</td><td class="colon">:</td><td>{{ $programme }}</td></tr>
+        <tr><td class="label">Title of the Thesis</td><td class="colon">:</td><td>{{ $thesisTitle }}</td></tr>
+        <tr><td class="label">Re-viva round</td><td class="colon">:</td><td>{{ $round }}</td></tr>
     </table>
 
-    <p>Thank you for examining the above candidate's thesis. The candidate has now corrected the thesis in response to the examiners' comments. We would be grateful if you could evaluate the corrected thesis against the enclosed Summary of Corrections, which sets out each comment, the action taken and the pages updated.</p>
+    <table class="numbered">
+        <tr><td class="n">2.</td><td>Upon receiving the thesis, the examiners are given a maximum of {{ $workingDaysWords }} ({{ $workingDays }}) working days to examine the thesis.</td></tr>
+    </table>
 
-    <p>The corrected thesis and the Summary of Corrections are available through the secure link in the email that brought this letter; the email gives the date the link works until.</p>
+    <table class="numbered">
+        <tr><td class="n">3.</td><td>
+            We sincerely hope that you will return the attached reevaluation form to our office at the address or email to the below personnels.
+            @php $first = $contacts[0] ?? null; @endphp
+            @if ($first)
+                <div class="contact">
+                    <b>{{ $first['name'] }}</b>
+                    Centre for Graduate Studies<br>
+                    {{ $letter['institution'] }}<br>
+                    @foreach ($letter['address'] as $line)
+                        {{ $line }}<br>
+                    @endforeach
+                    Tel: {{ $first['tel'] }} Mobile: {{ $first['mobile'] }}<br>
+                    Email : <span class="email">{{ collect($contacts)->pluck('email')->implode(' or ') }}</span>
+                </div>
+            @endif
+        </td></tr>
+    </table>
 
-    <p class="emphasis">Please note that examiners are given a maximum of {{ $workingDaysWords }} ({{ $workingDays }}) working days to complete the evaluation, that is by {{ $dueDate->format('j F Y') }}.</p>
+    <p>Thank you.</p>
+    <p>Best regards,</p>
+    @if (! empty($signatureImage))
+        <div><img src="{{ $signatureImage }}" alt="Signature" style="height: 28pt"></div>
+    @else
+        <div class="signature"></div>
+    @endif
+    @unless ($draft)
+        <p><b>{{ $signatory['name'] }}</b><br>
+            @foreach ($signatory['title'] as $line)
+                {{ $line }}<br>
+            @endforeach
+        </p>
+    @endunless
 
-    <p>Kindly complete the Thesis Re-evaluation Report (UTP/CGS/024) and return it to:</p>
-
-    <div class="contacts">
-        @foreach ($letter['return_contacts'] as $contact)
-            <p>{{ $contact['name'] }}, {{ $contact['role'] }}<br>
-               {{ $contact['email'] }}@if (! empty($contact['phone'])) · {{ $contact['phone'] }}@endif</p>
-        @endforeach
-    </div>
-
-    <p>Thank you for your continued support.</p>
-
-    <div class="signature">
-        <p>Yours sincerely,</p>
-        <p class="name">{{ $letter['signatory_name'] }}</p>
-        <p>{{ $letter['signatory_title'] }}<br>{{ $letter['institution'] }}</p>
-    </div>
-
-    <div class="footnote">Generated by UResearch 2.0. This letter is addressed to the named examiner only.</div>
+    <div class="footer">Open</div>
 </body>
 </html>

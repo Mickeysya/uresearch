@@ -6,10 +6,12 @@ use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApplicationDocument;
+use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Stage;
 use App\Modules\Haziq\Http\Controllers\Concerns\HandlesApplicationCorrections;
 use App\Modules\Haziq\Models\AcademicQualification;
 use App\Modules\Haziq\Models\ApplicationCorrectionRequest;
@@ -22,6 +24,7 @@ use App\Modules\Haziq\Notifications\ApplicationCorrectionResubmitted;
 use App\Modules\Haziq\Notifications\ApplicationRejected;
 use App\Modules\Haziq\Notifications\ApplicationSubmitted;
 use App\Modules\Haziq\Notifications\GaInterviewFailed;
+use App\Modules\Haziq\Notifications\GaInterviewPassed;
 use App\Modules\Haziq\Notifications\GaInterviewScheduled;
 use App\Modules\Haziq\Notifications\LetterIssued;
 use App\Modules\Haziq\Notifications\StageAwaitingReview;
@@ -30,6 +33,7 @@ use App\Modules\Haziq\Support\Roles;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -90,14 +94,55 @@ class GaApplicationController extends Controller
 
     /**
      * Every approver can flag a correction on any GA application at any
-     * time it's still pending, not just the stage whose turn it currently
-     * is — confirmed explicitly 2026-11-03, same reasoning as GRA's own
-     * canStillFlag(). Closes once the application is no longer pending —
-     * nothing left to gate a correction against.
+     * time it's still pending, not just the stage whose turn it
+     * currently is — confirmed explicitly 2026-11-03, same reasoning as
+     * GRA's own canStillFlag(). But "at any time it's pending" was never
+     * actually the whole rule even there: once THIS viewer's own stage
+     * has already recorded its decision, they specifically can no
+     * longer flag anything, even while the application is still pending
+     * somewhere later in the chain -- confirmed explicitly 2026-11-10,
+     * matching GRA exactly: "dah approve or verify mana leh nak flag
+     * pape dah... nak buat before verify or approve." This method's own
+     * docblock already claimed parity with GRA's; the implementation
+     * never actually had the per-stage check GRA's does, until now.
      */
     protected function canStillFlag(User $user, Application $application): bool
     {
-        return $application->status === Application::STATUS_PENDING;
+        if ($application->status !== Application::STATUS_PENDING) {
+            return false;
+        }
+
+        $stageKey = $this->viewerStageKeyFor($user);
+
+        if ($stageKey === null) {
+            return true;
+        }
+
+        return ! ApprovalHistory::where('application_id', $application->id)
+            ->where('stage_key', $stageKey)
+            ->exists();
+    }
+
+    /** Same as GraApplicationController::viewerStageKeyFor() -- which of this chain's stages (if any) this user's role sits at. */
+    protected function viewerStageKeyFor(User $user): ?string
+    {
+        $stages = (new \App\Modules\Haziq\Workflows\GaApplicationWorkflow())->stages();
+
+        foreach ($stages as $stage) {
+            if ($stage->role === $user->role) {
+                return $stage->key;
+            }
+        }
+
+        if ($user->isCgs()) {
+            foreach ($stages as $stage) {
+                if ($stage->role === Role::NON_EXEC_CGS) {
+                    return $stage->key;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -222,8 +267,9 @@ class GaApplicationController extends Controller
      * Mirrors GraApplicationController::store() — Save Draft (keeps
      * status DRAFT, never calls engine->submit()) and Submit Application
      * behind the same route, with Section D/E/F repeatables now saved
-     * too (the old version never did). Documents stay optional until
-     * Submit — see missingRequiredDocuments().
+     * too (the old version never did). Documents are never required to
+     * Submit, same as GRA's own store() — missingRequiredDocuments() only
+     * folds a note into the confirmation message now.
      */
     public function store(Request $request, WorkflowEngine $engine, DocumentStore $documents)
     {
@@ -319,16 +365,14 @@ class GaApplicationController extends Controller
 
         $missing = $this->missingRequiredDocuments($application);
 
-        if ($missing->isNotEmpty()) {
-            return redirect()->route('ga-application.create')
-                ->with('error', 'Saved your progress, but still missing: '.$missing->implode(', ').'. Upload the rest, then Submit.');
-        }
-
         $engine->submit($application);
         $application->student?->notify(new ApplicationSubmitted($application));
 
-        return redirect()->route('applications.index')
-            ->with('status', "GA application #{$application->id} submitted. Admin has been notified for document verification.");
+        $status = $missing->isEmpty()
+            ? "GA application #{$application->id} submitted. Admin has been notified for document verification."
+            : "GA application #{$application->id} submitted, but still missing: {$missing->implode(', ')}. Admin can't verify until you upload the rest; you'll get a weekly reminder until then.";
+
+        return redirect()->route('applications.index')->with('status', $status);
     }
 
     /** @return \Illuminate\Support\Collection<int, string> labels of document types with no file attached yet */
@@ -427,7 +471,10 @@ class GaApplicationController extends Controller
         return view('haziq::ga_application.show', $this->detailViewData($application) + [
             'stage' => $stage,
             'canDecide' => $stage && $stage->role === $user->role,
-            'canCorrect' => $this->canStillFlag($user, $application),
+            // Viewing show() is open to Research Centre too (role check
+            // above), but correcting is not -- see
+            // canRequestCorrectionRole()'s own docblock.
+            'canCorrect' => $this->canRequestCorrectionRole($user) && $this->canStillFlag($user, $application),
             'canEdit' => false,
             'viewerIsStudent' => false,
         ]);
@@ -466,6 +513,13 @@ class GaApplicationController extends Controller
                     ->firstWhere('key', $selectedStage)?->label
                 : null,
             'bottleneck' => $this->pendingByStage(),
+            // GA Extension's own queue (a tab here, not a separate
+            // sidebar entry -- confirmed explicitly 2026-11-10: "buaag ga
+            // extentions dekat actions, buat je kat page ga boleh
+            // filter") is reachable only by the roles that actually hold
+            // a stage on that chain. Research Centre has none there, so
+            // showing the tab for them would just be a dead 403 link.
+            'showExtensionTab' => $user->isAdmin() || $user->isCgs() || $user->role === Role::SUPERVISOR || $user->role === Role::SENIOR_DIRECTOR_CGS,
         ]);
     }
 
@@ -488,7 +542,31 @@ class GaApplicationController extends Controller
 
     public function queue(Request $request, WorkflowEngine $engine)
     {
-        $queue = $this->queueFor($request, $engine, ['documents']);
+        // The engine's queue is role-scoped, not person-scoped -- any
+        // Supervisor would otherwise see every student's application
+        // waiting at this stage, not only their own supervisees. Confirmed
+        // explicitly 2026-11-10: "bukan semua supervisor approve for any
+        // student." Same pattern as Nureen's SupervisionController.
+        // Same reasoning for Research Centre as supervisor just above --
+        // confirmed explicitly 2026-11-10: "research centre tu... ikut
+        // own student respective research centre au sebab student kan
+        // lain lain department of studies." There is no dedicated
+        // research-centre-assignment column (unlike supervisor_id);
+        // Research Centre reviewers are matched to students by
+        // `department`, the same field Chair/Academic Executive are
+        // already scoped by elsewhere (Role::isDepartmentScoped()) --
+        // Research Centre just was never added to that generic Core
+        // list, and adding it there would affect every other module
+        // that list touches, not just this one, so it is scoped here
+        // instead, the same way supervisor already is.
+        $queue = $this->queueFor($request, $engine, ['documents'],
+            function ($query, Stage $stage) use ($request) {
+                if ($stage->key === 'supervisor') {
+                    $query->whereHas('student', fn ($s) => $s->where('supervisor_id', $request->user()->id));
+                } elseif ($stage->key === 'research_centre_interview') {
+                    $query->whereHas('student', fn ($s) => $s->where('department', $request->user()->department));
+                }
+            });
 
         $details = GaApplicationDetail::whereIn('application_id', $queue['applications']->pluck('id'))
             ->get()->keyBy('application_id');
@@ -498,12 +576,25 @@ class GaApplicationController extends Controller
             ->get()
             ->groupBy('application_id');
 
+        // Only meaningful at admin_verify -- see decide()'s own identical
+        // gate. GA has no extension of its own through this controller
+        // (see KnowledgeBase's "DO NOT CONFUSE" note), so every row here is
+        // a 'new' application, unlike GRA's.
+        $missingDocuments = $queue['applications']->mapWithKeys(fn ($application) => [
+            $application->id => DocumentCompleteness::missingFor($application),
+        ]);
+
         return view('haziq::ga_application.queue', $queue + [
             'details' => $details,
             'openCorrections' => $openCorrections,
             'documentTypes' => $this->documentTypes(),
             'sectionLabels' => $this->sectionLabels(),
             'sectionFieldLabels' => $this->sectionFieldLabels(),
+            'missingDocuments' => $missingDocuments,
+            // The queue is shared with Research Centre, who can view it
+            // but never correct -- see canRequestCorrectionRole()'s own
+            // docblock. Confirmed explicitly 2026-11-10.
+            'canCorrect' => $this->canRequestCorrectionRole($request->user()),
         ]);
     }
 
@@ -520,11 +611,57 @@ class GaApplicationController extends Controller
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
         abort_unless($request->user()->role === Roles::RESEARCH_CENTRE, 403);
+        abort_unless($application->student?->department === $request->user()->department, 403, 'This student is not in your department.');
 
-        $data = $request->validate(['interview_date' => ['required', 'date']]);
+        // One date, two times on it -- not two independent timestamps that
+        // could land on different days. Confirmed explicitly 2026-11-10:
+        // "date taleh sampai 2 hari set satu date je, timing je set from
+        // what time end what time." Measurement only (see
+        // researchCentreDelayHours()), not a hard gate on decide() --
+        // confirmed the same day. Hour/minute/AM-PM instead of a raw 24h
+        // <input type="time"> -- confirmed explicitly 2026-11-10: "set
+        // timing tu cam tak user friendly je, buat lah am pm features
+        // terima 1-12 tu." Minute is any value 0-59, not stepped -- "yang
+        // minit tu tak kisah lah nak tulis berapa pun," confirmed the
+        // same day.
+        $data = $request->validate([
+            'interview_date' => ['required', 'date_format:Y-m-d'],
+            'interview_start_hour' => ['required', 'integer', 'between:1,12'],
+            // 'numeric', not 'integer' -- PHP's filter_var(FILTER_VALIDATE_INT)
+            // rejects a leading zero ("00".."09") as looking like octal,
+            // which a typed-in minute legitimately is. is_numeric() has no
+            // such quirk.
+            'interview_start_minute' => ['required', 'numeric', 'between:0,59'],
+            'interview_start_meridiem' => ['required', 'in:AM,PM'],
+            'interview_end_hour' => ['required', 'integer', 'between:1,12'],
+            'interview_end_minute' => ['required', 'numeric', 'between:0,59'],
+            'interview_end_meridiem' => ['required', 'in:AM,PM'],
+        ]);
+
+        $interviewDate = Carbon::parse(sprintf(
+            '%s %d:%02d %s',
+            $data['interview_date'], $data['interview_start_hour'], $data['interview_start_minute'], $data['interview_start_meridiem']
+        ));
+        $interviewEndsAt = Carbon::parse(sprintf(
+            '%s %d:%02d %s',
+            $data['interview_date'], $data['interview_end_hour'], $data['interview_end_minute'], $data['interview_end_meridiem']
+        ));
+
+        if ($interviewEndsAt->lessThanOrEqualTo($interviewDate)) {
+            return back()->with('error', 'The interview must end after it starts.')->withInput();
+        }
 
         $detail = GaApplicationDetail::where('application_id', $application->id)->firstOrFail();
-        $detail->update(['interview_date' => $data['interview_date']]);
+        // interview_scheduled_at is set once, here, the moment Research
+        // Centre actually does this task -- never touched again, even if
+        // the date is later rescheduled, since that is a different
+        // question (DelayByActorReport::rows() reads it as "when the
+        // scheduling task itself was done").
+        $detail->update([
+            'interview_date' => $interviewDate,
+            'interview_ends_at' => $interviewEndsAt,
+            'interview_scheduled_at' => $detail->interview_scheduled_at ?? now(),
+        ]);
 
         $application->student?->notify(new GaInterviewScheduled($application, $detail));
 
@@ -551,9 +688,30 @@ class GaApplicationController extends Controller
         $stage = $engine->currentStage($application);
         $detail = GaApplicationDetail::where('application_id', $application->id)->first();
 
+        // The queue above already hides another supervisor's (or another
+        // department's Research Centre's) students, but that filters a
+        // list, not this direct POST -- a crafted request naming someone
+        // else's application id still needs its own guard.
+        if ($stage?->key === 'supervisor' && $application->student?->supervisor_id !== $request->user()->id) {
+            abort(403, 'This student is not under your supervision.');
+        }
+
+        if ($stage?->key === 'research_centre_interview' && $application->student?->department !== $request->user()->department) {
+            abort(403, 'This student is not in your department.');
+        }
+
         if ($stage?->key === 'admin_verify') {
             $data = $request->validate(['decision' => ['required', 'in:approve']]);
             $data['remarks'] = null;
+
+            // Confirmed explicitly 2026-11-10: Admin specifically can't say
+            // "verified" while a required document is still missing — see
+            // the identical GRA guard in GraApplicationController::decide()
+            // for the full reasoning. DocumentCompleteness's own "never
+            // gates routing" rule still holds for every other stage.
+            if (! DocumentCompleteness::isComplete($application)) {
+                return back()->with('error', 'All required documents must be uploaded before this application can be verified and advanced.');
+            }
         } elseif ($stage?->key === 'research_centre_interview') {
             abort_unless($detail?->interview_date, 404, 'Schedule the interview first.');
 
@@ -615,6 +773,15 @@ class GaApplicationController extends Controller
             }
         } elseif ($decided->status === Application::STATUS_PENDING) {
             $this->notifyNextApprover($decided, $engine);
+
+            // A Fail already tells the student outright (ApplicationRejected
+            // above); a Pass used to leave them to find out only by
+            // checking the page -- notifyNextApprover() above only reaches
+            // CGS. Confirmed explicitly 2026-11-10. See GaInterviewPassed's
+            // own docblock.
+            if ($stage?->key === 'research_centre_interview') {
+                $application->student?->notify(new GaInterviewPassed($decided, $detail));
+            }
         }
 
         $verb = $data['decision'] === 'approve' ? 'approved' : 'rejected';

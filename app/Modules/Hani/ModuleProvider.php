@@ -87,9 +87,49 @@ class ModuleProvider extends ServiceProvider
                 ->withoutOverlapping();
         });
 
+        $this->quietEngineEmailsToReVivaStudents();
+
         $registry->register(new ExaminerNominationWorkflow());
         $registry->register(new ReVivaWorkflow());
         $registry->register(new VivaVoceWorkflow());
         $registry->register(new VivaSoftboundWorkflow());
+    }
+
+    /**
+     * Engine stage emails to the student that Hani cancels, through
+     * Laravel's NotificationSending event:
+     * - re-viva: every stage email. Re-viva sends its own milestone emails
+     *   (submitted, returned, accepted, sent to the examiners, result).
+     * - examiner nomination: the "Progress Update" at each approved stage.
+     *   Six of them per list told the student nothing they need; they see
+     *   the nomination's status in the app, never the examiners. The
+     *   return email (generic remarks, no names) still goes.
+     * Other modules and other recipients are untouched.
+     */
+    protected function quietEngineEmailsToReVivaStudents(): void
+    {
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Notifications\Events\NotificationSending::class, function ($event) {
+            $notification = $event->notification;
+
+            if (! $notification instanceof \App\Modules\Core\Notifications\ApplicationDecided
+                && ! $notification instanceof \App\Modules\Core\Notifications\ApplicationReturned) {
+                return null;
+            }
+
+            $application = (fn () => $this->application ?? null)->call($notification);
+
+            if (! $application || ($event->notifiable->id ?? null) !== $application->student_id) {
+                return null;
+            }
+
+            if ($application->module_type === 're_viva') {
+                return false;
+            }
+
+            $progressUpdate = $notification instanceof \App\Modules\Core\Notifications\ApplicationDecided
+                && (fn () => $this->approved && $this->outcome !== 'returned')->call($notification);
+
+            return $application->module_type === \App\Modules\Hani\Support\VivaProgress::NOMINATION && $progressUpdate ? false : null;
+        });
     }
 }

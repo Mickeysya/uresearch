@@ -6,7 +6,8 @@
     Hani\Support\ModuleTracker from stored status.
 
     Expects: $tracker (see ModuleTracker). Optional: $compact (no "What to do
-    now" line, for a row inside a list); $inline (one line of context, for a
+    now" line, for a row inside a list); $hideTitle (the page's own heading
+    already says it); $inline (one line of context, for a
     page whose form already has core::partials.form-stepper's step bar) with
     $journey as its lead-in when the tracker has no title ("Your viva").
 
@@ -49,11 +50,28 @@
         </ol>
     </nav>
 @else
-@if (! empty($tracker['title']))
+@if (! empty($tracker['title']) && empty($hideTitle))
     <p><b>{{ $tracker['title'] }}</b></p>
 @endif
 
-<div class="stepper">
+@php($dense = count($tracker['steps']) > 7)
+@if ($dense)
+    @once
+        {{-- Core's steps keep a 100px minimum each, so a long tracker (the
+             re-viva's ten steps) ran off the card. Here the steps share the
+             width instead, with smaller circles and shorter lines; in a
+             narrow table cell they stop at 56px and the row scrolls, as
+             Core's stepper does. --}}
+        <style>
+            .stepper.stepper-dense .step { min-width: 56px; flex: 1 1 0; }
+            .stepper.stepper-dense .step-circle { width: 26px; height: 26px; font-size: 12px; }
+            .stepper.stepper-dense .step-label { max-width: none; font-size: 11px; padding: 0 2px; }
+            .stepper.stepper-dense .step-line { flex: 0 1 18px; min-width: 6px; margin-top: 13px; }
+        </style>
+    @endonce
+@endif
+
+<div class="stepper{{ $dense ? ' stepper-dense' : '' }}">
     @foreach ($tracker['steps'] as $i => $step)
         <div class="step {{ $step['state'] }}">
             <div class="step-circle">

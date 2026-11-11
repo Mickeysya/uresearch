@@ -107,4 +107,44 @@ class GaExtensionLinkTest extends TestCase
 
         $this->assertSame('2027-03-31', $detail->current_end_date->toDateString());
     }
+
+    /**
+     * Confirmed explicitly 2026-11-10: approving the extension has to
+     * actually move the real ga_application's own service_end_date, or
+     * approvedFor() (and everything that reads it -- this module's own
+     * active-GA checks, Norhanis' Travel TA plan) keeps seeing the
+     * original date forever. The write side of the same
+     * SuppliesApprovedGaApplication relationship the read side already
+     * used.
+     */
+    public function test_approving_the_extension_moves_the_real_ga_applications_end_date(): void
+    {
+        $student = $this->studentWithSupervisor();
+        $gaApplication = $this->approvedGaApplication($student, '2027-03-31');
+        $cgs = $this->cgs();
+
+        $extensionApplication = Application::create([
+            'student_id' => $student->id,
+            'module_type' => 'ga_extension',
+            'status' => Application::STATUS_PENDING,
+            'current_stage' => 'cgs_verify',
+            'submitted_at' => now(),
+        ]);
+
+        GaExtensionDetail::create([
+            'application_id' => $extensionApplication->id,
+            'supervisor_id' => $student->supervisor_id,
+            'current_end_date' => '2027-03-31',
+            'requested_new_end_date' => '2027-09-30',
+            'reason_for_extension' => 'Continuing the same research project.',
+            'final_approver_snapshot' => 'cgs',
+        ]);
+
+        $this->actingAs($cgs)
+            ->post(route('ga-extension.decide', $extensionApplication), ['decision' => 'approve'])
+            ->assertRedirect();
+
+        $gaDetail = GaApplicationDetail::where('application_id', $gaApplication->id)->sole();
+        $this->assertSame('2027-09-30', $gaDetail->service_end_date->toDateString());
+    }
 }

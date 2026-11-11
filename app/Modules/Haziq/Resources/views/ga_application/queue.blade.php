@@ -44,31 +44,43 @@
             </div>
         @endif
 
-        @include('haziq::partials.correction_form', [
-            'application' => $application,
-            'documentTypes' => $documentTypes,
-            'sectionLabels' => $sectionLabels,
-            'sectionFieldLabels' => $sectionFieldLabels ?? [],
-            'requestRoute' => 'ga-application.request-correction',
-        ])
+        @if ($canCorrect ?? false)
+            @include('haziq::partials.correction_form', [
+                'application' => $application,
+                'documentTypes' => $documentTypes,
+                'sectionLabels' => $sectionLabels,
+                'sectionFieldLabels' => $sectionFieldLabels ?? [],
+                'requestRoute' => 'ga-application.request-correction',
+            ])
+        @endif
 
         @if ($stage->key === 'admin_verify')
-            <form method="POST" action="{{ route('ga-application.decide', $application) }}">
-                @csrf
-                <input type="hidden" name="decision" value="approve">
-                <p class="queue-meta">Admin verifies or requests correction (above) — there is no reject at this stage.</p>
-                <button type="submit" data-confirm="Verify and advance this application to Research Centre?">Verify &amp; Advance</button>
-            </form>
+            @php($missing = ($missingDocuments ?? collect())[$application->id] ?? collect())
+            <p class="queue-meta">Admin verifies or requests correction (above) — there is no reject at this stage.</p>
+            @if ($missing->isNotEmpty())
+                <p class="queue-meta" style="color: var(--danger-fg);">
+                    Still missing: {{ $missing->implode(', ') }}. Can't verify until every required document is uploaded.
+                </p>
+                <button type="button" disabled title="Still missing: {{ $missing->implode(', ') }}">Verify &amp; Advance</button>
+            @else
+                <form method="POST" action="{{ route('ga-application.decide', $application) }}">
+                    @csrf
+                    <input type="hidden" name="decision" value="approve">
+                    <button type="submit" data-confirm="Verify and advance this application to Research Centre?">Verify &amp; Advance</button>
+                </form>
+            @endif
         @elseif ($stage->key === 'research_centre_interview')
             @if (! $detail?->interview_date)
                 <form method="POST" action="{{ route('ga-application.schedule-interview', $application) }}">
                     @csrf
                     <label for="interview_date-{{ $application->id }}">Interview Date</label>
-                    <input type="datetime-local" name="interview_date" id="interview_date-{{ $application->id }}" required>
+                    <input type="date" name="interview_date" id="interview_date-{{ $application->id }}" required>
+                    @include('haziq::partials.time_picker', ['name' => 'interview_start', 'label' => 'Starts', 'idSuffix' => '-'.$application->id])
+                    @include('haziq::partials.time_picker', ['name' => 'interview_end', 'label' => 'Ends', 'idSuffix' => '-'.$application->id])
                     <button type="submit" data-confirm="Schedule this interview? The student will be notified.">Schedule Interview</button>
                 </form>
             @else
-                <p class="queue-meta">Scheduled for {{ $detail->interview_date->format('j M Y, g:ia') }}.</p>
+                <p class="queue-meta">Scheduled for {{ $detail->interview_date->format('j M Y, g:ia') }} to {{ $detail->interview_ends_at?->format('g:ia') ?? '?' }}.</p>
                 <form method="POST" action="{{ route('ga-application.decide', $application) }}" enctype="multipart/form-data">
                     @csrf
                     <label for="interview_notes-{{ $application->id }}">Interview Notes <span style="color: var(--text-grey)">(required to fail)</span></label>

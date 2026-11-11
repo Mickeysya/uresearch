@@ -508,3 +508,9 @@ day:
 `tests/Feature/Hani/`, run with
 `docker exec uresearch-app php artisan test tests/Feature/Hani`. The file
 list by prompt is in the README ("Tests").
+
+## Re-viva (official CGS re-examination process, 2026-11-09)
+
+Student submits three PDFs on Re-viva, the Senior Executive checks them and generates one letter and one UTP/CGS/024 per main examiner, the Dean of PGR approves or returns them, and the Senior Executive sends the pack. Examiners, internal and external, return their forms on My Re-evaluations (an account is created at send); the Senior Executive can record a return on their behalf. "Start review" moves the round to CGS Review, where it passes, is dismissed, or goes to a meeting. Level 4 opens the next round when the student submits again.
+
+The Academic Executive has no re-viva access. Non-Executive CGS has read-only Re-viva Cycles. Reminders go to examiners who have not returned, at the working days on Re-viva Settings (default 10 and 3). The examiner's signed link still requires the email code sign-in.

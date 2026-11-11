@@ -44,7 +44,7 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('role:'.implode(',', [
-        Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS,
+        Role::ADMIN, Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS,
     ]))->group(function () {
         Route::get('/ga-extension/queue', [GaExtensionController::class, 'queue'])->name('ga-extension.queue');
         Route::post('/ga-extension/{application}/decide', [GaExtensionController::class, 'decide'])->name('ga-extension.decide');

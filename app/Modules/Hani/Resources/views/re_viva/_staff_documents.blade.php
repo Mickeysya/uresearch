@@ -1,5 +1,5 @@
 {{-- Staff-only re-viva files for one round: letters (with when each was
-     last sent, and "Resend letter"), UTP/CGS/024 reports, Confirmation of
+     last sent, and "Resend email"), UTP/CGS/024 reports, Confirmation of
      Correction. Never included on a student's page.
      Expects: $detail (with staffDocuments loaded or loadable). --}}
 @php $staffDocs = $detail->staffDocuments->sortBy('id'); @endphp
@@ -18,11 +18,11 @@
                     @if ($doc->email_skipped_reason)
                         <span class="status-badge rejected">Not emailed</span> <span class="fstep-hint">{{ $doc->email_skipped_reason }}</span>
                     @endif
-                    {{-- AE of the department or Senior Executive, Under Panel Review, current main (ReVivaLetters::resendBlock). --}}
+                    {{-- Senior Executive, Under Panel Review, current main (ReVivaLetters::resendBlock). --}}
                     @if (auth()->user() && ! \App\Modules\Hani\Support\ReVivaLetters::resendBlock($doc, auth()->user()))
                         <form method="POST" action="{{ route('reviva.letters.resend', $doc) }}" style="display: inline">
                             @csrf
-                            <button type="submit" class="btn-secondary">Resend letter</button>
+                            <button type="submit" class="btn-secondary">Resend email</button>
                         </form>
                     @endif
                 @endif

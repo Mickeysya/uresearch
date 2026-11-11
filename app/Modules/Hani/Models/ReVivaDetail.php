@@ -28,6 +28,7 @@ class ReVivaDetail extends Model
         'correction_deadline', 'hardbound_deadline',
         'outcome_level', 'outcome_remarks', 'suggested_level', 'outcome_recorded_at', 'outcome_recorded_by_id',
         'final_thesis_submitted_at', 'corrections_accepted_at', 'corrections_accepted_by_id',
+        'documents_accepted_at', 'dean_approved_at', 'panel_deadline', 'meeting_kind', 'meeting_at', 'meeting_venue',
     ];
 
     protected function casts(): array
@@ -46,6 +47,10 @@ class ReVivaDetail extends Model
             'outcome_recorded_at' => 'datetime',
             'final_thesis_submitted_at' => 'datetime',
             'corrections_accepted_at' => 'datetime',
+            'documents_accepted_at' => 'datetime',
+            'dean_approved_at' => 'datetime',
+            'panel_deadline' => 'date',
+            'meeting_at' => 'datetime',
         ];
     }
 
@@ -83,6 +88,23 @@ class ReVivaDetail extends Model
     public function evaluationsComplete(): bool
     {
         return $this->currentEvaluations()->has(['internal_main_id', 'external_main_id']);
+    }
+
+    public function documentReturns(): HasMany
+    {
+        return $this->hasMany(ReVivaDocumentReturn::class)->latest('id');
+    }
+
+    /**
+     * The student's latest file of each of the three required documents.
+     *
+     * @return \Illuminate\Support\Collection<string, \App\Modules\Core\Models\ApplicationDocument>
+     */
+    public function studentDocuments()
+    {
+        return $this->application->documents()
+            ->whereIn('doc_type', \App\Modules\Hani\Support\ReVivaLogging::REQUIRED)
+            ->orderBy('id')->get()->keyBy('doc_type');
     }
 
     public function staffDocuments(): HasMany
@@ -163,7 +185,7 @@ class ReVivaDetail extends Model
         1 => 'Level 1: Pass (final thesis within 1 month)',
         2 => 'Level 2: Minor corrections (final thesis within 3 months)',
         3 => 'Level 3: Major corrections (final thesis within 3 to 6 months)',
-        4 => 'Level 4: Fail, oral examination required (CGS logs the next round)',
+        4 => 'Level 4: Fail, oral examination required (another round)',
         5 => 'Level 5: Fail (final)',
     ];
 

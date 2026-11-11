@@ -136,12 +136,8 @@ class VivaResultTest extends TestCase
 
         $this->record($viva, 4)->assertSessionHasNoErrors();
 
-        $link = route('reviva.create', ['student' => $viva['student']->id]);
+        $link = route('reviva.cycles.index');
         Notification::assertSentTo($senior, VivaOutcome::class, fn ($n) => $n->kind === 'reviva_to_log' && $n->toMail($senior)->actionUrl === $link);
-
-        // The Senior Executive can open the form with the student pre-selected.
-        $this->actingAs($senior)->get($link)->assertOk()
-            ->assertSee('value="'.$viva['student']->id.'"'."\n".'                            selected', false);
 
         $this->artisan('examiners:sweep')->assertSuccessful();
         Notification::assertNotSentTo($viva['ae'], EvaluationOverdue::class);
@@ -160,11 +156,10 @@ class VivaResultTest extends TestCase
 
         // A re-viva is logged for the second student in month 11.
         Carbon::setTestNow('2028-02-01 09:00');
-        $senior = User::create(['name' => 'Puan Waheeda', 'email' => 'waheeda@test.my', 'password' => 'password', 'role' => Role::SENIOR_EXEC_CGS]);
-        $this->actingAs($senior)->post(route('reviva.store'), [
-            'student_id' => $logged['student']->id,
+        $this->actingAs($logged['student'])->post(route('reviva.submit'), [
+            'confirmation' => UploadedFile::fake()->create('confirmation.pdf', 20, 'application/pdf'),
             'thesis' => UploadedFile::fake()->create('thesis.pdf', 100, 'application/pdf'),
-            'summary_of_corrections' => UploadedFile::fake()->create('summary.pdf', 20, 'application/pdf'),
+            'summary' => UploadedFile::fake()->create('summary.pdf', 20, 'application/pdf'),
         ])->assertSessionHasNoErrors();
         $this->assertSame('2029-02-01', Examiner::find($logged['panel']->internal_main_id)->assigned_until->toDateString());
 

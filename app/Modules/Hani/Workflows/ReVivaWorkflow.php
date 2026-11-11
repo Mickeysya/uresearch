@@ -5,6 +5,7 @@ namespace App\Modules\Hani\Workflows;
 use App\Modules\Core\Contracts\DecidesOneAtATime;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
+use App\Modules\Core\Contracts\SuppliesSignature;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -14,33 +15,17 @@ use App\Modules\Hani\Models\ReVivaDetail;
 use Carbon\CarbonInterface;
 
 /**
- * Re-examination monitoring.
+ * The official CGS re-examination process.
  *
- * A discrete stepper, not a fake progress bar: the four stages below are
- * administrative tracking events the Academic Executive advances, all one
- * role, all 'approve' in engine terms -- there is nothing to reject mid
- * stepper, so the queue view never renders a reject button even though the
- * route technically accepts one.
+ * The student submits; the Senior Executive and the Dean of PGR move it along.
+ * A return to the student is the engine's 'return' (status returned, same
+ * stage), and the result is the approved status after the last stage, so
+ * those two steps of the 10-step stepper are not engine stages. Meeting
+ * Scheduled joins the chain only for a round with a meeting.
  *
- * The 5-level outcome (see ReVivaDetail) is recorded separately, after the
- * chain reaches STATUS_APPROVED, and never touches applications.status or
- * current_stage -- that would violate the one rule this whole engine exists
- * to enforce. A level-4 loop-back is therefore not a loop in this Stage
- * graph at all: it is CGS Staff logging a new Application the next time the
- * student's re-corrected thesis reaches them, linked to the previous cycle
- * by ReVivaDetail::previous_cycle_id. See ReVivaController::create().
- *
- * DecidesOneAtATime (Prompt 3): stage 1 sends the correction letters and
- * stage 3 needs both re-evaluations, so Core's bulk decide must not skip
- * ReVivaController::decide().
- *
- * Logged by CGS Staff, not filed by the student -- so unlike every other
- * module, createRoute() is null (it never belongs in a student's "New
- * Application" list) and the create screen is reached instead via the
- * CGS-only link below, the same mechanism the Examiner Pool admin screen
- * uses to appear for that role.
+ * DecidesOneAtATime: every stage does more than call the engine.
  */
-class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime
+class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime, SuppliesSignature
 {
     public function key(): string
     {
@@ -54,16 +39,21 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
 
     public function stages(?Application $application = null): array
     {
-        return [
-            new Stage('report_sent', 'Report Sent', Role::ACADEMIC_EXEC, 'sent',
-                queueTitle: 'Reports to Send'),
-            new Stage('under_panel_review', 'Under Panel Review', Role::ACADEMIC_EXEC, 'reviewed',
-                queueTitle: 'Awaiting Panel Review'),
-            new Stage('report_received', 'Report Received', Role::ACADEMIC_EXEC, 'received',
-                queueTitle: 'Awaiting Report'),
-            new Stage('consolidation_scheduled', 'Consolidation Scheduled', Role::ACADEMIC_EXEC, 'consolidated',
-                queueTitle: 'Awaiting Consolidation'),
+        $stages = [
+            new Stage('student_submitted', 'Document Check', Role::SENIOR_EXEC_CGS, 'accepted', queueTitle: 'Document Check'),
+            new Stage('pack_preparation', 'Pack Preparation', Role::SENIOR_EXEC_CGS, 'prepared', queueTitle: 'Pack Preparation'),
+            new Stage('dean_approval', 'Dean Approval', Role::DEAN_PGR, 'approved', queueTitle: 'Re-viva Approval'),
+            new Stage('ready_to_send', 'Ready to Send', Role::SENIOR_EXEC_CGS, 'sent', queueTitle: 'Ready to Send'),
+            new Stage('under_panel_review', 'Under Panel Review', Role::SENIOR_EXEC_CGS, 'reviewed', queueTitle: 'Under Panel Review'),
+            new Stage('reports_received', 'Reports Received', Role::SENIOR_EXEC_CGS, 'received', queueTitle: 'Reports Received'),
+            new Stage('cgs_review', 'CGS Review', Role::SENIOR_EXEC_CGS, 'reviewed', queueTitle: 'CGS Review'),
         ];
+
+        if ($application === null || ReVivaDetail::where('application_id', $application->id)->whereNotNull('meeting_kind')->exists()) {
+            $stages[] = new Stage('meeting_scheduled', 'Meeting Scheduled', Role::SENIOR_EXEC_CGS, 'held', queueTitle: 'Meetings');
+        }
+
+        return $stages;
     }
 
     public function summary(Application $application): string
@@ -74,7 +64,7 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
             return 'Re-viva monitoring';
         }
 
-        return "Cycle {$detail->cycle_number}, resubmitted ".$detail->resubmission_at->format('j M Y');
+        return "Round {$detail->cycle_number}, submitted ".$detail->resubmission_at->format('j M Y');
     }
 
     public function createRoute(): ?string
@@ -87,30 +77,22 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
         return 'reviva.queue';
     }
 
-    /**
-     * Links queuesForRole() (stage-derived) cannot produce: CGS owns no stage
-     * in this chain -- the Senior Executive logs cycles, and both CGS roles
-     * read Re-viva Cycles (the Non-Executive read-only) -- and the Academic
-     * Executive's outcome step happens after an application leaves the chain.
-     */
+    /** Links the stage queues cannot produce. No link at all for the Academic Executive. */
     public function links(User $user): array
     {
-        return match ($user->role) {
-            Role::SENIOR_EXEC_CGS => [
-                ['label' => 'Log Re-viva Submission', 'route' => 'reviva.create'],
+        return match (true) {
+            $user->role === Role::SENIOR_EXEC_CGS => [
                 ['label' => 'Re-viva Cycles', 'route' => 'reviva.cycles.index'],
-            ],
-            Role::NON_EXEC_CGS => [
-                ['label' => 'Re-viva Cycles', 'route' => 'reviva.cycles.index'],
-            ],
-            Role::ACADEMIC_EXEC => [
                 ['label' => 'Re-viva Outcomes', 'route' => 'reviva.outcomes.index'],
+                ['label' => 'Re-viva Settings', 'route' => 'reviva.settings'],
             ],
-            // Only once they have a round or a category-4 viva: most never do.
-            Role::STUDENT => Application::where('module_type', $this->key())->where('student_id', $user->id)->exists()
+            $user->role === Role::NON_EXEC_CGS => [['label' => 'Re-viva Cycles', 'route' => 'reviva.cycles.index']],
+            $user->role === Role::ACADEMIC_EXEC => [],
+            $user->role === Role::STUDENT => Application::where('module_type', $this->key())->where('student_id', $user->id)->exists()
                     || \App\Modules\Hani\Support\ReVivaWindow::categoryFourViva($user)
-                ? [['label' => 'My Re-viva', 'route' => 'reviva.mine']]
+                ? [['label' => 'Re-viva', 'route' => 'reviva.mine']]
                 : [],
+            \App\Modules\Hani\Support\ReVivaProcess::examinesOpenRound($user) => [['label' => 'My Re-evaluations', 'route' => 'reviva.examiner.index']],
             default => [],
         };
     }
@@ -163,5 +145,27 @@ class ReVivaWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
         }
 
         return $events;
+    }
+
+    /** The Dean signs the re-viva correction letters: Approve is blocked without it. */
+    public function signatureFor(User $user): ?array
+    {
+        if ($user->role !== Role::DEAN_PGR) {
+            return null;
+        }
+
+        $signature = \App\Modules\Hani\Models\ReVivaSignature::forUser($user->id);
+
+        return [
+            'key' => 're-viva',
+            'title' => 'Re-viva Correction Letters',
+            'usedFor' => 'Stamped onto each Correction of Thesis letter when you approve a re-viva pack.',
+            'required' => true,
+            'imageUrl' => $signature ? route('reviva.signature.image') : null,
+            'updatedAt' => $signature?->updated_at,
+            'storeRoute' => 'reviva.signature.store',
+            'destroyRoute' => null,
+            'hint' => 'PNG or JPG, under 1 MB',
+        ];
     }
 }

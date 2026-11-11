@@ -1,6 +1,6 @@
 # Test accounts
 
-> **Superseded for the account list by [`accounts.md`](accounts.md)** (2026-11-08): all 245 base accounts (12 Chairs, 24 supervisors, the six CGS officers, the 180-student cohort) plus the `--fresh` demo accounts. The walkthrough notes below are still useful; their counts and the "no Electrical Chair" gap are out of date.
+> **Superseded for the account list by [`accounts.md`](accounts.md)** (2026-11-08): all 246 base accounts (12 Chairs, 24 supervisors, the seven CGS officers, the 180-student cohort) plus the `--fresh` demo accounts. The walkthrough notes below are still useful; their counts and the "no Electrical Chair" gap are out of date.
 
 Every account in the local database, so you can sign in as any of them without
 opening phpMyAdmin. **The password is `password` for all of them**, set by
@@ -24,7 +24,8 @@ From `DatabaseSeeder`, recreated by `./setup.sh`, `./sync.sh` and
 | `supervisor@utp.edu.my` | Supervisor | Dr. Aisyah Rahman | Computing |
 | `chair@utp.edu.my` | Chair | Dr. Lim Wei Chun | Computing |
 | `cgs@utp.edu.my` | Non-Executive CGS | M Syahmi Ifwat M Jafri | CGS |
-| `seniorexec@utp.edu.my` | Senior Executive CGS | Puan Waheeda | CGS |
+| `waheda.cgs@utp.edu.my` | Senior Executive CGS | Puan Waheeda | CGS |
+| `seniorexec@utp.edu.my` | Senior Executive CGS | Puan Waheeda (general account; still works) | CGS |
 | `manager@utp.edu.my` | Manager CGS | Norshahirah | CGS |
 | `director@utp.edu.my` | Senior Director CGS | En Zulkifly | CGS |
 | `dean@utp.edu.my` | Dean of PGR | Prof. Dr. Hafiz Osman | PGR |
@@ -43,7 +44,7 @@ From `DatabaseSeeder`, recreated by `./setup.sh`, `./sync.sh` and
   `director@` approves.
 - **Examiner nomination** — `supervisor@` nominates for a candidate, that
   candidate's own Academic Executive approves (`ae@` for Computing, otherwise
-  the one for their department below), `seniorexec@` compiles the faculty
+  the one for their department below), `waheda.cgs@` compiles the faculty
   list, `cgs@` releases it.
 - **RPD dismissal** — `cgs@` opens it, `dean@` endorses, `faculty@` signs,
   `registry@` closes the candidacy.

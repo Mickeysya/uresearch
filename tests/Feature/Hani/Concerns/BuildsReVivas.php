@@ -42,96 +42,86 @@ trait BuildsReVivas
         return $viva;
     }
 
-    /** The Senior Executive logs a round: both uploads, plus any extra fields. */
-    protected function logReViva(User $student, array $extra = [])
+    protected function deanUser(): User
     {
-        return $this->actingAs($this->senior())->post(route('reviva.store'), $extra + [
-            'student_id' => $student->id,
-            'thesis' => UploadedFile::fake()->create('corrected-thesis.pdf', 100, 'application/pdf'),
-            'summary_of_corrections' => UploadedFile::fake()->create('summary-of-corrections.pdf', 50, 'application/pdf'),
-        ]);
+        return User::firstOrCreate(['email' => 'dean@test.my'], ['name' => 'Dean Test', 'password' => 'password', 'role' => Role::DEAN_PGR]);
     }
 
-    /** A category-4 viva (1 Mar 2027) and round 1 logged inside its window on 1 Oct 2027: at stage 1. */
-    protected function roundAtStageOne(string $matric = '22001001'): array
+    /** The Dean's re-viva signature on file (Approve needs it). */
+    protected function deanSigns(): void
+    {
+        \Illuminate\Support\Facades\Storage::disk('local')->put('hani/reviva-signatures/dean.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='));
+        \App\Modules\Hani\Models\ReVivaSignature::updateOrCreate(['user_id' => $this->deanUser()->id], ['path' => 'hani/reviva-signatures/dean.png']);
+    }
+
+    protected function studentFiles(): array
+    {
+        return [
+            'confirmation' => UploadedFile::fake()->create('confirmation.pdf', 50, 'application/pdf'),
+            'summary' => UploadedFile::fake()->create('summary.pdf', 50, 'application/pdf'),
+            'thesis' => UploadedFile::fake()->create('thesis.pdf', 100, 'application/pdf'),
+        ];
+    }
+
+    protected function latestRound(User $student): ReVivaDetail
+    {
+        return \App\Modules\Hani\Support\ReVivaLogging::latestCycle($student->id);
+    }
+
+    protected function act(ReVivaDetail $round, string $action, User $by, array $data = [])
+    {
+        return $this->actingAs($by)->post(route('reviva.act', [$round->application_id, $action]), $data);
+    }
+
+    /** Round 1 submitted by the student on 1 Oct 2027. */
+    protected function roundSubmitted(string $matric = '22001001'): array
     {
         \Carbon\Carbon::setTestNow('2027-03-15 09:00');
         $viva = $this->categoryFourViva($matric);
         \Carbon\Carbon::setTestNow('2027-10-01 09:00');
-        $this->logReViva($viva['student'])->assertSessionHasNoErrors();
+        $this->actingAs($viva['student'])->post(route('reviva.submit'), $this->studentFiles())->assertSessionHasNoErrors();
         $viva['round'] = $this->latestRound($viva['student']);
 
         return $viva;
     }
 
-    protected function sendToPanel(array $viva)
+    protected function roundReadyToSend(string $matric = '22001001'): array
     {
-        return $this->actingAs($viva['ae'])->post(route('reviva.send-to-panel', $viva['round']->application_id));
+        $viva = $this->roundSubmitted($matric);
+        $this->act($viva['round'], 'accept', $this->senior())->assertSessionHasNoErrors();
+        $this->act($viva['round'], 'send-to-dean', $this->senior())->assertSessionHasNoErrors();
+        $this->deanSigns();
+        $this->act($viva['round'], 'dean-approve', $this->deanUser())->assertSessionHasNoErrors();
+
+        return $viva;
     }
 
-    /** Letters sent on Fri 1 Oct 2027: Under Panel Review. */
+    /** Sent on Fri 1 Oct 2027. */
     protected function roundUnderPanelReview(string $matric = '22001001'): array
     {
-        $viva = $this->roundAtStageOne($matric);
-        $this->sendToPanel($viva)->assertSessionHasNoErrors();
+        $viva = $this->roundReadyToSend($matric);
+        $this->act($viva['round'], 'send-to-panel', $this->senior())->assertSessionHasNoErrors();
         $viva['round']->refresh();
 
         return $viva;
     }
 
-    /** Stage 2 completed: Report Received, where the re-evaluations are recorded. */
-    protected function roundAtReportReceived(string $matric = '22001001'): array
+    protected function recordReturn(ReVivaDetail $round, string $seat, int $category, ?int $vivaAgain = null)
     {
-        $viva = $this->roundUnderPanelReview($matric);
-        $this->actingAs($viva['ae'])->post(route('reviva.decide', $viva['round']->application_id), ['decision' => 'approve'])
-            ->assertSessionHasNoErrors();
-
-        return $viva;
-    }
-
-    protected function recordEvaluation(array $viva, string $seat, int $category, ?bool $vivaAgain = null, array $extra = [])
-    {
-        return $this->actingAs($viva['ae'])->post(route('reviva.evaluations.record', [$viva['round']->application_id, $seat]), $extra + array_filter([
-            'category' => $category,
-            'viva_again' => $vivaAgain === null ? null : (int) $vivaAgain,
-            'report' => UploadedFile::fake()->create("utp-cgs-024-{$seat}.pdf", 80, 'application/pdf'),
+        return $this->actingAs($this->senior())->post(route('reviva.evaluations.record', [$round->application_id, $seat]), array_filter([
+            'category' => $category, 'viva_again' => $vivaAgain,
+            'report' => UploadedFile::fake()->create('r.pdf', 20, 'application/pdf'),
+            'signed_letter' => UploadedFile::fake()->create('s.pdf', 20, 'application/pdf'),
         ], fn ($v) => $v !== null));
     }
 
-    protected function advance(array $viva)
+    protected function roundAtReview(int $internal, int $external, ?int $vivaInternal = null, ?int $vivaExternal = null): array
     {
-        return $this->actingAs($viva['ae'])->post(route('reviva.decide', $viva['round']->application_id), ['decision' => 'approve']);
-    }
-
-    /**
-     * Both re-evaluations recorded and consolidation done: awaiting the outcome.
-     *
-     * @param  array{0: int, 1?: ?bool}  $internal  category, viva again
-     * @param  array{0: int, 1?: ?bool}  $external
-     */
-    protected function roundAwaitingOutcome(array $internal, array $external, string $matric = '22001001'): array
-    {
-        $viva = $this->roundAtReportReceived($matric);
-        $this->recordEvaluation($viva, 'internal_main_id', $internal[0], $internal[1] ?? null)->assertSessionHasNoErrors();
-        $this->recordEvaluation($viva, 'external_main_id', $external[0], $external[1] ?? null)->assertSessionHasNoErrors();
-        $this->advance($viva)->assertSessionHasNoErrors();
-        $this->advance($viva)->assertSessionHasNoErrors();
-        $viva['round']->refresh();
+        $viva = $this->roundUnderPanelReview();
+        $this->recordReturn($viva['round'], 'internal_main_id', $internal, $vivaInternal)->assertSessionHasNoErrors();
+        $this->recordReturn($viva['round'], 'external_main_id', $external, $vivaExternal)->assertSessionHasNoErrors();
+        $this->act($viva['round'], 'start-review', $this->senior())->assertSessionHasNoErrors();
 
         return $viva;
-    }
-
-    protected function recordOutcome(array $viva, int $level, ?string $remarks = null)
-    {
-        return $this->actingAs($viva['ae'])->post(route('reviva.outcomes.record', $viva['round']), array_filter([
-            'outcome_level' => $level,
-            'outcome_remarks' => $remarks,
-        ]));
-    }
-
-    protected function latestRound(User $student): ?ReVivaDetail
-    {
-        return ReVivaDetail::whereHas('application', fn ($q) => $q->where('student_id', $student->id)->where('module_type', 're_viva'))
-            ->latest('cycle_number')->first();
     }
 }

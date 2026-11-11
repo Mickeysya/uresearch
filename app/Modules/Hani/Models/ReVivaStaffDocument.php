@@ -20,7 +20,13 @@ class ReVivaStaffDocument extends Model
 
     public const CONFIRMATION = 'confirmation_of_correction';
 
+    public const REPORT_FORM = 're_evaluation_form';
+
+    public const SIGNED_LETTER = 'signed_letter';
+
     public const KINDS = [
+        self::REPORT_FORM => 'Thesis Re-evaluation Report form (UTP/CGS/024, blank)',
+        self::SIGNED_LETTER => 'Signed Correction of Thesis letter',
         self::LETTER => 'Correction letter',
         self::RE_EVALUATION => 'Thesis Re-evaluation Report (UTP/CGS/024)',
         self::CONFIRMATION => 'Confirmation of Correction',

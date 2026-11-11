@@ -6,6 +6,7 @@ use App\Modules\Haziq\Http\Controllers\AssistantController;
 use App\Modules\Haziq\Http\Controllers\CandidatureAppealController;
 use App\Modules\Haziq\Http\Controllers\DelayReportController;
 use App\Modules\Haziq\Http\Controllers\DocumentCompletenessController;
+use App\Modules\Haziq\Http\Controllers\GaAllowanceController;
 use App\Modules\Haziq\Http\Controllers\GaApplicationController;
 use App\Modules\Haziq\Http\Controllers\GraApplicationController;
 use App\Modules\Haziq\Http\Controllers\StageGateController;
@@ -143,14 +144,15 @@ Route::middleware('auth')->group(function () {
 
     // ---- Document Completeness ---------------------------------------
     // "Document completeness never blocks routing" -- a report plus one
-    // manual action, same approver audience as Stage Gate/Allowance's own
-    // monitoring routes above (no Student here -- see the student's own
-    // missing-documents box on gra-application.mine/ga-application.mine
-    // instead).
-    Route::middleware('role:'.implode(',', array_merge(
-        [Role::ADMIN, Role::SUPERVISOR],
-        Role::cgsTeam(),
-    )))->group(function () {
+    // manual action. Narrower than Stage Gate/Allowance's own monitoring
+    // routes above -- confirmed explicitly 2026-11-10: "document
+    // completeness analysis ni boleh tengok by admin je user lain taleh
+    // tengok... so yeang leh send reminder to all at any time admin
+    // sahaja." Admin alone chases paperwork; Supervisor/CGS/Senior
+    // Director never see this screen at all (no Student here either --
+    // see the student's own missing-documents box on
+    // gra-application.mine/ga-application.mine instead).
+    Route::middleware('role:'.Role::ADMIN)->group(function () {
         Route::get('/document-completeness', [DocumentCompletenessController::class, 'index'])->name('document-completeness.index');
         Route::post('/document-completeness/remind-all', [DocumentCompletenessController::class, 'remindAll'])->name('document-completeness.remind-all');
     });
@@ -162,6 +164,31 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:'.implode(',', [Role::ADMIN, Role::NON_EXEC_CGS]))->group(function () {
         Route::post('/allowance/{application}/confirm-payment', [AllowanceController::class, 'confirmPayment'])->name('allowance.confirm-payment');
         Route::post('/allowance/{application}/set-review-amount', [AllowanceController::class, 'setReviewAmount'])->name('allowance.set-review-amount');
+    });
+
+    // ---- GA Allowance Eligibility ---------------------------------------
+    // GA's own, deliberately separate from GRA's allowance.* routes above
+    // -- confirmed explicitly 2026-11-10: "ga ni letak actions lain.
+    // jangan sekali kan dengan allowance gra satu excel. navigation bar
+    // asing. with different names." Never Research Centre -- GA's
+    // allowance is none of its business, same as Delay by Actor's own
+    // ga_application-only scoping doesn't extend to this screen either.
+    Route::middleware('role:'.implode(',', array_merge(
+        [Role::ADMIN, Role::SUPERVISOR, Role::STUDENT],
+        Role::cgsTeam(),
+    )))->group(function () {
+        Route::get('/ga-allowance', [GaAllowanceController::class, 'index'])->name('ga-allowance.index');
+    });
+
+    Route::middleware('role:'.implode(',', array_merge(
+        [Role::ADMIN, Role::SUPERVISOR],
+        Role::cgsTeam(),
+    )))->group(function () {
+        Route::get('/ga-allowance/export', [GaAllowanceController::class, 'export'])->name('ga-allowance.export');
+    });
+
+    Route::middleware('role:'.implode(',', [Role::ADMIN, Role::NON_EXEC_CGS]))->group(function () {
+        Route::post('/ga-allowance/{log}/confirm-payment', [GaAllowanceController::class, 'confirmPayment'])->name('ga-allowance.confirm-payment');
     });
 
     // ---- Candidature Appeal -----------------------------------------------
@@ -187,7 +214,13 @@ Route::middleware('auth')->group(function () {
     // Every actor in either chain, not just one role -- confirmed explicitly
     // 2026-11-06: "i want all of the actors to see this." Never the student --
     // this is about who holds an application up, not their own progress,
-    // which they already see on the ordinary tracking page.
+    // which they already see on the ordinary tracking page. Research Centre
+    // is let in too, but DelayReportController::index() locks it to the
+    // ga_application scope -- confirmed explicitly 2026-11-10: "boleh je
+    // tengok delay by actor tapi yang role die related sahaja ah which is
+    // ga application," since Research Centre is itself one of the actors
+    // that scope's own chain can be slow at (see
+    // DelayByActorReport::researchCentreDelayHours()).
     Route::middleware('role:'.implode(',', array_merge(
         [Role::ADMIN, Roles::RESEARCH_CENTRE, Role::SUPERVISOR], Role::cgsTeam()
     )))->group(function () {

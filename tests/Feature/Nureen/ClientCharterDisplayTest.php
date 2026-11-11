@@ -67,7 +67,9 @@ class ClientCharterDisplayTest extends TestCase
             ->assertDontSee('data-expected-for="'.$decided->id.'"', false)
             ->assertSee('Expected decision by')
             ->assertSee('Thursday, 12 November 2026')
-            ->assertSee('Based on the CGS Client Charter of 5 working days')
+            // Whole chain's total, not just what's left ahead -- see
+            // ClientCharterTest's own comment on the same number.
+            ->assertSee('Based on the CGS Client Charter of 7 working days')
             ->assertDontSee('taking longer than the Client Charter');
     }
 

@@ -6834,6 +6834,64 @@ Applicants"; all 42 pre-existing tests still pass unchanged.
         deferred RM2,000 + Jan's own RM2,000), not RM2,000 as it did
         before this fix.
 
+- [x] **2026-11-10 — Dark mode, assistant widget, and a real authorisation
+      gap: any Supervisor could decide on any student's GRA/GA
+      application, not only their own supervisees.**
+  - [x] Every Chart.js config across the module (allowance trend/anomaly,
+        TA Hours, GRA/GA bottleneck, Document Completeness, Delay by
+        Actor, Stage Gate bottleneck/risk) hard-coded light-mode-only hex,
+        which is exactly what made the Stage Gate risk chart (and others)
+        unreadable in dark mode — Chart.js paints to a canvas, so CSS
+        redefining a token later can't reach it. Switched every one to
+        `Chart.uresearchToken()`, the dark-mode-aware helper Core and
+        every other module's charts already use. `partials/styles.blade.php`'s
+        status badges and several views' inline border/text colours had
+        the same problem outside of charts (hard-coded hex instead of the
+        existing `--danger-bg/-fg`, `--success-bg/-fg`, `--warning-fg`
+        tokens) — fixed too.
+  - [x] Gave the student assistant widget a full-figure robot mascot (not
+        a 22px line icon) with real CSS 3D motion (`perspective` +
+        `rotateX/Y`, a gentle idle float, a blink, a waving arm) and a
+        comic-style "Ask me anything 💬" invite bubble that pops up
+        periodically until the student actually opens the chat. Widened
+        its own wording past "GRA/GA" to name Stage Gate and Allowance
+        explicitly too, since it covers all of it.
+  - [x] **The real gap, confirmed explicitly by the user**: "supervisor
+        akan approve student yang connected to die je... bukan semua
+        supervisor approve for any student." `WorkflowEngine::decide()`'s
+        own authorisation is role-based only (`$actor->role !== $stage->role`)
+        plus department-scoping for roles that need it
+        (`Role::isDepartmentScoped()`) — neither covers a 1:1
+        student→supervisor assignment, which lives on `users.supervisor_id`,
+        not a department. Without this module's own scoping on top, any
+        user with role Supervisor could see and decide on *any* student's
+        application at the `supervisor` stage, not only their own
+        supervisees — confirmed missing in both `GraApplicationController`
+        and `GaApplicationController`, even though Haziq's own
+        `AllowanceController::index()` already scopes its Supervisor view
+        correctly the same way. Nureen's `SupervisionController` already
+        has the identical two-part fix for her own `supervisor` stage —
+        copied that exact pattern rather than inventing a new one.
+  - [x] Two-part fix, same shape in both controllers: `queue()` now
+        passes a `$scope` closure to `queueFor()` that filters to
+        `student->supervisor_id === $user->id` when `$stage->key ===
+        'supervisor'` (a list, filtered at the query so the count and
+        pagination are never wrong); `decide()` now aborts 403 with "This
+        student is not under your supervision" for the same case, since
+        the queue filter only hides a *list* — a direct POST naming
+        another student's application id still needs its own guard.
+  - [x] Verified the other half of the same message was already correct,
+        not a bug: "save draft hanya save draft... once submit baru
+        tunggu admin approval." Both `store()` methods only call
+        `$engine->submit()` outside the `save_draft` branch — a draft
+        stays at `STATUS_DRAFT` and never enters the workflow at all.
+        Nothing changed here.
+  - [x] Added `SupervisorScopingTest` (4 new tests: queue hides an
+        unassigned supervisor's view for both GRA and GA, `decide()`
+        403s the same case for both) and verified live against the real
+        `supervisor@utp.edu.my` account — both queues still load cleanly.
+        `php artisan test --filter=Haziq`: 128/128.
+
 ---
 
 ## Cross-module overlaps — unresolved

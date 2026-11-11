@@ -11,32 +11,25 @@ use App\Modules\Hani\Models\ReVivaDetail;
 use App\Modules\Hani\Models\ReVivaLetterSend;
 use App\Modules\Hani\Models\ReVivaStaffDocument;
 use App\Modules\Hani\Notifications\ReVivaCorrectionLetter;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Stage 1 of the re-viva, "Send to panel", in one action:
- *
- *   1. one "Correction of Master's/Doctoral Thesis" letter per CURRENT main
- *      examiner (after any declines), rendered with Dompdf
- *   2. stored on the private disk, staff-only (the letters name the examiners)
- *   3. report_sent completed through WorkflowEngine::decide()
- *   4. after the commit, each examiner is emailed their letter and a signed
- *      link to the corrected thesis and the Summary of Corrections; an
- *      examiner whose email is missing or reported not working is skipped,
- *      and the reason is kept on the letter row and shown to the AE
+ * "Send to panel", after the Dean approves: makes sure each main examiner has
+ * a portal account, starts the working-day clock, and emails each examiner
+ * their pack (ReVivaCorrectionLetter). An examiner whose email is missing or
+ * reported not working is skipped, and the reason is shown to the Senior
+ * Executive.
  */
 class ReVivaLetters
 {
-    public const STAGE = 'report_sent';
+    public const STAGE = 'ready_to_send';
 
-    /** Where a letter may be resent (resend). */
+    /** Where a pack may be resent (resend). */
     public const PANEL_STAGE = 'under_panel_review';
 
     public function __construct(protected WorkflowEngine $engine) {}
@@ -46,7 +39,7 @@ class ReVivaLetters
      */
     public function send(Application $application, User $actor): array
     {
-        $letters = DB::transaction(function () use ($application, $actor) {
+        $letters = DB::transaction(function () use ($application) {
             $detail = ReVivaDetail::where('application_id', $application->id)->lockForUpdate()->firstOrFail();
             $application->refresh();
 
@@ -54,31 +47,45 @@ class ReVivaLetters
                 throw ValidationException::withMessages(['send' => 'The letters for this round have already been sent.']);
             }
 
-            $mains = $detail->currentMains();
-            $sentAt = now();
+            $letters = $detail->staffDocuments()->where('kind', ReVivaStaffDocument::LETTER)->with('examiner')->get();
 
-            if ($mains === []) {
-                throw ValidationException::withMessages(['send' => 'No released panel with main examiners is linked to this round, so no letters can be generated. Check the panel, or record the examiners on the viva first.']);
+            if ($letters->isEmpty()) {
+                throw ValidationException::withMessages(['send' => 'No letters have been prepared for this round.']);
             }
 
-            $letters = [];
-            foreach ($mains as $seat => $examiner) {
-                $letters[] = $this->generate($detail, $application, $seat, $examiner, $sentAt, $actor);
+            foreach ($letters as $letter) {
+                ReVivaExaminerAccounts::ensure($letter->examiner);
             }
-
-            $detail->update(['sent_to_panel_at' => $sentAt, 'sent_to_panel_by_id' => $actor->id]);
-
-            // No examiner names: the student reads the remarks on their tracking page.
-            $this->engine->decide($application, $actor, 'approve', 'Correction letters sent to the '.count($letters).' main examiners.');
-
-            activity('re_viva')->causedBy($actor)->performedOn($application)
-                ->withProperties(['action' => 'sent_to_panel', 'letters' => count($letters)])
-                ->log('Re-viva correction letters sent');
 
             return $letters;
         });
 
-        return $this->email($letters, $actor);
+        // Sent now, not queued, so the page can say who got it. Only the ones
+        // not yet sent: pressing Send again after a failure does not double up.
+        $result = $this->email($letters->whereNull('emailed_at')->all(), $actor);
+        $result['letters'] = $letters->all();
+
+        if ($letters->every(fn (ReVivaStaffDocument $l) => $l->fresh()->emailed_at !== null)) {
+            DB::transaction(function () use ($application, $actor, $letters) {
+                $sentAt = now();
+                ReVivaDetail::where('application_id', $application->id)->update(['sent_to_panel_at' => $sentAt, 'sent_to_panel_by_id' => $actor->id, 'panel_deadline' => self::reviewDue($sentAt)]);
+                // No examiner names: the student reads the remarks on their tracking page.
+                $this->engine->decide($application->refresh(), $actor, 'approve', 'Sent to the '.$letters->count().' main examiners.');
+
+                activity('re_viva')->causedBy($actor)->performedOn($application)
+                    ->withProperties(['action' => 'sent_to_panel', 'letters' => $letters->count()])
+                    ->log('Re-viva pack sent to the panel');
+            });
+
+            $result['moved'] = true;
+            app(ReVivaProcess::class)->tell([$application->student], new \App\Modules\Hani\Notifications\ReVivaUpdate('sent_to_examiners', $application,
+                'Re-viva: sent to the examiners', ['Your re-corrected thesis has been sent to the examiners for re-evaluation. You will be told the result here and by email.'],
+                'Open Re-viva', route('reviva.mine')));
+        } else {
+            $result['moved'] = false;
+        }
+
+        return $result;
     }
 
     /** The signed, expiring link an examiner opens without logging in. */
@@ -104,77 +111,17 @@ class ReVivaLetters
 
     public static function linkExpiry(\DateTimeInterface $sentAt): Carbon
     {
-        return Carbon::parse($sentAt)->addDays((int) config('hani.reviva.link_days', 35))->endOfDay();
+        return Carbon::parse($sentAt)->addDays((int) config('hani.reviva.signed_link_days', 35))->endOfDay();
     }
 
     /** When the panel's working days run out. */
     public static function reviewDue(\DateTimeInterface $sentAt): Carbon
     {
-        return WorkingDays::add(Carbon::parse($sentAt), (int) config('hani.reviva.review_working_days', 20));
-    }
-
-    protected function generate(ReVivaDetail $detail, Application $application, string $seat, Examiner $examiner, Carbon $sentAt, User $actor): ReVivaStaffDocument
-    {
-        $pdf = self::render($detail, $application, $examiner, $sentAt);
-        $path = 'hani/reviva-letters/'.Str::random(40).'.pdf';
-        Storage::disk('local')->put($path, $pdf);
-
-        return ReVivaStaffDocument::create([
-            're_viva_detail_id' => $detail->id,
-            'kind' => ReVivaStaffDocument::LETTER,
-            'seat' => $seat,
-            'examiner_id' => $examiner->id,
-            'path' => $path,
-            'original_name' => 'correction-letter-'.Str::slug($examiner->name).'.pdf',
-            'created_by_id' => $actor->id,
-        ]);
-    }
-
-    public static function render(ReVivaDetail $detail, Application $application, Examiner $examiner, Carbon $sentAt): string
-    {
-        $student = $application->student;
-        $viva = $detail->vivaDetail();
-        $phd = ($viva?->programme_level ?? VivaChecklist::levelFor($student)) === VivaChecklist::PHD;
-        $days = (int) config('hani.reviva.review_working_days', 20);
-
-        $data = [
-            'reference' => config('hani.reviva.letter.reference_prefix', 'UTP/PGS/AD/').($student->matric_no ?: $student->id),
-            'date' => $sentAt,
-            'examiner' => $examiner,
-            'examinerPlace' => self::placeOf($examiner),
-            'student' => $student,
-            'degreeWord' => $phd ? 'Doctoral' : 'Master\'s',
-            'degreeName' => $phd ? 'Doctor of Philosophy' : 'Master of Science',
-            'programme' => $student->programme ?: '-',
-            'thesisTitle' => $viva?->thesis_title ?: ($detail->panel()?->thesis_title ?: '-'),
-            'workingDays' => $days,
-            'workingDaysWords' => self::words($days),
-            'dueDate' => self::reviewDue($sentAt),
-            'letter' => (array) config('hani.reviva.letter'),
-            'round' => $detail->cycle_number,
-        ];
-
-        return Pdf::loadView('hani::re_viva.pdf.correction_letter', $data)
-            ->setPaper('a4')
-            ->setOption(['isFontSubsettingEnabled' => true, 'defaultFont' => 'DejaVu Serif', 'isRemoteEnabled' => false])
-            ->output();
-    }
-
-    /** @return array<int, string> the lines under the examiner's name */
-    protected static function placeOf(Examiner $examiner): array
-    {
-        if ($examiner->type === Examiner::TYPE_EXTERNAL) {
-            return array_values(array_filter([$examiner->department !== 'External' ? $examiner->department : null, $examiner->institution]));
-        }
-
-        return array_values(array_filter([
-            $examiner->department ? 'Department of '.$examiner->department : null,
-            config('hani.reviva.letter.institution'),
-        ]));
+        return WorkingDays::add(Carbon::parse($sentAt), (int) config('hani.reviva.panel_working_days', 20));
     }
 
     /** "twenty" for 20: the letter spells the number out, as the real one does. */
-    protected static function words(int $n): string
+    public static function words(int $n): string
     {
         $ones = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
             'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
@@ -200,7 +147,7 @@ class ReVivaLetters
 
         foreach ($letters as $letter) {
             [$name, $problem] = $this->deliver($letter, $actor, ReVivaLetterSend::FIRST);
-            $name ? $emailed[] = $name : $skipped[] = $problem.' Their letter was generated; use "Resend letter" once the email is updated.';
+            $name ? $emailed[] = $name : $skipped[] = $problem;
         }
 
         return ['letters' => $letters, 'emailed' => $emailed, 'skipped' => $skipped];
@@ -248,8 +195,8 @@ class ReVivaLetters
         if ($letter->kind !== ReVivaStaffDocument::LETTER || ! $application) {
             return 'Only a correction letter can be resent.';
         }
-        if (! ($user->role === Role::SENIOR_EXEC_CGS || ($user->role === Role::ACADEMIC_EXEC && $user->department === $application->student?->department))) {
-            return 'Only the Academic Executive of the student\'s department or the Senior Executive can resend a letter.';
+        if ($user->role !== Role::SENIOR_EXEC_CGS) {
+            return 'Only the Senior Executive can resend a letter.';
         }
         if ($application->status !== Application::STATUS_PENDING || $application->current_stage !== self::PANEL_STAGE) {
             return 'Letters can be resent only while the round is Under Panel Review.';
@@ -289,16 +236,17 @@ class ReVivaLetters
         try {
             $send = $log(true, null);
             Notification::route('mail', [$examiner->usableEmail() => $examiner->name])
-                ->notify(new ReVivaCorrectionLetter($letter, $send));
+                ->notifyNow(new ReVivaCorrectionLetter($letter, $send));
             $letter->update(['emailed_at' => $letter->emailed_at ?? now(), 'email_skipped_reason' => null]);
 
             return [$examiner->name, null];
         } catch (\Throwable $e) {
             report($e);
-            $letter->update(['email_skipped_reason' => 'The email could not be sent.']);
-            isset($send) ? $send->update(['emailed' => false, 'skipped_reason' => 'The email could not be sent.']) : $log(false, 'The email could not be sent.');
+            $reason = 'The email could not be sent: '.Str::limit($e->getMessage(), 160);
+            $letter->update(['email_skipped_reason' => $reason]);
+            isset($send) ? $send->update(['emailed' => false, 'skipped_reason' => $reason]) : $log(false, $reason);
 
-            return [null, "The email to {$examiner->name} could not be sent."];
+            return [null, "The email to {$examiner->name} could not be sent ({$e->getMessage()})."];
         }
     }
 }

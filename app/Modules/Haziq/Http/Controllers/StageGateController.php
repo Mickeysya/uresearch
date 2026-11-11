@@ -93,7 +93,18 @@ class StageGateController extends Controller
             $query->where('allowance_status', $allowance);
         }
 
-        $gates = $query->orderByRaw("FIELD(timeline_status, 'grace_expired', 'grace_period', 'due_soon', 'upcoming')")
+        // CASE WHEN, not MySQL's own FIELD() -- same ordering, but also
+        // runs under the sqlite connection the test suite uses, which
+        // has no FIELD() function at all. Found 2026-11-10 while adding
+        // a test for this same route's approver branch: nothing had ever
+        // exercised it before, so this had silently never been testable.
+        $gates = $query->orderByRaw("CASE timeline_status
+                WHEN 'grace_expired' THEN 1
+                WHEN 'grace_period' THEN 2
+                WHEN 'due_soon' THEN 3
+                WHEN 'upcoming' THEN 4
+                ELSE 5
+            END")
             ->orderBy('deadline_date')
             ->paginate(25)
             ->withQueryString();
@@ -174,9 +185,25 @@ class StageGateController extends Controller
     }
 
     /**
-     * Active/Terminated — this appointment's own candidature_status, not
-     * the student's broader standing. Keyed by application_id, GRA and GA
-     * both, since the monitoring screen shows both module types together.
+     * Approved / Active / Inactive / Terminated -- this appointment's own
+     * lifecycle (GraApplicationDetail/GaApplicationDetail::serviceStatus(),
+     * not the raw candidature_status column directly), not the student's
+     * broader standing. Keyed by application_id, GRA and GA both, since
+     * the monitoring screen shows both module types together. Confirmed
+     * explicitly 2026-11-10: this screen should show "Approved" before
+     * service_start_date arrives and "Active" once it does, for every
+     * role that reaches this screen, not just candidature_status's own
+     * plain active/terminated.
+     *
+     * GRA reads through currentInChain() rather than calling
+     * serviceStatus() on $detail directly -- this screen's own rows are
+     * always keyed by the FIRST application in an extension chain (the
+     * only one with real Stage Gates), so without it, an approved
+     * extension carrying the student forward would still read as
+     * "Inactive" here once the original's own window lapsed, confirmed
+     * explicitly 2026-11-10. GA never chains this way (an approved GA
+     * Extension updates the same row in place instead), so it has no
+     * equivalent call.
      *
      * @param  \Illuminate\Support\Collection<int, int>  $applicationIds
      * @return array<int, string>
@@ -184,9 +211,11 @@ class StageGateController extends Controller
     protected function candidatureStatusByApplication($applicationIds): array
     {
         $gra = GraApplicationDetail::whereIn('application_id', $applicationIds)
-            ->pluck('candidature_status', 'application_id');
+            ->get()
+            ->mapWithKeys(fn (GraApplicationDetail $detail) => [$detail->application_id => $detail->currentInChain()->serviceStatus()]);
         $ga = GaApplicationDetail::whereIn('application_id', $applicationIds)
-            ->pluck('candidature_status', 'application_id');
+            ->get()
+            ->mapWithKeys(fn (GaApplicationDetail $detail) => [$detail->application_id => $detail->serviceStatus()]);
 
         return $gra->union($ga)->all();
     }

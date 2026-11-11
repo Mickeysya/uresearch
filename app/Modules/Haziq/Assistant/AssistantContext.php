@@ -8,6 +8,7 @@ use App\Modules\Haziq\Models\AllowancePaymentLog;
 use App\Modules\Haziq\Models\ApplicationCorrectionRequest;
 use App\Modules\Haziq\Models\AssistantLog;
 use App\Modules\Haziq\Models\CandidatureAppeal;
+use App\Modules\Haziq\Models\GaAllowancePaymentLog;
 use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\StageGate;
@@ -38,6 +39,21 @@ class AssistantContext
             $lines[] = $history;
         }
 
+        // Just the name -- confirmed explicitly 2026-11-10: "siapa
+        // supervisor akan approve... tak confidential... tapi detail
+        // lebih supervisor taleh." Who a student's own supervisor is
+        // isn't gated on the application having actually reached that
+        // stage yet; it's a plain fact of the student's own record, the
+        // same one gra_application/show.blade.php and ga_application/
+        // show.blade.php already show regardless of current_stage.
+        // Nothing else about that supervisor -- their other supervisees,
+        // how long they take, any internal note -- belongs here; see
+        // KnowledgeBase's own "WHAT A STUDENT'S OWN RECORDS NEVER
+        // INCLUDE" section for the line that keeps that boundary.
+        if ($student->supervisor) {
+            $lines[] = "Your assigned supervisor: {$student->supervisor->name}.";
+        }
+
         $applications = Application::whereIn('module_type', ['gra_application', 'ga_application'])
             ->where('student_id', $student->id)
             ->orderByDesc('submitted_at')
@@ -54,6 +70,11 @@ class AssistantContext
         $allowance = self::allowanceSummary($student);
         if ($allowance) {
             $lines[] = $allowance;
+        }
+
+        $gaAllowance = self::gaAllowanceSummary($student);
+        if ($gaAllowance) {
+            $lines[] = $gaAllowance;
         }
 
         // The TA hours log moved to Norhanis' module; read it through her helper, not her table.
@@ -205,8 +226,11 @@ class AssistantContext
         $line = "Allowance, most recent record ({$log->payment_month->format('M Y')}): status={$log->status}, amount=RM"
             .number_format($displayAmount, 2).'.';
 
-        // GA has no allowance tracking at all (GraApplicationDetail only),
-        // so a null rate here is routine for a GA student, not a data gap.
+        // This whole method only ever reads GRA's own AllowancePaymentLog
+        // -- a GA student's allowance comes from gaAllowanceSummary()
+        // below instead, a completely separate table and rule. A null
+        // rate here is still routine (a GRA row with no detail row is a
+        // genuine data gap, but a different one), not evidence of either.
         $rate = GraApplicationDetail::where('application_id', $log->application_id)->value('proposed_allowance');
 
         if ($rate !== null) {
@@ -225,5 +249,39 @@ class AssistantContext
         }
 
         return $line;
+    }
+
+    /**
+     * GA's own allowance cycle -- deliberately separate from the GRA
+     * one above, confirmed explicitly 2026-11-10: "ga ni letak actions
+     * lain. jangan sekali kan dengan allowance gra satu excel." It does
+     * accumulate the same way GRA's does though, confirmed the same
+     * day, reversing an earlier "resets every month" version: "ga pun
+     * sama ah, kalau ada accumulated amount on service end month, month
+     * after payment accumulated amount tu." No Stage Gates and no
+     * termination to account for, though, so there is no "if
+     * unconfirmed, next month would be" projection the way GRA's own
+     * summary gives -- just the real running total as of now.
+     */
+    protected static function gaAllowanceSummary(User $student): ?string
+    {
+        $month = Carbon::today()->startOfMonth();
+
+        $log = GaAllowancePaymentLog::where('student_id', $student->id)
+            ->where('payment_month', '<=', $month)
+            ->orderByDesc('payment_month')
+            ->first();
+
+        if (! $log) {
+            return null;
+        }
+
+        $amount = $log->isConfirmed()
+            ? (float) $log->confirmed_amount
+            : \App\Modules\Haziq\Support\GaAllowanceLedger::accumulatedTotalThrough((int) $log->application_id, Carbon::parse($log->payment_month));
+
+        return "GA Allowance, most recent record ({$log->payment_month->format('M Y')}): "
+            .($log->isConfirmed() ? 'paid' : 'pending confirmation by CGS/Admin')
+            .', amount=RM'.number_format($amount, 2).'.';
     }
 }

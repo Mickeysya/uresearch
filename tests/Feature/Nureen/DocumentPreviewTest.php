@@ -226,6 +226,8 @@ class DocumentPreviewTest extends TestCase
         $this->actingAs($this->student)->post(route('ga-extension.store'), $this->gaExtensionFields() + $this->gaExtensionDocuments());
         $application = Application::where('module_type', 'ga_extension')->sole();
 
+        $this->actingAs($this->admin())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
         $this->actingAs($this->supervisor)->get(route('ga-extension.queue'))->assertDontSee('Return to supervisor');
 
         $this->actingAs($this->supervisor)->post(route('ga-extension.decide', $application), ['decision' => 'approve']);

@@ -202,29 +202,6 @@
 }
 .ws-link-button:hover { background: none; box-shadow: none; color: var(--navy-dark); }
 
-.ws-seat-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: var(--space-3);
-}
-
-.ws-seat-tile {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    padding: var(--space-4);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    transition: border-color var(--duration-fast) var(--ease), box-shadow var(--duration-fast) var(--ease);
-}
-.ws-seat-tile:hover { border-color: var(--navy-300, var(--border-strong)); box-shadow: var(--shadow-sm); }
-.ws-seat-tile form { margin: 0; }
-.ws-seat-tile button { width: 100%; margin: 0; min-height: 44px; }
-.ws-seat-num { font-size: var(--text-lg); font-weight: var(--weight-semi); color: var(--text-dark); }
-.ws-seat-state { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); color: var(--success-fg); }
-.ws-seat-state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-
 .ws-footnote { margin: var(--space-6) 0 0; font-size: var(--text-xs); color: var(--text-grey); }
 
 /* ---- Terms -------------------------------------------------------------- */
@@ -286,10 +263,6 @@
 .wst-reasons { list-style: lower-alpha; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-1) var(--space-6); margin: var(--space-3) 0 0; padding-left: var(--space-5); }
 
 .wst-colophon { margin: var(--space-8) 0 0; padding-top: var(--space-5); border-top: 1px solid var(--border-subtle); font-size: var(--text-sm); color: var(--text-grey); }
-
-/* Select reads as a light outline until the tile is hovered or focused. */
-.ws-seat-tile:hover button.btn-secondary,
-.ws-seat-tile button.btn-secondary:focus-visible { background: var(--accent-solid); color: var(--text-on-accent); border-color: var(--accent-solid); }
 
 /* ---- CGS: Workstation Management -------------------------------------
    Same cards as the student pages. The seat card (_seat-card.blade.php) is

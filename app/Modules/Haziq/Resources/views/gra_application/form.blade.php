@@ -27,66 +27,85 @@
                 <p><b>Previous Allowance</b><br>RM {{ $parentDetail->proposed_allowance !== null ? number_format($parentDetail->proposed_allowance, 2) : '—' }}</p>
             </div>
 
+            @if ($draft ?? false)
+                <div class="haziq-repeatable-row" style="border-color: var(--warning-fg);">
+                    <p style="grid-column: 1 / -1;">
+                        <b>Continuing your saved draft</b> (#{{ $draft->id }}) — everything below is what
+                        you last saved. Keep editing, Save Draft again any time, or Submit Extension
+                        when it's ready.
+                    </p>
+                </div>
+            @endif
+
             <form method="POST" action="{{ route('gra-application.extension.store') }}" enctype="multipart/form-data">
                 @csrf
                 <input type="hidden" name="parent_application_id" value="{{ $parent->id }}">
+                @if ($draft ?? false)
+                    <input type="hidden" name="draft_id" value="{{ $draft->id }}">
+                @endif
 
                 <h3>Section B — Project Details</h3>
                 <label for="project_leader_name">Project Leader</label>
                 <input type="text" name="project_leader_name" id="project_leader_name" required
-                       value="{{ old('project_leader_name', $parentDetail->project_leader_name) }}">
+                       value="{{ old('project_leader_name', $draftDetail->project_leader_name ?? $parentDetail->project_leader_name) }}">
                 @error('project_leader_name') <p class="field-error">{{ $message }}</p> @enderror
 
                 <label for="project_leader_contact">Project Leader Contact No.</label>
                 <input type="text" name="project_leader_contact" id="project_leader_contact"
-                       value="{{ old('project_leader_contact', $parentDetail->project_leader_contact) }}">
+                       value="{{ old('project_leader_contact', $draftDetail->project_leader_contact ?? $parentDetail->project_leader_contact) }}">
 
                 <label for="project_title">Project Title</label>
                 <input type="text" name="project_title" id="project_title" required
-                       value="{{ old('project_title', $parentDetail->project_title) }}">
+                       value="{{ old('project_title', $draftDetail->project_title ?? $parentDetail->project_title) }}">
                 @error('project_title') <p class="field-error">{{ $message }}</p> @enderror
 
                 <label for="funding_source">Funding Source</label>
                 <select name="funding_source" id="funding_source" required>
                     @foreach (['Internal Funding', 'MOHE Grant', 'MOSTI Grant', 'Government Agencies', 'Consultancy & Contract Research', 'Petroleum Research Fund (PRF)', 'Research Industry or Private Grant', 'International Grant', 'Others'] as $source)
-                        <option value="{{ $source }}" @selected(old('funding_source', $parentDetail->funding_source) === $source)>{{ $source }}</option>
+                        <option value="{{ $source }}" @selected(old('funding_source', $draftDetail->funding_source ?? $parentDetail->funding_source) === $source)>{{ $source }}</option>
                     @endforeach
                 </select>
 
                 <label for="funding_continuation">Is this extension on the same grant, or a new one?</label>
                 <select name="funding_continuation" id="funding_continuation" required>
-                    <option value="existing" @selected(old('funding_continuation') === 'existing')>Existing Grant</option>
-                    <option value="new" @selected(old('funding_continuation') === 'new')>New Grant</option>
+                    <option value="existing" @selected(old('funding_continuation', $draftDetail->funding_continuation ?? null) === 'existing')>Existing Grant</option>
+                    <option value="new" @selected(old('funding_continuation', $draftDetail->funding_continuation ?? null) === 'new')>New Grant</option>
                 </select>
                 @error('funding_continuation') <p class="field-error">{{ $message }}</p> @enderror
 
                 <label for="grant_name">Name of Grant</label>
-                <input type="text" name="grant_name" id="grant_name" value="{{ old('grant_name', $parentDetail->grant_name) }}">
+                <input type="text" name="grant_name" id="grant_name" value="{{ old('grant_name', $draftDetail->grant_name ?? $parentDetail->grant_name) }}">
 
                 <label for="cost_centre">Cost Centre</label>
-                <input type="text" name="cost_centre" id="cost_centre" value="{{ old('cost_centre', $parentDetail->cost_centre) }}">
+                <input type="text" name="cost_centre" id="cost_centre" value="{{ old('cost_centre', $draftDetail->cost_centre ?? $parentDetail->cost_centre) }}">
 
                 <label for="centre_name">Name of Centre</label>
-                <input type="text" name="centre_name" id="centre_name" value="{{ old('centre_name', $parentDetail->centre_name) }}">
+                <input type="text" name="centre_name" id="centre_name" value="{{ old('centre_name', $draftDetail->centre_name ?? $parentDetail->centre_name) }}">
 
                 <h3>Extension Details</h3>
                 <label for="requested_new_end_date">Requested New End Date</label>
-                <input type="date" name="requested_new_end_date" id="requested_new_end_date" required
-                       value="{{ old('requested_new_end_date') }}">
+                <input type="date" name="requested_new_end_date" id="requested_new_end_date"
+                       value="{{ old('requested_new_end_date', $draftDetail?->service_end_date?->format('Y-m-d')) }}">
                 @error('requested_new_end_date') <p class="field-error">{{ $message }}</p> @enderror
                 <p class="queue-meta" style="margin-top: -8px;">
                     No allowance field here — CGS sets the allowance for the extension when they approve it.
                 </p>
 
                 <label for="extension_reason">Reason / Justification</label>
-                <textarea name="extension_reason" id="extension_reason" rows="4" required>{{ old('extension_reason') }}</textarea>
+                <textarea name="extension_reason" id="extension_reason" rows="4">{{ old('extension_reason', $draftDetail->extension_reason ?? null) }}</textarea>
                 @error('extension_reason') <p class="field-error">{{ $message }}</p> @enderror
 
                 <label for="evidence_document">Stage Gate Evidence <span style="color: var(--text-grey)">(journal acceptance / publication proof, if applicable)</span></label>
+                @if (($draftDocuments ?? collect())->where('doc_type', 'Stage Gate Evidence / Publication Proof')->isNotEmpty())
+                    <p class="queue-meta" style="margin: 0 0 6px;">Already uploaded — choose a file only to replace it.</p>
+                @endif
                 <input type="file" name="evidence_document" id="evidence_document">
                 @error('evidence_document') <p class="field-error">{{ $message }}</p> @enderror
 
-                <button type="submit" data-confirm="Submit this GRA extension request? You won't be able to edit it unless an approver sends it back for correction.">Submit Extension</button>
+                <div class="haziq-actions" style="margin-top: 14px;">
+                    <button type="submit" name="action" value="save_draft" class="btn-secondary">Save Draft</button>
+                    <button type="submit" name="action" value="submit" data-confirm="Submit this GRA extension request? You won't be able to edit it unless an approver sends it back for correction.">Submit Extension</button>
+                </div>
             </form>
         @else
             @if ($draft ?? false)

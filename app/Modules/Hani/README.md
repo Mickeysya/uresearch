@@ -134,8 +134,8 @@ Every value CGS has not confirmed is marked **Provisional** in the file.
 | `examiner_progress.criteria`, `.sections` | rating labels | Provisional wording |
 | `scheduling.*` | clash hours, slots, public holidays | Provisional |
 | `result.*` | correction months, resubmission window, reminder days | Provisional |
-| `reviva.review_working_days`, `reviva.link_days` | 20 working days; 35-day link | Confirmed (20 days) |
-| `reviva.next_round_window_months`, `final_thesis_months`, `hold_months`, `panel_*_working_days`, `risk.*` | | Provisional |
+| `reviva.panel_working_days`, `reviva.signed_link_days` | 20 working days; 35-day link | Confirmed (20 days) |
+| `reviva.next_round_window_months`, `final_deadline_months`, `hold_months`, `panel_*_working_days`, `risk.*` | | Provisional |
 | `reviva.letter.*` | signatory and CGS contacts | Provisional (fictional) |
 | `reminders.*`, `sweep.*`, `sla.daily_at` | run times and reminder spacing | Provisional |
 | `sla.stages` | per-stage limits, e.g. 5 and 10 working days | Provisional |
@@ -170,8 +170,8 @@ Fictional, on demand only, never called from `DatabaseSeeder`. Password
 
 **Staff (shared test accounts):** `ae@utp.edu.my` (AE, Computing; other
 departments `ae.<department>@utp.edu.my`, e.g. `ae.petroleum@`,
-`ae.applied@`, `ae.chemical@`), `seniorexec@utp.edu.my` (Senior Executive
-CGS), `director@utp.edu.my` (Senior Director CGS), `dean@utp.edu.my` (Dean
+`ae.applied@`, `ae.chemical@`), `waheda.cgs@utp.edu.my` (Puan Waheeda,
+Senior Executive CGS; `seniorexec@utp.edu.my` still works), `director@utp.edu.my` (Senior Director CGS), `dean@utp.edu.my` (Dean
 of PGR), `cgs@utp.edu.my` (Non-Executive CGS).
 
 **Demo supervisors:** `nurul.aziz@example.com` (Computing; S01, S08),
@@ -186,12 +186,12 @@ described under "Demo data" below. A suggested walkthrough:
 | Viva from the start (MSc) | `aiman.roslan@example.com` (S01) | eligibility and notice on one page |
 | Acknowledge | `ae@utp.edu.my` | Notices Received → acknowledge S01 |
 | Nominate with suggestions | `nurul.aziz@example.com` | Nominate Examiners → S01 → click suggestions |
-| The chain | `ae@` → `seniorexec@` → `director@` → `dean@` → `seniorexec@` | approve each; "Finalise and release" at the end; `cgs@` sees the notification |
+| The chain | `ae@` → `waheda.cgs@` → `director@` → `dean@` → `waheda.cgs@` | approve each; "Finalise and release" at the end; `cgs@` sees the notification |
 | Softbound with System checks | S01, then `ae@` | Form #019 with the fictional Turnitin report; AE reads the checks |
 | Divergence | `ae.mechanical@utp.edu.my` | S06's examiner progress: internal 2, external 4 |
 | Viva reminders | terminal | `viva:reminders --dry-run`: S07's 7-day reminder |
-| Re-viva | `ae.applied@utp.edu.my`, then `seniorexec@` | S09 under panel review for 22 working days (resend a letter); the Senior Exec logs S10's round 2 (`ae.chemical@` runs it) |
-| Analytics | `seniorexec@` or `ae@` | Examiner Dashboard → Process Analytics; switch 3/6/12 months; download Excel |
+| Re-viva | `reviva.a@example.com`, then `waheda.cgs@`, `dean@` | rounds `reviva.a@`–`reviva.l@` wait at each step: document check, Dean approval, Ready to Send (`reviva.f@`), panel review, result |
+| Analytics | `waheda.cgs@` or `ae@` | Examiner Dashboard → Process Analytics; switch 3/6/12 months; download Excel |
 
 ## Module details
 
@@ -424,7 +424,7 @@ Settings in `config/hani.php` under `reviva`; unconfirmed values are marked
   (`Resources/views/re_viva/pdf/correction_letter.blade.php`, styles in one
   block), stored staff-only, emailed with a signed link (no login, expiring,
   throttled) to the corrected thesis and Summary of Corrections. The link
-  works for `hani.reviva.link_days` from when the email is built, not from a
+  works for `hani.reviva.signed_link_days` from when the email is built, not from a
   backdated send. `Http/Middleware/ValidPanelLink` answers a tampered link
   with 403 and an expired one with a 410 page giving the CGS contacts.
   Flagged emails are skipped and named. The stage completes in the same
@@ -537,7 +537,7 @@ password `password`, like the test accounts. Their approvers are the shared
 test accounts:
 - the candidate's department AE, for example `ae@utp.edu.my` for Computing
   and `ae.petroleum@utp.edu.my` for Petroleum Engineering
-- `seniorexec@`, `director@` and `dean@`
+- `waheda.cgs@` (or `seniorexec@`), `director@` and `dean@`
 
 | Student | Email | Programme / department | Stage |
 |---|---|---|---|
@@ -616,3 +616,9 @@ Hani/
    `WorkflowEngine::submit()`, `::decide()` or `::returnTo()`.
 
 See `docs/adding-a-module.md` for the full walkthrough.
+
+## Re-viva (official CGS re-examination process, 2026-11-09)
+
+Student submits three PDFs on Re-viva, the Senior Executive checks them and generates one letter and one UTP/CGS/024 per main examiner, the Dean of PGR approves or returns them, and the Senior Executive sends the pack. Examiners, internal and external, return their forms on My Re-evaluations (an account is created at send); the Senior Executive can record a return on their behalf. "Start review" moves the round to CGS Review, where it passes, is dismissed, or goes to a meeting. Level 4 opens the next round when the student submits again.
+
+The Academic Executive has no re-viva access. Non-Executive CGS has read-only Re-viva Cycles. Reminders go to examiners who have not returned, at the working days on Re-viva Settings (default 10 and 3). The examiner's signed link still requires the email code sign-in.

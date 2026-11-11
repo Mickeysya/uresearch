@@ -279,4 +279,39 @@ class AssistantContextTest extends TestCase
         $this->assertNotFalse($newestKept);
         $this->assertLessThan($newestKept, $oldestKept, 'oldest-kept question should read before the newest, not after');
     }
+
+    /**
+     * Confirmed explicitly 2026-11-10: "siapa supervisor akan approve...
+     * tak confidential" -- who a student's own supervisor is, not
+     * gated on current_stage having actually reached Supervisor yet.
+     */
+    public function test_the_students_own_supervisor_name_is_included_even_before_the_application_reaches_that_stage(): void
+    {
+        $supervisor = User::create(['name' => 'Dr. Aiman Supervisor', 'email' => 'aiman-sup@test.com', 'password' => 'password', 'role' => Role::SUPERVISOR]);
+        $student = $this->student('student-with-sup@test.com');
+        $student->update(['supervisor_id' => $supervisor->id]);
+
+        $application = Application::create([
+            'student_id' => $student->id, 'module_type' => 'gra_application',
+            'status' => Application::STATUS_PENDING, 'current_stage' => 'admin_verify', 'submitted_at' => now(),
+        ]);
+        GraApplicationDetail::create([
+            'application_id' => $application->id, 'profile_id' => $this->profileFor($student)->id,
+            'application_type' => 'new', 'project_leader_name' => 'Dr. Lim', 'project_title' => 'Test',
+            'funding_source' => 'Internal', 'service_start_date' => now(), 'service_end_date' => now()->addYears(2),
+        ]);
+
+        $context = AssistantContext::forStudent($student->fresh());
+
+        $this->assertStringContainsString('Your assigned supervisor: Dr. Aiman Supervisor.', $context);
+    }
+
+    public function test_no_supervisor_line_appears_when_none_is_assigned(): void
+    {
+        $student = $this->student('student-without-sup@test.com');
+
+        $context = AssistantContext::forStudent($student);
+
+        $this->assertStringNotContainsString('Your assigned supervisor', $context);
+    }
 }

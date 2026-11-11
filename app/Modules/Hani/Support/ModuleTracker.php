@@ -119,27 +119,36 @@ final class ModuleTracker
         $application = $detail->application;
         $stage = $application?->current_stage;
         $finished = $application?->status === Application::STATUS_APPROVED;
+        $returned = $application?->status === Application::STATUS_RETURNED;
         $level = $detail->outcome_level;
+        $order = ['student_submitted' => 0, 'pack_preparation' => 1, 'dean_approval' => 2, 'ready_to_send' => 3, 'under_panel_review' => 4, 'reports_received' => 5, 'cgs_review' => 6, 'meeting_scheduled' => 7];
+        $at = $finished ? 8 : ($order[$stage] ?? 0);
+        $past = fn (int $i) => $finished || $at > $i;
 
         $done = [
-            'resubmission' => true,
-            'panel' => $finished || in_array($stage, ['report_received', 'consolidation_scheduled'], true),
-            'consolidation' => $finished,
+            'submitted' => $past(0) || $returned,
+            'returned' => $past(0),
+            'pack' => $past(1), 'dean' => $past(2), 'send' => $past(3), 'panel' => $past(4),
+            'reports' => $past(5), 'review' => $past(6), 'meeting' => $past(7),
             'result' => $level !== null,
         ];
 
         $now = [
-            'resubmission' => null,
-            'panel' => 'Send the re-viva report to the panel and track their review.',
-            'consolidation' => 'Record the panel\'s report and schedule the consolidation meeting.',
-            'result' => 'Record the outcome level under Re-viva Outcomes.',
+            'submitted' => 'CGS is checking the submitted documents.',
+            'returned' => 'Some documents were returned: re-upload them on Re-viva.',
+            'pack' => 'CGS is preparing the letters and report forms.',
+            'dean' => 'The Dean of PGR is reviewing the letters.',
+            'send' => 'CGS will send the documents to the panel.',
+            'panel' => 'The panel is re-evaluating the thesis'.($detail->panel_deadline ? ', due '.$detail->panel_deadline->format('j M Y') : '').'.',
+            'reports' => 'The reports are in and CGS will review them.',
+            'review' => 'CGS is reviewing the reports and deciding the result.',
+            'meeting' => $detail->meeting_at ? 'A meeting is scheduled for '.$detail->meeting_at->format('j M Y, g:i a').'.' : 'A meeting is being arranged.',
+            'result' => 'The result is being recorded.',
         ];
 
         $tracker = self::linear([
-            'resubmission' => 'Resubmission',
-            'panel' => 'Panel Review',
-            'consolidation' => 'Report & Consolidation',
-            'result' => 'Re-viva Result',
+            'submitted' => 'Submitted', 'returned' => 'Returned (if any)', 'pack' => 'Pack Preparation', 'dean' => 'Dean Approval', 'send' => 'Ready to Send',
+            'panel' => 'Panel Review', 'reports' => 'Reports Received', 'review' => 'CGS Review', 'meeting' => 'Meeting (if needed)', 'result' => 'Result',
         ], $done, $now);
 
         $tracker['title'] = 'Re-viva round '.$detail->cycle_number;
@@ -147,12 +156,12 @@ final class ModuleTracker
         if ($level !== null) {
             // A fail or a dismissal reads as a cross, not a tick.
             if ($level >= ReVivaDetail::OUTCOME_LOOP_BACK) {
-                $tracker['steps'][3]['state'] = 'rejected';
+                $tracker['steps'][9]['state'] = 'rejected';
             }
 
             $tracker['now'] = match (true) {
                 $level === ReVivaDetail::OUTCOME_DISMISSED => 'Level 5: dismissed. This is the final outcome; there is no further action.',
-                $level === ReVivaDetail::OUTCOME_LOOP_BACK => 'Level 4: another round is needed. CGS logs re-viva round '.($detail->cycle_number + 1).' when the corrected thesis arrives.',
+                $level === ReVivaDetail::OUTCOME_LOOP_BACK => 'Level 4: another round is needed. Round '.($detail->cycle_number + 1).' opens when the student submits again.',
                 $detail->corrections_accepted_at !== null => 'Level '.$level.': final thesis accepted on '.$detail->corrections_accepted_at->format('j M Y').'. The re-viva is complete.',
                 default => 'Level '.$level.': passed with corrections'.($detail->correction_deadline ? ', due by '.$detail->correction_deadline->format('j M Y') : '').'.',
             };

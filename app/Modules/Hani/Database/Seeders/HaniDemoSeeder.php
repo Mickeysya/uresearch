@@ -33,8 +33,8 @@ use RuntimeException;
  *   Part 2 (people, vivaScenarios; Concerns\SeedsVivaScenarios): the demo
  *   supervisors and students, each put at their stated viva stage through
  *   the real WorkflowEngine.
- *   Part 3 (reVivaScenarios; Concerns\SeedsReVivaScenarios): S09's and
- *   S10's re-viva rounds.
+ *   Part 5 (reVivaScenarios; Concerns\SeedsReVivaScenarios): one
+ *   student at each point of the re-examination process.
  *   Part 4 (historicalCases; Concerns\SeedsHistoricalCases): 24 fictional
  *   completed cases over the past year (H01-H24), for Process Analytics.
  *   No email, and the pool's state is put back afterwards.
@@ -84,7 +84,7 @@ class HaniDemoSeeder extends Seeder
     /** @return array<int, string> the step methods run() calls, in order */
     protected function steps(): array
     {
-        return ['examinerPool', 'people', 'vivaScenarios', 'reVivaScenarios', 'historicalCases'];
+        return ['examinerPool', 'people', 'vivaScenarios', 'historicalCases', 'reVivaScenarios'];
     }
 
     public function run(): void

@@ -3,127 +3,95 @@
 namespace App\Modules\Hani\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
-use App\Modules\Core\Services\DocumentStore;
+use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Hani\Models\ReVivaDetail;
-use App\Modules\Hani\Models\ReVivaSummary;
 use App\Modules\Hani\Support\ReVivaCorrections;
+use App\Modules\Hani\Support\ReVivaDocuments;
 use App\Modules\Hani\Support\ReVivaLogging;
+use App\Modules\Hani\Support\ReVivaProcess;
 use App\Modules\Hani\Support\ReVivaWindow;
-use App\Modules\Hani\Support\SummaryOfCorrections;
 use Illuminate\Http\Request;
 
 /**
- * The student's own re-viva rounds: where each stands, the outcome level,
- * the final-thesis deadline and the upload (levels 1-3).
- *
- * Never an examiner's name, an individual recommendation or a staff-only
- * file: this page reads re_viva_details and the student's own DocumentStore
- * files only.
+ * The student's re-viva: forms, the three uploads, returns, status and
+ * result. Never shows an examiner's name on a page; only the downloadable
+ * blank forms name the panel.
  */
 class ReVivaStudentController extends Controller
 {
+    public const FIELDS = [
+        'confirmation' => ReVivaLogging::DOC_CONFIRMATION,
+        'summary' => ReVivaLogging::DOC_SUMMARY,
+        'thesis' => ReVivaLogging::DOC_THESIS,
+    ];
+
     public function mine(Request $request)
     {
-        $rounds = ReVivaDetail::with('application.documents')
-            ->whereHas('application', fn ($q) => $q->where('module_type', 're_viva')->where('student_id', $request->user()->id))
-            ->orderByDesc('cycle_number')
-            ->get();
+        $user = $request->user();
+        $rounds = ReVivaDetail::with(['application.documents', 'documentReturns'])
+            ->whereHas('application', fn ($q) => $q->where('module_type', 're_viva')->where('student_id', $user->id))
+            ->orderByDesc('cycle_number')->get();
+
+        abort_if($rounds->isEmpty() && ! ReVivaWindow::categoryFourViva($user), 403);
 
         return view('hani::re_viva.mine', [
-            'rounds' => $rounds,
-            'expecting' => $this->expecting($request->user()),
-            'summary' => ReVivaSummary::openFor($request->user()),
+            'rounds' => $rounds, 'expecting' => $this->expecting($user),
+            'forms' => ReVivaDocuments::FORMS, 'fields' => self::FIELDS,
         ]);
     }
 
-    /**
-     * The digital Summary of Corrections (nice-to-have c2): open while a
-     * corrected thesis is expected (a category-4 viva or a level-4 round,
-     * with no round logged yet).
-     */
-    public function summary(Request $request)
+    public function form(Request $request, string $form, string $variant, ReVivaDocuments $documents)
     {
-        $student = $request->user();
-        abort_unless($this->expecting($student), 403, 'There is no re-viva resubmission expected from you at the moment.');
+        abort_unless(isset(ReVivaDocuments::FORMS[$form]), 404);
+        abort_if($variant === 'blank' && ! ReVivaWindow::categoryFourViva($request->user()) && ! ReVivaLogging::latestCycle($request->user()->id), 403);
 
-        $summary = ReVivaSummary::openFor($student) ?? new ReVivaSummary(['student_id' => $student->id, 'rows' => []]);
-
-        return view('hani::re_viva.summary', [
-            'summary' => $summary,
-            'result' => $summary->exists ? SummaryOfCorrections::check($summary) : null,
-            'window' => $this->expecting($student),
-        ]);
-    }
-
-    public function saveSummary(Request $request)
-    {
-        $student = $request->user();
-        abort_unless($this->expecting($student), 403);
-
-        $data = $request->validate([
-            'rows' => ['nullable', 'array', 'max:200'],
-            'rows.*.examiner' => ['required', 'integer', 'in:1,2'],
-            'rows.*.comment' => ['nullable', 'string', 'max:3000'],
-            'rows.*.action' => ['nullable', 'string', 'max:3000'],
-            'rows.*.pages' => ['nullable', 'string', 'max:100'],
-            'thesis' => [...DocumentStore::rules(), 'mimes:pdf'],
-            'intent' => ['required', 'in:save,submit'],
-        ]);
-
-        $summary = ReVivaSummary::openFor($student) ?? new ReVivaSummary(['student_id' => $student->id]);
-
-        // A row is a comment; blank lines the form offers are dropped.
-        $summary->rows = collect($data['rows'] ?? [])
-            ->filter(fn ($row) => filled($row['comment'] ?? null))
-            ->map(fn ($row) => [
-                'examiner' => (int) $row['examiner'],
-                'comment' => trim($row['comment']),
-                'action' => trim((string) ($row['action'] ?? '')),
-                'pages' => trim((string) ($row['pages'] ?? '')),
-            ])
-            ->sortBy('examiner')
-            ->values()
-            ->all();
-
-        // Only the page count is kept: the thesis itself goes to CGS with the summary.
-        if ($file = $request->file('thesis')) {
-            $summary->thesis_pages = SummaryOfCorrections::pageCount((string) file_get_contents($file->getRealPath()));
-            $summary->thesis_name = $file->getClientOriginalName();
-        }
-
-        $result = SummaryOfCorrections::check($summary);
-        $submit = $data['intent'] === 'submit';
-
-        if ($submit && ! $summary->thesis_name) {
-            $result['ok'] = false;
-            $result['checks'][] = ['status' => SummaryOfCorrections::PROBLEM, 'text' => 'Upload the corrected thesis so the pages can be checked.'];
-        }
-
-        $summary->submitted_at = $submit && $result['ok'] ? now() : null;
-        $summary->save();
-
-        return redirect()->route('reviva.summary.edit')->with(
-            $submit && ! $result['ok'] ? 'error' : 'status',
-            match (true) {
-                $submit && $result['ok'] => 'Summary of Corrections checked and ready. Download the PDF for your supervisor to endorse; CGS can attach it when they log your corrected thesis.',
-                $submit => 'Not ready yet: see the checks below.',
-                default => 'Saved.',
-            },
-        );
-    }
-
-    public function summaryPdf(Request $request)
-    {
-        $summary = ReVivaSummary::where('student_id', $request->user()->id)->whereNotNull('submitted_at')->latest('id')->firstOrFail();
-
-        return response(SummaryOfCorrections::render($summary), 200, [
+        return response($documents->form($form, $variant, $request->user()), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="summary-of-corrections.pdf"',
+            'Content-Disposition' => 'attachment; filename="'.$form.'-'.$variant.'.pdf"',
         ]);
     }
 
-    /** The window a corrected thesis is expected in, or null if none is. */
+    public function submit(Request $request, ReVivaLogging $logging, ReVivaProcess $process)
+    {
+        $user = $request->user();
+        abort_unless($this->expecting($user), 403, 'There is no re-viva submission expected from you at the moment.');
+
+        $rule = ['required', 'file', 'mimes:pdf', 'max:'.$this->maxKb()];
+        $request->validate(array_fill_keys(array_keys(self::FIELDS), $rule));
+
+        $result = $logging->log($user, collect(self::FIELDS)->mapWithKeys(fn ($type, $field) => [$type => $request->file($field)])->all());
+        $process->submitted($result['detail']);
+
+        $redirect = redirect()->route('reviva.mine')->with('status', 'Submitted — being checked by CGS.');
+
+        return $result['warning'] ? $redirect->with('warning', $result['warning']) : $redirect;
+    }
+
+    /** Only the returned documents are required again. */
+    public function resubmit(Request $request, ReVivaDetail $detail, ReVivaProcess $process)
+    {
+        abort_unless($detail->application->module_type === 're_viva' && $detail->application->student_id === $request->user()->id, 404);
+        abort_unless($detail->application->status === Application::STATUS_RETURNED, 403);
+
+        $returned = (array) $detail->documentReturns()->first()?->documents;
+        $fields = array_intersect(self::FIELDS, $returned);
+        $request->validate(array_fill_keys(array_keys($fields), ['required', 'file', 'mimes:pdf', 'max:'.$this->maxKb()]));
+
+        $process->resubmit($detail, collect($fields)->mapWithKeys(fn ($type, $field) => [$type => $request->file($field)])->all());
+
+        return redirect()->route('reviva.mine')->with('status', 'Resubmitted — being checked by CGS.');
+    }
+
+    public function submitFinalThesis(Request $request, ReVivaDetail $detail, ReVivaCorrections $corrections)
+    {
+        abort_unless($detail->application->module_type === 're_viva' && $detail->application->student_id === $request->user()->id, 404);
+        $request->validate(['final_thesis' => ['required', 'file', 'mimes:pdf', 'max:'.$this->maxKb()]]);
+        $corrections->submit($detail, $request->file('final_thesis'), $request->user());
+
+        return redirect()->route('reviva.mine')->with('status', 'Final thesis submitted. CGS has been told.');
+    }
+
     protected function expecting(User $student): ?ReVivaWindow
     {
         $latest = ReVivaLogging::latestCycle($student->id);
@@ -131,16 +99,8 @@ class ReVivaStudentController extends Controller
         return ReVivaLogging::blockReason($latest) === null ? ReVivaWindow::for($student, $latest) : null;
     }
 
-    public function submitFinalThesis(Request $request, ReVivaDetail $detail, ReVivaCorrections $corrections)
+    protected function maxKb(): int
     {
-        abort_unless($detail->application->module_type === 're_viva' && $detail->application->student_id === $request->user()->id, 404);
-
-        $request->validate([
-            'final_thesis' => [...DocumentStore::rules(required: true), 'mimes:pdf'],
-        ]);
-
-        $corrections->submit($detail, $request->file('final_thesis'), $request->user());
-
-        return redirect()->route('reviva.mine')->with('status', 'Final thesis submitted. Your Academic Executive has been told.');
+        return (int) config('hani.reviva.upload_max_mb', 20) * 1024;
     }
 }
