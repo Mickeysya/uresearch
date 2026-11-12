@@ -86,6 +86,9 @@ class ReVivaStudentController extends Controller
     public function submitFinalThesis(Request $request, ReVivaDetail $detail, ReVivaCorrections $corrections)
     {
         abort_unless($detail->application->module_type === 're_viva' && $detail->application->student_id === $request->user()->id, 404);
+        if ($detail->needsFinalThesis() && ! $detail->finalThesisOpen()) {
+            return redirect()->route('reviva.mine')->with('error', 'You may submit your final thesis from '.$detail->finalOpensOn()->format('j M Y').'.');
+        }
         $request->validate(['final_thesis' => ['required', 'file', 'mimes:pdf', 'max:'.$this->maxKb()]]);
         $corrections->submit($detail, $request->file('final_thesis'), $request->user());
 

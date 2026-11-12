@@ -20,7 +20,11 @@
     .suggest-score { padding: 1px 8px; border-radius: 999px; background: var(--info-bg); color: var(--info-fg); font-size: var(--text-2xs); font-weight: 700; }
     .suggest-where, .suggest-reasons { color: var(--text-grey); font-size: var(--text-xs); }
     .suggest-matched { font-size: var(--text-xs); }
-    .suggest-flag { margin-top: 3px; padding: 3px 8px; border-radius: 8px; font-size: var(--text-xs); }
+    .suggest-flag { box-sizing: border-box; max-width: 320px; margin-top: 3px; padding: 3px 8px; border-radius: 8px; font-size: var(--text-xs);
+        text-transform: none; white-space: normal; overflow-wrap: anywhere; }
+    .suggest-flag details { font-weight: 400; }
+    .suggest-flag summary { cursor: pointer; text-decoration: underline; }
+    .suggest-flag details p { margin: 2px 0 0; }
     .suggest-flag.is-warning { background: var(--warning-bg); color: var(--warning-fg); }
     .suggest-flag.is-block { background: var(--danger-bg); color: var(--danger-fg); }
     .suggest-actions { display: flex; gap: 6px; margin-top: 4px; }

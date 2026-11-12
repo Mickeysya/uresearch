@@ -75,7 +75,7 @@
                     @case('reports_received')
                     @case('cgs_review')
                         @if ($stage->key === 'under_panel_review' && $detail?->sent_to_panel_at)
-                            <p>With the panel for <b>{{ \App\Modules\Hani\Support\WorkingDays::between($detail->sent_to_panel_at, today()) }}</b> of {{ config('hani.reviva.panel_working_days') }} working days. Deadline {{ $detail->panel_deadline?->format('j F Y') }}.</p>
+                            <p>With the panel for <b>{{ \App\Modules\Hani\Support\WorkingDays::between($detail->sent_to_panel_at, today()) }}</b> of {{ \App\Modules\Hani\Support\ReVivaLetters::panelWorkingDays($detail) }} working days. Deadline {{ $detail->panel_deadline?->format('j F Y') }}.</p>
                             @include('hani::re_viva._staff_documents', ['detail' => $detail])
                         @endif
                         @include('hani::re_viva._evaluations', ['detail' => $detail, 'mains' => $panel])
@@ -103,6 +103,16 @@
                                 <select id="kind-{{ $application->id }}" name="meeting_kind" required><option value="consolidation">Consolidation meeting</option><option value="re_viva">Re-viva (oral examination)</option></select>
                                 <label for="at-{{ $application->id }}">Date and time</label><input type="datetime-local" id="at-{{ $application->id }}" name="meeting_at" required>
                                 <label for="venue-{{ $application->id }}">Venue or online link</label><input type="text" id="venue-{{ $application->id }}" name="meeting_venue" required>
+                                @php($vivaChair = $detail->vivaDetail())
+                                @if ($vivaChair?->chair_email)
+                                    <p class="fstep-hint">Invited: you, the two main examiners and the viva chairman ({{ $vivaChair->chair_name }}). The student and supervisor are told the date, without the calendar file.</p>
+                                @else
+                                    <p class="message-warning" role="alert">The viva chairman is not on record for this student's viva. Type the chairman's name and email so they are invited.</p>
+                                    <label for="chair-name-{{ $application->id }}">Chairman's name</label><input type="text" id="chair-name-{{ $application->id }}" name="meeting_chair_name" maxlength="150" value="{{ old('meeting_chair_name') }}">
+                                    @error('meeting_chair_name') <p class="field-error">{{ $message }}</p> @enderror
+                                    <label for="chair-email-{{ $application->id }}">Chairman's email</label><input type="email" id="chair-email-{{ $application->id }}" name="meeting_chair_email" maxlength="150" value="{{ old('meeting_chair_email') }}">
+                                    @error('meeting_chair_email') <p class="field-error">{{ $message }}</p> @enderror
+                                @endif
                                 <button type="submit" class="btn-secondary">Schedule and send invitations</button></form>
                         @endif
                         @break

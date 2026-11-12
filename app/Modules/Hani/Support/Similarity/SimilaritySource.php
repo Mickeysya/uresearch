@@ -7,7 +7,7 @@ namespace App\Modules\Hani\Support\Similarity;
  * Hani\ModuleProvider from config('hani.similarity.source'):
  *
  *   uploaded      UploadedReportSource (default): reads the Turnitin report
- *                 PDF the student downloaded from ULearn
+ *                 PDF the student downloaded from ULearnX
  *   turnitin_api  TurnitinApiSource: a documented stub until UTP licenses API
  *                 access
  *   simulated     SimulatedSource: deterministic made-up figures for demos,

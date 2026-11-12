@@ -129,6 +129,14 @@ return [
         ],
     ],
 
+    // The Notice of Thesis Submission's automatic document checks (UAT
+    // 11 Nov 2026). Advisory only. No indexed-journal list yet: indexing is
+    // always "Needs manual check" until a class implementing
+    // Support\Indexing\IndexingSource is named here.
+    'notice_checks' => [
+        'indexing_source' => \App\Modules\Hani\Support\Indexing\ManualCheckSource::class,
+    ],
+
     'notice' => [
         // The abstract and keywords on the Notice of Thesis Submission, which
         // feed the examiner suggestions. Provisional: our own bounds, not a
@@ -145,9 +153,10 @@ return [
         // (stub, needs a UTP licence) | simulated (demo figures, labelled).
         'source' => 'uploaded',
 
-        // Where students get the report. CONFIRMED: students download it
-        // from ULearn. The address itself is provisional.
-        'ulearn_url' => 'https://ulearn.utp.edu.my',
+        // Where students get the report. CONFIRMED (UAT 11 Nov 2026):
+        // postgraduate students download it from ULearnX. The key keeps its
+        // old name.
+        'ulearn_url' => 'https://ulearnx.utp.edu.my',
 
         // Flag any single primary source above this percentage. Provisional.
         'single_source_warn' => 5,
@@ -290,25 +299,40 @@ return [
         // (agreed for the FYP 2026-11-04, not a CGS figure).
         'next_round_window_months' => [0, 6],
 
-        // Months from the re-viva outcome date to the final thesis, by level
-        // (UTP/CGS/024: within 1 month, up to 3, 3 to 6). Provisional.
-        'final_deadline_months' => [1 => 1, 2 => 3, 3 => 6],
+        // The final-thesis window by level, in months from the re-viva outcome
+        // date (UTP/CGS/024, confirmed at UAT 11 Nov 2026): level 1 within 1
+        // month; level 2 minimum 1, maximum 3; level 3 minimum 3, maximum 6.
+        // Before min the student cannot upload; after max it is allowed but
+        // flagged Overdue and CGS is told once.
+        'final_window_months' => [
+            1 => ['min' => 0, 'max' => 1],
+            2 => ['min' => 1, 'max' => 3],
+            3 => ['min' => 3, 'max' => 6],
+        ],
 
         // Logging a re-viva keeps the two main examiners Assigned until at
         // most this many months later; the outcome releases them sooner.
         // Provisional (the original 12-month hardbound horizon).
         'hold_months' => 12,
 
-        // CONFIRMED (the real letter): "examiners are given a maximum of
-        // twenty (20) working days". The letter prints the date this falls on.
-        'panel_working_days' => 20,
+        // CONFIRMED (the Correction of Thesis letter, UAT 11 Nov 2026): the
+        // examiners are given a maximum of twenty (20) working days for a
+        // Master's thesis and thirty (30) for a Doctoral one. The letter
+        // prints the date this falls on.
+        'panel_working_days' => ['master' => 20, 'doctoral' => 30],
 
         // Senior Executive's document check (client charter 2 to 5 days): one reminder after this many working days.
         'doc_check_sla_days' => 5,
 
-        // Examiner reminders, in working days before the deadline. Senior
-        // Executives can override this on Re-viva Settings (re_viva_settings).
-        'external_reminders' => [10, 3],
+        // Examiner reminders, in working days before the deadline, by level
+        // (UAT 11 Nov 2026). Each is sent once. Senior Executives can override
+        // them on Re-viva Settings (re_viva_settings).
+        'examiner_reminders' => ['master' => [10, 3], 'doctoral' => [5, 3, 1]],
+
+        // Every re-viva email TO CGS goes only to these addresses, plus the
+        // Academic Executive(s) of the student's department (informational).
+        // The first is the Senior Executive who runs the re-viva.
+        'cgs_recipients' => ['waheda.cgs@utp.edu.my', 'syahmi.cgs@utp.edu.my'],
 
         // Over this total, an examiner's email carries the letter and the
         // report form, and a signed link for the student's documents.
@@ -339,10 +363,14 @@ return [
         // When `re-viva:monitor` runs each day. Provisional.
         'monitor_daily_at' => '08:00',
 
-        // How long the examiner's signed link to the corrected thesis and the
-        // Summary of Corrections works. Provisional: the 20 working days plus
-        // slack for a late report.
-        'signed_link_days' => 35,
+        // How long the examiner's account-setup link works, in days.
+        // Provisional: longer than 30 working days (a Doctoral panel).
+        'signed_link_days' => 50,
+
+        // The examiner's signed link to the corrected thesis and the Summary
+        // of Corrections works until the panel's deadline plus this many
+        // calendar days, for a late report. Provisional.
+        'signed_link_slack_days' => 10,
 
         // The examiner's sign-in to that link: how long the emailed code
         // works, and how long the sign-in lasts in that browser.
@@ -356,7 +384,10 @@ return [
             'institution' => 'Universiti Teknologi PETRONAS',
             'address' => ['Bandar Seri Iskandar', '31750 Tronoh Perak', 'Darul Ridzuan'],
         ],
-        'signatory' => ['name' => 'Prof. Ts. Dr. M Fadzil Hassan', 'title' => ['Dean,', 'Postgraduate & Research']],
+        // FALLBACK only: a letter prints the Dean of PGR who approved it
+        // (approval_history), and this name only before anyone has. The demo
+        // seeder also gives dean@utp.edu.my this name.
+        'signatory' => ['name' => 'Prof. Ts. Dr. M. Fadzil Hassan', 'title' => ['Dean, Postgraduate & Research (PGR)']],
         'return_contacts' => [
             ['name' => 'Waheda Rahayu Bt Rashid', 'role' => 'Senior Executive CGS', 'email' => 'waheda.cgs@utp.edu.my', 'tel' => '+605 000 0001', 'mobile' => '+6012 000 0001'],
             ['name' => 'M Syahmi Ifwat M Jafri', 'role' => 'Non-Executive CGS', 'email' => 'syahmi.cgs@utp.edu.my', 'tel' => '+605 000 0002', 'mobile' => '+6012 000 0002'],

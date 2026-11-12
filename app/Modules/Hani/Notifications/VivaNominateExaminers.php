@@ -12,7 +12,7 @@ use Illuminate\Notifications\Notification;
  * Step 3 of the viva guideline: "AE will communicate with the Sv on the
  * appointment of examiners upon receiving the notice of thesis submission."
  *
- * Sent to the student's supervisor when the AE acknowledges the notice, and
+ * Sent to the student's supervisor when the AE verifies the notice, and
  * points them at Examiner Nomination, which is where proposing examiners
  * actually happens. Only a prompt: the nomination itself is unchanged.
  */
@@ -45,7 +45,7 @@ class VivaNominateExaminers extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('Please nominate examiners for '.$this->notice->student?->name)
             ->greeting('Dear '.$notifiable->name.',')
-            ->line($this->student().' has filed their Notice of Thesis Submission, and it has been acknowledged by '.$this->academicExecName.'.')
+            ->line($this->student().' has filed their Notice of Thesis Submission, and it has been verified by '.$this->academicExecName.'.')
             ->line('Thesis: '.$this->thesisTitle)
             ->line('Please propose the examiners for their viva voce: one internal examiner from the candidate\'s department (not the supervisor or co-supervisor) and one external examiner, each with a backup.')
             ->action('Nominate Examiners', route('examiner-nomination.create'))
@@ -60,7 +60,7 @@ class VivaNominateExaminers extends Notification implements ShouldQueue
             'module' => $this->notice->module()->label(),
             'reference' => $this->notice->reference(),
             'title' => 'Please nominate examiners for '.$this->student().'.',
-            'message' => 'Their Notice of Thesis Submission has been acknowledged. Use Nominate Examiners.',
+            'message' => 'Their Notice of Thesis Submission has been verified. Use Nominate Examiners.',
         ];
     }
 }

@@ -21,8 +21,9 @@ use Illuminate\Validation\ValidationException;
  *   suggestion   both examiners map to the same level -> that level;
  *                otherwise "Consolidation needed", showing both
  *                (1 -> 1, 2 -> 2, 3 -> 3, 4 + viva YES -> 4, 4 + viva NO -> 5)
- *   levels 1-3   final thesis due 1 / 3 / 6 months from the outcome date
- *                (hani.reviva.final_deadline_months); the mains' evaluation is
+ *   levels 1-3   final thesis window from the outcome date: within 1 month,
+ *                1 to 3 months, 3 to 6 months (hani.reviva.final_window_months;
+ *                correction_deadline holds the maximum); the mains' evaluation is
  *                complete, so their 90-day gap starts
  *   level 4      an oral examination again: the mains stay held until the
  *                next round is logged or its window closes; the Senior
@@ -88,7 +89,7 @@ class ReVivaOutcome
                 'outcome_recorded_at' => now(),
                 'outcome_recorded_by_id' => $actor->id,
                 'correction_deadline' => in_array($level, ReVivaDetail::OUTCOME_CORRECTIONS, true)
-                    ? $today->copy()->addMonthsNoOverflow((int) config("hani.reviva.final_deadline_months.{$level}"))
+                    ? $today->copy()->addMonthsNoOverflow(ReVivaDetail::finalWindowMonths($level)[1])
                     : null,
             ])->save();
 
@@ -130,7 +131,8 @@ class ReVivaOutcome
         [$subject, $lines] = match (true) {
             $detail->needsFinalThesis() => ['Re-viva result: Passed', [
                 "We are pleased to inform you that you have passed the re-examination (round {$round}): ".$detail->outcomeLabel().'.',
-                'The final thesis must be submitted in UResearch by '.$detail->correction_deadline->format('j F Y').'.',
+                'The final thesis must be submitted in UResearch '.$detail->finalWindowText('j F Y').'.',
+                'You can upload it from '.$detail->finalOpensOn()->format('j F Y').'. After '.$detail->correction_deadline->format('j F Y').' it is overdue.',
             ]],
             $level === ReVivaDetail::OUTCOME_LOOP_BACK => ['Re-viva result: another round required', [
                 "The result of re-viva round {$round} is: ".$detail->outcomeLabel().'.',

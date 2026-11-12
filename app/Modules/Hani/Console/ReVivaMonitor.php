@@ -11,6 +11,8 @@ use App\Modules\Hani\Models\VivaDetail;
 use App\Modules\Hani\Models\VivaReminderLog;
 use App\Modules\Hani\Support\PanelSeats;
 use App\Modules\Hani\Support\ReVivaExaminerAccounts;
+use App\Modules\Hani\Support\ReVivaLetters;
+use App\Modules\Hani\Support\ReVivaRecipients;
 use App\Modules\Hani\Support\ReVivaOutcome;
 use App\Modules\Hani\Support\ReVivaSettings;
 use Carbon\CarbonInterface;
@@ -185,7 +187,7 @@ class ReVivaMonitor extends Command
             if ($daysLeft < 0) {
                 $panel = $detail->panel();
 
-                yield [$detail, 'next_round_window_closed', '', User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
+                yield [$detail, 'next_round_window_closed', '', ReVivaRecipients::cgs($detail->application), (new ReVivaUpdate(
                     'next_round_window_closed', $detail->application,
                     'Re-viva window closed: '.$student->name,
                     [
@@ -193,7 +195,7 @@ class ReVivaMonitor extends Command
                         'The two main examiners have been freed, without a gap, since they did not examine again.',
                     ],
                     'Open Re-viva Cycles', route('reviva.cycles.index'),
-                ), function () use ($panel) {
+                ))->forCgs(), function () use ($panel) {
                     if ($panel) {
                         app(PanelSeats::class)->freeWithoutGap($panel, 'Re-viva level 4: the next round\'s window closed with no round logged.');
                     }
@@ -238,7 +240,7 @@ class ReVivaMonitor extends Command
             $daysLeft = (int) today()->diffInDays($due, false);
 
             if ($daysLeft < 0) {
-                yield [$detail, 'final_overdue', '', User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
+                yield [$detail, 'final_overdue', '', ReVivaRecipients::cgs($detail->application), (new ReVivaUpdate(
                     'final_overdue', $detail->application,
                     'Re-viva final thesis overdue: '.$student->name,
                     [
@@ -247,7 +249,7 @@ class ReVivaMonitor extends Command
                         'The round is flagged on Re-viva Cycles.',
                     ],
                     'Open Re-viva Cycles', route('reviva.cycles.index'),
-                )];
+                ))->forCgs()];
 
                 continue;
             }
@@ -278,18 +280,18 @@ class ReVivaMonitor extends Command
             $days = WorkingDays::between($detail->application->submitted_at ?? $detail->resubmission_at, today());
 
             if ($days >= $limit) {
-                yield [$detail, 'doc_check', (string) $detail->application->submitted_at?->timestamp, User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
+                yield [$detail, 'doc_check', (string) $detail->application->submitted_at?->timestamp, ReVivaRecipients::cgs($detail->application), (new ReVivaUpdate(
                     'doc_check', $detail->application, "Re-viva documents waiting to be checked: {$name}",
                     ["{$name}'s re-viva documents have waited {$days} working days for a check."],
                     'Open Document Check', route('reviva.queue', ['stage' => 'student_submitted']),
-                )];
+                ))->forCgs()];
             }
         }
     }
 
     protected function panelTimeLimits(): iterable
     {
-        $thresholds = ReVivaSettings::reminderDays();
+        $thresholds = collect(ReVivaSettings::LEVELS)->map(fn ($label, $level) => ReVivaSettings::reminderDays($level))->all();
         $details = ReVivaDetail::with('application.student')
             ->whereNotNull('panel_deadline')
             ->whereHas('application', fn ($q) => $q->where('module_type', 're_viva')
@@ -304,18 +306,19 @@ class ReVivaMonitor extends Command
             $evaluations = $detail->currentEvaluations();
 
             if (today()->gt($due)) {
-                yield [$detail, 'panel_overdue', '', User::where('role', Role::SENIOR_EXEC_CGS)->get(), new ReVivaUpdate(
+                yield [$detail, 'panel_overdue', '', ReVivaRecipients::cgs($detail->application), (new ReVivaUpdate(
                     'panel_overdue', $detail->application, "Re-viva panel overdue: {$student->name}",
                     ["The panel's re-evaluation for {$student->name} (round {$detail->cycle_number}) was due on {$due->format('j M Y')}."],
                     'Open Under Panel Review', route('reviva.queue', ['stage' => 'under_panel_review']),
-                )];
+                ))->forCgs()];
 
                 continue;
             }
 
             $threshold = null;
-            foreach ($thresholds as $i => $days) {
-                if ($left <= $days && $left > ($thresholds[$i + 1] ?? -1)) {
+            $levelDays = $thresholds[ReVivaLetters::level($detail)] ?? [];
+            foreach ($levelDays as $i => $days) {
+                if ($left <= $days && $left > ($levelDays[$i + 1] ?? -1)) {
                     $threshold = $days;
                 }
             }

@@ -121,7 +121,10 @@ final class ReVivaRisk
             default => $application->history->sortByDesc('created_at')->first()?->created_at,
         } ?? $detail->resubmission_at;
 
-        return [WorkingDays::between(Carbon::parse($entered), today()), isset($limits[$stage]) ? (int) $limits[$stage] : null, $labels[$stage] ?? $stage];
+        // The panel's limit is the letter's: 20 working days (Master), 30 (Doctoral).
+        $limit = $stage === 'under_panel_review' ? ReVivaLetters::panelWorkingDays($detail) : (isset($limits[$stage]) ? (int) $limits[$stage] : null);
+
+        return [WorkingDays::between(Carbon::parse($entered), today()), $limit, $labels[$stage] ?? $stage];
     }
 
     protected static function factor(string $key, string $label, float $share, int $max, string $detail): array

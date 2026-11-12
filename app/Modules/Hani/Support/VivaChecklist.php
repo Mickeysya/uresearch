@@ -17,7 +17,7 @@ use App\Modules\Hani\Support\Eligibility\EligibilitySource;
  * candidacy period, from the candidature start date) are checked by the
  * system instead: a verified item needs no tick, and an item the system finds
  * not met blocks the notice whatever was ticked. The AE confirms the lot on
- * acknowledgement (viva_eligibility.verified_by_id / verified_at).
+ * verification (viva_eligibility.verified_by_id / verified_at).
  */
 final class VivaChecklist
 {
@@ -97,8 +97,9 @@ final class VivaChecklist
 
         return $items + [
             'registered_current_semester' => [
-                'label' => 'I am registered for the current semester',
-                'hint' => 'Check your registration status on the student portal.',
+                // Label only (UAT 11 Nov 2026); the column name is unchanged.
+                'label' => 'I am an active student for this semester',
+                'hint' => 'Registered for Research Progress or Active Enrolment Status (AES) this semester.',
             ],
             'no_outstanding_fees' => [
                 'label' => 'I have no outstanding fees',
@@ -188,6 +189,17 @@ final class VivaChecklist
      * A notice already in the chain or finished. A rejected one does not
      * count, so the student can file again after a rejection.
      */
+    /** A notice the supervisor returned for changes, which the student edits and resubmits. */
+    public static function returnedNotice(User $student): ?Application
+    {
+        return Application::query()
+            ->where('module_type', 'viva_voce')
+            ->where('student_id', $student->id)
+            ->where('status', Application::STATUS_RETURNED)
+            ->latest('id')
+            ->first();
+    }
+
     public static function openNotice(User $student): ?Application
     {
         return Application::query()

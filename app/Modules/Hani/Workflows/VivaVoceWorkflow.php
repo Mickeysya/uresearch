@@ -17,9 +17,10 @@ use Carbon\CarbonInterface;
  * Viva Voce Assessment, opened by the student's Notice of Thesis Submission.
  *
  * This application IS the viva record: the notice reaches the Academic
- * Executive, who acknowledges it and then contacts the supervisor about
+ * Executive, who verifies it (each eligibility item, then Verified or
+ * Rejected, as in UCampus) and the supervisor is asked to nominate
  * examiners. Labelled "Notice of Thesis Submission" rather than "Viva Voce"
- * because the engine's acknowledgement email says the application is fully
+ * because the engine's approval email says the application is fully
  * approved, which is true of the notice and not of the viva. The key stays
  * viva_voce; labels are display-only.
  *
@@ -35,7 +36,7 @@ use Carbon\CarbonInterface;
  * The viva date itself is set off-chain by the AE (VivaScheduleController):
  * it changes no status and can be moved.
  *
- * DecidesOneAtATime: acknowledging does more than move the stage -- it asks
+ * DecidesOneAtATime: verifying does more than move the stage -- it asks
  * the supervisor to nominate examiners (VivaController::decide()). Core's
  * bulk decide would skip that.
  */
@@ -51,15 +52,33 @@ class VivaVoceWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalenda
         return 'Notice of Thesis Submission';
     }
 
+    public const SUPERVISOR_STAGE = 'sv_endorsement';
+
+    /**
+     * The supervisor endorses the notice first (UAT 11 Nov 2026), then the
+     * Academic Executive verifies it. A student with no supervisor on record
+     * goes straight to the AE, so the notice is never stuck on nobody.
+     * Notices filed before the change are already at notice_received and
+     * stay there.
+     */
     public function stages(?Application $application = null): array
     {
+        $supervisor = new Stage(
+            key: self::SUPERVISOR_STAGE,
+            label: 'Supervisor endorsement',
+            role: Role::SUPERVISOR,
+            decision: 'endorsed',
+            queueTitle: 'Notice of Thesis Submission',
+        );
+
         return [
+            ...($application && ! $application->student?->supervisor_id ? [] : [$supervisor]),
             new Stage(
                 key: 'notice_received',
-                label: 'Academic Executive',
+                label: 'Academic Executive verification',
                 role: Role::ACADEMIC_EXEC,
-                decision: 'acknowledged',
-                queueTitle: 'Notices Received',
+                decision: 'verified',
+                queueTitle: 'Notices to Verify',
             ),
         ];
     }

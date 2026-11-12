@@ -38,6 +38,18 @@ class VivaEligibilityTest extends TestCase
         return $this->noticeFields($overrides);
     }
 
+    public function test_item_three_reads_active_student_and_the_fees_item_stays_separate(): void
+    {
+        $student = $this->user(\App\Modules\Core\Support\Role::STUDENT, ['programme' => 'MSc Full-Time']);
+
+        $this->actingAs($student)->get(route('viva.eligibility'))->assertOk()
+            ->assertSee('I am an active student for this semester')
+            ->assertSee('Registered for Research Progress or Active Enrolment Status (AES) this semester.')
+            ->assertDontSee('zero outstanding dues')
+            ->assertDontSee('I am registered for the current semester')
+            ->assertSee('I have no outstanding fees');
+    }
+
     public function test_one_page_holds_the_checklist_and_the_notice_and_one_submit_files_it(): void
     {
         Storage::fake('local');
@@ -51,7 +63,8 @@ class VivaEligibilityTest extends TestCase
             ->assertSee('Notice of Thesis Submission')
             ->assertSee('name="abstract"', false)
             ->assertSee('name="keywords"', false)
-            ->assertSee('Publication Proof');
+            ->assertSee('Publication papers')
+            ->assertSee('Research Methodology result');
 
         // The old notice URL lands on the same page.
         $this->actingAs($student)->get(route('viva.notice'))
@@ -176,29 +189,51 @@ class VivaEligibilityTest extends TestCase
         $student = $this->student(attributes: ['programme' => 'MSc Full-Time']);
         VivaEligibility::create(['student_id' => $student->id] + self::MSC_CHECKS);
 
-        // Proof must be a PDF, and the softbound date 3 months out.
+        // Papers must be PDFs (1 to 5, 10 MB each), the Research Methodology
+        // result a PDF/PNG/JPG, the title 15 words or fewer, and the softbound date 3 months out.
         $this->actingAs($student)->post(route('viva.notice.store'), $this->notice([
-            'publication_proof' => UploadedFile::fake()->create('proof.docx', 10),
-        ]))->assertSessionHasErrors('publication_proof');
+            'publication_papers' => [UploadedFile::fake()->create('proof.docx', 10)],
+        ]))->assertSessionHasErrors('publication_papers.0');
 
         $this->actingAs($student)->post(route('viva.notice.store'), $this->notice([
-            'publication_proof' => UploadedFile::fake()->create('big.pdf', 6000, 'application/pdf'),
-        ]))->assertSessionHasErrors('publication_proof');
+            'publication_papers' => [UploadedFile::fake()->create('big.pdf', 11000, 'application/pdf')],
+        ]))->assertSessionHasErrors('publication_papers.0');
+
+        $this->actingAs($student)->post(route('viva.notice.store'), $this->notice([
+            'publication_papers' => array_map(fn ($i) => UploadedFile::fake()->create("p{$i}.pdf", 10, 'application/pdf'), range(1, 6)),
+        ]))->assertSessionHasErrors('publication_papers');
+
+        $this->actingAs($student)->post(route('viva.notice.store'), $this->notice(['publication_papers' => []]))
+            ->assertSessionHasErrors('publication_papers');
+
+        $this->actingAs($student)->post(route('viva.notice.store'), $this->notice([
+            'research_methodology_result' => UploadedFile::fake()->create('rm.docx', 10),
+        ]))->assertSessionHasErrors('research_methodology_result');
+
+        $this->actingAs($student)->post(route('viva.notice.store'), $this->notice([
+            'thesis_title' => 'One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen',
+        ]))->assertSessionHasErrors('thesis_title');
 
         $this->actingAs($student)->post(route('viva.notice.store'), $this->notice([
             'expected_softbound_date' => now()->addMonth()->toDateString(),
         ]))->assertSessionHasErrors('expected_softbound_date');
 
-        $this->actingAs($student)->post(route('viva.notice.store'), $this->notice())
-            ->assertSessionHasNoErrors();
+        $this->actingAs($student)->post(route('viva.notice.store'), $this->notice([
+            'thesis_title' => 'One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen',
+            'publication_papers' => [
+                UploadedFile::fake()->create('paper-1.pdf', 100, 'application/pdf'),
+                UploadedFile::fake()->create('paper-2.pdf', 100, 'application/pdf'),
+            ],
+            'research_methodology_result' => UploadedFile::fake()->image('rm.png'),
+        ]))->assertSessionHasNoErrors();
 
         $application = Application::sole();
         $this->assertSame('viva_voce', $application->module_type);
         $this->assertSame('notice_received', $application->current_stage);
         $this->assertSame('MSC', VivaDetail::sole()->programme_level);
-        $this->assertSame('Publication Proof', $application->documents()->sole()->doc_type);
+        $this->assertSame(['Publication Paper', 'Publication Paper', 'Research Methodology Result'], $application->documents()->orderBy('id')->pluck('doc_type')->all());
 
-        // A receipt on submit; the engine's own email follows on acknowledgement.
+        // A receipt on submit; the engine's own email follows on verification.
         Notification::assertSentTo($student, VivaNoticeSubmitted::class);
         Notification::assertNotSentTo($student, ApplicationDecided::class);
 
@@ -208,9 +243,9 @@ class VivaEligibilityTest extends TestCase
         $student->update(['department' => 'Computing']);
         $this->actingAs($ae)->get(route('viva.queue'))
             ->assertOk()
-            ->assertSee('Constraint-based examiner matching');
+            ->assertSee('One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen');
 
-        $this->actingAs($ae)->post(route('viva.decide', $application), ['decision' => 'approve'])
+        $this->verifyNotice($ae, $application)
             ->assertSessionHasNoErrors();
         Notification::assertSentTo($student, ApplicationDecided::class);
 

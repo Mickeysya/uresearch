@@ -52,6 +52,9 @@ trait BuildsVivas
             'thesis_title' => 'Thesis of '.$matric, 'expected_softbound_date' => now()->addMonths(4),
         ]);
         $engine->submit($notice);
+        if ($notice->current_stage === 'sv_endorsement') {
+            $engine->decide($notice, $supervisor, 'approve');
+        }
         $engine->decide($notice, $ae, 'approve');
 
         if ($softbound) {

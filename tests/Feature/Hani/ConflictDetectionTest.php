@@ -12,6 +12,7 @@ use App\Modules\Hani\Notifications\NominationsNeedCompileReview;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Hani\Concerns\DecidesNominations;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ use Tests\TestCase;
  */
 class ConflictDetectionTest extends TestCase
 {
+    use DecidesNominations;
     use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
@@ -133,8 +135,7 @@ class ConflictDetectionTest extends TestCase
         $this->nominate('Petroleum Engineering');
 
         // Computing's AE clears their list: it reaches cgs_compile with a clash.
-        $this->actingAs($this->departments['Computing']['ae'])
-            ->post(route('examiner-nomination.decide', $this->applicationFor('Computing')), ['decision' => 'approve'])
+        $this->decideNomination($this->departments['Computing']['ae'], $this->applicationFor('Computing'), ['decision' => 'approve'])
             ->assertSessionHas('status');
 
         $this->assertSame('cgs_compile', $this->applicationFor('Computing')->current_stage);
@@ -154,8 +155,7 @@ class ConflictDetectionTest extends TestCase
 
         $this->nominate('Computing');
 
-        $this->actingAs($this->departments['Computing']['ae'])
-            ->post(route('examiner-nomination.decide', $this->applicationFor('Computing')), ['decision' => 'approve']);
+        $this->decideNomination($this->departments['Computing']['ae'], $this->applicationFor('Computing'), ['decision' => 'approve']);
 
         Notification::assertNotSentTo($senior, NominationsNeedCompileReview::class);
     }
@@ -165,8 +165,7 @@ class ConflictDetectionTest extends TestCase
         $this->nominate('Computing');
         $this->nominate('Petroleum Engineering');
 
-        $this->actingAs($this->departments['Petroleum Engineering']['ae'])
-            ->post(route('examiner-nomination.decide', $this->applicationFor('Petroleum Engineering')), [
+        $this->decideNomination($this->departments['Petroleum Engineering']['ae'], $this->applicationFor('Petroleum Engineering'), [
                 'decision' => 'reject', 'remarks' => 'Choose again.',
             ]);
 
@@ -184,8 +183,7 @@ class ConflictDetectionTest extends TestCase
         $this->nominate('Petroleum Engineering');
         $application = $this->applicationFor('Computing');
 
-        $this->actingAs($this->departments['Computing']['ae'])
-            ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->decideNomination($this->departments['Computing']['ae'], $application, ['decision' => 'approve']);
 
         // The same arrival triggered again (a double submit both requests got
         // through, a retry): no second notification.
@@ -208,10 +206,10 @@ class ConflictDetectionTest extends TestCase
         $this->nominate('Petroleum Engineering');
         $application = $this->applicationFor('Computing');
 
-        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
-        $this->actingAs($senior)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->decideNomination($ae, $application, ['decision' => 'approve']);
+        $this->decideNomination($senior, $application, ['decision' => 'approve']);
         $this->actingAs($director)->post(route('examiner-nomination.return', $application), ['remarks' => 'Choose again.']);
-        $this->actingAs($ae)->post(route('examiner-nomination.decide', $application), ['decision' => 'approve']);
+        $this->decideNomination($ae, $application, ['decision' => 'approve']);
 
         $this->assertSame('cgs_compile', $application->fresh()->current_stage);
         Notification::assertSentToTimes($senior, NominationsNeedCompileReview::class, 2);

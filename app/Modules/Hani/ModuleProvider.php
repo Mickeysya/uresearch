@@ -35,6 +35,11 @@ class ModuleProvider extends ServiceProvider
         // say) can be bound here instead -- see README.md.
         $this->app->bind(ExaminerMatcher::class, TfIdfMatcher::class);
 
+        // Journal indexing for the notice's document checks. No CGS list yet,
+        // so ManualCheckSource ("Needs manual check"); see hani.notice_checks.
+        $this->app->bind(\App\Modules\Hani\Support\Indexing\IndexingSource::class,
+            fn ($app) => $app->make(config('hani.notice_checks.indexing_source', \App\Modules\Hani\Support\Indexing\ManualCheckSource::class)));
+
         // Where a softbound thesis's similarity figures come from; see
         // config('hani.similarity.source') and Support\Similarity.
         $this->app->bind(SimilaritySource::class, fn ($app) => $app->make(match (config('hani.similarity.source')) {
@@ -98,12 +103,16 @@ class ModuleProvider extends ServiceProvider
     /**
      * Engine stage emails to the student that Hani cancels, through
      * Laravel's NotificationSending event:
-     * - re-viva: every stage email. Re-viva sends its own milestone emails
-     *   (submitted, returned, accepted, sent to the examiners, result).
+     * - re-viva: every stage email, to the student AND to staff. Re-viva
+     *   sends its own milestone emails (submitted, returned, accepted, sent
+     *   to the examiners, result); CGS-bound ones go only to
+     *   ReVivaRecipients::cgs() (UAT 11 Nov 2026).
      * - examiner nomination: the "Progress Update" at each approved stage.
      *   Six of them per list told the student nothing they need; they see
      *   the nomination's status in the app, never the examiners. The
      *   return email (generic remarks, no names) still goes.
+     * - viva notice: the engine's "not approved" email, which says the
+     *   outcome is final; VivaNoticeDecision sends the comment instead.
      * Other modules and other recipients are untouched.
      */
     protected function quietEngineEmailsToReVivaStudents(): void
@@ -118,16 +127,30 @@ class ModuleProvider extends ServiceProvider
 
             $application = (fn () => $this->application ?? null)->call($notification);
 
-            if (! $application || ($event->notifiable->id ?? null) !== $application->student_id) {
+            if (! $application) {
                 return null;
             }
 
+            // Re-viva: no engine stage email to anyone. Its own emails go to
+            // the student and, for CGS, only to ReVivaRecipients::cgs().
             if ($application->module_type === 're_viva') {
                 return false;
             }
 
+            if (($event->notifiable->id ?? null) !== $application->student_id) {
+                return null;
+            }
+
             $progressUpdate = $notification instanceof \App\Modules\Core\Notifications\ApplicationDecided
                 && (fn () => $this->approved && $this->outcome !== 'returned')->call($notification);
+
+            // A rejected or returned notice: VivaNoticeDecision tells the
+            // student, with the comment. The engine's says it is final; it is not.
+            if ($application->module_type === \App\Modules\Hani\Support\VivaProgress::NOTICE
+                && $notification instanceof \App\Modules\Core\Notifications\ApplicationDecided
+                && ! (fn () => $this->approved)->call($notification)) {
+                return false;
+            }
 
             return $application->module_type === \App\Modules\Hani\Support\VivaProgress::NOMINATION && $progressUpdate ? false : null;
         });

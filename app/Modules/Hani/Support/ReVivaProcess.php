@@ -52,7 +52,7 @@ class ReVivaProcess
         $this->tell([$student], new ReVivaUpdate('student_submitted', $detail->application, 'Re-viva documents submitted',
             ["Your documents for re-viva round {$detail->cycle_number} have been submitted. CGS will check them and let you know."],
             'Open Re-viva', route('reviva.mine')));
-        $this->tell($this->seniorExecs(), new ReVivaUpdate('submitted', $detail->application, "Re-viva documents submitted: {$student->name}",
+        $this->tellCgs(new ReVivaUpdate('submitted', $detail->application, "Re-viva documents submitted: {$student->name}",
             ["{$student->name} has submitted the documents for re-viva round {$detail->cycle_number}. Please check them within ".config('hani.reviva.doc_check_sla_days').' working days.'],
             'Open Document Check', route('reviva.queue', ['stage' => 'student_submitted'])));
     }
@@ -139,12 +139,12 @@ class ReVivaProcess
 
         DB::transaction(function () use ($application, $actor, $detail, $signature) {
             $detail->update(['dean_approved_at' => now()]);
-            $this->pack->renderLetters($detail, false, $signature);
+            $this->pack->renderLetters($detail, false, $signature, $actor);
             $this->engine->decide($application, $actor, 'approve', 'Approved by the Dean of PGR.');
         });
 
         $name = $application->student->name;
-        $this->tell($this->seniorExecs(), new ReVivaUpdate('dean_approved', $application, "Approved by the Dean: {$name}",
+        $this->tellCgs(new ReVivaUpdate('dean_approved', $application, "Approved by the Dean: {$name}",
             ['Approved by the Dean — please send to the panel examiners.'],
             'Open Ready to Send', route('reviva.queue', ['stage' => 'ready_to_send'])));
     }
@@ -154,6 +154,13 @@ class ReVivaProcess
     {
         $this->at($application, 'dean_approval');
         $this->engine->returnTo($application, $actor, 'pack_preparation', $reason);
+
+        // The engine's own return email to CGS is held back (ModuleProvider):
+        // CGS hears it here, from the three re-viva recipients only.
+        $name = $application->student->name;
+        $this->tellCgs(new ReVivaUpdate('dean_returned', $application, "Returned by the Dean: {$name}",
+            ["The Dean of PGR returned the re-examination letters for {$name}.", "Reason: {$reason}"],
+            'Open Pack Preparation', route('reviva.queue', ['stage' => 'pack_preparation'])));
     }
 
     /**
@@ -191,7 +198,7 @@ class ReVivaProcess
 
         if ($byExaminer) {
             $name = $application->student->name;
-            $this->tell($this->seniorExecs(), new ReVivaUpdate('evaluation_received', $application, "Re-evaluation received from {$evaluation->examiner->name} for {$name}",
+            $this->tellCgs(new ReVivaUpdate('evaluation_received', $application, "Re-evaluation received from {$evaluation->examiner->name} for {$name}",
                 ["{$evaluation->examiner->name} has returned the re-evaluation for {$name}."],
                 'Open Under Panel Review', route('reviva.queue', ['stage' => 'under_panel_review'])));
         }
@@ -234,7 +241,8 @@ class ReVivaProcess
         $detail = $this->at($application, 'cgs_review');
 
         DB::transaction(function () use ($application, $actor, $detail, $data) {
-            $detail->update(['meeting_kind' => $data['meeting_kind'], 'meeting_at' => $data['meeting_at'], 'meeting_venue' => $data['meeting_venue']]);
+            $detail->update(['meeting_kind' => $data['meeting_kind'], 'meeting_at' => $data['meeting_at'], 'meeting_venue' => $data['meeting_venue'],
+                'meeting_chair_name' => $data['meeting_chair_name'] ?? null, 'meeting_chair_email' => $data['meeting_chair_email'] ?? null]);
             $this->engine->decide($application->refresh(), $actor, 'approve', 'A meeting has been scheduled.');
         });
 
@@ -254,6 +262,13 @@ class ReVivaProcess
         });
     }
 
+    /**
+     * Attending, with the .ics: the Senior Executive (Puan Waheda), the two
+     * main examiners and the viva chairman (the linked viva's, or the one
+     * typed on the form). Told but not attending, with no .ics and no
+     * examiner names: the student and the supervisor. A re-viva (oral
+     * examination) also invites the student.
+     */
     protected function invite(ReVivaDetail $detail): void
     {
         $application = $detail->application;
@@ -263,14 +278,21 @@ class ReVivaProcess
 
         foreach ($detail->currentMains() as $examiner) {
             if ($email = $examiner->usableEmail()) {
-                $emails[$email] = $examiner->name;
+                $emails[strtolower($email)] = $examiner->name;
             }
         }
-        if (($viva = $detail->vivaDetail())?->chair_email) {
-            $emails[$viva->chair_email] = (string) $viva->chair_name;
+        $chair = $detail->meetingChair();
+        if ($chair['email']) {
+            $emails[strtolower($chair['email'])] = (string) $chair['name'];
         }
 
         $when = $detail->meeting_at->format('j F Y, g:i a');
+        $senior = ReVivaRecipients::seniorExec();
+
+        if ($senior) {
+            unset($emails[strtolower($senior->email)]);
+            $this->attempt(fn () => $senior->notify(new ReVivaMeetingInvite($detail, $label)));
+        }
 
         foreach ($emails as $email => $name) {
             $this->attempt(fn () => Notification::route('mail', [$email => $name])->notify(new ReVivaMeetingInvite($detail, $label)));
@@ -279,7 +301,7 @@ class ReVivaProcess
         $this->tell(array_filter([$student, $student->supervisor]), new ReVivaUpdate('meeting', $application, "{$label} scheduled",
             $detail->meeting_kind === self::RE_VIVA
                 ? ["A re-viva (oral examination) has been scheduled for {$when} at {$detail->meeting_venue}."]
-                : ['A consolidation meeting of the examiners will be held. You will be told the result afterwards.'],
+                : ["A consolidation meeting will be held on {$when}.", 'You do not need to attend. You will be told the result afterwards.'],
             'Open Re-viva', route('reviva.mine')));
 
         if ($detail->meeting_kind === self::RE_VIVA) {
@@ -318,9 +340,11 @@ class ReVivaProcess
         return ReVivaDetail::where('application_id', $application->id)->firstOrFail();
     }
 
-    protected function seniorExecs()
+    /** A CGS-bound email: only to ReVivaRecipients::cgs(), action button for the Senior Executive only. */
+    public function tellCgs(ReVivaUpdate $notification): void
     {
-        return User::where('role', Role::SENIOR_EXEC_CGS)->get();
+        $application = (fn () => $this->application)->call($notification);
+        $this->tell(ReVivaRecipients::cgs($application), $notification->forCgs());
     }
 
     public function tell(iterable $users, ReVivaUpdate $notification): void

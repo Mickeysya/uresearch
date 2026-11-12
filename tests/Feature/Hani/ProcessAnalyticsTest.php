@@ -21,6 +21,9 @@ use Tests\TestCase;
  */
 class ProcessAnalyticsTest extends TestCase
 {
+    /** notice_received: index 1, after the supervisor's endorsement stage (UAT 11 Nov 2026, item E). */
+    protected const AE_STAGE = 1;
+
     use BuildsVivas;
     use KeepsJobsOffTheDevQueue;
     use RefreshDatabase;
@@ -77,7 +80,7 @@ class ProcessAnalyticsTest extends TestCase
         $this->acknowledgedNotice('22001003', 30, 9);
 
         $data = $this->analytics($this->person(Role::SENIOR_EXEC_CGS, 'senior@test.my'));
-        $stage = $data['stages']['viva_voce']['stages'][0];
+        $stage = $data['stages']['viva_voce']['stages'][self::AE_STAGE];
 
         $this->assertSame(3, $stage['count']);
         $this->assertEquals(5.0, $stage['average']);
@@ -116,9 +119,9 @@ class ProcessAnalyticsTest extends TestCase
 
         $senior = $this->person(Role::SENIOR_EXEC_CGS, 'senior@test.my');
 
-        $this->assertSame(2, $this->analytics($senior, 12)['stages']['viva_voce']['stages'][0]['count']);
-        $this->assertSame(1, $this->analytics($senior, 6)['stages']['viva_voce']['stages'][0]['count']);
-        $this->assertSame(1, $this->analytics($senior, 3)['stages']['viva_voce']['stages'][0]['count']);
+        $this->assertSame(2, $this->analytics($senior, 12)['stages']['viva_voce']['stages'][self::AE_STAGE]['count']);
+        $this->assertSame(1, $this->analytics($senior, 6)['stages']['viva_voce']['stages'][self::AE_STAGE]['count']);
+        $this->assertSame(1, $this->analytics($senior, 3)['stages']['viva_voce']['stages'][self::AE_STAGE]['count']);
 
         $this->actingAs($senior)->get(route('process-analytics', ['months' => 7]))->assertSessionHasErrors('months');
     }
@@ -137,8 +140,8 @@ class ProcessAnalyticsTest extends TestCase
         $data = $this->analytics($ae);
 
         $this->assertSame('Computing', $data['department']);
-        $this->assertSame(1, $data['stages']['viva_voce']['stages'][0]['count']);
-        $this->assertEquals(2.0, $data['stages']['viva_voce']['stages'][0]['average']);
+        $this->assertSame(1, $data['stages']['viva_voce']['stages'][self::AE_STAGE]['count']);
+        $this->assertEquals(2.0, $data['stages']['viva_voce']['stages'][self::AE_STAGE]['average']);
         $this->assertSame([], $data['overdue']);
 
         $csv = $this->actingAs($ae)->get(route('process-analytics.export', ['format' => 'csv']))->assertOk()->streamedContent();
@@ -148,7 +151,7 @@ class ProcessAnalyticsTest extends TestCase
         // The Senior Executive sees both, and the overdue notice by name.
         $senior = $this->person(Role::SENIOR_EXEC_CGS, 'senior@test.my');
         $all = $this->analytics($senior);
-        $this->assertSame(2, $all['stages']['viva_voce']['stages'][0]['count']);
+        $this->assertSame(2, $all['stages']['viva_voce']['stages'][self::AE_STAGE]['count']);
         $this->assertSame('Petroleum Waiting', $all['overdue'][0]['student']);
         $this->assertStringContainsString('Petroleum Waiting', $this->actingAs($senior)->get(route('process-analytics.export', ['format' => 'csv']))->assertOk()->streamedContent());
     }
@@ -164,7 +167,7 @@ class ProcessAnalyticsTest extends TestCase
         foreach ([Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR] as $role) {
             $data = $this->analytics($this->person($role, $role.'@test.my'));
             $this->assertNull($data['department'], $role);
-            $this->assertSame(1, $data['stages']['viva_voce']['stages'][0]['count'], $role);
+            $this->assertSame(1, $data['stages']['viva_voce']['stages'][self::AE_STAGE]['count'], $role);
         }
 
         // Read-only: no form anywhere in the page's own content (the layout's

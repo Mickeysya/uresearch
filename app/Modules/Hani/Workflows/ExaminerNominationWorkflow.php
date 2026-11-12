@@ -61,11 +61,14 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
     {
         return [
             new Stage(
+                // Label only (UAT 11 Nov 2026): the AE compiles the
+                // department's list for the DAC and records its decision on
+                // DAC Compilation (ExaminerDacController). The key is unchanged.
                 key: 'academic_exec',
-                label: 'Academic Executive',
+                label: 'Department compilation & DAC endorsement',
                 role: Role::ACADEMIC_EXEC,
-                decision: 'approved',
-                queueTitle: 'Pending My Approval',
+                decision: 'endorsed',
+                queueTitle: 'Waiting for the DAC',
             ),
             new Stage(
                 key: 'cgs_compile',
@@ -201,6 +204,7 @@ class ExaminerNominationWorkflow implements WorkflowModule, DecidesOneAtATime, P
             // The pool read-only: they advise supervisors on who is free, and
             // email CGS to change it.
             Role::ACADEMIC_EXEC => [
+                ['label' => 'DAC Compilation', 'route' => 'examiner-nomination.dac'],
                 ['label' => 'Pending Evaluation', 'route' => 'examiner-nomination.pending-evaluation'],
                 ['label' => 'Examiner Pool', 'route' => 'examiner-admin.index'],
                 ['label' => 'Conflict Detection', 'route' => 'conflict-detection.index'],

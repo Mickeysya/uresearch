@@ -22,7 +22,7 @@ use Tests\TestCase;
 
 /**
  * Softbound "System checks": the Turnitin report read by the built-in PDF
- * reader from a FICTIONAL ULearn-layout fixture, the fallback when it cannot
+ * reader from a FICTIONAL ULearnX-layout fixture, the fallback when it cannot
  * be read, the warnings the AE sees, and the 25% limit on the figure read.
  */
 class VivaSoftboundChecksTest extends TestCase
@@ -56,7 +56,7 @@ class VivaSoftboundChecksTest extends TestCase
 
         $this->actingAs($this->student)->post(route('viva.notice.store'), $this->noticeFields(['thesis_title' => self::TITLE]))
             ->assertSessionHasNoErrors();
-        $this->actingAs($this->ae)->post(route('viva.decide', Application::where('module_type', 'viva_voce')->sole()), ['decision' => 'approve']);
+        $this->verifyNotice($this->ae, Application::where('module_type', 'viva_voce')->sole());
     }
 
     protected function form(array $overrides = []): array
@@ -115,7 +115,9 @@ class VivaSoftboundChecksTest extends TestCase
         $this->actingAs($this->student)->get(route('viva.softbound.create'))
             ->assertOk()
             ->assertSee('full similarity report')
-            ->assertSee(config('hani.similarity.ulearn_url'));
+            ->assertSee('ULearnX (postgraduate students)')
+            ->assertSee('https://ulearnx.utp.edu.my');
+        $this->assertSame('https://ulearnx.utp.edu.my', config('hani.similarity.ulearn_url'));
 
         $this->actingAs($this->student)->postJson(route('viva.softbound.similarity-preview'), [
             'turnitin_report' => UploadedFile::fake()->createWithContent('turnitin.pdf', FictionalPdfs::turnitinReport(self::TITLE, 18)),

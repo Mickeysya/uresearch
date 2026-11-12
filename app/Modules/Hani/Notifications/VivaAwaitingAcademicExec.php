@@ -10,7 +10,8 @@ use Illuminate\Notifications\Notification;
 
 /**
  * Tells the student's Academic Executive that something has landed in one of
- * their viva queues: a new notice, or a softbound thesis to check.
+ * their viva queues: a new notice, or a softbound thesis to check. Also
+ * used for the supervisor's "Notice of Thesis Submission to endorse".
  *
  * WorkflowEngine only notifies the student, never the approver, so without
  * this the AE finds new work only by opening the queue. The in-app copy

@@ -85,6 +85,6 @@ class ModuleTrackerTest extends TestCase
         $this->actingAs($ae)->get(route('examiner-nomination.queue'))
             ->assertOk()
             ->assertSee('CGS Compilation')
-            ->assertSee('With Academic Executive.');
+            ->assertSee('With Department compilation & DAC endorsement.');
     }
 }

@@ -23,6 +23,8 @@ optional.** The modules work today with none of them applied.
 | 9 | `TODO.md` | Hani's section is out of date | Yes |
 | 10 | Chloe's `study_candidacies` table | read-only, guarded read | Yes |
 | 11 | Jason's appointment import | skip an Application No. + examiner already sent | Yes, but a part-sent row can still produce a second letter |
+| 12 | `database/seeders/DatabaseSeeder.php`, `tests/Support/MakesUsers.php` | the Dean of PGR's name: Prof. Ts. Dr. M. Fadzil Hassan | Yes (Hani's demo seeder renames the account) |
+| 13 | `tests/Feature/Core/ApproverDashboardTest.php`, `tests/Feature/Core/SidebarQueuesTest.php` | three Core tests still expect re-viva on the Academic Executive (removed 9 Nov); plus three failures that are not Hani's | Yes (only the tests fail) |
 
 ---
 
@@ -607,3 +609,261 @@ if (count($kinds) < 2 && ! ctype_digit($cell('nomination_id'))) {
 under a record later merged by Conflict Detection does not match the record
 kept. Hani's report counts it as sent because it knows about the merge
 (`examiner_merges`). The import would not, so that one examiner is still at risk.
+
+---
+
+## 12. The Dean of PGR's name (shared seeder and test helper)
+
+**Reason.** At the UAT session on 11 Nov 2026, CGS confirmed that the Dean of
+PGR is **Prof. Ts. Dr. M. Fadzil Hassan**, "Dean, Postgraduate & Research
+(PGR)". The shared seeder still names the `dean@utp.edu.my` account
+"Prof. Dr. Hafiz Osman", so letters and emails show the wrong Dean.
+
+**What Hani's module already does (no shared file touched).**
+- Re-viva letters print the name of the Dean who **approved** them, read from
+  `approval_history`. The `hani.reviva.signatory` config is only the fallback.
+- `HaniDemoSeeder` (the `people` step) **renames the `dean@utp.edu.my` account
+  to Prof. Ts. Dr. M. Fadzil Hassan** each time it runs. The email stays the
+  same; his real email is not used anywhere. **This is why the Dean's name
+  changes after a Hani demo seed.** A plain `migrate:fresh --seed` without the
+  Hani demo still shows the old name until this item is applied.
+
+**Snippet.**
+
+```php
+// database/seeders/DatabaseSeeder.php, line 62
+$this->user('Prof. Ts. Dr. M. Fadzil Hassan', 'dean@utp.edu.my', Role::DEAN_PGR, ['department' => 'PGR']);
+
+// tests/Support/MakesUsers.php, dean()
+return $this->user(Role::DEAN_PGR, ['name' => 'Prof. Ts. Dr. M. Fadzil Hassan', 'email' => 'dean@test.my']);
+```
+
+**Impact: other members' tests assert the old name** and must change in the
+same commit:
+- Nureen: `tests/Feature/Nureen/SupervisionHandbookTest.php:288` expects
+  "following approval by the Dean of PGR, Prof. Dr. Hafiz Osman".
+- Chloe: `tests/Feature/CandidacyDemoDataTest.php:36` creates the dean with
+  the old name.
+- Jason: `tests/Feature/JasonAppointmentLetterTest.php` (lines 441, 550, 592).
+- Core: `tests/Feature/AssistantPrivacyMaskingTest.php` (lines 79, 119) uses it
+  as a sample name to mask; it can stay as it is.
+- `docs/test-accounts.md` and `docs/accounts.md` list the old name.
+
+**Works without it?** Yes. Hani's letters already use the approver's name, and
+the demo seeder renames the account.
+
+
+---
+
+## 13. Core tests that still expect re-viva on the Academic Executive
+
+**Reason.** On 9 Nov 2026 re-viva moved off the Academic Executive. CGS now
+runs it end to end: the seven monitoring stages belong to the Senior Executive
+CGS, and `ReVivaWorkflow::links()` gives the AE no link. Three Core tests were
+written when the AE had four re-viva stages and a "Re-viva Outcomes" link, so
+they now fail on `main` and on every branch:
+
+| Test | Line | Fails with |
+|---|---|---|
+| `ApproverDashboardTest::test_the_academic_executive_gets_it_too_with_its_module_shortcuts` | 80 | "To contain: Re-viva Outcomes" |
+| `SidebarQueuesTest::test_a_module_owning_several_stages_is_one_group_not_repeated_links` | 35 | "Re-viva no longer has several AE stages. Failed asserting that 0 is greater than 1." |
+| `SidebarQueuesTest::test_the_flat_or_tree_decision_counts_modules` | 147 | "The AE owns four or more modules. Failed asserting that 3 is equal to 4 or is greater than 4." |
+
+What each test protects is still true; only the role it uses changed. The
+edits below move each test to a role that still has the case it checks.
+**All three replacements were run against this branch and pass** (3 tests,
+25 assertions). They were run as a copy in the container's `/tmp`; the Core
+files themselves are untouched.
+
+The AE now has 3 modules with queues (Examiner Nomination, Viva Voce, Viva
+Softbound), so the AE's sidebar is flat. The Senior Executive still has two
+modules with several stages each (re-viva has 7, Examiner Nomination has 3).
+The Dean has 5 modules.
+
+**Owner:** the team (Core tests). **Apply after** `feature/hani-automation`
+is merged, because edit 13a checks the AE's "DAC Compilation" link, which is
+added on that branch. To apply 13a earlier, leave out that one line.
+
+### 13a. `tests/Feature/Core/ApproverDashboardTest.php`, lines 70–81
+
+Old:
+
+```php
+    public function test_the_academic_executive_gets_it_too_with_its_module_shortcuts(): void
+    {
+        $this->actingAs($this->academicExec())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Awaiting your decision')
+            // Declared by Hani's module through ProvidesLinks, so they reach
+            // the examiner screens Core knows nothing about.
+            ->assertSee('Pending Evaluation')
+            ->assertSee('Conflict Detection')
+            ->assertSee('Re-viva Outcomes');
+    }
+```
+
+New:
+
+```php
+    public function test_the_academic_executive_gets_it_too_with_its_module_shortcuts(): void
+    {
+        $this->actingAs($this->academicExec())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Awaiting your decision')
+            // Declared by Hani's module through ProvidesLinks, so they reach
+            // the examiner screens Core knows nothing about.
+            ->assertSee('Pending Evaluation')
+            ->assertSee('Conflict Detection')
+            ->assertSee('DAC Compilation')
+            // Re-viva left the AE on 9 Nov 2026; CGS runs it end to end.
+            ->assertDontSee('Re-viva Outcomes');
+    }
+```
+
+### 13b. `tests/Feature/Core/SidebarQueuesTest.php`, class docblock, lines 14–18
+
+Old:
+
+```php
+ * A module contributes one queue per stage it owns for a role, and the nav
+ * printed the MODULE's label for each. Hani's re-viva has four consecutive
+ * Academic Executive stages, so that sidebar read "Re-viva Monitoring" four
+ * times with nothing to tell them apart — four links nobody could choose
+ * between, and a bug no test could see because every one of them resolved.
+```
+
+New (comment only; the old text describes the AE as it was before 9 Nov):
+
+```php
+ * A module contributes one queue per stage it owns for a role, and the nav
+ * printed the MODULE's label for each. Hani's re-viva had four consecutive
+ * Academic Executive stages, so that sidebar read "Re-viva Monitoring" four
+ * times with nothing to tell them apart — four links nobody could choose
+ * between, and a bug no test could see because every one of them resolved.
+ * Since 9 Nov 2026 those stages belong to the Senior Executive CGS.
+```
+
+### 13c. `tests/Feature/Core/SidebarQueuesTest.php`, lines 25–65
+
+Old: `test_a_module_owning_several_stages_is_one_group_not_repeated_links()` as
+it stands. It counts re-viva's AE queues (line 32–35) and renders the AE's
+dashboard (lines 37–48).
+
+New: the same checks on the Senior Executive's queues. The CGS roles have
+their own nav, so the grouping is checked on `sidebar-approver-nav` itself,
+as `test_the_flat_or_tree_decision_counts_modules` already does.
+
+```php
+    public function test_a_module_owning_several_stages_is_one_group_not_repeated_links(): void
+    {
+        $registry = app(ModuleRegistry::class);
+
+        // The condition this is really about: more than one stage of one
+        // module on a single role. Re-viva left the Academic Executive on
+        // 9 Nov 2026; its stages now sit with the Senior Executive CGS. If
+        // re-viva is ever restaged again, this should fail rather than
+        // quietly prove nothing.
+        $queues = $registry->queuesForRole(Role::SENIOR_EXEC_CGS);
+        $reViva = collect($queues)->filter(fn ($q) => $q['module']->key() === 're_viva');
+
+        $this->assertGreaterThan(1, $reViva->count(), 'Re-viva no longer has several Senior Executive stages.');
+
+        // The CGS roles have their own nav, so the grouping is checked on
+        // the approver partial itself (as the flat-or-tree test does).
+        $this->actingAs($this->seniorExec());
+        $sidebar = view('core::partials.sidebar-approver-nav', ['queues' => $queues])->render();
+
+        $this->assertSame(
+            1,
+            substr_count($sidebar, '>Re-viva Monitoring<'),
+            'The module name should label the group once, not once per stage.'
+        );
+
+        // The label alone, not '>label<': Blade renders the anchor's text on
+        // its own indented line, so the tags are not adjacent to it.
+        foreach ($reViva as $queue) {
+            $this->assertStringContainsString(
+                $queue['stage']->label,
+                $sidebar,
+                "The '{$queue['stage']->label}' stage needs its own named link."
+            );
+        }
+    }
+```
+
+### 13d. `tests/Feature/Core/SidebarQueuesTest.php`, lines 136–155
+
+Old, in the docblock:
+
+```php
+ * the count moves whenever a module adds a stage for that role (Viva
+ * Voce took the Academic Executive from three modules to four). One role
+ * on each side keeps both branches covered.
+```
+
+New:
+
+```php
+ * the count moves whenever a module adds or drops a stage for that role
+ * (Viva Voce took the Academic Executive from three modules to four;
+ * re-viva leaving the AE on 9 Nov 2026 took it back to three). One role
+ * on each side keeps both branches covered.
+```
+
+Old, lines 147–155:
+
+```php
+        $this->assertGreaterThanOrEqual(4, $modulesFor(Role::ACADEMIC_EXEC), 'The AE owns four or more modules.');
+        // Not Registry: it lost its only queue when RPD was retired.
+        $this->assertLessThan(4, $modulesFor(Role::SENIOR_EXEC_CGS), 'The Senior Executive owns fewer than four modules.');
+
+        $this->actingAs($this->academicExec())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('title="Pending My Action"', false)
+            ->assertDontSee('nav-flat-queues', false);
+```
+
+New (the Dean becomes the tree side; the AE is now checked on the flat side,
+on the real dashboard):
+
+```php
+        // The Dean is the tree side since re-viva left the AE (9 Nov 2026).
+        $this->assertGreaterThanOrEqual(4, $modulesFor(Role::DEAN_PGR), 'The Dean owns four or more modules.');
+        $this->assertLessThan(4, $modulesFor(Role::ACADEMIC_EXEC), 'The AE owns fewer than four modules.');
+        // Not Registry: it lost its only queue when RPD was retired.
+        $this->assertLessThan(4, $modulesFor(Role::SENIOR_EXEC_CGS), 'The Senior Executive owns fewer than four modules.');
+
+        $this->actingAs($this->dean())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('title="Pending My Action"', false)
+            ->assertDontSee('nav-flat-queues', false);
+
+        $this->actingAs($this->academicExec())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('nav-flat-queues', false);
+```
+
+The Senior Executive partial check at the end of the test stays as it is.
+
+### 13e. Pre-existing, not Hani
+
+These three failures are also in the full suite. They have nothing to do with
+Hani's modules or the 9 Nov change. They are listed here so nobody looks for
+them in Hani's work. They fail the same way at `e2970c4`, before the 11 Nov UAT
+changes.
+
+| Test | Cause | Owner |
+|---|---|---|
+| `PageShellTest::test_every_signed_in_screen_opens_with_the_shared_page_header` | 17 views open with their own `<h2>` instead of `<x-core::page-header>`: 16 in `app/Modules/Haziq/Resources/views/` (allowance, candidature_appeal, ga_application, gra_application, stage_gate) and `app/Modules/Norhanis/Resources/views/ta_hours/index.blade.php` | Haziq, Norhanis |
+| `PageShellTest::test_no_screen_still_puts_its_heading_inside_the_card` | the same views, less `candidature_appeal/queue`, `ga_application/queue` and `gra_application/queue` (14 files) | Haziq, Norhanis |
+| `ProseTest::test_no_page_uses_an_em_dash_as_a_sentence_connector` | em dashes used as connectors in Haziq's views (`allowance/index`, `candidature_appeal/*`, `ga_application/correction` and others) | Haziq |
+
+Run `php artisan test tests/Feature/Core/PageShellTest.php tests/Feature/Core/ProseTest.php`
+for the full list of files and lines.
+
+**Works without it?** Yes. Only the tests fail; the app behaves correctly.

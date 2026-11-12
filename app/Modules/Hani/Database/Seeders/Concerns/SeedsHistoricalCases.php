@@ -210,7 +210,7 @@ trait SeedsHistoricalCases
 
         $engine = app(WorkflowEngine::class);
         $ae = $this->academicExecFor($student);
-        $senior = $this->desk(Role::SENIOR_EXEC_CGS, 'Puan Waheeda (demo)');
+        $senior = $this->reVivaSenior();
         $title = self::HISTORY_TITLES[$i];
 
         // ---- Notice of Thesis Submission ---------------------------------
@@ -228,7 +228,13 @@ trait SeedsHistoricalCases
 
             return $engine->submit($notice);
         });
-        $this->at($at('ack'), fn () => $engine->decide($notice, $ae, 'approve'));
+        $this->at($at('ack'), function () use ($engine, $notice, $ae, $student) {
+            // The supervisor endorses before the AE verifies (UAT 11 Nov 2026).
+            if ($notice->current_stage === \App\Modules\Hani\Workflows\VivaVoceWorkflow::SUPERVISOR_STAGE) {
+                $engine->decide($notice, $student->supervisor, 'approve', 'Endorsed.');
+            }
+            $engine->decide($notice, $ae, 'approve');
+        });
 
         // ---- Examiner nomination: the six-stage chain -----------------------
         $panel = $this->historyPanel($i, $student, $walkthrough);
@@ -253,7 +259,7 @@ trait SeedsHistoricalCases
                 $application->refresh();
                 $returnTo
                     ? $engine->returnTo($application, $actor, 'academic_exec', 'The internal backup examiner is from another department; please nominate one from the candidate\'s own department.')
-                    : $engine->decide($application, $actor, 'approve');
+                    : ($stage === 'academic_exec' ? $this->dacEndorse($application, $actor) : $engine->decide($application, $actor, 'approve'));
             });
         }
         $nomination = ExaminerNomination::where('application_id', $application->id)->sole();

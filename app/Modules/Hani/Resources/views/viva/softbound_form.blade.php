@@ -71,13 +71,14 @@
 
                 <label for="thesis_title">Thesis Title</label>
                 <textarea name="thesis_title" id="thesis_title" rows="2" required maxlength="255"
+                          data-title-words data-max="{{ \App\Modules\Hani\Models\VivaDetail::TITLE_MAX_WORDS }}"
                           class="@error('thesis_title') is-invalid @enderror">{{ old('thesis_title', $noticeTitle) }}</textarea>
-                <p class="fstep-hint">From your notice. Update it if the title has changed.</p>
+                <p class="fstep-hint">From your notice. Update it if the title has changed. At most {{ \App\Modules\Hani\Models\VivaDetail::TITLE_MAX_WORDS }} words: <span data-title-count>0</span> so far.</p>
                 @error('thesis_title') <p class="field-error">{{ $message }}</p> @enderror
 
                 <div class="message-info" id="turnitin-guidance">
                     <p><b>Your Turnitin report.</b> Download it from
-                        <a href="{{ $ulearnUrl }}" target="_blank" rel="noopener noreferrer">ULearn</a>:
+                        <a href="{{ $ulearnUrl }}" target="_blank" rel="noopener noreferrer">ULearnX (postgraduate students)</a>:
                         open your thesis submission and download the <b>full similarity report</b> as a PDF
                         (the Originality Report, with the similarity index and the list of primary sources).
                         The Digital Receipt on its own is not enough.</p>
@@ -159,6 +160,22 @@
 @include('core::partials.form-stepper')
 
 @push('scripts')
+    <script @cspNonce>
+        // Live word count for the thesis title; VivaSoftboundController is the rule.
+        (function () {
+            var title = document.querySelector('[data-title-words]');
+            var out = document.querySelector('[data-title-count]');
+            if (!title || !out) return;
+            function sync() {
+                var m = title.value.match(/[\p{L}\p{N}]+(?:['\-’][\p{L}\p{N}]+)*/gu);
+                var n = m ? m.length : 0, max = +title.dataset.max;
+                out.textContent = n;
+                title.setCustomValidity(n > max ? 'The thesis title must be ' + max + ' words or fewer.' : '');
+            }
+            title.addEventListener('input', sync);
+            sync();
+        })();
+    </script>
     <script @cspNonce>
         // Reads the chosen Turnitin report on the server and fills in the
         // similarity index for the student to confirm. A convenience only:

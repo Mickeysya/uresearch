@@ -7,11 +7,11 @@ use Dompdf\Options;
 
 /**
  * FICTIONAL PDFs for tests and the demo seeder: a Turnitin Originality Report
- * laid out the way ULearn prints one, and a thesis of a given length. Every
+ * laid out the way ULearnX prints one, and a thesis of a given length. Every
  * name, title and source here is invented; source hosts are example.com /
  * example.org. Rendered with Dompdf, which is already installed.
  *
- * The report follows the real ULearn layout: the submission title, then
+ * The report follows the real ULearnX layout: the submission title, then
  * "ORIGINALITY REPORT", the big similarity index over "SIMILARITY INDEX",
  * the three breakdown figures (INTERNET SOURCES, PUBLICATIONS, STUDENT
  * PAPERS), the PRIMARY SOURCES list (rank, source, type, %), and the

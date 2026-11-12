@@ -90,7 +90,7 @@ class ExaminerDashboardTest extends TestCase
             ->pluck('count', 'label');
 
         $this->assertSame(1, $stages['CGS Compilation']);
-        $this->assertSame(0, $stages['Academic Executive']);
+        $this->assertSame(0, $stages['Department compilation & DAC endorsement']);
     }
 
     public function test_a_thesis_topic_nobody_covers_is_flagged_as_a_gap(): void
