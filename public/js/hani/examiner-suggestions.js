@@ -40,6 +40,21 @@
         return node;
     }
 
+    // One pill per flag, as the _coi partial draws it: the short summary
+    // when there is one, the full sentence in the tooltip and "Show details".
+    function flagPill(flag) {
+        var pill = el('div', 'suggest-flag is-' + flag.level,
+            (flag.level === 'block' ? 'Conflict: ' : 'Check: ') + (flag.summary || flag.message));
+        pill.title = flag.message;
+        if (flag.summary) {
+            var details = el('details');
+            details.appendChild(el('summary', null, 'Show details'));
+            details.appendChild(el('p', null, flag.message));
+            pill.appendChild(details);
+        }
+        return pill;
+    }
+
     function message(panel, text) {
         panel.replaceChildren(el('p', 'suggest-empty', text));
     }
@@ -81,8 +96,7 @@
                 li.appendChild(el('div', 'suggest-reasons', item.reasons.join(' · ')));
             }
             (item.flags || []).forEach(function (flag) {
-                li.appendChild(el('div', 'suggest-flag is-' + flag.level,
-                    (flag.level === 'block' ? 'Conflict: ' : 'Check: ') + flag.message));
+                li.appendChild(flagPill(flag));
             });
             if (item.needs_email) li.appendChild(el('div', 'suggest-flag is-warning', 'Email needed before letters can be sent.'));
 
@@ -120,8 +134,7 @@
             var flags = (select && select.value && checks[select.value]) || [];
             slot.replaceChildren();
             flags.forEach(function (flag) {
-                slot.appendChild(el('div', 'suggest-flag is-' + flag.level,
-                    (flag.level === 'block' ? 'Conflict: ' : 'Check: ') + flag.message));
+                slot.appendChild(flagPill(flag));
             });
         });
     }

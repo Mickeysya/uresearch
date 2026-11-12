@@ -41,7 +41,13 @@ class ConflictOfInterest
 
     public function __construct(protected NameNormaliser $names) {}
 
-    /** @return array<int, array{level: string, rule: string, message: string}> */
+    /**
+     * Each flag's `message` is the full sentence (exports, block errors,
+     * the DAC PDF). A long one also carries a `summary` for the pill on
+     * screen, with the message behind "Show details" (_coi partial).
+     *
+     * @return array<int, array{level: string, rule: string, message: string, summary?: string}>
+     */
     public function flagsFor(Examiner $examiner, User $student): array
     {
         ['supervisor' => $supervisor, 'co' => $co] = $this->peopleFor($student);
@@ -59,8 +65,8 @@ class ConflictOfInterest
             'the candidate' => $student->name,
             'the supervisor' => $supervisor?->name,
             'the co-supervisor' => $co['name'],
-        ])) as $message) {
-            $flags[] = $this->flag(self::WARNING, 'coauthor', $message);
+        ])) as $message => $summary) {
+            $flags[] = $this->flag(self::WARNING, 'coauthor', $message) + ['summary' => $summary];
         }
 
         if ($examiner->isExternal()) {
@@ -132,7 +138,7 @@ class ConflictOfInterest
      * Publications the examiner co-authored with any of $people.
      *
      * @param  array<string, string>  $people  role => name
-     * @return array<int, string>
+     * @return array<string, string> full message => short summary for the pill
      */
     protected function coauthorships(Examiner $examiner, array $people): array
     {
@@ -149,18 +155,23 @@ class ConflictOfInterest
 
                 foreach ($people as $role => $name) {
                     if ($this->names->looksAlike($coauthor, $name)) {
-                        $messages[] = sprintf('Co-authored "%s"%s with %s (%s).',
+                        $message = sprintf('Co-authored "%s"%s with %s (%s).',
                             $publication->title,
                             $publication->year ? " ({$publication->year})" : '',
                             $name,
                             $role,
+                        );
+                        // The paper title can run to a paragraph; the pill names the relation.
+                        $messages[$message] = sprintf('Co-author with %s%s',
+                            str_replace('the ', '', $role),
+                            $publication->year ? " ({$publication->year})" : '',
                         );
                     }
                 }
             }
         }
 
-        return array_values(array_unique($messages));
+        return $messages; // keyed by message, so a paper listed twice flags once
     }
 
     protected function isUtp(?string $institution): bool

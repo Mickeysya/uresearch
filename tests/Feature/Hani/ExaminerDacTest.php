@@ -167,6 +167,38 @@ class ExaminerDacTest extends TestCase
             ->assertSee('Department compilation &amp; DAC endorsement', false)->assertSee('DAC Compilation');
     }
 
+    public function test_a_long_coauthor_flag_is_a_short_wrapping_pill_with_the_paper_behind_show_details(): void
+    {
+        $one = $this->nominate('22001001');
+        $title = 'A very long paper title about constraint-based examiner matching that used to run off the page';
+        Examiner::where('name', 'Dr Internal 22001001')->sole()->publications()
+            ->create(['title' => $title, 'year' => 2024, 'coauthors' => $this->supervisor->name]);
+
+        // DAC Compilation: the shared pill, not the uppercase status badge,
+        // and a fixed-layout table inside a scroll container.
+        $this->actingAs($this->ae)->get(route('examiner-nomination.dac'))->assertOk()
+            ->assertSee('Check: Co-author with supervisor (2024)')
+            ->assertSee('Show details')
+            ->assertSee($title)
+            ->assertSee('class="coi-flag is-warning"', false)
+            ->assertSee('class="dac-scroll"', false)
+            ->assertSeeInOrder(['Internal (main):', 'Dr Internal 22001001', '· Computing'])
+            ->assertDontSee('class="status-badge returned"', false);
+
+        // The same pill on the AE's stage-1 card and on the Examiner Report.
+        $this->actingAs($this->ae)->get(route('examiner-nomination.queue'))->assertOk()
+            ->assertSee('Check: Co-author with supervisor (2024)')->assertSee('Show details');
+        $this->actingAs($this->senior)->get(route('examiner-nomination.report'))->assertOk()
+            ->assertSee('Check: Co-author with supervisor (2024)');
+
+        // The export and the full message keep the whole sentence.
+        $flag = collect(\App\Modules\Hani\Http\Controllers\ExaminerDacController::flags(
+            \App\Modules\Hani\Models\ExaminerNomination::with('application.student')->where('application_id', $one->id)->get()
+        )[$one->id])->flatten(1)->firstWhere('rule', 'coauthor');
+        $this->assertStringContainsString($title, $flag['message']);
+        $this->assertSame('Co-author with supervisor (2024)', $flag['summary']);
+    }
+
     public function test_another_departments_ae_cannot_record_for_it(): void
     {
         $one = $this->nominate('22001001');

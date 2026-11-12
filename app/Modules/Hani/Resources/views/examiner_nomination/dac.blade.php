@@ -9,7 +9,21 @@
     Three forms share one set of checkboxes through the form attribute
     (nested forms are illegal).
 --}}
+@push('head')
+    <style>
+        /* The compiled list never breaks out of the card: fixed columns, wrapping cells, scroll on narrow screens. */
+        .dac-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+        .dac-table { table-layout: fixed; width: 100%; min-width: 880px; }
+        .dac-table th, .dac-table td { vertical-align: top; white-space: normal; overflow-wrap: break-word; }
+        .dac-table td { overflow-wrap: anywhere; }
+        .dac-seats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+        .dac-seat { font-weight: 600; color: var(--text-grey); }
+        .dac-flag-group + .dac-flag-group { margin-top: 8px; }
+    </style>
+@endpush
+
 @section('content')
+<div class="card-container-inline">
     <x-core::page-header title="DAC Compilation"
         :subtitle="$nominations->count().' '.Str::plural('nomination', $nominations->count()).' from '.($department ?: 'your department').' waiting for the DAC. Only DAC-endorsed nominations go on to CGS.'" />
 
@@ -22,7 +36,11 @@
 
         <div class="card card-wide">
             <p class="fstep-hint">Tick the nominations to act on. The download takes the ticked ones, or all of them when none is ticked.</p>
+            <div class="dac-scroll">
             <table class="table dac-table">
+                <colgroup>
+                    <col style="width: 40px"><col style="width: 12%"><col style="width: 10%"><col style="width: 14%"><col style="width: 9%"><col style="width: 30%"><col style="width: 25%">
+                </colgroup>
                 <thead>
                     <tr>
                         <th><input type="checkbox" data-dac-all aria-label="Select all"></th>
@@ -45,14 +63,19 @@
                             <td>{{ $n->thesis_title }}</td>
                             <td>{{ $n->application?->submittedBy?->name ?? $student?->supervisor?->name }}</td>
                             <td>
-                                @foreach ($n->panel() as $seat => $examiner)
-                                    <div>{{ $seat }}: {{ $examiner?->name ?? '—' }} @if ($examiner)<span class="fstep-hint">({{ $examiner->institution ?: $examiner->department }})</span>@endif</div>
-                                @endforeach
+                                <ul class="dac-seats">
+                                    @foreach ($n->panel() as $seat => $examiner)
+                                        <li><span class="dac-seat">{{ $seat }}:</span> {{ $examiner?->name ?? 'Not named' }}@if ($examiner) <span class="fstep-hint">· {{ $examiner->institution ?: $examiner->department }}</span>@endif</li>
+                                    @endforeach
+                                </ul>
                             </td>
                             <td>
-                                @php($flags = collect($coiFlags[$n->application_id] ?? [])->flatten(1))
-                                @forelse ($flags as $flag)
-                                    <div class="status-badge {{ $flag['level'] === 'block' ? 'rejected' : 'returned' }}">{{ $flag['message'] }}</div>
+                                @php($byExaminer = collect($coiFlags[$n->application_id] ?? [])->filter())
+                                @forelse ($byExaminer as $examinerId => $flags)
+                                    <div class="dac-flag-group">
+                                        <span class="fstep-hint">{{ collect($n->panel())->filter()->firstWhere('id', $examinerId)?->name }}</span>
+                                        @include('hani::examiner_nomination._coi', ['flags' => $flags])
+                                    </div>
                                 @empty
                                     <span class="fstep-hint">None</span>
                                 @endforelse
@@ -61,6 +84,7 @@
                     @endforeach
                 </tbody>
             </table>
+            </div>
             @error('ids') <p class="field-error">{{ $message }}</p> @enderror
 
             <h3>Download compiled list</h3>
@@ -105,6 +129,8 @@
             </ul>
         </div>
     @endif
+
+</div>
 
     <script @cspNonce>
         (function () {
