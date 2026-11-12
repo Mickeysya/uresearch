@@ -16,7 +16,7 @@ use App\Modules\Hani\Support\VivaProgress;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
+use Tests\Feature\Hani\Concerns\FakesAPrivateLocalDisk;
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
@@ -25,6 +25,7 @@ use Tests\TestCase;
 class HaniDemoSeederTest extends TestCase
 {
     use KeepsJobsOffTheDevQueue;
+    use FakesAPrivateLocalDisk;
     use MakesUsers;
     use RefreshDatabase;
 
@@ -32,7 +33,7 @@ class HaniDemoSeederTest extends TestCase
     {
         parent::setUp();
 
-        Storage::fake('local');
+        $this->fakePrivateLocalDisk();
         Notification::fake();
 
         foreach ([
