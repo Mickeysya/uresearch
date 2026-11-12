@@ -126,6 +126,90 @@ Run with `db:seed --class=...`; none are wired into Core's seeder:
 
 ---
 
+## 2026-11-12 — GA Extension follows the GA Application chain (Admin → CGS → Supervisor → Senior Director)
+
+**Branch:** `feature/ga-extension-chain`, from `feature/cgs-assignment`
+(`2e2e010`), uncommitted. Nureen's folder only; no Core change.
+SHARED_CHANGES §19 has two shared issues found along the way.
+
+### The ask
+- **The confirmation:** CGS (Puan Akmar, Senior Executive CGS, 12 Nov 2026)
+  confirmed that GA Extension's chain must match Haziq's GA Application chain
+  minus its Research Centre interview, so Haziq's Admin stage stays.
+- **Snapshot mode:** new applications get a third mode; in-flight ones keep
+  theirs.
+- **Returns:** CGS can return to Admin; the Senior Director to CGS or the
+  supervisor; a reason is always required.
+- **Emails:** the submission email goes to Admin; progress emails at every
+  stage; the final outcome at the Senior Director; no "for information" copy.
+- **Charter:** Admin 2, CGS 2, Supervisor 3; the Senior Director is null until
+  CGS confirms.
+
+### Key findings before writing any code
+- **The two chains differed in four ways besides the interview:**
+  - The order: CGS came after the Supervisor in GA Extension.
+  - The final approver: the default `cgs` mode ended at CGS.
+  - CGS's decision: it was final ("approved") instead of "reviewed".
+  - The stage key: `cgs_verify` here, `cgs_review` in Haziq's. Kept as is,
+    since keys are permanent.
+- **Haziq's GA Application has no stage returns.** It has only "flag a
+  correction", where the student is asked to fix fields and the application
+  doesn't move. So the agreed returns were used.
+- **Haziq has no Client Charter figures** to borrow for the Senior Director.
+
+### The design
+- **A third snapshot mode,** `ga_application`, is now the default for
+  `final_approver`. Its chain is `admin_verify` (verified) → `cgs_verify`
+  (reviewed) → `supervisor` (endorsed) → `senior_director` (approved). The
+  existing stage objects are reused, and `stages(null)` still returns every
+  stage any chain uses.
+- **`GaExtensionWorkflow::returnTargets()`** lists the stages the current one
+  may go back to. The controller's `returnToEarlierStage()` (route
+  `ga-extension.return?to=`) validates against it. The decision bar shows one
+  Return button per target.
+- **`SubmissionNotifier`** names GA Extension's next actor stage by stage:
+  - every Admin
+  - the assigned CGS officer
+  - the named supervisor
+  - every Senior Director
+
+### What changed
+- **Workflow, config, controller and route:** the new chain, the default mode,
+  and the general return.
+- **Approver panel, decision bar and the queue and detail views:** the Return
+  buttons and the line shown at the CGS stage.
+- **`SubmissionNotifier`:** the next actor at every stage.
+- **Tests:**
+  - **New, `GaExtensionChainTest` (10 tests):** the chain read against
+    Haziq's workflow, older snapshots, the emails at every stage, the
+    returns, the CGS assignment, the Senior Director's charter, and
+    Section E.
+  - **Rewritten for the new default:** two in `SupervisorSafeguardsTest`
+    and one in `DocumentPreviewTest`.
+  - **Pinned to the `cgs` chain:** 11 tests that walk the old order, each
+    with a comment.
+- **Docs:** the README, `docs/functional-test-cases.md` (GAX-07, 08, 10 and
+  11 rewritten; GAX-17 and 18 added; 59 cases), `results.md`, and
+  SHARED_CHANGES §19.
+
+### Bugs caught
+- **A return to the supervisor emails all 24 supervisors** (Core
+  `notifyReturn()`). Recorded as a proposal, not fixed.
+- **`DemoDataSeeder` cannot decide `admin_verify`,** which has been the case
+  since 10 Nov. Recorded as a proposal.
+
+### Verification
+- **Tests:** Nureen, `CgsAssignmentTest` and Haziq's tests: 658 passed. The
+  one failure, `AttendanceActionCardTest`, already fails on this branch; its
+  fix is commit `9a45624` on `feature/ga-extension-shortcut`.
+- **Functional rerun** on a throwaway copy (results.md, run 2): GAX-07 to
+  GAX-18 all pass, including GAX-13 now that the CGS assignment is present.
+  SHR-03 is still a Fail because of Haziq's GA Application email link.
+- **The form PDF's Section E** names Dr. Aisyah Rahman (endorsed), Zulkifly
+  (reviewed) and En Zulkifly (approved).
+
+---
+
 ## 2026-11-12 — Each module's CGS decisions go to one CGS officer
 
 **Branch:** `feature/cgs-assignment` (from `origin/develop` at `fbf5a6c`),

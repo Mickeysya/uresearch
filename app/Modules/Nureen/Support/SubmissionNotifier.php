@@ -7,6 +7,8 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\WorkflowEngine;
+use App\Modules\Core\Support\Role;
+use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Models\SupervisionDetail;
@@ -44,7 +46,9 @@ class SubmissionNotifier
             return;
         }
 
-        $recipients = $this->recipients($application)->filter(fn (User $u) => $u->role === $stage->role);
+        $recipients = ($application->module_type === 'ga_extension'
+            ? $this->gaExtensionRecipients($application, $stage)
+            : $this->recipients($application))->filter(fn (User $u) => $u->role === $stage->role);
 
         if ($recipients->isEmpty()) {
             return;
@@ -62,6 +66,28 @@ class SubmissionNotifier
             $clock && $clock['on_charter'] ? $clock['charter_days'] : null,
             $reassignedReason,
         ));
+    }
+
+    /**
+     * GA Extension's next actor, stage by stage -- since 2026-11-12 its
+     * default chain (Puan Akmar's confirmation: Haziq's GA Application
+     * chain minus the interview) starts with Admin, so "whoever acts first"
+     * is no longer the named supervisor:
+     *   admin_verify     every Admin
+     *   cgs_verify       the officer GA Extension is assigned to
+     *                    (config/cgs_assignment.php), every CGS if open
+     *   supervisor       the supervisor this application names
+     *   senior_director  every Senior Director CGS
+     *
+     * @return Collection<int, User>
+     */
+    protected function gaExtensionRecipients(Application $application, Stage $stage): Collection
+    {
+        return match ($stage->role) {
+            Role::NON_EXEC_CGS => app(CgsAssignment::class)->recipients($application->module_type),
+            Role::SUPERVISOR => User::whereKey(GaExtensionDetail::where('application_id', $application->id)->value('supervisor_id'))->get(),
+            default => User::where('role', $stage->role)->get(),
+        };
     }
 
     /** @return Collection<int, User> */

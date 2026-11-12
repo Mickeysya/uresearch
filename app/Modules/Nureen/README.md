@@ -4,8 +4,14 @@
 
 ## Built
 
-- **GA Extension** — complete. Supervisor → Non-Executive CGS (default), or
-  Supervisor → CGS Staff → Senior Director CGS (`final_approver`). Required
+- **GA Extension** — complete. Default chain since 12 Nov 2026 (confirmed by
+  Puan Akmar, Senior Executive CGS): **Admin → CGS Staff → Supervisor →
+  Senior Director CGS**, the same as Haziq's GA Application minus its
+  Research Centre interview (`final_approver` = `'ga_application'`). CGS can
+  return it to Admin; the Senior Director to CGS or the supervisor, with a
+  reason. Applications submitted earlier keep the chain they were submitted
+  under (`'cgs'`: Admin → Supervisor → CGS final; `'senior_director'`:
+  Admin → Supervisor → CGS → Senior Director). Required
   documents are enforced at validation, so incomplete applications never
   reach CGS. The official GA Extension Form is generated from the student's
   answers rather than uploaded; see "The GA Extension Form, generated" below.
@@ -358,8 +364,12 @@ collect, so a student can leave and resume.
 ## The Client Charter
 
 CGS commits to a number of working days per approval stage
-(`config('nureen.charter_days')`: GA Extension 3 + 2, Supervision 3 + 3 (+ 0
-for `cgs_review` in `'manual'` mode), Certification 3 + 2 + 2). Everything
+(`config('nureen.charter_days')`: GA Extension Admin 2 (placeholder) + CGS 2 +
+Supervisor 3 + Senior Director **null** until CGS gives a figure — so a GA
+Extension on the default chain has no expected decision date while the Senior
+Director is still ahead; set `charter_days.ga_extension.senior_director` in
+`config/nureen.php` once CGS confirms it — Supervision 3 + 3 (+ 0 for
+`cgs_review` in `'manual'` mode), Certification 3 + 2 + 2). Everything
 the charter drives goes through two classes, so nothing can disagree:
 
 - **`Support\WorkingDayCalendar`** counts Monday–Friday, minus
@@ -370,8 +380,8 @@ the charter drives goes through two classes, so nothing can disagree:
   `submitted_at`), that stage's due date, whether it is overdue, and the
   student's expected decision date: the stage's due date (or today, if
   past) plus the charter days of every stage still ahead on *that
-  application's* chain (mode snapshot respected; a return-to-supervisor
-  just puts it back at an earlier position). A stage with a `null` charter
+  application's* chain (mode snapshot respected; a return just puts it
+  back at an earlier position). A stage with a `null` charter
   gets no due date and no expected date, so no date is invented for it.
 
 One rule ties them together: a stage is **overdue** once more working days
@@ -497,11 +507,12 @@ keeps its snapshot.
 
 ## Two chains per module, one superset for queues
 
-GA Extension (`final_approver`) has two chains and Supervision
+GA Extension (`final_approver`: `'ga_application'`, `'cgs'`,
+`'senior_director'`) has three chains and Supervision
 (`cgs_stage`: `'endorse'`, `'automatic'`, `'manual'`) three, each
 snapshotted per application at submission. `stages($application)`
 returns that application's own chain; `stages(null)` returns **every stage
-either chain uses**, because Core builds the sidebar and gates the queue
+any chain uses**, because Core builds the sidebar and gates the queue
 pages from it (`ModuleRegistry::queuesForRole()`). That is what keeps an
 older application reachable after the default changes: e.g. a
 `'senior_director'` GA Extension at the Senior Director, or a `'manual'`
@@ -554,6 +565,7 @@ role-scoped pending that decision.
 | `AttendanceProjectorTest` | the least-squares projection: the worked 87.5 → 62.5 example, steady attendance, too few periods, zero-session periods, clamping at 0 and 100% |
 | `AttendanceEarlyWarningTest` | who is flagged and why; the email wording, which never contains the projection; no repeated alerts (margin, recovery); alerts recorded and shown as "last emailed"; sorting; students never seeing the projection; approved appeals excusing absences |
 | `AttendanceTest` | the template round-trip (download it, feed it straight back), the header check, the date formats Excel writes, a bad row being skipped with a reason while the good rows save, re-uploading a period replacing rather than duplicating, and the at-risk alert firing on the transition |
+| `GaExtensionChainTest` | the default chain since 12 Nov 2026 (Puan Akmar): read against Haziq's `GaApplicationWorkflow` minus the interview; older snapshots keep their chain; the "awaiting you" email to Admin, CGS (the assigned officer), the named supervisor and the Senior Director in turn; a progress email to the student at each stage; the final outcome at the Senior Director with the supervisor copied and no "for information" copy; CGS → Admin and Senior Director → CGS / supervisor returns, reasons required, no other targets; the CGS assignment at `cgs_verify` and not at Admin; no charter figure for the Senior Director yet; Section E naming each approver |
 | `GaExtensionTest` | document completeness — the module's point per `nureen.md` Module 2 — and the three-stage chain, asserting the position after *every* decision, because the middle stage is what the legacy app got wrong |
 | `AttendanceBacktestTest` | mean ± sample SD; `--runs` over consecutive seeds (the reported mean equals the seeds' own runs); `--compare` side by side on the same data; a hand-worked 5-student dataset giving exactly MAE 6.98 and the expected precision/recall/earliness (directly and through the CSV parser); every metric at every cut-off on synthetic data; same seed = identical report; the documented pattern mix; no database writes or notifications at all; bad input; incomplete students left out |
 | `AttendanceProjectionWindowTest` | the window's boundaries; no projection flag before period 4 (figure still stored) or after the active share; the rule still applies; the backtest replay matching the live `assess()` period by period for 21 synthetic students under both windows |

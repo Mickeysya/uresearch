@@ -4,6 +4,8 @@ Accounts (all @utp.edu.my): student@ (Ahmad Danial, GA student after the GA Exte
 
 ## GA Extension (Figure 3.9a)
 
+Chain since 12 Nov 2026, confirmed by Puan Akmar (Senior Executive CGS): **Admin → CGS → Supervisor → Senior Director**, the same as the GA Application chain minus its Research Centre interview. GAX-07, GAX-08, GAX-10 and GAX-11 were rewritten and GAX-17 and GAX-18 added for this chain.
+
 | ID | Test case | User | Steps | Expected result |
 |---|---|---|---|---|
 | GAX-01 | Non-GA student cannot open the form | non-GA student | Open GA Extension | Form refused with a message |
@@ -12,16 +14,18 @@ Accounts (all @utp.edu.my): student@ (Ahmad Danial, GA student after the GA Exte
 | GAX-04 | Delete a draft | student@ | My Drafts → Delete | Draft removed |
 | GAX-05 | Missing documents refused | student@ | Submit without a required document | Error shown, not submitted |
 | GAX-06 | Backdated start refused | student@ | Submit with a start date in the past | Error shown, not submitted |
-| GAX-07 | Submit application | student@ | Fill all fields, submit | Pending at Supervisor; supervisor emailed |
-| GAX-08 | Supervisor endorses | supervisor@ | Open the application, Endorse | Pending at CGS; student emailed |
+| GAX-07 | Submit application | student@ | Fill all fields, submit | Pending at Admin; Admin emailed with the due date and queue link |
+| GAX-08 | Supervisor endorses | supervisor@ | Open the application (after Admin verifies and CGS reviews), Endorse | Pending at Senior Director; student emailed |
 | GAX-09 | Supervisor rejects | supervisor@ | Reject with reason (on a separate application) | Rejected; student sees the reason |
-| GAX-10 | CGS returns to supervisor | zulkifly.cgs | Return with reason | Back at Supervisor; reason recorded |
-| GAX-11 | CGS approves | zulkifly.cgs | Approve | Approved; student and supervisor emailed; Senior Director informed |
+| GAX-10 | CGS returns to Admin | zulkifly.cgs | Return to Admin with reason | Back at Admin; reason recorded |
+| GAX-11 | CGS reviews | zulkifly.cgs | Approve (after Admin verifies) | Pending at Supervisor; supervisor emailed |
 | GAX-12 | CGS rejects | zulkifly.cgs | Reject with reason (on a separate application) | Rejected; student emailed |
 | GAX-13 | Other CGS officer cannot decide | syahmi.cgs | Open an application at the CGS stage | Read-only, "Assigned to: Zulkifly", no decision buttons; a forced decision returns 403 |
 | GAX-14 | Sensitive data masked | supervisor@ | View the application | IC and account no. shown as •••• 1234 |
 | GAX-15 | Generated form PDF | student@ | Download the form after approval | PDF with approvals filled in |
 | GAX-16 | Rejected application cannot be approved | zulkifly.cgs | Try to decide on a rejected application | Not possible (no buttons / refused) |
+| GAX-17 | Senior Director approves | director@ | Approve (after the supervisor endorses) | Approved; student and supervisor emailed; no "for information" copy to the Senior Director |
+| GAX-18 | Senior Director returns | director@ | Return to CGS, and (on a separate application) to the supervisor, with a reason | Back at the chosen stage; reason recorded |
 
 ## Supervision (Figure 3.9b)
 
@@ -84,4 +88,4 @@ Accounts (all @utp.edu.my): student@ (Ahmad Danial, GA student after the GA Exte
 | SHR-02 | Overdue reminder | system | Run the reminder command on an overdue application | Reviewer emailed; application marked overdue |
 | SHR-03 | Email links work | each recipient | Click links in the emails | Each opens a page that person can access |
 
-Total: 57 test cases.
+Total: 59 test cases (57 until 12 Nov 2026; GAX-17 and GAX-18 added for the new GA Extension chain).

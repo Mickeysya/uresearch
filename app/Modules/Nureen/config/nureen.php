@@ -305,20 +305,26 @@ return [
             // 'funding_source' => ['label' => 'Funding Source', 'type' => 'text', 'required' => false],
         ],
 
-        // Who gives the final word, confirmed with CGS against their
-        // UResearch process workflow (5-day Client Charter: Supervisor 3,
-        // CGS 2). See GaExtensionWorkflow::stages() and
+        // Which chain a NEW application is submitted under. See
+        // GaExtensionWorkflow::stages() and
         // GaExtensionDetail::final_approver_snapshot -- an in-flight
         // application always runs the chain it was submitted under, never
         // whatever this config currently says.
-        //   'cgs'             DEFAULT. Supervisor endorses, Non-Executive CGS
-        //                     decides and the application ends there. The
-        //                     Senior Director is emailed every outcome for
-        //                     information only -- no action, no stage.
-        //   'senior_director' The old chain: Supervisor, then CGS Staff
-        //                     (an intermediate review), then the Senior
-        //                     Director gives the final approval.
-        'final_approver' => env('NUREEN_GA_EXTENSION_FINAL_APPROVER', 'cgs'),
+        //   'ga_application'  DEFAULT since 2026-11-12, confirmed by Puan
+        //                     Akmar (Senior Executive CGS): Haziq's GA
+        //                     Application chain minus the Research Centre
+        //                     interview -- Admin, CGS Staff, Supervisor,
+        //                     Senior Director (final). CGS can return to
+        //                     Admin; the Senior Director to CGS or the
+        //                     Supervisor.
+        //   'cgs'             The previous default: Admin, Supervisor,
+        //                     then Non-Executive CGS decides. The Senior
+        //                     Director is emailed every outcome for
+        //                     information only.
+        //   'senior_director' The original chain: Admin, Supervisor, CGS
+        //                     Staff (an intermediate review), Senior
+        //                     Director.
+        'final_approver' => env('NUREEN_GA_EXTENSION_FINAL_APPROVER', 'ga_application'),
 
     ],
 
@@ -425,8 +431,8 @@ return [
         // same upload field, different wording for who has to have signed
         // or approved it.
         'supporting_document_label' => [
-            'GA' => "Evidence of Work Done (signed by Course Owner)",
-            'GRA' => "Evidence of Work Done (signed by Project Leader)",
+            'GA' => 'Evidence of Work Done (signed by Course Owner)',
+            'GRA' => 'Evidence of Work Done (signed by Project Leader)',
         ],
 
         // CGS's official online form, sections 1-5 (see the migration
@@ -519,6 +525,13 @@ return [
             'admin_verify' => 2,
             'supervisor' => 3,
             'cgs_verify' => 2,
+            // The final stage of the default 'ga_application' chain since
+            // 2026-11-12. No CGS figure yet (Haziq's GA Application has no
+            // charter figures to borrow), so null: no due date at this
+            // stage, no expected decision date for the student while it is
+            // still ahead, and reminders fall back to
+            // reminders.ga_extension.stalled_days. SET THE FIGURE HERE once
+            // CGS confirms it.
             'senior_director' => null,
         ],
         'supervision' => [

@@ -32,10 +32,12 @@
          GaExtensionWorkflow::allStages()), so say which this one is. --}}
     @if ($application->current_stage === 'cgs_verify')
         <p class="queue-meta">
-            @if ($detail->final_approver_snapshot === 'senior_director')
+            @if ($detail->final_approver_snapshot === 'ga_application')
+                Your review sends it on to the supervisor, then the Senior Director CGS for the final decision.
+            @elseif ($detail->final_approver_snapshot === 'senior_director')
                 Submitted under the earlier chain: your approval sends it on to the Senior Director CGS for the final decision.
             @else
-                Your decision is final for this application.
+                Submitted under the earlier chain: your decision is final for this application.
             @endif
         </p>
     @endif
@@ -178,5 +180,6 @@
 {{-- System checks and Section J (above) → Documents → Remarks → actions. --}}
 <x-nureen::documents :items="$panel['documents']" />
 <x-nureen::decision-bar :application="$application" :route="route('ga-extension.decide', $application)"
-    :approve-label="$panel['approveLabel']" :hint="$panel['hint']" :return-action="$panel['returnAction']" />
+    :approve-label="$panel['approveLabel']" :hint="$panel['hint']" :return-action="$panel['returnAction']"
+    :return-actions="$panel['returnActions'] ?? []" />
 </div>

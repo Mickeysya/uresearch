@@ -3,9 +3,9 @@
 namespace Tests\Feature\Nureen;
 
 use App\Modules\Core\Models\Application;
-use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Core\Models\ApplicationDocument;
 use App\Modules\Core\Models\User;
+use App\Modules\Haziq\Models\GaApplicationDetail;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Support\LetterRenderer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -198,6 +198,12 @@ class GaExtensionFormTest extends TestCase
 
     public function test_they_are_masked_everywhere_but_the_cgs_stage(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         $application = $this->submit();
 
         // The supervisor's queue: masked.
@@ -430,6 +436,12 @@ class GaExtensionFormTest extends TestCase
 
     public function test_a_return_to_the_supervisor_clears_the_endorsements_it_sent_back_over(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         $application = $this->submit();
         $this->actingAs($this->supervisor)->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
         $this->actingAs($this->cgs())->post(route('ga-extension.return', $application), ['remarks' => 'The admission letter is unreadable.']);
@@ -446,6 +458,12 @@ class GaExtensionFormTest extends TestCase
 
     public function test_cgs_fills_section_j_at_its_stage_and_it_prints_on_the_form(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         $application = $this->submit();
         $cgs = $this->cgs();
 
@@ -532,6 +550,12 @@ class GaExtensionFormTest extends TestCase
 
     public function test_the_queue_links_the_form(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         $application = $this->submit();
 
         $this->actingAs($this->supervisor)->get(route('ga-extension.queue'))

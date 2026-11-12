@@ -26,20 +26,26 @@ use Illuminate\Support\Str;
 /**
  * Graduate Assistantship extension requests.
  *
- * Two chains, chosen per application at submission time and never revisited
- * afterwards -- see GaExtensionDetail::final_approver_snapshot:
- *   'cgs'             DEFAULT, confirmed against CGS's UResearch process.
- *                      Supervisor endorses, Non-Executive CGS gives the
- *                      final decision. The Senior Director no longer acts
- *                      here; see GaExtensionController::decide().
- *   'senior_director' The original chain: Supervisor, then CGS Staff as an
- *                      intermediate review, then the Senior Director's
- *                      final approval.
+ * Three chains, chosen per application at submission time and never
+ * revisited afterwards -- see GaExtensionDetail::final_approver_snapshot:
+ *   'ga_application'  DEFAULT since 2026-11-12, confirmed by Puan Akmar
+ *                      (Senior Executive CGS): the same chain as Haziq's GA
+ *                      Application minus its Research Centre interview --
+ *                      Admin verifies, CGS Staff reviews, the Supervisor
+ *                      endorses, the Senior Director gives the final
+ *                      decision.
+ *   'cgs'             The previous default (until 2026-11-12): Admin,
+ *                      Supervisor, then Non-Executive CGS's final decision;
+ *                      the Senior Director is only informed. Kept for
+ *                      applications submitted under it.
+ *   'senior_director' The original chain: Admin, Supervisor, CGS Staff as
+ *                      an intermediate review, then the Senior Director.
+ *                      Kept for applications submitted under it.
  *
- * Both chains keep the same three Stage keys (supervisor, cgs_verify,
- * senior_director) that existed before this split -- only which ones are
- * actually on an application's chain, and whether cgs_verify is
- * intermediate or final, changes. That is what lets an application already
+ * Every chain uses the same Stage keys (admin_verify, supervisor,
+ * cgs_verify, senior_director) -- only which ones are on an application's
+ * chain, in which order, and whether cgs_verify is intermediate or final,
+ * changes. That is what lets an application already
  * sitting at any of these keys stay decidable exactly where it is no
  * matter which chain is live in config when it is next acted on.
  *
@@ -102,13 +108,13 @@ class GaExtensionWorkflow implements DecidesOneAtATime, DescribesApplicationDeta
     /**
      * With an application: the chain it was submitted under (its snapshot).
      *
-     * Without one: every stage EITHER chain can use, as Core's contract
+     * Without one: every stage ANY chain can use, as Core's contract
      * asks -- ModuleRegistry::queuesForRole() builds the sidebar and gates
      * the queue pages from this, so a stage missing here is a stage nobody
      * can reach. Returning only the live config's chain was a bug: in the
      * default 'cgs' mode it dropped 'senior_director', and every older
      * application already sitting there became undecidable. The live chain
-     * comes first, then any stage only the other chain has.
+     * comes first, then any stage only another chain has.
      */
     public function stages(?Application $application = null): array
     {
@@ -126,15 +132,18 @@ class GaExtensionWorkflow implements DecidesOneAtATime, DescribesApplicationDeta
         $stages = $this->chainFor($live);
         $keys = array_map(fn (Stage $s) => $s->key, $stages);
 
-        foreach ($this->chainFor($live === 'cgs' ? 'senior_director' : 'cgs') as $stage) {
-            if (! in_array($stage->key, $keys, true)) {
-                $stages[] = $stage;
+        foreach (array_diff(self::MODES, [$live]) as $mode) {
+            foreach ($this->chainFor($mode) as $stage) {
+                if (! in_array($stage->key, $keys, true)) {
+                    $stages[] = $stage;
+                    $keys[] = $stage->key;
+                }
             }
         }
 
         // 'cgs_verify' is the final decision on a 'cgs' application and an
-        // intermediate review on a 'senior_director' one, and both kinds
-        // share one queue -- so the queue's own title must not claim either.
+        // intermediate review on the other two, and all of them share one
+        // queue -- so the queue's own title must not claim either.
         // Per-application labels still come from chainFor().
         return array_map(fn (Stage $s) => $s->key === 'cgs_verify'
             ? new Stage(
@@ -172,25 +181,32 @@ class GaExtensionWorkflow implements DecidesOneAtATime, DescribesApplicationDeta
             queueTitle: 'Pending My Endorsement',
         );
 
+        $cgsReview = new Stage(
+            key: 'cgs_verify',
+            label: 'CGS Staff',
+            role: Role::NON_EXEC_CGS,
+            decision: 'reviewed',
+            queueTitle: 'Pending My Verification',
+        );
+
+        $seniorDirector = new Stage(
+            key: 'senior_director',
+            label: 'Senior Director CGS',
+            role: Role::SENIOR_DIRECTOR_CGS,
+            decision: 'approved',
+            queueTitle: 'Final Approval',
+        );
+
+        // Haziq's GA Application chain minus its Research Centre interview:
+        // Admin, CGS, Supervisor, Senior Director. Confirmed by Puan Akmar
+        // (Senior Executive CGS), 12 Nov 2026. Read from his workflow's
+        // order, not copied blind -- see GaExtensionChainTest.
+        if ($mode === 'ga_application') {
+            return [$adminStage, $cgsReview, $supervisorStage, $seniorDirector];
+        }
+
         if ($mode === 'senior_director') {
-            return [
-                $adminStage,
-                $supervisorStage,
-                new Stage(
-                    key: 'cgs_verify',
-                    label: 'CGS Staff',
-                    role: Role::NON_EXEC_CGS,
-                    decision: 'reviewed',
-                    queueTitle: 'Pending My Verification',
-                ),
-                new Stage(
-                    key: 'senior_director',
-                    label: 'Senior Director CGS',
-                    role: Role::SENIOR_DIRECTOR_CGS,
-                    decision: 'approved',
-                    queueTitle: 'Final Approval',
-                ),
-            ];
+            return [$adminStage, $supervisorStage, $cgsReview, $seniorDirector];
         }
 
         return [
@@ -206,8 +222,36 @@ class GaExtensionWorkflow implements DecidesOneAtATime, DescribesApplicationDeta
         ];
     }
 
+    /** Every final_approver_snapshot value a GA Extension can carry, newest first. */
+    public const MODES = ['ga_application', 'cgs', 'senior_director'];
+
     /**
-     * 'cgs' or 'senior_director' -- the application's own snapshot when it
+     * The earlier stages an application can be sent back to from where it
+     * is now, as stage key => button label; empty when its stage has no
+     * return. A reason is always required (WorkflowEngine::returnTo()).
+     *
+     *   'ga_application'  CGS -> Admin; Senior Director -> CGS or Supervisor
+     *                      (confirmed by Puan Akmar, 12 Nov 2026 -- Haziq's
+     *                      GA Application itself has no stage returns, only
+     *                      correction requests to the student).
+     *   'cgs' / 'senior_director'  CGS -> Supervisor, unchanged.
+     *
+     * @return array<string, string>
+     */
+    public function returnTargets(Application $application): array
+    {
+        $stage = $application->status === Application::STATUS_PENDING ? $application->current_stage : null;
+
+        return match (true) {
+            $this->modeFor($application) === 'ga_application' && $stage === 'cgs_verify' => ['admin_verify' => 'Return to Admin'],
+            $this->modeFor($application) === 'ga_application' && $stage === 'senior_director' => ['cgs_verify' => 'Return to CGS', 'supervisor' => 'Return to supervisor'],
+            $this->modeFor($application) !== 'ga_application' && $stage === 'cgs_verify' => ['supervisor' => 'Return to supervisor'],
+            default => [],
+        };
+    }
+
+    /**
+     * 'ga_application', 'cgs' or 'senior_director' -- the application's own snapshot when it
      * has one, otherwise the live config (true for a brand new application
      * mid-submit, which has no snapshot yet because GaExtensionController::
      * store() has not written one until after stages() first runs).

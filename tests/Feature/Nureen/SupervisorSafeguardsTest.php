@@ -6,6 +6,8 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
+use App\Modules\Nureen\Database\Seeders\NureenClientCharterDemoSeeder;
+use App\Modules\Nureen\Database\Seeders\NureenRealignedWorkflowDemoSeeder;
 use App\Modules\Nureen\Models\AttendanceRecord;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Models\GaExtensionDetail;
@@ -15,6 +17,7 @@ use App\Modules\Nureen\Notifications\CertificationRevoked;
 use App\Modules\Nureen\Support\ProcessingTimeAnalytics;
 use App\Modules\Nureen\Support\StuckSupervisorStages;
 use Carbon\CarbonImmutable;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
@@ -123,13 +126,26 @@ class SupervisorSafeguardsTest extends TestCase
 
     public function test_the_named_supervisor_is_emailed_on_a_ga_extension_submission_with_the_charter_due_date(): void
     {
+        // Since 2026-11-12 (Puan Akmar, Senior Executive CGS) the default
+        // chain is Admin -> CGS -> Supervisor -> Senior Director: the
+        // submission email goes to Admin, and the named supervisor is
+        // emailed once CGS has reviewed it -- with their own charter date.
         $student = $this->supervised();
         $supervisor = User::find($student->supervisor_id);
+        $admin = $this->admin();
+        $cgs = $this->cgs();
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->gaExtensionPayload())->assertSessionHasNoErrors();
         $application = Application::where('module_type', 'ga_extension')->sole();
 
-        $this->actingAs($this->admin())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+        // Monday 2 Nov + Admin's 2 working days: Wednesday 4 Nov.
+        Notification::assertSentTo($admin, ApplicationAwaitingYou::class, fn ($n) => str_contains(implode(' ', $n->toMail($admin)->introLines), 'please decide by Wednesday, 4 November 2026 (2 working days)')
+            && $n->toMail($admin)->actionUrl === route('ga-extension.queue'));
+        Notification::assertNotSentTo($supervisor, ApplicationAwaitingYou::class);
+
+        $this->actingAs($admin)->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+        Notification::assertSentTo($cgs, ApplicationAwaitingYou::class);
+        $this->actingAs($cgs)->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
         Notification::assertSentTo($supervisor, ApplicationAwaitingYou::class, function ($n) use ($supervisor, $application) {
             $mail = $n->toMail($supervisor);
@@ -140,7 +156,8 @@ class SupervisorSafeguardsTest extends TestCase
                 && str_contains($text, 'please decide by Thursday, 5 November 2026 (3 working days)')
                 && $mail->actionUrl === route('ga-extension.queue');
         });
-        Notification::assertSentTimes(ApplicationAwaitingYou::class, 1);
+        // Admin at submission, CGS after Admin, the supervisor after CGS.
+        Notification::assertSentTimes(ApplicationAwaitingYou::class, 3);
     }
 
     public function test_certification_and_supervision_submissions_email_the_supervisor_who_acts_first(): void
@@ -194,7 +211,10 @@ class SupervisorSafeguardsTest extends TestCase
         $this->actingAs($student)->post(route('ga-extension.store'), $this->gaExtensionPayload());
         $application = Application::where('module_type', 'ga_extension')->sole();
 
+        // Admin, then CGS (the default chain since 2026-11-12), then it waits
+        // for the named supervisor.
         $this->actingAs($this->admin())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+        $this->actingAs($this->cgs())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
         $this->actingAs($student)->get(route('applications.show', $application))
             ->assertOk()
@@ -343,11 +363,11 @@ class SupervisorSafeguardsTest extends TestCase
 
     public function test_every_student_my_demo_seeders_create_has_a_documented_supervisor(): void
     {
-        $this->seed(\Database\Seeders\DatabaseSeeder::class);
+        $this->seed(DatabaseSeeder::class);
         $before = User::where('role', Role::STUDENT)->pluck('id');
 
-        $this->seed(\App\Modules\Nureen\Database\Seeders\NureenRealignedWorkflowDemoSeeder::class);
-        $this->seed(\App\Modules\Nureen\Database\Seeders\NureenClientCharterDemoSeeder::class);
+        $this->seed(NureenRealignedWorkflowDemoSeeder::class);
+        $this->seed(NureenClientCharterDemoSeeder::class);
 
         $documented = file_get_contents(base_path('docs/test-accounts.md'));
         $created = User::where('role', Role::STUDENT)->whereNotIn('id', $before)->with('supervisor')->get();

@@ -650,10 +650,6 @@ class GaExtensionController extends Controller
         return view('nureen::ga_extension.queue', $queue + [
             'details' => $details,
             'clocks' => $queue['applications']->mapWithKeys(fn (Application $a) => [$a->id => $charter->stageClock($a)]),
-            // Only CGS Staff, at the cgs_verify stage, may send an
-            // incomplete application back to the supervisor rather than
-            // rejecting it outright -- see returnToSupervisor().
-            'canReturn' => $queue['stage']->key === 'cgs_verify',
             'bottleneck' => $this->pendingByStage(),
         ]);
     }
@@ -688,49 +684,70 @@ class GaExtensionController extends Controller
     }
 
     /**
-     * Sends an application back to the supervisor instead of rejecting it,
-     * from CGS Staff's desk -- a missing or wrong document does not need to
-     * end the application, only go back one stage for a fix.
+     * Sends an application back to an earlier stage instead of rejecting
+     * it -- a missing or wrong document does not need to end the
+     * application, only go back for a fix. Which stages it may go back to
+     * from where it is now is GaExtensionWorkflow::returnTargets():
+     *   'ga_application' chain  CGS -> Admin; Senior Director -> CGS or
+     *                           Supervisor (Puan Akmar, 12 Nov 2026)
+     *   older chains            CGS -> Supervisor
+     * `to` names the target stage key; when the stage has exactly one
+     * target it may be left out (the older forms never sent it).
      *
-     * Not a decide()-time check: the route is open to the whole chain and
-     * WorkflowEngine::returnTo() refuses it anywhere but the cgs_verify
-     * stage, the same way every other authorisation check in this app
-     * belongs to the engine rather than to a middleware list. See
+     * The route is open to the whole chain; WorkflowEngine::returnTo()
+     * checks the actor holds the current stage (and, at cgs_verify, is the
+     * officer the module is assigned to). See
      * Hani\Http\Controllers\ExaminerNominationController::returnToDepartment()
      * for the pattern this follows.
      */
-    public function returnToSupervisor(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
+    public function returnToEarlierStage(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
 
+        $targets = app(GaExtensionWorkflow::class)->returnTargets($application);
+
         $data = $request->validate([
             'remarks' => ['required', 'string', 'max:2000'],
+            'to' => ['nullable', 'string', 'in:'.implode(',', array_keys($targets) ?: ['-'])],
         ], [
-            'remarks.required' => 'Say what is missing or needs changing — the supervisor is being asked to review it again.',
+            'remarks.required' => 'Say what is missing or needs changing — whoever it goes back to is being asked to act on it again.',
+            'to.in' => 'This application cannot be sent back to that stage from where it is now.',
         ]);
 
+        $to = $data['to'] ?? (count($targets) === 1 ? array_key_first($targets) : null);
+
+        if ($to === null) {
+            return back()->with('error', $targets === []
+                ? 'That application is not at a stage you can send back.'
+                : 'Choose which stage to send it back to.');
+        }
+
         try {
-            $engine->returnTo($application, $request->user(), 'supervisor', $data['remarks']);
+            $engine->returnTo($application, $request->user(), $to, $data['remarks']);
         } catch (UnauthorizedException $e) {
             return back()->with('error', $e->getMessage());
         } catch (\LogicException $e) {
             return back()->with('error', 'That application is not at a stage you can send back.');
         }
 
-        return back()->with(
-            'status',
-            "Application #{$application->id} sent back to the supervisor. They have been notified."
-        );
+        $who = match ($to) {
+            'admin_verify' => 'Admin',
+            'cgs_verify' => 'CGS',
+            default => 'the supervisor',
+        };
+
+        return back()->with('status', "Application #{$application->id} sent back to {$who}. They have been notified.");
     }
 
     /**
      * Overrides the trait's decide(): a 'supervisor'-stage decision must
-     * come from the supervisor this application names, and the final
-     * decision of this chain --
-     * wherever it lands, see GaExtensionWorkflow::stages() -- also copies
-     * the endorsing supervisor and, in 'cgs' mode, informs the Senior
-     * Director who no longer has a stage of their own. See
-     * DecidesOneAtATime on GaExtensionWorkflow.
+     * come from the supervisor this application names, every decision
+     * that leaves it pending emails whoever acts next, and the final
+     * decision of this chain -- wherever it lands, see
+     * GaExtensionWorkflow::stages(); the Senior Director on the
+     * 'ga_application' chain -- also copies the endorsing supervisor and,
+     * in 'cgs' mode only, informs the Senior Director who has no stage of
+     * their own there. See DecidesOneAtATime on GaExtensionWorkflow.
      */
     public function decide(Request $request, Application $application, WorkflowEngine $engine): RedirectResponse
     {
@@ -776,13 +793,10 @@ class GaExtensionController extends Controller
         if ($stage && $decided->status !== Application::STATUS_PENDING) {
             $this->notifyFinalDecision($decided, $stage, $data['decision'] === 'approve', $mode);
         } elseif ($decided->status === Application::STATUS_PENDING) {
-            // Admin clearing the paperwork is the one stage SubmissionNotifier
-            // never names an individual for -- it's "whoever acts first",
-            // which used to always mean the named supervisor at submission
-            // time. Added 2026-11-10 alongside the Admin stage: this is a
-            // no-op for every later transition (recipients() still only
-            // ever names the supervisor, whose role won't match cgs_verify
-            // or senior_director), so it only actually fires here.
+            // Whoever acts next is told, at every stage -- Admin at
+            // submission (see store()), then CGS, the named supervisor and
+            // the Senior Director in turn. The student's own progress email
+            // comes from Core's engine on every decision.
             app(SubmissionNotifier::class)->notify($decided);
         }
 

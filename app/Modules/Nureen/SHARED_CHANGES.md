@@ -1150,3 +1150,42 @@ These were open questions in the first draft of this section:
    to every Non-Executive CGS officer, and Akmar stays Senior Executive CGS.
 2. **Cover Senior Executive CGS stages too?** No. Only Non-Executive CGS stages
    are assigned, and Hani's modules stay as they are.
+
+## 19. GA Extension follows the GA Application chain (Nureen only, 12 Nov 2026) — two shared issues found
+
+**Branch:** `feature/ga-extension-chain`, uncommitted. **No Core file changed.**
+
+CGS confirmed (Puan Akmar, Senior Executive CGS, 12 Nov 2026) that GA
+Extension's chain must match Haziq's GA Application chain minus the
+Research Centre interview: **Admin → CGS → Supervisor → Senior Director**.
+New applications get the snapshot mode `ga_application`. Older applications
+keep their `cgs` or `senior_director` chain. Haziq's folder was only read
+(`GaApplicationWorkflow::stages()`), never edited. Haziq's GA Application
+has no stage returns (only correction requests to the student), so GA
+Extension's returns are CGS → Admin and Senior Director → CGS / Supervisor,
+with a reason.
+
+Two things outside this folder came up. Both are proposals; nothing was
+changed.
+
+**a. Core: a return to the supervisor emails every supervisor.**
+`WorkflowEngine::notifyReturn()` sends `ApplicationReturned` to every holder
+of the target stage's role. It narrows only Chair and Academic Executive by
+department. In the functional rerun, a Senior Director's return of one GA
+Extension to the supervisor emailed all 24 supervisors. The older CGS →
+Supervisor return did the same.
+
+*Proposal:* let a module name a return's recipients. For example, add an
+optional contract `NamesStageHolders` with
+`holdersFor(Application, Stage): ?Collection`, which `notifyReturn()` uses
+when the module implements it. GA Extension, Supervision and Certification
+would return their named supervisor.
+
+**b. `database/seeders/DemoDataSeeder.php`: no Admin decider.** `deciderFor()`
+has no `Role::ADMIN` entry, so its GA Extension scenarios fail at
+`admin_verify`. That has been the case since the Admin stage was added on
+10 Nov (`9bb4d64`), before this change. With the new chain it would also
+need decisions for CGS → Supervisor → Senior Director.
+
+*Proposal for whoever owns the seeder:* add `Role::ADMIN => admin@utp.edu.my`
+to `loadDeciders()`. It already walks each module's live chain.
