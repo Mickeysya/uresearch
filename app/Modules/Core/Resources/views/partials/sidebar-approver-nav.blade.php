@@ -61,3 +61,15 @@
         </div>
     @endif
 @endif
+
+{{-- The Students page for the approver roles it is open to (Chair: own
+     department; Supervisor: own students; Dean: all) -- see
+     Services\StudentDirectory. CGS and Admin have it in their own navs. --}}
+@if (in_array(auth()->user()?->role, [\App\Modules\Core\Support\Role::CHAIR, \App\Modules\Core\Support\Role::SUPERVISOR, \App\Modules\Core\Support\Role::DEAN_PGR], true))
+    <a href="{{ route('students.index') }}" class="nav-item @if(request()->routeIs('students.*')) active @endif" title="Students">
+        <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5.2a3.5 3.5 0 0 1 0 5.6"/><path d="M18.5 20a6.5 6.5 0 0 0-3-5.5"/></svg>
+        </span>
+        <span class="nav-label">Students</span>
+    </a>
+@endif

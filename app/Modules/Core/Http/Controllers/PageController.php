@@ -37,12 +37,6 @@ class PageController extends Controller
                 .'searchable and filterable by department and programme, will appear here. '
                 .'Only students currently flagged at-risk are listed today, under "At-Risk Students".',
         ],
-        'cgs-students' => [
-            'Students',
-            'The postgraduate directory, holding programme, department, supervisor, candidacy '
-                .'status and every application a student has filed, in one record. This is the '
-                .'"holistic view of a student\'s administrative status" the scope document asks for.',
-        ],
         'cgs-reports' => [
             'Reports and Analytics',
             'Bottleneck analysis: how many applications are sitting at each stage, '

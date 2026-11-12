@@ -13,6 +13,8 @@ use App\Modules\Core\Http\Controllers\NotificationController;
 use App\Modules\Core\Http\Controllers\PageController;
 use App\Modules\Core\Http\Controllers\ProfileController;
 use App\Modules\Core\Http\Controllers\QueueController;
+use App\Modules\Core\Http\Controllers\StudentDirectoryController;
+use App\Modules\Core\Services\StudentDirectory;
 use App\Modules\Core\Http\Controllers\SignatureController;
 use App\Modules\Core\Http\Controllers\SupervisorCandidatesController;
 use App\Modules\Core\Http\Controllers\UserAdminController;
@@ -133,12 +135,23 @@ Route::middleware('auth')->group(function () {
         Route::put('/users/{user}', [UserAdminController::class, 'update'])->name('users.update');
     });
 
+    // The Students page: a read-only directory and one record per student.
+    // Who sees which students is Services\StudentDirectory (CGS team, Dean
+    // and Admin all; Chair own department; Supervisor own students);
+    // students themselves are refused here.
+    Route::middleware('role:'.implode(',', StudentDirectory::roles()))->group(function () {
+        Route::get('/students', [StudentDirectoryController::class, 'index'])->name('students.index');
+        Route::get('/students/{student}', [StudentDirectoryController::class, 'show'])->whereNumber('student')->name('students.show');
+    });
+
     // CGS-only screens. Gated by role here as well as hidden from the sidebar,
     // because a sidebar that does not render a link is not access control.
     Route::middleware('role:'.implode(',', Role::cgsTeam()))->group(function () {
         Route::get('/cgs/attendance', [PageController::class, 'show'])->name('cgs.attendance.overview')->defaults('page', 'cgs-attendance');
         Route::get('/cgs/attendance/students', [PageController::class, 'show'])->name('cgs.attendance.students')->defaults('page', 'cgs-student-list');
-        Route::get('/cgs/students', [PageController::class, 'show'])->name('cgs.students.index')->defaults('page', 'cgs-students');
+        // The Students page moved to /students (StudentDirectoryController);
+        // the old address and route name still work.
+        Route::redirect('/cgs/students', '/students')->name('cgs.students.index');
         Route::get('/cgs/reports', [PageController::class, 'show'])->name('cgs.reports.index')->defaults('page', 'cgs-reports');
     });
 });

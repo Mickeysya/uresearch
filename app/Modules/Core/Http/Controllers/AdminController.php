@@ -37,12 +37,10 @@ class AdminController extends Controller
         return view('core::pages.placeholder', compact('title', 'description'));
     }
 
+    /** The read-only Students page is shared with CGS: StudentDirectoryController. */
     public function students()
     {
-        return $this->page('Students',
-            'A read-only roster of every postgraduate, with programme, department, supervisor, '
-            .'candidacy status and application history. Read-only on purpose: the administrator '
-            .'oversees, CGS acts. Account creation and role changes live under Users and Roles.');
+        return redirect()->route('students.index');
     }
 
     public function applications(Request $request)

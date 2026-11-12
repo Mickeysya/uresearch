@@ -3,16 +3,18 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
-use App\Modules\Core\Contracts\DescribesApplicationDetails;
 use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
-use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\ProvidesStaffView;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\AttendanceAppealDetail;
+use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Nureen\Workflows\Concerns\LinksToStaffView;
 use Illuminate\Support\Str;
 
 /**
@@ -25,10 +27,13 @@ use Illuminate\Support\Str;
  * already exposes. A student's own Overview/History pair lives in the app's
  * fixed sidebar tree instead, not declared here.
  */
-class AttendanceAppealWorkflow implements WorkflowModule, ProvidesLinks, DecidesOneAtATime, DescribesApplicationDetails
+class AttendanceAppealWorkflow implements DecidesOneAtATime, DescribesApplicationDetails, ProvidesLinks, ProvidesStaffView, WorkflowModule
 {
     /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
     use DescribesApplicationDetailsDefaults;
+
+    /** Core\Contracts\ProvidesStaffView: the read-only staff page, for staff allowed to open it. */
+    use LinksToStaffView;
 
     public function details(Application $application): array
     {

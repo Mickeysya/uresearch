@@ -7,6 +7,7 @@ use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
 use App\Modules\Core\Contracts\DescribesApplicationDetails;
 use App\Modules\Core\Contracts\DescribesApplicationProgress;
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\ProvidesStaffView;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\SuppliesOverdueStatus;
@@ -20,6 +21,7 @@ use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Support\ApplicationDetailsContent;
 use App\Modules\Nureen\Support\TrackingDescriptions;
 use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
+use App\Modules\Nureen\Workflows\Concerns\LinksToStaffView;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
 
@@ -50,10 +52,13 @@ use Illuminate\Support\Str;
  * stuck on step 1. Declaring the chain here puts it on the same footing as
  * everything else.
  */
-class GaExtensionWorkflow implements DecidesOneAtATime, DescribesApplicationDetails, DescribesApplicationProgress, ProvidesLinks, SuppliesCalendarEvents, SuppliesDecisionDates, SuppliesOverdueStatus, SuppliesReminderCount, WorkflowModule
+class GaExtensionWorkflow implements DecidesOneAtATime, DescribesApplicationDetails, DescribesApplicationProgress, ProvidesLinks, ProvidesStaffView, SuppliesCalendarEvents, SuppliesDecisionDates, SuppliesOverdueStatus, SuppliesReminderCount, WorkflowModule
 {
     /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
     use DescribesApplicationDetailsDefaults;
+
+    /** Core\Contracts\ProvidesStaffView: the read-only staff page, for staff allowed to open it. */
+    use LinksToStaffView;
 
     public function details(Application $application): array
     {

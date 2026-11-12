@@ -3,7 +3,9 @@
 namespace App\Modules\Nureen;
 
 use App\Modules\Core\Contracts\SuppliesAttendance;
+use App\Modules\Core\Contracts\SuppliesAttendanceOverview;
 use App\Modules\Core\Contracts\SuppliesDraftCount;
+use App\Modules\Core\Contracts\SuppliesSupervisionHistory;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Nureen\Console\Commands\BacktestAttendance;
 use App\Modules\Nureen\Console\Commands\CheckAttendanceRisk;
@@ -11,12 +13,14 @@ use App\Modules\Nureen\Console\Commands\RemindStalledCertification;
 use App\Modules\Nureen\Console\Commands\RemindStalledGaExtension;
 use App\Modules\Nureen\Console\Commands\RemindStalledSupervisionRequests;
 use App\Modules\Nureen\Console\Commands\SyncAttendance;
+use App\Modules\Nureen\Support\AttendanceOverviewProvider;
 use App\Modules\Nureen\Support\AttendanceProvider;
 use App\Modules\Nureen\Support\AttendanceSourceFactory;
 use App\Modules\Nureen\Support\Contracts\AttendanceSource;
 use App\Modules\Nureen\Support\Contracts\GeneratesQrCode;
 use App\Modules\Nureen\Support\DraftCountProvider;
 use App\Modules\Nureen\Support\QrCode\UnavailableQrCodeGenerator;
+use App\Modules\Nureen\Support\SupervisionHistoryProvider;
 use App\Modules\Nureen\Workflows\AttendanceAppealWorkflow;
 use App\Modules\Nureen\Workflows\CertificationLetterWorkflow;
 use App\Modules\Nureen\Workflows\GaExtensionWorkflow;
@@ -40,6 +44,12 @@ class ModuleProvider extends ServiceProvider
         // either side knows about the other.
         $this->app->bind(SuppliesAttendance::class, AttendanceProvider::class);
 
+        // Core's Students page: attendance for many students at once, and
+        // co-/previous supervisors from Supervision -- see
+        // Core\Contracts\SuppliesAttendanceOverview / SuppliesSupervisionHistory.
+        $this->app->bind(SuppliesAttendanceOverview::class, AttendanceOverviewProvider::class);
+        $this->app->bind(SuppliesSupervisionHistory::class, SupervisionHistoryProvider::class);
+
         // Same seam for the dashboard's "My Drafts" badge -- see
         // Core\Contracts\SuppliesDraftCount. Keeps the count in sync with
         // Support\Drafts::MODULES without Core naming it directly.
@@ -57,10 +67,10 @@ class ModuleProvider extends ServiceProvider
 
     public function boot(ModuleRegistry $registry): void
     {
-        $registry->register(new GaExtensionWorkflow());
-        $registry->register(new AttendanceAppealWorkflow());
-        $registry->register(new SupervisionWorkflow());
-        $registry->register(new CertificationLetterWorkflow());
+        $registry->register(new GaExtensionWorkflow);
+        $registry->register(new AttendanceAppealWorkflow);
+        $registry->register(new SupervisionWorkflow);
+        $registry->register(new CertificationLetterWorkflow);
 
         if ($this->app->runningInConsole()) {
             $this->commands([

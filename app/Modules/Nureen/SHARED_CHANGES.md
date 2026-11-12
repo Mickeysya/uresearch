@@ -1150,3 +1150,73 @@ These were open questions in the first draft of this section:
    to every Non-Executive CGS officer, and Akmar stays Senior Executive CGS.
 2. **Cover Senior Executive CGS stages too?** No. Only Non-Executive CGS stages
    are assigned, and Hani's modules stay as they are.
+
+## 20. The Students page (Core), built by Nureen with the team's agreement (13 Nov 2026)
+
+**Branch:** `feature/students-page`, rebased onto `origin/develop` (`b3eeb7e`) so it
+merges on its own; uncommitted. (§19 is the GA Extension chain's entry, on
+`feature/ga-extension-chain`.)
+
+This replaces Sharvin's two placeholders: `/cgs/students` (`d4889fc0`,
+17 Sep) and `/admin/students` (`ba792fa1`, 12 Sep). The new page is
+`/students`, a read-only directory, and `/students/{id}`, one record per
+student. Teammates' data is read only through Core contracts; no
+teammate's folder was edited.
+
+**Who sees whom** (`Core\Services\StudentDirectory`):
+- the CGS team (Non-Executive, Senior Executive, Manager, Senior Director),
+  the Dean of PGR and Admin: every student;
+- a Chair: their own department;
+- a supervisor: their own students, as main supervisor or as an active
+  co-supervisor;
+- students: refused (403).
+
+The projected attendance figure is passed to the view for the CGS team only.
+IC and bank numbers are never read.
+
+### Core files changed, and why
+
+| File | Change | Why |
+|---|---|---|
+| `Core/Contracts/SuppliesAttendanceOverview.php` (new, optional) | `overviewFor(iterable $studentIds)`: semester %, projected %, at-risk flag and latest period for many students at once | The list filters "at risk" and sorts by attendance across every student, with one query rather than one per row. Implemented by Nureen |
+| `Core/Contracts/SuppliesSupervisionHistory.php` (new, optional) | `supervisorsFor(User)`: co-supervisors and previous supervisors. `coSupervisedStudentIds(User)`: who someone co-supervises | `users.supervisor_id` knows only the current main supervisor. Implemented by Nureen |
+| `Core/Contracts/ProvidesStaffView.php` (new, optional, on a workflow) | `staffViewUrl(Application, User $viewer)`: the staff page this viewer may open, or null | Core has no staff detail page of its own. Implemented by Nureen's four workflows |
+| `Core/Services/StudentDirectory.php` (new) | The roles allowed in, the scoping query, and `seesProjection()` | One rule shared by the list, the record and the tests |
+| `Core/Http/Controllers/StudentDirectoryController.php` (new) | `index()` and `show()` | The page itself |
+| `Core/Resources/views/students/index.blade.php`, `show.blade.php` (new) | The list (search, filters, sort, 20 per page) and the record (profile, supervision, candidacy, GA/GRA, attendance, applications, issued letters) | Uses the shared page header, cards, `data-table`, pagination and empty states |
+| `public/css/students.css` (new) and `partials/stylesheets.blade.php` | Scoped `.std` styles built from tokens; `students` added to the stylesheet list | Layout only |
+| `Core/routes.php` | `/students` and `/students/{student}` for the roles above. `/cgs/students` (route `cgs.students.index`) redirects to `/students` | The page's routes; the old address still works |
+| `Core/Http/Controllers/PageController.php` | Removed the `'cgs-students'` placeholder | Replaced |
+| `Core/Http/Controllers/AdminController.php` | `students()` now redirects to `/students` | Admin shares the page (agreed) |
+| `partials/sidebar-cgs-nav.blade.php`, `sidebar-admin-nav.blade.php`, `dashboard/partials/cgs-stat-cards.blade.php` | The Students links point to `students.index` | — |
+| `partials/sidebar-approver-nav.blade.php` | A "Students" link for Chair, Supervisor and Dean of PGR | Their entry point |
+
+**In Nureen's folder:**
+- `Support/AttendanceOverviewProvider` reads `AttendanceRiskState`, the
+  same figures as the At-Risk list.
+- `Support/SupervisionHistoryProvider` reads approved Supervision requests.
+- `Workflows/Concerns/LinksToStaffView` links to `nureen.application` for
+  staff that `StaffApplicationAccess` allows.
+- The first two are bound in `ModuleProvider`.
+
+### For teammates (not edited; optional)
+
+**Chloe.** `SuppliesCandidacyStatus::candidacyStatusFor()` answers one
+student at a time, so the list's candidacy column makes one query per row.
+That's at most 20 per page, but still a query per row. An optional bulk
+method, for example `candidacyStatusesFor(iterable $students): array`, would
+make it one query. The Students page would use it whenever present.
+
+**Haziq.** Study level and mode exist only in your `GraGaStudentProfile`.
+Core doesn't import module classes, so the record shows "Not recorded".
+`currentAppointmentFor()` and `approvedFor()` already cover GA/GRA. A small
+optional contract, for example
+`SuppliesStudentProfile::profileFor(User): ?array{level_of_study, mode_of_study}`,
+would fill that field. Implementing `ProvidesStaffView` on your workflows
+(`ga-application.show`, `gra-application.show`) would also link your
+applications from the record.
+
+**Norhanis, Jason, Hani, Chloe.** Your applications are listed on the record
+(module, reference, status, stage, date), without a link until your workflow
+implements `ProvidesStaffView`. Return null for viewers who may not open the
+page.

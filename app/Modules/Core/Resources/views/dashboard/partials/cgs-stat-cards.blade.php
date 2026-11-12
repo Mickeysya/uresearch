@@ -21,7 +21,7 @@
         ['tone'=>'red','panel'=>'applications','icon'=>'cross','label'=>'Rejected',
          'figure'=>$rejectedCount,'pill'=>'View Rejected','pillTone'=>'critical','route'=>null],
         ['tone'=>'blue','panel'=>'students','icon'=>'people','label'=>'Active Students',
-         'figure'=>$activeStudents,'pill'=>'View Students','pillTone'=>'info','route'=>'cgs.students.index'],
+         'figure'=>$activeStudents,'pill'=>'View Students','pillTone'=>'info','route'=>'students.index'],
         ['tone'=>'orange','panel'=>'postgraduate','icon'=>'clock','label'=>'Stage Gate Bottleneck',
          'figure'=>$stageGateBottleneck,'pill'=>'View Stage Gates','pillTone'=>'warn','route'=>'stage-gate.index'],
         ['tone'=>'red','panel'=>'postgraduate','icon'=>'trend','label'=>'Allowance Anomalies',

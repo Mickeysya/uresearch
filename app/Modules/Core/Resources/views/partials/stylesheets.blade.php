@@ -43,6 +43,7 @@
     'charts',
     'sidebar-identity',
     'help',
+    'students',
 ] as $sheet)
     <link rel="stylesheet" href="{{ asset("css/{$sheet}.css") }}?v={{ @filemtime(public_path("css/{$sheet}.css")) ?: 1 }}">
 @endforeach
