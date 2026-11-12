@@ -131,7 +131,11 @@
                                             </span>
                                         @endif
                                     </td>
-                                    <td>{{ $nomination->thesis_title }}</td>
+                                    <td>{{ $nomination->thesis_title }}
+                                        @if ($dac = \App\Modules\Hani\Models\ExaminerDacRecord::endorsementFor((int) $application?->id))
+                                            <br><span class="rep-seat">{{ $dac->label() }}</span>
+                                        @endif
+                                    </td>
 
                                     @foreach (['internalMain' => 'internalBackup', 'externalMain' => 'externalBackup'] as $main => $backup)
                                         <td>

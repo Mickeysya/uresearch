@@ -126,6 +126,148 @@ Run with `db:seed --class=...`; none are wired into Core's seeder:
 
 ---
 
+## 2026-11-12 — Each module's CGS decisions go to one CGS officer
+
+**Branch:** `feature/cgs-assignment` (from `origin/develop` at `fbf5a6c`),
+uncommitted. This is an agreed Core change; SHARED_CHANGES §18 lists every
+Core file, and a to-do for each teammate.
+
+### The ask
+- **Assignment:** CGS confirmed one Non-Executive CGS officer per team member's
+  modules:
+  - Norshahira: Norhanis
+  - Zulkifly: Nureen
+  - Syahmi: Jason, except Hardbound, which stays open to every officer
+  - Amirul: Chloe
+  - Akmar: Haziq (superseded the same day: open to all, see below)
+  - Waheda: Hani (superseded the same day: not covered, see below)
+- **What it restricts:** only that officer may approve, reject, return,
+  endorse or issue a letter, or revoke one at a Non-Executive CGS stage.
+  Everyone else gets a 403 but can still view.
+- **Who gets the emails:** "awaiting you" and overdue emails go to the
+  officer alone.
+- **Absence cover:** a backup, or any CGS, may decide after escalation.
+- **Dashboard:** "assigned to me" shown separately from "all".
+
+### Key findings before writing any code
+- **Which modules have a Non-Executive CGS stage:**
+  - travel, publication, claims_student
+  - ga_extension, supervision, ga_certification, attendance_appeal
+  - hardbound_submission, hardbound_appeal, appointment_letter
+  - candidacy_appeal
+  - gra_application, ga_application
+
+  Hani's modules have none; their CGS desks are Senior Executive CGS.
+- **Decisions outside the engine:**
+  - Nureen: Section J, and both letter revokes
+  - Chloe: candidacy appeal, on its own table
+  - Haziq: request-correction, edit-allowance, Stage Gate complete or not
+    complete, and allowance payments
+- **Agreed as decisions:** Section J and Haziq's actions. Stuck Reviews
+  reassign stays open. Both Hardbound keys are `'*'`.
+- **No shared reminder count:** each module keeps its own, and only Nureen's
+  three modules and Norhanis' three supply a charter "overdue".
+- **The accounts exist already:** `DatabaseSeeder::CGS_OFFICERS` creates
+  them. But Akmar and Waheeda are **Senior Executive CGS** (`855e4c2`), so
+  Akmar can't hold Haziq's Non-Executive stage.
+- **Two controllers write before calling `decide()`:** Haziq's GRA allowance,
+  and Jason's pack generation. So a 403 from the engine comes after those
+  writes, which is listed for them.
+
+### The design
+- **The map:** one config map, `config/cgs_assignment.php`, read only through
+  Core's `CgsAssignment`. An unlisted module, or an officer with no
+  Non-Executive CGS account, falls back to any CGS.
+- **The check:** in `WorkflowEngine::decide()` and `returnTo()`. It throws
+  `NotAssignedOfficer`, a 403 that module controllers don't catch, so every
+  engine decision in every module is covered.
+- **Read-only rows:** the read-only line lives in Core's `decision-form`
+  component, so Haziq's pages get it too, and in Nureen's decision bar.
+- **Escalation:** overdue (the module's charter, else 14 days) plus reminders
+  from the new optional contract `SuppliesReminderCount`; overdue alone when a
+  module doesn't supply a count. Module-level actions (revoking a letter) are
+  officer-only.
+
+### What changed
+- **Core:**
+  - new: the config, `CgsAssignment`, `CgsVerdict`, `NotAssignedOfficer` and
+    `SuppliesReminderCount`
+  - the engine check, and return emails narrowed to the officer
+  - bulk decide skips another officer's rows
+  - the decision form goes read-only, and queue rows show "Assigned to: …"
+    with "Overdue: backup may decide"
+  - the dashboard shows "N assigned to you"
+  - `layout.css` styles
+  - `DemoDataSeeder` decides a CGS stage as the assigned officer
+- **Nureen:**
+  - Section J and both revokes are checked
+  - the decision bar goes read-only
+  - reminder counts are supplied
+  - CGS emails go to the officer
+  - the demo seeders decide as Zulkifly
+- **Docs:** `accounts.md`, `test-accounts.md` (a table of who decides what), and
+  SHARED_CHANGES §18.
+
+### Bugs caught
+- **DemoDataSeeder and Nureen's two demo seeders** decided every CGS stage as
+  `cgs@`, which the new check refuses. `sync.sh --fresh` would have failed.
+- **Bulk decide would have stopped halfway** through a batch on the first
+  row owned by another officer. It now skips that row and names the officer.
+- **Nureen's rows would have shown two read-only lines:** Core's form and the
+  decision bar. Core's line is hidden there by the existing rule.
+
+### Team decisions (later the same day, 2026-11-12)
+- **Haziq's modules are open to every Non-Executive CGS officer.**
+  `gra_application` and `ga_application` are `'*'`, and Akmar's role
+  doesn't change. His SHARED_CHANGES to-do (check before saving the
+  allowance) is now only an optional good-practice note.
+- **The assignment doesn't cover Senior Executive CGS stages.** Hani's
+  modules have no Non-Executive CGS stage, so they're out of the map.
+- **No Akmar or Waheeda:** neither email appears in the map any more.
+- **Tests:** `CgsAssignmentTest` replaces its Akmar-based fallback test with a
+  generic one, and adds three tests:
+  - Haziq's modules accept every officer, including module-level actions and
+    emails to all.
+  - Senior Executive CGS stages are never affected.
+  - The map names neither Akmar nor Waheeda.
+
+### Verification
+- **`CgsAssignmentTest`:** 30 tests, 248 assertions, all passing, after the team decisions (27 and 193 before). They cover:
+  - each module group (the officer may decide; any other CGS may not)
+  - a 403 with the officer's name from the engine and over HTTP, while the
+    queue and the application page stay viewable
+  - `returnTo`, Section J and both revokes
+  - both Hardbound keys open
+  - an unmapped module, and an officer with no Non-Executive CGS account,
+    falling back to any CGS
+  - the backup only after escalation, and any CGS when no backup is set, with
+    the row note
+  - the 14-day and charter fallbacks
+  - bulk decide
+  - emails to the officer only, while an open module emails everyone
+  - the dashboard "assigned to you" count
+- **Full suite**, rerun after the team decisions: 2438 passed, 16 failed. The same 16 as before:
+  - 15 of the failures also fail on a clean `origin/develop` (`fbf5a6c`),
+    checked by stashing this change and rerunning those files:
+    - QueueTest ×6, DepartmentScopingTest ×2, PageShellTest ×2,
+      SidebarQueuesTest ×2
+    - ProseTest (em dashes in Haziq's allowance view)
+    - ApproverDashboardTest ×1, AttendanceActionCardTest ×1
+  - The 16th is Norhanis' `CgsOfficerTest`, which asserts the old rule. The
+    replacement is in SHARED_CHANGES §18.
+- **Jobs:** `failed_jobs` and `jobs` were 0 before and after.
+- **Dev app** (`sync.sh` applied first), GA Extension #202 at `cgs_verify`:
+  - **zulkifly.cgs:** sees "Assigned to: Zulkifly", the Section J form, and
+    Approve / Reject / Return to supervisor. The dashboard says "19 assigned
+    to you".
+  - **syahmi.cgs:** sees the same row with Section J as saved text and the
+    line "This module is assigned to Zulkifly. You can view it but not decide
+    on it." A real POST to `/ga-extension/202/decide` returns 403 with that
+    message.
+  - Both checked in light and dark mode in headless Chrome.
+
+---
+
 ## 2026-11-08 — Approver rows: one decision bar, and a preview overlay for every document
 
 **Branch:** `nureen/forms-and-drafts`, uncommitted. Nureen only: no Core edit.

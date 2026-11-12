@@ -53,6 +53,7 @@ class ExaminerListExport implements FromArray, WithHeadings
             'Internal Main Letter Status', 'Internal Backup Letter Status',
             'External Main Letter Status', 'External Backup Letter Status',
             'Letter Needed For', 'Replaced Examiners',
+            'DAC Endorsed',
         ];
     }
 
@@ -92,6 +93,7 @@ class ExaminerListExport implements FromArray, WithHeadings
                 $letters['seats']['external_backup_id'] ?? null,
                 $this->flagNeeded ? $this->needed($letters) : null,
                 $this->replaced($letters),
+                \App\Modules\Hani\Models\ExaminerDacRecord::endorsementFor((int) $application?->id)?->label(),
             ];
         })->values()->all();
     }

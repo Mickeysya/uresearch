@@ -17,7 +17,7 @@
         <tr>
             <th scope="row">Notice of Thesis Submission</th>
             <td>
-                {{ $notice->status === Application::STATUS_APPROVED ? 'Acknowledged by your Academic Executive' : 'Waiting for your Academic Executive' }}
+                {{ $notice->status === Application::STATUS_APPROVED ? 'Verified by your Academic Executive' : ($notice->current_stage === \App\Modules\Hani\Workflows\VivaVoceWorkflow::SUPERVISOR_STAGE ? 'With your supervisor to endorse' : 'Waiting for your Academic Executive') }}
                 &middot; <a href="{{ route('applications.show', $notice) }}">View</a>
             </td>
         </tr>

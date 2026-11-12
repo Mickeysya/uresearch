@@ -62,7 +62,7 @@ class VivaScheduleTest extends TestCase
 
         $this->actingAs($this->student)->post(route('viva.notice.store'), $this->noticeFields());
         $this->notice = Application::where('module_type', 'viva_voce')->sole();
-        $this->actingAs($this->ae)->post(route('viva.decide', $this->notice), ['decision' => 'approve']);
+        $this->verifyNotice($this->ae, $this->notice);
 
         $this->actingAs($this->student)->post(route('viva.softbound.store'), [
             'field_of_study' => 'Data analytics', 'contact_number' => '0133372001',

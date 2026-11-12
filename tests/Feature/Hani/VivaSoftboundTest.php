@@ -60,7 +60,7 @@ class VivaSoftboundTest extends TestCase
 
     protected function acknowledge(Application $notice): void
     {
-        $this->actingAs($this->ae)->post(route('viva.decide', $notice), ['decision' => 'approve']);
+        $this->verifyNotice($this->ae, $notice);
     }
 
     protected function softbound(array $overrides = []): array
@@ -123,6 +123,8 @@ class VivaSoftboundTest extends TestCase
             'co_supervisor_email' => ['co_supervisor_email' => 'co.sv@gmail.com'],
             'format_confirmation' => ['format_confirmation' => null],
             'thesis' => ['thesis' => UploadedFile::fake()->create('thesis.docx', 100)],
+            // 15 words at most (UAT 11 Nov 2026), as on the notice.
+            'thesis_title' => ['thesis_title' => 'One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen'],
         ] as $field => $override) {
             $this->actingAs($this->student)->post(route('viva.softbound.store'), $this->softbound($override))
                 ->assertSessionHasErrors($field);

@@ -75,8 +75,14 @@ Route::middleware('auth')->group(function () {
             ->name('viva.softbound.similarity-preview');
     });
 
+    // The notice queue: the supervisor's endorsement stage, then the AE's
+    // verification. queueFor() shows each only their own stage and rows.
+    Route::middleware('role:'.Role::ACADEMIC_EXEC.','.Role::SUPERVISOR)
+        ->get('/viva/queue', [VivaController::class, 'queue'])->name('viva.queue');
+    Route::middleware('role:'.Role::SUPERVISOR)
+        ->post('/viva/{application}/endorse', [VivaController::class, 'endorse'])->name('viva.endorse');
+
     Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
-        Route::get('/viva/queue', [VivaController::class, 'queue'])->name('viva.queue');
         Route::post('/viva/{application}/decide', [VivaController::class, 'decide'])->name('viva.decide');
 
         Route::get('/viva/softbound/queue', [VivaSoftboundController::class, 'queue'])->name('viva.softbound.queue');
@@ -145,6 +151,19 @@ Route::middleware('auth')->group(function () {
         Route::post('/examiner-nomination/{application}/return', [ExaminerNominationController::class, 'returnToDepartment'])
             ->name('examiner-nomination.return');
     });
+
+    // DAC Compilation (UAT 11 Nov 2026): the AE compiles her department's
+    // nominations for the DAC and records its outcome. See ExaminerDacController.
+    Route::middleware('role:'.Role::ACADEMIC_EXEC)->group(function () {
+        Route::get('/examiner-nomination/dac', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'index'])->name('examiner-nomination.dac');
+        Route::get('/examiner-nomination/dac/export', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'export'])->name('examiner-nomination.dac.export');
+        Route::post('/examiner-nomination/dac/endorse', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'endorse'])->name('examiner-nomination.dac.endorse');
+        Route::post('/examiner-nomination/dac/not-endorsed', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'notEndorsed'])->name('examiner-nomination.dac.not-endorsed');
+    });
+    Route::middleware('role:'.implode(',', [
+        Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS, Role::DEAN_PGR, Role::NON_EXEC_CGS,
+    ]))->get('/examiner-nomination/dac/minutes/{record}', [\App\Modules\Hani\Http\Controllers\ExaminerDacController::class, 'minutes'])
+        ->name('examiner-nomination.dac.minutes');
 
     Route::middleware('role:'.implode(',', [
         Role::ACADEMIC_EXEC, Role::SENIOR_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS,

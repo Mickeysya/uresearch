@@ -36,10 +36,10 @@ class ReVivaDocuments
     }
 
     /** Re-render the letters in place: the final version after the Dean approves. */
-    public function renderLetters(ReVivaDetail $detail, bool $draft, ?string $signature = null): void
+    public function renderLetters(ReVivaDetail $detail, bool $draft, ?string $signature = null, ?User $approver = null): void
     {
         foreach ($detail->staffDocuments()->where('kind', ReVivaStaffDocument::LETTER)->with('examiner')->get() as $letter) {
-            Storage::disk('local')->put($letter->path, $this->letter($detail, $letter->examiner, $draft, $signature));
+            Storage::disk('local')->put($letter->path, $this->letter($detail, $letter->examiner, $draft, $signature, $approver));
         }
     }
 
@@ -63,10 +63,10 @@ class ReVivaDocuments
         ReVivaStaffDocument::create(['re_viva_detail_id' => $detail->id, 'kind' => $kind, 'seat' => $seat, 'examiner_id' => $examiner->id, 'path' => $path, 'original_name' => $name, 'created_by_id' => $by]);
     }
 
-    public function letter(ReVivaDetail $detail, Examiner $examiner, bool $draft, ?string $signature = null): string
+    public function letter(ReVivaDetail $detail, Examiner $examiner, bool $draft, ?string $signature = null, ?User $approver = null): string
     {
         $data = self::candidate($detail->application->student, $detail->vivaDetail(), $detail);
-        $days = (int) config('hani.reviva.panel_working_days', 20);
+        $days = ReVivaLetters::panelWorkingDays($detail);
 
         return $this->pdf('correction_letter', $data + [
             'reference' => config('hani.reviva.letter.reference_prefix').($data['student']->matric_no ?: $data['student']->id),
@@ -74,9 +74,28 @@ class ReVivaDocuments
             'workingDays' => $days, 'workingDaysWords' => ReVivaLetters::words($days),
             'letter' => (array) config('hani.reviva.letter'),
             'contacts' => (array) config('hani.reviva.return_contacts'),
-            'signatory' => (array) config('hani.reviva.signatory'),
+            'signatory' => self::signatory($detail, $approver),
             'round' => $detail->cycle_number, 'draft' => $draft, 'signatureImage' => $draft ? null : $signature,
         ]);
+    }
+
+    /**
+     * Who signs the letter: the Dean of PGR who approved it ($approver while
+     * approving, then the approval_history row), with the configured title.
+     * The configured name is only the fallback before anyone has approved.
+     *
+     * @return array{name: string, title: array<int, string>}
+     */
+    public static function signatory(ReVivaDetail $detail, ?User $approver = null): array
+    {
+        $config = (array) config('hani.reviva.signatory');
+        $approver ??= \App\Modules\Core\Models\ApprovalHistory::query()
+            ->where('application_id', $detail->application_id)
+            ->where('stage_key', 'dean_approval')
+            ->whereNotIn('decision', ['rejected', 'returned'])
+            ->latest('id')->first()?->approver;
+
+        return ['name' => $approver?->name ?: (string) ($config['name'] ?? ''), 'title' => (array) ($config['title'] ?? [])];
     }
 
     public function reportForm(ReVivaDetail $detail, Examiner $examiner): string

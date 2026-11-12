@@ -14,15 +14,12 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Haziq\Http\Controllers\Concerns\HandlesApplicationCorrections;
 use App\Modules\Haziq\Models\AcademicQualification;
-use App\Modules\Haziq\Models\AllowanceRecommendationNote;
 use App\Modules\Haziq\Models\ApplicationCorrectionRequest;
 use App\Modules\Haziq\Models\GraApplicationDetail;
 use App\Modules\Haziq\Models\GraGaStudentProfile;
 use App\Modules\Haziq\Models\Publication;
 use App\Modules\Haziq\Models\TermsAcceptance;
 use App\Modules\Haziq\Models\WorkExperience;
-use App\Modules\Haziq\Notifications\AllowanceRecommendationFlagged;
-use App\Modules\Haziq\Notifications\AllowanceRecommendationUpdated;
 use App\Modules\Haziq\Notifications\ApplicationCorrectionResubmitted;
 use App\Modules\Haziq\Notifications\ApplicationRejected;
 use App\Modules\Haziq\Notifications\ApplicationSubmitted;
@@ -94,12 +91,14 @@ class GraApplicationController extends Controller
                 'cost_centre' => 'Cost Centre',
                 'centre_name' => 'Name of Centre',
                 'service_start_date' => 'Service Start Date',
+                'proposed_allowance' => 'Proposed Allowance',
             ],
             'section_c' => [
                 'level_of_study' => 'Level of Study',
                 'programme' => 'Programme',
                 'mode_of_study' => 'Mode of Study',
                 'admission_date' => 'Admission Date',
+                'candidature_period' => 'Period Candidature',
                 'thesis_title' => 'Thesis Title',
                 'co_supervisor_id' => 'Co-Supervisor',
                 'ic_passport_no' => 'I/C or Passport No.',
@@ -379,15 +378,6 @@ class GraApplicationController extends Controller
             'canCorrect' => $this->canStillFlag($user, $application),
             'canEdit' => false,
             'viewerIsStudent' => false,
-            // Supervisor/Senior Director only — see flagAllowance().
-            'canFlagAllowance' => in_array($user->role, [Role::SUPERVISOR, Role::SENIOR_DIRECTOR_CGS], true),
-            'allowanceNotes' => AllowanceRecommendationNote::where('application_id', $application->id)
-                ->with('author')->latest()->get(),
-            // Same role that sets it originally — not gated to their own
-            // current stage, since by the time there's something worth
-            // revising the application has usually already moved past
-            // cgs_review. See editAllowance().
-            'canEditAllowance' => $user->role === Role::NON_EXEC_CGS && $application->status === Application::STATUS_PENDING,
         ]);
     }
 
@@ -413,11 +403,6 @@ class GraApplicationController extends Controller
             'canCorrect' => false,
             'canEdit' => $this->canStudentEdit($application),
             'viewerIsStudent' => true,
-            'canFlagAllowance' => false,
-            // Never queried, let alone shown, for the student's own view —
-            // see AllowanceRecommendationNote's migration for why.
-            'allowanceNotes' => collect(),
-            'canEditAllowance' => false,
             // Extension rows were never gated on these documents at
             // Submit (storeExtension() has no missingRequiredDocuments()
             // call) -- see Support\DocumentCompleteness's own docblock.
@@ -631,7 +616,11 @@ class GraApplicationController extends Controller
                 'expected_reporting_date' => $data['expected_reporting_date'] ?? null,
                 'service_start_date' => $data['service_start_date'],
                 'service_end_date' => GraApplicationDetail::computeServiceEndDate(Carbon::parse($data['service_start_date']), $profile->level_of_study),
-                // proposed_allowance stays null — CGS sets it when they approve.
+                // The project leader's own proposed figure, same as GA's form
+                // — no approver sets or overrides this directly any more; see
+                // sectionFieldLabels()'s 'proposed_allowance' entry for how an
+                // approver who disagrees pushes back on it instead.
+                'proposed_allowance' => $data['proposed_allowance'],
             ];
 
             if ($draft) {
@@ -787,8 +776,10 @@ class GraApplicationController extends Controller
             'centre_name' => ['nullable', 'string', 'max:150'],
             'requested_new_end_date' => [$action === 'submit' ? 'required' : 'nullable', 'date', 'after:today'],
             'extension_reason' => [$action === 'submit' ? 'required' : 'nullable', 'string', 'max:2000'],
-            // No proposed_allowance here either — same as a new application,
-            // CGS sets it when they approve the extension's cgs_review stage.
+            // Same as a new application — the project leader proposes the
+            // extension's own monthly figure directly, required to submit,
+            // relaxed to nullable while only a draft.
+            'proposed_allowance' => [$action === 'submit' ? 'required' : 'nullable', 'numeric', 'min:0'],
             'evidence_document' => DocumentStore::rules(),
         ]);
 
@@ -813,6 +804,7 @@ class GraApplicationController extends Controller
                 'service_start_date' => $parentDetail->service_end_date,
                 'service_end_date' => $data['requested_new_end_date'] ?? $existingDetail?->service_end_date ?? $parentDetail->service_end_date,
                 'extension_reason' => $data['extension_reason'] ?? null,
+                'proposed_allowance' => $data['proposed_allowance'] ?? $existingDetail?->proposed_allowance,
             ];
 
             if ($draft) {
@@ -830,7 +822,6 @@ class GraApplicationController extends Controller
                     'profile_id' => $profile->id,
                     'application_type' => 'extension',
                     'parent_application_id' => $parent->id,
-                    // proposed_allowance stays null — CGS sets it when they approve.
                     'previous_allowance' => $parentDetail->proposed_allowance,
                 ] + $detailAttributes);
             }
@@ -987,23 +978,6 @@ class GraApplicationController extends Controller
             return back()->with('error', 'All required documents must be uploaded before this application can be verified and advanced.');
         }
 
-        // CGS sets the GRA allowance the moment they approve their stage —
-        // the student never proposes a figure themselves; see
-        // gra_application_details' nullable-proposed_allowance migration
-        // for why. Validated and saved before engine->decide() runs, so a
-        // missing figure blocks the approval rather than leaving it
-        // half-applied.
-        if ($currentStage?->key === 'cgs_review' && $data['decision'] === 'approve') {
-            $allowanceData = $request->validate([
-                'proposed_allowance' => ['required', 'numeric', 'min:0'],
-            ], [
-                'proposed_allowance.required' => 'Set the proposed allowance before approving.',
-            ]);
-
-            GraApplicationDetail::where('application_id', $application->id)
-                ->update(['proposed_allowance' => $allowanceData['proposed_allowance']]);
-        }
-
         try {
             $decided = $engine->decide($application, $request->user(), $data['decision'], $data['remarks'] ?? null);
         } catch (UnauthorizedException $e) {
@@ -1026,71 +1000,6 @@ class GraApplicationController extends Controller
         $verb = $data['decision'] === 'approve' ? 'approved' : 'rejected';
 
         return back()->with('status', "Application #{$application->id} {$verb}.");
-    }
-
-    /**
-     * Supervisor/Senior Director's internal feedback on CGS's recommended
-     * allowance — never shown to the student, see
-     * AllowanceRecommendationNote's migration for why this is a separate
-     * mechanism from "Request Correction". Open to both roles on any GRA
-     * application, not gated to their own current stage — same reasoning
-     * as "Request Correction" being open regardless of stage, just a
-     * narrower audience.
-     */
-    public function flagAllowance(Request $request, Application $application): RedirectResponse
-    {
-        abort_unless($application->module_type === $this->moduleKey(), 404);
-
-        $user = $request->user();
-        abort_unless(in_array($user->role, [Role::SUPERVISOR, Role::SENIOR_DIRECTOR_CGS], true), 403);
-
-        $data = $request->validate([
-            'reason' => ['required', 'string', 'max:1000'],
-        ]);
-
-        AllowanceRecommendationNote::create([
-            'application_id' => $application->id,
-            'author_id' => $user->id,
-            'reason' => $data['reason'],
-        ]);
-
-        User::whereIn('role', Role::cgsTeam())->get()->each(
-            fn (User $cgs) => $cgs->notify(new AllowanceRecommendationFlagged($application, $user, $data['reason']))
-        );
-
-        return back()->with('status', 'Noted — CGS has been notified.');
-    }
-
-    /**
-     * CGS revising the allowance they set — any time the application is
-     * still pending, not gated to their own cgs_review decide() the way
-     * setting it the first time is, since by the time something's worth
-     * revising (most often a Supervisor/Senior Director flag) the
-     * application has usually already moved on to a later stage.
-     */
-    public function editAllowance(Request $request, Application $application): RedirectResponse
-    {
-        abort_unless($application->module_type === $this->moduleKey(), 404);
-
-        $user = $request->user();
-        abort_unless($user->role === Role::NON_EXEC_CGS, 403);
-        abort_unless($application->status === Application::STATUS_PENDING, 404, 'This application is no longer pending.');
-
-        $data = $request->validate([
-            'proposed_allowance' => ['required', 'numeric', 'min:0'],
-        ]);
-
-        GraApplicationDetail::where('application_id', $application->id)
-            ->update(['proposed_allowance' => $data['proposed_allowance']]);
-
-        // Whoever flagged it finds out CGS actually looked at it, not just
-        // that the number quietly changed underneath them.
-        AllowanceRecommendationNote::where('application_id', $application->id)
-            ->with('author')->get()->pluck('author')->unique('id')->each(
-                fn (User $flagger) => $flagger->notify(new AllowanceRecommendationUpdated($application, (float) $data['proposed_allowance']))
-            );
-
-        return back()->with('status', 'Proposed allowance updated.');
     }
 
     protected function notifyNextApprover(Application $application, WorkflowEngine $engine): void
@@ -1148,11 +1057,14 @@ class GraApplicationController extends Controller
             'centre_name' => ['nullable', 'string', 'max:150'],
             'expected_reporting_date' => ['nullable', 'date'],
             'service_start_date' => ['required', 'date'],
-            // No service_end_date, no proposed_allowance here — the first
-            // is always derived from service_start_date + level_of_study
-            // (24 months Master, 42 PhD; see
-            // GraApplicationDetail::computeServiceEndDate()), the second is
-            // CGS's to set when they approve, not the student's to propose.
+            // No service_end_date here — it is always derived from
+            // service_start_date + level_of_study (24 months Master, 42
+            // PhD; see GraApplicationDetail::computeServiceEndDate()).
+            // proposed_allowance IS required here — the project leader
+            // proposes the monthly figure directly on the form, the same
+            // as GA's own form; no approver sets or overrides it, see
+            // sectionFieldLabels()'s 'proposed_allowance' entry.
+            'proposed_allowance' => ['required', 'numeric', 'min:0'],
 
             // Always required, never left to a stale default — every
             // student's own profile is different, and reusing an older
@@ -1164,6 +1076,7 @@ class GraApplicationController extends Controller
             'programme' => ['required', 'string', 'max:150'],
             'mode_of_study' => ['nullable', 'string', 'max:50'],
             'admission_date' => ['required', 'date'],
+            'candidature_period' => ['nullable', 'string', 'max:100'],
             'thesis_title' => ['nullable', 'string', 'max:255'],
             'co_supervisor_id' => ['nullable', 'integer', 'exists:users,id'],
             'ic_passport_no' => ['nullable', 'string', 'max:50'],
@@ -1234,6 +1147,7 @@ class GraApplicationController extends Controller
             'programme' => $data['programme'],
             'mode_of_study' => $data['mode_of_study'] ?? null,
             'admission_date' => $data['admission_date'],
+            'candidature_period' => $data['candidature_period'] ?? null,
             'thesis_title' => $data['thesis_title'] ?? null,
             'co_supervisor_id' => $data['co_supervisor_id'] ?? null,
             'ic_passport_no' => $data['ic_passport_no'] ?? null,
@@ -1385,10 +1299,9 @@ class GraApplicationController extends Controller
                 // Only an extension row ever collects a funding_continuation
                 // in the first place (see storeExtension() vs store()).
                 'funding_continuation' => $isExtension ? ['required', 'in:new,existing'] : ['prohibited'],
-                // No service_end_date, no proposed_allowance — same reasons
-                // as the submission form: the first is always derived below,
-                // the second stays CGS's to set.
+                // No service_end_date here — it is always derived below.
                 'service_start_date' => $isExtension ? ['prohibited'] : ['required', 'date'],
+                'proposed_allowance' => ['required', 'numeric', 'min:0'],
             ]));
 
             $profile->update($request->validate([
@@ -1396,6 +1309,7 @@ class GraApplicationController extends Controller
                 'programme' => ['required', 'string', 'max:150'],
                 'mode_of_study' => ['nullable', 'string', 'max:50'],
                 'admission_date' => ['required', 'date'],
+                'candidature_period' => ['nullable', 'string', 'max:100'],
                 'thesis_title' => ['nullable', 'string', 'max:255'],
                 'co_supervisor_id' => ['nullable', 'integer', 'exists:users,id'],
                 'ic_passport_no' => ['nullable', 'string', 'max:50'],

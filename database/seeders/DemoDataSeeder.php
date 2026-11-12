@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
 use App\Modules\Hani\Models\Examiner;
@@ -456,6 +457,14 @@ class DemoDataSeeder extends Seeder
                 $role,
                 ['department' => $department, 'faculty' => $application->student->faculty]
             );
+        }
+
+        // A Non-Executive CGS stage may belong to one officer
+        // (config/cgs_assignment.php); the engine refuses anyone else, so the
+        // demo decides as that officer when their account exists.
+        if ($role === Role::NON_EXEC_CGS
+            && $officer = app(CgsAssignment::class)->officer($application->module_type)) {
+            return $officer;
         }
 
         return $this->deciders[$role];

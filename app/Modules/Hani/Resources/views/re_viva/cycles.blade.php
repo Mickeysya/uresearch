@@ -45,7 +45,7 @@
                                             'compact' => true,
                                         ])
                                         @if ($detail->sent_to_panel_at)
-                                            <p class="fstep-hint">Sent to panel {{ $detail->sent_to_panel_at->format('j M Y') }}; reports due {{ \App\Modules\Hani\Support\ReVivaLetters::reviewDue($detail->sent_to_panel_at)->format('j M Y') }}.</p>
+                                            <p class="fstep-hint">Sent to panel {{ $detail->sent_to_panel_at->format('j M Y') }}; reports due {{ \App\Modules\Hani\Support\ReVivaLetters::reviewDue($detail->sent_to_panel_at, $detail)->format('j M Y') }}.</p>
                                         @endif
                                         {{-- In the wide column: names and the divergence badge do not fit under Outcome. --}}
                                         @if ($detail->sent_to_panel_at)
@@ -60,7 +60,7 @@
                                             @if ($detail->logged_outside_window) <span class="status-badge returned">Outside window</span> @endif
                                         @endif
                                         @if ($detail->correction_deadline)
-                                            <br>{{ $detail->outcome_level ? 'Final thesis' : 'Corrections' }} due {{ $detail->correction_deadline->format('j M Y') }}
+                                            <br>@if ($detail->finalWindowText()) Final thesis due {{ $detail->finalWindowText() }} @else {{ $detail->outcome_level ? 'Final thesis' : 'Corrections' }} due {{ $detail->correction_deadline->format('j M Y') }} @endif
                                             @if ($detail->finalThesisOverdue()) <span class="status-badge rejected">Overdue</span> @endif
                                             @if ($detail->final_thesis_submitted_at && ! $detail->corrections_accepted_at) <br><span class="fstep-hint">Final thesis submitted {{ $detail->final_thesis_submitted_at->format('j M Y') }}</span> @endif
                                         @endif

@@ -4,6 +4,7 @@ namespace App\Modules\Haziq\Http\Controllers;
 
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\ApplicationDocument;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Support\Role;
@@ -16,7 +17,9 @@ use App\Modules\Haziq\Notifications\CandidatureAppealSubmitted;
 use App\Modules\Haziq\Support\StageGateEngine;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 /**
@@ -61,7 +64,7 @@ class CandidatureAppealController extends Controller
             'status' => 'pending',
         ]);
 
-        $documents->attach($application, $request->file('appeal_letter'), 'Candidature Appeal Letter');
+        $this->replaceDocument($application, $request->file('appeal_letter'), 'Candidature Appeal Letter', $documents);
 
         // Its own log_name — a distinct action from the application's own
         // decide() (logged under 'workflow') and from Mark Complete
@@ -203,5 +206,30 @@ class CandidatureAppealController extends Controller
         return CandidatureAppeal::where('application_id', $application->id)
             ->where('status', 'pending')
             ->first();
+    }
+
+    /**
+     * Same fix as Concerns\HandlesApplicationCorrections::replaceDocument()
+     * and for the same reason: DocumentStore::attach() is always just a
+     * create(), so a student terminated more than once (a later Stage
+     * Gate, after an earlier appeal was already decided) appealing again
+     * was piling up another "Candidature Appeal Letter" row on top of
+     * every earlier one instead of replacing it — confirmed explicitly
+     * 2026-11-11 from the resulting document list showing the same label
+     * repeated many times over. Not pulled from that trait directly: this
+     * controller implements none of its other abstract methods (it has no
+     * "sections" or "stage" concept of its own to flag against).
+     */
+    protected function replaceDocument(Application $application, UploadedFile $file, string $docType, DocumentStore $documents): void
+    {
+        ApplicationDocument::where('application_id', $application->id)
+            ->where('doc_type', $docType)
+            ->get()
+            ->each(function (ApplicationDocument $old) {
+                Storage::disk('local')->delete($old->path);
+                $old->delete();
+            });
+
+        $documents->attach($application, $file, $docType);
     }
 }

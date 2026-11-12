@@ -28,7 +28,7 @@ class ReVivaDetail extends Model
         'correction_deadline', 'hardbound_deadline',
         'outcome_level', 'outcome_remarks', 'suggested_level', 'outcome_recorded_at', 'outcome_recorded_by_id',
         'final_thesis_submitted_at', 'corrections_accepted_at', 'corrections_accepted_by_id',
-        'documents_accepted_at', 'dean_approved_at', 'panel_deadline', 'meeting_kind', 'meeting_at', 'meeting_venue',
+        'documents_accepted_at', 'dean_approved_at', 'panel_deadline', 'meeting_kind', 'meeting_at', 'meeting_venue', 'meeting_chair_name', 'meeting_chair_email',
     ];
 
     protected function casts(): array
@@ -197,6 +197,52 @@ class ReVivaDetail extends Model
     public function needsFinalThesis(): bool
     {
         return in_array($this->outcome_level, self::OUTCOME_CORRECTIONS, true);
+    }
+
+    /** The viva chairman for the meeting: the linked viva's, else the one the Senior Executive typed. @return array{name: ?string, email: ?string} */
+    public function meetingChair(): array
+    {
+        $viva = $this->vivaDetail();
+
+        return $viva?->chair_email
+            ? ['name' => $viva->chair_name, 'email' => $viva->chair_email]
+            : ['name' => $this->meeting_chair_name, 'email' => $this->meeting_chair_email];
+    }
+
+    /** Months [min, max] from the outcome date for this level (hani.reviva.final_window_months). */
+    public static function finalWindowMonths(int $level): array
+    {
+        $window = (array) config("hani.reviva.final_window_months.{$level}", []);
+
+        return [(int) ($window['min'] ?? 0), (int) ($window['max'] ?? 0)];
+    }
+
+    /** Levels 1-3: the earliest day the final thesis may be submitted. */
+    public function finalOpensOn(): ?\Illuminate\Support\Carbon
+    {
+        if (! $this->needsFinalThesis() || ! $this->outcome_recorded_at) {
+            return null;
+        }
+
+        return $this->outcome_recorded_at->copy()->startOfDay()->addMonthsNoOverflow(self::finalWindowMonths($this->outcome_level)[0]);
+    }
+
+    /** Levels 1-3: the student may upload the final thesis today (from the minimum date on; late is allowed). */
+    public function finalThesisOpen(): bool
+    {
+        $opens = $this->finalOpensOn();
+
+        return $opens === null || ! today()->lt($opens);
+    }
+
+    /** "between 12 Dec 2026 and 12 Feb 2027" */
+    public function finalWindowText(string $format = 'j M Y'): ?string
+    {
+        if (! $this->needsFinalThesis() || ! $this->correction_deadline) {
+            return null;
+        }
+
+        return 'between '.($this->finalOpensOn() ?? $this->outcome_recorded_at)?->format($format).' and '.$this->correction_deadline->format($format);
     }
 
     /** Levels 1-3, final thesis not accepted yet, past its deadline. */

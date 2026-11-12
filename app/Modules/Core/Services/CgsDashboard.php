@@ -8,6 +8,7 @@ use App\Modules\Core\Services\Concerns\BuildsPanels;
 use App\Modules\Core\Services\Concerns\ReadsAttendance;
 use App\Modules\Core\Services\Concerns\ReadsPostgraduateProgress;
 use App\Modules\Core\Support\Role;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -59,6 +60,46 @@ class CgsDashboard
                 ->when($to, fn ($q) => $q->where('submitted_at', '<', $to))
                 ->count()
         ), $this->noTrend());
+    }
+
+    /**
+     * Of Pending My Action, how many are this officer's own modules
+     * (config/cgs_assignment.php) -- the rest they can view but another
+     * officer decides. Null for any role but Non-Executive CGS, and when
+     * none of the modules waiting on that role is assigned to anyone, so
+     * the card shows nothing rather than a meaningless "0 assigned".
+     */
+    public function assignedToMe(): ?int
+    {
+        if ($this->staff->role !== Role::NON_EXEC_CGS) {
+            return null;
+        }
+
+        return $this->safely('applications', function () {
+            $assignment = app(CgsAssignment::class);
+            $queues = collect(app(ModuleRegistry::class)->queuesForRole($this->staff->role));
+
+            if ($queues->every(fn ($q) => $assignment->officer($q['module']->key()) === null)) {
+                return null;
+            }
+
+            $mine = $queues->filter(fn ($q) => $assignment->officer($q['module']->key())?->is($this->staff));
+
+            if ($mine->isEmpty()) {
+                return 0;
+            }
+
+            return Application::query()
+                ->where('status', Application::STATUS_PENDING)
+                ->where(function ($q) use ($mine) {
+                    foreach ($mine as $queue) {
+                        $q->orWhere(fn ($inner) => $inner
+                            ->where('module_type', $queue['module']->key())
+                            ->where('current_stage', $queue['stage']->key));
+                    }
+                })
+                ->count();
+        }, null);
     }
 
     /** @return array{count: int, delta: ?float} */
@@ -239,7 +280,7 @@ class CgsDashboard
      * `approval_history`. Merged and re-sorted here rather than stored as a
      * third "activity" table nobody would remember to write to.
      *
-     * @return Collection<int, array{text: string, at: \Illuminate\Support\Carbon, tone: string, icon: string, url: ?string}>
+     * @return Collection<int, array{text: string, at: Carbon, tone: string, icon: string, url: ?string}>
      */
     public function recentActivities(int $limit = 6): Collection
     {
@@ -302,5 +343,4 @@ class CgsDashboard
                 ->count()
         ), $this->noTrend());
     }
-
 }

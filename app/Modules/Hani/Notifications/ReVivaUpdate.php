@@ -21,6 +21,9 @@ class ReVivaUpdate extends Notification implements ShouldQueue
 {
     use Queueable;
 
+    /** A copy to CGS: the action button only for the Senior Executive (see forCgs()). */
+    protected bool $cgsCopy = false;
+
     /** @param  array<int, string>  $lines */
     public function __construct(
         public readonly string $kind,
@@ -31,6 +34,31 @@ class ReVivaUpdate extends Notification implements ShouldQueue
         protected ?string $actionUrl = null,
     ) {
         $this->afterCommit();
+    }
+
+    /**
+     * Mark this as a CGS-bound email (ReVivaRecipients::cgs()). The Senior
+     * Executive keeps the action; the Non-Executive gets Re-viva Cycles,
+     * which he can open read-only; anyone else (the Academic Executive, who
+     * has no re-viva pages) gets no link and an "information only" line.
+     */
+    public function forCgs(): self
+    {
+        $this->cgsCopy = true;
+
+        return $this;
+    }
+
+    /** @return array{0: ?string, 1: ?string} label, url for this recipient */
+    protected function actionFor(object $notifiable): array
+    {
+        if (! $this->cgsCopy || ! $notifiable instanceof User || $notifiable->role === \App\Modules\Core\Support\Role::SENIOR_EXEC_CGS) {
+            return [$this->actionLabel, $this->actionUrl];
+        }
+
+        return $notifiable->role === \App\Modules\Core\Support\Role::NON_EXEC_CGS
+            ? ['Open Re-viva Cycles', route('reviva.cycles.index')]
+            : [null, null];
     }
 
     public function via(object $notifiable): array
@@ -48,8 +76,12 @@ class ReVivaUpdate extends Notification implements ShouldQueue
             $mail->line($line);
         }
 
-        if ($this->actionUrl) {
-            $mail->action($this->actionLabel ?? 'Open UResearch', $this->actionUrl);
+        [$label, $url] = $this->actionFor($notifiable);
+
+        if ($url) {
+            $mail->action($label ?? 'Open UResearch', $url);
+        } elseif ($this->cgsCopy) {
+            $mail->line('For your information: no action is needed from you.');
         }
 
         return $mail->line('Sent by UResearch 2.0.');

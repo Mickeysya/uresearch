@@ -83,6 +83,7 @@ class GaApplicationController extends Controller
                 'purpose' => 'Purpose',
                 'proposed_hours_per_week' => 'Proposed Hours per Week',
                 'service_start_date' => 'Service Start Date',
+                'proposed_allowance' => 'Proposed Allowance',
             ],
             'section_c' => [
                 'level_of_study' => 'Level of Study',

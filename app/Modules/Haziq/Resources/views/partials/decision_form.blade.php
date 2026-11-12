@@ -15,15 +15,6 @@
 <form method="POST" action="{{ $route }}" class="haziq-decision-form">
     @csrf
 
-    {{-- GRA's cgs_review stage only — current_stage never matches this key
-         for any other module's stages, so this is safe in the shared GA
-         queue that also includes this partial. CGS sets the allowance the
-         moment they approve; see GraApplicationController::decide(). --}}
-    @if (($application->current_stage ?? null) === 'cgs_review')
-        <label for="proposed_allowance-{{ $application->id }}">Proposed Allowance (RM) <span style="color: var(--text-grey)">(required to approve)</span></label>
-        <input type="number" step="0.01" min="0" id="proposed_allowance-{{ $application->id }}" name="proposed_allowance" placeholder="e.g. 1500.00">
-    @endif
-
     <label for="remarks-{{ $application->id }}">Remarks <span style="color: var(--text-grey)">(required to reject)</span></label>
     <textarea id="remarks-{{ $application->id }}" name="remarks" rows="2"
               placeholder="Visible to the student and recorded in the audit trail."></textarea>

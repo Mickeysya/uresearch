@@ -14,23 +14,22 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>Update Application #{{ $application->id }}</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header title="Update Application #{{ $application->id }}" />
 
+    <div class="card card-wide">
         @if ($open->isNotEmpty())
             <p class="queue-meta">
                 Your application has not been rejected. The item(s) highlighted in red below were
-                flagged by an approver — everything else is yours to edit too, any time.
+                flagged by an approver; everything else is yours to edit too, any time.
             </p>
         @else
-            <p class="queue-meta">Nothing has been flagged — you can still update any section below and resubmit.</p>
+            <p class="queue-meta">Nothing has been flagged; you can still update any section below and resubmit.</p>
         @endif
 
         <form method="POST" action="{{ route('ga-application.correction.store', $application) }}" enctype="multipart/form-data">
             @csrf
 
-            <h3>Section B — GA Details</h3>
+            <h3>Section B: GA Details</h3>
             <div class="{{ $flaggedSections->contains('section_b') ? 'haziq-flagged-section' : '' }}">
                 @if ($r = $sectionReason('section_b'))
                     <p class="haziq-flag-reason">⚠ {{ $r }}</p>
@@ -66,10 +65,12 @@
 
                 <label for="proposed_allowance">Proposed Allowance (RM)</label>
                 <input type="number" step="0.01" min="0" name="proposed_allowance" id="proposed_allowance" required
-                       value="{{ old('proposed_allowance', $detail->proposed_allowance) }}">
+                       value="{{ old('proposed_allowance', $detail->proposed_allowance) }}"
+                       class="{{ $isFlagged('section_b', 'proposed_allowance') ? 'haziq-flagged' : '' }}">
+                @if ($r = $fieldReason('section_b', 'proposed_allowance'))<p class="haziq-flag-reason">⚠ {{ $r }}</p>@endif
             </div>
 
-            <h3>Section C — Candidate Details</h3>
+            <h3>Section C: Candidate Details</h3>
             <div class="{{ $flaggedSections->contains('section_c') ? 'haziq-flagged-section' : '' }}">
                 @if ($r = $sectionReason('section_c'))
                     <p class="haziq-flag-reason">⚠ {{ $r }}</p>
@@ -96,7 +97,7 @@
                 @if ($r = $fieldReason('section_c', 'admission_date'))<p class="haziq-flag-reason">⚠ {{ $r }}</p>@endif
             </div>
 
-            <h3>Section D — Academic Qualification</h3>
+            <h3>Section D: Academic Qualification</h3>
             <div class="{{ $flaggedSections->contains('section_d') ? 'haziq-flagged-section' : '' }}">
                 @if ($r = $sectionReason('section_d'))<p class="haziq-flag-reason">⚠ {{ $r }}</p>@endif
                 @php($rows = $academics->isNotEmpty() ? $academics : collect([null, null, null]))
@@ -112,7 +113,7 @@
                 @endforeach
             </div>
 
-            <h3>Section E — Working Experience</h3>
+            <h3>Section E: Working Experience</h3>
             <div class="{{ $flaggedSections->contains('section_e') ? 'haziq-flagged-section' : '' }}">
                 @if ($r = $sectionReason('section_e'))<p class="haziq-flag-reason">⚠ {{ $r }}</p>@endif
                 @php($rows = $experiences->isNotEmpty() ? $experiences : collect([null, null]))
@@ -127,7 +128,7 @@
                 @endforeach
             </div>
 
-            <h3>Section F — Publications</h3>
+            <h3>Section F: Publications</h3>
             <div class="{{ $flaggedSections->contains('section_f') ? 'haziq-flagged-section' : '' }}">
                 @if ($r = $sectionReason('section_f'))<p class="haziq-flag-reason">⚠ {{ $r }}</p>@endif
                 @php($rows = $publications->isNotEmpty() ? $publications : collect([null, null]))
@@ -142,15 +143,15 @@
             </div>
 
             <h3>Documents</h3>
-            <p class="queue-meta">Choose a file only to replace what's already on record — otherwise it stays as is.</p>
+            <p class="queue-meta">Choose a file only to replace what's already on record; otherwise it stays as is.</p>
             @foreach ($documentTypes as $field => $label)
                 @php($flaggedDoc = $flaggedDocuments->contains($label))
                 @php($existing = ($existingDocuments ?? collect())->get($label))
-                <label for="{{ $field }}">{{ $label }} @if ($flaggedDoc)<span style="color: var(--danger-fg);">— flagged, please replace</span>@endif</label>
+                <label for="{{ $field }}">{{ $label }} @if ($flaggedDoc)<span style="color: var(--danger-fg);">: flagged, please replace</span>@endif</label>
                 @if ($existing)
                     <p class="queue-meta" style="margin: 2px 0 4px;">
                         <span style="color: {{ $flaggedDoc ? 'var(--danger-fg)' : 'var(--success-fg)' }};">Already uploaded: {{ $existing->original_name }}</span>
-                        — <a href="{{ $existing->url() }}" target="_blank" rel="noopener">view</a>
+                        , <a href="{{ $existing->url() }}" target="_blank" rel="noopener">view</a>
                     </p>
                 @endif
                 <input type="file" name="{{ $field }}" id="{{ $field }}" class="{{ $flaggedDoc ? 'haziq-flagged' : '' }}">

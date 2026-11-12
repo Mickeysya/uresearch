@@ -53,6 +53,9 @@
     $overdueAfter = 14;   // days waiting before a row is called out
     $criticalAfter = 30;
     $bulk = ! $module instanceof \App\Modules\Core\Contracts\DecidesOneAtATime;
+    // Which CGS officer each row belongs to (config/cgs_assignment.php). One
+    // instance for the page, so the officer's account is looked up once.
+    $cgsAssignment = app(\App\Modules\Core\Services\CgsAssignment::class);
 @endphp
 
 @php
@@ -158,6 +161,9 @@
                     $waiting >= $overdueAfter => 'warn',
                     default => 'quiet',
                 };
+                // NOT_APPLICABLE (and so no "Assigned to") off a CGS stage.
+                $cgsVerdict = auth()->user() ? $cgsAssignment->verdict(auth()->user(), $application, $stage) : null;
+                $canDecideRow = ! $cgsVerdict || $cgsVerdict->allowed();
             @endphp
 
             <details class="queue-row">
@@ -166,7 +172,9 @@
                          nicer, but a checkbox inside one works as long as the
                          click does not also toggle the row; the script below
                          stops that. --}}
-                    @if ($bulk)
+                    {{-- No checkbox on a row that is another officer's: the
+                         bulk POST would only skip it. --}}
+                    @if ($bulk && $canDecideRow)
                     <label class="queue-check" data-queue-check-wrap>
                         <input type="checkbox" name="ids[]" value="{{ $application->id }}"
                                form="queue-bulk" data-queue-check
@@ -192,6 +200,15 @@
                     @if ($application->documents->isNotEmpty())
                         <span class="queue-row-docs" title="{{ $application->documents->count() }} attached">
                             {{ $application->documents->count() }} file{{ $application->documents->count() === 1 ? '' : 's' }}
+                        </span>
+                    @endif
+
+                    @if ($cgsVerdict?->assigneeName())
+                        <span class="queue-row-assignee">
+                            Assigned to: {{ $cgsVerdict->assigneeName() }}
+                            @if ($cgsVerdict->coverNote())
+                                <span class="queue-row-cover">{{ $cgsVerdict->coverNote() }}</span>
+                            @endif
                         </span>
                     @endif
 

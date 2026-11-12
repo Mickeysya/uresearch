@@ -3,19 +3,21 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
-use App\Modules\Core\Contracts\DescribesApplicationDetails;
 use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
-use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
 use App\Modules\Core\Contracts\DescribesApplicationProgress;
-use App\Modules\Core\Contracts\SuppliesOverdueStatus;
-use App\Modules\Nureen\Support\TrackingDescriptions;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
+use App\Modules\Core\Contracts\SuppliesOverdueStatus;
+use App\Modules\Core\Contracts\SuppliesReminderCount;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
-use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 use App\Modules\Nureen\Models\GaCertificationDetail;
+use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Nureen\Support\LetterRenderer;
+use App\Modules\Nureen\Support\TrackingDescriptions;
+use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 
 /**
  * GA/GRA Certification Letter.
@@ -31,7 +33,7 @@ use App\Modules\Nureen\Models\GaCertificationDetail;
  * SupervisionController does, not to everyone holding the Supervisor role.
  * The Senior Director's approval is still what triggers PDF generation.
  */
-class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus, DescribesApplicationProgress, DescribesApplicationDetails
+class CertificationLetterWorkflow implements DecidesOneAtATime, DescribesApplicationDetails, DescribesApplicationProgress, SuppliesDecisionDates, SuppliesOverdueStatus, SuppliesReminderCount, WorkflowModule
 {
     /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
     use DescribesApplicationDetailsDefaults;
@@ -72,9 +74,9 @@ class CertificationLetterWorkflow implements WorkflowModule, DecidesOneAtATime, 
     /** Track My Applications: Core\Contracts\DescribesApplicationProgress -- see Support\TrackingDescriptions. */
     public function describeProgress(Application $application): array
     {
-        $detail = \App\Modules\Nureen\Models\GaCertificationDetail::where('application_id', $application->id)->first();
+        $detail = GaCertificationDetail::where('application_id', $application->id)->first();
 
-        return app(TrackingDescriptions::class)->letter($application, \App\Modules\Nureen\Support\LetterRenderer::CERTIFICATION_DOC_TYPE, $detail?->reference_number, $detail?->revoked_at);
+        return app(TrackingDescriptions::class)->letter($application, LetterRenderer::CERTIFICATION_DOC_TYPE, $detail?->reference_number, $detail?->revoked_at);
     }
 
     /** expectedDecisionDate(): the Client Charter date, for the student dashboard. */

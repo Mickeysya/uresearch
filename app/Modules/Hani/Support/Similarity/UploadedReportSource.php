@@ -5,9 +5,9 @@ namespace App\Modules\Hani\Support\Similarity;
 use App\Modules\Hani\Support\Pdf\PdfReader;
 
 /**
- * Reads the Turnitin Originality Report a student downloads from ULearn.
+ * Reads the Turnitin Originality Report a student downloads from ULearnX.
  *
- * The layout it expects, as ULearn prints it:
+ * The layout it expects, as ULearnX prints it:
  *
  *     <submission title>
  *     ORIGINALITY REPORT
@@ -68,7 +68,7 @@ class UploadedReportSource implements SimilaritySource
         $reportAt = stripos($text, 'ORIGINALITY REPORT');
         if ($reportAt === false || stripos($text, 'SIMILARITY INDEX') === false) {
             return SimilarityReading::failed($this->name(),
-                'This does not look like a Turnitin Originality Report. Download the full similarity report from ULearn, not the Digital Receipt alone.', $engine);
+                'This does not look like a Turnitin Originality Report. Download the full similarity report from ULearnX, not the Digital Receipt alone.', $engine);
         }
 
         $sourcesAt = stripos($text, 'PRIMARY SOURCES', $reportAt);

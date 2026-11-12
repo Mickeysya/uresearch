@@ -42,7 +42,9 @@ final class ModuleTracker
 
         $now = [
             'notice' => match (true) {
-                $notice?->status === Application::STATUS_PENDING => 'Your Academic Executive is reviewing your Notice of Thesis Submission. Nothing to do until they acknowledge it.',
+                $notice?->status === Application::STATUS_PENDING && $notice->current_stage === \App\Modules\Hani\Workflows\VivaVoceWorkflow::SUPERVISOR_STAGE
+                    => 'With supervisor: your supervisor endorses your Notice of Thesis Submission first, then your Academic Executive verifies it.',
+                $notice?->status === Application::STATUS_PENDING => 'Your Academic Executive is reviewing your Notice of Thesis Submission. Nothing to do until they verify it.',
                 $eligible => 'Submit your Notice of Thesis Submission to continue.',
                 default => 'Tick every requirement on the eligibility checklist, then submit your Notice of Thesis Submission.',
             },
@@ -163,7 +165,7 @@ final class ModuleTracker
                 $level === ReVivaDetail::OUTCOME_DISMISSED => 'Level 5: dismissed. This is the final outcome; there is no further action.',
                 $level === ReVivaDetail::OUTCOME_LOOP_BACK => 'Level 4: another round is needed. Round '.($detail->cycle_number + 1).' opens when the student submits again.',
                 $detail->corrections_accepted_at !== null => 'Level '.$level.': final thesis accepted on '.$detail->corrections_accepted_at->format('j M Y').'. The re-viva is complete.',
-                default => 'Level '.$level.': passed with corrections'.($detail->correction_deadline ? ', due by '.$detail->correction_deadline->format('j M Y') : '').'.',
+                default => 'Level '.$level.': passed with corrections'.($detail->finalWindowText() ? ', final thesis due '.$detail->finalWindowText() : '').'.',
             };
         }
 

@@ -16,7 +16,7 @@ use App\Modules\Hani\Support\VivaProgress;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
+use Tests\Feature\Hani\Concerns\FakesAPrivateLocalDisk;
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
@@ -25,6 +25,7 @@ use Tests\TestCase;
 class HaniDemoSeederTest extends TestCase
 {
     use KeepsJobsOffTheDevQueue;
+    use FakesAPrivateLocalDisk;
     use MakesUsers;
     use RefreshDatabase;
 
@@ -32,7 +33,7 @@ class HaniDemoSeederTest extends TestCase
     {
         parent::setUp();
 
-        Storage::fake('local');
+        $this->fakePrivateLocalDisk();
         Notification::fake();
 
         foreach ([
@@ -52,6 +53,16 @@ class HaniDemoSeederTest extends TestCase
         $email = collect(json_decode(file_get_contents(HaniDemoSeeder::DATASET), true)['students'])->firstWhere('key', $key)['email'];
 
         return User::where('email', $email)->sole();
+    }
+
+    public function test_it_gives_the_dean_demo_account_the_deans_name(): void
+    {
+        $dean = $this->user(Role::DEAN_PGR, ['name' => 'Prof. Dr. Hafiz Osman', 'email' => 'dean@utp.edu.my']);
+
+        $this->seed(HaniDemoSeeder::class);
+
+        $this->assertSame('Prof. Ts. Dr. M. Fadzil Hassan', $dean->refresh()->name);
+        $this->assertSame('dean@utp.edu.my', $dean->email);
     }
 
     public function test_it_loads_the_pool_through_the_import_and_is_idempotent(): void

@@ -8,20 +8,15 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="GA Application"
+        subtitle="Admin verifies your documents, Research Centre conducts an interview, then CGS Staff, Supervisor and Senior Director CGS each decide in turn. A failed interview ends the application; it never reaches CGS." />
+
     <div class="card card-wide">
-        <h2>GA Application</h2>
-        <div class="card-divider"></div>
-
-        <p class="queue-meta">
-            Admin verifies your documents, Research Centre conducts an interview, then CGS
-            Staff, Supervisor and Senior Director CGS each decide in turn. A failed interview
-            ends the application — it never reaches CGS.
-        </p>
-
         @if ($draft ?? false)
             <div class="haziq-repeatable-row" style="border-color: var(--warning-fg);">
                 <p style="grid-column: 1 / -1;">
-                    <b>Continuing your saved draft</b> (#{{ $draft->id }}) — everything below is what
+                    <b>Continuing your saved draft</b> (#{{ $draft->id }}): everything below is what
                     you last saved. Keep editing, Save Draft again any time, or Submit Application
                     when it's ready.
                 </p>
@@ -31,7 +26,7 @@
         <form method="POST" action="{{ route('ga-application.store') }}" enctype="multipart/form-data">
             @csrf
 
-            <h3>Section B — GA Details</h3>
+            <h3>Section B: GA Details</h3>
             <label for="department_unit">Department / Unit</label>
             <input type="text" name="department_unit" id="department_unit" value="{{ old('department_unit', $draftDetail?->department_unit) }}">
 
@@ -52,11 +47,11 @@
             <label for="proposed_allowance">Proposed Allowance (RM)</label>
             <input type="number" step="0.01" min="0" name="proposed_allowance" id="proposed_allowance" required value="{{ old('proposed_allowance', $draftDetail?->proposed_allowance) }}">
 
-            <h3>Section C — Candidate Details</h3>
+            <h3>Section C: Candidate Details</h3>
             @if ($draft ?? false)
-                <p class="queue-meta">Pre-filled from your saved draft — update anything before submitting.</p>
+                <p class="queue-meta">Pre-filled from your saved draft; update anything before submitting.</p>
             @else
-                <p class="queue-meta">Every application starts blank, even if you've applied before — fill in your current details.</p>
+                <p class="queue-meta">Every application starts blank, even if you've applied before; fill in your current details.</p>
             @endif
 
             <label for="level_of_study">Level of Study</label>
@@ -72,7 +67,7 @@
             <input type="date" name="admission_date" id="admission_date" required
                    value="{{ old('admission_date', $profile?->admission_date?->format('Y-m-d')) }}">
 
-            <h3>Section D — Academic Qualification</h3>
+            <h3>Section D: Academic Qualification</h3>
             @php($academicRows = ($academics ?? collect())->isNotEmpty() ? $academics : collect([null, null, null]))
             @foreach ($academicRows as $i => $row)
                 <div class="haziq-repeatable-row">
@@ -85,7 +80,7 @@
                 </div>
             @endforeach
 
-            <h3>Section E — Working Experience</h3>
+            <h3>Section E: Working Experience</h3>
             @php($experienceRows = ($experiences ?? collect())->isNotEmpty() ? $experiences : collect([null, null]))
             @foreach ($experienceRows as $i => $row)
                 <div class="haziq-repeatable-row">
@@ -97,7 +92,7 @@
                 </div>
             @endforeach
 
-            <h3>Section F — Publications <span style="color: var(--text-grey); font-weight: normal;">(optional)</span></h3>
+            <h3>Section F: Publications <span style="color: var(--text-grey); font-weight: normal;">(optional)</span></h3>
             @php($publicationRows = ($publications ?? collect())->isNotEmpty() ? $publications : collect([null, null]))
             @foreach ($publicationRows as $i => $row)
                 <div class="haziq-repeatable-row">
@@ -108,13 +103,13 @@
                 </div>
             @endforeach
 
-            <h3>Section A — Documents</h3>
-            <p class="queue-meta">Only required to Submit — Save Draft works with none, some, or all of these uploaded.</p>
+            <h3>Section A: Documents</h3>
+            <p class="queue-meta">Only required to Submit; Save Draft works with none, some, or all of these uploaded.</p>
             @php($draftDocLabels = ($draftDocuments ?? collect())->pluck('doc_type'))
             @foreach (['resume' => 'Resume/CV', 'academic_transcript' => 'Academic Transcript', 'visa_or_ic' => 'Visa / IC'] as $field => $label)
                 <label for="{{ $field }}">{{ $label }}
                     @if ($draftDocLabels->contains($label))
-                        <span style="color: var(--success-fg);">— already uploaded, choose a file only to replace it</span>
+                        <span style="color: var(--success-fg);">: already uploaded, choose a file only to replace it</span>
                     @endif
                 </label>
                 <input type="file" name="{{ $field }}" id="{{ $field }}">

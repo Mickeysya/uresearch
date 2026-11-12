@@ -18,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\Feature\Hani\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\Support\MakesUsers;
+use Tests\Feature\Hani\Concerns\DecidesNominations;
 use Tests\TestCase;
 
 /**
@@ -26,6 +27,7 @@ use Tests\TestCase;
  */
 class ConflictDetectionActionsTest extends TestCase
 {
+    use DecidesNominations;
     use KeepsJobsOffTheDevQueue;
     use MakesUsers;
     use RefreshDatabase;
@@ -102,8 +104,7 @@ class ConflictDetectionActionsTest extends TestCase
         $actors = ['academic_exec' => $this->cast[$k]['ae'], 'cgs_compile' => $this->senior, 'senior_director' => $this->director, 'dean' => $this->dean, 'cgs_final' => $this->senior];
 
         while (($application = $application->fresh())->status === Application::STATUS_PENDING && $application->current_stage !== $to) {
-            $this->actingAs($actors[$application->current_stage])
-                ->post(route('examiner-nomination.decide', $application), ['decision' => 'approve'])
+            $this->decideNomination($actors[$application->current_stage], $application, ['decision' => 'approve'])
                 ->assertSessionHas('status');
         }
 
@@ -519,7 +520,7 @@ class ConflictDetectionActionsTest extends TestCase
         }
         $this->assertDatabaseCount('examiner_merges', 0);
 
-        $this->actingAs($this->cast['p']['ae'])->post(route('examiner-nomination.decide', $two), ['decision' => 'reject', 'remarks' => 'No.']);
+        $this->decideNomination($this->cast['p']['ae'], $two, ['decision' => 'reject', 'remarks' => 'No.']);
 
         $this->merge($keep, $other)->assertSessionHas('status');
         $this->assertSame($other->id, $this->nominationOf($two)->external_main_id);

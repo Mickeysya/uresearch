@@ -20,7 +20,7 @@ use Tests\TestCase;
 /**
  * "Within candidacy period" is checked by the system from the candidacy
  * expiry date in Study Candidacy (study_candidacies, Chloe's module); the
- * rest stays self-declared. The AE's acknowledgement confirms the lot.
+ * rest stays self-declared. The AE's verification confirms the lot.
  */
 class VivaEligibilityVerificationTest extends TestCase
 {
@@ -142,7 +142,7 @@ class VivaEligibilityVerificationTest extends TestCase
         $this->assertSame(0, Application::count());
     }
 
-    public function test_the_ae_sees_the_summary_and_acknowledging_confirms_it(): void
+    public function test_the_ae_sees_the_summary_and_verifying_confirms_it(): void
     {
         $this->candidacy(now()->subMonths(12)->toDateString(), now()->addMonths(36)->toDateString());
         $ae = $this->academicExec();
@@ -154,10 +154,10 @@ class VivaEligibilityVerificationTest extends TestCase
         $this->actingAs($ae)->get(route('viva.queue'))
             ->assertOk()
             ->assertSee('Verified by system')
-            ->assertSee('Acknowledging confirms these.');
+            ->assertSee('Submit verification');
 
-        $this->actingAs($ae)->post(route('viva.decide', $notice), ['decision' => 'approve'])
-            ->assertSessionHas('status', fn ($m) => str_contains($m, 'eligibility confirmed'));
+        $this->verifyNotice($ae, $notice)
+            ->assertSessionHas('status', fn ($m) => str_contains($m, 'verified'));
 
         $record = VivaEligibility::sole();
         $this->assertSame($ae->id, $record->verified_by_id);

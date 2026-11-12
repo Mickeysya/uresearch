@@ -291,13 +291,20 @@ class KnowledgeBase
 
             WHO DOES WHAT
             The system itself never decides an amount or a status on its own
-            initiative -- every figure traces back to a person's action. Admin
-            verifies paperwork. CGS Staff sets the actual allowance amount during
-            their review, before an application can be approved at all -- CGS is
+            initiative -- every figure traces back to a person's action. The
+            STUDENT proposes their own monthly allowance amount directly on the
+            application form, GRA and GA alike -- this was reversed 2026-11-11;
+            no approver sets or overrides this figure any more. Admin verifies
+            paperwork. CGS Staff reviews and approves their own stage -- CGS is
             also who marks a month's payment complete, with proof attached.
-            Supervisor and Senior Director CGS approve the chain and may leave
-            internal feedback on CGS's recommended amount, but that feedback is
-            never shown to the student. Research Centre conducts the GA interview.
+            Supervisor and Senior Director CGS approve the chain. If ANY
+            approver (Admin, CGS Staff, Supervisor, or Senior Director CGS)
+            is not satisfied with the student's proposed allowance, they use
+            the exact same Request Correction flow as any other wrong field --
+            there is no separate, hidden allowance-only mechanism any more, and
+            nothing about it is ever kept from the student: a correction on the
+            allowance is visible to them the same way a correction on the
+            Project Title would be. Research Centre conducts the GA interview.
             A terminated student's own appeal is decided only by a Senior
             Director. The daily Stage Gate evaluation is the one thing that runs
             automatically, without a person acting -- it only ever applies the
@@ -316,10 +323,10 @@ class KnowledgeBase
             between the two is identity versus everything else about them.
 
             WHAT A STUDENT'S OWN RECORDS NEVER INCLUDE, EVEN IF ASKED
-            A pending application's allowance amount is set by CGS but is NOT
-            shown to the student until the application is actually approved --
-            if asked about it before then, say plainly that it isn't visible yet
-            rather than guessing a figure. Nothing here ever includes another
+            The proposed allowance is the student's own figure, entered on their
+            own form -- it is visible to them at every stage, pending or
+            approved, the same as any other field they typed in; there is
+            nothing to withhold here any more. Nothing here ever includes another
             student's or another user's information; only the records of the one
             student asking. Nothing here ever includes internal staff reporting
             such as how long an approver takes, which role or individual causes

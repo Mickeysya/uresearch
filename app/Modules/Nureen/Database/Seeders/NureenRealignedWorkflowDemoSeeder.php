@@ -4,6 +4,7 @@ namespace App\Modules\Nureen\Database\Seeders;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
@@ -71,6 +72,10 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
         $coSupervisor = $this->makeUser('Dr. Faizal Hakimi', 'co-supervisor-demo@utp.edu.my', Role::SUPERVISOR, ['department' => 'Computing']);
         $chair = $this->makeUser('Dr. Lim Wei Chun', 'chair@utp.edu.my', Role::CHAIR, ['department' => 'Computing']);
         $cgs = $this->makeUser('M Syahmi Ifwat M Jafri', 'cgs@utp.edu.my', Role::NON_EXEC_CGS, ['department' => 'CGS']);
+        // Decide as the officer Nureen's modules are assigned to when that
+        // account exists (config/cgs_assignment.php); the engine refuses
+        // any other CGS officer.
+        $cgs = app(CgsAssignment::class)->officer('ga_extension') ?? $cgs;
         $director = $this->makeUser('En Zulkifly', 'director@utp.edu.my', Role::SENIOR_DIRECTOR_CGS, ['department' => 'CGS']);
 
         $gaExtStudent = $this->makeUser('Nurul Izzah', 'ga-extension-demo@utp.edu.my', Role::STUDENT, [

@@ -3,19 +3,21 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
-use App\Modules\Core\Contracts\DescribesApplicationDetails;
 use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
-use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
 use App\Modules\Core\Contracts\DescribesApplicationProgress;
-use App\Modules\Core\Contracts\SuppliesOverdueStatus;
-use App\Modules\Nureen\Support\TrackingDescriptions;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
+use App\Modules\Core\Contracts\SuppliesOverdueStatus;
+use App\Modules\Core\Contracts\SuppliesReminderCount;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
-use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 use App\Modules\Nureen\Models\SupervisionDetail;
+use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Nureen\Support\LetterRenderer;
+use App\Modules\Nureen\Support\TrackingDescriptions;
+use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 
 /**
  * Supervisor (Main or Co-) appointment requests.
@@ -44,7 +46,7 @@ use App\Modules\Nureen\Models\SupervisionDetail;
  * rather than in this class, since that write is a side effect of a
  * decision, not part of the chain itself.
  */
-class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus, DescribesApplicationProgress, DescribesApplicationDetails
+class SupervisionWorkflow implements DecidesOneAtATime, DescribesApplicationDetails, DescribesApplicationProgress, SuppliesDecisionDates, SuppliesOverdueStatus, SuppliesReminderCount, WorkflowModule
 {
     /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
     use DescribesApplicationDetailsDefaults;
@@ -87,7 +89,7 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
     {
         $detail = SupervisionDetail::where('application_id', $application->id)->first();
 
-        return app(TrackingDescriptions::class)->letter($application, \App\Modules\Nureen\Support\LetterRenderer::APPOINTMENT_DOC_TYPE, $detail?->letter_reference, $detail?->letter_revoked_at);
+        return app(TrackingDescriptions::class)->letter($application, LetterRenderer::APPOINTMENT_DOC_TYPE, $detail?->letter_reference, $detail?->letter_revoked_at);
     }
 
     /** expectedDecisionDate(): the Client Charter date, for the student dashboard. */
@@ -285,7 +287,7 @@ class SupervisionWorkflow implements WorkflowModule, DecidesOneAtATime, Supplies
      */
     protected function detailFor(Application $application): ?SupervisionDetail
     {
-        $this->details ??= new \WeakMap();
+        $this->details ??= new \WeakMap;
 
         if (isset($this->details[$application])) {
             return $this->details[$application];

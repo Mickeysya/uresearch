@@ -8,10 +8,9 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>{{ $application->student->name }} — GRA Application #{{ $application->id }}</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header title="{{ $application->student->name }}: GRA Application #{{ $application->id }}" />
 
+    <div class="card card-wide">
         <x-core::stepper :application="$application" />
 
         <p class="queue-meta" style="margin-top: 16px;">
@@ -48,7 +47,7 @@
         @if ($terminated ?? false)
             <div class="haziq-repeatable-row" style="border-color: var(--danger-fg); background: var(--danger-bg);">
                 <p style="grid-column: 1 / -1;">
-                    <b>This appointment has been terminated</b> — a Stage Gate requirement was not completed
+                    <b>This appointment has been terminated</b>: a Stage Gate requirement was not completed
                     within its grace period.
                     @if ($application->student_id === auth()->id())
                         You can submit a new GRA application any time.
@@ -61,12 +60,12 @@
             <div class="haziq-repeatable-row" style="border-color: var(--danger-fg);">
                 <p style="grid-column: 1 / -1;"><b>Awaiting student action:</b></p>
                 @foreach ($openCorrections as $req)
-                    <p>{{ $req->target_label }} — <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>
+                    <p>{{ $req->target_label }}: <span style="color: var(--text-grey);">{{ $req->remarks }}</span></p>
                 @endforeach
             </div>
         @endif
 
-        <h3>Section B — Project Details</h3>
+        <h3>Section B: Project Details</h3>
         <div class="haziq-repeatable-row">
             <p><b>Project Title</b><br>{{ $detail->project_title }}</p>
             <p><b>Project Leader</b><br>{{ $detail->project_leader_name }}</p>
@@ -77,13 +76,18 @@
             @if ($detail->isExtension())
                 <p><b>Funding Continuation</b><br>{{ $detail->funding_continuation === 'new' ? 'New Grant' : 'Existing Grant' }}</p>
             @endif
+            <p><b>Proposed Allowance</b><br>
+                RM {{ number_format($detail->proposed_allowance, 2) }}
+                @if ($detail->isExtension() && $detail->previous_allowance !== null) (was RM {{ number_format($detail->previous_allowance, 2) }}) @endif
+            </p>
         </div>
 
-        <h3>Section C — GRA Details</h3>
+        <h3>Section C: GRA Details</h3>
         @if ($profile)
             <div class="haziq-repeatable-row">
                 <p><b>Programme</b><br>{{ $profile->programme }} ({{ strtoupper($profile->level_of_study) }})</p>
                 <p><b>Admission Date</b><br>{{ $profile->admission_date->format('j M Y') }}</p>
+                <p><b>Period Candidature</b><br>{{ $profile->candidature_period ?? '—' }}</p>
                 <p><b>Mode of Study</b><br>{{ $profile->mode_of_study ?? '—' }}</p>
                 <p><b>Thesis Title</b><br>{{ $profile->thesis_title ?? '—' }}</p>
                 <p><b>Co-Supervisor</b><br>{{ $profile->coSupervisor?->name ?? '—' }}</p>
@@ -105,61 +109,9 @@
                 </p>
             </div>
         @endif
-        @php($allowanceVisible = ! ($viewerIsStudent ?? false) || $application->status === \App\Modules\Core\Models\Application::STATUS_APPROVED)
-        <p>Service: {{ $detail->service_start_date->format('j M Y') }} to {{ $detail->service_end_date->format('j M Y') }}
-            &middot; Allowance:
-            @if (! $allowanceVisible)
-                <span style="color: var(--text-grey);">to be confirmed once your application is fully approved</span>
-            @elseif ($detail->proposed_allowance === null)
-                <span style="color: var(--text-grey);">not yet set by CGS</span>
-            @else
-                RM {{ number_format($detail->proposed_allowance, 2) }}
-                @if ($detail->isExtension()) (was RM {{ number_format($detail->previous_allowance, 2) }}) @endif
-            @endif
-        </p>
+        <p>Service: {{ $detail->service_start_date->format('j M Y') }} to {{ $detail->service_end_date->format('j M Y') }}</p>
 
-        @unless ($viewerIsStudent ?? false)
-            {{-- Internal only — never rendered on the student's own view
-                 (showMine() always passes an empty collection for it, and
-                 $canFlagAllowance is always false there), see
-                 AllowanceRecommendationNote's migration for why. --}}
-            @if ($allowanceNotes->isNotEmpty())
-                <div class="haziq-repeatable-row" style="border-color: var(--warning-fg);">
-                    <p style="grid-column: 1 / -1;"><b>Allowance notes (internal — CGS/Admin/Supervisor/Senior Director only):</b></p>
-                    @foreach ($allowanceNotes as $note)
-                        <p style="grid-column: 1 / -1;">
-                            <b>{{ $note->author->name }}</b> ({{ $note->author->roleLabel() }}), {{ $note->created_at->format('j M Y') }}
-                            — {{ $note->reason }}
-                        </p>
-                    @endforeach
-                </div>
-            @endif
-
-            @if ($canFlagAllowance ?? false)
-                <form method="POST" action="{{ route('gra-application.flag-allowance', $application) }}" style="margin-bottom: 16px;">
-                    @csrf
-                    <label for="allowance-reason-{{ $application->id }}">Flag the proposed allowance (CGS only sees this, not the student)</label>
-                    <textarea id="allowance-reason-{{ $application->id }}" name="reason" rows="2"
-                              placeholder="Why does this figure need a second look?" required></textarea>
-                    <button type="submit" class="btn-secondary" style="margin-top: 6px;">Flag Allowance</button>
-                </form>
-            @endif
-
-            @if ($canEditAllowance ?? false)
-                <form method="POST" action="{{ route('gra-application.edit-allowance', $application) }}" style="margin-bottom: 16px;">
-                    @csrf
-                    <label for="proposed_allowance-edit-{{ $application->id }}">
-                        {{ $detail->proposed_allowance === null ? 'Set' : 'Revise' }} the proposed allowance (RM)
-                    </label>
-                    <input type="number" step="0.01" min="0" id="proposed_allowance-edit-{{ $application->id }}"
-                           name="proposed_allowance" value="{{ $detail->proposed_allowance }}" required>
-                    <button type="submit" class="btn-secondary" style="margin-top: 6px;"
-                            data-confirm="Save this as the new proposed allowance?">Save Allowance</button>
-                </form>
-            @endif
-        @endunless
-
-        <h3>Section D — Academic Qualification</h3>
+        <h3>Section D: Academic Qualification</h3>
         @forelse ($academics as $row)
             <div class="haziq-repeatable-row">
                 <p>{{ $row->level_of_study }}</p>
@@ -172,7 +124,7 @@
             <p style="color: var(--text-grey);">None on record.</p>
         @endforelse
 
-        <h3>Section E — Working Experience</h3>
+        <h3>Section E: Working Experience</h3>
         @forelse ($experiences as $row)
             <div class="haziq-repeatable-row">
                 <p>{{ $row->company_name }}</p>
@@ -184,7 +136,7 @@
             <p style="color: var(--text-grey);">None on record.</p>
         @endforelse
 
-        <h3>Section F — Publications</h3>
+        <h3>Section F: Publications</h3>
         @forelse ($publications as $row)
             <div class="haziq-repeatable-row">
                 <p>{{ $row->publication_type }}</p>
@@ -202,10 +154,16 @@
         @endforelse
 
         <h3>Documents</h3>
-        @if ($application->documents->isNotEmpty())
+        {{-- Exactly the Section A checklist, same scope as the correction
+             form's own upload loop — not the generated Offer/Admission
+             letters (Mailpit has those), not Proof of Payment (Allowance
+             Eligibility has that), not a Candidature Appeal Letter (the
+             appeal's own queue/detail page has that). --}}
+        @php($applicationDocuments = $application->documents->whereIn('doc_type', array_values($documentTypes)))
+        @if ($applicationDocuments->isNotEmpty())
             <ul class="doc-list">
-                @foreach ($application->documents as $doc)
-                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }} — {{ $doc->original_name }}</a></li>
+                @foreach ($applicationDocuments as $doc)
+                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
                 @endforeach
             </ul>
         @else
@@ -223,7 +181,7 @@
         <h3>Approval History</h3>
         @forelse ($application->history as $entry)
             <p>
-                <b>{{ $entry->stage_label }}</b> — {{ $entry->decision }} by {{ $entry->approver?->name ?? '—' }}
+                <b>{{ $entry->stage_label }}</b>: {{ $entry->decision }} by {{ $entry->approver?->name ?? '—' }}
                 <span style="color: var(--text-grey);">({{ $entry->created_at->format('j M Y, g:ia') }})</span>
                 @if ($entry->remarks) <br><span style="color: var(--text-grey);">"{{ $entry->remarks }}"</span> @endif
             </p>
@@ -234,14 +192,14 @@
         @if ($resolvedCorrections->isNotEmpty())
             <h3>Resolved Corrections</h3>
             @foreach ($resolvedCorrections as $req)
-                <p>{{ $req->target_label }} — requested {{ $req->requested_at->format('j M Y') }},
+                <p>{{ $req->target_label }}: requested {{ $req->requested_at->format('j M Y') }},
                    resolved {{ $req->resolved_at->format('j M Y') }}</p>
             @endforeach
         @endif
 
         @if ($canCorrect)
             <h3>Request Correction</h3>
-            <p class="queue-meta">Any approver can flag a section or document — this doesn't reject the application, it just sends the student back to fix the one thing flagged.</p>
+            <p class="queue-meta">Any approver can flag a section or document; this doesn't reject the application, it just sends the student back to fix the one thing flagged.</p>
             @include('haziq::partials.correction_form', [
                 'application' => $application,
                 'documentTypes' => $documentTypes,
@@ -257,7 +215,7 @@
                 <form method="POST" action="{{ route('gra-application.decide', $application) }}">
                     @csrf
                     <input type="hidden" name="decision" value="approve">
-                    <p class="queue-meta">Admin verifies or requests correction (above) — there is no reject at this stage.</p>
+                    <p class="queue-meta">Admin verifies or requests correction (above); there is no reject at this stage.</p>
                     <button type="submit" data-confirm="Verify and advance this application to CGS?">Verify &amp; Advance to CGS</button>
                 </form>
             @else

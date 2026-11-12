@@ -1,5 +1,19 @@
 # Changelog: Hani's modules
 
+## 2026-11-12: UAT changes from the AE + CGS session (11 Nov)
+
+- **Changed (A)** The Dean of PGR is Prof. Ts. Dr. M. Fadzil Hassan, "Dean, Postgraduate & Research (PGR)". Re-viva letters print the Dean who approved them; the config signatory is the fallback. The demo seeder renames `dean@utp.edu.my` (SHARED_CHANGES item 12 covers the shared seeder).
+- **Changed (B1)** Final-thesis window has a minimum and a maximum: level 1 within 1 month, level 2 1 to 3 months, level 3 3 to 6 months (`reviva.final_window_months`). Upload is blocked before the minimum; late uploads are allowed and flagged Overdue.
+- **Changed (B2)** Panel limit is 20 working days for a Master's thesis and 30 for a Doctoral one; reminders Master [10, 3], PhD [5, 3, 1] (`reviva.panel_working_days`, `reviva.examiner_reminders`, replacing `external_reminders`). Re-viva Settings edits both.
+- **Changed (B3)** Re-viva emails to CGS go only to `reviva.cgs_recipients` (Waheda, Syahmi) and the department's AE; only Waheda's copy has the action button.
+- **Changed (B4)** The consolidation meeting invite goes to Waheda, the two mains and the viva chairman; the student and supervisor get an information email. A missing chairman can be typed on the form.
+- **Changed (C1)** Eligibility item 3 reads "I am an active student for this semester".
+- **Changed (C2)** The AE verifies a notice as in UCampus (per-item Verified / Not met, then Verified or Rejected with a comment). The notice takes 1 to 5 publication papers and a Research Methodology result; thesis titles are 15 words at most.
+- **Added (C3)** Automatic document checks on the notice's papers (PDF, DOI, journal, ISSN, year, acceptance wording, author name; indexing always "Needs manual check").
+- **Changed (C4)** Turnitin guidance points at ULearnX (https://ulearnx.utp.edu.my).
+- **Added (D)** DAC Compilation for the AE: compiled list (.xlsx, PDF), Record DAC approval, Not endorsed by DAC. Nothing reaches CGS without a DAC record.
+- **Added (E)** The notice goes to the student's supervisor first (`sv_endorsement`): Endorse, or Return with a comment for the student to edit and resubmit.
+
 ## 2026-11-11: Quieter student emails, demo supervisor, re-viva tracker
 
 - **Changed** A viva student no longer gets the engine's "Examiner Nomination … Progress Update" email at each approved stage. They see the nomination's status in the app; the return email (generic remarks, no names) still goes.

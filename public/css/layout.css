@@ -2165,6 +2165,38 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 .queue-row-age.tone-warn { color: var(--warning-fg); }
 .queue-row-age.tone-critical { color: var(--danger-fg); }
 
+/* Which CGS officer the row belongs to (config/cgs_assignment.php), and
+   on an escalated row why someone else may act. Neutral, not a warning:
+   most rows are simply someone's. */
+.queue-row-assignee {
+    flex-shrink: 0;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-2);
+    font-size: var(--text-xs);
+    color: var(--text-body);
+}
+.queue-row-cover {
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--warning-bg);
+    color: var(--warning-fg);
+    font-weight: var(--weight-semi);
+}
+
+/* In place of the decision form for an officer the module is not
+   assigned to. */
+.decision-readonly {
+    margin: var(--space-4) 0 0;
+    padding: var(--space-3) var(--space-4);
+    border: 1px dashed var(--border-grey);
+    border-radius: var(--radius-sm);
+    background: var(--surface-sunken);
+    color: var(--text-body);
+    font-size: var(--text-sm);
+}
+
 .queue-row-chevron { flex-shrink: 0; display: inline-flex; color: var(--text-grey); }
 .queue-row-chevron svg { width: 16px; height: 16px; transition: transform var(--duration-fast) var(--ease); }
 .queue-row[open] .queue-row-chevron svg { transform: rotate(180deg); }
@@ -2193,6 +2225,7 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
 @media (max-width: 720px) {
     .queue-row-summary { flex-wrap: wrap; }
     .queue-row-summary-text { flex-basis: 100%; order: 10; }
+    .queue-row-assignee { flex-basis: 100%; order: 11; }
     .queue-tool-field { flex: 1 1 100%; }
 }
 

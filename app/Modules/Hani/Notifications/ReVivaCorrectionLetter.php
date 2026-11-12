@@ -52,7 +52,7 @@ class ReVivaCorrectionLetter extends Notification implements ShouldQueue
         $mine = array_filter([$this->letter, $form]);
         $total = collect($mine)->sum(fn ($d) => $disk->size($d->path)) + $studentDocs->sum(fn ($d) => $disk->size($d->path));
         $attachAll = $total <= (int) config('hani.reviva.attachment_limit_mb', 20) * 1048576;
-        $due = $detail->panel_deadline ?? ReVivaLetters::reviewDue($sentAt);
+        $due = $detail->panel_deadline ?? ReVivaLetters::reviewDue($sentAt, $detail);
         $account = ReVivaExaminerAccounts::find($examiner);
 
         $data = [

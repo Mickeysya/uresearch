@@ -107,6 +107,14 @@ trait SeedsVivaScenarios
             ]);
         }
 
+        // The Dean of PGR's demo account carries his name, so the re-viva
+        // letters the demo approves print the right approver. The shared
+        // DatabaseSeeder still seeds the old name (SHARED_CHANGES.md item 12).
+        $deanName = (string) config('hani.reviva.signatory.name');
+        if (User::where('email', 'dean@utp.edu.my')->where('role', Role::DEAN_PGR)->update(['name' => $deanName])) {
+            $this->command?->info("  Dean of PGR demo account (dean@utp.edu.my) renamed to {$deanName}.");
+        }
+
         $this->command?->info(sprintf('  Demo people: %d supervisors, %d students (password "password").',
             count($this->dataset()['supervisors'] ?? []), count($this->dataset()['students'] ?? [])));
     }
@@ -259,12 +267,30 @@ trait SeedsVivaScenarios
             'keywords' => VivaDetail::parseKeywords($row['keywords']),
             'expected_softbound_date' => today()->subDays($filedDaysAgo)->addMonthsNoOverflow(3)->addDays(7),
         ]);
+        // Fictional documents only: a paper whose author list names the
+        // student, with a made-up DOI and ISSN, and a Research Methodology result.
         app(DocumentStore::class)->storeGenerated($notice,
-            FictionalPdfs::document('Letter of Acceptance (fictional)', ['Manuscript: '.$row['thesis_title'], 'Journal of Example Studies, accepted for publication.']),
-            'publication-proof.pdf', 'Publication Proof');
+            FictionalPdfs::document('Journal of Example Studies (fictional)', [
+                $row['thesis_title'],
+                'Authors: '.$student->name.', '.($student->supervisor?->name ?? 'A. Supervisor'),
+                'Journal of Example Studies, Vol. 12, 2026. ISSN 1234-5679',
+                'DOI: 10.5555/example.'.Str::slug($student->matric_no ?: (string) $student->id),
+                'This manuscript has been accepted for publication.',
+            ]),
+            'publication-paper-1.pdf', VivaDetail::DOC_PAPER);
+        app(DocumentStore::class)->storeGenerated($notice,
+            FictionalPdfs::document('Research Methodology result (fictional)', ['Student: '.$student->name, 'Research Methodology: Pass']),
+            'research-methodology-result.pdf', VivaDetail::DOC_METHODOLOGY);
 
         $engine->submit($notice);
         $this->backdate($notice, $filedDaysAgo);
+        \App\Modules\Hani\Jobs\RunNoticeChecks::dispatchSync($notice->id);
+
+        // The supervisor endorses first (UAT 11 Nov 2026), a day after filing,
+        // so every seeded notice is past that stage: waiting for the AE or verified.
+        if ($notice->current_stage === \App\Modules\Hani\Workflows\VivaVoceWorkflow::SUPERVISOR_STAGE) {
+            $this->at(now()->subDays(max(0, $filedDaysAgo - 1)), fn () => $engine->decide($notice, $student->supervisor, 'approve', 'Endorsed.'));
+        }
 
         if ($acknowledge) {
             // Acknowledged two days after filing, not today: approval_history
@@ -272,6 +298,10 @@ trait SeedsVivaScenarios
             $ae = $this->academicExecFor($student);
             $this->at(now()->subDays(max(0, $filedDaysAgo - 2)), fn () => $engine->decide($notice, $ae, 'approve'));
             VivaEligibility::where('student_id', $student->id)->update(['verified_by_id' => $ae->id, 'verified_at' => now()->subDays(max(0, $filedDaysAgo - 2))]);
+            VivaDetail::where('application_id', $notice->id)->update([
+                'ae_item_checks' => json_encode(array_fill_keys(array_keys(VivaChecklist::itemsFor($student)), 'verified')),
+                'ae_checked_by_id' => $ae->id, 'ae_checked_at' => now()->subDays(max(0, $filedDaysAgo - 2)),
+            ]);
         }
 
         return $notice;
@@ -323,7 +353,9 @@ trait SeedsVivaScenarios
             $stage = $application->current_stage;
             $step += $stage === 'cgs_release' ? 0 : 1;
             $this->at(now()->subDays(30 - 4 * $step)->setTime(10, 0)->addMinutes($stage === 'cgs_release' ? 30 : 0),
-                fn () => $engine->decide($application, $desks[$stage](), 'approve'));
+                fn () => $stage === 'academic_exec'
+                    ? $this->dacEndorse($application, $desks[$stage]())
+                    : $engine->decide($application, $desks[$stage](), 'approve'));
             $application->refresh();
         }
 
@@ -455,6 +487,18 @@ trait SeedsVivaScenarios
     }
 
     /** The CGS desk for a role from the test accounts, or a demo one. */
+    /** Stage 1 as the AE now decides it: a DAC record (fictional reference), then the engine's approve. */
+    protected function dacEndorse(Application $application, User $ae): void
+    {
+        $nomination = ExaminerNomination::where('application_id', $application->id)->first();
+        \App\Modules\Hani\Models\ExaminerDacRecord::create([
+            'nomination_id' => $nomination?->id, 'application_id' => $application->id,
+            'outcome' => \App\Modules\Hani\Models\ExaminerDacRecord::ENDORSED, 'meeting_date' => now()->toDateString(),
+            'reference' => 'DAC/DEMO/'.now()->format('Y/m'), 'recorded_by_id' => $ae->id,
+        ]);
+        app(WorkflowEngine::class)->decide($application, $ae, 'approve', 'Endorsed by the DAC on '.now()->format('j M Y').', ref DAC/DEMO/'.now()->format('Y/m').'.');
+    }
+
     protected function desk(string $role, string $name): User
     {
         return User::where('role', $role)->orderBy('id')->first()

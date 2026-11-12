@@ -2,13 +2,13 @@
 
 namespace App\Modules\Nureen\Http\Controllers;
 
-use App\Modules\Nureen\Support\SubmissionNotifier;
 use App\Modules\Core\Contracts\SuppliesApprovedGaApplication;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
@@ -16,13 +16,16 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionInformational;
-use App\Modules\Nureen\Support\SupervisorCheck;
 use App\Modules\Nureen\Support\ClientCharter;
 use App\Modules\Nureen\Support\Drafts;
 use App\Modules\Nureen\Support\LetterRenderer;
+use App\Modules\Nureen\Support\SubmissionNotifier;
+use App\Modules\Nureen\Support\SupervisorCheck;
 use App\Modules\Nureen\Workflows\GaExtensionWorkflow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\UnauthorizedException;
 
@@ -42,7 +45,7 @@ class GaExtensionController extends Controller
      * that matters) without one bound, the same "fail closed, not silently
      * skipped" rule Core\Services\Concerns\ReadsAttendance follows.
      *
-     * @return array{application: \App\Modules\Core\Models\Application, service_end_date: \Illuminate\Support\Carbon}|null
+     * @return array{application: Application, service_end_date: Carbon}|null
      */
     protected function approvedGaApplication(User $student): ?array
     {
@@ -80,7 +83,7 @@ class GaExtensionController extends Controller
      * approvedGaApplication()'s own docblock for why a student only ever
      * has the one.
      */
-    protected function form(Request $request, ?Application $draft, ?\Illuminate\Support\Carbon $currentEndDate)
+    protected function form(Request $request, ?Application $draft, ?Carbon $currentEndDate)
     {
         $student = $request->user()->loadMissing('supervisor');
         $detail = $draft ? GaExtensionDetail::where('application_id', $draft->id)->first() : null;
@@ -436,6 +439,11 @@ class GaExtensionController extends Controller
         $stage = $engine->currentStage($application);
         abort_unless($stage?->key === 'cgs_verify' && $request->user()->role === $stage->role, 403, 'Section J is filled at the CGS stage.');
 
+        // Section J counts as a decision (agreed 2026-11-12): only the
+        // officer GA Extension is assigned to -- or, once it is escalated,
+        // the backup -- may write it. See config/cgs_assignment.php.
+        app(CgsAssignment::class)->authorize($request->user(), $application, $stage);
+
         $fields = config('nureen.ga_extension.cgs_remarks_fields');
         $rules = [];
         foreach ($fields as $key => $field) {
@@ -659,9 +667,9 @@ class GaExtensionController extends Controller
      * approval-mode chains, so a student mid-way through either mode still
      * counts correctly against whichever stage key they're actually at.
      *
-     * @return \Illuminate\Support\Collection<int, array{key: string, label: string, count: int}>
+     * @return Collection<int, array{key: string, label: string, count: int}>
      */
-    protected function pendingByStage(): \Illuminate\Support\Collection
+    protected function pendingByStage(): Collection
     {
         $counts = Application::where('module_type', $this->moduleKey())
             ->where('status', Application::STATUS_PENDING)

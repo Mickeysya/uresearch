@@ -43,17 +43,17 @@ Source of truth: `database/seeders/DatabaseSeeder.php` (`ACADEMIC_EXECS`, `CHAIR
 
 ### CGS officers
 
-Roles follow the CGS Staff Directory: its Senior Executives are Senior Executive CGS, its Senior Assistants Non-Executive CGS. Six are one per team member; Aqil is the directory's third Senior Executive. Core routes queues by role, so each one **sees every** queue of their role; a module that emails only its own officer configures that itself (Norhanis' `Config/cgs.php` does). `cgs@utp.edu.my` and `seniorexec@utp.edu.my` above are the general accounts for those two roles.
+Roles follow the CGS Staff Directory: its Senior Executives are Senior Executive CGS, its Senior Assistants Non-Executive CGS. Six are one per team member; Aqil is the directory's third Senior Executive. Every officer still **sees every** queue of their role, but since 2026-11-12 a Non-Executive CGS stage is **decided only by the officer its module is assigned to** (`config/cgs_assignment.php`, Core's `CgsAssignment`); the others get a read-only view, and "awaiting you" and reminder emails go to the assigned officer alone. Both Hardbound modules stay open to every Non-Executive CGS. `cgs@utp.edu.my` and `seniorexec@utp.edu.my` above are the general accounts for those two roles: `cgs@` can still view everything, and decides only the open (Hardbound) modules or a row that has been escalated (overdue, with no backup set).
 
 | Email | Name | Role | Team member's modules |
 |---|---|---|---|
-| `waheda.cgs@utp.edu.my` | Puan Waheeda | Senior Executive CGS | Hani — Examiner Nomination · Conflict Detection · Re-viva (use this one for Hani's demos) |
-| `akmar.cgs@utp.edu.my` | Akmar | Senior Executive CGS | Haziq — GRA · GA · Stage Gates · Allowance Eligibility |
+| `waheda.cgs@utp.edu.my` | Puan Waheeda | Senior Executive CGS | Hani — Examiner Nomination · Conflict Detection · Re-viva (use this one for Hani's demos). Not in the assignment map, which does not cover Senior Executive CGS stages (team decision, 2026-11-12). |
+| `akmar.cgs@utp.edu.my` | Akmar | Senior Executive CGS | Haziq — GRA · GA · Stage Gates · Allowance Eligibility. Not in the assignment map: Haziq's modules are open to every Non-Executive CGS officer, and Akmar stays Senior Executive CGS (team decision, 2026-11-12). |
 | `aqil.cgs@utp.edu.my` | Aqil | Senior Executive CGS | – |
 | `norshahira.cgs@utp.edu.my` | Norshahira | Non-Executive CGS | Norhanis — Travel · Publication · Claims |
-| `amirul.cgs@utp.edu.my` | Amirul | Non-Executive CGS | Chloe — Workstation · Study Candidacy |
+| `amirul.cgs@utp.edu.my` | Amirul | Non-Executive CGS | Chloe — Workstation · Study Candidacy (decides Study Candidacy Appeal's `cgs_verify` once Chloe's portal adopts the check; Workstation has no stages) |
 | `zulkifly.cgs@utp.edu.my` | Zulkifly | Non-Executive CGS | Nureen — Attendance · GA Extension · Supervision · Certification |
-| `syahmi.cgs@utp.edu.my` | Syahmi | Non-Executive CGS | Jason — Hardbound · Appeal Hardbound · Appointment Letters |
+| `syahmi.cgs@utp.edu.my` | Syahmi | Non-Executive CGS | Jason — Appointment Letters (Hardbound and Appeal Hardbound: any Non-Executive CGS) |
 
 ## Departments: Chair, Academic Executive, Research Centre and Supervisors
 
