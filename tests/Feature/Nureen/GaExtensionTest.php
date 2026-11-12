@@ -197,7 +197,7 @@ class GaExtensionTest extends TestCase
         $this->assertSame(0, Application::where('module_type', 'ga_extension')->count());
     }
 
-    public function test_a_complete_request_is_submitted_and_pending_at_the_supervisor(): void
+    public function test_a_complete_request_is_submitted_and_pending_at_admin(): void
     {
         Storage::fake('local');
 
@@ -208,7 +208,7 @@ class GaExtensionTest extends TestCase
         $application = Application::where('module_type', 'ga_extension')->sole();
 
         $this->assertSame(Application::STATUS_PENDING, $application->status);
-        $this->assertSame('supervisor', $application->current_stage);
+        $this->assertSame('admin_verify', $application->current_stage);
 
         $detail = GaExtensionDetail::where('application_id', $application->id)->sole();
         $this->assertTrue($detail->requested_new_end_date->greaterThan($detail->current_end_date));
@@ -244,7 +244,14 @@ class GaExtensionTest extends TestCase
         $application = Application::where('module_type', 'ga_extension')->sole();
         $this->assertSame('cgs', GaExtensionDetail::where('application_id', $application->id)->sole()->final_approver_snapshot);
 
-        // 1. Supervisor endorses.
+        // 1. Admin verifies the paperwork.
+        $this->actingAs($this->admin())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        $application->refresh();
+        $this->assertSame('supervisor', $application->current_stage);
+
+        // 2. Supervisor endorses.
         $this->actingAs($supervisor)
             ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
@@ -252,7 +259,7 @@ class GaExtensionTest extends TestCase
         $this->assertSame(Application::STATUS_PENDING, $application->status);
         $this->assertSame('cgs_verify', $application->current_stage);
 
-        // 2. Non-Executive CGS gives the final decision -- no Senior
+        // 3. Non-Executive CGS gives the final decision -- no Senior
         //    Director stage exists on this chain at all.
         $this->actingAs($this->cgs())
             ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
@@ -280,6 +287,9 @@ class GaExtensionTest extends TestCase
 
         $application = Application::where('module_type', 'ga_extension')->sole();
         $this->assertSame('senior_director', GaExtensionDetail::where('application_id', $application->id)->sole()->final_approver_snapshot);
+
+        $this->actingAs($this->admin())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
         $this->actingAs($supervisor)
             ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
@@ -366,6 +376,9 @@ class GaExtensionTest extends TestCase
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
         $application = Application::where('module_type', 'ga_extension')->sole();
 
+        $this->actingAs($this->admin())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
         $this->actingAs($supervisor)
             ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
@@ -395,6 +408,9 @@ class GaExtensionTest extends TestCase
 
         $application = Application::where('module_type', 'ga_extension')->sole();
 
+        $this->actingAs($this->admin())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
         $this->actingAs($supervisor)
             ->post(route('ga-extension.decide', $application), [
                 'decision' => 'reject',
@@ -421,6 +437,9 @@ class GaExtensionTest extends TestCase
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
         $application = Application::where('module_type', 'ga_extension')->sole();
+
+        $this->actingAs($this->admin())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
         $this->actingAs($supervisor)
             ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
@@ -452,6 +471,9 @@ class GaExtensionTest extends TestCase
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
         $application = Application::where('module_type', 'ga_extension')->sole();
 
+        $this->actingAs($this->admin())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
         $this->actingAs($supervisor)
             ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
@@ -470,6 +492,9 @@ class GaExtensionTest extends TestCase
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
         $application = Application::where('module_type', 'ga_extension')->sole();
+
+        $this->actingAs($this->admin())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
         // Still sitting at the supervisor's own stage -- CGS Staff holds
         // cgs_verify, not supervisor, so the engine refuses it regardless of
@@ -495,6 +520,10 @@ class GaExtensionTest extends TestCase
         $this->approveGaApplication($student);
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->payload());
+        $application = Application::where('module_type', 'ga_extension')->sole();
+
+        $this->actingAs($this->admin())
+            ->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
 
         $this->actingAs($supervisor)
             ->get(route('ga-extension.queue'))

@@ -21,12 +21,19 @@ class GaInterviewScheduled extends Notification implements ShouldQueue
         return ['mail', 'database'];
     }
 
+    protected function when(): string
+    {
+        $ends = $this->detail->interview_ends_at?->format('g:ia') ?? '?';
+
+        return $this->detail->interview_date->format('j M Y, g:ia').' to '.$ends;
+    }
+
     public function toArray(object $notifiable): array
     {
         return [
             'application_id' => $this->application->id,
             'title' => 'GA interview scheduled',
-            'body' => 'Your GA application interview is scheduled for '.$this->detail->interview_date->format('j M Y, g:ia').'.',
+            'body' => 'Your GA application interview is scheduled for '.$this->when().'.',
         ];
     }
 
@@ -36,7 +43,7 @@ class GaInterviewScheduled extends Notification implements ShouldQueue
             ->subject("Your GA interview is scheduled — Application #{$this->application->id}")
             ->greeting('Hi '.$notifiable->name.',')
             ->line('Your interview for your GA application has been scheduled.')
-            ->line('Date: '.$this->detail->interview_date->format('j M Y, g:ia'))
+            ->line('Date: '.$this->when())
             ->action('View my application', route('ga-application.mine', $this->application));
     }
 }

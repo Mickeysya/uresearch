@@ -12,8 +12,10 @@
 <section class="sdash-card approver-panel">
     <header class="sdash-card-head">
         <h3>My candidates</h3>
-        @if ($candidateCount > $candidates->count())
-            <span class="sdash-action">{{ $candidates->count() }} of {{ $candidateCount }}</span>
+        @if ($candidateCount > 0)
+            {{-- Every candidate is in the list below (it scrolls); the full
+                 page adds a search and the rest of each student's details. --}}
+            <a href="{{ route('supervisor.candidates') }}" class="sdash-action">View all {{ $candidateCount }}</a>
         @endif
     </header>
 
@@ -25,7 +27,11 @@
             <p class="queue-meta">CGS sets the supervisor on a student's record.</p>
         </div>
     @else
-        <ul class="approver-feed approver-scroll">
+        {{-- approver-scroll like every panel body, plus cand-list: this one
+             holds every candidate, so layout.css gives it back the scrollbar
+             dashboard-states.css hides on the others -- a supervisor needs to
+             see there is more to scroll to. --}}
+        <ul class="approver-feed approver-scroll cand-list" tabindex="0" aria-label="Your candidates">
             @foreach ($candidates as $row)
                 @php
                     $student = $row['student'];

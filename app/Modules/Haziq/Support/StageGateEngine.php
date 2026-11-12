@@ -91,10 +91,16 @@ class StageGateEngine
         // Backfills every month up to and including this one, not just
         // today's — if the job missed a run (or an application only just
         // caught up), a gap here would mean a withheld month with no log
-        // row to ever back-pay against.
+        // row to ever back-pay against. GRA only -- GA was wrongly
+        // included here before 2026-11-10: GA has no Stage Gates, so
+        // governingGate() always found nothing and statusAsOf() defaulted
+        // every month to 'eligible', which is an ACCUMULATING_STATUSES
+        // value -- GA was silently running through GRA's unconfirmed-RPD
+        // ledger instead of resetting every month the way it actually
+        // should. See GaAllowanceEngine for GA's own, separate cycle.
         Application::query()
             ->where('status', Application::STATUS_APPROVED)
-            ->whereIn('module_type', ['gra_application', 'ga_application'])
+            ->where('module_type', 'gra_application')
             ->each(fn (Application $application) => $this->ensureMonthlyLogs($application));
     }
 

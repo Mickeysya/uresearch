@@ -104,6 +104,7 @@ class PublicationCertificationController extends Controller
                 ->get()
                 ->keyBy('doc_type'),
             'replaced' => $detail->evaluations()->whereNotNull('replaced_at')->get(),
+            'outstanding' => $signOffs->outstanding($detail->fresh()),
         ]);
     }
 

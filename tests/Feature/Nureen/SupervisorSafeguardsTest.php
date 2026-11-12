@@ -129,6 +129,8 @@ class SupervisorSafeguardsTest extends TestCase
         $this->actingAs($student)->post(route('ga-extension.store'), $this->gaExtensionPayload())->assertSessionHasNoErrors();
         $application = Application::where('module_type', 'ga_extension')->sole();
 
+        $this->actingAs($this->admin())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
         Notification::assertSentTo($supervisor, ApplicationAwaitingYou::class, function ($n) use ($supervisor, $application) {
             $mail = $n->toMail($supervisor);
             $text = implode(' ', array_merge($mail->introLines, [$mail->subject]));
@@ -190,8 +192,11 @@ class SupervisorSafeguardsTest extends TestCase
         $this->approveGaApplication($student, '2026-12-01');
 
         $this->actingAs($student)->post(route('ga-extension.store'), $this->gaExtensionPayload());
+        $application = Application::where('module_type', 'ga_extension')->sole();
 
-        $this->actingAs($student)->get(route('applications.show', Application::where('module_type', 'ga_extension')->sole()))
+        $this->actingAs($this->admin())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
+        $this->actingAs($student)->get(route('applications.show', $application))
             ->assertOk()
             ->assertSee('Waiting for <b>Dr. Aisyah Rahman, your supervisor</b>.', false);
     }

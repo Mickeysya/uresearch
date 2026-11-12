@@ -89,7 +89,10 @@ class ClientCharterTest extends TestCase
         // Monday + 3 = Thursday; + 2 more = the following Monday.
         $this->assertSame('2026-11-05', $expected['stage_due_date']->format('Y-m-d'));
         $this->assertSame('2026-11-09', $expected['expected_date']->format('Y-m-d'));
-        $this->assertSame(5, $expected['total_charter_days']);
+        // Total is the whole chain's own charter days, not just what's
+        // left ahead -- admin_verify(2) + supervisor(3) + cgs_verify(2),
+        // even though this fixture starts already past admin_verify.
+        $this->assertSame(7, $expected['total_charter_days']);
         $this->assertNull($expected['untimed_stage']);
     }
 

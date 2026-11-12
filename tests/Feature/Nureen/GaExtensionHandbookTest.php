@@ -98,6 +98,9 @@ class GaExtensionHandbookTest extends TestCase
             ->post(route('ga-extension.store'), $this->gaExtensionFields(['mode_of_study' => 'part_time']) + $this->gaExtensionDocuments())
             ->assertSessionHasNoErrors();
 
+        $application = Application::where('module_type', 'ga_extension')->sole();
+        $this->actingAs($this->admin())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+
         $this->actingAs($supervisor)->get(route('ga-extension.queue'))
             ->assertSee('Full-time research student')
             ->assertSee('Part-time · Research: GA is for full-time research students only');

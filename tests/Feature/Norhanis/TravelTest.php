@@ -88,6 +88,30 @@ class TravelTest extends TestCase
             ->assertSessionHasErrors('supporting_document');
     }
 
+    public function test_the_supporting_document_takes_exactly_one_file(): void
+    {
+        $pdf = fn (string $name) => \Illuminate\Http\UploadedFile::fake()->create($name, 20, 'application/pdf');
+
+        $this->actingAs($this->student())
+            ->post(route('travel.store'), $this->payload(['supporting_document' => [$pdf('a.pdf'), $pdf('b.pdf')]]))
+            ->assertSessionHasErrors(['supporting_document' => 'Attach one file only for the Supporting Document.']);
+        $this->assertSame(0, Application::where('module_type', 'travel')->count());
+
+        // A plain single-file input, and no Publication-only compile note.
+        $this->get(route('travel.create'))->assertOk()
+            ->assertSee('<input type="file" name="supporting_document" id="supporting_document"', false)
+            ->assertDontSee('name="supporting_document[]"', false)
+            ->assertDontSee('multiple', false)
+            ->assertDontSee('Compile the file into 1');
+    }
+
+    public function test_a_single_supporting_document_is_stored_once(): void
+    {
+        $application = $this->submit();
+
+        $this->assertSame(1, $application->documents()->where('doc_type', 'Supporting Document')->count());
+    }
+
     public function test_the_cost_centre_is_optional_and_saved_when_given(): void
     {
         $with = $this->submitAs($this->student('22001001', 'a@test.my'), ['cost_centre' => 'YUTP-015LC0-123']);
@@ -155,6 +179,17 @@ class TravelTest extends TestCase
         $this->assertSame(5, $detail->duration_days, 'Duration must be computed from the dates, inclusive.');
     }
 
+    public function test_type_of_request_starts_on_select_and_must_be_chosen(): void
+    {
+        $this->actingAs($this->student());
+
+        $this->get(route('travel.create'))->assertOk()
+            ->assertSeeInOrder(['id="type_of_request"', '<option value="">-- Select --</option>', 'value="research_attachment"'], false);
+
+        $this->post(route('travel.store'), $this->payload(['type_of_request' => '']))
+            ->assertSessionHasErrors('type_of_request');
+    }
+
     public function test_an_end_date_before_the_start_is_rejected(): void
     {
         $this->actingAs($this->student());
@@ -162,9 +197,50 @@ class TravelTest extends TestCase
         $this->post(route('travel.store'), $this->payload([
             'travel_start_date' => now()->addDays(10)->toDateString(),
             'travel_end_date' => now()->addDays(3)->toDateString(),
-        ]))->assertSessionHasErrors('travel_end_date');
+        ]))->assertSessionHasErrors(['travel_end_date' => 'The end date must be on or after the start date.']);
 
         $this->assertSame(0, Application::where('module_type', 'travel')->count());
+    }
+
+    public function test_a_same_day_trip_is_accepted(): void
+    {
+        $day = now()->addDays(20);
+
+        $application = $this->submit([
+            'travel_start_date' => $day->toDateString(),
+            'travel_end_date' => $day->toDateString(),
+        ]);
+
+        $detail = \App\Modules\Norhanis\Models\TravelDetail::where('application_id', $application->id)->sole();
+        $this->assertSame($day->toDateString(), $detail->travel_end_date->toDateString());
+    }
+
+    public function test_an_end_date_after_the_start_is_accepted(): void
+    {
+        $application = $this->submit([
+            'travel_start_date' => now()->addDays(20)->toDateString(),
+            'travel_end_date' => now()->addDays(25)->toDateString(),
+        ]);
+
+        $detail = \App\Modules\Norhanis\Models\TravelDetail::where('application_id', $application->id)->sole();
+        $this->assertSame(now()->addDays(25)->toDateString(), $detail->travel_end_date->toDateString());
+    }
+
+    public function test_the_end_date_cannot_be_picked_before_the_start_date_in_the_form(): void
+    {
+        $this->actingAs($this->student())->get(route('travel.create'))->assertOk()
+            // Before a start date is chosen the end date's floor is today, like the start's.
+            ->assertSee('id="travel_end_date" required'."\n".'                   min="'.now()->toDateString().'"', false);
+
+        // Coming back from a failed submit, the floor is the start date that was chosen.
+        $this->post(route('travel.store'), $this->payload([
+            'travel_start_date' => now()->addDays(30)->toDateString(),
+            'travel_end_date' => now()->addDays(29)->toDateString(),
+        ]));
+        $this->get(route('travel.create'))
+            ->assertSee('min="'.now()->addDays(30)->toDateString().'"', false)
+            ->assertSee("getElementById(\"travel_start_date\")", false)
+            ->assertSee("getElementById(\"travel_end_date\")", false);
     }
 
     public function test_a_ga_gra_student_must_provide_the_ta_plan(): void
@@ -275,60 +351,24 @@ class TravelTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_only_the_applicant_can_update_the_supporting_document_and_only_for_international_travel(): void
+    public function test_the_supporting_document_cannot_be_replaced_after_submitting(): void
     {
-        $localStudent = $this->student('22002222', 'student2@test.my');
-        $local = $this->submitAs($localStudent, ['is_international' => 0]);
+        $application = $this->submit(['is_international' => 1]);
+        $original = $application->documents()->where('doc_type', 'Supporting Document')->sole();
 
-        // Local travel: the page does not apply, even for the applicant.
-        $this->actingAs($localStudent)
-            ->get(route('travel.document.edit', $local))
-            ->assertForbidden();
+        // No button on the student's own page, local or international...
+        $this->get(route('travel.show', $application))
+            ->assertOk()
+            ->assertDontSee('Update Supporting Document');
 
-        $student = $this->student('22003333', 'student3@test.my');
-        $international = $this->submitAs($student, ['is_international' => 1]);
+        // ...and no route behind it, even posted by hand.
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('travel.document.edit'));
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('travel.document.update'));
+        $this->post('/travel/'.$application->id.'/supporting-document', [
+            'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('swap.pdf', 20, 'application/pdf'),
+        ])->assertNotFound();
 
-        // Someone else's international application.
-        $this->actingAs($this->student('22004444', 'student4@test.my'))
-            ->get(route('travel.document.edit', $international))
-            ->assertForbidden();
-
-        // The applicant, on their own international application: allowed.
-        $this->actingAs($student)
-            ->get(route('travel.document.edit', $international))
-            ->assertOk();
-    }
-
-    public function test_updating_the_supporting_document_replaces_the_file_and_logs_the_history(): void
-    {
-        \Illuminate\Support\Facades\Storage::fake('local');
-        \Illuminate\Support\Facades\Notification::fake();
-
-        $student = $this->student();
-        $application = $this->submitAs($student, [
-            'is_international' => 1,
-            'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('memo-old.pdf', 40, 'application/pdf'),
-        ]);
-
-        $old = $application->documents()->where('doc_type', 'Supporting Document')->sole();
-
-        $this->actingAs($student)
-            ->post(route('travel.document.update', $application), [
-                'supporting_document' => \Illuminate\Http\UploadedFile::fake()->create('memo-new.pdf', 40, 'application/pdf'),
-            ])
-            ->assertRedirect(route('travel.show', $application));
-
-        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk('local')->exists($old->path));
-
-        $new = $application->documents()->where('doc_type', 'Supporting Document')->sole();
-        $this->assertSame('memo-new.pdf', $new->original_name);
-
-        $this->assertDatabaseHas('approval_history', [
-            'application_id' => $application->id,
-            'remarks' => 'Supporting document updated',
-        ]);
-
-        \Illuminate\Support\Facades\Notification::assertSentTo($this->sup(), \App\Modules\Norhanis\Notifications\TravelSupportingDocumentUpdated::class);
+        $this->assertSame([$original->id], $application->documents()->where('doc_type', 'Supporting Document')->pluck('id')->all());
     }
 
     public function test_the_form_renders_with_the_wizard_wired_up(): void
@@ -371,7 +411,7 @@ class TravelTest extends TestCase
         $this->get(route('travel.create'))
             ->assertOk()
             ->assertSee('You hold an active GA appointment')
-            ->assertSee('40 hours (logged since', false)
+            ->assertSee('40 hours (approved since', false)
             ->assertDontSee('Are you a GA/GRA recipient?');
     }
 
@@ -393,6 +433,39 @@ class TravelTest extends TestCase
         ]);
 
         $this->assertEquals(12, \App\Modules\Norhanis\Models\TravelTaPlan::where('application_id', $application->id)->value('hours_completed'));
+    }
+
+    public function test_the_student_sees_the_expected_decision_date_on_view_details_and_the_dates_page(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow('2026-11-10 09:00'); // a Tuesday
+        $student = $this->student();
+        $application = $this->submitAs($student, ['is_international' => 0]);
+
+        // Local travel: 4 stages at 1 working day each (Config/charter.php),
+        // from Tuesday 9am: Monday 16 November, the weekend skipped.
+        $expected = app(\App\Modules\Norhanis\Support\StageDurations::class)->estimate($application)['expected'];
+        $this->assertSame('2026-11-16', $expected->toDateString());
+
+        $this->actingAs($student)->get(route('applications.show', $application))
+            ->assertOk()
+            ->assertSee('Expected decision by')
+            ->assertSee($expected->format('j M Y'));
+
+        $this->get(route('nureen.expected-dates'))
+            ->assertOk()
+            ->assertSee('When to expect an outcome on your applications, based on the CGS Client Charter.')
+            ->assertSee('data-expected-for="'.$application->id.'"', false)
+            ->assertSee($expected->format('l, j F Y'))
+            ->assertDontSee('You have no applications awaiting a decision.');
+
+        \Illuminate\Support\Carbon::setTestNow();
+    }
+
+    public function test_the_dates_page_says_so_when_nothing_is_awaiting_a_decision(): void
+    {
+        $this->actingAs($this->student())->get(route('nureen.expected-dates'))
+            ->assertOk()
+            ->assertSee('You have no applications awaiting a decision.');
     }
 
     /* ---------------- helpers ---------------- */
@@ -418,6 +491,7 @@ class TravelTest extends TestCase
                         'activity_type' => 'Lab session',
                         'activity_date' => now()->toDateString(),
                         'hours' => $this->hours,
+                        'state' => TaHourLog::APPROVED,
                     ]);
                 }
 

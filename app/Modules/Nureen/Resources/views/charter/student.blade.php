@@ -5,16 +5,18 @@
 @section('content')
 {{--
     Each pending GA Extension, Supervision or Certification application with
-    the date Support\ClientCharter::expectedDecision() works out. Worded as
+    the date Support\ClientCharter::expectedDecision() works out, then
+    ($otherRows) any other module's pending application whose module
+    supplies a date through Core\Contracts\SuppliesDecisionDates. Worded as
     a service target, not a promise: the Client Charter is CGS's commitment
     on how long each stage should take, and this page only applies it.
 --}}
 <div class="card-container-inline">
     <x-core::page-header
         title="Expected Decision Dates"
-        subtitle="When to expect an outcome on your GA Extension, Supervision and Certification applications, based on the CGS Client Charter." />
+        subtitle="When to expect an outcome on your applications, based on the CGS Client Charter." />
 
-    @forelse ($rows as $row)
+    @foreach ($rows as $row)
         @php
             $application = $row['application'];
             $expected = $row['expected'];
@@ -59,13 +61,42 @@
                 </p>
             @endif
         </div>
-    @empty
+    @endforeach
+
+    @foreach ($otherRows as $row)
+        @php($application = $row['application'])
+        <div class="card card-wide" style="margin-bottom: var(--space-5);" data-expected-for="{{ $application->id }}">
+            <h3 style="margin: 0 0 var(--space-1);">
+                <a href="{{ route('applications.show', $application) }}">{{ $application->module()->label() }}</a>
+            </h3>
+            <p class="queue-meta" style="margin: 0 0 var(--space-3);">
+                Reference {{ $application->reference() }}
+                · Submitted {{ $application->submitted_at?->format('j M Y') }}
+                @if ($stage = $application->currentStage())
+                    · Currently with the {{ $stage->label }}
+                @endif
+            </p>
+            <p style="margin: 0; font-size: var(--text-lg);">
+                Expected decision by <b>{{ $row['date']->format('l, j F Y') }}</b>
+            </p>
+            <p class="queue-meta" style="margin: var(--space-1) 0 0;">
+                Based on the CGS Client Charter for this type of application. This is a service target, not a guaranteed date.
+            </p>
+            @if ($row['overdue'])
+                <p data-charter-overdue style="margin: var(--space-3) 0 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); border: 1px solid var(--warning-border); background: var(--warning-bg); color: var(--warning-fg);">
+                    This stage is taking longer than the Client Charter. You don't need to do anything; the reviewer has been reminded.
+                </p>
+            @endif
+        </div>
+    @endforeach
+
+    @if ($rows->isEmpty() && $otherRows->isEmpty())
         <div class="card card-wide">
             <p class="queue-meta" style="margin: 0;">
-                You have no GA Extension, Supervision or Certification applications awaiting a decision.
+                You have no applications awaiting a decision.
                 Decided applications are under <a href="{{ route('applications.index') }}">My Applications</a>.
             </p>
         </div>
-    @endforelse
+    @endif
 </div>
 @endsection

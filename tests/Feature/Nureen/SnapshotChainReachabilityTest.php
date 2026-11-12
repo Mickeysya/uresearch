@@ -70,12 +70,12 @@ class SnapshotChainReachabilityTest extends TestCase
         $keys = fn (array $stages) => array_map(fn ($s) => $s->key, $stages);
 
         config(['nureen.ga_extension.final_approver' => 'cgs', 'nureen.supervision.cgs_stage' => 'automatic']);
-        $this->assertSame(['supervisor', 'cgs_verify', 'senior_director'], $keys(app(GaExtensionWorkflow::class)->stages()));
+        $this->assertSame(['admin_verify', 'supervisor', 'cgs_verify', 'senior_director'], $keys(app(GaExtensionWorkflow::class)->stages()));
         $this->assertSame(['supervisor', 'chair', 'cgs_review'], $keys(app(SupervisionWorkflow::class)->stages()));
 
         // Per-application chains are still the snapshot, never the superset.
         $student = $this->student(attributes: ['supervisor_id' => $this->supervisor()->id]);
-        $this->assertSame(['supervisor', 'cgs_verify'], $keys(app(GaExtensionWorkflow::class)->stages($this->gaExtension($student, 'supervisor', 'cgs'))));
+        $this->assertSame(['admin_verify', 'supervisor', 'cgs_verify'], $keys(app(GaExtensionWorkflow::class)->stages($this->gaExtension($student, 'supervisor', 'cgs'))));
     }
 
     /* -----------------------------------------------------------------

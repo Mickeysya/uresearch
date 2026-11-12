@@ -17,7 +17,7 @@
 
     @if ($drafts->isEmpty())
         <div class="empty-state">
-            You have no saved drafts. Use <b>Save draft</b> on the GA Extension, Certification Letter, GRA Application or GA Application form to keep a half-finished request.
+            You have no saved drafts. Use <b>Save draft</b> on any application form to keep a half-finished request.
         </div>
     @else
         <div class="card card-wide">

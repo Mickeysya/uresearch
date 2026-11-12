@@ -623,6 +623,32 @@ button[value="rejected"]:hover {
     border-color: var(--warning-border);
 }
 
+/* GRA/GA Application's own appointment lifecycle (GraApplicationDetail /
+   GaApplicationDetail::serviceStatus()) -- 'active' reuses the same tone
+   as 'approved' since both are healthy states, just at different points
+   in the appointment's own timeline. 'inactive' (service window lapsed,
+   no termination involved) stays neutral rather than alarming red. */
+.status-badge.active {
+    background: var(--success-bg);
+    color: var(--success-fg);
+    border-color: var(--success-border);
+}
+
+.status-badge.inactive {
+    background: var(--surface-sunken);
+    color: var(--text-grey);
+    border-color: var(--border-grey);
+}
+
+/* GA Allowance Eligibility's own two states -- 'paid' reuses 'approved'
+   tone, 'pending' here means "not yet marked complete by CGS", same
+   tone as the pending workflow status above. */
+.status-badge.paid {
+    background: var(--success-bg);
+    color: var(--success-fg);
+    border-color: var(--success-border);
+}
+
 /* ============================================================
    7 · Flash messages
 
@@ -2390,6 +2416,21 @@ a.cal-up-row:hover .cal-up-title { color: var(--accent-solid); }
     min-height: 4rem;
     overflow-y: auto;
 }
+
+/* The supervisor's "My candidates" list holds every candidate, so unlike the
+   other panels it shows a thin scrollbar: with 19 students in a box that fits
+   four, a hidden bar made it look as if there were no more. Two classes, so it
+   outranks dashboard-states.css's [class*="-scroll"] hiding rule whatever the
+   load order. The max-height keeps the panel from stretching its whole row
+   to fit everyone. */
+.approver-scroll.cand-list {
+    max-height: 18rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-grey) transparent;
+}
+.approver-scroll.cand-list::-webkit-scrollbar { display: block; width: 8px; height: auto; }
+.approver-scroll.cand-list::-webkit-scrollbar-thumb { background: var(--border-grey); border-radius: 4px; }
+.approver-scroll.cand-list:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
 
 /* Nothing to add: `.sdash-stats` is a wrapping flex row (dashboard-student.css)
    and already shares the cards out at any width. A grid-template-columns was

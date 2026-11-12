@@ -34,11 +34,19 @@
         @if ($stage->key === 'admin_verify')
             {{-- Admin never rejects here — see GraApplicationController::decide(). The only
                  way to say "this is wrong" is the Request Correction form above. --}}
-            <form method="POST" action="{{ route('gra-application.decide', $application) }}">
-                @csrf
-                <input type="hidden" name="decision" value="approve">
-                <button type="submit" data-confirm="Verify and advance this application to CGS?">Verify &amp; Advance to CGS</button>
-            </form>
+            @php($missing = ($missingDocuments ?? collect())[$application->id] ?? collect())
+            @if ($missing->isNotEmpty())
+                <p class="queue-meta" style="color: var(--danger-fg);">
+                    Still missing: {{ $missing->implode(', ') }}. Can't verify until every required document is uploaded.
+                </p>
+                <button type="button" disabled title="Still missing: {{ $missing->implode(', ') }}">Verify &amp; Advance to CGS</button>
+            @else
+                <form method="POST" action="{{ route('gra-application.decide', $application) }}">
+                    @csrf
+                    <input type="hidden" name="decision" value="approve">
+                    <button type="submit" data-confirm="Verify and advance this application to CGS?">Verify &amp; Advance to CGS</button>
+                </form>
+            @endif
         @else
             @include('haziq::partials.decision_form', ['application' => $application, 'route' => route('gra-application.decide', $application)])
         @endif

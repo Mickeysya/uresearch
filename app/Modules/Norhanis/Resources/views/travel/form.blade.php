@@ -19,6 +19,9 @@
             <label for="type_of_request">Type of Request</label>
             <select name="type_of_request" id="type_of_request" required
                     class="@error('type_of_request') is-invalid @enderror">
+                {{-- Blank first, as on the other selects: without it the first
+                     type showed as chosen and a student could skip past it. --}}
+                <option value="">-- Select --</option>
                 @foreach ($requestTypes as $value => $labelText)
                     <option value="{{ $value }}" @selected(old('type_of_request') === $value)>{{ $labelText }}</option>
                 @endforeach
@@ -56,7 +59,10 @@
             <p class="message-warning" id="lead-time-warning" hidden></p>
 
             <label for="travel_end_date">End Date</label>
+            {{-- Never before the start date (same day is fine): the min follows
+                 it, see partials/date-range. --}}
             <input type="date" name="travel_end_date" id="travel_end_date" required
+                   min="{{ old('travel_start_date') ?: now()->toDateString() }}"
                    value="{{ old('travel_end_date') }}"
                    class="@error('travel_end_date') is-invalid @enderror">
             @error('travel_end_date') <p class="field-error">{{ $message }}</p> @enderror
@@ -102,8 +108,7 @@
                    class="@error('contact_person_email') is-invalid @enderror">
             @error('contact_person_email') <p class="field-error">{{ $message }}</p> @enderror
 
-            <x-nureen::multi-file-upload name="supporting_document" label="Supporting Document" :required="true"
-                :existing="$attached->get('Supporting Document', collect())" />
+            @include('norhanis::partials.file-field', ['name' => 'supporting_document', 'label' => 'Supporting Document'])
             </fieldset>
 
             {{-- The GA/GRA module says whether this student holds an appointment
@@ -114,7 +119,8 @@
             <fieldset class="fstep" data-label="Teaching Assistant (TA) Plan">
             @if ($ta['known'])
                 <p class="message-info">You hold an active {{ $ta['type'] }} appointment, so this TA plan is required.
-                   Your TA hours completed this semester are taken from your TA Hours record.</p>
+                   Your TA hours completed this semester are the hours your course lecturer has approved on your
+                   <a href="{{ route('ta-hours.index') }}">Daily Log TA Hours</a>. Submit any hours not yet logged, and have them approved, before you apply.</p>
             @else
             <p class="fstep-hint">This section is compulsory for GA/GRA students.</p>
 
@@ -140,7 +146,7 @@
                 @if ($ta['known'])
                     {{-- Shown, never posted: store() reads the same figure itself. --}}
                     <input type="text" id="ta_hours_completed" readonly
-                           value="{{ rtrim(rtrim(number_format($ta['hoursCompleted'], 2, '.', ''), '0'), '.') }} hours (logged since {{ $ta['from']->format('j M Y') }})">
+                           value="{{ rtrim(rtrim(number_format($ta['hoursCompleted'], 2, '.', ''), '0'), '.') }} hours (approved since {{ $ta['from']->format('j M Y') }})">
                 @else
                 <input type="number" name="ta_hours_completed" id="ta_hours_completed"
                        min="0" max="{{ $taHoursRequired }}" step="0.5" value="{{ old('ta_hours_completed') }}"
@@ -284,6 +290,7 @@
     })();
 </script>
 
+@include('norhanis::partials.date-range', ['start' => 'travel_start_date', 'end' => 'travel_end_date'])
 @include('core::partials.form-stepper')
 @includeIf('nureen::partials.draft-form-script')
 @include('norhanis::partials.file-remove')

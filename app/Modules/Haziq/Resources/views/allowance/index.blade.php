@@ -28,6 +28,30 @@
         </p>
 
         <form method="GET" action="{{ route('allowance.index') }}" class="haziq-filter-bar">
+            {{-- GRA and GA share this one screen and nav entry, each with
+                 its own rules/table/export underneath -- confirmed
+                 explicitly 2026-11-10: "ga allowoance eleigability masuk
+                 je dekat page allowance eligability. cuma page tu leh
+                 filter tuk ga or gra... apply for admin dah ke atas." Never
+                 for a student -- confirmed the same day: a student reaches
+                 this page through their own "My Allowance"/"My GA
+                 Allowance" link, which already only appears once that
+                 module's application is approved, so a toggle here would
+                 let them poke at a module they may have nothing approved
+                 in at all. $canExport is already exactly "not a student"
+                 in both controllers. --}}
+            @if ($canExport ?? false)
+                <select name="module" data-autosubmit>
+                    <option value="gra" @selected(($module ?? 'gra') === 'gra')>GRA</option>
+                    <option value="ga" @selected(($module ?? 'gra') === 'ga')>GA</option>
+                </select>
+            @else
+                {{-- No select to toggle, but the month filter below still
+                     has to keep whichever module this student's own link
+                     pointed at, or changing the month would silently drop
+                     back to GRA. --}}
+                <input type="hidden" name="module" value="{{ $module ?? 'gra' }}">
+            @endif
             <input type="month" name="month" value="{{ $month->format('Y-m') }}" data-autosubmit>
             <select name="status" data-autosubmit>
                 <option value="">Any Status</option>

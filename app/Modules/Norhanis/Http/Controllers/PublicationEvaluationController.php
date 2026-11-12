@@ -198,7 +198,11 @@ class PublicationEvaluationController extends Controller
                 ->with('status', 'Response saved. Every sign-off is now in, and your application has been sent to your supervisor.');
         }
 
-        return back()->with('status', 'Response saved.');
+        // Say what is still holding it, or a reply that changes nothing
+        // visible looks as if the corrections path were broken.
+        $outstanding = $signOffs->outstanding($this->ownEvaluation($request, $application, $evaluation)->fresh());
+
+        return back()->with('status', 'Response saved. Not sent to your supervisor yet: '.implode(' ', $outstanding));
     }
 
     /** The application's own evaluation row, for the student who filed it. */

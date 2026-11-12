@@ -66,6 +66,7 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
 
         $engine = app(WorkflowEngine::class);
 
+        $admin = $this->makeUser('Admin Office', 'admin@utp.edu.my', Role::ADMIN);
         $supervisor = $this->makeUser('Dr. Aisyah Rahman', 'supervisor@utp.edu.my', Role::SUPERVISOR, ['department' => 'Computing']);
         $coSupervisor = $this->makeUser('Dr. Faizal Hakimi', 'co-supervisor-demo@utp.edu.my', Role::SUPERVISOR, ['department' => 'Computing']);
         $chair = $this->makeUser('Dr. Lim Wei Chun', 'chair@utp.edu.my', Role::CHAIR, ['department' => 'Computing']);
@@ -88,7 +89,7 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
             'matric_no' => '22090005', 'department' => 'Computing', 'supervisor_id' => $supervisor->id,
         ]);
 
-        $this->gaExtensionCgsMode($engine, $gaExtStudent, $supervisor, $cgs);
+        $this->gaExtensionCgsMode($engine, $gaExtStudent, $admin, $supervisor, $cgs);
         $this->supervisionMain($engine, $mainStudent, $supervisor, $chair, $cgs);
         $this->supervisionCo($engine, $coStudent, $coSupervisor, $chair, $cgs);
         $this->certification($engine, $gaCertStudent, $supervisor, $cgs, $director, 'GA');
@@ -109,7 +110,7 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
         ]);
     }
 
-    protected function gaExtensionCgsMode(WorkflowEngine $engine, User $student, User $supervisor, User $cgs): void
+    protected function gaExtensionCgsMode(WorkflowEngine $engine, User $student, User $admin, User $supervisor, User $cgs): void
     {
         $application = Application::create([
             'student_id' => $student->id,
@@ -129,6 +130,7 @@ class NureenRealignedWorkflowDemoSeeder extends Seeder
 
         app(DemoDocuments::class)->attachRequired($application);
         $engine->submit($application);
+        $engine->decide($application, $admin, 'approve');
         $engine->decide($application, $supervisor, 'approve');
         // Final in 'cgs' mode -- no Senior Director stage on this chain.
         $engine->decide($application, $cgs, 'approve');

@@ -3,6 +3,9 @@
 namespace App\Modules\Norhanis\Workflows;
 
 use App\Modules\Core\Contracts\ProvidesLinks;
+use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\SuppliesDecisionDates;
+use App\Modules\Core\Contracts\SuppliesOverdueStatus;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
@@ -11,6 +14,8 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Norhanis\Http\Controllers\ApplicationOverviewController;
 use App\Modules\Norhanis\Models\ClaimsDetail;
 use App\Modules\Norhanis\Support\Drafts;
+use App\Modules\Norhanis\Workflows\Concerns\ExpectsDecisionByCharter;
+use App\Modules\Norhanis\Support\Roles;
 
 /**
  * Student Claims — journal publication claims only.
@@ -28,8 +33,11 @@ use App\Modules\Norhanis\Support\Drafts;
  * the Project Director happens after approval and outside this app, so it
  * is not modelled as a Stage.
  */
-class ClaimsWorkflow implements WorkflowModule, ProvidesLinks
+class ClaimsWorkflow implements WorkflowModule, ProvidesLinks, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus
 {
+    /** expectedDecisionDate() and decisionIsOverdue(): see the trait. */
+    use ExpectsDecisionByCharter;
+
     public function key(): string
     {
         return 'claims_student';
@@ -61,10 +69,24 @@ class ClaimsWorkflow implements WorkflowModule, ProvidesLinks
         return 'Journal claim · RM '.number_format($detail->total_claims, 2).' · '.$detail->bank_name;
     }
 
-    /** "Claims Applications": everyone who has applied, for those who approve claims. */
+    /**
+     * "Claims Applications": everyone who has applied, for those who approve
+     * claims. Plus Daily Log TA Hours, which UCampus files under Research
+     * Claims too: the student's log, the lecturer's approvals, or the
+     * read-only view for supervisors and CGS.
+     */
     public function links(User $user): array
     {
-        return ApplicationOverviewController::link($this, $user);
+        $links = ApplicationOverviewController::link($this, $user);
+
+        $ta = match (true) {
+            $user->isStudent() => ['label' => 'Daily Log TA Hours', 'route' => 'ta-hours.index'],
+            $user->role === Roles::LECTURER => ['label' => 'TA Hours Approvals', 'route' => 'ta-hours.approvals'],
+            $user->isAdmin(), $user->isCgs(), $user->role === Role::SUPERVISOR => ['label' => 'TA Hours', 'route' => 'ta-hours.index'],
+            default => null,
+        };
+
+        return $ta ? [...$links, $ta] : $links;
     }
 
     public function createRoute(): ?string

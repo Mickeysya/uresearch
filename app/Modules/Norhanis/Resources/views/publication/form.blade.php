@@ -67,8 +67,10 @@
                    class="@error('organizer_publisher') is-invalid @enderror">
             @error('organizer_publisher') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="venue">Venue <span style="color: var(--text-grey)">(conference only, e.g. the city and hall)</span></label>
-            <input type="text" name="venue" id="venue" value="{{ old('venue') }}"
+            {{-- Conference only: a journal has no venue. Shown and required
+                 with the scope question above, by the same script. --}}
+            <label for="venue" data-conference-only>Venue</label>
+            <input type="text" name="venue" id="venue" value="{{ old('venue') }}" data-conference-only
                    class="@error('venue') is-invalid @enderror">
             @error('venue') <p class="field-error">{{ $message }}</p> @enderror
 
@@ -79,7 +81,10 @@
             @error('conference_start_date') <p class="field-error">{{ $message }}</p> @enderror
 
             <label for="conference_end_date">Conference / Publication End Date</label>
+            {{-- Never before the start date (same day is fine): the min follows
+                 it, see partials/date-range. --}}
             <input type="date" name="conference_end_date" id="conference_end_date" required
+                   @if (old('conference_start_date')) min="{{ old('conference_start_date') }}" @endif
                    value="{{ old('conference_end_date') }}"
                    class="@error('conference_end_date') is-invalid @enderror">
             @error('conference_end_date') <p class="field-error">{{ $message }}</p> @enderror
@@ -103,20 +108,24 @@
             @error('currency_type') <p class="field-error">{{ $message }}</p> @enderror
 
             {{-- One choice, as agreed with CGS. A Letter of Undertaking is one of
-                 them, so there is no separate tick box. A split memo is not done
-                 in UResearch: CGS emails the template and the supervisor fills it. --}}
+                 them, so there is no separate tick box. The CGS & Grant split memo
+                 is not done in UResearch: CGS emails the template and the
+                 supervisor fills it. A conference may use "Others" only (the
+                 script below picks it); the server checks the same rule. --}}
             <label for="cost_centre">Cost Centre to be Utilized</label>
             <select name="cost_centre" id="cost_centre" required
                     class="@error('cost_centre') is-invalid @enderror">
                 <option value="">-- Select --</option>
                 @foreach ($costCentres as $value => $labelText)
-                    <option value="{{ $value }}" @selected(old('cost_centre') === $value)>{{ $labelText }}</option>
+                    <option value="{{ $value }}" @selected(old('cost_centre') === $value)
+                            @unless ($value === $conferenceCostCentre) data-journal-only @endunless>{{ $labelText }}</option>
                 @endforeach
             </select>
+            <p class="field-hint" data-cost-conference hidden>A conference request uses the "Others" cost centre only. Please specify it below.</p>
             @error('cost_centre') <p class="field-error">{{ $message }}</p> @enderror
 
             <p class="field-hint" data-cost-split @if (old('cost_centre') !== 'split_memo') hidden @endif>
-                CGS will email you the split memo template. Your supervisor completes it outside UResearch.
+                CGS will email you the CGS &amp; Grant - Split Memo template. Your supervisor completes it outside UResearch.
             </p>
 
             <label for="cost_centre_other" data-cost-others @if (old('cost_centre') !== 'others') hidden @endif>If "Others", please specify</label>
@@ -134,25 +143,33 @@
             @error('authors') <p class="field-error">{{ $message }}</p> @enderror
 
             <div id="authors-container">
+                {{-- Author 1 is the student: prefilled from the account
+                     (Support\ApplicantAuthor), every field still editable. --}}
+                @php($me = \App\Modules\Norhanis\Support\ApplicantAuthor::for(auth()->user()))
                 <div class="pub-person-row" data-index="0">
                     <p class="queue-meta">Author 1</p>
 
                     <label for="author_0_name"><span hidden>Author 1 </span>Name</label>
-                    <input type="text" name="authors[0][author_name]" id="author_0_name" value="{{ old('authors.0.author_name', auth()->user()->name) }}">
+                    <input type="text" name="authors[0][author_name]" id="author_0_name" required maxlength="150" value="{{ old('authors.0.author_name', $me['author_name']) }}">
                     @error('authors.0.author_name') <p class="field-error">{{ $message }}</p> @enderror
 
                     <label for="author_0_email"><span hidden>Author 1 </span>Email</label>
-                    <input type="email" name="authors[0][email]" id="author_0_email" required value="{{ old('authors.0.email', auth()->user()->email) }}">
+                    <input type="email" name="authors[0][email]" id="author_0_email" required maxlength="255" value="{{ old('authors.0.email', $me['email']) }}">
+                    @error('authors.0.email') <p class="field-error">{{ $message }}</p> @enderror
 
                     <label for="author_0_designation"><span hidden>Author 1 </span>Designation</label>
-                    <input type="text" name="authors[0][designation]" id="author_0_designation" value="{{ old('authors.0.designation') }}"
+                    <input type="text" name="authors[0][designation]" id="author_0_designation" required maxlength="150" value="{{ old('authors.0.designation', $me['designation']) }}"
                            placeholder="e.g. PhD Student, Co-Supervisor, External Collaborator">
+                    @error('authors.0.designation') <p class="field-error">{{ $message }}</p> @enderror
 
                     <label for="author_0_organisation"><span hidden>Author 1 </span>Organisation</label>
-                    <input type="text" name="authors[0][organisation]" id="author_0_organisation" value="{{ old('authors.0.organisation') }}">
+                    <input type="text" name="authors[0][organisation]" id="author_0_organisation" required maxlength="150" value="{{ old('authors.0.organisation', $me['organisation']) }}">
+                    @error('authors.0.organisation') <p class="field-error">{{ $message }}</p> @enderror
 
                     <label for="author_0_role"><span hidden>Author 1 </span>Role / Contribution</label>
-                    <input type="text" name="authors[0][role_contribution]" id="author_0_role" value="{{ old('authors.0.role_contribution') }}">
+                    <input type="text" name="authors[0][role_contribution]" id="author_0_role" required maxlength="150" value="{{ old('authors.0.role_contribution') }}"
+                           placeholder="e.g. Main author: methodology, experiments and writing">
+                    @error('authors.0.role_contribution') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
 
                 {{-- Co-authors already entered: from a saved draft, or a submit that came back with an error. --}}
@@ -161,15 +178,20 @@
                     <div class="pub-person-row" data-index="{{ $i }}">
                         <p class="queue-meta">Author {{ $i + 1 }}</p>
                         <label for="author_{{ $i }}_name"><span hidden>Author {{ $i + 1 }} </span>Name</label>
-                        <input type="text" name="authors[{{ $i }}][author_name]" id="author_{{ $i }}_name" value="{{ $author['author_name'] ?? '' }}">
+                        <input type="text" name="authors[{{ $i }}][author_name]" required id="author_{{ $i }}_name" value="{{ $author['author_name'] ?? '' }}">
+                        @error("authors.{$i}.author_name") <p class="field-error">{{ $message }}</p> @enderror
                         <label for="author_{{ $i }}_email"><span hidden>Author {{ $i + 1 }} </span>Email</label>
-                        <input type="email" name="authors[{{ $i }}][email]" id="author_{{ $i }}_email" required value="{{ $author['email'] ?? '' }}">
+                        <input type="email" name="authors[{{ $i }}][email]" required id="author_{{ $i }}_email" value="{{ $author['email'] ?? '' }}">
+                        @error("authors.{$i}.email") <p class="field-error">{{ $message }}</p> @enderror
                         <label for="author_{{ $i }}_designation"><span hidden>Author {{ $i + 1 }} </span>Designation</label>
-                        <input type="text" name="authors[{{ $i }}][designation]" id="author_{{ $i }}_designation" value="{{ $author['designation'] ?? '' }}" placeholder="e.g. PhD Student, Co-Supervisor, External Collaborator">
+                        <input type="text" name="authors[{{ $i }}][designation]" required id="author_{{ $i }}_designation" value="{{ $author['designation'] ?? '' }}" placeholder="e.g. PhD Student, Co-Supervisor, External Collaborator">
+                        @error("authors.{$i}.designation") <p class="field-error">{{ $message }}</p> @enderror
                         <label for="author_{{ $i }}_organisation"><span hidden>Author {{ $i + 1 }} </span>Organisation</label>
-                        <input type="text" name="authors[{{ $i }}][organisation]" id="author_{{ $i }}_organisation" value="{{ $author['organisation'] ?? '' }}">
+                        <input type="text" name="authors[{{ $i }}][organisation]" required id="author_{{ $i }}_organisation" value="{{ $author['organisation'] ?? '' }}">
+                        @error("authors.{$i}.organisation") <p class="field-error">{{ $message }}</p> @enderror
                         <label for="author_{{ $i }}_role"><span hidden>Author {{ $i + 1 }} </span>Role / Contribution</label>
-                        <input type="text" name="authors[{{ $i }}][role_contribution]" id="author_{{ $i }}_role" value="{{ $author['role_contribution'] ?? '' }}">
+                        <input type="text" name="authors[{{ $i }}][role_contribution]" required id="author_{{ $i }}_role" value="{{ $author['role_contribution'] ?? '' }}">
+                        @error("authors.{$i}.role_contribution") <p class="field-error">{{ $message }}</p> @enderror
                         <button type="button" class="btn-secondary remove-author-btn" style="margin-top: 8px;">Remove</button>
                     </div>
                 @endforeach
@@ -236,26 +258,21 @@
             </fieldset>
 
             <fieldset class="fstep" data-label="Documents">
-            <x-nureen::multi-file-upload name="invoice" label="Invoice" :required="true"
-                :existing="$attached->get('Invoice', collect())" />
+            <p class="fstep-hint" data-compile-hint>Compile the file into 1 if have more than 1 file.</p>
 
-            <x-nureen::multi-file-upload name="index_proof" label="Index Proof" :required="true"
-                :existing="$attached->get('Index Proof', collect())" />
+            @include('norhanis::partials.file-field', ['name' => 'invoice', 'label' => 'Invoice'])
 
-            <x-nureen::multi-file-upload name="turnitin_report" label="Turnitin Report" :required="true"
-                :existing="$attached->get('Turnitin Report', collect())" />
+            @include('norhanis::partials.file-field', ['name' => 'index_proof', 'label' => 'Index Proof'])
 
-            <x-nureen::multi-file-upload name="letter_of_acceptance" label="Letter of Acceptance" :required="true"
-                :existing="$attached->get('Letter of Acceptance', collect())" />
+            @include('norhanis::partials.file-field', ['name' => 'turnitin_report', 'label' => 'Turnitin Report'])
 
-            <x-nureen::multi-file-upload name="conference_journal_details" label="Conference/Journal Details" :required="true"
-                :existing="$attached->get('Conference/Journal Details', collect())" />
+            @include('norhanis::partials.file-field', ['name' => 'letter_of_acceptance', 'label' => 'Letter of Acceptance'])
 
-            <x-nureen::multi-file-upload name="response_to_reviewer_comment" label="Response to Reviewer Comment" :required="true"
-                :existing="$attached->get('Response to Reviewer Comment', collect())" />
+            @include('norhanis::partials.file-field', ['name' => 'conference_journal_details', 'label' => 'Conference/Journal Details'])
 
-            <x-nureen::multi-file-upload name="corrected_conference_journal_paper" label="Corrected Conference/Journal Paper" :required="true"
-                :existing="$attached->get('Corrected Conference/Journal Paper', collect())" />
+            @include('norhanis::partials.file-field', ['name' => 'response_to_reviewer_comment', 'label' => 'Response to Reviewer Comment'])
+
+            @include('norhanis::partials.file-field', ['name' => 'corrected_conference_journal_paper', 'label' => 'Corrected Conference/Journal Paper'])
 
             </fieldset>
 
@@ -265,6 +282,7 @@
     </div>
 </div>
 
+@include('norhanis::partials.date-range', ['start' => 'conference_start_date', 'end' => 'conference_end_date'])
 @include('core::partials.form-stepper')
 @includeIf('nureen::partials.draft-form-script')
 
@@ -300,15 +318,15 @@
     <div class="pub-person-row" data-index="__INDEX__">
         <p class="queue-meta">Author __LABEL__</p>
         <label for="author___INDEX___name"><span hidden>Author __LABEL__ </span>Name</label>
-        <input type="text" name="authors[__INDEX__][author_name]" id="author___INDEX___name">
+        <input type="text" name="authors[__INDEX__][author_name]" required id="author___INDEX___name">
         <label for="author___INDEX___email"><span hidden>Author __LABEL__ </span>Email</label>
-        <input type="email" name="authors[__INDEX__][email]" id="author___INDEX___email" required>
+        <input type="email" name="authors[__INDEX__][email]" required id="author___INDEX___email">
         <label for="author___INDEX___designation"><span hidden>Author __LABEL__ </span>Designation</label>
-        <input type="text" name="authors[__INDEX__][designation]" id="author___INDEX___designation" placeholder="e.g. PhD Student, Co-Supervisor, External Collaborator">
+        <input type="text" name="authors[__INDEX__][designation]" required id="author___INDEX___designation" placeholder="e.g. PhD Student, Co-Supervisor, External Collaborator">
         <label for="author___INDEX___organisation"><span hidden>Author __LABEL__ </span>Organisation</label>
-        <input type="text" name="authors[__INDEX__][organisation]" id="author___INDEX___organisation">
+        <input type="text" name="authors[__INDEX__][organisation]" required id="author___INDEX___organisation">
         <label for="author___INDEX___role"><span hidden>Author __LABEL__ </span>Role / Contribution</label>
-        <input type="text" name="authors[__INDEX__][role_contribution]" id="author___INDEX___role">
+        <input type="text" name="authors[__INDEX__][role_contribution]" required id="author___INDEX___role">
         <button type="button" class="btn-secondary remove-author-btn" style="margin-top: 8px;">Remove</button>
     </div>
 </template>
@@ -364,7 +382,27 @@
         toggle('[data-cost-split]', costCentre.value === 'split_memo');
     }
 
+    // A conference may use "Others" only: the other options are disabled
+    // and "Others" is picked for the student. A journal gets all four back.
+    function syncCostCentreChoices() {
+        const isConference = typeOfRequest.value === 'publication_conference';
+
+        costCentre.querySelectorAll('option[data-journal-only]').forEach(function (option) {
+            option.disabled = isConference;
+            option.hidden = isConference;
+        });
+        document.querySelectorAll('[data-cost-conference]').forEach(function (el) { el.hidden = ! isConference; });
+
+        if (isConference && costCentre.value !== @json($conferenceCostCentre)) {
+            costCentre.value = @json($conferenceCostCentre);
+        }
+
+        syncCostCentre();
+    }
+
     costCentre.addEventListener('change', syncCostCentre);
+    typeOfRequest.addEventListener('change', syncCostCentreChoices);
+    syncCostCentreChoices();
 
     // The signature lives in a hidden field, which the stepper's per-step
     // check skips. Hanging the message on the certify box instead means

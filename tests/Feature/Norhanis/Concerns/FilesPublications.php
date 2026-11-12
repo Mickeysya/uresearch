@@ -22,7 +22,7 @@ trait FilesPublications
     /** A complete journal application: one author (the student), two reviewers. */
     protected function payload(array $overrides = []): array
     {
-        return $overrides + [
+        $payload = $overrides + [
             'type_of_request' => 'publication_journal',
             'title_of_paper' => 'Reservoir Simulation with Graph Networks',
             'title_of_conference_journal' => 'Journal of Petroleum Science',
@@ -37,7 +37,26 @@ trait FilesPublications
             'applicant_signature' => self::SIGNATURE,
             'reviewers' => $this->reviewers(2),
         ] + $this->documents();
+
+        // Every author field is required; a test that names only a name and
+        // email gets the rest filled in. To test a missing field, unset it
+        // from the returned payload.
+        if (is_array($payload['authors'])) {
+            $payload['authors'] = array_map(
+                fn ($author) => is_array($author) ? $author + self::AUTHOR_DEFAULTS : $author,
+                $payload['authors'],
+            );
+        }
+
+        return $payload;
     }
+
+    /** What a test's authors get unless it says otherwise. */
+    protected const AUTHOR_DEFAULTS = [
+        'designation' => 'PhD Student',
+        'organisation' => 'Universiti Teknologi PETRONAS',
+        'role_contribution' => 'Methodology and writing',
+    ];
 
     /** @return array<int, array{name: string, email: string}> */
     protected function reviewers(int $count): array

@@ -82,16 +82,19 @@ class ClaimsController extends Controller
     }
 
     /**
-     * The student's own approved publications, newest first: the only ones
-     * a claim may be linked to. Scoped here, and the same list validates
-     * store(), so a claim can never name someone else's publication or one
-     * still in approval.
+     * The student's own approved journal publications, newest first: the
+     * only ones a claim may be linked to (claims are journal claims only;
+     * a conference is paid another way). Scoped here, and the same list
+     * validates store(), so a claim can never name someone else's
+     * publication, a conference, or one still in approval -- even from an
+     * edited request.
      *
      * @return \Illuminate\Support\Collection<int, PublicationDetail>
      */
     protected function approvedPublications(User $student)
     {
         return PublicationDetail::query()
+            ->where('type_of_request', 'publication_journal')
             ->whereIn('application_id', Application::query()
                 ->where('module_type', 'publication')
                 ->where('student_id', $student->id)
@@ -119,7 +122,7 @@ class ClaimsController extends Controller
 
         ], [
             'publication_application_id.required' => 'Choose the publication this claim is for.',
-            'publication_application_id.in' => 'Choose one of your own approved publications.',
+            'publication_application_id.in' => 'Choose one of your own approved journal publications.',
         ]);
 
         $application = DB::transaction(function () use ($request, $data, $engine, $documents, $draft, $removing) {
