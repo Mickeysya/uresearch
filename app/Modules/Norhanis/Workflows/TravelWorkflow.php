@@ -5,6 +5,7 @@ namespace App\Modules\Norhanis\Workflows;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Contracts\DescribesApplicationProgress;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\SuppliesOverdueStatus;
 use App\Modules\Core\Contracts\WorkflowModule;
@@ -17,6 +18,8 @@ use App\Modules\Norhanis\Models\TravelDetail;
 use Carbon\CarbonInterface;
 use App\Modules\Norhanis\Support\Drafts;
 use App\Modules\Norhanis\Workflows\Concerns\ExpectsDecisionByCharter;
+use App\Modules\Norhanis\Workflows\Concerns\NamesStageActions;
+use App\Modules\Norhanis\Support\StageAction;
 
 /**
  * Travel requests.
@@ -30,10 +33,25 @@ use App\Modules\Norhanis\Workflows\Concerns\ExpectsDecisionByCharter;
  * a chain instead means the student's stepper shows the correct number of
  * steps from the moment they submit, and nothing has to be kept in sync.
  */
-class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus
+class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarEvents, DecidesOneAtATime, SuppliesDecisionDates, SuppliesOverdueStatus, DescribesApplicationProgress
 {
     /** expectedDecisionDate() and decisionIsOverdue(): see the trait. */
     use ExpectsDecisionByCharter;
+    use NamesStageActions;
+
+    /**
+     * What each approver does: only the final approver approves -- the
+     * Senior Director CGS for local travel, the Dean of PGR for
+     * international. The one place this module's wording lives; see
+     * Support\StageAction.
+     */
+    public const ACTIONS = [
+        'supervisor' => StageAction::Endorse,
+        'chair' => StageAction::Endorse,
+        'cgs_review' => StageAction::Review,
+        'dean' => StageAction::Approve,
+        'senior_director' => StageAction::Approve,
+    ];
 
     /** @var array<int, bool> memoised per application, keyed by id */
     protected array $internationalCache = [];
@@ -75,24 +93,18 @@ class TravelWorkflow implements WorkflowModule, ProvidesLinks, SuppliesCalendarE
     protected function route(bool $international): array
     {
         return [
-            new Stage(
-                key: 'supervisor',
-                label: 'Lecturer/Supervisor',
-                role: Role::SUPERVISOR,
-                decision: 'endorsed',
-                queueTitle: 'Pending My Endorsement',
-            ),
-            new Stage('chair', 'Chair of Department', Role::CHAIR, 'endorsed'),
-            new Stage('cgs_review', 'Non-Executive CGS', Role::NON_EXEC_CGS, 'reviewed'),
+            $this->actionStage('supervisor', 'Lecturer/Supervisor', Role::SUPERVISOR),
+            $this->actionStage('chair', 'Chair of Department', Role::CHAIR),
+            $this->actionStage('cgs_review', 'Non-Executive CGS', Role::NON_EXEC_CGS),
             $international
-                ? new Stage('dean', 'Dean of PGR', Role::DEAN_PGR, 'approved')
+                ? $this->actionStage('dean', 'Dean of PGR', Role::DEAN_PGR)
                 : $this->seniorDirector(),
         ];
     }
 
     protected function seniorDirector(): Stage
     {
-        return new Stage('senior_director', 'Senior Director CGS', Role::SENIOR_DIRECTOR_CGS, 'approved');
+        return $this->actionStage('senior_director', 'Senior Director CGS', Role::SENIOR_DIRECTOR_CGS);
     }
 
     public function summary(Application $application): string

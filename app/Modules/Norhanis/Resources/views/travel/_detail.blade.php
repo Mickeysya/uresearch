@@ -39,3 +39,5 @@
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif
+
+@include('norhanis::partials.decision-form', ['application' => $application, 'route' => route($decideRoute, $application)])

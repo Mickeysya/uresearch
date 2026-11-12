@@ -31,7 +31,9 @@ class ApplicationSubmitted extends Notification implements ShouldQueue
             ->subject("{$this->module()} Application #{$this->application->id}: Submitted")
             ->greeting('Hi '.$notifiable->name.',')
             ->line("Your {$this->module()} application has been submitted.")
-            ->line('It is now with: '.($stage?->label ?? 'the first approver').'. You will be emailed after each decision.')
+            ->line('It is now with: '.($stage
+                ? $stage->label.', for '.\App\Modules\Norhanis\Support\StageAction::forStage($stage)->noun()
+                : 'the first approver').'. You will be emailed after each decision.')
             ->action('Track your application', route('applications.show', $this->application))
             ->line('Thank you for using UResearch 2.0.');
     }

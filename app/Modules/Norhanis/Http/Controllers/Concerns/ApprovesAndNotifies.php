@@ -7,7 +7,9 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
+use App\Modules\Core\Support\Stage;
 use App\Modules\Norhanis\Support\ApproverNotifier;
+use App\Modules\Norhanis\Support\StageAction;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -39,6 +41,7 @@ trait ApprovesAndNotifies
         }
 
         $before = [$application->status, $application->current_stage];
+        $stage = $application->currentStage();
 
         $response = $this->decideInCore($request, $application, $engine);
 
@@ -46,12 +49,29 @@ trait ApprovesAndNotifies
         // leaves the row as it was, and the next approver was told already.
         $application->refresh();
 
-        if ([$application->status, $application->current_stage] !== $before) {
+        if ($stage && [$application->status, $application->current_stage] !== $before) {
             app(ApproverNotifier::class)->arrived($application);
+
+            if ($request->input('decision') === 'approve') {
+                // Core's message says "approved" at every stage; this one
+                // says what the stage did (Support\StageAction).
+                $next = $application->currentStage();
+                $response->with('status', "Application #{$application->id} ".StageAction::forStage($stage)->past().'.'
+                    .($next ? " It now moves to the {$next->label}." : ' This was the final approval.'));
+            }
+
+            $this->decided($application, $stage);
         }
 
         return $response;
     }
+
+    /**
+     * After a decision went through at $stage. Nothing by default; a
+     * module's controller overrides it for work of its own (Publication's
+     * Split Memo email on final approval).
+     */
+    protected function decided(Application $application, Stage $stage): void {}
 
     /** Core's queue, narrowed for a supervisor to their own supervisees -- before the count and the page. */
     protected function queueFor(Request $request, WorkflowEngine $engine, array $with = [], ?callable $scope = null): array

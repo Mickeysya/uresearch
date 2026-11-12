@@ -5,6 +5,8 @@ namespace App\Modules\Norhanis;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Norhanis\Console\Commands\RemindStalledApplications;
 use App\Modules\Norhanis\Console\Commands\SeedDemoApplications;
+use App\Modules\Norhanis\Console\Commands\DemoSeed;
+use App\Modules\Norhanis\Console\Commands\DemoClear;
 use App\Modules\Norhanis\Support\Drafts;
 use App\Modules\Norhanis\Support\StageDurations;
 use App\Modules\Nureen\Support\Drafts as NureenDrafts;
@@ -57,6 +59,9 @@ class ModuleProvider extends ServiceProvider
             $this->commands([
                 // Example students and applications, for development only.
                 SeedDemoApplications::class,
+                // Demo data from the existing users only (local/dev).
+                DemoSeed::class,
+                DemoClear::class,
                 RemindStalledApplications::class,
             ]);
         }

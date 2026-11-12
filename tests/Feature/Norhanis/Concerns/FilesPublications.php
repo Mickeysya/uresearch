@@ -30,8 +30,6 @@ trait FilesPublications
             'conference_journal_fee' => '2500.00',
             'currency_type' => 'MYR',
             'cost_centre' => 'cgs_pay_and_claims',
-            'conference_start_date' => now()->addDays(30)->toDateString(),
-            'conference_end_date' => now()->addDays(32)->toDateString(),
             'authors' => [['author_name' => 'Ahmad Danial', 'email' => 'student@test.my']],
             'applicant_certifies' => '1',
             'applicant_signature' => self::SIGNATURE,
@@ -49,6 +47,31 @@ trait FilesPublications
         }
 
         return $payload;
+    }
+
+    /**
+     * A conference's Travel Details, every one required (UAT, 11 Nov 2026):
+     * travel 30 to 32 days from now, so a duration of 3 days.
+     *
+     * @return array<string, string>
+     */
+    protected function travelDetails(array $overrides = []): array
+    {
+        return $overrides + [
+            'travel_start_date' => now()->addDays(30)->toDateString(),
+            'travel_end_date' => now()->addDays(32)->toDateString(),
+            'reason_for_travel' => 'Present the paper',
+            'destination_address' => 'Kuala Lumpur Convention Centre',
+            'contact_person_name' => 'Dr. Siti Mariam',
+            'contact_person_no' => '012-3456789',
+            'contact_person_email' => 'siti.mariam@utp.edu.my',
+        ];
+    }
+
+    /** What a conference needs beyond a journal: its typed cost centre and its Travel Details. */
+    protected function conferenceFields(array $overrides = []): array
+    {
+        return $overrides + ['cost_centre_other' => 'FRG research grant'] + $this->travelDetails();
     }
 
     /** What a test's authors get unless it says otherwise. */

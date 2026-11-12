@@ -261,6 +261,11 @@ class SeedDemoApplications extends Command
         $application = $this->draft($student, 'publication');
         $conference = mt_rand(0, 1) === 1;
         $start = now()->addDays(mt_rand(20, 120));
+        // A conference types its cost centre (stored as "Others" with the
+        // words); a journal picks from the list. See PublicationDetail.
+        $costCentre = $conference
+            ? PublicationDetail::CONFERENCE_COST_CENTRE
+            : [PublicationDetail::PAY_AND_CLAIMS, PublicationDetail::LETTER_OF_UNDERTAKING, PublicationDetail::SPLIT_MEMO][mt_rand(0, 2)];
 
         $detail = PublicationDetail::create([
             'application_id' => $application->id,
@@ -271,11 +276,18 @@ class SeedDemoApplications extends Command
             'organizer_publisher' => 'Demo Publisher',
             'conference_journal_fee' => mt_rand(8, 30) * 100,
             'currency_type' => 'MYR',
-            // A conference may use "Others" only; a journal any of them.
-            'cost_centre' => $conference ? 'others' : ['cgs_pay_and_claims', 'cgs_letter_of_undertaking', 'split_memo'][mt_rand(0, 2)],
+            'cost_centre' => $costCentre,
             'cost_centre_other' => $conference ? 'Demo research grant' : null,
-            'conference_start_date' => $start,
-            'conference_end_date' => $start->copy()->addDays(2),
+            'wants_letter_of_undertaking' => $costCentre === PublicationDetail::LETTER_OF_UNDERTAKING,
+            // Travel Details: a conference only; a journal has no dates.
+            'travel_start_date' => $conference ? $start : null,
+            'travel_end_date' => $conference ? $start->copy()->addDays(2) : null,
+            'duration_days' => $conference ? 3 : null,
+            'reason_for_travel' => $conference ? 'Demo: present the paper' : null,
+            'destination_address' => $conference ? 'Demo Convention Centre, Kuala Lumpur' : null,
+            'contact_person_name' => $conference ? 'Demo Contact' : null,
+            'contact_person_no' => $conference ? '012-3456789' : null,
+            'contact_person_email' => $conference ? 'demo.contact@example.com' : null,
         ]);
 
         $detail->authors()->create(['author_name' => $student->name, 'email' => $student->email]);

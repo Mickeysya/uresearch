@@ -5,14 +5,21 @@
     <p><b>Type of Request:</b> {{ $detail->requestTypeLabel() }}</p>
     <p><b>Internal Reviewers Required:</b> {{ \App\Modules\Norhanis\Models\PublicationDetail::reviewersRequired($detail->type_of_request, $detail->conference_scope) }}</p>
     <p><b>Title of Paper:</b> {{ $detail->title_of_paper }}</p>
-    <p><b>Conference / Journal:</b> {{ $detail->title_of_conference_journal }}</p>
+    <p><b>{{ $detail->titleLabel() }}:</b> {{ $detail->title_of_conference_journal }}</p>
     <p><b>Organizer / Publisher:</b> {{ $detail->organizer_publisher }}</p>
-    @if ($detail->venue) <p><b>Venue:</b> {{ $detail->venue }}</p> @endif
-    <p><b>Dates:</b> {{ $detail->conference_start_date->format('j M Y') }} – {{ $detail->conference_end_date->format('j M Y') }}</p>
-    <p><b>Fee:</b> {{ $detail->currency_type }} {{ number_format($detail->conference_journal_fee, 2) }}</p>
+    <p><b>{{ $detail->feeLabelText() }}:</b> {{ $detail->currency_type }} {{ number_format($detail->conference_journal_fee, 2) }}</p>
+    {{-- Travel Details: a conference only. --}}
+    @if ($rows = $detail->travelDetailRows())
+        <p style="margin-top: 8px;"><b>Travel Details</b></p>
+        @foreach ($rows as $label => $value)
+            <p><b>{{ $label }}:</b> {{ $value }}</p>
+        @endforeach
+    @endif
     <p><b>Cost Centre to be Utilized:</b> {{ $detail->costCentreLabel() }}</p>
-    @if ($detail->cost_centre === 'split_memo')
-        <p style="color: var(--text-grey);">CGS will email the CGS &amp; Grant - Split Memo template; the supervisor completes it outside UResearch.</p>
+    @if ($detail->usesCostCentre(\App\Modules\Norhanis\Models\PublicationDetail::SPLIT_MEMO))
+        <p style="color: var(--text-grey);">On final approval the student is emailed the CGS &amp; Grant - Split Memo template and sends the signed memo to CGS.</p>
+    @elseif ($detail->usesCostCentre(\App\Modules\Norhanis\Models\PublicationDetail::LETTER_OF_UNDERTAKING))
+        <p style="color: var(--text-grey);">Letter of Undertaking: processed directly by CGS.</p>
     @endif
     @include('norhanis::partials.stage-estimate', ['application' => $application])
     @include('norhanis::pack._buttons', ['application' => $application])
@@ -68,3 +75,5 @@
 @else
     <p style="color: var(--text-grey);">Detail record missing for this application.</p>
 @endif
+
+@include('norhanis::partials.decision-form', ['application' => $application, 'route' => route($decideRoute, $application)])

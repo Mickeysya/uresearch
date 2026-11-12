@@ -11,7 +11,7 @@
         <div class="card-divider"></div>
 
         <p><b>Title of Paper:</b> {{ $detail->title_of_paper }}</p>
-        <p><b>Title of Conference / Journal:</b> {{ $detail->title_of_conference_journal }}</p>
+        <p><b>{{ $detail->titleLabel() }}:</b> {{ $detail->title_of_conference_journal }}</p>
 
         <p style="margin-top: 12px;"><b>Authors, in the order listed on the manuscript:</b></p>
         <ol style="margin: 4px 0 0 20px;">

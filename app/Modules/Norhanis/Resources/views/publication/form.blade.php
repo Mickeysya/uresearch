@@ -55,7 +55,11 @@
                    class="@error('title_of_paper') is-invalid @enderror">
             @error('title_of_paper') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="title_of_conference_journal">Title of Conference / Journal</label>
+            {{-- Labels follow the request type (script below): "Title of
+                 Conference" / "Conference Fee" or "Title of Journal" / "Journal
+                 Fee", never the two together. --}}
+            @php($typeNow = old('type_of_request'))
+            <label for="title_of_conference_journal" data-label-conference="Title of Conference" data-label-journal="Title of Journal">{{ \App\Modules\Norhanis\Models\PublicationDetail::venueTitleLabel($typeNow) }}</label>
             <input type="text" name="title_of_conference_journal" id="title_of_conference_journal" required
                    value="{{ old('title_of_conference_journal') }}"
                    class="@error('title_of_conference_journal') is-invalid @enderror">
@@ -67,32 +71,78 @@
                    class="@error('organizer_publisher') is-invalid @enderror">
             @error('organizer_publisher') <p class="field-error">{{ $message }}</p> @enderror
 
-            {{-- Conference only: a journal has no venue. Shown and required
-                 with the scope question above, by the same script. --}}
-            <label for="venue" data-conference-only>Venue</label>
-            <input type="text" name="venue" id="venue" value="{{ old('venue') }}" data-conference-only
-                   class="@error('venue') is-invalid @enderror">
-            @error('venue') <p class="field-error">{{ $message }}</p> @enderror
+            {{-- Travel Details: a conference only, inside this step so a journal
+                 never meets them (the shared stepper cannot skip a whole step).
+                 The wrapper hides the section; each field's own
+                 data-conference-only disables it for a journal, so nothing is
+                 checked or sent. No cost centre here: that is on the Cost step. --}}
+            <div class="pub-travel" data-conference-only>
+            <h3 class="pub-travel-head">Travel Details</h3>
+            <p class="field-hint" style="margin-top: 0;">Your travel to attend the conference. All fields are required.</p>
 
-            <label for="conference_start_date">Conference / Publication Start Date</label>
-            <input type="date" name="conference_start_date" id="conference_start_date" required
-                   value="{{ old('conference_start_date') }}"
-                   class="@error('conference_start_date') is-invalid @enderror">
-            @error('conference_start_date') <p class="field-error">{{ $message }}</p> @enderror
+            {{-- Conference only: shown, enabled and required with the scope
+                 question by the same script; hidden and disabled for a
+                 journal, so nothing is checked or sent. The dates behave as
+                 Travel's do (partials/date-range, Support\TravelDates). --}}
+            <label for="travel_start_date" data-conference-only>Travel Start Date</label>
+            <input type="date" name="travel_start_date" id="travel_start_date" data-conference-only
+                   min="{{ now()->toDateString() }}"
+                   value="{{ old('travel_start_date') }}"
+                   class="@error('travel_start_date') is-invalid @enderror">
+            @error('travel_start_date') <p class="field-error">{{ $message }}</p> @enderror
 
-            <label for="conference_end_date">Conference / Publication End Date</label>
-            {{-- Never before the start date (same day is fine): the min follows
-                 it, see partials/date-range. --}}
-            <input type="date" name="conference_end_date" id="conference_end_date" required
-                   @if (old('conference_start_date')) min="{{ old('conference_start_date') }}" @endif
-                   value="{{ old('conference_end_date') }}"
-                   class="@error('conference_end_date') is-invalid @enderror">
-            @error('conference_end_date') <p class="field-error">{{ $message }}</p> @enderror
+            <label for="travel_end_date" data-conference-only>Travel End Date</label>
+            <input type="date" name="travel_end_date" id="travel_end_date" data-conference-only
+                   min="{{ old('travel_start_date') ?: now()->toDateString() }}"
+                   value="{{ old('travel_end_date') }}"
+                   class="@error('travel_end_date') is-invalid @enderror">
+            @error('travel_end_date') <p class="field-error">{{ $message }}</p> @enderror
+
+            {{-- Worked out from the two dates, both days counted. Not posted:
+                 the server works it out again. --}}
+            <label for="duration_days" data-conference-only>Duration of Travelling (Days)</label>
+            <input type="text" id="duration_days" readonly tabindex="-1" data-conference-only data-duration-days
+                   placeholder="Filled in from the dates" value="">
+
+            <label for="reason_for_travel" data-conference-only>Reason for Travelling</label>
+            <input type="text" name="reason_for_travel" id="reason_for_travel" maxlength="255" data-conference-only
+                   value="{{ old('reason_for_travel') }}"
+                   class="@error('reason_for_travel') is-invalid @enderror">
+            @error('reason_for_travel') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="destination_address" data-conference-only>Destination Address</label>
+            <input type="text" name="destination_address" id="destination_address" maxlength="255" data-conference-only
+                   value="{{ old('destination_address') }}"
+                   class="@error('destination_address') is-invalid @enderror">
+            @error('destination_address') <p class="field-error">{{ $message }}</p> @enderror
+
+            <h4 class="pub-travel-subhead">Contact Person While Travelling</h4>
+
+            <label for="contact_person_name" data-conference-only>Name</label>
+            <input type="text" name="contact_person_name" id="contact_person_name" maxlength="150" data-conference-only
+                   value="{{ old('contact_person_name') }}"
+                   class="@error('contact_person_name') is-invalid @enderror">
+            @error('contact_person_name') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="contact_person_no" data-conference-only>Contact No.</label>
+            <input type="text" name="contact_person_no" id="contact_person_no" maxlength="30" data-conference-only
+                   value="{{ old('contact_person_no') }}"
+                   class="@error('contact_person_no') is-invalid @enderror">
+            @error('contact_person_no') <p class="field-error">{{ $message }}</p> @enderror
+
+            <label for="contact_person_email" data-conference-only>Email Address</label>
+            <input type="email" name="contact_person_email" id="contact_person_email" maxlength="150" data-conference-only
+                   value="{{ old('contact_person_email') }}"
+                   class="@error('contact_person_email') is-invalid @enderror">
+            @error('contact_person_email') <p class="field-error">{{ $message }}</p> @enderror
+            </div>
+
+
 
             </fieldset>
 
             <fieldset class="fstep" data-label="Cost">
-            <label for="conference_journal_fee" style="margin-top: 0;">Conference / Journal Fee</label>
+            <label for="conference_journal_fee" style="margin-top: 0;" data-label-conference="Conference Fee" data-label-journal="Journal Fee">{{ \App\Modules\Norhanis\Models\PublicationDetail::feeLabel($typeNow) }}</label>
             <input type="number" step="0.01" name="conference_journal_fee" id="conference_journal_fee" required
                    value="{{ old('conference_journal_fee', 0) }}"
                    class="@error('conference_journal_fee') is-invalid @enderror">
@@ -107,31 +157,43 @@
             </select>
             @error('currency_type') <p class="field-error">{{ $message }}</p> @enderror
 
-            {{-- One choice, as agreed with CGS. A Letter of Undertaking is one of
-                 them, so there is no separate tick box. The CGS & Grant split memo
-                 is not done in UResearch: CGS emails the template and the
-                 supervisor fills it. A conference may use "Others" only (the
-                 script below picks it); the server checks the same rule. --}}
-            <label for="cost_centre">Cost Centre to be Utilized</label>
-            <select name="cost_centre" id="cost_centre" required
+            {{-- The cost centre depends on the request type (UAT, 11 Nov 2026).
+                 A journal picks one of the four agreed with CGS, and says which
+                 if "Others". A conference has no list: it types the cost centre
+                 in one field. Both text boxes post cost_centre_other -- only the
+                 one shown is enabled -- so a saved draft refills either. The
+                 server applies the same rules (PublicationController::store()). --}}
+            @php($conference = old('type_of_request') === 'publication_conference')
+
+            <label for="cost_centre" data-cost-journal @if ($conference) hidden @endif>Cost Centre to be Utilized</label>
+            <select name="cost_centre" id="cost_centre" data-cost-journal
+                    @if ($conference) hidden disabled @else required @endif
                     class="@error('cost_centre') is-invalid @enderror">
                 <option value="">-- Select --</option>
                 @foreach ($costCentres as $value => $labelText)
-                    <option value="{{ $value }}" @selected(old('cost_centre') === $value)
-                            @unless ($value === $conferenceCostCentre) data-journal-only @endunless>{{ $labelText }}</option>
+                    <option value="{{ $value }}" @selected(old('cost_centre') === $value)>{{ $labelText }}</option>
                 @endforeach
             </select>
-            <p class="field-hint" data-cost-conference hidden>A conference request uses the "Others" cost centre only. Please specify it below.</p>
             @error('cost_centre') <p class="field-error">{{ $message }}</p> @enderror
 
-            <p class="field-hint" data-cost-split @if (old('cost_centre') !== 'split_memo') hidden @endif>
-                CGS will email you the CGS &amp; Grant - Split Memo template. Your supervisor completes it outside UResearch.
-            </p>
+            {{-- Shown whatever is chosen, so the student can choose knowing what follows. --}}
+            <div class="field-hint cost-centre-help" data-cost-journal @if ($conference) hidden @endif>
+                <p><b>Pay and Claims:</b> submit a claim in the Student Claims form after your publication has been approved.</p>
+                <p><b>Letter of Undertaking (LOU):</b> processed directly by CGS.</p>
+                <p><b>CGS &amp; Grant - Split Memo:</b> after approval, you will receive an email with the memo template and the CGS contact to submit the signed memo to.</p>
+            </div>
 
-            <label for="cost_centre_other" data-cost-others @if (old('cost_centre') !== 'others') hidden @endif>If "Others", please specify</label>
+            @php($others = ! $conference && old('cost_centre') === 'others')
+            <label for="cost_centre_other" data-cost-others @unless ($others) hidden @endunless>Please specify</label>
             <input type="text" name="cost_centre_other" id="cost_centre_other" maxlength="150" data-cost-others
                    value="{{ old('cost_centre_other') }}"
-                   @if (old('cost_centre') !== 'others') hidden disabled @endif
+                   @if ($others) required @else hidden disabled @endif
+                   class="@error('cost_centre_other') is-invalid @enderror">
+
+            <label for="cost_centre_conference" data-cost-conference @unless ($conference) hidden @endunless>Cost Centre to be Utilized</label>
+            <input type="text" name="cost_centre_other" id="cost_centre_conference" maxlength="150" data-cost-conference
+                   value="{{ old('cost_centre_other') }}"
+                   @if ($conference) required @else hidden disabled @endif
                    class="@error('cost_centre_other') is-invalid @enderror">
             @error('cost_centre_other') <p class="field-error">{{ $message }}</p> @enderror
 
@@ -282,7 +344,7 @@
     </div>
 </div>
 
-@include('norhanis::partials.date-range', ['start' => 'conference_start_date', 'end' => 'conference_end_date'])
+@include('norhanis::partials.date-range', ['start' => 'travel_start_date', 'end' => 'travel_end_date', 'duration' => 'duration_days'])
 @include('core::partials.form-stepper')
 @includeIf('nureen::partials.draft-form-script')
 
@@ -311,6 +373,17 @@
 
     .pub-person-row[hidden] {
         display: none;
+    }
+
+    /* Travel Details inside the Paper step, a conference only. */
+    .pub-travel { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border-grey); }
+    .pub-travel[hidden] { display: none; }
+    .pub-travel-head { margin: 0 0 var(--space-1); }
+    .pub-travel-subhead { margin: var(--space-5) 0 0; }
+
+    /* The three cost-centre notes under a journal's dropdown. */
+    .cost-centre-help p {
+        margin: 0 0 var(--space-1);
     }
 </style>
 
@@ -374,29 +447,32 @@
         const isConference = typeOfRequest.value === 'publication_conference';
 
         toggle('[data-conference-only]', isConference);
+
+        // "Title of Conference" / "Title of Journal", "Conference Fee" / "Journal Fee".
+        document.querySelectorAll('[data-label-conference]').forEach(function (label) {
+            label.textContent = isConference ? label.dataset.labelConference : label.dataset.labelJournal;
+        });
         toggle('[data-third-reviewer]', isConference && conferenceScope.value === 'international');
     }
 
+    // A journal: the list, its help text, and "Please specify" only for
+    // "Others" (emptied when it is hidden, so a stale answer is not sent).
+    // A conference: one typed field instead, and no list at all.
+    const costOther = document.getElementById('cost_centre_other');
+
     function syncCostCentre() {
-        toggle('[data-cost-others]', costCentre.value === 'others');
-        toggle('[data-cost-split]', costCentre.value === 'split_memo');
+        const isConference = typeOfRequest.value === 'publication_conference';
+        const others = ! isConference && costCentre.value === 'others';
+
+        if (! others) costOther.value = '';
+        toggle('[data-cost-others]', others);
     }
 
-    // A conference may use "Others" only: the other options are disabled
-    // and "Others" is picked for the student. A journal gets all four back.
     function syncCostCentreChoices() {
         const isConference = typeOfRequest.value === 'publication_conference';
 
-        costCentre.querySelectorAll('option[data-journal-only]').forEach(function (option) {
-            option.disabled = isConference;
-            option.hidden = isConference;
-        });
-        document.querySelectorAll('[data-cost-conference]').forEach(function (el) { el.hidden = ! isConference; });
-
-        if (isConference && costCentre.value !== @json($conferenceCostCentre)) {
-            costCentre.value = @json($conferenceCostCentre);
-        }
-
+        toggle('[data-cost-journal]', ! isConference);
+        toggle('[data-cost-conference]', isConference);
         syncCostCentre();
     }
 

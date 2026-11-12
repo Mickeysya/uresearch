@@ -177,8 +177,10 @@ class ApplicationOverviewController extends Controller
     }
 
     /**
-     * The sidebar link to one module's list, for CGS when it approves it.
-     * Each of the three workflows returns this from its own links().
+     * The sidebar links to one module's list and its Reports & Analytics,
+     * for CGS when it approves it. Each of the three workflows returns this
+     * from its own links(). The report has its own link because the button
+     * on the list was the only way in, and CGS could not find it.
      *
      * @return array<int, array{label: string, route: string, params: array}>
      */
@@ -190,11 +192,21 @@ class ApplicationOverviewController extends Controller
             return [];
         }
 
-        return [[
+        $links = [[
             'label' => ucfirst($slug).' Applications',
             'route' => 'norhanis.overview',
             'params' => ['module' => $slug],
         ]];
+
+        if (in_array($user->role, ApplicationReportController::REPORT_ROLES, true)) {
+            $links[] = [
+                'label' => ucfirst($slug).' Reports & Analytics',
+                'route' => 'norhanis.report',
+                'params' => ['module' => $slug],
+            ];
+        }
+
+        return $links;
     }
 
     /**

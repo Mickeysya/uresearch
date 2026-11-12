@@ -67,7 +67,7 @@
         <div class="history-trail">
             @forelse ($application->history as $entry)
                 <div class="entry">
-                    <b>{{ $entry->stage_label }}</b>: {{ $entry->decision }}
+                    <b>{{ $entry->stage_label }}</b>: {{ \App\Modules\Norhanis\Support\StageAction::decisionLabel($entry->decision) }}
                     by {{ $entry->approver->name }}
                     on {{ $entry->created_at->format('j M Y, g:ia') }}
                     @if ($entry->remarks) "{{ $entry->remarks }}" @endif

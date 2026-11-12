@@ -12,4 +12,23 @@
  */
 return [
     'officer' => env('NORHANIS_CGS_OFFICER', 'norshahira.cgs@utp.edu.my'),
+
+    /*
+     * The "CGS & Grant - Split Memo" email a student gets when a journal
+     * publication on that cost centre is finally approved (Support\SplitMemo).
+     *
+     * contact:   where the student sends the signed memo.
+     * templates: the memo template to attach, tried in order; the first
+     *            file that exists is sent. A relative path is under
+     *            storage/app. If none exists the email still goes, without
+     *            the attachment, and a warning is logged.
+     */
+    'split_memo' => [
+        'contact' => env('NORHANIS_SPLIT_MEMO_CONTACT', 'norshahira@utp.edu.my'),
+        'templates' => array_values(array_filter([
+            env('NORHANIS_SPLIT_MEMO_TEMPLATE'),
+            'templates/split-memo-template.docx',
+            'templates/split-memo-template.pdf',
+        ])),
+    ],
 ];

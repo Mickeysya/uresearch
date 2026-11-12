@@ -12,9 +12,12 @@
     <div class="card card-wide">
         {{-- A claim pays for a publication CGS has already approved, so with
              none there is nothing to claim for. See ClaimsController::create(). --}}
+        @if ($ignoredLink ?? false)
+            <p class="message-warning">That publication cannot be claimed: it is not one of your approved Pay and Claims journal publications, or it has already been claimed.</p>
+        @endif
+
         @if ($publications->isEmpty())
-            <p class="message-info">You have no approved journal publication yet. A claim must be for a
-               journal publication application that has been approved, so you can claim once yours is.</p>
+            <p class="message-info">You have no publication you can claim for yet. Only approved journal publications that used the Pay and Claims cost centre can be claimed, once each, so you can claim once one of yours is approved.</p>
             <p><a href="{{ route('publication.create') }}">Apply for publication funding</a></p>
         @else
         <form method="POST" action="{{ route('claims.store') }}" enctype="multipart/form-data" class="app-form" data-stepper
@@ -23,37 +26,55 @@
             @include('norhanis::partials.draft-fields')
 
             <fieldset class="fstep" data-label="Claim details">
-            <p class="fstep-hint">Journal publication claims only. Choose the approved publication you are claiming for, then enter the amount and where it should be paid.</p>
+            <p class="fstep-hint">Only approved journal publications that used the Pay and Claims cost centre can be claimed. Check the publication you are claiming for, then enter the amount and where it should be paid.</p>
 
-            <label for="publication_application_id">Publication</label>
-            <select name="publication_application_id" id="publication_application_id" required
-                    class="@error('publication_application_id') is-invalid @enderror">
-                <option value="">-- Select an approved publication --</option>
-                @foreach ($publications as $publication)
-                    <option value="{{ $publication->application_id }}" @selected((string) old('publication_application_id') === (string) $publication->application_id)
-                            data-title="{{ $publication->title_of_paper }}"
-                            data-journal="{{ $publication->title_of_conference_journal }}"
-                            data-publisher="{{ $publication->organizer_publisher }}"
-                            data-fee="{{ number_format((float) $publication->conference_journal_fee, 2, '.', '') }}"
-                            data-fee-shown="{{ number_format((float) $publication->conference_journal_fee, 2) }}"
-                            data-currency="{{ $publication->currency_type }}"
-                            data-cost-centre="{{ $publication->costCentreLabel() }}">
-                        #{{ $publication->application_id }} · {{ $publication->title_of_paper }} ({{ $publication->title_of_conference_journal }})
-                        · {{ $publication->currency_type }} {{ number_format((float) $publication->conference_journal_fee, 2) }}
-                    </option>
-                @endforeach
-            </select>
+            {{-- One claimable publication: no choice to make, so no dropdown;
+                 it is posted as a hidden field and shown below. Several: the
+                 dropdown, short ("#ID · Title") so it is not cut off, with a
+                 deep link's (?publication=) or a draft's choice preselected.
+                 The server checks the same list (ClaimablePublications). --}}
+            @php
+                $single = $publications->count() === 1 ? $publications->first() : null;
+                $wanted = (string) old('publication_application_id', $preselected ?? '');
+                $chosen = $single ?? $publications->first(fn ($p) => (string) $p->application_id === $wanted);
+                $data = fn ($p) => [
+                    'data-title' => $p->title_of_paper,
+                    'data-journal' => $p->title_of_conference_journal,
+                    'data-publisher' => $p->organizer_publisher,
+                    'data-fee' => number_format((float) $p->conference_journal_fee, 2, '.', ''),
+                    'data-fee-shown' => number_format((float) $p->conference_journal_fee, 2),
+                    'data-currency' => $p->currency_type,
+                    'data-cost-centre' => $p->costCentreLabel(),
+                ];
+            @endphp
+
+            @if ($single)
+                <p class="queue-meta" style="margin-top: 0;"><b>Publication:</b> #{{ $single->application_id }} · {{ $single->title_of_paper }}</p>
+                <input type="hidden" name="publication_application_id" id="publication_application_id" value="{{ $single->application_id }}"
+                       @foreach ($data($single) as $attribute => $value) {{ $attribute }}="{{ $value }}" @endforeach>
+            @else
+                <label for="publication_application_id">Publication</label>
+                <select name="publication_application_id" id="publication_application_id" required
+                        class="@error('publication_application_id') is-invalid @enderror">
+                    <option value="">-- Select an approved Pay and Claims publication --</option>
+                    @foreach ($publications as $publication)
+                        <option value="{{ $publication->application_id }}" @selected($chosen?->is($publication))
+                                @foreach ($data($publication) as $attribute => $value) {{ $attribute }}="{{ $value }}" @endforeach>#{{ $publication->application_id }} · {{ $publication->title_of_paper }}</option>
+                    @endforeach
+                </select>
+            @endif
             @error('publication_application_id') <p class="field-error">{{ $message }}</p> @enderror
 
             {{-- What the chosen publication says, read-only, so the amount can be
-                 checked against it. Filled by the script below from the option's
-                 data attributes (textContent only, never HTML). --}}
-            <div class="claim-publication" data-publication-summary hidden>
+                 checked against it. Filled here for the publication already
+                 chosen, and by the script below when the choice changes
+                 (textContent only, never HTML). --}}
+            <div class="claim-publication" data-publication-summary @unless ($chosen) hidden @endunless>
                 <dl>
-                    <dt>Title</dt><dd data-summary="title"></dd>
-                    <dt>Journal / Publisher</dt><dd data-summary="venue"></dd>
-                    <dt>Fee</dt><dd data-summary="fee"></dd>
-                    <dt>Cost centre</dt><dd data-summary="costCentre"></dd>
+                    <dt>Title of Paper</dt><dd data-summary="title">{{ $chosen?->title_of_paper }}</dd>
+                    <dt>Title of Journal / Publisher</dt><dd data-summary="venue">{{ $chosen ? $chosen->title_of_conference_journal.' / '.$chosen->organizer_publisher : '' }}</dd>
+                    <dt>Journal Fee</dt><dd data-summary="fee">{{ $chosen ? $chosen->currency_type.' '.number_format((float) $chosen->conference_journal_fee, 2) : '' }}</dd>
+                    <dt>Cost centre</dt><dd data-summary="costCentre">{{ $chosen?->costCentreLabel() }}</dd>
                 </dl>
             </div>
 
@@ -121,7 +142,9 @@
         function field(name) { return box.querySelector('[data-summary="' + name + '"]'); }
 
         function sync(initial) {
-            var option = select.options[select.selectedIndex];
+            // A dropdown's chosen option, or the hidden field that stands in
+            // for it when there is only one publication to claim.
+            var option = select.tagName === 'SELECT' ? select.options[select.selectedIndex] : select;
             var chosen = option && option.value !== '';
 
             box.hidden = ! chosen;
@@ -153,7 +176,7 @@
             }
         }
 
-        select.addEventListener('change', function () { sync(false); });
+        if (select.tagName === 'SELECT') select.addEventListener('change', function () { sync(false); });
         sync(true);
     })();
 </script>
