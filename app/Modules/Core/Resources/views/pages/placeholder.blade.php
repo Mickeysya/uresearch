@@ -13,5 +13,6 @@
             <p style="margin: 0;">{{ $description }}</p>
         </div>
     </div>
+    @includeWhen(request()->routeIs('cgs.reports.index') && view()->exists('norhanis::report._cgs_reports_links'), 'norhanis::report._cgs_reports_links')
 </div>
 @endsection

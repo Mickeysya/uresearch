@@ -4,6 +4,7 @@ namespace App\Modules\Norhanis\Http\Controllers;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApprovalHistory;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Support\StageDurations;
@@ -115,6 +116,7 @@ class ApplicationReportController extends ApplicationOverviewController
         $charter = $this->charterOf($registry, $shown);
         $months = $this->intakeByMonth($applications, $slugs);
         $labels = array_map(fn (string $key) => $registry->get($key)->label(), $shown);
+        $monthly = $this->monthlyCounts($applications, $shown, $period);
 
         return view('norhanis::report.index', [
             'scope' => $module,
@@ -140,6 +142,7 @@ class ApplicationReportController extends ApplicationOverviewController
             'median' => $median,
             'charter' => $charter,
             'months' => $months,
+            'monthly' => $monthly,
             'longest' => Application::with('student')->findMany(array_keys($longest))
                 ->sortByDesc(fn (Application $application) => $longest[$application->id])
                 ->map(fn (Application $application) => ['application' => $application, 'days' => round($longest[$application->id], 1)])
@@ -170,11 +173,13 @@ class ApplicationReportController extends ApplicationOverviewController
     /** The rows behind the report, one line per application, as a CSV file. */
     public function export(Request $request, ModuleRegistry $registry, ?string $module = null)
     {
-        [, , $query] = $this->scope($request, $registry, $module);
+        [$shown, $period, $query] = $this->scope($request, $registry, $module);
+        $monthly = $this->monthlyCounts($query()->get(['id', 'module_type', 'submitted_at']), $shown, $period);
+        $labels = array_map(fn (string $key) => $registry->get($key)->label(), $shown);
 
         $name = 'applications-'.($module ?? 'all').'-'.now()->format('Y-m-d').'.csv';
 
-        return response()->streamDownload(function () use ($query) {
+        return response()->streamDownload(function () use ($query, $monthly, $labels) {
             $out = fopen('php://output', 'w');
 
             fputcsv($out, ['Application No.', 'Student', 'Matric No.', 'Module', 'Application', 'Status', 'Now With', 'Awaiting', 'Submitted', 'Days Since Submitted']);
@@ -195,6 +200,15 @@ class ApplicationReportController extends ApplicationOverviewController
                     $application->submitted_at?->format('Y-m-d'),
                     $application->submitted_at ? (int) $application->submitted_at->diffInDays(now()) : '',
                 ]));
+            }
+
+            // The monthly counts the page shows, after a blank line, so a
+            // spreadsheet reads the two tables apart.
+            fputcsv($out, []);
+            fputcsv($out, ['Applications submitted each month']);
+            fputcsv($out, ['Month', ...array_values($labels), 'Total']);
+            foreach ($monthly['rows'] as $row) {
+                fputcsv($out, [$row['label'], ...array_values($row['counts']), $row['total']]);
             }
 
             fclose($out);
@@ -258,6 +272,77 @@ class ApplicationReportController extends ApplicationOverviewController
      * @param  array<string, string>  $slugs  module_type => slug
      * @return array{labels: array<int, string>, series: array<string, array<int, int>>}
      */
+    /**
+     * Applications submitted in each month, per module and in total, for
+     * the table under the monthly chart and the CSV. The months follow the
+     * page's period filter (from the month it starts in to this month); for
+     * "All time", from the first month with an application to the last.
+     * A month with none is still listed, with 0.
+     *
+     * @param  array<string, string>  $shown  slug => module_type
+     * @return array{rows: array<int, array{month: string, label: string, counts: array<string, int>, total: int}>}
+     */
+    protected function monthlyCounts(Collection $applications, array $shown, int $period): array
+    {
+        $dated = $applications->filter(fn ($application) => $application->submitted_at !== null);
+
+        if ($period > 0) {
+            $from = Carbon::now()->subDays($period)->startOfMonth();
+            $to = Carbon::now()->startOfMonth();
+        } elseif ($dated->isEmpty()) {
+            return ['rows' => []];
+        } else {
+            $from = Carbon::instance($dated->min('submitted_at'))->startOfMonth();
+            $to = Carbon::instance($dated->max('submitted_at'))->startOfMonth();
+        }
+
+        $slugs = array_flip($shown);
+        $rows = [];
+        for ($month = $from->copy(); $month->lte($to); $month->addMonth()) {
+            $rows[$month->format('Y-m')] = [
+                'month' => $month->format('Y-m'),
+                'label' => $month->format('M Y'),
+                'counts' => array_fill_keys(array_keys($shown), 0),
+                'total' => 0,
+            ];
+        }
+
+        foreach ($dated as $application) {
+            $key = $application->submitted_at->format('Y-m');
+            if (isset($rows[$key], $slugs[$application->module_type])) {
+                $rows[$key]['counts'][$slugs[$application->module_type]]++;
+                $rows[$key]['total']++;
+            }
+        }
+
+        return ['rows' => array_values($rows)];
+    }
+
+    /**
+     * The reports this user may open, slug => module label: a report role,
+     * and only the modules whose chain they hold a stage in -- the same
+     * rule index() enforces. Empty for everyone else. For the links on
+     * Core's CGS Reports and Analytics page (report/_cgs_reports_links).
+     *
+     * @return array<string, string>
+     */
+    public static function reportModulesFor(?User $user): array
+    {
+        if (! $user || ! in_array($user->role, self::REPORT_ROLES, true)) {
+            return [];
+        }
+
+        $registry = app(ModuleRegistry::class);
+        $modules = [];
+        foreach (self::MODULES as $slug => $key) {
+            if (self::approves($registry->get($key), $user)) {
+                $modules[$slug] = $registry->get($key)->label();
+            }
+        }
+
+        return $modules;
+    }
+
     protected function intakeByMonth(Collection $applications, array $slugs): array
     {
         $months = collect(range(self::MONTHS - 1, 0))->map(fn (int $back) => Carbon::now()->startOfMonth()->subMonths($back));

@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@php($title = ($scope ? $modules[$scope] : 'Travel, Claims & Publication').': Reports & Analytics')
+@php($title = ($scope ? $modules[$scope] : 'Travel, Claims & Publication').': Reports and Analytics')
 
 @section('title', $title)
 
@@ -160,6 +160,33 @@
                 </tr>
             @endforeach
         </table>
+
+        {{-- Month by month, per module and in total, over the period chosen
+             above ("All time": the months the applications cover). A month
+             with none still shows, with 0. Also in the CSV export. --}}
+        <h4 style="margin-top: 20px;">Monthly counts</h4>
+        @if (empty($monthly['rows']))
+            <p class="queue-meta">No applications submitted in this period.</p>
+        @else
+            <table class="recent-activity-table report-monthly" style="margin-top: 8px;">
+                <tr>
+                    <th>Month</th>
+                    @foreach ($modules as $label)
+                        <th>{{ $label }}</th>
+                    @endforeach
+                    <th>Total</th>
+                </tr>
+                @foreach ($monthly['rows'] as $row)
+                    <tr data-month="{{ $row['month'] }}">
+                        <td>{{ $row['label'] }}</td>
+                        @foreach ($row['counts'] as $slug => $count)
+                            <td data-module="{{ $slug }}">{{ $count }}</td>
+                        @endforeach
+                        <td data-total><b>{{ $row['total'] }}</b></td>
+                    </tr>
+                @endforeach
+            </table>
+        @endif
     </div>
 
     {{-- ---- Longest waiting --------------------------------------------- --}}
