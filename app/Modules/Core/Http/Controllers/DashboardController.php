@@ -61,7 +61,7 @@ class DashboardController extends Controller
         }
 
         if ($user->isAdmin()) {
-            $dash = new AdminDashboard();
+            $dash = new AdminDashboard;
 
             return view('core::dashboard.admin', [
                 'totalStudents' => $dash->totalStudents(),
@@ -86,6 +86,7 @@ class DashboardController extends Controller
             return view('core::dashboard.cgs', [
                 'totalApplications' => $dash->totalApplications(),
                 'pendingMyAction' => $dash->pendingMyAction(),
+                'assignedToMe' => $dash->assignedToMe(),
                 'approvedCount' => $dash->approved(),
                 'rejectedCount' => $dash->rejected(),
                 'activeStudents' => $dash->activeStudents(),

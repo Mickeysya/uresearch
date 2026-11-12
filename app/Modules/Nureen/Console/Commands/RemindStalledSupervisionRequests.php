@@ -4,6 +4,7 @@ namespace App\Modules\Nureen\Console\Commands;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Models\SupervisionDetail;
 use App\Modules\Nureen\Notifications\SupervisionEscalatedToCgs;
@@ -77,7 +78,9 @@ class RemindStalledSupervisionRequests extends Command
                     ->where('department', $application->student?->department)
                     ->get(),
                 'dean_pgr' => User::where('role', Role::DEAN_PGR)->get(),
-                default => User::where('role', Role::NON_EXEC_CGS)->get(),
+                // cgs_review: Supervision's assigned CGS officer
+                // (config/cgs_assignment.php), every CGS when it is open.
+                default => app(CgsAssignment::class)->recipients($application->module_type),
             };
 
             foreach ($recipients as $recipient) {
@@ -105,7 +108,7 @@ class RemindStalledSupervisionRequests extends Command
                     default => 'the Chair of Department',
                 };
 
-                foreach (User::where('role', Role::NON_EXEC_CGS)->get() as $cgsStaff) {
+                foreach (app(CgsAssignment::class)->recipients($application->module_type) as $cgsStaff) {
                     $cgsStaff->notify(new SupervisionEscalatedToCgs($application, $stalledParty, $reminderCount));
                     $sent++;
                 }

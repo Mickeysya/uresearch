@@ -13,7 +13,9 @@
         ['tone'=>'purple','panel'=>'applications','icon'=>'doc','label'=>'Total Applications',
          'figure'=>$totalApplications,'pill'=>'View All','pillTone'=>'info','route'=>'applications.index'],
         ['tone'=>'orange','panel'=>'applications','icon'=>'clock','label'=>'Pending My Action',
-         'figure'=>$pendingMyAction,'pill'=>'View Pending','pillTone'=>'warn','route'=>null],
+         'figure'=>$pendingMyAction,'pill'=>'View Pending','pillTone'=>'warn','route'=>null,
+         // Of those, this officer's own modules (config/cgs_assignment.php).
+         'note'=>isset($assignedToMe) ? number_format($assignedToMe).' assigned to you' : null],
         ['tone'=>'green','panel'=>'applications','icon'=>'check','label'=>'Approved',
          'figure'=>$approvedCount,'pill'=>'View Approved','pillTone'=>'good','route'=>null],
         ['tone'=>'red','panel'=>'applications','icon'=>'cross','label'=>'Rejected',
@@ -54,6 +56,10 @@
                  only appears beside a real month-on-month change. --}}
             @if ($card['figure']['delta'] !== null)
                 <div class="sdash-stat-note">vs last month</div>
+            @endif
+
+            @if (! empty($card['note']))
+                <div class="sdash-stat-note">{{ $card['note'] }}</div>
             @endif
 
             {{-- A button only where there is somewhere to go. Pending, Approved

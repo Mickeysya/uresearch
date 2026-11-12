@@ -27,6 +27,11 @@
         @if ($detail->letter_revoke_note)
             <p class="queue-meta">{{ $detail->letter_revoke_note }}</p>
         @endif
+    @elseif (($revokeOfficer = app(\App\Modules\Core\Services\CgsAssignment::class)->officer('supervision'))
+             && auth()->user()?->role === \App\Modules\Core\Support\Role::NON_EXEC_CGS
+             && ! auth()->user()->is($revokeOfficer))
+        {{-- Revoking is the assigned officer's (config/cgs_assignment.php). --}}
+        <p class="decision-readonly" role="note">{{ \App\Modules\Core\Exceptions\NotAssignedOfficer::messageFor($revokeOfficer) }}</p>
     @else
         <form method="POST" action="{{ route('supervision.revoke', $application) }}">
             @csrf

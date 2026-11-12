@@ -4,6 +4,7 @@ namespace App\Modules\Nureen\Support;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Models\ApplicationReminder;
@@ -68,6 +69,12 @@ class StalledApplicationReminder
 
         if (! $stage) {
             return collect();
+        }
+
+        // A CGS stage's reminder goes to the module's assigned officer
+        // alone (config/cgs_assignment.php), every CGS when it is open.
+        if ($stage->role === Role::NON_EXEC_CGS) {
+            return app(CgsAssignment::class)->recipients($application->module_type);
         }
 
         $query = User::where('role', $stage->role);

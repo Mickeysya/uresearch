@@ -2,23 +2,24 @@
 
 namespace App\Modules\Nureen\Http\Controllers;
 
-use App\Modules\Nureen\Support\SubmissionNotifier;
-use App\Modules\Nureen\Notifications\CertificationRevoked;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Notifications\CertificationIssued;
-use App\Modules\Nureen\Support\SupervisorCheck;
+use App\Modules\Nureen\Notifications\CertificationRevoked;
 use App\Modules\Nureen\Support\AppointmentVerifier;
+use App\Modules\Nureen\Support\CertificateReferenceGenerator;
 use App\Modules\Nureen\Support\ClientCharter;
 use App\Modules\Nureen\Support\Drafts;
 use App\Modules\Nureen\Support\LetterRenderer;
-use App\Modules\Nureen\Support\CertificateReferenceGenerator;
+use App\Modules\Nureen\Support\SubmissionNotifier;
+use App\Modules\Nureen\Support\SupervisorCheck;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -233,9 +234,9 @@ class CertificationController extends Controller
             'declaration' => ['accepted'],
         ] + $this->onlineFormRules(required: true, identityOnFile: $identityOnFile)
           + $this->periodRules(required: true), [
-            'declaration.accepted' => 'Please tick the declaration to confirm the information is true and complete.',
-            'identity_number.required' => 'Enter your MyKad or passport number.',
-        ]);
+              'declaration.accepted' => 'Please tick the declaration to confirm the information is true and complete.',
+              'identity_number.required' => 'Enter your MyKad or passport number.',
+          ]);
         unset($data['declaration']);
 
         // "The form shows only the fields for the chosen type" -- validated
@@ -578,6 +579,11 @@ class CertificationController extends Controller
     public function revoke(Request $request, Application $application): RedirectResponse
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        // A Non-Executive CGS may revoke only as the officer Certification
+        // is assigned to (config/cgs_assignment.php). Other roles on this
+        // route are not affected by the map.
+        app(CgsAssignment::class)->authorizeModule($request->user(), $this->moduleKey());
 
         $detail = GaCertificationDetail::where('application_id', $application->id)->firstOrFail();
 

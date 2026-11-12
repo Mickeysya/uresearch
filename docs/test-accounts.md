@@ -38,9 +38,9 @@ From `DatabaseSeeder`, recreated by `./setup.sh`, `./sync.sh` and
 
 - **Local travel** (two stages) — `student@` files it, `supervisor@` endorses,
   `chair@` approves. Done.
-- **International travel** (four stages) — same start, then `cgs@` reviews and
+- **International travel** (four stages) — same start, then `norshahira.cgs@` reviews and
   `dean@` gives final approval.
-- **GA Extension** — `student@` files, `supervisor@` endorses, `cgs@` verifies,
+- **GA Extension** — `student@` files, `supervisor@` endorses, `zulkifly.cgs@` verifies,
   `director@` approves.
 - **Examiner nomination** — `supervisor@` nominates for a candidate, that
   candidate's own Academic Executive approves (`ae@` for Computing, otherwise
@@ -48,6 +48,29 @@ From `DatabaseSeeder`, recreated by `./setup.sh`, `./sync.sh` and
   list, `cgs@` releases it.
 - **RPD dismissal** — `cgs@` opens it, `dean@` endorses, `faculty@` signs,
   `registry@` closes the candidacy.
+
+### Which CGS officer decides which module (since 2026-11-12)
+
+Every Non-Executive CGS officer sees every queue, but a CGS stage is decided
+only by the officer its module is assigned to (`config/cgs_assignment.php`).
+Anyone else gets a read-only row ("This module is assigned to … You can view
+it but not decide on it.") and a 403 on the decide route. Once a row is
+escalated (past its Client Charter due date, or 14 days on the stage, plus
+two reminders where the module counts them), the backup may decide, or any
+Non-Executive CGS when no backup is set.
+
+| Officer | Decides |
+|---|---|
+| `norshahira.cgs@` | Travel · Publication · Student Claims |
+| `zulkifly.cgs@` | GA Extension · Supervision (including revoking a letter) · Certification (including revoking) · Attendance Appeal |
+| `syahmi.cgs@` | Appointment Letters |
+| any Non-Executive CGS | Hardbound Submission · Appeal Hardbound Submission |
+| `amirul.cgs@` | Study Candidacy Appeal (once Chloe's own portal adopts the check) |
+| any Non-Executive CGS | GA · GRA Application, Stage Gates, Allowance (team decision, 2026-11-12) |
+| not covered by the assignment | Hani's modules: Senior Executive CGS stages (`waheda.cgs@` as before) are outside the map (team decision, 2026-11-12) |
+
+Not restricted for anyone: viewing, documents, attendance upload, Sync now,
+recording leave, the At-Risk list, reports, and Stuck Reviews.
 
 ---
 

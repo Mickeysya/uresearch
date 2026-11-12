@@ -4,13 +4,14 @@ namespace App\Modules\Nureen\Support;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\WorkflowEngine;
-use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Models\SupervisionDetail;
 use App\Modules\Nureen\Notifications\ApplicationAwaitingYou;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
 
 /**
@@ -63,7 +64,7 @@ class SubmissionNotifier
         ));
     }
 
-    /** @return \Illuminate\Support\Collection<int, User> */
+    /** @return Collection<int, User> */
     protected function recipients(Application $application)
     {
         $id = match ($application->module_type) {
@@ -73,8 +74,10 @@ class SubmissionNotifier
             default => null,
         };
 
+        // Attendance Appeal starts at CGS: its assigned officer alone, or
+        // every Non-Executive CGS if the module is open (config/cgs_assignment.php).
         if ($application->module_type === 'attendance_appeal') {
-            return User::where('role', Role::NON_EXEC_CGS)->get();
+            return app(CgsAssignment::class)->recipients($application->module_type);
         }
 
         return User::whereKey($id)->get();

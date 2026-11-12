@@ -3,24 +3,25 @@
 namespace App\Modules\Nureen\Workflows;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
-use App\Modules\Core\Contracts\DescribesApplicationDetails;
 use App\Modules\Core\Contracts\Defaults\DescribesApplicationDetailsDefaults;
-use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Core\Contracts\DescribesApplicationDetails;
 use App\Modules\Core\Contracts\DescribesApplicationProgress;
-use App\Modules\Core\Contracts\SuppliesOverdueStatus;
-use App\Modules\Nureen\Support\TrackingDescriptions;
-use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
+use App\Modules\Core\Contracts\SuppliesDecisionDates;
+use App\Modules\Core\Contracts\SuppliesOverdueStatus;
+use App\Modules\Core\Contracts\SuppliesReminderCount;
 use App\Modules\Core\Contracts\WorkflowModule;
 use App\Modules\Core\Models\Application;
+use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
-use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 use App\Modules\Nureen\Models\GaExtensionDetail;
-use Illuminate\Support\Str;
-use App\Modules\Core\Models\User;
+use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Nureen\Support\TrackingDescriptions;
+use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Str;
 
 /**
  * Graduate Assistantship extension requests.
@@ -49,7 +50,7 @@ use Carbon\CarbonInterface;
  * stuck on step 1. Declaring the chain here puts it on the same footing as
  * everything else.
  */
-class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, DecidesOneAtATime, ProvidesLinks, SuppliesDecisionDates, SuppliesOverdueStatus, DescribesApplicationProgress, DescribesApplicationDetails
+class GaExtensionWorkflow implements DecidesOneAtATime, DescribesApplicationDetails, DescribesApplicationProgress, ProvidesLinks, SuppliesCalendarEvents, SuppliesDecisionDates, SuppliesOverdueStatus, SuppliesReminderCount, WorkflowModule
 {
     /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
     use DescribesApplicationDetailsDefaults;
@@ -232,7 +233,7 @@ class GaExtensionWorkflow implements WorkflowModule, SuppliesCalendarEvents, Dec
      */
     protected function detailFor(Application $application): ?GaExtensionDetail
     {
-        $this->details ??= new \WeakMap();
+        $this->details ??= new \WeakMap;
 
         if (isset($this->details[$application])) {
             return $this->details[$application];

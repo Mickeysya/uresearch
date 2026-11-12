@@ -23,6 +23,11 @@
 
     @if ($detail->isRevoked())
         <p class="queue-meta">Revoked: {{ $detail->revoked_reason }}</p>
+    @elseif (($revokeOfficer = app(\App\Modules\Core\Services\CgsAssignment::class)->officer('ga_certification'))
+             && auth()->user()?->role === \App\Modules\Core\Support\Role::NON_EXEC_CGS
+             && ! auth()->user()->is($revokeOfficer))
+        {{-- Revoking is the assigned officer's (config/cgs_assignment.php). --}}
+        <p class="decision-readonly" role="note">{{ \App\Modules\Core\Exceptions\NotAssignedOfficer::messageFor($revokeOfficer) }}</p>
     @else
         <form method="POST" action="{{ route('ga-certification.revoke', $application) }}">
             @csrf

@@ -20,7 +20,24 @@
     reason is mandatory there and optional here, and one textarea cannot be
     both. Its own textarea is `required`, so the browser stops an empty
     return before the request is made.
+
+    CGS ASSIGNMENT (config/cgs_assignment.php). At a Non-Executive CGS stage
+    a module may belong to one officer. Anyone else sees a read-only line in
+    place of both forms -- the engine would refuse them with a 403 anyway,
+    this only stops offering buttons that cannot work. Every caller of this
+    component gets it, with nothing to pass.
 --}}
+@php
+    $cgsVerdict = auth()->user()
+        ? app(\App\Modules\Core\Services\CgsAssignment::class)->verdict(auth()->user(), $application)
+        : null;
+@endphp
+
+@if ($cgsVerdict && ! $cgsVerdict->allowed())
+    <p class="decision-readonly" role="note">
+        {{ \App\Modules\Core\Exceptions\NotAssignedOfficer::messageFor($cgsVerdict->officer) }}
+    </p>
+@else
 <form method="POST" action="{{ $route }}">
     @csrf
 
@@ -51,4 +68,5 @@
             <button type="submit" class="btn-secondary">{{ $returnAction['label'] }}</button>
         </div>
     </form>
+@endif
 @endif

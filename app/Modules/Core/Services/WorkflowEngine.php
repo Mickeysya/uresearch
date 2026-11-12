@@ -24,7 +24,16 @@ use Illuminate\Validation\UnauthorizedException;
  */
 class WorkflowEngine
 {
-    public function __construct(protected ModuleRegistry $registry) {}
+    /**
+     * $assignment is optional so a test that builds the engine by hand with
+     * just the registry still works; the container injects it everywhere else.
+     */
+    public function __construct(
+        protected ModuleRegistry $registry,
+        protected ?CgsAssignment $assignment = null,
+    ) {
+        $this->assignment ??= new CgsAssignment($registry);
+    }
 
     /**
      * Put a freshly created application onto the first stage of its chain.
@@ -88,6 +97,11 @@ class WorkflowEngine
                 "'{$actor->department}' cannot act on a '{$application->student?->department}' application."
             );
         }
+
+        // The third check, for Non-Executive CGS only: holding the role is
+        // not the same as this being your module (config/cgs_assignment.php).
+        // A 403 rather than an UnauthorizedException -- see NotAssignedOfficer.
+        $this->assignment->authorize($actor, $application, $stage);
 
         if ($decision === 'return') {
             return $this->recordReturn($application, $actor, $stage, $remarks);
@@ -188,6 +202,8 @@ class WorkflowEngine
             );
         }
 
+        $this->assignment->authorize($actor, $application, $stage);
+
         $stages = $this->stagesFor($application);
         $keys = array_map(fn (Stage $s) => $s->key, $stages);
 
@@ -254,7 +270,9 @@ class WorkflowEngine
      * would otherwise tell them except the row quietly reappearing in their
      * queue. A department-scoped stage is narrowed to that application's own
      * department -- see Role::isDepartmentScoped() -- so eleven Academic
-     * Executives are not emailed about one department's list.
+     * Executives are not emailed about one department's list. A Non-Executive
+     * CGS stage is narrowed to the module's assigned officer the same way --
+     * see CgsAssignment::recipients().
      *
      * Best effort, for the reason notifyStudent() gives: the decision is
      * committed and durable; the announcement is not worth a 500 over.
@@ -266,12 +284,16 @@ class WorkflowEngine
 
             $application->student?->notify($notification);
 
-            $owners = User::where('role', $target->role)
-                ->when(
-                    Role::isDepartmentScoped($target->role) && $application->student?->department,
-                    fn ($q) => $q->where('department', $application->student->department)
-                )
-                ->get()
+            // A Non-Executive CGS stage goes to that module's assigned
+            // officer alone (every CGS officer when the module is open).
+            $owners = ($target->role === Role::NON_EXEC_CGS
+                ? $this->assignment->recipients($application->module_type)
+                : User::where('role', $target->role)
+                    ->when(
+                        Role::isDepartmentScoped($target->role) && $application->student?->department,
+                        fn ($q) => $q->where('department', $application->student->department)
+                    )
+                    ->get())
                 ->reject(fn (User $user) => $user->is($application->student));
 
             Notification::send($owners, $notification);
@@ -453,7 +475,7 @@ class WorkflowEngine
      * page of cards).
      *
      * @return array<int, array{stage: Stage, state: string}>
-     *         state is one of: completed, current, rejected, upcoming, skipped
+     *                                                        state is one of: completed, current, rejected, upcoming, skipped
      */
     public function progress(Application $application): array
     {

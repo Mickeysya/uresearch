@@ -28,11 +28,22 @@
     opened.
 --}}
 @php
+    // At a Non-Executive CGS stage the module may be one officer's
+    // (config/cgs_assignment.php); anyone else gets a read-only line instead
+    // of buttons the engine would refuse.
+    $cgsVerdict = auth()->user()
+        ? app(\App\Modules\Core\Services\CgsAssignment::class)->verdict(auth()->user(), $application)
+        : null;
     $id = 'nureen-decision-'.$application->id;
     $thisRow = (string) old('_row') === (string) $application->id;
     $serverError = $thisRow ? $errors->first('remarks') : null;
 @endphp
 
+@if ($cgsVerdict && ! $cgsVerdict->allowed())
+    <p class="decision-readonly nureen-readonly" role="note">
+        {{ \App\Modules\Core\Exceptions\NotAssignedOfficer::messageFor($cgsVerdict->officer) }}
+    </p>
+@else
 <form method="POST" action="{{ $route }}" class="nureen-decision" id="{{ $id }}" data-decision-bar
       @if ($serverError) data-decision-error @endif>
     @csrf
@@ -63,6 +74,7 @@
         <p class="nureen-decision-hint">{{ $hint }}</p>
     @endif
 </form>
+@endif
 
 @once
     <style>
@@ -70,7 +82,8 @@
            detail view is Nureen's (see the comment at the top). */
         .queue-row-body:has(> .nureen-row) > ul.doc-list,
         .queue-row-body:has(> .nureen-row) > form:not([class]),
-        .queue-row-body:has(> .nureen-row) > form.decision-return { display: none; }
+        .queue-row-body:has(> .nureen-row) > form.decision-return,
+        .queue-row-body:has(> .nureen-row) > p.decision-readonly { display: none; }
 
         .nureen-decision { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border-subtle); }
         .nureen-decision-label { display: block; margin: 0 0 var(--space-1); }

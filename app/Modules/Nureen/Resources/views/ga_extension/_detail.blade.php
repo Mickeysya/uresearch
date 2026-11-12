@@ -15,7 +15,10 @@
     $publications = $detail?->publicationRows() ?? [];
     // Section J: editable by the CGS stage's role while it is at that stage.
     $currentStage = app(\App\Modules\Core\Services\WorkflowEngine::class)->currentStage($application);
-    $canFillJ = $currentStage?->key === 'cgs_verify' && $viewer?->role === $currentStage->role;
+    // Section J counts as a decision: the assigned officer only (or the
+    // backup once escalated) -- config/cgs_assignment.php.
+    $canFillJ = $currentStage?->key === 'cgs_verify' && $viewer?->role === $currentStage->role
+        && app(\App\Modules\Core\Services\CgsAssignment::class)->canDecide($viewer, $application, $currentStage);
     $remarks = $detail?->cgs_remarks ?? [];
     $tone = [
         'pass' => ['✓', 'var(--success-fg)'],

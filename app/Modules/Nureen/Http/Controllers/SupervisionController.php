@@ -2,24 +2,25 @@
 
 namespace App\Modules\Nureen\Http\Controllers;
 
-use App\Modules\Nureen\Support\SubmissionNotifier;
 use App\Modules\Core\Http\Controllers\Concerns\ApprovesApplications;
 use App\Modules\Core\Http\Controllers\Controller;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Services\DocumentStore;
 use App\Modules\Core\Services\WorkflowEngine;
-use App\Modules\Core\Support\Stage;
 use App\Modules\Core\Support\Role;
+use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\SupervisionDetail;
-use App\Modules\Nureen\Support\ClientCharter;
-use App\Modules\Nureen\Support\LetterRenderer;
 use App\Modules\Nureen\Notifications\AppointmentLetterIssued;
 use App\Modules\Nureen\Notifications\AppointmentLetterIssuedToCgs;
 use App\Modules\Nureen\Notifications\AppointmentLetterRevoked;
 use App\Modules\Nureen\Notifications\SupervisionFinalDecisionCc;
 use App\Modules\Nureen\Support\AppointmentReferenceGenerator;
+use App\Modules\Nureen\Support\ClientCharter;
 use App\Modules\Nureen\Support\GaStatus;
+use App\Modules\Nureen\Support\LetterRenderer;
+use App\Modules\Nureen\Support\SubmissionNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -389,6 +390,11 @@ class SupervisionController extends Controller
     public function revokeLetter(Request $request, Application $application): RedirectResponse
     {
         abort_unless($application->module_type === $this->moduleKey(), 404);
+
+        // Revoking a letter is a decision: only the officer Supervision is
+        // assigned to (config/cgs_assignment.php). No escalation here -- the
+        // application is already approved, so there is no charter clock.
+        app(CgsAssignment::class)->authorizeModule($request->user(), $this->moduleKey());
 
         $detail = SupervisionDetail::where('application_id', $application->id)->firstOrFail();
 

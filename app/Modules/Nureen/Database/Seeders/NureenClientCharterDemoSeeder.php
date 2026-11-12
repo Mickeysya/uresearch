@@ -4,6 +4,7 @@ namespace App\Modules\Nureen\Database\Seeders;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\CgsAssignment;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
 use App\Modules\Nureen\Database\Seeders\Support\DemoDocuments;
@@ -59,7 +60,11 @@ class NureenClientCharterDemoSeeder extends Seeder
 
         $supervisor = User::where('email', 'supervisor@utp.edu.my')->firstOrFail();
         $chair = User::where('email', 'chair@utp.edu.my')->firstOrFail();
-        $cgs = User::where('email', 'cgs@utp.edu.my')->firstOrFail();
+        // The officer Nureen's modules are assigned to (zulkifly.cgs, see
+        // config/cgs_assignment.php) when that account exists -- the engine
+        // refuses any other CGS officer -- else the general CGS account.
+        $cgs = app(CgsAssignment::class)->officer('ga_extension')
+            ?? User::where('email', 'cgs@utp.edu.my')->firstOrFail();
         $director = User::where('email', 'director@utp.edu.my')->firstOrFail();
 
         // [matric, mode, steps: [working days ago => actor|null for submission]]

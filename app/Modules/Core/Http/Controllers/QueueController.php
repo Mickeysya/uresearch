@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Http\Controllers;
 
 use App\Modules\Core\Contracts\DecidesOneAtATime;
+use App\Modules\Core\Exceptions\NotAssignedOfficer;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Services\WorkflowEngine;
@@ -69,6 +70,7 @@ class QueueController extends Controller
 
         $decided = 0;
         $refused = 0;
+        $assignedElsewhere = null;
 
         foreach ($applications as $application) {
             try {
@@ -78,11 +80,22 @@ class QueueController extends Controller
                 // Not yours to act on, or someone decided it while this page
                 // was open. Both are ordinary, and neither stops the rest.
                 $refused++;
+            } catch (NotAssignedOfficer $e) {
+                // Another CGS officer's module (config/cgs_assignment.php).
+                // A 403 on its own decide route; here it is one skipped row,
+                // or a hand-built POST would stop halfway through the batch.
+                $refused++;
+                $assignedElsewhere = $e;
             }
         }
 
         // Anything asked for but not found was already filtered out above.
         $refused += count($data['ids']) - $applications->count();
+
+        // Every row was another officer's: say whose, like the single decide.
+        if ($decided === 0 && $assignedElsewhere) {
+            return back()->with('error', $assignedElsewhere->getMessage());
+        }
 
         return back()->with(
             $decided > 0 ? 'status' : 'error',

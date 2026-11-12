@@ -1006,3 +1006,147 @@ today.
 
 **Browser support note.** The interim CSS rule uses `:has()` (Chrome 105+,
 Firefox 121+, Safari 15.4+). Part (a) removes that dependency.
+
+## 18. Each module's CGS decisions go to one CGS officer (agreed Core change, 2026-11-12)
+
+**Branch:** `feature/cgs-assignment` (from `origin/develop` at `fbf5a6c`), uncommitted.
+**Agreed by:** the team, including Hani as Integration & Git Lead. CGS confirmed which officer handles which modules.
+
+Before this, any Non-Executive CGS could decide any module's CGS stage. Now
+one map, `config/cgs_assignment.php`, names each module's officer (an optional
+backup, or `'*'` for any CGS). Deciding at a Non-Executive CGS stage is
+restricted to that officer. Viewing is never restricted, and other roles'
+stages are untouched.
+
+Fallbacks, so that nothing breaks:
+- A module **not in the map** behaves as before: any CGS.
+- An officer address with **no Non-Executive CGS account** behind it (a fresh
+  checkout, the test database) also falls back to any CGS.
+
+**Team decisions, 2026-11-12** (after the first draft of this section):
+1. **Haziq's modules are open to every Non-Executive CGS officer.**
+   `gra_application` and `ga_application` are `'*'` in the map. That covers
+   everything in his folder, because Stage Gates and Allowance have no keys of
+   their own and would be checked against these two. Akmar's role doesn't
+   change: she stays Senior Executive CGS, and `akmar.cgs` is no longer in the
+   map.
+2. **The map does not cover Senior Executive CGS stages.** Hani's modules are
+   unchanged. None of them has a Non-Executive CGS stage, so they aren't in the
+   map at all, and `waheda.cgs` is no longer in it.
+
+### Core files changed, and why
+
+| File | Change | Why |
+|---|---|---|
+| `config/cgs_assignment.php` (new) | The map, `escalate_after_reminders` (2) and `overdue_after_days` (14) | One place; nothing hard-coded in controllers or views |
+| `Core/Services/CgsAssignment.php` (new) | `officer()`, `backup()`, `recipients()`, `verdict()`, `canDecide()`, `authorize()`, `authorizeModule()`, `isEscalated()` | The one implementation every check uses |
+| `Core/Support/CgsVerdict.php` (new) | Answers "may they decide, and why", plus the row text ("Assigned to: …", "Overdue: backup may decide") | Lets the engine refuse and the queue explain, using the same answer |
+| `Core/Exceptions/NotAssignedOfficer.php` (new) | A 403 that reads "This module is assigned to `<name>`. You can view it but not decide on it." | Deliberately **not** an `UnauthorizedException` or `LogicException`, which module controllers catch and turn into a flash message |
+| `Core/Contracts/SuppliesReminderCount.php` (new, optional) | `remindersAtCurrentStage()` | Core has no shared reminder count. Absence cover reads it, and a module without it is escalated on being overdue alone |
+| `Core/Services/WorkflowEngine.php` | `decide()` and `returnTo()` call `authorize()` after the role and department checks. `notifyReturn()` sends a return to a CGS stage to `recipients()` only | Covers every engine decision in every module (queues, bulk, each module's own decide route) without a module changing |
+| `Core/Http/Controllers/QueueController.php` | Bulk decide counts another officer's row as skipped, and names the officer when every row was skipped | Otherwise a 403 would stop a batch halfway |
+| `Core/Resources/views/components/decision-form.blade.php` | A read-only line instead of both forms when the viewer may not decide | Every caller gets it, **including Haziq's GA/GRA pages** (his `partials/decision_form` wraps this component) |
+| `Core/Resources/views/partials/queue.blade.php` | An "Assigned to: …" chip on CGS-stage rows, the escalation note, and no bulk checkbox on rows the viewer can't decide | The queue shows whose row it is |
+| `Core/Services/CgsDashboard.php`, `DashboardController.php`, `dashboard/partials/cgs-stat-cards.blade.php` | "N assigned to you" under Pending My Action (Non-Executive CGS only). Pending My Action itself still counts all rows | "Assigned to me" kept separate from "all". No other tile changed |
+| `public/css/layout.css` | `.queue-row-assignee`, `.queue-row-cover`, `.decision-readonly`, using tokens only | Styles for the above |
+| `database/seeders/DemoDataSeeder.php` | `deciderFor()` decides a CGS stage as the assigned officer when that account exists | Otherwise `sync.sh --fresh` would be refused at the first assigned CGS stage |
+
+**Absence cover.** An application is escalated once it is overdue and has had
+`escalate_after_reminders` reminders at its CGS stage.
+- **Overdue** is the module's own Client Charter answer (`SuppliesOverdueStatus`)
+  where it has one; otherwise 14 calendar days on the stage.
+- **Reminder count** comes from `SuppliesReminderCount`. A module without it is
+  escalated on being overdue alone.
+- **Who may then decide:** the backup, or any Non-Executive CGS if no backup is
+  set.
+- **Not covered:** module-level actions with no pending stage (revoking an
+  issued letter, Stage Gates, allowance payments). These have no charter
+  clock, so they are officer-only.
+
+**No new seeder.** All six accounts exist: `DatabaseSeeder::CGS_OFFICERS`
+creates them, and it replaced `database/sql/cgs_officers.sql`.
+
+### Nureen (done in this change)
+
+- **Section J** (`saveCgsRemarks`) counts as a decision, and the form shows only
+  to the officer.
+- **Revoking a letter** (`supervision.revoke`, `ga-certification.revoke`) is
+  officer-only. A supervisor revoking a certificate is still open, as flagged
+  before.
+- **Decision bar:** read-only for anyone else.
+- **Reminder counts:** GA Extension, Supervision and Certification implement
+  `SuppliesReminderCount` from the counts their reminder commands already keep.
+- **Emails:** "awaiting you" (Attendance Appeal), CGS-stage stall reminders,
+  and `SupervisionEscalatedToCgs` go to the officer alone.
+- **Unchanged:** `AppointmentLetterIssuedToCgs`, the FYI copy of an issued
+  letter, still goes to every CGS.
+- **Not restricted:** Stuck Reviews reassign (agreed).
+- **Demo seeders:** decide as Zulkifly.
+
+### For each teammate (not edited; your folder)
+
+**Haziq.** **Nothing is needed for the assignment.** Since the team decision
+of 2026-11-12, your modules are `'*'`, so every check passes for every
+Non-Executive CGS officer.
+
+*Optional, good practice only, not part of this change:* in
+`GraApplicationController::decide()`, run the permission checks before saving
+`proposed_allowance`. Then a decision that is going to be refused for any
+other reason (wrong role, already decided) doesn't leave the allowance
+half-saved. If your modules are ever assigned to one officer later, the check
+to add is `app(CgsAssignment::class)->authorize($request->user(), $application)`
+in `decide()`, `requestCorrection()` and `editAllowance()`. For Stage Gate and
+the allowance actions it would be `authorizeModule($user, 'gra_application')`
+(or `'ga_application'`).
+
+**Jason.**
+1. **`AppointmentLetterController::savePreparation()`:** call `authorize()`
+   before `generatePack()`. The engine's 403 rolls the transaction back, but the
+   pack's files have already been written.
+2. **`prepare.blade.php`:** show read-only to anyone but Syahmi.
+3. **Undecided:** resend, import and promote are pack dispatch, not decisions,
+   so they're left open. Say if they should count.
+4. **No change:** Hardbound and Appeal Hardbound are `'*'`.
+
+**Chloe.** Study Candidacy Appeal decides through `PortalController::decide()`
+on its own `candidacy_appeals` table, never the engine, so Core can't enforce
+it.
+1. While an appeal is with CGS, call
+   `app(CgsAssignment::class)->authorizeModule($request->user(), 'candidacy_appeal')`.
+2. Hide the CGS buttons in `wca/portal/_modals.blade.php` the same way.
+3. Send the CGS "awaiting" email to `recipients('candidacy_appeal')`.
+
+**Norhanis.**
+1. **`ApproverNotifier::holders()`:** use
+   `app(CgsAssignment::class)->recipients($application->module_type)` for the
+   CGS stage. Then retire `Support/CgsOfficer.php` and `Config/cgs.php`, which
+   are now a second map to keep in sync. Same in `SeedDemoApplications` and in
+   `RemindStalledApplications`' CGS recipients.
+2. **`tests/Feature/Norhanis/CgsOfficerTest.php` now fails, as it should.**
+   Its last three lines assert the old rule: another CGS officer decides
+   Norshahira's claim, and it moves to `manager`. Replace them with:
+   ```php
+   $this->actingAs($other)->post(route('claims.decide', $application), ['decision' => 'approve'])
+       ->assertForbidden()->assertSee('This module is assigned to Norshahira.');
+   $this->assertSame('cgs_review', $application->fresh()->current_stage);
+   $this->actingAs($officer)->post(route('claims.decide', $application), ['decision' => 'approve']);
+   $this->assertSame('manager', $application->fresh()->current_stage);
+   ```
+   The lists and queues part of the test still holds. Not edited, because it
+   is Norhanis' test.
+3. **Optional:** your `ExpectsDecisionByCharter` already supplies
+   `SuppliesOverdueStatus`. Adding `SuppliesReminderCount` from
+   `norhanis_stage_reminders` would make Travel, Claims and Publication wait
+   for 2 reminders before the backup steps in. Without it they escalate as soon
+   as the charter date passes.
+
+**Hani.** Nothing to do. The map does not cover Senior Executive CGS stages
+(team decision, 2026-11-12), and your modules have no Non-Executive CGS stage.
+
+### Decided (2026-11-12)
+
+These were open questions in the first draft of this section:
+1. **Akmar's role vs Haziq's Non-Executive stage:** Haziq's modules stay open
+   to every Non-Executive CGS officer, and Akmar stays Senior Executive CGS.
+2. **Cover Senior Executive CGS stages too?** No. Only Non-Executive CGS stages
+   are assigned, and Hani's modules stay as they are.
