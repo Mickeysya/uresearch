@@ -38,3 +38,23 @@ Norhanis/
    `WorkflowEngine::submit()` and `::decide()`.
 
 See `docs/adding-a-module.md` for the full walkthrough.
+
+## Demo data (local/dev only)
+
+```bash
+php artisan norhanis:demo-seed           # 30 Travel, 70 Publication, 35 Student Claims from existing users
+php artisan norhanis:demo-seed --fresh   # clear the previous run first, then seed again
+php artisan norhanis:demo-clear          # remove exactly what the seeder created
+```
+
+Uses only existing students, supervisors, Chairs and CGS staff (creates and
+changes no users), spread across every department in proportion to its
+students. Everything goes through the module's own services (WorkflowEngine,
+ApproverNotifier, PublicationSignOffs, PublicationFollowUp, DocumentStore) with
+the clock set back to when each step "happened", so history, documents,
+sign-off PDFs and in-app notifications look real. No email is sent (array
+mailer, sync queue). What it creates is listed in
+`storage/app/demo-seed-manifest.json`; `demo-clear` deletes only those rows,
+their files, their notifications and their activity-log entries. Refuses to run
+when `APP_ENV=production`. Named `norhanis:*` because `demo:seed` is the team's
+command. Code: `Support/Demo/`, `Console/Commands/DemoSeed.php`, `DemoClear.php`.
