@@ -94,7 +94,10 @@ class VivaNoticeVerificationTest extends TestCase
 
         $this->verifyNotice($this->ae, $notice)->assertSessionHasNoErrors();
         $this->assertSame(Application::STATUS_APPROVED, $notice->fresh()->status);
-        $this->assertSame('verified', $notice->history()->latest('id')->value('decision'));
+        // By stage, not latest(): history() is ordered by created_at, so the
+        // supervisor's 'endorsed' row sorts last whenever the two decisions
+        // fall in different seconds.
+        $this->assertSame('verified', $notice->history()->where('stage_key', 'notice_received')->value('decision'));
         $this->assertSame($items, VivaDetail::where('application_id', $notice->id)->value('ae_item_checks'));
         $this->assertSame($this->ae->id, VivaEligibility::sole()->verified_by_id);
         Notification::assertSentTo($this->student->supervisor, VivaNominateExaminers::class);
