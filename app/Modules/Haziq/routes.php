@@ -52,20 +52,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/gra-application/{application}', [GraApplicationController::class, 'show'])->name('gra-application.show');
     });
 
-    // Supervisor/Senior Director only — internal feedback on CGS's
-    // recommended allowance, never surfaced to the student. See
-    // GraApplicationController::flagAllowance().
-    Route::middleware('role:'.implode(',', [Role::SUPERVISOR, Role::SENIOR_DIRECTOR_CGS]))->group(function () {
-        Route::post('/gra-application/{application}/flag-allowance', [GraApplicationController::class, 'flagAllowance'])->name('gra-application.flag-allowance');
-    });
-
-    // CGS only — revising the allowance they set, any time the
-    // application is still pending (not gated to the cgs_review stage
-    // itself). See GraApplicationController::editAllowance().
-    Route::middleware('role:'.Role::NON_EXEC_CGS)->group(function () {
-        Route::post('/gra-application/{application}/edit-allowance', [GraApplicationController::class, 'editAllowance'])->name('gra-application.edit-allowance');
-    });
-
     Route::middleware('role:'.Role::STUDENT)->group(function () {
         // Read-only view of what the student submitted, with an Edit
         // button that only appears once something has actually been

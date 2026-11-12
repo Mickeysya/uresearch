@@ -13,7 +13,7 @@
     <p>Ref: UResearch/GRA-ADM/{{ $application->id }}</p>
     <p>Date: {{ now()->format('j F Y') }}</p>
 
-    <div class="title">GRADUATE RESEARCH ASSISTANT (GRA) — ADMISSION LETTER</div>
+    <div class="title">GRADUATE RESEARCH ASSISTANT (GRA): ADMISSION LETTER</div>
 
     <div class="body">
         <p>This is to confirm that <b>{{ $student->name }}</b>

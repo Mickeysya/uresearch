@@ -13,7 +13,7 @@
     <p>Ref: UResearch/GA-PROG/{{ $application->id }}</p>
     <p>Date: {{ now()->format('j F Y') }}</p>
 
-    <div class="title">GRADUATE ASSISTANT (GA) — PROGRAM OFFER LETTER</div>
+    <div class="title">GRADUATE ASSISTANT (GA): PROGRAM OFFER LETTER</div>
 
     <div class="body">
         <p>This confirms that <b>{{ $student->name }}</b> (Student ID: {{ $student->matric_no ?? '—' }})

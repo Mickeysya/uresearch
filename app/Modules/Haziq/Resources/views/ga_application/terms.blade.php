@@ -1,6 +1,6 @@
 @extends('core::layouts.app')
 
-@section('title', 'GA Scheme — Terms and Conditions')
+@section('title', 'GA Scheme: Terms and Conditions')
 
 @push('head')
     @include('haziq::partials.styles')
@@ -8,15 +8,11 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header
+        title="Graduate Assistant (GA) Scheme: Terms and Conditions"
+        subtitle="Read this before starting your GA application. You only need to accept this once; it covers every GA application you submit afterwards." />
+
     <div class="card card-wide">
-        <h2>Graduate Assistant (GA) Scheme — Terms and Conditions</h2>
-        <div class="card-divider"></div>
-
-        <p class="queue-meta">
-            Read this before starting your GA application. You only need to accept this once —
-            it covers every GA application you submit afterwards.
-        </p>
-
         <div class="haziq-repeatable-row" style="grid-template-columns: 1fr; gap: 10px;">
             <p><b>Eligibility.</b> Open to full-time, on-campus postgraduate students in good
                 academic standing, appointed to assist a department or unit with teaching or
@@ -24,7 +20,7 @@
 
             <p><b>Interview.</b> Every application goes through an interview conducted by
                 Research Centre before it can proceed to CGS. A failed interview ends the
-                application outright — it does not reach CGS for a decision.</p>
+                application outright; it does not reach CGS for a decision.</p>
 
             <p><b>Hours.</b> Proposed weekly hours are capped and reviewed by every approver in
                 the chain before final approval.</p>

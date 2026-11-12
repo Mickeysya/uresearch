@@ -212,6 +212,7 @@ class DocumentCompletenessTest extends TestCase
             'project_title' => 'Reservoir Simulation under Uncertainty',
             'funding_source' => 'UTP Internal Grant',
             'service_start_date' => '2026-12-01',
+            'proposed_allowance' => '1500',
             'level_of_study' => 'phd',
             'programme' => 'PhD Petroleum Engineering',
             'admission_date' => '2024-09-01',

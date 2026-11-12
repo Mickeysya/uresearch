@@ -8,21 +8,21 @@
 
 @section('content')
 <div class="card-container-inline">
-    <div class="card card-wide">
-        <h2>{{ $extension ? 'GRA Extension' : 'GRA Application' }}</h2>
-        <div class="card-divider"></div>
+    <x-core::page-header title="{{ $extension ? 'GRA Extension' : 'GRA Application' }}" />
 
+    <div class="card card-wide">
         @if ($extension)
             {{-- Extension: academic profile is loaded read-only; Section B is
                  re-confirmed since funding can change between appointments. --}}
             <p class="queue-meta">
-                Programme and admission details below are from your record — no need to re-enter.
+                Programme and admission details below are from your record; no need to re-enter.
                 Project/funding details are pre-filled from your current appointment but can be changed,
                 e.g. if this extension moves to a different grant.
             </p>
             <div class="haziq-repeatable-row">
                 <p><b>Programme</b><br>{{ $profile->programme }} ({{ ucfirst($profile->level_of_study) }})</p>
                 <p><b>Admission Date</b><br>{{ $profile->admission_date->format('j M Y') }}</p>
+                <p><b>Period Candidature</b><br>{{ $profile->candidature_period ?? '—' }}</p>
                 <p><b>Current Service Period</b><br>{{ $parentDetail->service_start_date->format('j M Y') }} – {{ $parentDetail->service_end_date->format('j M Y') }}</p>
                 <p><b>Previous Allowance</b><br>RM {{ $parentDetail->proposed_allowance !== null ? number_format($parentDetail->proposed_allowance, 2) : '—' }}</p>
             </div>
@@ -30,7 +30,7 @@
             @if ($draft ?? false)
                 <div class="haziq-repeatable-row" style="border-color: var(--warning-fg);">
                     <p style="grid-column: 1 / -1;">
-                        <b>Continuing your saved draft</b> (#{{ $draft->id }}) — everything below is what
+                        <b>Continuing your saved draft</b> (#{{ $draft->id }}): everything below is what
                         you last saved. Keep editing, Save Draft again any time, or Submit Extension
                         when it's ready.
                     </p>
@@ -44,7 +44,7 @@
                     <input type="hidden" name="draft_id" value="{{ $draft->id }}">
                 @endif
 
-                <h3>Section B — Project Details</h3>
+                <h3>Section B: Project Details</h3>
                 <label for="project_leader_name">Project Leader</label>
                 <input type="text" name="project_leader_name" id="project_leader_name" required
                        value="{{ old('project_leader_name', $draftDetail->project_leader_name ?? $parentDetail->project_leader_name) }}">
@@ -82,14 +82,16 @@
                 <label for="centre_name">Name of Centre</label>
                 <input type="text" name="centre_name" id="centre_name" value="{{ old('centre_name', $draftDetail->centre_name ?? $parentDetail->centre_name) }}">
 
+                <label for="proposed_allowance">Proposed Allowance (RM)</label>
+                <input type="number" step="0.01" min="0" name="proposed_allowance" id="proposed_allowance" required
+                       value="{{ old('proposed_allowance', $draftDetail->proposed_allowance ?? $parentDetail->proposed_allowance) }}">
+                @error('proposed_allowance') <p class="field-error">{{ $message }}</p> @enderror
+
                 <h3>Extension Details</h3>
                 <label for="requested_new_end_date">Requested New End Date</label>
                 <input type="date" name="requested_new_end_date" id="requested_new_end_date"
                        value="{{ old('requested_new_end_date', $draftDetail?->service_end_date?->format('Y-m-d')) }}">
                 @error('requested_new_end_date') <p class="field-error">{{ $message }}</p> @enderror
-                <p class="queue-meta" style="margin-top: -8px;">
-                    No allowance field here — CGS sets the allowance for the extension when they approve it.
-                </p>
 
                 <label for="extension_reason">Reason / Justification</label>
                 <textarea name="extension_reason" id="extension_reason" rows="4">{{ old('extension_reason', $draftDetail->extension_reason ?? null) }}</textarea>
@@ -97,7 +99,7 @@
 
                 <label for="evidence_document">Stage Gate Evidence <span style="color: var(--text-grey)">(journal acceptance / publication proof, if applicable)</span></label>
                 @if (($draftDocuments ?? collect())->where('doc_type', 'Stage Gate Evidence / Publication Proof')->isNotEmpty())
-                    <p class="queue-meta" style="margin: 0 0 6px;">Already uploaded — choose a file only to replace it.</p>
+                    <p class="queue-meta" style="margin: 0 0 6px;">Already uploaded; choose a file only to replace it.</p>
                 @endif
                 <input type="file" name="evidence_document" id="evidence_document">
                 @error('evidence_document') <p class="field-error">{{ $message }}</p> @enderror
@@ -111,7 +113,7 @@
             @if ($draft ?? false)
                 <div class="haziq-repeatable-row" style="border-color: var(--warning-fg);">
                     <p style="grid-column: 1 / -1;">
-                        <b>Continuing your saved draft</b> (#{{ $draft->id }}) — everything below is what
+                        <b>Continuing your saved draft</b> (#{{ $draft->id }}): everything below is what
                         you last saved. Keep editing, Save Draft again any time, or Submit Application
                         when it's ready.
                     </p>
@@ -121,7 +123,7 @@
             <form method="POST" action="{{ route('gra-application.store') }}" enctype="multipart/form-data">
                 @csrf
 
-                <h3>Section B — Project Details</h3>
+                <h3>Section B: Project Details</h3>
                 <label for="project_leader_name">Project Leader</label>
                 <input type="text" name="project_leader_name" id="project_leader_name" required
                        value="{{ old('project_leader_name', $draftDetail?->project_leader_name) }}">
@@ -152,14 +154,19 @@
                 <label for="centre_name">Name of Centre</label>
                 <input type="text" name="centre_name" id="centre_name" value="{{ old('centre_name', $draftDetail?->centre_name) }}">
 
-                <h3>Section C — GRA Details</h3>
+                <label for="proposed_allowance">Proposed Allowance (RM)</label>
+                <input type="number" step="0.01" min="0" name="proposed_allowance" id="proposed_allowance" required
+                       value="{{ old('proposed_allowance', $draftDetail?->proposed_allowance) }}">
+                @error('proposed_allowance') <p class="field-error">{{ $message }}</p> @enderror
+
+                <h3>Section C: GRA Details</h3>
                 @if ($draft ?? false)
                     <p class="queue-meta">
-                        Pre-filled from your saved draft — update anything before submitting.
+                        Pre-filled from your saved draft; update anything before submitting.
                     </p>
                 @else
                     <p class="queue-meta">
-                        Every application starts blank, even if you've applied before — fill in your
+                        Every application starts blank, even if you've applied before; fill in your
                         current details.
                     </p>
                 @endif
@@ -179,14 +186,17 @@
                 <label for="admission_date">Admission Date</label>
                 <input type="date" name="admission_date" id="admission_date" required
                        value="{{ old('admission_date', $profile?->admission_date?->format('Y-m-d')) }}">
-                <p class="queue-meta" style="margin-top: -8px;">Your academic admission date — a different date from Service Start Date below, which is what your Stage Gate schedule is actually built from.</p>
+                <p class="queue-meta" style="margin-top: -8px;">Your academic admission date; a different date from Service Start Date below, which is what your Stage Gate schedule is actually built from.</p>
+
+                <label for="candidature_period">Period Candidature</label>
+                <input type="text" name="candidature_period" id="candidature_period" value="{{ old('candidature_period', $profile?->candidature_period) }}">
 
                 <label for="thesis_title">Thesis Title</label>
                 <input type="text" name="thesis_title" id="thesis_title" value="{{ old('thesis_title', $profile?->thesis_title) }}">
 
                 <label for="co_supervisor_id">Co-Supervisor <span style="color: var(--text-grey);">(if any)</span></label>
                 <select name="co_supervisor_id" id="co_supervisor_id">
-                    <option value="">— None —</option>
+                    <option value="">None</option>
                     @foreach ($supervisors ?? [] as $supervisor)
                         <option value="{{ $supervisor->id }}" @selected((string) old('co_supervisor_id', $profile?->co_supervisor_id) === (string) $supervisor->id)>{{ $supervisor->name }}</option>
                     @endforeach
@@ -228,12 +238,11 @@
                 <input type="date" name="service_start_date" id="service_start_date" required
                        value="{{ old('service_start_date', $draftDetail?->service_start_date?->format('Y-m-d')) }}">
                 <p class="queue-meta" style="margin-top: -8px;">
-                    Your Stage Gate schedule is built from this date. Service End Date and the proposed
-                    allowance are not entered here — the end date is calculated automatically (24 months
-                    for Master's, 42 for PhD), and CGS sets the allowance when they approve.
+                    Your Stage Gate schedule is built from this date. Service End Date is not entered
+                    here; it is calculated automatically (24 months for Master's, 42 for PhD).
                 </p>
 
-                <h3>Section D — Academic Qualification</h3>
+                <h3>Section D: Academic Qualification</h3>
                 @php($academicRows = ($academics ?? collect())->isNotEmpty() ? $academics : collect([null, null, null]))
                 @foreach ($academicRows as $i => $row)
                     <div class="haziq-repeatable-row">
@@ -246,7 +255,7 @@
                     </div>
                 @endforeach
 
-                <h3>Section E — Working Experience</h3>
+                <h3>Section E: Working Experience</h3>
                 @php($experienceRows = ($experiences ?? collect())->isNotEmpty() ? $experiences : collect([null, null]))
                 @foreach ($experienceRows as $i => $row)
                     <div class="haziq-repeatable-row">
@@ -258,7 +267,7 @@
                     </div>
                 @endforeach
 
-                <h3>Section F — Publications <span style="color: var(--text-grey); font-weight: normal;">(optional)</span></h3>
+                <h3>Section F: Publications <span style="color: var(--text-grey); font-weight: normal;">(optional)</span></h3>
                 @php($publicationRows = ($publications ?? collect())->isNotEmpty() ? $publications : collect([null, null]))
                 @foreach ($publicationRows as $i => $row)
                     <div class="haziq-repeatable-row">
@@ -276,9 +285,9 @@
                     </div>
                 @endforeach
 
-                <h3>Section A — Documents</h3>
+                <h3>Section A: Documents</h3>
                 <p class="queue-meta">
-                    Only required to Submit — Save Draft works with none, some, or all of these uploaded.
+                    Only required to Submit; Save Draft works with none, some, or all of these uploaded.
                 </p>
                 @php($draftDocLabels = ($draftDocuments ?? collect())->pluck('doc_type'))
                 @foreach ([
@@ -293,7 +302,7 @@
                 ] as $field => $label)
                     <label for="{{ $field }}">{{ $label }}
                         @if ($draftDocLabels->contains($label))
-                            <span style="color: var(--success-fg);">— already uploaded, choose a file only to replace it</span>
+                            <span style="color: var(--success-fg);">: already uploaded, choose a file only to replace it</span>
                         @endif
                     </label>
                     <input type="file" name="{{ $field }}" id="{{ $field }}">

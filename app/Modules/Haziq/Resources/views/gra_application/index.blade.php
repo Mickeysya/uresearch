@@ -8,6 +8,8 @@
 
 @section('content')
 <div class="card-container-inline">
+    <x-core::page-header title="GRA Applicants" subtitle="Every GRA application in play, and where it's piling up." />
+
     {{-- Always exactly one tab active, never a combined view -- same
          rule and same style as GA Applicants' own Application/Extension
          tabs. Confirmed explicitly 2026-11-10: "buat sama cam ga." --}}
@@ -20,7 +22,6 @@
 
     <div class="card card-wide">
         <h2>Pending by Stage</h2>
-        <div class="card-divider"></div>
         <p class="queue-meta">Where applications are piling up right now. Click a bar to see who's there.</p>
 
         @include('core::dashboard.partials.chartjs')
@@ -102,15 +103,13 @@
 
     <div class="card card-wide">
         @if ($selectedStage)
-            <h2>{{ $selectedStageLabel }} — {{ $applications->total() }} {{ Str::plural('student', $applications->total()) }}</h2>
-            <div class="card-divider"></div>
+            <h2>{{ $selectedStageLabel }}: {{ $applications->total() }} {{ Str::plural('student', $applications->total()) }}</h2>
             <p class="queue-meta">
                 Only students currently at this stage.
                 <a href="{{ route('gra-application.index', ['type' => $selectedType]) }}">Clear filter, show every stage</a>
             </p>
         @else
             <h2>GRA Applicants</h2>
-            <div class="card-divider"></div>
             <p class="queue-meta">Every applicant. Click a bar above to narrow this to one stage.</p>
         @endif
 

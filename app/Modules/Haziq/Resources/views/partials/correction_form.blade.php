@@ -18,7 +18,7 @@
 --}}
 <form method="POST" action="{{ route($requestRoute, $application) }}" style="margin-top: 10px;">
     @csrf
-    <label>Request Correction — tick everything that needs fixing</label>
+    <label>Request Correction: tick everything that needs fixing</label>
 
     @if (count($sectionLabels))
         <p style="font-weight: 600; font-size: 13px; margin: 10px 0 4px;">Sections</p>
@@ -51,7 +51,7 @@
         </div>
     @endforeach
 
-    <label for="remarks-{{ $application->id }}" style="margin-top: 10px;">Reason — shown to the student</label>
+    <label for="remarks-{{ $application->id }}" style="margin-top: 10px;">Reason: shown to the student</label>
     <textarea name="remarks" id="remarks-{{ $application->id }}" rows="2" required
               placeholder="Applies to everything ticked above."></textarea>
 

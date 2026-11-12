@@ -1,14 +1,16 @@
 @extends('core::layouts.app')
 
-@section('title', 'GRA Application — ' . $stage->queueTitle())
+@section('title', 'GRA Application: ' . $stage->queueTitle())
 
 @push('head')
     @include('haziq::partials.styles')
 @endpush
 
 @section('content')
-<h2>GRA Application — {{ $stage->queueTitle() }}</h2>
-<p class="queue-meta">{{ $applications->count() }} {{ Str::plural('application', $applications->count()) }} awaiting your decision.</p>
+<div class="card-container-inline">
+    <x-core::page-header
+        title="GRA Application: {{ $stage->queueTitle() }}"
+        subtitle="{{ $applications->count() }} {{ Str::plural('application', $applications->count()) }} awaiting your decision." />
 
 @forelse ($applications as $application)
     <div class="app-item">
@@ -23,10 +25,11 @@
 
         @include('haziq::gra_application._detail', ['application' => $application])
 
-        @if ($application->documents->isNotEmpty())
+        @php($queueDocuments = $application->documents->whereIn('doc_type', array_values($documentTypes)))
+        @if ($queueDocuments->isNotEmpty())
             <ul class="doc-list">
-                @foreach ($application->documents as $doc)
-                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }} — {{ $doc->original_name }}</a></li>
+                @foreach ($queueDocuments as $doc)
+                    <li><a href="{{ $doc->url() }}">{{ $doc->doc_type }}: {{ $doc->original_name }}</a></li>
                 @endforeach
             </ul>
         @endif
@@ -54,6 +57,7 @@
 @empty
     <div class="empty-state">Nothing is waiting on you right now.</div>
 @endforelse
+</div>
 
 @include('haziq::partials.confirm_scripts')
 @endsection
