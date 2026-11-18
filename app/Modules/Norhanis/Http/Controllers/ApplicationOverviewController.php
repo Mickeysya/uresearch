@@ -177,7 +177,7 @@ class ApplicationOverviewController extends Controller
     }
 
     /**
-     * The sidebar links to one module's list and its Reports & Analytics,
+     * The sidebar links to one module's list and its Reports and Analytics,
      * for CGS when it approves it. Each of the three workflows returns this
      * from its own links(). The report has its own link because the button
      * on the list was the only way in, and CGS could not find it.
@@ -200,7 +200,7 @@ class ApplicationOverviewController extends Controller
 
         if (in_array($user->role, ApplicationReportController::REPORT_ROLES, true)) {
             $links[] = [
-                'label' => ucfirst($slug).' Reports & Analytics',
+                'label' => ucfirst($slug).' Reports and Analytics',
                 'route' => 'norhanis.report',
                 'params' => ['module' => $slug],
             ];

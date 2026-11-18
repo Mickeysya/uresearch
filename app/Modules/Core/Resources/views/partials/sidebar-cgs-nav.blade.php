@@ -136,12 +136,29 @@
     </div>
 </div>
 
-<a href="{{ route('cgs.reports.index') }}" class="nav-item @if(request()->routeIs('cgs.reports.*')) active @endif" title="Reports and Analytics">
+{{-- Reports and Analytics is the first item of the Actions tree below,
+     next to the reports modules declare there. Top-level only when no
+     Actions tree renders, so no CGS user loses the link.
+
+     It opens the Travel, Claims and Publication report for all modules
+     together (Norhanis' norhanis.report) for anyone who can open it --
+     /cgs/reports is still a placeholder -- and /cgs/reports for everyone
+     else. Each module's own report stays under that module in Actions. --}}
+@php
+    $reportModules = class_exists(\App\Modules\Norhanis\Http\Controllers\ApplicationReportController::class) && Route::has('norhanis.report')
+        ? \App\Modules\Norhanis\Http\Controllers\ApplicationReportController::reportModulesFor(auth()->user())
+        : [];
+    $reportsUrl = $reportModules ? route('norhanis.report') : route('cgs.reports.index');
+    $onReports = request()->routeIs('cgs.reports.*') || (request()->routeIs('norhanis.report') && request()->route('module') === null);
+@endphp
+@if (collect($extraLinks ?? [])->reject(fn ($l) => in_array($l['route'], $attendanceLinkRoutes, true))->isEmpty())
+<a href="{{ $reportsUrl }}" class="nav-item @if($onReports) active @endif" title="Reports and Analytics">
     <span class="nav-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>
     </span>
     <span class="nav-label">Reports and Analytics</span>
 </a>
+@endif
 
 {{-- ---- Administration --------------------------------------------------
      Non-Executive CGS only (route middleware enforces this regardless), and
@@ -176,7 +193,7 @@
          than eight. Opens itself when you are on one of its pages, like every
          other tree here. --}}
     @php
-        $actionsOpen = $unplacedLinks->contains(fn ($l) => request()->routeIs($l['route']));
+        $actionsOpen = $onReports || $unplacedLinks->contains(fn ($l) => request()->routeIs($l['route']));
 
         // Grouped by the module that declared each link (ModuleRegistry
         // tags them). A link with no module -- nothing produces one today --
@@ -196,6 +213,9 @@
         </button>
         <div class="nav-tree-panel">
             <div class="nav-tree-items">
+                <a href="{{ $reportsUrl }}"
+                   class="nav-subitem @if($onReports) active @endif"
+                   title="Reports and Analytics">Reports and Analytics</a>
                 {{-- Same rule as the queue tree above (core::partials.queue-links):
                      one module, one link, stays a link -- naming the module as
                      well would just say "Hardbound Submission: My Signature".
