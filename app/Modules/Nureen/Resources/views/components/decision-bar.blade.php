@@ -7,6 +7,9 @@
     // ['route' => ..., 'label' => ...]: a secondary action posting the same
     // remarks to another route (GA Extension's return to the supervisor).
     'returnAction' => null,
+    // A list of those, one button each -- GA Extension's Senior Director can
+    // send it back to CGS or to the supervisor.
+    'returnActions' => [],
 ])
 
 {{--
@@ -64,10 +67,10 @@
     <div class="nureen-decision-actions">
         <button type="submit" name="decision" value="approve">{{ $approveLabel }}</button>
         <button type="submit" name="decision" value="reject" class="btn-reject" data-needs-reason="Give a reason before rejecting: the student is told why.">Reject</button>
-        @if ($returnAction)
-            <button type="submit" class="btn-secondary" formaction="{{ $returnAction['route'] }}"
-                    data-needs-reason="Say what has to change before sending it back.">{{ $returnAction['label'] }}</button>
-        @endif
+        @foreach (array_filter([$returnAction, ...$returnActions]) as $return)
+            <button type="submit" class="btn-secondary" formaction="{{ $return['route'] }}"
+                    data-needs-reason="Say what has to change before sending it back.">{{ $return['label'] }}</button>
+        @endforeach
     </div>
 
     @if ($hint)

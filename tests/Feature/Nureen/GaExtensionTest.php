@@ -4,7 +4,6 @@ namespace Tests\Feature\Nureen;
 
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
-use App\Modules\Core\Models\ApprovalHistory;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionInformational;
@@ -12,9 +11,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
-use Tests\Support\MakesUsers;
 use Tests\Feature\Nureen\Concerns\FilesGaExtensions;
 use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
+use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
 /**
@@ -230,8 +229,14 @@ class GaExtensionTest extends TestCase
             ->assertSee($supervisor->name);
     }
 
-    public function test_the_default_cgs_chain_needs_only_two_approvals(): void
+    public function test_the_cgs_chain_needs_only_two_approvals(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         Storage::fake('local');
         Notification::fake();
 
@@ -365,6 +370,12 @@ class GaExtensionTest extends TestCase
 
     public function test_the_senior_director_is_informed_but_cannot_act_in_cgs_mode(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         Storage::fake('local');
         Notification::fake();
 
@@ -398,6 +409,12 @@ class GaExtensionTest extends TestCase
 
     public function test_a_rejection_anywhere_in_the_chain_closes_it(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         Storage::fake('local');
 
         $supervisor = $this->supervisor();
@@ -429,6 +446,12 @@ class GaExtensionTest extends TestCase
 
     public function test_cgs_staff_can_return_an_application_to_the_supervisor_with_a_reason(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         Storage::fake('local');
 
         $supervisor = $this->supervisor();
@@ -484,6 +507,12 @@ class GaExtensionTest extends TestCase
 
     public function test_a_role_not_holding_the_applications_current_stage_cannot_return_it(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         Storage::fake('local');
 
         $supervisor = $this->supervisor();
@@ -513,6 +542,12 @@ class GaExtensionTest extends TestCase
 
     public function test_the_system_checks_panel_shows_every_required_type_as_present(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         Storage::fake('local');
 
         $supervisor = $this->supervisor();
@@ -531,7 +566,7 @@ class GaExtensionTest extends TestCase
             ->assertSee('System checks')
             ->assertSee('IC or Passport/Visa Copy')
             ->assertSee('Admission Letter &amp; Offer Letter', false)
-            ->assertSee("Supervisor&#039;s Supporting Letter", false)
+            ->assertSee('Supervisor&#039;s Supporting Letter', false)
             ->assertDontSee('(missing)');
     }
 }

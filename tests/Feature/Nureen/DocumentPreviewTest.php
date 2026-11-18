@@ -221,19 +221,28 @@ class DocumentPreviewTest extends TestCase
             ->assertSee('class="file-preview"', false);
     }
 
-    public function test_ga_extension_shows_return_to_supervisor_in_the_bar_for_cgs_only(): void
+    public function test_ga_extension_shows_each_stages_returns_in_the_bar_only_to_its_holder(): void
     {
+        // The default chain since 2026-11-12: Admin -> CGS -> Supervisor ->
+        // Senior Director. CGS may return to Admin; the Senior Director to
+        // CGS or the supervisor (GaExtensionWorkflow::returnTargets()).
         $this->actingAs($this->student)->post(route('ga-extension.store'), $this->gaExtensionFields() + $this->gaExtensionDocuments());
         $application = Application::where('module_type', 'ga_extension')->sole();
 
+        $cgs = $this->cgs();
         $this->actingAs($this->admin())->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+        $this->actingAs($cgs)->get(route('ga-extension.queue', ['stage' => 'cgs_verify']))
+            ->assertSee('Return to Admin')
+            ->assertSee('formaction="'.route('ga-extension.return', [$application, 'to' => 'admin_verify']).'"', false)
+            ->assertDontSee('Return to supervisor');
 
-        $this->actingAs($this->supervisor)->get(route('ga-extension.queue'))->assertDontSee('Return to supervisor');
+        $this->actingAs($cgs)->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
+        $this->actingAs($this->supervisor)->get(route('ga-extension.queue'))->assertDontSee('Return to');
 
         $this->actingAs($this->supervisor)->post(route('ga-extension.decide', $application), ['decision' => 'approve']);
-        $this->actingAs($this->cgs())->get(route('ga-extension.queue', ['stage' => 'cgs_verify']))
-            ->assertSee('Return to supervisor')
-            ->assertSee('formaction="'.route('ga-extension.return', $application).'"', false);
+        $this->actingAs($this->seniorDirector())->get(route('ga-extension.queue', ['stage' => 'senior_director']))
+            ->assertSee('formaction="'.route('ga-extension.return', [$application, 'to' => 'cgs_verify']).'"', false)
+            ->assertSee('formaction="'.route('ga-extension.return', [$application, 'to' => 'supervisor']).'"', false);
     }
 
     /* -----------------------------------------------------------------

@@ -6,6 +6,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\WorkflowEngine;
 use App\Modules\Core\Support\Role;
+use App\Modules\Nureen\Workflows\GaExtensionWorkflow;
 use App\Modules\Nureen\Workflows\SupervisionWorkflow;
 
 /**
@@ -15,7 +16,7 @@ use App\Modules\Nureen\Workflows\SupervisionWorkflow;
  * hint under it, and GA Extension's Return. One place per module, so the
  * four _detail views stay markup.
  *
- * @phpstan-type Panel array{documents: array<int, array<string, mixed>>, approveLabel: string, hint: ?string, returnAction: ?array{route: string, label: string}}
+ * @phpstan-type Panel array{documents: array<int, array<string, mixed>>, approveLabel: string, hint: ?string, returnAction: ?array{route: string, label: string}, returnActions?: array<int, array{route: string, label: string}>}
  */
 final class ApproverPanel
 {
@@ -93,15 +94,25 @@ final class ApproverPanel
             ...DocumentPreviews::attachments($application, $viewer),
         ];
 
-        // Only Non-Executive CGS at cgs_verify may send it back (see
-        // GaExtensionController::returnToSupervisor()).
-        $canReturn = $stage?->key === 'cgs_verify' && $viewer?->role === $stage->role;
+        // One Return button per earlier stage this one may send it back to
+        // (GaExtensionWorkflow::returnTargets()), shown only to whoever holds
+        // the current stage -- the engine re-checks on submit.
+        $returns = [];
+
+        if ($stage && $viewer?->role === $stage->role) {
+            foreach (app(GaExtensionWorkflow::class)->returnTargets($application) as $to => $label) {
+                $returns[] = ['route' => route('ga-extension.return', [$application, 'to' => $to]), 'label' => $label];
+            }
+        }
+
+        $final = $stage?->key === 'senior_director';
 
         return [
             'documents' => $documents,
             'approveLabel' => 'Approve',
-            'hint' => null,
-            'returnAction' => $canReturn ? ['route' => route('ga-extension.return', $application), 'label' => 'Return to supervisor'] : null,
+            'hint' => $final ? 'Your decision is final: the student and their supervisor are told, and an approval moves the GA end date.' : null,
+            'returnAction' => null,
+            'returnActions' => $returns,
         ];
     }
 

@@ -88,6 +88,12 @@ class GaExtensionHandbookTest extends TestCase
 
     public function test_an_ineligible_student_can_still_submit_and_cgs_sees_the_warning(): void
     {
+        // Walks the 'cgs' chain (Admin -> Supervisor -> CGS, final), the
+        // default until 2026-11-12 and still the chain of every application
+        // submitted under it. The default 'ga_application' chain is
+        // GaExtensionChainTest's.
+        config(['nureen.ga_extension.final_approver' => 'cgs']);
+
         Storage::fake('local');
         Notification::fake();
         $supervisor = $this->supervisor();

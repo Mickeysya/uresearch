@@ -9,11 +9,9 @@
         'moduleLabel' => 'GA Extension',
         'decideRoute' => 'ga-extension.decide',
         'detailView' => 'nureen::ga_extension._detail',
+        // Returns are offered by each row's own decision bar (ApproverPanel::
+        // gaExtension(), one button per GaExtensionWorkflow::returnTargets()
+        // entry), not by Core's single-route return form.
         'intro' => view('nureen::ga_extension._queue_intro', ['bottleneck' => $bottleneck])->render(),
-    ] + ($canReturn ? [
-        // Only CGS Staff, at cgs_verify, gets this -- see
-        // GaExtensionController::queue()/returnToSupervisor().
-        'returnRoute' => 'ga-extension.return',
-        'returnLabel' => 'Send back to the supervisor',
-    ] : []))
+    ])
 @endsection

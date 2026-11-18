@@ -11,9 +11,9 @@ use App\Modules\Nureen\Http\Controllers\DocumentPreviewController;
 use App\Modules\Nureen\Http\Controllers\DraftsController;
 use App\Modules\Nureen\Http\Controllers\ExpectedDecisionController;
 use App\Modules\Nureen\Http\Controllers\GaExtensionController;
-use App\Modules\Nureen\Http\Controllers\SupervisionController;
 use App\Modules\Nureen\Http\Controllers\StaffApplicationController;
 use App\Modules\Nureen\Http\Controllers\StuckReviewsController;
+use App\Modules\Nureen\Http\Controllers\SupervisionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,7 +26,6 @@ Route::middleware('auth')->group(function () {
     // -- what staff emails link to (applications.show is students-only).
     // Access: Support\StaffApplicationAccess.
     Route::get('/nureen/applications/{application}', [StaffApplicationController::class, 'show'])->name('nureen.application');
-
 
     // ---- GA Extension -------------------------------------------------
     Route::middleware('role:'.Role::STUDENT)->group(function () {
@@ -48,10 +47,10 @@ Route::middleware('auth')->group(function () {
     ]))->group(function () {
         Route::get('/ga-extension/queue', [GaExtensionController::class, 'queue'])->name('ga-extension.queue');
         Route::post('/ga-extension/{application}/decide', [GaExtensionController::class, 'decide'])->name('ga-extension.decide');
-        // Open to the whole chain; WorkflowEngine::returnTo() refuses it
-        // anywhere but CGS Staff's cgs_verify stage -- see
-        // GaExtensionController::returnToSupervisor().
-        Route::post('/ga-extension/{application}/return', [GaExtensionController::class, 'returnToSupervisor'])->name('ga-extension.return');
+        // Open to the whole chain; GaExtensionWorkflow::returnTargets() says
+        // which stage may go back where, and WorkflowEngine::returnTo()
+        // checks the actor -- see GaExtensionController::returnToEarlierStage().
+        Route::post('/ga-extension/{application}/return', [GaExtensionController::class, 'returnToEarlierStage'])->name('ga-extension.return');
     });
 
     // Section J of the generated form: CGS staff, at the cgs_verify stage
