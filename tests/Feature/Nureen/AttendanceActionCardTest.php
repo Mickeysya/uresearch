@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Nureen;
 
+use App\Modules\Core\Contracts\SuppliesDecisionDates;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\User;
 use App\Modules\Nureen\Database\Seeders\AttendanceRiskDemoSeeder;
@@ -13,6 +14,7 @@ use App\Modules\Nureen\Support\AttendanceEarlyWarning;
 use App\Modules\Nureen\Support\AttendanceTarget;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Tests\Feature\Nureen\Concerns\KeepsJobsOffTheDevQueue;
 use Tests\Support\MakesUsers;
@@ -257,15 +259,24 @@ class AttendanceActionCardTest extends TestCase
 
         // The Senior Director's stage has no charter figure: no date is invented.
         $this->pendingGaExtension($student, 'senior_director', 'senior_director');
-        // A teammate's module keeps no charter at all.
-        Application::create([
+        // A teammate's module keeps no charter at all. (This was 'travel'
+        // until Norhanis's TravelWorkflow gained a charter; Haziq's GRA
+        // Application keeps none. If it ever does, the guard below says so
+        // plainly -- swap in another module that does not implement
+        // SuppliesDecisionDates.)
+        $noCharter = Application::create([
             'student_id' => $student->id,
             'submitted_by_id' => $student->id,
-            'module_type' => 'travel',
+            'module_type' => 'gra_application',
             'status' => Application::STATUS_PENDING,
-            'current_stage' => 'supervisor',
+            'current_stage' => 'admin_verify',
             'submitted_at' => now(),
         ]);
+        $this->assertNotInstanceOf(
+            SuppliesDecisionDates::class,
+            $noCharter->module(),
+            'gra_application now keeps a charter; use a module that does not implement SuppliesDecisionDates.',
+        );
 
         $this->dashboard($student)->assertSee('In progress')->assertDontSee('next decision by');
     }
@@ -345,5 +356,66 @@ class AttendanceActionCardTest extends TestCase
         $this->dashboard($projection)->assertSee('Attend 74 of the next 100 sessions');
         $this->dashboard($current)->assertSee('Justification needed');
         $this->dashboard($steady)->assertSee('On track');
+    }
+
+    public function test_the_demo_seeder_creates_its_students_on_an_empty_database(): void
+    {
+        Notification::fake();
+        $this->assertSame(0, User::count());
+
+        $this->seed(AttendanceRiskDemoSeeder::class);
+        $this->seed(AttendanceRiskDemoSeeder::class);
+
+        // The three students and the supervisor they need -- once each, despite two runs.
+        $this->assertSame(4, User::count());
+        $supervisor = User::where('email', 'supervisor@utp.edu.my')->sole();
+
+        $students = collect(AttendanceRiskDemoSeeder::STUDENTS)->map(function (array $who, string $matric) use ($supervisor) {
+            [$name, $email] = $who;
+            $student = User::where('matric_no', $matric)->sole();
+
+            $this->assertSame($name, $student->name);
+            $this->assertSame($email, $student->email);
+            $this->assertSame('student', $student->role);
+            $this->assertSame('Computing', $student->department);
+            $this->assertSame($supervisor->id, $student->supervisor_id);
+            $this->assertTrue(Hash::check('password', $student->password));
+            $this->assertSame(4, AttendanceRecord::where('student_id', $student->id)->count());
+
+            return $student;
+        });
+
+        $state = fn (string $matric) => AttendanceRiskState::where('student_id', $students[$matric]->id)->first();
+
+        // 22093001: projection only.
+        $this->assertSame(95.0, $state(AttendanceRiskDemoSeeder::PROJECTION_ONLY)->current_percentage);
+        $this->assertSame(75.0, $state(AttendanceRiskDemoSeeder::PROJECTION_ONLY)->projected_percentage);
+        $this->assertSame('projected', $state(AttendanceRiskDemoSeeder::PROJECTION_ONLY)->reason);
+
+        // 22001011: under 80% now and declining -- both rules.
+        $this->assertSame(27.5, $state(AttendanceRiskDemoSeeder::CURRENT_RULE)->current_percentage);
+        $this->assertSame('both', $state(AttendanceRiskDemoSeeder::CURRENT_RULE)->reason);
+
+        // 22001012: steady 90%, not flagged.
+        $this->assertSame(90.0, $state(AttendanceRiskDemoSeeder::STEADY)->current_percentage);
+        $this->assertFalse($state(AttendanceRiskDemoSeeder::STEADY)->at_risk);
+        $this->assertNull($state(AttendanceRiskDemoSeeder::STEADY)->reason);
+
+        $this->dashboard($students[AttendanceRiskDemoSeeder::PROJECTION_ONLY])->assertSee('Attend 74 of the next 100 sessions');
+        $this->dashboard($students[AttendanceRiskDemoSeeder::CURRENT_RULE])->assertSee('Justification needed');
+        $this->dashboard($students[AttendanceRiskDemoSeeder::STEADY])->assertSee('On track');
+    }
+
+    public function test_the_demo_seeder_keeps_existing_students_as_they_are(): void
+    {
+        Notification::fake();
+        $existing = $this->student(AttendanceRiskDemoSeeder::PROJECTION_ONLY, 'my-own-hafiz@test.my');
+        $before = $existing->only(['name', 'email', 'department', 'supervisor_id', 'password']);
+
+        $this->seed(AttendanceRiskDemoSeeder::class);
+
+        $this->assertSame($before, $existing->fresh()->only(['name', 'email', 'department', 'supervisor_id', 'password']));
+        $this->assertSame(1, User::where('matric_no', AttendanceRiskDemoSeeder::PROJECTION_ONLY)->count());
+        $this->assertFalse(User::where('email', 'hafiz-22093001@utp.edu.my')->exists());
     }
 }
