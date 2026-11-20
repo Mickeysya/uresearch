@@ -6,6 +6,7 @@ use App\Modules\Core\Models\Application;
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\TravelDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\BulkDecidableWorkflow;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
@@ -27,7 +28,7 @@ class DepartmentScopingTest extends TestCase
     use MakesUsers;
     use RefreshDatabase;
 
-    protected function travelAwaitingChair(string $department): Application
+    protected function travelAwaitingChair(string $department, string $module = 'travel'): Application
     {
         $student = $this->user(Role::STUDENT, [
             'name' => 'Candidate '.$department,
@@ -39,11 +40,15 @@ class DepartmentScopingTest extends TestCase
         $application = Application::create([
             'student_id' => $student->id,
             'submitted_by_id' => $student->id,
-            'module_type' => 'travel',
+            'module_type' => $module,
             'status' => Application::STATUS_PENDING,
             'current_stage' => 'chair',
             'submitted_at' => now()->subDay(),
         ]);
+
+        if ($module !== 'travel') {
+            return $application;
+        }
 
         TravelDetail::create([
             'application_id' => $application->id,
@@ -79,7 +84,8 @@ class DepartmentScopingTest extends TestCase
             ->assertSee('1 application awaiting')
             ->getContent();
 
-        $this->assertStringContainsString('value="'.$mine->id.'"', $html);
+        // The row id, not a checkbox: Travel decides one at a time.
+        $this->assertStringContainsString('queue-row-id">#'.$mine->id.'<', $html);
     }
 
     public function test_a_chair_with_no_department_sees_only_undeclared_applications(): void
@@ -126,11 +132,14 @@ class DepartmentScopingTest extends TestCase
 
     public function test_bulk_deciding_skips_rows_outside_the_actors_department(): void
     {
-        $mine = $this->travelAwaitingChair('Civil Engineering');
-        $theirs = $this->travelAwaitingChair('Petroleum Engineering');
+        // Travel now decides one at a time, so the bulk path is exercised on
+        // a test-only workflow with the same Chair stage.
+        BulkDecidableWorkflow::register();
+        $mine = $this->travelAwaitingChair('Civil Engineering', BulkDecidableWorkflow::KEY);
+        $theirs = $this->travelAwaitingChair('Petroleum Engineering', BulkDecidableWorkflow::KEY);
 
         $this->actingAs($this->chairOf('Civil Engineering'))
-            ->post(route('queue.decide-bulk', 'travel'), [
+            ->post(route('queue.decide-bulk', BulkDecidableWorkflow::KEY), [
                 'ids' => [$mine->id, $theirs->id],
                 'decision' => 'approve',
             ])

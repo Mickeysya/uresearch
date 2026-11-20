@@ -7,6 +7,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Support\Role;
 use App\Modules\Norhanis\Models\TravelDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\BulkDecidableWorkflow;
 use Tests\Support\MakesUsers;
 use Tests\TestCase;
 
@@ -19,24 +20,41 @@ use Tests\TestCase;
  */
 class QueueTest extends TestCase
 {
-    use MakesUsers;
+    use MakesUsers { supervisor as makeSupervisor; }
     use RefreshDatabase;
 
-    /** @return array<int, Application> */
-    protected function pending(int $count, ?User $student = null): array
+    /**
+     * One supervisor per test, and every student in it is theirs: Travel's
+     * supervisor queue lists only the supervisor's own students
+     * (Norhanis\ApprovesAndNotifies::queueFor, since 2026-11-10).
+     */
+    protected function supervisor(string $email = 'sup@test.my'): User
     {
-        $student ??= $this->student();
+        return User::where('email', $email)->first() ?? $this->makeSupervisor($email);
+    }
+
+    /** @return array<int, Application> */
+    protected function pending(int $count, ?User $student = null, string $module = 'travel'): array
+    {
+        $student ??= User::where('email', 'student@test.my')->first() ?? $this->student();
+        $student->update(['supervisor_id' => $this->supervisor()->id]);
         $made = [];
 
         for ($i = 0; $i < $count; $i++) {
             $application = Application::create([
                 'student_id' => $student->id,
                 'submitted_by_id' => $student->id,
-                'module_type' => 'travel',
+                'module_type' => $module,
                 'status' => Application::STATUS_PENDING,
                 'current_stage' => 'supervisor',
                 'submitted_at' => now()->subDays($count - $i),
             ]);
+
+            $made[] = $application;
+
+            if ($module !== 'travel') {
+                continue;
+            }
 
             TravelDetail::create([
                 'application_id' => $application->id,
@@ -48,8 +66,6 @@ class QueueTest extends TestCase
                 'destination_address' => 'Kuala Lumpur',
                 'is_international' => false,
             ]);
-
-            $made[] = $application;
         }
 
         return $made;
@@ -66,7 +82,9 @@ class QueueTest extends TestCase
             ->getContent();
 
         // 20 a page, so the 25th row is on page two and there are page links.
-        $this->assertSame(20, substr_count($html, 'name="ids[]"'), 'Expected one page of rows.');
+        // Counted by the row id, not the checkbox: Travel decides one at a
+        // time, so its queue has no checkboxes.
+        $this->assertSame(20, substr_count($html, 'class="queue-row-id"'), 'Expected one page of rows.');
         $this->assertStringContainsString('class="pager"', $html);
 
         // How long each row has waited, as whole days. Carbon 3's diffInDays
@@ -115,26 +133,27 @@ class QueueTest extends TestCase
 
         $html = $this->actingAs($supervisor)->get(route('travel.queue'))->getContent();
         $this->assertLessThan(
-            strpos($html, 'value="'.$newest->id.'"'),
-            strpos($html, 'value="'.$oldest->id.'"'),
+            strpos($html, 'queue-row-id">#'.$newest->id.'<'),
+            strpos($html, 'queue-row-id">#'.$oldest->id.'<'),
             'A queue is first in, first out: the longest wait comes first.'
         );
 
         $html = $this->actingAs($supervisor)->get(route('travel.queue', ['sort' => 'newest']))->getContent();
         $this->assertLessThan(
-            strpos($html, 'value="'.$oldest->id.'"'),
-            strpos($html, 'value="'.$newest->id.'"'),
+            strpos($html, 'queue-row-id">#'.$oldest->id.'<'),
+            strpos($html, 'queue-row-id">#'.$newest->id.'<'),
             '?sort=newest has to actually reverse it.'
         );
     }
 
     public function test_a_page_of_applications_can_be_decided_in_one_submission(): void
     {
-        $applications = $this->pending(3);
+        BulkDecidableWorkflow::register();
+        $applications = $this->pending(3, null, BulkDecidableWorkflow::KEY);
         $ids = collect($applications)->pluck('id')->all();
 
         $this->actingAs($this->supervisor())
-            ->post(route('queue.decide-bulk', 'travel'), [
+            ->post(route('queue.decide-bulk', BulkDecidableWorkflow::KEY), [
                 'ids' => $ids,
                 'decision' => 'approve',
                 'remarks' => 'Cleared at the weekly review.',
@@ -157,13 +176,14 @@ class QueueTest extends TestCase
      */
     public function test_bulk_deciding_rows_that_are_not_yours_decides_nothing(): void
     {
-        $applications = $this->pending(2);
+        BulkDecidableWorkflow::register();
+        $applications = $this->pending(2, null, BulkDecidableWorkflow::KEY);
         $ids = collect($applications)->pluck('id')->all();
 
         // The Chair owns a stage in this chain, but not the one these rows
         // are sitting on.
         $this->actingAs($this->chair())
-            ->post(route('queue.decide-bulk', 'travel'), ['ids' => $ids, 'decision' => 'approve'])
+            ->post(route('queue.decide-bulk', BulkDecidableWorkflow::KEY), ['ids' => $ids, 'decision' => 'approve'])
             ->assertSessionHas('error');
 
         foreach ($applications as $application) {
@@ -172,7 +192,7 @@ class QueueTest extends TestCase
 
         // And a student cannot decide their own.
         $this->actingAs(User::find($applications[0]->student_id))
-            ->post(route('queue.decide-bulk', 'travel'), ['ids' => $ids, 'decision' => 'approve'])
+            ->post(route('queue.decide-bulk', BulkDecidableWorkflow::KEY), ['ids' => $ids, 'decision' => 'approve'])
             ->assertSessionHas('error');
 
         $this->assertSame(Application::STATUS_PENDING, $applications[0]->fresh()->status);
@@ -222,11 +242,14 @@ class QueueTest extends TestCase
 
     public function test_bulk_deciding_cannot_reach_into_another_module(): void
     {
+        BulkDecidableWorkflow::register();
         $travel = $this->pending(1)[0];
 
-        // Same ids, wrong module in the URL: scoped out by module_type.
+        // Same ids, wrong module in the URL: scoped out by module_type. The
+        // URL names a bulk-decidable module, so it is the module_type scope
+        // that stops it, not DecidesOneAtATime.
         $this->actingAs($this->supervisor())
-            ->post(route('queue.decide-bulk', 'publication'), ['ids' => [$travel->id], 'decision' => 'approve'])
+            ->post(route('queue.decide-bulk', BulkDecidableWorkflow::KEY), ['ids' => [$travel->id], 'decision' => 'approve'])
             ->assertSessionHas('error');
 
         $this->assertSame('supervisor', $travel->fresh()->current_stage);

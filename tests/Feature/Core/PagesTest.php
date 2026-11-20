@@ -51,6 +51,78 @@ class PagesTest extends TestCase
             ->assertDontSee('theirs.pdf');
     }
 
+    /**
+     * The Documents page pages in SQL, so its scope must name exactly the
+     * rows visibleTo() allows -- no more (a list naming files the download
+     * refuses) and no fewer (a file nobody can find). One pending application
+     * per stage of every chain, so every role holds some and misses others.
+     */
+    public function test_the_documents_scope_matches_visible_to_exactly(): void
+    {
+        $student = $this->student();
+        // A real chain: the viva notice skips its supervisor stage without one.
+        $student->update(['supervisor_id' => $this->supervisor('own-sup@test.my')->id]);
+        $registry = app(\App\Modules\Core\Services\ModuleRegistry::class);
+
+        foreach ($registry->all() as $module) {
+            foreach ($module->stages(null) as $stage) {
+                $application = \App\Modules\Core\Models\Application::create([
+                    'student_id' => $student->id,
+                    'module_type' => $module->key(),
+                    'status' => \App\Modules\Core\Models\Application::STATUS_PENDING,
+                    'current_stage' => $stage->key,
+                ]);
+
+                // The engine only ever parks an application on a stage of its
+                // own chain; a conditional stage this bare row cannot reach is
+                // a state real data never holds.
+                if (! $application->currentStage()) {
+                    $application->delete();
+
+                    continue;
+                }
+
+                \App\Modules\Core\Models\ApplicationDocument::create([
+                    'application_id' => $application->id, 'doc_type' => 'Letter',
+                    'original_name' => "{$module->key()}-{$stage->key}.pdf", 'path' => 'x', 'size_bytes' => 1,
+                ]);
+            }
+        }
+
+        foreach ([$this->supervisor(), $this->chair(), $this->cgs(), $this->dean(), $this->student('22009999', 'other@test.my')] as $user) {
+            $listed = \App\Modules\Core\Models\ApplicationDocument::query()->visibleTo($user)->pluck('id')->sort()->values();
+            $allowed = \App\Modules\Core\Models\ApplicationDocument::all()
+                ->filter(fn ($doc) => $doc->visibleTo($user))->pluck('id')->sort()->values();
+
+            $this->assertEquals($allowed->all(), $listed->all(), $user->role);
+        }
+    }
+
+    public function test_documents_pages_and_finds_a_file_by_its_reference(): void
+    {
+        $student = $this->student();
+
+        foreach (range(1, 55) as $i) {
+            $application = \App\Modules\Core\Models\Application::create([
+                'student_id' => $student->id, 'module_type' => 'travel',
+                'status' => \App\Modules\Core\Models\Application::STATUS_DRAFT,
+            ]);
+            \App\Modules\Core\Models\ApplicationDocument::create([
+                'application_id' => $application->id, 'doc_type' => 'Letter',
+                'original_name' => sprintf('file-%02d.pdf', $i), 'path' => 'x', 'size_bytes' => 1,
+            ]);
+        }
+
+        $this->actingAs($student)->get(route('documents.index'))
+            ->assertOk()->assertSee('Showing 1–50 of 55')->assertSee('file-55.pdf')->assertDontSee('file-05.pdf');
+
+        $this->actingAs($student)->get(route('documents.index', ['page' => 2]))
+            ->assertOk()->assertSee('file-05.pdf');
+
+        $this->actingAs($student)->get(route('documents.index', ['q' => $application->reference()]))
+            ->assertOk()->assertSee('file-55.pdf')->assertDontSee('file-54.pdf');
+    }
+
     public function test_the_calendar_renders_and_shows_a_real_date(): void
     {
         $student = $this->student();

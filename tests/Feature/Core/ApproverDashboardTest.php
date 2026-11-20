@@ -77,7 +77,9 @@ class ApproverDashboardTest extends TestCase
             // the examiner screens Core knows nothing about.
             ->assertSee('Pending Evaluation')
             ->assertSee('Conflict Detection')
-            ->assertSee('Re-viva Outcomes');
+            ->assertSee('DAC Compilation')
+            // Re-viva left the AE on 9 Nov 2026; CGS runs it end to end.
+            ->assertDontSee('Re-viva Outcomes');
     }
 
     /**

@@ -12,10 +12,11 @@ use Tests\TestCase;
  * The sidebar's queue list, grouped by module.
  *
  * A module contributes one queue per stage it owns for a role, and the nav
- * printed the MODULE's label for each. Hani's re-viva has four consecutive
+ * printed the MODULE's label for each. Hani's re-viva had four consecutive
  * Academic Executive stages, so that sidebar read "Re-viva Monitoring" four
  * times with nothing to tell them apart — four links nobody could choose
  * between, and a bug no test could see because every one of them resolved.
+ * Since 9 Nov 2026 those stages belong to the Senior Executive CGS.
  */
 class SidebarQueuesTest extends TestCase
 {
@@ -27,25 +28,19 @@ class SidebarQueuesTest extends TestCase
         $registry = app(ModuleRegistry::class);
 
         // The condition this is really about: more than one stage of one
-        // module on a single role. If re-viva is ever restaged, this test
-        // should start failing rather than quietly proving nothing.
-        $reViva = collect($registry->queuesForRole(Role::ACADEMIC_EXEC))
-            ->filter(fn ($q) => $q['module']->key() === 're_viva');
+        // module on a single role. Re-viva left the Academic Executive on
+        // 9 Nov 2026; its stages now sit with the Senior Executive CGS. If
+        // re-viva is ever restaged again, this should fail rather than
+        // quietly prove nothing.
+        $queues = $registry->queuesForRole(Role::SENIOR_EXEC_CGS);
+        $reViva = collect($queues)->filter(fn ($q) => $q['module']->key() === 're_viva');
 
-        $this->assertGreaterThan(1, $reViva->count(), 'Re-viva no longer has several AE stages.');
+        $this->assertGreaterThan(1, $reViva->count(), 'Re-viva no longer has several Senior Executive stages.');
 
-        $html = $this->actingAs($this->academicExec())
-            ->get(route('dashboard'))
-            ->assertOk()
-            ->getContent();
-
-        // The module's name appears once, as the group; the stages appear by
-        // their own names underneath it.
-        $sidebar = substr(
-            $html,
-            strpos($html, 'id="app-sidebar"'),
-            strpos($html, 'sidebar-footer') - strpos($html, 'id="app-sidebar"')
-        );
+        // The CGS roles have their own nav, so the grouping is checked on
+        // the approver partial itself (as the flat-or-tree test does).
+        $this->actingAs($this->seniorExec());
+        $sidebar = view('core::partials.sidebar-approver-nav', ['queues' => $queues])->render();
 
         $this->assertSame(
             1,
@@ -134,8 +129,9 @@ class SidebarQueuesTest extends TestCase
      * collapse into the "Pending My Action" tree, three or fewer stay flat.
      *
      * Checked against the rule rather than a fixed count per role, because
-     * the count moves whenever a module adds a stage for that role (Viva
-     * Voce took the Academic Executive from three modules to four). One role
+     * the count moves whenever a module adds or drops a stage for that role
+     * (Viva Voce took the Academic Executive from three modules to four;
+     * re-viva leaving the AE on 9 Nov 2026 took it back to three). One role
      * on each side keeps both branches covered.
      */
     public function test_the_flat_or_tree_decision_counts_modules(): void
@@ -144,15 +140,22 @@ class SidebarQueuesTest extends TestCase
             ->unique(fn ($q) => $q['module']->key())
             ->count();
 
-        $this->assertGreaterThanOrEqual(4, $modulesFor(Role::ACADEMIC_EXEC), 'The AE owns four or more modules.');
+        // The Dean is the tree side since re-viva left the AE (9 Nov 2026).
+        $this->assertGreaterThanOrEqual(4, $modulesFor(Role::DEAN_PGR), 'The Dean owns four or more modules.');
+        $this->assertLessThan(4, $modulesFor(Role::ACADEMIC_EXEC), 'The AE owns fewer than four modules.');
         // Not Registry: it lost its only queue when RPD was retired.
         $this->assertLessThan(4, $modulesFor(Role::SENIOR_EXEC_CGS), 'The Senior Executive owns fewer than four modules.');
 
-        $this->actingAs($this->academicExec())
+        $this->actingAs($this->dean())
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee('title="Pending My Action"', false)
             ->assertDontSee('nav-flat-queues', false);
+
+        $this->actingAs($this->academicExec())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('nav-flat-queues', false);
 
         // The CGS roles have their own nav, so the flat branch is checked on
         // the approver partial itself.

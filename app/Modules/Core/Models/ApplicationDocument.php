@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Models;
 
+use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Support\Role;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -74,9 +75,10 @@ class ApplicationDocument extends Model
      *
      * Kept beside visibleTo() deliberately: they must agree, and they are
      * easiest to keep in step when they are readable together. The stage
-     * check is the one that cannot be expressed in SQL here -- current_stage
-     * maps to a role through the module's own chain, which is PHP -- so the
-     * query is deliberately slightly wide and visibleTo() filters the rest.
+     * check resolves the user's role to (module_type, stage key) pairs in PHP
+     * first -- ModuleRegistry::queuesForRole() over each chain's superset --
+     * so the query is exact and the Documents page can paginate in SQL.
+     * visibleTo() still guards the download itself.
      */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
@@ -84,13 +86,24 @@ class ApplicationDocument extends Model
             return $query;
         }
 
-        return $query->whereHas('application', function (Builder $q) use ($user) {
+        $stages = app(ModuleRegistry::class)->queuesForRole((string) $user->role);
+
+        return $query->whereHas('application', function (Builder $q) use ($user, $stages) {
             $q->where('student_id', $user->id)
-                ->orWhere(fn (Builder $inner) => $inner->whereIn(
-                    'id',
-                    ApprovalHistory::where('approver_id', $user->id)->select('application_id')
-                ))
-                ->orWhere(fn (Builder $inner) => $inner->where('status', Application::STATUS_PENDING));
+                ->orWhereIn('id', ApprovalHistory::where('approver_id', $user->id)->select('application_id'));
+
+            if ($stages !== []) {
+                $q->orWhere(function (Builder $held) use ($stages) {
+                    $held->where('status', Application::STATUS_PENDING)
+                        ->where(function (Builder $pairs) use ($stages) {
+                            foreach ($stages as $queue) {
+                                $pairs->orWhere(fn (Builder $pair) => $pair
+                                    ->where('module_type', $queue['module']->key())
+                                    ->where('current_stage', $queue['stage']->key));
+                            }
+                        });
+                });
+            }
         });
     }
 }

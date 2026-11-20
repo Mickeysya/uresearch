@@ -1704,55 +1704,96 @@ button[value="rejected"]:hover {
     max-width: none;
 }
 
-.doc-group + .doc-group { margin-top: var(--space-6); }
-
-.doc-grid {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: var(--space-3);
+/* Visually hidden, still read by screen readers. */
+.doc-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
 }
 
-/* Not a card each -- a row each. Border and background say "list item",
-   and the only lifted thing on the page is the one being hovered. */
-.doc-card {
-    position: relative;
-    display: grid;
-    grid-template-columns: 38px minmax(0, 1fr) auto;
+/* The line above the table: the range shown and the one click that widens it. */
+.doc-scope {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-2);
+}
+
+.doc-range {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+    font-variant-numeric: tabular-nums;
+}
+
+.doc-range a { color: var(--accent-solid); font-weight: var(--weight-semi); }
+
+.doc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: 28px;
+    padding: 0 var(--space-2) 0 var(--space-3);
+    border: 1px solid var(--border-grey);
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    color: var(--text-dark);
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+    transition: border-color var(--duration-fast) var(--ease);
+}
+
+.doc-chip:hover { border-color: var(--accent-solid); }
+.doc-chip svg { width: 14px; height: 14px; color: var(--text-grey); }
+
+/* A records table: rules and alignment, no bands. The header is sentence
+   case here -- with six columns of plain words the shared uppercase header
+   is louder than the files it labels. */
+/* One solid panel: the page background is a photograph, and rows read
+   on a surface, not on it. No overflow here, so the header can stick. */
+.doc-panel {
     background: var(--surface);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-md);
-    transition: border-color var(--duration-fast) var(--ease),
-                background-color var(--duration-fast) var(--ease);
+    padding: 0 var(--space-2);
 }
 
-.doc-card:hover {
-    border-color: var(--accent-solid);
-    background: var(--surface-hover);
+.doc-table { margin-top: 0; }
+
+.doc-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: var(--weight-normal);
 }
 
-.doc-icon {
-    display: grid;
-    place-items: center;
-    width: 38px;
-    height: 38px;
-    border-radius: var(--radius-md);
-    background: var(--info-bg);
-    color: var(--info-fg);
+.doc-table td { vertical-align: middle; padding-top: 10px; padding-bottom: 10px; }
+.doc-table tbody tr:last-child td { border-bottom: 0; }
+.doc-table th:first-child,
+.doc-table td:first-child { padding-left: var(--space-2); }
+
+.doc-table .num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
-.doc-icon svg { width: 18px; height: 18px; }
-
-.doc-main { min-width: 0; }
+/* The identity column takes the width; everything else sizes to content. */
+.doc-file { width: 40%; min-width: 0; }
 
 .doc-name {
     display: block;
-    font-size: var(--text-md);
     font-weight: var(--weight-semi);
     color: var(--text-dark);
     text-decoration: none;
@@ -1761,40 +1802,92 @@ button[value="rejected"]:hover {
 
 .doc-name:hover { color: var(--accent-solid); text-decoration: underline; }
 
-.doc-meta {
-    margin: 2px 0 0;
+.doc-sub {
+    display: block;
+    margin-top: 2px;
     font-size: var(--text-xs);
     color: var(--text-grey);
 }
 
-.doc-meta a { color: inherit; }
-.doc-meta a:hover { color: var(--accent-solid); }
+.doc-sub a { color: inherit; }
+.doc-sub a:hover { color: var(--accent-solid); }
 
-.doc-side {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-    font-size: var(--text-xs);
-    color: var(--text-grey);
-    white-space: nowrap;
+.doc-ref {
+    color: var(--text-dark);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    text-decoration: none;
 }
 
-.doc-size { font-weight: var(--weight-semi); color: var(--text-body); }
+.doc-ref:hover { color: var(--accent-solid); text-decoration: underline; }
+
+.doc-student { color: var(--text-body); }
+.doc-size,
+.doc-date { color: var(--text-grey); }
+
+.doc-action { width: 1%; padding-right: var(--space-2) !important; }
+
+.doc-download {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    color: var(--text-grey);
+    transition: color var(--duration-fast) var(--ease),
+                background-color var(--duration-fast) var(--ease);
+}
+
+.doc-download:hover { color: var(--accent-solid); background: var(--accent-subtle); }
+.doc-download:focus-visible { outline: 2px solid var(--accent-solid); outline-offset: 1px; }
+.doc-download svg { width: 16px; height: 16px; }
+.doc-download.doc-link-disabled { opacity: .35; }
 
 /* The row is in the database but the file is not on disk. Worth saying
    out loud -- the alternative is a download that 404s silently. */
 .doc-missing {
-    position: absolute;
-    top: var(--space-2);
-    right: var(--space-2);
-    padding: 1px 7px;
+    display: inline-block;
+    margin-left: var(--space-1);
+    padding: 0 6px;
     border-radius: var(--radius-full);
     background: var(--danger-bg);
     color: var(--danger-fg);
-    font-size: 10px;
     font-weight: var(--weight-semi);
+    white-space: nowrap;
+}
+
+/* Phone: each row becomes a two-line entry -- file on top, the rest as one
+   grey line under it, download at the right. Nothing scrolls sideways. */
+@media (max-width: 720px) {
+    .doc-table thead { display: none; }
+
+    .doc-table,
+    .doc-table tbody { display: block; }
+
+    .doc-table tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: var(--space-3);
+        padding: var(--space-3) var(--space-2);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .doc-table td {
+        display: block;
+        padding: 0 !important;
+        border: 0;
+        width: auto;
+        text-align: left;
+    }
+
+    .doc-table .doc-file { grid-column: 1; }
+    .doc-table .doc-action { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
+    .doc-table .doc-app,
+    .doc-table .doc-student,
+    .doc-table .doc-date { grid-column: 1; margin-top: var(--space-1); font-size: var(--text-xs); color: var(--text-grey); }
+    .doc-table .doc-app .doc-sub { display: inline; margin: 0 0 0 var(--space-1); }
+    .doc-table td.num { text-align: left; }
+    .doc-table .doc-size { display: none; }
 }
 
 /* ============================================================
