@@ -1259,3 +1259,73 @@ applications from the record.
 (module, reference, status, stage, date), without a link until your workflow
 implements `ProvidesStaffView`. Return null for viewers who may not open the
 page.
+
+## 22. `php artisan demo:seed` crashes on a fresh database: no Admin decider (20 Nov 2026) — proposal only
+
+**Branch:** `nureen/demo-video-prep`. **Nothing outside this folder was
+changed.** (Section 21 is the Senior Director rename on
+`feature/students-page`, not yet committed, so that number is left free.)
+This expands §19b, which found the same gap before it was seen to crash.
+
+**What happens.** On a fresh database, `php artisan demo:seed` stops with
+
+    ErrorException: Undefined array key "admin"
+    at database/seeders/DemoDataSeeder.php:470   (deciderFor())
+
+**Why.** `DemoDataSeeder`'s GA Extension rows have no
+`final_approver_snapshot`, so `GaExtensionWorkflow::modeFor()` uses the live
+config, `ga_application` (the default since 12 Nov). That chain starts with
+**Admin** (`admin_verify`), then CGS, Supervisor and Senior Director.
+`runChain()` correctly walks the live chain, so it asks `deciderFor('admin')`.
+Admin is neither the supervisor nor department-scoped nor a Non-Executive
+CGS, so it reaches `return $this->deciders[$role];`. `loadDeciders()` has no
+`Role::ADMIN` entry.
+
+Every teammate's demo data stops at that point. Anything the seeder would
+create after GA Extension is never created.
+
+**Proposed fix** (`database/seeders/DemoDataSeeder.php`, shared, so not
+applied):
+
+```diff
+     protected function loadDeciders(): void
+     {
+         $this->deciders = [
++            Role::ADMIN => User::where('email', 'admin@utp.edu.my')->firstOrFail(),
+             Role::SUPERVISOR => User::where('email', 'supervisor@utp.edu.my')->firstOrFail(),
+```
+
+`admin@utp.edu.my` is made by `DatabaseSeeder`, so `firstOrFail()` is safe
+in the order `demo:seed` runs. None of GA Extension's `$outcomes` rejects at
+the first stage, which matters because Admin never rejects outright
+(`GaExtensionController::decide()`). The first decision in every list is
+`approve`.
+
+**Also stale, but not a crash: `CHAINS`.** It is only used by
+`decisionsFor()` to size the `force_outcome = 'approve'` list. With the old
+lengths, an "approve everything" scenario leaves these three modules one
+stage short of approved:
+
+```diff
+-        'ga_extension' => [Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS],
+-        'supervision' => [Role::SUPERVISOR, Role::NON_EXEC_CGS],
+-        'ga_certification' => [Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS],
++        'ga_extension' => [Role::ADMIN, Role::NON_EXEC_CGS, Role::SUPERVISOR, Role::SENIOR_DIRECTOR_CGS],
++        'supervision' => [Role::SUPERVISOR, Role::CHAIR, Role::NON_EXEC_CGS],
++        'ga_certification' => [Role::SUPERVISOR, Role::NON_EXEC_CGS, Role::SENIOR_DIRECTOR_CGS],
+```
+
+With the longer GA Extension chain, the two `['approve', 'approve', 'approve']`
+rows now end pending at the Senior Director rather than approved. That's
+harmless, and arguably useful because it gives the Senior Director's queue a
+row. Add a fourth `approve` to either row to keep one fully approved
+extension.
+
+**How to check:** on a scratch database, `./sync.sh --fresh` then
+`php artisan demo:seed`. It should finish, and
+`Application::where('module_type','ga_extension')->whereNotNull('current_stage')->pluck('current_stage')`
+should include stages past `admin_verify`.
+
+**For Nureen's demo video in the meantime:** `NureenVideoDemoSeeder`
+needs nothing from `demo:seed`. It uses only the accounts `DatabaseSeeder`
+makes.

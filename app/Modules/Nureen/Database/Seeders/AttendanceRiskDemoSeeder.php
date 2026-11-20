@@ -10,10 +10,11 @@ use App\Modules\Nureen\Support\AttendanceEarlyWarning;
 use App\Modules\Nureen\Support\AttendanceProvider;
 use App\Modules\Nureen\Support\AttendanceRiskEvaluator;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 
 /**
- * The three attendance-risk demo cases for the viva, on three existing
- * seeded students:
+ * The three attendance-risk demo cases for the viva, on three demo
+ * students (created here when missing -- see ensureStudents()):
  *
  *   22093001  projection only  10, 10, 9, 9 -- 95% so far, comfortably above
  *                              85%, so the original rule does not flag them;
@@ -55,18 +56,23 @@ class AttendanceRiskDemoSeeder extends Seeder
         self::STEADY => [9, 9, 9, 9],
     ];
 
+    /**
+     * Who to create when a case's student is missing. 22001011 and 22001012
+     * carry the name and email DemoDataSeeder gives them (it upserts by
+     * email, so the two never duplicate each other); 22093001 is created by
+     * no other seeder.
+     *
+     * @var array<string, array{0: string, 1: string}>
+     */
+    public const STUDENTS = [
+        self::PROJECTION_ONLY => ['Hafiz Danial Rosli', 'hafiz-22093001@utp.edu.my'],
+        self::CURRENT_RULE => ['Muhammad Haziq Irfan', 'muhammad.haziq.irfan@utp.edu.my'],
+        self::STEADY => ['Tan Wei Jian', 'tan.wei.jian@utp.edu.my'],
+    ];
+
     public function run(): void
     {
-        $students = User::where('role', Role::STUDENT)
-            ->whereIn('matric_no', array_keys(self::CASES))
-            ->get()
-            ->keyBy('matric_no');
-
-        if ($students->isEmpty()) {
-            $this->command?->warn('None of the demo students ('.implode(', ', array_keys(self::CASES)).') exist -- run the main seeders first.');
-
-            return;
-        }
+        $students = $this->ensureStudents();
 
         foreach ($students as $matric => $student) {
             AttendanceRecord::where('student_id', $student->id)->delete();
@@ -77,7 +83,7 @@ class AttendanceRiskDemoSeeder extends Seeder
             }
         }
 
-        app(AttendanceEarlyWarning::class)->run($students->pluck('id'));
+        app(AttendanceEarlyWarning::class)->run($students->pluck('id')->values());
 
         $pct = fn ($value) => $value === null ? '-' : rtrim(rtrim(number_format((float) $value, 1), '0'), '.').'%';
 
@@ -101,5 +107,52 @@ class AttendanceRiskDemoSeeder extends Seeder
                 ];
             })->values()->all(),
         );
+    }
+
+    /**
+     * The three case students, keyed by matric number. A student who already
+     * exists is used exactly as they are -- name, email, department and
+     * supervisor untouched. A missing one is created as a Computing student
+     * supervised by supervisor@utp.edu.my, password "password" (the
+     * supervisor too, if even that account is missing).
+     *
+     * @return Collection<string, User>
+     */
+    protected function ensureStudents()
+    {
+        $existing = User::where('role', Role::STUDENT)
+            ->whereIn('matric_no', array_keys(self::CASES))
+            ->get()
+            ->keyBy('matric_no');
+
+        $supervisor = null;
+
+        foreach (self::STUDENTS as $matric => [$name, $email]) {
+            if ($existing->has($matric)) {
+                continue;
+            }
+
+            $supervisor ??= User::firstOrCreate(['email' => 'supervisor@utp.edu.my'], [
+                'name' => 'Dr. Aisyah Rahman',
+                'role' => Role::SUPERVISOR,
+                'department' => 'Computing',
+                'password' => 'password',
+            ]);
+
+            // Matched on email as well, so a half-seeded row (email taken,
+            // matric missing) is completed rather than duplicated.
+            $existing[$matric] = User::firstOrCreate(['email' => $email], [
+                'name' => $name,
+                'role' => Role::STUDENT,
+                'matric_no' => $matric,
+                'department' => 'Computing',
+                'supervisor_id' => $supervisor->id,
+                'password' => 'password',
+            ]);
+
+            $this->command?->info("Created demo student {$matric} ({$email}).");
+        }
+
+        return $existing;
     }
 }

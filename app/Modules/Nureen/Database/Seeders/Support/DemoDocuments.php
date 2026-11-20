@@ -73,6 +73,7 @@ class DemoDocuments
             'supervision' => ['Supporting Document'],
             'ga_certification' => [config('nureen.ga_certification.supporting_document_label.'
                 .(GaCertificationDetail::where('application_id', $application->id)->value('appointment_type') ?? 'GA'))],
+            'attendance_appeal' => array_values(config('nureen.attendance_appeal.required_documents')),
             default => [],
         };
     }
