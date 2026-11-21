@@ -54,4 +54,15 @@ interface SuppliesAttendance
      * @return Collection<int, AttendanceReading>
      */
     public function latestPerStudent(): Collection;
+
+    /**
+     * The attendance rule's lines, in percent, for the CGS dashboard's bands:
+     * 'threshold' is the compliance line (below it is "Below 80%"), and
+     * 'watchFrom' the early-warning line (from threshold up to it is "Watch",
+     * at or above it is "Good"). The supplying module owns the numbers, so
+     * Core never hard-codes them or names the class that holds them.
+     *
+     * @return array{threshold: float, watchFrom: float}
+     */
+    public function riskThresholds(): array;
 }

@@ -5,14 +5,20 @@
     remove or reorder an entry and the grid reflows on its own.
 
     'delta' is a month-over-month percentage from CgsDashboard::withTrend().
-    It is null when last month had nothing to compare against, and the card
-    then shows nothing rather than a misleading "0%".
+    It is null when last month had fewer than CgsDashboard::MIN_TREND_BASELINE
+    (5) to compare against, and the card then shows nothing rather than a
+    misleading "0%" or "↑ 4020%".
+
+    "Pending at CGS" is every application waiting at a stage this CGS role
+    owns, in every module: the same set the Workload Overview splits by
+    module, so the two always agree. "assigned to you" is the part of it in
+    modules config/cgs_assignment.php gives to this officer by name.
 --}}
 @php
     $cards = [
         ['tone'=>'purple','panel'=>'applications','icon'=>'doc','label'=>'Total Applications',
          'figure'=>$totalApplications,'pill'=>'View All','pillTone'=>'info','route'=>'applications.index'],
-        ['tone'=>'orange','panel'=>'applications','icon'=>'clock','label'=>'Pending My Action',
+        ['tone'=>'orange','panel'=>'applications','icon'=>'clock','label'=>'Pending at CGS',
          'figure'=>$pendingMyAction,'pill'=>'View Pending','pillTone'=>'warn','route'=>null,
          // Of those, this officer's own modules (config/cgs_assignment.php).
          'note'=>isset($assignedToMe) ? number_format($assignedToMe).' assigned to you' : null],

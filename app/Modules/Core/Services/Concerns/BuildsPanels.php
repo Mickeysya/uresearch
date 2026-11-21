@@ -111,10 +111,14 @@ trait BuildsPanels
      * to compare against -- a brand-new portal has no trend, and showing
      * "up 0%" would imply it measured one. The views render nothing for null.
      *
+     * $minBaseline: the smallest last-month count worth comparing against.
+     * The default 1 is "last month had anything at all", as it always was;
+     * CgsDashboard passes 5 so a tiny baseline gives no arrow, not "↑ 4020%".
+     *
      * @param  callable(?\Illuminate\Support\Carbon, ?\Illuminate\Support\Carbon): int  $counter
      * @return array{count: int, delta: ?float}
      */
-    protected function withTrend(callable $counter): array
+    protected function withTrend(callable $counter, int $minBaseline = 1): array
     {
         $startOfThis = now()->startOfMonth();
         $startOfLast = now()->subMonthNoOverflow()->startOfMonth();
@@ -125,7 +129,7 @@ trait BuildsPanels
 
         return [
             'count' => $total,
-            'delta' => $lastMonth > 0
+            'delta' => $lastMonth > 0 && $lastMonth >= $minBaseline
                 ? round((($thisMonth - $lastMonth) / $lastMonth) * 100, 1)
                 : null,
         ];

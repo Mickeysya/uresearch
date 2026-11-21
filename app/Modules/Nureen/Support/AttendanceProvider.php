@@ -24,6 +24,15 @@ use Illuminate\Support\Collection;
  */
 class AttendanceProvider implements SuppliesAttendance
 {
+    /** The CGS dashboard's band lines: 80% and 85%, straight from the rule. */
+    public function riskThresholds(): array
+    {
+        return [
+            'threshold' => AttendanceRiskEvaluator::THRESHOLD,
+            'watchFrom' => AttendanceRiskEvaluator::THRESHOLD + AttendanceRiskEvaluator::EARLY_WARNING_BAND,
+        ];
+    }
+
     public function latestFor(User $student): ?AttendanceReading
     {
         $record = AttendanceRecord::where('student_id', $student->id)

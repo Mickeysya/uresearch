@@ -2,11 +2,10 @@
     "Attendance Alerts" — every student's latest attendance record, counted
     across the bands.
 
-    Bands come from StudentDashboard::attendanceBands(), NOT from thresholds
-    of their own, so a student reading "Good" on their dashboard is counted
-    as Good here. The 80% figure in the footer is a separate measure: 80% is
-    the mandatory compliance threshold, while the bands are the traffic-light
-    scale, and they deliberately do not line up.
+    Bands come from CgsDashboard::attendanceAlerts(): Good / Watch / Below
+    80%, on the attendance rule's own lines (SuppliesAttendance::
+    riskThresholds()). They do not overlap, so the three counts add up to
+    "students tracked", and the footer's figure is the Below band's count.
 
     Warning colour only where there is something to act on. This used to draw
     a warning and a critical triangle, with red and amber zeros, before any
@@ -80,9 +79,9 @@
             <span class="sdash-note-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => $below > 0 ? 'warning' : 'check'])</span>
             <span>
                 @if ($below > 0)
-                    {{ $below }} {{ Str::plural('student', $below) }} {{ $below === 1 ? 'is' : 'are' }} below the 80% threshold.
+                    {{ $below }} {{ Str::plural('student', $below) }} {{ $below === 1 ? 'is' : 'are' }} below the {{ $attendance['threshold'] }} threshold.
                 @else
-                    Every student is above the 80% threshold.
+                    Every student is at or above the {{ $attendance['threshold'] }} threshold.
                 @endif
             </span>
         </footer>

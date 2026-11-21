@@ -26,7 +26,12 @@ use Illuminate\Support\Collection;
 class CgsDashboard
 {
     /** safely(), remember(), markUnavailable(), unavailable(), withTrend(). */
-    use BuildsPanels;
+    use BuildsPanels {
+        withTrend as protected trendFrom;
+    }
+
+    /** The month-over-month arrow needs at least this many last month -- see withTrend(). */
+    public const MIN_TREND_BASELINE = 5;
 
     /** attendanceSource() — the module supplying attendance, or null. */
     use ReadsAttendance;
@@ -227,18 +232,25 @@ class CgsDashboard
     /**
      * How every student's latest attendance record falls across the bands.
      *
-     * Uses StudentDashboard::attendanceBands() rather than its own thresholds,
-     * so a student reading "Good" on their dashboard is counted as Good here.
-     * The 80% figure in the footer is separate on purpose: 80% is the
-     * *mandatory compliance threshold*, while the bands are the traffic-light
-     * scale, and they do not line up (a student on 78% is compliant-failing
-     * but only "Warning" on the scale).
+     * The bands follow the attendance rule, whose lines come from the
+     * supplying module (SuppliesAttendance::riskThresholds(): 80% and 85%):
      *
-     * @return array{bands: Collection<int, array{label: string, tone: string, count: int}>, belowThreshold: int, total: int}
+     *   Good       watchFrom and above          (85% and above)
+     *   Watch      threshold to below watchFrom (80% to below 85%)
+     *   Below 80%  under threshold              (under 80%)
+     *
+     * Half-open ranges, so every tracked student is in exactly one band, the
+     * three counts add up to 'total', and 'belowThreshold' (the footer) is
+     * the third band's count rather than a separate figure. This used to
+     * reuse StudentDashboard::attendanceBands() (75/85), whose "Warning
+     * (75% – 84%)" overlapped the below-80% footer. The student and
+     * supervisor dashboards keep that scale; only this card changed.
+     *
+     * @return array{bands: Collection<int, array{label: string, tone: string, count: int}>, belowThreshold: int, threshold: string, total: int}
      */
     public function attendanceAlerts(): array
     {
-        $empty = ['bands' => collect(), 'belowThreshold' => 0, 'total' => 0];
+        $empty = ['bands' => collect(), 'belowThreshold' => 0, 'threshold' => '', 'total' => 0];
 
         $source = $this->attendanceSource();
 
@@ -251,18 +263,29 @@ class CgsDashboard
         return $this->safely('attendance', function () use ($source) {
             $latest = $this->latestPerStudent($source);
 
-            $bands = collect(StudentDashboard::attendanceBands())
-                ->map(fn ($band) => [
-                    'label' => $band['label'],
-                    'tone' => $band['tone'],
-                    'count' => $latest->filter(
-                        fn ($r) => StudentDashboard::toneFor((float) $r->percentage) === $band['tone']
-                    )->count(),
-                ]);
+            ['threshold' => $threshold, 'watchFrom' => $watchFrom] = $source->riskThresholds();
+            $t = self::percent($threshold);
+            $w = self::percent($watchFrom);
+
+            // [label, tone, from (inclusive), below (exclusive; null = no upper bound)]
+            $bands = collect([
+                ["Good ({$w} and above)", 'good', $watchFrom, null],
+                ["Watch ({$t} to below {$w})", 'warn', $threshold, $watchFrom],
+                ["Below {$t}", 'critical', null, $threshold],
+            ])->map(fn ($band) => [
+                'label' => $band[0],
+                'tone' => $band[1],
+                'count' => $latest->filter(function ($r) use ($band) {
+                    $pct = (float) $r->percentage;
+
+                    return ($band[2] === null || $pct >= $band[2]) && ($band[3] === null || $pct < $band[3]);
+                })->count(),
+            ]);
 
             return [
                 'bands' => $bands,
-                'belowThreshold' => $latest->filter(fn ($r) => (float) $r->percentage < 80.0)->count(),
+                'belowThreshold' => $bands->last()['count'],
+                'threshold' => $t,
                 'total' => $latest->count(),
             ];
         }, $empty);
@@ -311,6 +334,22 @@ class CgsDashboard
     /* ---------------------------------------------------------------
      | Helpers
      |---------------------------------------------------------------*/
+
+    /** 80.0 => "80%", 82.5 => "82.5%". */
+    protected static function percent(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 1), '0'), '.').'%';
+    }
+
+    /**
+     * BuildsPanels::withTrend(), with this dashboard's smallest comparable
+     * month: below MIN_TREND_BASELINE last month, no arrow at all, so a tiny
+     * demo baseline (1 last month, 41 this month) never reads "↑ 4000%".
+     */
+    protected function withTrend(callable $counter): array
+    {
+        return $this->trendFrom($counter, self::MIN_TREND_BASELINE);
+    }
 
     /** Applications sitting on a stage this role owns. */
     protected function myQueueQuery()

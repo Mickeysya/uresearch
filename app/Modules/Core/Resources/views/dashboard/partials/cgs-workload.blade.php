@@ -59,7 +59,7 @@
     <footer class="sdash-note">
         <span class="sdash-note-icon" aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'info'])</span>
         <span>
-            You have {{ $total }} {{ Str::plural('application', $total) }} pending your action.
+            {{ $total }} {{ Str::plural('application', $total) }} {{ $total === 1 ? 'is' : 'are' }} waiting at CGS.
         </span>
     </footer>
     @else
