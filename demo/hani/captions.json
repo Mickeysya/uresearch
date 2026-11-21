@@ -1,0 +1,196 @@
+[
+  {
+    "start": 4,
+    "end": 9,
+    "text": "The student completes the Handbook eligibility checklist.",
+    "segment": "1. Viva notice"
+  },
+  {
+    "start": 10.05,
+    "end": 15.05,
+    "text": "The title, abstract and keywords also feed the examiner suggestions later.",
+    "segment": "1. Viva notice"
+  },
+  {
+    "start": 17.74,
+    "end": 20.85,
+    "text": "The softbound date must be at least 3 months away, or the notice is refused.",
+    "segment": "1. Viva notice"
+  },
+  {
+    "start": 20.85,
+    "end": 25.85,
+    "text": "Once the date is fixed, the notice is filed…",
+    "segment": "1. Viva notice"
+  },
+  {
+    "start": 26.14,
+    "end": 29.14,
+    "text": "…and the progress tracker starts.",
+    "segment": "1. Viva notice"
+  },
+  {
+    "start": 29.73,
+    "end": 34.73,
+    "text": "The supervisor endorses it first, or returns it with a comment.",
+    "segment": "1. Viva notice"
+  },
+  {
+    "start": 35.26,
+    "end": 39.92,
+    "text": "The AE verifies every item.",
+    "segment": "1. Viva notice"
+  },
+  {
+    "start": 40.29,
+    "end": 44.8,
+    "text": "The notice only passes when all are met.",
+    "segment": "1. Viva notice"
+  },
+  {
+    "start": 47.64,
+    "end": 52.64,
+    "text": "For another student, Nur Farah, the system reads the Turnitin report itself: similarity, single sources above 5%, title and word count.",
+    "segment": "2. Softbound checks",
+    "pos": "top"
+  },
+  {
+    "start": 52.64,
+    "end": 56.64,
+    "text": "Anything that doesn't match is a warning for the AE, never a silent pass.",
+    "segment": "2. Softbound checks",
+    "pos": "top"
+  },
+  {
+    "start": 56.65,
+    "end": 60.65,
+    "text": "The AE approves, and the softbound thesis is verified.",
+    "segment": "2. Softbound checks"
+  },
+  {
+    "start": 65.22,
+    "end": 70.22,
+    "text": "Only Available examiners can be picked. Anyone in their 90-day gap is greyed out.",
+    "segment": "3. Examiner nomination"
+  },
+  {
+    "start": 70.22,
+    "end": 74.22,
+    "text": "Suggestions are ranked by TF-IDF, and each one shows why it matched.",
+    "segment": "3. Examiner nomination"
+  },
+  {
+    "start": 74.98,
+    "end": 79.98,
+    "text": "Conflicts of interest are flagged with the evidence: here, a paper co-written with the supervisor.",
+    "segment": "3. Examiner nomination"
+  },
+  {
+    "start": 82,
+    "end": 86.8,
+    "text": "An examiner already on another department's list is flagged too.",
+    "segment": "3. Examiner nomination"
+  },
+  {
+    "start": 86.8,
+    "end": 91.8,
+    "text": "The supervisor submits the four-seat panel.",
+    "segment": "3. Examiner nomination"
+  },
+  {
+    "start": 92.22,
+    "end": 96.23,
+    "text": "Pool states are worked out from dates, so nobody updates a spreadsheet any more.",
+    "segment": "3. Examiner nomination"
+  },
+  {
+    "start": 98.3,
+    "end": 103.3,
+    "text": "The AE compiles nominations for the DAC. Nothing reaches CGS without a DAC record.",
+    "segment": "4. DAC + conflict detection"
+  },
+  {
+    "start": 103.3,
+    "end": 107.8,
+    "text": "The compiled list is generated as a PDF for the DAC meeting.",
+    "segment": "4. DAC + conflict detection"
+  },
+  {
+    "start": 107.8,
+    "end": 112.8,
+    "text": "At faculty level, the same examiner nominated by two departments is flagged, not rejected.",
+    "segment": "4. DAC + conflict detection"
+  },
+  {
+    "start": 114.74,
+    "end": 118.74,
+    "text": "Near-identical names are caught too, so one person isn't booked twice.",
+    "segment": "4. DAC + conflict detection"
+  },
+  {
+    "start": 121.34,
+    "end": 125.84,
+    "text": "A viva can only be set once the softbound is verified and the nomination is released.",
+    "segment": "5. Viva scheduling"
+  },
+  {
+    "start": 125.84,
+    "end": 130.84,
+    "text": "Lee Jia Hui is ready. Her examiners' report categories differ, so the AE sees it before setting the date.",
+    "segment": "5. Viva scheduling"
+  },
+  {
+    "start": 132.44,
+    "end": 137.44,
+    "text": "Weekends, public holidays and clashes are warned about, and the AE decides.",
+    "segment": "5. Viva scheduling"
+  },
+  {
+    "start": 139.95,
+    "end": 144.46,
+    "text": "Setting the date sends calendar invites to the student, supervisor, examiners and chair.",
+    "segment": "5. Viva scheduling"
+  },
+  {
+    "start": 144.48,
+    "end": 148.48,
+    "text": "Students follow their progress but never see examiner names.",
+    "segment": "5. Viva scheduling"
+  },
+  {
+    "start": 150.77,
+    "end": 154.77,
+    "text": "Every re-viva has a formal submission time, so each deadline is calculated from it.",
+    "segment": "6. Re-viva monitoring"
+  },
+  {
+    "start": 155.8,
+    "end": 160.31,
+    "text": "The risk score lists its factors. It's rule-based, not a prediction.",
+    "segment": "6. Re-viva monitoring"
+  },
+  {
+    "start": 160.31,
+    "end": 164.81,
+    "text": "Correction letters and re-evaluation forms are generated automatically.",
+    "segment": "6. Re-viva monitoring"
+  },
+  {
+    "start": 164.81,
+    "end": 169.81,
+    "text": "The Dean approves the pack…",
+    "segment": "6. Re-viva monitoring"
+  },
+  {
+    "start": 169.98,
+    "end": 174.98,
+    "text": "…and CGS sends it to the panel in one click, with signed, expiring links.",
+    "segment": "6. Re-viva monitoring"
+  },
+  {
+    "start": 175.08,
+    "end": 180.08,
+    "text": "The panel gets a working-day deadline: 20 days for Master, 30 for PhD, with reminders before it's due.",
+    "segment": "6. Re-viva monitoring"
+  }
+]
