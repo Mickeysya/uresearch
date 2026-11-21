@@ -2,8 +2,10 @@
 
 namespace App\Modules\Core\Http\Controllers;
 
+use App\Modules\Core\Contracts\SuppliesGeneratedDocuments;
 use App\Modules\Core\Models\Application;
 use App\Modules\Core\Models\ApplicationDocument;
+use App\Modules\Core\Services\ApplicationLinks;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Core\Support\Role;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,7 +35,7 @@ class DocumentLibraryController extends Controller
     /** The default window. Search and the application filter ignore it. */
     public const RECENT_DAYS = 90;
 
-    public function index(Request $request, ModuleRegistry $registry)
+    public function index(Request $request, ModuleRegistry $registry, ApplicationLinks $links)
     {
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:100'],
@@ -103,11 +105,24 @@ class DocumentLibraryController extends Controller
         // the latest upload across them.
         $groups->setCollection($groups->getCollection()
             ->filter(fn ($g) => $applications->has($g->application_id))
-            ->map(fn ($g) => (object) [
-                'application' => $applications[$g->application_id],
-                'documents' => $documents->get($g->application_id, collect()),
-                'latestUpload' => $documents->get($g->application_id, collect())->max('created_at'),
-            ])
+            ->map(function ($g) use ($applications, $documents, $registry, $links, $user) {
+                $application = $applications[$g->application_id];
+                $module = $registry->has($application->module_type) ? $registry->get($application->module_type) : null;
+                $supplies = $module instanceof SuppliesGeneratedDocuments;
+
+                return (object) [
+                    'application' => $application,
+                    'documents' => $documents->get($g->application_id, collect()),
+                    'latestUpload' => $documents->get($g->application_id, collect())->max('created_at'),
+                    // The page this viewer's role may open, or null: no link
+                    // rather than one that 403s. See Services\ApplicationLinks.
+                    'openUrl' => $links->openUrl($application, $user),
+                    // Files the module renders on demand, already filtered to
+                    // what this viewer may open.
+                    'generated' => $supplies ? $module->generatedDocuments($application, $user) : [],
+                    'typeLabel' => fn (string $type) => ($supplies ? $module->documentTypeLabel($type) : null) ?? $type,
+                ];
+            })
             ->values());
 
         return view('core::documents.index', [

@@ -27,16 +27,18 @@
 
 @section('content')
 <div class="trk trk-detail">
+    {{-- The page's one way back. Always Track My Applications (with the
+         list's tab and status kept), wherever the student came from -- a
+         dashboard card, a notification, the Documents page. --}}
     <nav class="trk-crumbs" aria-label="Breadcrumb">
-        <a href="{{ $back }}">
-            <span aria-hidden="true">@include('core::dashboard.partials.icon', ['name' => 'chevron'])</span>
-            Track My Applications
-        </a>
+        <a href="{{ $back }}">&larr; Back to Track My Applications</a>
     </nav>
 
     {{-- ---- header: the shared page header, with the decision date (or
-         the student's action) on the right ---- --}}
-    <x-core::page-header :title="$title" class="trk-detail-header">
+         the student's action) on the right. :back="false" turns off
+         page-header's automatic "← Back" for *.show routes, which
+         duplicated the link above. ---- --}}
+    <x-core::page-header :title="$title" class="trk-detail-header" :back="false">
         <x-slot:subtitle>
             <span class="trk-module trk-tone-{{ $category['tone'] }}">{{ $label }}</span>
             <span class="trk-ref">{{ $reference }}</span>

@@ -139,7 +139,7 @@
                                 <li class="doc-file-row @if($hit) is-match @endif">
                                     <div class="doc-file-id">
                                         <span class="doc-file-type">
-                                            {{ $doc->doc_type }}
+                                            {{ ($group->typeLabel)($doc->doc_type) }}
                                             @if ($hit)<span class="doc-sr">(matches your search)</span>@endif
                                         </span>
                                         <span class="doc-file-name">{{ $doc->original_name }}</span>
@@ -161,11 +161,38 @@
                                     </span>
                                 </li>
                             @endforeach
+
+                            {{-- Rendered on demand by the module, never stored: no
+                                 size or upload date to show. Opens in the same
+                                 preview overlay as a stored file. --}}
+                            @foreach ($group->generated as $generated)
+                                <li class="doc-file-row is-generated">
+                                    <div class="doc-file-id">
+                                        <span class="doc-file-type">{{ $generated['label'] }}</span>
+                                        <span class="doc-file-name">{{ $generated['name'] }}</span>
+                                    </div>
+                                    <span class="doc-file-size">PDF</span>
+                                    <span class="doc-file-date">Generated</span>
+                                    <span class="doc-file-actions">
+                                        <x-core::doc-link :url="$generated['url']" :download="$generated['download']" :name="$generated['name']"
+                                                          class="doc-file-view" data-region-swap-ignore
+                                                          aria-label="View {{ $generated['label'] }}">View</x-core::doc-link>
+                                        <a href="{{ $generated['download'] }}" class="doc-download" data-region-swap-ignore
+                                           aria-label="Download {{ $generated['label'] }}">
+                                            @include('core::dashboard.partials.icon', ['name' => 'download'])
+                                        </a>
+                                    </span>
+                                </li>
+                            @endforeach
                         </ul>
 
-                        <p class="doc-group-foot">
-                            <a href="{{ route('applications.show', $app) }}" data-region-swap-ignore>Open application</a>
-                        </p>
+                        {{-- Only when this viewer's role has a page for it
+                             (Services\ApplicationLinks); never a link to a 403. --}}
+                        @if ($group->openUrl)
+                            <p class="doc-group-foot">
+                                <a href="{{ $group->openUrl }}" data-region-swap-ignore>Open application</a>
+                            </p>
+                        @endif
                     </details>
                 @endforeach
             </div>

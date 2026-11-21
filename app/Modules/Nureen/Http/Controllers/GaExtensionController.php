@@ -18,6 +18,7 @@ use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionCc;
 use App\Modules\Nureen\Notifications\GaExtensionFinalDecisionInformational;
 use App\Modules\Nureen\Support\ClientCharter;
 use App\Modules\Nureen\Support\Drafts;
+use App\Modules\Nureen\Support\GaExtensionFormAccess;
 use App\Modules\Nureen\Support\LetterRenderer;
 use App\Modules\Nureen\Support\SubmissionNotifier;
 use App\Modules\Nureen\Support\SupervisorCheck;
@@ -396,35 +397,10 @@ class GaExtensionController extends Controller
         ]);
     }
 
-    /**
-     * The owner; and once submitted, the supervisor it is addressed to (or
-     * who endorsed it, if that has since changed) and anyone holding the
-     * role of another stage on this application's own chain.
-     */
+    /** The rule lives in Support\GaExtensionFormAccess, so the Documents page uses the same one. */
     protected function canViewForm(User $user, Application $application): bool
     {
-        if ($application->student_id === $user->id) {
-            return true;
-        }
-
-        if ($application->status === Application::STATUS_DRAFT) {
-            return false;
-        }
-
-        $detail = GaExtensionDetail::where('application_id', $application->id)->first();
-
-        if ($detail?->supervisor_id === $user->id
-            || ApprovalHistory::where('application_id', $application->id)->where('stage_key', 'supervisor')->where('approver_id', $user->id)->exists()) {
-            return true;
-        }
-
-        foreach (app(WorkflowEngine::class)->stagesFor($application) as $stage) {
-            if ($stage->key !== 'supervisor' && $stage->role === $user->role) {
-                return true;
-            }
-        }
-
-        return false;
+        return GaExtensionFormAccess::allows($user, $application);
     }
 
     /**

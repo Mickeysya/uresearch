@@ -10,6 +10,7 @@ use App\Modules\Core\Contracts\ProvidesLinks;
 use App\Modules\Core\Contracts\ProvidesStaffView;
 use App\Modules\Core\Contracts\SuppliesCalendarEvents;
 use App\Modules\Core\Contracts\SuppliesDecisionDates;
+use App\Modules\Core\Contracts\SuppliesGeneratedDocuments;
 use App\Modules\Core\Contracts\SuppliesOverdueStatus;
 use App\Modules\Core\Contracts\SuppliesReminderCount;
 use App\Modules\Core\Contracts\WorkflowModule;
@@ -19,6 +20,7 @@ use App\Modules\Core\Support\Role;
 use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Support\ApplicationDetailsContent;
+use App\Modules\Nureen\Support\GaExtensionFormAccess;
 use App\Modules\Nureen\Support\TrackingDescriptions;
 use App\Modules\Nureen\Workflows\Concerns\ExpectsDecisionByCharter;
 use App\Modules\Nureen\Workflows\Concerns\LinksToStaffView;
@@ -58,13 +60,41 @@ use Illuminate\Support\Str;
  * stuck on step 1. Declaring the chain here puts it on the same footing as
  * everything else.
  */
-class GaExtensionWorkflow implements DecidesOneAtATime, DescribesApplicationDetails, DescribesApplicationProgress, ProvidesLinks, ProvidesStaffView, SuppliesCalendarEvents, SuppliesDecisionDates, SuppliesOverdueStatus, SuppliesReminderCount, WorkflowModule
+class GaExtensionWorkflow implements DecidesOneAtATime, DescribesApplicationDetails, DescribesApplicationProgress, ProvidesLinks, ProvidesStaffView, SuppliesCalendarEvents, SuppliesDecisionDates, SuppliesGeneratedDocuments, SuppliesOverdueStatus, SuppliesReminderCount, WorkflowModule
 {
     /** The student's details page -- Core\Contracts\DescribesApplicationDetails; see Support\ApplicationDetailsContent. */
     use DescribesApplicationDetailsDefaults;
 
     /** Core\Contracts\ProvidesStaffView: the read-only staff page, for staff allowed to open it. */
     use LinksToStaffView;
+
+    /**
+     * Core\Contracts\SuppliesGeneratedDocuments: the GA Extension Form is
+     * rendered on demand (LetterRenderer::gaExtensionForm()), never stored,
+     * so the Documents page lists it from here -- only for viewers the
+     * form's own routes let in (Support\GaExtensionFormAccess).
+     */
+    public function generatedDocuments(Application $application, User $viewer): array
+    {
+        if (! GaExtensionFormAccess::allows($viewer, $application)) {
+            return [];
+        }
+
+        return [[
+            'label' => 'GA Extension Form (generated)',
+            'name' => 'GA_Extension_Form_'.($application->student?->matric_no ?: 'application').'_'.$application->id.'.pdf',
+            'url' => route('ga-extension.form-pdf.view', $application),
+            'download' => route('ga-extension.form-pdf', $application),
+        ]];
+    }
+
+    /** A student's own uploaded form, from before it was generated, is not the generated one. */
+    public function documentTypeLabel(string $docType): ?string
+    {
+        return $docType === config('nureen.ga_extension.legacy_documents.form')
+            ? 'GA Extension Form (old upload)'
+            : null;
+    }
 
     public function details(Application $application): array
     {

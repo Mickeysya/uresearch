@@ -35,6 +35,8 @@
     without shipping a script on every page that uses page-header at all,
     `back` or not); pass `:back-history="false"` when `back` is always the
     right target and there is no history-preserving case to prefer.
+    Pass `:back="false"` for none at all -- for a page that draws its own
+    back link and would otherwise get a second one from the rule below.
 --}}
 @php
     // A DETAIL page with no `back` of its own still gets one. Approvers open
@@ -45,7 +47,7 @@
     // this site, else the dashboard; data-browser-back (handled once, in
     // core::partials.back-link) prefers real history so a filtered queue
     // comes back as it was left.
-    if (! $back && auth()->check() && preg_match('/\.(show|review|read|memo)$/', (string) request()->route()?->getName())) {
+    if ($back === null && auth()->check() && preg_match('/\.(show|review|read|memo)$/', (string) request()->route()?->getName())) {
         $previous = url()->previous();
         $sameSite = str_starts_with($previous, url('/')) && $previous !== url()->current();
         $back = $sameSite ? $previous : route('dashboard');
