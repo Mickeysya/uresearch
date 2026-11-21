@@ -107,9 +107,9 @@ class StageDurationsTest extends TestCase
 
         $this->assertSame(3.0, $current['waited']);
         $this->assertTrue($current['overdue']);
-        // Nothing left for the supervisor; Chair, Non-Exec CGS and the
-        // Senior Director at one day each.
-        $this->assertSame(3.0, $estimate['remaining']);
+        // Nothing left for the supervisor; Chair 1 + Non-Exec CGS 1 +
+        // Senior Director 3.
+        $this->assertSame(5.0, $estimate['remaining']);
         $this->assertSame('senior_director', end($estimate['steps'])['stage']->key);
     }
 
@@ -131,7 +131,7 @@ class StageDurationsTest extends TestCase
         $this->actingAs($student)->get(route('travel.show', $travel))
             ->assertOk()
             ->assertSee('Expected final decision')
-            ->assertSee('Thu, 12 Nov 2026')
+            ->assertSee('Mon, 16 Nov 2026')
             // Just the date: the per-stage breakdown is not shown.
             ->assertDontSee('working days from now')
             ->assertDontSee('usually takes');
@@ -145,17 +145,17 @@ class StageDurationsTest extends TestCase
     {
         $durations = app(StageDurations::class);
 
-        // Supervisor 1 + Chair 1 + Non-Exec CGS 1 + the final approver 1.
+        // Supervisor 1 + Chair 1 + Non-Exec CGS 1 + the final approver 3.
         foreach (app(TravelWorkflow::class)->routes() as $stages) {
-            $this->assertSame(4.0, $durations->routeDays('travel', $stages));
+            $this->assertSame(6.0, $durations->routeDays('travel', $stages));
         }
 
-        // The form carries the expected date for the script's warning: four
-        // working days from Friday noon is Thursday 12 Nov.
+        // The form carries the expected date for the script's warning: six
+        // working days from Friday noon is Monday 16 Nov.
         $this->actingAs($this->student())->get(route('travel.create'))
             ->assertOk()
             ->assertSee('id="lead-time-warning"', false)
-            ->assertSee('"expected":"2026-11-12"', false);
+            ->assertSee('"expected":"2026-11-16"', false);
     }
 
     public function test_a_trip_departing_before_its_expected_decision_is_marked_urgent(): void
@@ -164,7 +164,7 @@ class StageDurationsTest extends TestCase
         $supervisor = $this->supervisor();
         $student->forceFill(['supervisor_id' => $supervisor->id])->save();
 
-        // Monday 9 Nov, before the decision expected on Thursday 12 Nov.
+        // Monday 9 Nov, before the decision expected on Monday 16 Nov.
         $soon = $this->localTravel($student, startsIn: 3);
 
         $this->actingAs($supervisor)->get(route('travel.queue'))
@@ -205,7 +205,7 @@ class StageDurationsTest extends TestCase
         return app(WorkflowEngine::class)->submit($application);
     }
 
-    protected function localTravel(User $student, int $startsIn = 10): Application
+    protected function localTravel(User $student, int $startsIn = 14): Application
     {
         $application = Application::create([
             'student_id' => $student->id,

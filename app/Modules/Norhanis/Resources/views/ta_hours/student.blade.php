@@ -80,7 +80,7 @@
 
         @if ($eligible)
             @include('core::dashboard.partials.chartjs')
-            <p class="queue-meta" style="margin-top: 20px;">Approved hours over the last 6 months, against the {{ rtrim(rtrim(number_format($cap, 2, '.', ''), '0'), '.') }}-hour monthly cap.</p>
+            <p class="queue-meta" style="margin-top: 20px;">Approved hours over the last 6 months.</p>
             <div style="height: 200px;">
                 <canvas id="ta-hours-trend" role="img"
                         aria-label="Approved TA hours by month: {{ $monthlyTrend->map(fn ($m) => $m['month'].' '.$m['hours'].' hrs')->implode(', ') }}"></canvas>
@@ -92,13 +92,8 @@
                         var el = document.getElementById('ta-hours-trend');
                         if (! el || typeof Chart === 'undefined') return;
 
-                        var cap = @json($cap);
                         var hours = @json($monthlyTrend->pluck('hours'));
-                        var colors = hours.map(function (h) {
-                            return h > cap ? Chart.uresearchToken('--danger-fg', '#D0342C')
-                                : h >= cap - 3 ? Chart.uresearchToken('--warning-fg', '#C28E40')
-                                : Chart.uresearchToken('--success-fg', '#07794A');
-                        });
+                        var colors = hours.map(function () { return Chart.uresearchToken('--success-fg', '#07794A'); });
 
                         new Chart(el, {
                             type: 'bar',
@@ -113,7 +108,7 @@
                                     datalabels: { display: true, anchor: 'end', align: 'top', offset: 2, color: function () { return Chart.uresearchToken('--text-body', '#23283A'); }, font: { size: 11, weight: '700' } },
                                 },
                                 scales: {
-                                    y: { beginAtZero: true, suggestedMax: cap + 3, grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } }, border: { display: false } },
+                                    y: { beginAtZero: true, grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } }, border: { display: false } },
                                     x: { grid: { display: false }, border: { display: false } },
                                 },
                             },

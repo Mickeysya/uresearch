@@ -441,10 +441,10 @@ class TravelTest extends TestCase
         $student = $this->student();
         $application = $this->submitAs($student, ['is_international' => 0]);
 
-        // Local travel: 4 stages at 1 working day each (Config/charter.php),
-        // from Tuesday 9am: Monday 16 November, the weekend skipped.
+        // Local travel: 1 + 1 + 1 + 3 working days (Config/charter.php),
+        // from Tuesday 9am: Wednesday 18 November, the weekend skipped.
         $expected = app(\App\Modules\Norhanis\Support\StageDurations::class)->estimate($application)['expected'];
-        $this->assertSame('2026-11-16', $expected->toDateString());
+        $this->assertSame('2026-11-18', $expected->toDateString());
 
         $this->actingAs($student)->get(route('applications.show', $application))
             ->assertOk()

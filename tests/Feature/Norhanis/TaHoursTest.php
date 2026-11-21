@@ -135,7 +135,7 @@ class TaHoursTest extends TestCase
             ->assertSessionHasErrors('course_lecturer');
     }
 
-    public function test_overlapping_rows_and_the_monthly_cap_are_refused(): void
+    public function test_overlapping_rows_are_refused_but_a_month_has_no_hour_limit(): void
     {
         $this->lecturer();
         $this->actingAs($this->student());
@@ -144,10 +144,11 @@ class TaHoursTest extends TestCase
         $this->post(route('ta-hours.store', [2026, 11]), $this->row(['time_in' => '17:00', 'time_out' => '19:00']))->assertSessionHasErrors('time_in');
 
         $this->post(route('ta-hours.store', [2026, 11]), $this->row(['activity_date' => '2026-11-11', 'time_in' => '08:00', 'time_out' => '18:00']))->assertSessionHasNoErrors();
-        // 20 hrs logged; 2 more would pass the 21-hour cap.
-        $this->post(route('ta-hours.store', [2026, 11]), $this->row(['activity_date' => '2026-11-12', 'time_in' => '08:00', 'time_out' => '10:00']))->assertSessionHasErrors('time_out');
+        // 20 hrs logged; the monthly cap was removed (21 Nov 2026), so more is accepted.
+        $this->post(route('ta-hours.store', [2026, 11]), $this->row(['activity_date' => '2026-11-12', 'time_in' => '08:00', 'time_out' => '10:00']))->assertSessionHasNoErrors();
 
-        $this->assertSame(2, TaHourLog::count());
+        $this->assertSame(3, TaHourLog::count());
+        $this->assertSame(22.0, (float) TaHourLog::sum('hours'));
     }
 
     public function test_submitting_sends_drafts_to_the_lecturer_they_name(): void
@@ -217,7 +218,8 @@ class TaHoursTest extends TestCase
         $this->pending($student, $hafiz, ['hours' => 5, 'activity_date' => '2026-11-11']);
         $this->pending($student, $hafiz, ['hours' => 7, 'activity_date' => '2026-11-12', 'state' => TaHourLog::DRAFT]);
 
-        $this->assertSame(3.0, (new TaHourController)->thisMonthFor($student)['hours']);
+        // The dashboard panel now shows this semester's approved hours against the 84 required.
+        $this->assertSame(['hours' => 3.0, 'cap' => 84.0], (new TaHourController)->thisMonthFor($student));
         $this->assertSame(3.0, TaStatus::hoursBetween($student, Carbon::create(2026, 9, 1), Carbon::today()));
     }
 

@@ -14,7 +14,7 @@
 
             @if ($byStudentThisMonth->isNotEmpty())
                 @include('core::dashboard.partials.chartjs')
-                <p class="queue-meta" style="margin-top: 4px; margin-bottom: 14px;">Approved hours this month per student, against the {{ rtrim(rtrim(number_format($cap, 2, '.', ''), '0'), '.') }}-hour cap. Hours are logged by the student and approved by their course lecturer.</p>
+                <p class="queue-meta" style="margin-top: 4px; margin-bottom: 14px;">Approved hours this month per student. Hours are logged by the student and approved by their course lecturer.</p>
                 <div style="height: {{ 50 + $byStudentThisMonth->count() * 32 }}px;">
                     <canvas id="ta-hours-by-student" role="img"
                             aria-label="Hours this month by student: {{ $byStudentThisMonth->map(fn ($r) => $r['student']->name.' '.$r['hours'].' hrs')->implode(', ') }}"></canvas>
@@ -26,13 +26,8 @@
                             var el = document.getElementById('ta-hours-by-student');
                             if (! el || typeof Chart === 'undefined') return;
 
-                            var cap = @json($cap);
                             var hours = @json($byStudentThisMonth->pluck('hours'));
-                            var colors = hours.map(function (h) {
-                                return h > cap ? Chart.uresearchToken('--danger-fg', '#D0342C')
-                                    : h >= cap - 3 ? Chart.uresearchToken('--warning-fg', '#C28E40')
-                                    : Chart.uresearchToken('--success-fg', '#07794A');
-                            });
+                            var colors = hours.map(function () { return Chart.uresearchToken('--success-fg', '#07794A'); });
 
                             new Chart(el, {
                                 type: 'bar',
@@ -54,7 +49,7 @@
                                         datalabels: { display: true, anchor: 'end', align: 'end', color: function () { return Chart.uresearchToken('--text-body', '#23283A'); }, font: { size: 11, weight: '700' } },
                                     },
                                     scales: {
-                                        x: { beginAtZero: true, suggestedMax: cap + 3, grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } }, border: { display: false } },
+                                        x: { beginAtZero: true, grid: { color: function () { return Chart.uresearchToken('--border-grey', '#F1F3F7'); } }, border: { display: false } },
                                         y: { grid: { display: false }, border: { display: false } },
                                     },
                                 },

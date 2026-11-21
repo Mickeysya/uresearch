@@ -31,8 +31,8 @@
         <p class="message-info">Click the <b>+</b> button to add rows. When every row for the month is in, click <b>Submit</b>
             so your course lecturer can approve them. Only approved hours count.</p>
 
-        <p class="queue-meta">Logged this month: <b>{{ $num($counted) }} / {{ $num($cap) }} hrs</b>
-            <span style="color: var(--text-grey);">(monthly cap, no carry-forward; rejected rows do not count)</span></p>
+        <p class="queue-meta">Logged this month: <b>{{ $num($counted) }} hrs</b>
+            <span style="color: var(--text-grey);">(rejected rows do not count; only approved hours count towards the 84 required this semester)</span></p>
 
         <div style="overflow-x: auto;">
             <table class="ta-table">

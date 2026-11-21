@@ -57,8 +57,13 @@ class CgsOfficerTest extends TestCase
             }
         }
 
+        // Since 12 Nov 2026 (config/cgs_assignment.php) another officer sees
+        // the row but cannot decide it; the assigned officer can.
         $this->actingAs($other)->get(route('claims.queue'))->assertSee('Ahmad Danial');
-        $this->actingAs($other)->post(route('claims.decide', $application), ['decision' => 'approve'])->assertSessionHasNoErrors();
+        $this->actingAs($other)->post(route('claims.decide', $application), ['decision' => 'approve'])->assertForbidden();
+        $this->assertSame('cgs_review', $application->fresh()->current_stage);
+
+        $this->actingAs($officer)->post(route('claims.decide', $application), ['decision' => 'approve'])->assertSessionHasNoErrors();
         $this->assertSame('manager', $application->fresh()->current_stage);
     }
 

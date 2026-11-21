@@ -15,16 +15,17 @@
  * one place.
  */
 return [
-    // Chart total 7 days = 3 (student) + 1 + 1 + 1 + 1.
+    // 3 (student) + 1 + 1 + 1 + 3: the final approval takes 3 working days
+    // (Norhanis, 20 Nov 2026, matching the viva slides and dissertation).
     'travel' => [
         'supervisor' => 1,
         'chair' => 1,
         'cgs_review' => 1,
-        'dean' => 1,
+        'dean' => 3,
         // Not on the chart, which predates local travel going past the Chair
-        // (agreed with CGS, Oct 2026). 1 day, set by Norhanis to match the
-        // other travel stages.
-        'senior_director' => 1,
+        // (agreed with CGS, Oct 2026). 3 days, the same as the Dean's final
+        // approval for international travel.
+        'senior_director' => 3,
     ],
 
     // Chart total 12 days = 3 (student) + 2 + 2 + 3 + 2. Payment through the

@@ -10,9 +10,6 @@ return [
     // Fixed per semester, never trusted from the form.
     'hours_required' => 84,
 
-    // The most TA hours that count in one calendar month. No carry-forward.
-    'monthly_cap' => 21,
-
     // The months a UTP postgraduate semester starts in (January, May,
     // September). "TA hours completed this semester" counts from the most
     // recent of these, or from the appointment's start if that is later.

@@ -58,7 +58,6 @@ class TaHourController extends Controller
         return view('norhanis::ta_hours.index', [
             'logs' => $query->paginate(25),
             'byStudentThisMonth' => $this->byStudentThisMonth($scopeToSupervisees),
-            'cap' => $this->cap(),
         ]);
     }
 
@@ -82,7 +81,6 @@ class TaHourController extends Controller
             'months' => $months,
             'years' => $this->years(),
             'monthlyTrend' => $this->monthlyTrendFor($student),
-            'cap' => $this->cap(),
             'hoursRequired' => (float) config('norhanis.ta.hours_required'),
         ]);
     }
@@ -124,7 +122,6 @@ class TaHourController extends Controller
             'logs' => $logs,
             'activities' => config('norhanis.ta.activities'),
             'lecturers' => TaCourseLecturer::choices(),
-            'cap' => $this->cap(),
             'counted' => (float) $logs->where('state', '!=', TaHourLog::REJECTED)->sum('hours'),
             'minDate' => Carbon::create($year, $month, 1)->toDateString(),
             'maxDate' => min(Carbon::create($year, $month, 1)->endOfMonth(), Carbon::today())->toDateString(),
@@ -175,14 +172,9 @@ class TaHourController extends Controller
             throw ValidationException::withMessages(['time_in' => 'These times overlap a row you have already logged on that date.']);
         }
 
-        $counted = (float) TaHourLog::counting()->where('student_id', $student->id)->inMonth($year, $month)->sum('hours');
-        if ($counted + $hours > $this->cap()) {
-            throw ValidationException::withMessages([
-                'time_out' => sprintf('This row would take %s past the %s-hour monthly cap (%s hrs logged already).',
-                    $first->format('F'), $this->num($this->cap()), $this->num($counted)),
-            ]);
-        }
-
+        // No monthly limit (removed by Norhanis, 21 Nov 2026): a GA may work as
+        // many hours in a month as they need; only the 84 hours a semester
+        // matter, and that is a target, not a cap.
         TaHourLog::create([
             'student_id' => $student->id,
             'activity_type' => $data['activity_type'],
@@ -247,19 +239,18 @@ class TaHourController extends Controller
     }
 
     /**
-     * This calendar month's approved hours against the cap, for the shared
-     * dashboard's "Postgraduate Progress" panel (Haziq's DashboardSupplier).
+     * For the shared dashboard's "Postgraduate Progress" panel (Haziq's
+     * DashboardSupplier): this semester's approved hours against the 84
+     * required. The keys stay 'hours' and 'cap' because Core's panel reads
+     * them; since the monthly cap was removed, 'cap' is the semester target.
      *
      * @return array{hours: float, cap: float}
      */
     public function thisMonthFor(User $student): array
     {
-        $hours = (float) TaHourLog::approved()
-            ->where('student_id', $student->id)
-            ->where('activity_date', '>=', Carbon::today()->startOfMonth())
-            ->sum('hours');
+        $hours = TaStatus::hoursBetween($student, TaStatus::semesterStart(), Carbon::today());
 
-        return ['hours' => $hours, 'cap' => $this->cap()];
+        return ['hours' => $hours, 'cap' => (float) config('norhanis.ta.hours_required')];
     }
 
     /* ---------------- helpers ---------------- */
@@ -294,17 +285,8 @@ class TaHourController extends Controller
         return [$year, $year - 1];
     }
 
-    protected function cap(): float
-    {
-        return (float) config('norhanis.ta.monthly_cap', 21);
-    }
 
-    protected function num(float $n): string
-    {
-        return rtrim(rtrim(number_format($n, 2, '.', ''), '0'), '.');
-    }
-
-    /** The student's own approved hours over the last 6 months, against the cap. */
+    /** The student's own approved hours over the last 6 months. */
     protected function monthlyTrendFor(User $student): Collection
     {
         $thisMonth = Carbon::today()->startOfMonth();
