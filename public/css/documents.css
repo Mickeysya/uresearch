@@ -1,0 +1,190 @@
+/* ============================================================
+   Documents (/documents) -- files grouped by application.
+
+   Scoped to .doc-groups: every rule here starts with it, so nothing on
+   another page can pick these up. Tokens only (tokens.css), so dark mode
+   comes for free. The search box, scope line, chip, download button and
+   "File missing" tag are still styled in layout.css section 14.
+   ============================================================ */
+
+.doc-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+/* One application: the same solid card the table used to sit on. */
+.doc-groups .doc-group {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.doc-groups .doc-group[open] { border-color: var(--border-grey); }
+
+.doc-groups .doc-group-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    list-style: none;
+    transition: background-color var(--duration-fast) var(--ease);
+}
+
+/* Hide the browser's own triangle; .doc-group-chevron replaces it. */
+.doc-groups .doc-group-head::-webkit-details-marker { display: none; }
+.doc-groups .doc-group-head::marker { content: ''; }
+
+.doc-groups .doc-group-head:hover { background: var(--surface-hover); }
+
+.doc-groups .doc-group-head:focus-visible {
+    outline: 2px solid var(--accent-solid);
+    outline-offset: 2px;
+}
+
+.doc-groups .doc-group-chevron {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--text-grey);
+    border-bottom: 2px solid var(--text-grey);
+    transform: rotate(-45deg);
+    transition: transform var(--duration-fast) var(--ease);
+}
+
+.doc-groups .doc-group[open] .doc-group-chevron { transform: rotate(45deg); }
+
+.doc-groups .doc-group-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-3);
+    flex: 1 1 240px;
+    min-width: 0;
+}
+
+.doc-groups .doc-group-ref {
+    font-weight: var(--weight-semi);
+    color: var(--text-dark);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.doc-groups .doc-group-student {
+    color: var(--text-body);
+    overflow-wrap: anywhere;
+}
+
+.doc-groups .doc-group-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+    font-variant-numeric: tabular-nums;
+}
+
+.doc-groups .doc-group-module { color: var(--text-body); }
+
+/* The files inside one application. */
+.doc-groups .doc-group-files {
+    margin: 0;
+    padding: 0 var(--space-4);
+    list-style: none;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.doc-groups .doc-file-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-2);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.doc-groups .doc-file-row:last-child { border-bottom: 0; }
+
+/* The file the search found. */
+.doc-groups .doc-file-row.is-match {
+    background: var(--warning-bg);
+    box-shadow: inset 3px 0 0 var(--warning-border);
+    border-radius: var(--radius-sm);
+}
+
+.doc-groups .doc-file-id { min-width: 0; }
+
+.doc-groups .doc-file-type {
+    display: block;
+    font-weight: var(--weight-semi);
+    color: var(--text-dark);
+}
+
+.doc-groups .doc-file-name {
+    display: block;
+    margin-top: 2px;
+    font-size: var(--text-xs);
+    color: var(--text-grey);
+    overflow-wrap: anywhere;
+}
+
+.doc-groups .doc-file-size,
+.doc-groups .doc-file-date {
+    font-size: var(--text-sm);
+    color: var(--text-grey);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.doc-groups .doc-file-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.doc-groups .doc-file-view {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semi);
+    color: var(--accent-solid);
+    text-decoration: none;
+}
+
+.doc-groups .doc-file-view:hover { background: var(--accent-subtle); }
+.doc-groups .doc-file-view:focus-visible { outline: 2px solid var(--accent-solid); outline-offset: 1px; }
+
+.doc-groups .doc-group-foot {
+    margin: 0;
+    padding: var(--space-2) var(--space-4) var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+    font-size: var(--text-sm);
+}
+
+.doc-groups .doc-group-foot a { color: var(--accent-solid); font-weight: var(--weight-semi); }
+
+/* Phone: the header stacks, and each file becomes name on top, then one
+   grey line of size and date, with the actions at the right. */
+@media (max-width: 720px) {
+    .doc-groups .doc-group-head { padding: var(--space-3); align-items: flex-start; }
+    .doc-groups .doc-group-chevron { margin-top: 6px; }
+    .doc-groups .doc-group-meta { flex-basis: 100%; padding-left: calc(8px + var(--space-4)); }
+
+    .doc-groups .doc-group-files { padding: 0 var(--space-2); }
+
+    .doc-groups .doc-file-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        row-gap: var(--space-1);
+        column-gap: var(--space-3);
+    }
+
+    .doc-groups .doc-file-id { grid-column: 1; }
+    .doc-groups .doc-file-actions { grid-column: 2; grid-row: 1 / span 2; }
+    .doc-groups .doc-file-size { display: none; }
+    .doc-groups .doc-file-date { grid-column: 1; font-size: var(--text-xs); }
+}

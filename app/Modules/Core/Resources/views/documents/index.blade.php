@@ -3,6 +3,8 @@
 @section('title', 'Documents')
 
 @php
+    use App\Modules\Core\Http\Controllers\DocumentLibraryController;
+
     $filtered = $search !== '' || $module !== 'all' || $applicationId;
     // Filter links keep every other filter, so narrowing never resets the rest.
     $keep = array_filter([
@@ -11,16 +13,23 @@
         'application' => $applicationId,
         'range' => $windowed ? null : 'all',
     ]);
+    // Rows open on their own when the list is answering a question -- a
+    // search, or one application -- and stay collapsed for plain browsing.
+    $openRows = $search !== '' || $applicationId;
+    $size = fn (int $bytes) => $bytes >= 1048576
+        ? number_format($bytes / 1048576, 1).' MB'
+        : max(1, round($bytes / 1024)).' KB';
 @endphp
 
 @section('content')
 <div class="rpd-page">
     <x-core::page-header title="Documents">
         <x-slot:subtitle>
-            @if ($documents->total() === 0 && ! $filtered)
+            @if ($groups->total() === 0 && ! $filtered)
                 Files you upload with an application appear here automatically.
             @else
-                {{ number_format($documents->total()) }} {{ Str::plural('file', $documents->total()) }}@if ($totalBytes > 0) · {{ number_format($totalBytes / 1024 / 1024, 1) }} MB @endif
+                {{ number_format($groups->total()) }} {{ Str::plural('application', $groups->total()) }}
+                · {{ number_format($fileTotal) }} {{ Str::plural('file', $fileTotal) }}@if ($totalBytes > 0) · {{ number_format($totalBytes / 1024 / 1024, 1) }} MB @endif
                 @unless ($isOwnList) · from applications you have handled or are handling @endunless
             @endif
         </x-slot:subtitle>
@@ -28,13 +37,14 @@
         <form method="GET" action="{{ route('documents.index') }}" class="doc-search" role="search">
             @if ($module !== 'all')<input type="hidden" name="module" value="{{ $module }}">@endif
             @if ($applicationId)<input type="hidden" name="application" value="{{ $applicationId }}">@endif
-            <label for="doc-search" class="doc-sr">Search documents</label>
+            <label for="doc-search" class="doc-sr">Search by student, reference, file name or document type</label>
             <input type="search" name="q" id="doc-search" value="{{ $search }}"
-                   placeholder="Search files">
+                   placeholder="Search student, reference or file">
         </form>
     </x-core::page-header>
 
     @if ($byModule->isNotEmpty() || $module !== 'all')
+        {{-- Each count is applications, not files. --}}
         <nav class="notif-filters" aria-label="Filter by application type">
             <a href="{{ route('documents.index', Arr::except($keep, 'module')) }}"
                class="notif-filter @if($module === 'all') active @endif"
@@ -53,11 +63,11 @@
 
     <div class="doc-results">
         {{-- What the list is showing, and the one click that widens it. --}}
-        @if ($documents->total() > 0 || $applicationId)
+        @if ($groups->total() > 0 || $applicationId)
         <div class="doc-scope">
             <p class="doc-range">
-                @if ($documents->total() > 0)
-                    Showing {{ number_format($documents->firstItem()) }}–{{ number_format($documents->lastItem()) }} of {{ number_format($documents->total()) }}
+                @if ($groups->total() > 0)
+                    Showing {{ number_format($groups->firstItem()) }}–{{ number_format($groups->lastItem()) }} of {{ number_format($groups->total()) }} {{ Str::plural('application', $groups->total()) }}
                 @endif
                 @if ($windowed)
                     · last {{ $recentDays }} days and anything still pending ·
@@ -78,7 +88,7 @@
         </div>
         @endif
 
-        @if ($documents->isEmpty())
+        @if ($groups->isEmpty())
             <div class="empty-state">
                 @if ($filtered)
                     <p>No document matches that.</p>
@@ -98,80 +108,84 @@
                 @endif
             </div>
         @else
-            <div class="doc-panel">
-            <table class="data-table doc-table">
-                <thead>
-                    <tr>
-                        <th scope="col">File</th>
-                        <th scope="col">Application</th>
-                        @unless ($isOwnList)<th scope="col">Student</th>@endunless
-                        <th scope="col" class="num">Size</th>
-                        <th scope="col" class="num">Uploaded</th>
-                        <th scope="col"><span class="doc-sr">Download</span></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($documents as $doc)
-                        @php $app = $doc->application; @endphp
-                        <tr>
-                            <td class="doc-file">
-                                {{-- The viewer, a download and another page's detail view
-                                     are real navigations, so RegionSwap leaves them alone. --}}
-                                <x-core::doc-link :document="$doc" class="doc-name" data-region-swap-ignore>{{ $doc->original_name }}</x-core::doc-link>
-                                <span class="doc-sub">
-                                    {{ $doc->doc_type }}
-                                    @unless ($doc->exists())
-                                        <span class="doc-missing" title="The row exists but the stored file does not">File missing</span>
-                                    @endunless
-                                </span>
-                            </td>
-                            <td class="doc-app">
-                                <a href="{{ route('documents.index', ['application' => $app->id]) }}"
-                                   class="doc-ref" title="Show every file on {{ $app->reference() }}">{{ $app->reference() }}</a>
-                                <span class="doc-sub">
-                                    {{ $moduleLabels[$app->module_type] ?? $app->module_type }}
-                                    · <a href="{{ route('applications.show', $app) }}" data-region-swap-ignore>Open</a>
-                                </span>
-                            </td>
-                            @unless ($isOwnList)
-                                <td class="doc-student">{{ $app->student?->name ?? '—' }}</td>
-                            @endunless
-                            <td class="num doc-size">
-                                {{ $doc->size_bytes >= 1048576
-                                    ? number_format($doc->size_bytes / 1048576, 1).' MB'
-                                    : max(1, round($doc->size_bytes / 1024)).' KB' }}
-                            </td>
-                            <td class="num doc-date">
-                                <time datetime="{{ $doc->created_at->toDateString() }}">{{ $doc->created_at->format('j M Y') }}</time>
-                            </td>
-                            <td class="doc-action">
-                                <x-core::doc-link :document="$doc" action="download" class="doc-download"
-                                                  data-region-swap-ignore aria-label="Download {{ $doc->original_name }}">
-                                    @include('core::dashboard.partials.icon', ['name' => 'download'])
-                                </x-core::doc-link>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+            {{-- One <details> per application: the browser gives it Enter and
+                 Space, and it works with no script at all. --}}
+            <div class="doc-groups">
+                @foreach ($groups as $group)
+                    @php
+                        $app = $group->application;
+                        $count = $group->documents->count();
+                    @endphp
+                    <details class="doc-group" @if($openRows) open @endif>
+                        <summary class="doc-group-head">
+                            <span class="doc-group-chevron" aria-hidden="true"></span>
+                            <span class="doc-group-main">
+                                <span class="doc-group-ref">{{ $app->reference() }}</span>
+                                <span class="doc-group-student">{{ $app->student?->name ?? '—' }}</span>
+                            </span>
+                            <span class="doc-group-meta">
+                                <span class="doc-group-module">{{ $moduleLabels[$app->module_type] ?? $app->module_type }}</span>
+                                <span class="doc-group-count">{{ $count }} {{ Str::plural('file', $count) }}</span>
+                                @if ($group->latestUpload)
+                                    <span class="doc-group-date">Latest <time datetime="{{ $group->latestUpload->toDateString() }}">{{ $group->latestUpload->format('j M Y') }}</time></span>
+                                @endif
+                                <x-core::status-badge :status="$app->status" />
+                            </span>
+                        </summary>
+
+                        <ul class="doc-group-files">
+                            @foreach ($group->documents as $doc)
+                                @php $hit = DocumentLibraryController::fileMatches($doc, $search); @endphp
+                                <li class="doc-file-row @if($hit) is-match @endif">
+                                    <div class="doc-file-id">
+                                        <span class="doc-file-type">
+                                            {{ $doc->doc_type }}
+                                            @if ($hit)<span class="doc-sr">(matches your search)</span>@endif
+                                        </span>
+                                        <span class="doc-file-name">{{ $doc->original_name }}</span>
+                                        @unless ($doc->exists())
+                                            <span class="doc-missing" title="The row exists but the stored file does not">File missing</span>
+                                        @endunless
+                                    </div>
+                                    <span class="doc-file-size">{{ $size((int) $doc->size_bytes) }}</span>
+                                    <time class="doc-file-date" datetime="{{ $doc->created_at->toDateString() }}">{{ $doc->created_at->format('j M Y') }}</time>
+                                    <span class="doc-file-actions">
+                                        {{-- The viewer and a download are real navigations,
+                                             so RegionSwap leaves them alone. --}}
+                                        <x-core::doc-link :document="$doc" class="doc-file-view" data-region-swap-ignore
+                                                          aria-label="View {{ $doc->original_name }}">View</x-core::doc-link>
+                                        <x-core::doc-link :document="$doc" action="download" class="doc-download"
+                                                          data-region-swap-ignore aria-label="Download {{ $doc->original_name }}">
+                                            @include('core::dashboard.partials.icon', ['name' => 'download'])
+                                        </x-core::doc-link>
+                                    </span>
+                                </li>
+                            @endforeach
+                        </ul>
+
+                        <p class="doc-group-foot">
+                            <a href="{{ route('applications.show', $app) }}" data-region-swap-ignore>Open application</a>
+                        </p>
+                    </details>
+                @endforeach
             </div>
 
             {{-- Hand-rolled like the notifications pager: Laravel's default
                  pagination views are Tailwind markup and this app has none. --}}
-            @if ($documents->hasPages())
+            @if ($groups->hasPages())
                 <nav class="notif-pager" aria-label="Pagination">
-                    @if ($documents->onFirstPage())
+                    @if ($groups->onFirstPage())
                         <span class="notif-page-link is-disabled">Previous</span>
                     @else
-                        <a href="{{ $documents->previousPageUrl() }}" class="notif-page-link" rel="prev">Previous</a>
+                        <a href="{{ $groups->previousPageUrl() }}" class="notif-page-link" rel="prev">Previous</a>
                     @endif
 
                     <span class="notif-page-count">
-                        Page {{ number_format($documents->currentPage()) }} of {{ number_format($documents->lastPage()) }}
+                        Page {{ number_format($groups->currentPage()) }} of {{ number_format($groups->lastPage()) }}
                     </span>
 
-                    @if ($documents->hasMorePages())
-                        <a href="{{ $documents->nextPageUrl() }}" class="notif-page-link" rel="next">Next</a>
+                    @if ($groups->hasMorePages())
+                        <a href="{{ $groups->nextPageUrl() }}" class="notif-page-link" rel="next">Next</a>
                     @else
                         <span class="notif-page-link is-disabled">Next</span>
                     @endif

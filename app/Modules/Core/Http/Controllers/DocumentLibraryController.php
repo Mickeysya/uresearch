@@ -10,21 +10,25 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 /**
- * The Documents page — every file this user may see, in one list.
+ * The Documents page: every file this user may see, grouped by application.
  *
  * Nothing new is stored. Every row already exists in `application_documents`;
- * this is the same data with the application as a column rather than as the
- * only route to it.
+ * this is the same data, gathered under the application it belongs to.
  *
  * Visibility is NOT re-derived here. `ApplicationDocument::scopeVisibleTo()`
  * is the exact query form of `visibleTo()`, the method the download route
- * calls, so the list can never name a file `documents.show` would refuse --
- * and because the scope is exact, filtering, counting and paging all happen
- * in SQL. The page holds 50 rows whether CGS can see 50 files or 50,000.
+ * calls, so the list can never name a file `documents.show` would refuse.
+ * Every query below starts from that scope -- the one that picks which
+ * applications match, the one that pages them, and the one that loads their
+ * files -- so grouping changes the shape of the page, never who sees what.
+ *
+ * Paging is by application, in SQL: one grouped query picks this page's 20
+ * applications, and only their files are loaded.
  */
 class DocumentLibraryController extends Controller
 {
-    public const PER_PAGE = 50;
+    /** Applications per page. Each one is a collapsed row. */
+    public const PER_PAGE = 20;
 
     /** The default window. Search and the application filter ignore it. */
     public const RECENT_DAYS = 90;
@@ -47,8 +51,9 @@ class DocumentLibraryController extends Controller
         // looking across all time; only plain browsing is windowed.
         $windowed = ($filters['range'] ?? null) !== 'all' && $search === '' && $applicationId === null;
 
-        // Everything except the module tab, so each tab's count says what
-        // clicking it would bring back under the current search and window.
+        // The files that decide whether an application is listed: everything
+        // except the module tab, so each tab's count says what clicking it
+        // would bring back under the current search and window.
         $base = fn (): Builder => ApplicationDocument::query()
             ->visibleTo($user)
             ->when($windowed, fn (Builder $q) => $q->where(fn (Builder $recent) => $recent
@@ -57,27 +62,62 @@ class DocumentLibraryController extends Controller
             ->when($applicationId, fn (Builder $q) => $q->where('application_documents.application_id', $applicationId))
             ->when($search !== '', fn (Builder $q) => $this->search($q, $search));
 
+        // Each tab counts applications, not files.
         $byModule = $base()
             ->join('applications', 'applications.id', '=', 'application_documents.application_id')
             ->groupBy('applications.module_type')
-            ->selectRaw('applications.module_type, count(*) as total')
+            ->selectRaw('applications.module_type, count(distinct application_documents.application_id) as total')
             ->orderByDesc('total')
             ->pluck('total', 'module_type');
 
-        $filtered = fn (): Builder => $base()->when($module !== 'all', fn (Builder $q) => $q
-            ->whereHas('application', fn (Builder $a) => $a->where('module_type', $module)));
+        $matched = $base()
+            ->when($module !== 'all', fn (Builder $q) => $q
+                ->whereHas('application', fn (Builder $a) => $a->where('module_type', $module)))
+            ->select('application_documents.application_id');
 
-        $documents = $filtered()
-            ->with(['application.student'])
-            ->latest('application_documents.created_at')
-            ->latest('application_documents.id')
+        // A matched application shows every file on it this user may see --
+        // a search for the student's name should not hide the rest of their
+        // letters. Still the same visibility scope, file by file.
+        $files = fn (): Builder => ApplicationDocument::query()
+            ->visibleTo($user)
+            ->whereIn('application_documents.application_id', $matched);
+
+        $groups = $files()
+            ->groupBy('application_documents.application_id')
+            ->selectRaw('application_documents.application_id, max(application_documents.created_at) as latest_upload, count(*) as file_count')
+            ->orderByDesc('latest_upload')
+            ->orderByDesc('application_documents.application_id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
+        $pageIds = $groups->getCollection()->pluck('application_id')->all();
+        $applications = Application::with('student')->findMany($pageIds)->keyBy('id');
+        $documents = $files()
+            ->whereIn('application_documents.application_id', $pageIds)
+            ->latest('application_documents.created_at')
+            ->latest('application_documents.id')
+            ->get()
+            ->groupBy('application_id');
+
+        // Paginator of groups, in page order: the application, its files, and
+        // the latest upload across them.
+        $groups->setCollection($groups->getCollection()
+            ->filter(fn ($g) => $applications->has($g->application_id))
+            ->map(fn ($g) => (object) [
+                'application' => $applications[$g->application_id],
+                'documents' => $documents->get($g->application_id, collect()),
+                'latestUpload' => $documents->get($g->application_id, collect())->max('created_at'),
+            ])
+            ->values());
+
         return view('core::documents.index', [
-            'documents' => $documents,
+            'groups' => $groups,
+            'fileTotal' => $files()->count(),
+            'totalBytes' => (int) $files()->sum('size_bytes'),
             'byModule' => $byModule,
-            'moduleLabels' => $byModule->keys()->mapWithKeys(fn ($key) => [$key => $registry->labelFor($key)]),
+            'moduleLabels' => $byModule->keys()
+                ->merge($applications->pluck('module_type'))->unique()
+                ->mapWithKeys(fn ($key) => [$key => $registry->labelFor($key)]),
             'module' => $module,
             'search' => $search,
             'windowed' => $windowed,
@@ -86,9 +126,19 @@ class DocumentLibraryController extends Controller
             // Only a reference, derived from id + module key -- nothing the
             // URL did not already say. The list itself stays scoped.
             'applicationRef' => $applicationId ? Application::find($applicationId)?->reference() : null,
-            'totalBytes' => (int) $filtered()->sum('size_bytes'),
             'isOwnList' => $user->hasRole(Role::STUDENT),
         ]);
+    }
+
+    /**
+     * Does this file itself match the search (by name or type)? A match on
+     * the student or the reference matches the whole application instead.
+     */
+    public static function fileMatches(ApplicationDocument $document, string $search): bool
+    {
+        return $search !== ''
+            && (mb_stripos($document->original_name, $search) !== false
+                || mb_stripos((string) $document->doc_type, $search) !== false);
     }
 
     /** File name, doc type, student name, or a full reference like GAEX-2026-00202. */

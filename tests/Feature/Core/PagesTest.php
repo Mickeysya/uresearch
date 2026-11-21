@@ -114,9 +114,10 @@ class PagesTest extends TestCase
         }
 
         $this->actingAs($student)->get(route('documents.index'))
-            ->assertOk()->assertSee('Showing 1–50 of 55')->assertSee('file-55.pdf')->assertDontSee('file-05.pdf');
+            ->assertOk()->assertSee('Showing 1–20 of 55 applications')->assertSee('file-55.pdf')->assertDontSee('file-05.pdf');
 
-        $this->actingAs($student)->get(route('documents.index', ['page' => 2]))
+        // Paged by application now, 20 a page: one file each, so file-05 is on page 3.
+        $this->actingAs($student)->get(route('documents.index', ['page' => 3]))
             ->assertOk()->assertSee('file-05.pdf');
 
         $this->actingAs($student)->get(route('documents.index', ['q' => $application->reference()]))

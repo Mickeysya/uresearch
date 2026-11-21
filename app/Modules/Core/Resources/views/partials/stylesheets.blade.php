@@ -22,6 +22,9 @@
       charts.css          every Chart.js surface, shared by all dashboards
       sidebar-identity.css the sidebar's identity card
       help.css            Help and Support (/help), scoped to .help
+      documents.css       the /documents page, scoped to .doc-groups.
+                          Last, so it can lean on layout.css's doc-*
+                          rules without fighting them.
 
     ?v=<file mtime> so a change always reaches the browser instead of
     silently serving a stale cached copy.
@@ -44,6 +47,7 @@
     'sidebar-identity',
     'help',
     'students',
+    'documents',
 ] as $sheet)
     <link rel="stylesheet" href="{{ asset("css/{$sheet}.css") }}?v={{ @filemtime(public_path("css/{$sheet}.css")) ?: 1 }}">
 @endforeach
