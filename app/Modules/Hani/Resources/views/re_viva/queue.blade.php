@@ -57,8 +57,11 @@
                         </form>
                         @break
                     @case('pack_preparation')
-                        <form method="POST" action="{{ $act('send-to-dean') }}">@csrf <button type="submit">Send to Dean</button></form>
-                        <form method="POST" action="{{ $act('regenerate') }}">@csrf <button type="submit" class="btn-secondary">Regenerate</button></form>
+                        @include('hani::partials._button_row')
+                        <div class="hani-btn-row">
+                            <form method="POST" action="{{ $act('send-to-dean') }}">@csrf <button type="submit">Send to Dean</button></form>
+                            <form method="POST" action="{{ $act('regenerate') }}">@csrf <button type="submit" class="btn-secondary">Regenerate</button></form>
+                        </div>
                         @break
                     @case('dean_approval')
                         <form method="POST" action="{{ $act('dean-approve') }}">@csrf <button type="submit">Approve</button></form>

@@ -1,5 +1,11 @@
 # Changelog: Hani's modules
 
+## 2026-11-21: Side-by-side action buttons line up
+
+- **Fixed** Conflict Detection, "Possibly the same person on different lists": "Not the same person" and "Same person: merge" sit on one line at the same height (merge was ~15px higher: the shared `button` rule's 16px top margin applied to one and not to the `<summary>`). Opening merge puts its form on its own line below, so the buttons do not move.
+- **Fixed** The same row layout for Re-viva Pack Preparation ("Send to Dean" / "Regenerate", which were stacked at different sizes) and the Examiner Pool's proposed-email "Confirm" / "Dismiss".
+- **Added** `partials/_button_row.blade.php` (`.hani-btn-row`): Hani-only; no shared stylesheet changed.
+
 ## 2026-11-12: UAT changes from the AE + CGS session (11 Nov)
 
 - **Changed (A)** The Dean of PGR is Prof. Ts. Dr. M. Fadzil Hassan, "Dean, Postgraduate & Research (PGR)". Re-viva letters print the Dean who approved them; the config signatory is the fallback. The demo seeder renames `dean@utp.edu.my` (SHARED_CHANGES item 12 covers the shared seeder).

@@ -13,8 +13,7 @@
     .cd-entry summary, .cd-pair summary { display: inline-block; cursor: pointer; }
     .cd-entry textarea { width: 100%; }
     .cd-pair { padding: var(--space-3) 0; border-bottom: 1px solid var(--border-subtle); }
-    .cd-pair-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: flex-start; margin-top: var(--space-2); }
-    .cd-pair-actions details { margin-top: 0; }
+    /* .cd-pair-actions is laid out by .hani-btn-row (partials/_button_row). */
     .cd-record { display: block; margin: var(--space-2) 0; font-weight: normal; }
 </style>
 
@@ -46,7 +45,8 @@
                         <span class="cd-meta">({{ $on['department'] }}, {{ implode(' and ', array_unique($on['names'])) }})</span>@if (! $loop->last), @endif
                     @endforeach
 
-                    <div class="cd-pair-actions">
+                    @include('hani::partials._button_row')
+                    <div class="cd-pair-actions hani-btn-row">
                         <form method="POST" action="{{ route('examiner-admin.dismiss-duplicate') }}">
                             @csrf
                             <input type="hidden" name="examiner_id" value="{{ $pair['a']->id }}">
@@ -56,7 +56,7 @@
 
                         <details>
                             <summary class="btn-secondary">Same person: merge</summary>
-                            <form method="POST" action="{{ route('conflict-detection.merge') }}" style="margin-top: var(--space-2);">
+                            <form method="POST" action="{{ route('conflict-detection.merge') }}">
                                 @csrf
                                 <p class="cd-meta">Pick the record to keep. The other is marked Unavailable, never deleted. Its seats on pending and released panels, expertise and publications move to the record kept.</p>
                                 <input type="hidden" name="record_a_id" value="{{ $pair['a']->id }}">

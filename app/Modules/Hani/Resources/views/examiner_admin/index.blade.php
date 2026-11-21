@@ -171,14 +171,17 @@
                             <td>{{ $proposal->proposedBy?->name ?? 'Unknown' }}@if ($proposal->nomination), nomination #{{ $proposal->nomination->application_id }}@endif<span class="examiner-reason">{{ $proposal->created_at->format('j M Y') }}</span></td>
                             <td>@if ($proposal->cv_path)<a href="{{ route('examiner-admin.proposal.cv', $proposal) }}" data-region-swap-ignore>Download CV</a>@else None @endif</td>
                             <td>
-                                <form method="POST" action="{{ route('examiner-admin.proposal.confirm', $proposal) }}" style="display: inline;">
+                                @include('hani::partials._button_row')
+                                <div class="hani-btn-row" style="margin-top: 0;">
+                                <form method="POST" action="{{ route('examiner-admin.proposal.confirm', $proposal) }}">
                                     @csrf
                                     <button type="submit" @disabled(! $proposal->examiner->emailNeedsUpdating()) title="{{ $proposal->examiner->emailNeedsUpdating() ? '' : 'The examiner already has a working email' }}">Confirm</button>
                                 </form>
-                                <form method="POST" action="{{ route('examiner-admin.proposal.dismiss', $proposal) }}" style="display: inline;">
+                                <form method="POST" action="{{ route('examiner-admin.proposal.dismiss', $proposal) }}">
                                     @csrf
                                     <button type="submit" class="btn-secondary">Dismiss</button>
                                 </form>
+                                </div>
                             </td>
                         </tr>
                     @endforeach
