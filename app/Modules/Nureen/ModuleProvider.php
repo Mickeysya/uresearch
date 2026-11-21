@@ -9,6 +9,7 @@ use App\Modules\Core\Contracts\SuppliesSupervisionHistory;
 use App\Modules\Core\Services\ModuleRegistry;
 use App\Modules\Nureen\Console\Commands\BacktestAttendance;
 use App\Modules\Nureen\Console\Commands\CheckAttendanceRisk;
+use App\Modules\Nureen\Console\Commands\RegenerateCertificationLetters;
 use App\Modules\Nureen\Console\Commands\RemindStalledCertification;
 use App\Modules\Nureen\Console\Commands\RemindStalledGaExtension;
 use App\Modules\Nureen\Console\Commands\RemindStalledSupervisionRequests;
@@ -80,6 +81,7 @@ class ModuleProvider extends ServiceProvider
                 SyncAttendance::class,
                 CheckAttendanceRisk::class,
                 BacktestAttendance::class,
+                RegenerateCertificationLetters::class,
             ]);
         }
 
