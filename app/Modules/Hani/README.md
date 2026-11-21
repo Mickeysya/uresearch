@@ -573,6 +573,30 @@ Engineering, though, and a clash is by definition across departments, so
 the clash is with S04 instead. Every chain runs through `WorkflowEngine`;
 only Hani's own tables are written directly.
 
+## Lecturer UAT data (`ExaminerNominationUatSeeder`)
+
+On demand, separate from the demo above, and safe to run again after the
+UAT (it puts everything back to the same starting point):
+
+```bash
+docker exec uresearch-app php artisan db:seed --class="App\Modules\Hani\Database\Seeders\ExaminerNominationUatSeeder"
+```
+
+- `supervisor@utp.edu.my` (Dr. Aisyah Rahman): Nur Farah Adilah
+  (`student2@`) has a notice that is filed, SV-endorsed and AE-verified, and
+  no nomination yet. Nominate Examiners suggests three strong matches on each
+  side, with a co-author flag (Dr Tan Mei Xuan), a UTP-adjunct flag
+  (Dr Kavitha a/p Raman) and a cross-department duplicate flag
+  (Assoc Prof Dr Gan Wei Jie, on a fictional Electrical student's pending
+  list). Prof Dr Rahmat bin Ismail, the closest fit, is On Gap.
+- `ae@utp.edu.my`: Nur Farah's softbound in Theses to Check, with System
+  checks that pass on most items and warn on two (declared 9% against an 11%
+  report, and a Digital Receipt 45 days old).
+- It touches only `student2@`'s viva, softbound, nomination and re-viva
+  records, its own eight fictional examiners, and one fictional companion
+  student and supervisor (`@example.com`). Record numbers change on every
+  run; the command prints the new ones.
+
 ## Tests
 
 `tests/Feature/Hani/`: 250 tests. Run them with
@@ -590,7 +614,7 @@ full suite with `docker exec uresearch-app php artisan test`.
 | 2, viva | `VivaEligibilityTest`, `VivaEligibilityVerificationTest`, `VivaSoftboundTest`, `VivaSoftboundChecksTest`, `VivaExaminerProgressTest`, `VivaScheduleTest`, `VivaSchedulingAssistTest`, `VivaResultTest`, `VivaBulkSafetyTest`, `ModuleTrackerTest` |
 | 3, re-viva | `ReVivaTest`, `ReVivaRolesTest`, `ReVivaHandoffTest`, `ReVivaLettersTest`, `ReVivaResendTest`, `ReVivaMonitorTest`, `ReVivaEvaluationsTest`, `ReVivaOutcomeTest`, `ReVivaCorrectionsTest`, `ReVivaRiskTest`, `ReVivaSummaryTest` |
 | 4, across | `SlaRemindersTest`, `ProcessAnalyticsTest`, `EvaluationOverTest` |
-| demo | `HaniDemoSeederTest` (pool, stages, re-viva, links, the fictional history) |
+| demo | `HaniDemoSeederTest` (pool, stages, re-viva, links, the fictional history), `ExaminerNominationUatSeederTest` (the lecturer UAT data) |
 
 Fixtures are in `tests/Feature/Hani/Concerns/` (`BuildsVivas`,
 `BuildsReVivas`, `FilesVivaNotices`, `KeepsJobsOffTheDevQueue`).
