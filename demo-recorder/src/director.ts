@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { chromium, type Browser, type Locator, type Page } from 'playwright';
-import { config } from './config.js';
+import { config, ROOT } from './config.js';
 import { overlay } from './overlay.js';
 
 /** Thrown with the clip, step and cause, so the console says exactly what failed. */
@@ -25,7 +25,7 @@ export class Recorder {
    * `nureen:demo-fresh --reset` removes it like the rest.
    */
   static created(id: number): void {
-    const file = path.join(config.videosDir, '..', '.demo-created.json');
+    const file = path.join(ROOT, '.demo-created.json');
     const ids: number[] = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
     if (!ids.includes(id)) ids.push(id);
     fs.writeFileSync(file, JSON.stringify(ids));
@@ -106,8 +106,8 @@ export class Shot {
   }
 
   /** A pause for the viewer to read -- pacing, never a wait for loading. */
-  async hold(ms = config.hold): Promise<void> {
-    await this.page.waitForTimeout(ms);
+  async hold(ms?: number): Promise<void> {
+    await this.page.waitForTimeout(ms === undefined ? config.hold : Math.round(ms * config.pace));
   }
 
   async goto(url: string): Promise<void> {
@@ -141,12 +141,12 @@ export class Shot {
   async pointAt(target: Locator): Promise<void> {
     await this.reveal(target);
     const box = await target.boundingBox();
-    if (box) await this.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 18 });
+    if (box) await this.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: config.pointerSteps });
   }
 
   async click(target: Locator, opts: { navigates?: boolean } = {}): Promise<void> {
     await this.pointAt(target);
-    await this.page.waitForTimeout(250);
+    await this.page.waitForTimeout(config.clickPause);
     if (opts.navigates) {
       await Promise.all([this.page.waitForNavigation({ waitUntil: 'load' }), target.click()]);
       await this.settle();
@@ -155,11 +155,18 @@ export class Shot {
     }
   }
 
-  /** Types at human speed. */
-  async type(target: Locator, text: string): Promise<void> {
+  /**
+   * Types at human speed. With --fast, anything longer than a short field
+   * (a remark, a reason, an email address) appears at once instead.
+   */
+  async type(target: Locator, text: string, opts: { instant?: boolean } = {}): Promise<void> {
     await this.click(target);
     await target.fill('');
-    await target.pressSequentially(text, { delay: config.typeDelay });
+    if (opts.instant || (config.fast && text.length > 30)) {
+      await target.fill(text);
+    } else {
+      await target.pressSequentially(text, { delay: config.typeDelay });
+    }
   }
 
   async fillDate(target: Locator, isoDate: string): Promise<void> {
@@ -173,7 +180,7 @@ export class Shot {
   }
 
   /** A temporary outline drawn round something worth looking at. */
-  async highlight(target: Locator, ms = config.hold): Promise<void> {
+  async highlight(target: Locator, ms?: number): Promise<void> {
     await this.pointAt(target);
     await target.evaluate((el) => {
       const s = (el as HTMLElement).style;
@@ -192,8 +199,9 @@ export class Shot {
     await this.step(`Log in as ${this.role}`, async () => {
       await this.page.goto(config.baseUrl + '/login', { waitUntil: 'load' });
       await this.settle();
-      await this.type(this.page.locator('#email'), email);
-      await this.type(this.page.locator('#password'), config.password);
+      // Still the real login page; with --fast the fields fill at once.
+      await this.type(this.page.locator('#email'), email, { instant: config.fast });
+      await this.type(this.page.locator('#password'), config.password, { instant: config.fast });
       await this.click(this.page.getByRole('button', { name: 'Log In' }), { navigates: true });
       if (new URL(this.page.url()).pathname === '/login') throw new Error(`login was refused for ${email}`);
       await this.hold(1200);
@@ -233,19 +241,19 @@ export class Shot {
     await this.caption(title);
     const pdf = await this.saveOutcome(url, outcomeName);
     await this.page.screenshot({ path: path.join(config.outcomesDir, `${outcomeName}-preview.png`) });
-    await this.hold(3000);
+    await this.page.waitForTimeout(config.docHold);
 
     // Scroll through every page with the mouse wheel over the document.
     const box = await frame.boundingBox();
     if (box) {
       await this.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 12 });
       const distance = pdf.pages * 1200;
-      for (let done = 0; done < distance; done += 90) {
-        await this.page.mouse.wheel(0, 90);
+      for (let done = 0; done < distance; done += config.scrollStep) {
+        await this.page.mouse.wheel(0, config.scrollStep);
         await this.page.waitForTimeout(70);
       }
     }
-    await this.hold(3000);
+    await this.page.waitForTimeout(config.docHold);
     await this.caption('');
     await this.click(this.page.locator('[data-preview-close]'));
   }

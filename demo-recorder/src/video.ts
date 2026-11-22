@@ -19,7 +19,8 @@ function concatList(files: string[], listFile: string): string {
  * size and codec, so this is a straight copy), then videos/<clip>.mp4.
  */
 export function buildClip(clip: string, segments: string[]): { webm: string; mp4: string | null } {
-  const webm = path.join(config.videosDir, `${clip}.webm`);
+  fs.mkdirSync(config.clipsDir, { recursive: true });
+  const webm = path.join(config.clipsDir, `${clip}.webm`);
   if (segments.length === 1) {
     fs.copyFileSync(segments[0], webm);
   } else {
@@ -27,17 +28,16 @@ export function buildClip(clip: string, segments: string[]): { webm: string; mp4
     ffmpeg(['-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', webm]);
   }
   if (!hasFfmpeg()) return { webm, mp4: null };
-  const mp4 = path.join(config.videosDir, `${clip}.mp4`);
+  const mp4 = path.join(config.clipsDir, `${clip}.mp4`);
   ffmpeg(['-i', webm, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-r', '25', '-movflags', '+faststart', mp4]);
   return { webm, mp4 };
 }
 
-/** Every clip's .mp4 that exists, in clip order, joined into demo-full.mp4. */
-export function joinAll(clips: string[]): string | null {
-  const mp4s = clips.map((c) => path.join(config.videosDir, `${c}.mp4`)).filter((f) => fs.existsSync(f));
-  if (mp4s.length === 0 || !hasFfmpeg()) return null;
-  const out = path.join(config.videosDir, 'demo-full.mp4');
-  ffmpeg(['-f', 'concat', '-safe', '0', '-i', concatList(mp4s, path.join(config.rawDir, 'full.txt')), '-c', 'copy', '-movflags', '+faststart', out]);
+/** The given clip files (in that order) joined into videos/<name>. */
+export function join(mp4s: string[], name: string): string | null {
+  if (mp4s.length === 0 || !mp4s.every((f) => fs.existsSync(f)) || !hasFfmpeg()) return null;
+  const out = path.join(config.videosDir, name);
+  ffmpeg(['-f', 'concat', '-safe', '0', '-i', concatList(mp4s, path.join(config.rawDir, `${name}.txt`)), '-c', 'copy', '-movflags', '+faststart', out]);
   return out;
 }
 

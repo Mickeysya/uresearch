@@ -7,9 +7,11 @@ import { config } from '../config.js';
  * box, as an approver would) and opens its row.
  */
 export async function openQueueRow(s: Shot, queuePath: string, id: number): Promise<Locator> {
-  await s.goto(queuePath);
+  // --fast: straight to the search result -- the same page the search box
+  // gives, without typing into it on camera.
+  await s.goto(config.fast ? `${queuePath}?q=${id}` : queuePath);
   const search = s.page.locator('#queue-q');
-  if (await search.count()) {
+  if (!config.fast && (await search.count())) {
     await s.type(search, String(id));
     await search.press('Enter');
     await s.page.waitForLoadState('load');

@@ -18,8 +18,17 @@ export async function run(rec: Recorder, info: DemoInfo): Promise<void> {
   await rec.as('CGS officer (Zulkifly)', loginAt(app, 'cgs_verify') ?? config.staff.cgs, async (s) => {
     await s.step(`CGS checks ${student.name}'s GA/GRA status and eligibility`, async () => {
       const row = await openQueueRow(s, '/ga-certification/queue', app.id);
-      const checks = row.locator('.cert-checks, :text("Appointment check")').first();
-      await s.highlight(checks, 4000);
+      await s.highlight(row.locator('.cert-checks').first(), 3000);
+      // The GA/GRA status badge (Verified / Mismatch / Not Found), shown when
+      // NUREEN_GA_CERTIFICATION_APPOINTMENT_CHECK=true.
+      const badge = row.locator('p', { hasText: 'Appointment check:' }).first();
+      if (await badge.count()) {
+        const status = (await badge.innerText()).replace(/.*Appointment check:\s*/s, '').split('\n')[0].trim();
+        await s.caption(`GA/GRA status checked against the appointment on file: ${status}`);
+        await s.highlight(badge, 4000);
+      } else {
+        console.warn('    (no GA/GRA status badge: set NUREEN_GA_CERTIFICATION_APPOINTMENT_CHECK=true to show it)');
+      }
     });
     await s.step('Verified: CGS approves and passes it to the Senior Director', async () => {
       await approve(s, app.id, 'GA appointment and period verified.');
@@ -61,7 +70,7 @@ export async function run(rec: Recorder, info: DemoInfo): Promise<void> {
       await s.goto(`/verify/certificate/${letterRef}`);
       const valid = s.page.getByText('Valid', { exact: true }).first();
       await s.caption(`Public verification of ${letterRef}: Valid`);
-      await s.highlight(cardWith(s, 'Valid'), 3000);
+      await s.highlight(cardWith(s, 'Valid'), config.docHold / config.pace);
       await valid.waitFor({ state: 'visible' });
       await s.page.screenshot({ path: path.join(config.outcomesDir, '05-verification-valid.png'), fullPage: true });
       await s.hold(1000);

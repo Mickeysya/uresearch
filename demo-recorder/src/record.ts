@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from './config.js';
+import { config, ROOT, useFastMode } from './config.js';
 import { freshDemoData, type DemoInfo } from './demoData.js';
 import { Recorder, StepError } from './director.js';
-import { buildClip, duration, hasFfmpeg, joinAll } from './video.js';
+import { buildClip, duration, hasFfmpeg, join } from './video.js';
 import * as ga from './clips/01-ga-extension.js';
 import * as tracking from './clips/02-tracking-and-email.js';
 import * as attendance from './clips/03-attendance.js';
@@ -20,7 +20,13 @@ const CLIPS: Clip[] = [
   { id: '05', name: '05-certification', run: certification.run },
 ];
 
-/** `npm run record` (all clips) or `npm run record -- --clip 03` (one; repeatable). */
+/** The viva cut: GA Extension, attendance prediction, certification letter + verification. */
+const VIVA = ['01-ga-extension', '03-attendance', '05-certification'];
+
+/**
+ * `npm run record` (all clips), `npm run record -- --clip 03` (one;
+ * repeatable), `--fast` for the short viva pacing (clips go to videos/fast/).
+ */
 function chosenClips(argv: string[]): Clip[] {
   const wanted: string[] = [];
   argv.forEach((a, i) => {
@@ -38,7 +44,10 @@ async function reachable(url: string): Promise<boolean> {
 }
 
 async function main(): Promise<number> {
-  const clips = chosenClips(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const clips = chosenClips(argv);
+  if (argv.includes('--fast')) useFastMode();
+  console.log(config.fast ? 'Pace: --fast (viva cut), clips in videos/fast/' : 'Pace: normal, clips in videos/');
 
   for (const [what, url] of [['The app', `${config.baseUrl}/login`], ['Mailpit', config.mailpitUrl]] as const) {
     if (!(await reachable(url))) {
@@ -51,7 +60,7 @@ async function main(): Promise<number> {
       + 'Install it with  sudo apt install ffmpeg  (or use ./record.sh, whose Docker image has it).');
   }
 
-  for (const dir of [config.videosDir, config.rawDir, config.outcomesDir]) fs.mkdirSync(dir, { recursive: true });
+  for (const dir of [config.videosDir, config.clipsDir, config.rawDir, config.outcomesDir]) fs.mkdirSync(dir, { recursive: true });
   fs.rmSync(config.failuresDir, { recursive: true, force: true });
 
   const info = freshDemoData();
@@ -77,20 +86,26 @@ async function main(): Promise<number> {
   }
   await browser.close();
 
-  // Rebuilt whenever every clip exists, so re-recording one clip refreshes it.
-  const all = CLIPS.map((c) => c.name);
-  const full = all.every((c) => fs.existsSync(path.join(config.videosDir, `${c}.mp4`))) ? joinAll(all) : null;
+  // Rebuilt whenever every clip they need exists, so re-recording one clip
+  // refreshes them: demo-full.mp4 from the normal-speed clips in videos/,
+  // demo-viva.mp4 from the --fast clips in videos/fast/.
+  const normalDir = config.videosDir;
+  const fastDir = path.join(config.videosDir, 'fast');
+  join(CLIPS.map((c) => path.join(normalDir, `${c.name}.mp4`)), 'demo-full.mp4');
+  join(VIVA.map((c) => path.join(fastDir, `${c}.mp4`)), 'demo-viva.mp4');
 
-  console.log('\nVideos:');
-  for (const c of CLIPS) {
-    for (const ext of ['mp4', 'webm']) {
-      const f = path.join(config.videosDir, `${c.name}.${ext}`);
-      if (fs.existsSync(f)) { console.log(`  ${c.name}.${ext}  ${duration(f)}`); break; }
-    }
+  for (const [title, dir] of [['Videos (normal speed, videos/)', normalDir], ['Videos (--fast, videos/fast/)', fastDir]] as const) {
+    const found = CLIPS.map((c) => path.join(dir, `${c.name}.mp4`)).filter((f) => fs.existsSync(f));
+    if (!found.length) continue;
+    console.log(`\n${title}:`);
+    found.forEach((f) => console.log(`  ${path.basename(f)}  ${duration(f)}`));
   }
-  if (full) console.log(`  demo-full.mp4  ${duration(full)}`);
+  for (const name of ['demo-full.mp4', 'demo-viva.mp4']) {
+    const f = path.join(config.videosDir, name);
+    if (fs.existsSync(f)) console.log(`  ${name}  ${duration(f)}`);
+  }
 
-  console.log('\nOutcome screenshots (videos/outcomes/):');
+  console.log(`\nOutcome screenshots (${path.relative(ROOT, config.outcomesDir)}/):`);
   for (const f of fs.readdirSync(config.outcomesDir).filter((f) => f.endsWith('.png')).sort()) console.log(`  ${f}`);
 
   if (failures.length) {

@@ -11,7 +11,14 @@ From the project root, with the app running (`./vendor/bin/sail up -d`):
 ```bash
 ./demo-recorder/record.sh               # all five clips + demo-full.mp4
 ./demo-recorder/record.sh --clip 03     # just one clip (repeat --clip for more)
+./demo-recorder/record.sh --fast --clip 01 --clip 03 --clip 05   # the viva cut
 ```
+
+`--fast` is the short viva pacing: slowMo 120 ms, about 1 s on each page,
+typing at 15 ms a character, 2 s on each document. Logins, remarks and long
+answers fill at once, and queues open straight on their search result. Every
+step is still shown. Fast clips go to `videos/fast/` and never overwrite
+the normal-speed ones.
 
 `record.sh` runs everything in Docker (Node, Playwright's Chromium, ffmpeg
 and poppler), so nothing needs installing in WSL. The first run builds the
@@ -47,7 +54,8 @@ are not listed there: `nureen:demo-fresh` picks them on every run.
 | `MAILPIT_URL` | `http://localhost:8025` | Mailpit |
 | `DEMO_PASSWORD` | `password` | every seeded account |
 | `ADMIN_EMAIL`, `CGS_EMAIL`, `CHAIR_EMAIL`, `DIRECTOR_EMAIL` | the seeded staff | used if the demo data names nobody |
-| `SLOW_MO`, `HOLD`, `TYPE_DELAY` | 250, 1800, 40 ms | pacing |
+| `SLOW_MO`, `HOLD`, `TYPE_DELAY`, `DOC_HOLD` | 250, 1800, 40, 3000 ms | pacing |
+| `FAST_SLOW_MO`, `FAST_HOLD`, `FAST_TYPE_DELAY`, `FAST_DOC_HOLD` | 120, 1000, 15, 2000 ms | pacing with `--fast` |
 
 ## Clips
 
@@ -57,12 +65,16 @@ are not listed there: `nureen:demo-fresh` picks them on every run.
 | `02-tracking-and-email` | Track My Applications, View details (who acted, who is next), the expected decision date, the status emails in Mailpit |
 | `03-attendance` | The At-Risk list (one student by projection, one by the 80% rule), the early-warning email, the student's Attendance Action card |
 | `04-supervision` | Supervisor, Chair and CGS endorse a supervision request; the appointment letter (CGS/SVAPPT/...) opens |
-| `05-certification` | CGS verifies and the Senior Director approves a certification request; the letter (CGS/GACERT/...) opens, then its public verification page shows "Valid" |
+| `05-certification` | CGS checks the GA/GRA status badge (Verified / Mismatch / Not Found; needs `NUREEN_GA_CERTIFICATION_APPOINTMENT_CHECK=true` in the app's `.env`) and approves; the Senior Director approves; the letter (CGS/GACERT/...) opens, then its public verification page shows "Valid" |
 
 ## Output (`videos/`, not committed)
 
-- `01-ga-extension.mp4` ... `05-certification.mp4` (H.264), their `.webm`
-  originals, and `demo-full.mp4` (all five, in order; made when all clips are recorded).
+- `01-ga-extension.mp4` ... `05-certification.mp4` (H.264) and their `.webm`
+  originals, plus `demo-full.mp4`: all five normal-speed clips in order.
+- `fast/`: the `--fast` clips, plus `demo-viva.mp4` (in `videos/`) joined from
+  fast 01, 03 and 05: GA Extension, attendance prediction, certification letter and verification.
+- Both joined files are rebuilt whenever the clips they need exist, so
+  re-recording one clip refreshes them.
 - `outcomes/`: each generated PDF, every page of it as PNG (for slides), a
   screenshot of it in the preview overlay, and the verification page.
 - `failures/`: a screenshot of any step that failed; the console names the
