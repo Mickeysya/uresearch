@@ -1,0 +1,6 @@
+# Local settings (demo account passwords) and everything a run produces.
+.env
+videos/
+node_modules/
+.demo-fresh.txt
+.demo-created.json

@@ -1,0 +1,17 @@
+{
+  "name": "uresearch-demo-recorder",
+  "private": true,
+  "type": "module",
+  "description": "Records the demo video of Nureen's four UResearch modules with Playwright.",
+  "scripts": {
+    "record": "tsx src/record.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "dotenv": "^16.4.5",
+    "playwright": "1.65.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
