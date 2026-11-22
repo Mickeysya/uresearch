@@ -79,8 +79,11 @@
                                     @if ($reading)
                                         <span class="cand-attendance tone-{{ $row['tone'] }}"
                                               title="{{ $reading->sessions_attended }} of {{ $reading->sessions_total }} sessions to {{ $reading->period_end->format('j M Y') }}">
-                                            {{ rtrim(rtrim(number_format($reading->percentage, 1), '0'), '.') }}%
+                                            {{ $reading->headlineLabel() }}: {{ $reading::format($reading->headline()) }}
                                         </span>
+                                        @if ($reading->semester_percentage !== null)
+                                            <span class="queue-meta" style="display: block;">Latest week: {{ $reading::format($reading->percentage) }}</span>
+                                        @endif
                                     @else
                                         <span class="cand-attendance tone-none">Not recorded</span>
                                     @endif

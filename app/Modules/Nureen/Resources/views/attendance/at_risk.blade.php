@@ -13,7 +13,7 @@
 @section('content')
 @php
     $reasonLabels = [
-        'current' => ['Current', 'var(--danger-bg)', 'var(--danger-fg)', 'Below, or close to, the requirement now (the original rule)'],
+        'current' => ['80% rule', 'var(--danger-bg)', 'var(--danger-fg)', 'Below, or close to, the requirement now (the original rule)'],
         'projected' => ['Projected', 'var(--warning-bg)', 'var(--warning-fg)', 'Compliant now, but the trend projects below the requirement by the end of the semester'],
         'both' => ['Both', 'var(--danger-bg)', 'var(--danger-fg)', 'Flagged by the original rule and by the projection'],
     ];
@@ -68,7 +68,7 @@
             </div>
         @else
             <p class="queue-meta" style="margin-top: 0;">
-                <b>Current</b> is attendance so far this semester (sessions excused by approved appeals {{ \App\Modules\Nureen\Models\AttendanceRecord::excusalRule() === 'exclude_from_total' ? 'are left out of the total' : 'count as attended' }}).
+                <b>Semester so far</b> is attendance across the semester to date, the figure the 80% requirement is measured on (sessions excused by approved appeals {{ \App\Modules\Nureen\Models\AttendanceRecord::excusalRule() === 'exclude_from_total' ? 'are left out of the total' : 'count as attended' }}).
                 <b>Projected</b> extends each student's own trend, a least-squares line through their per-period
                 attendance, over the rest of a {{ $semesterPeriods }}-period semester. <b>Trend</b> is in percentage points per period.
                 Students are emailed automatically; they are never shown the projection.
@@ -81,7 +81,7 @@
                             {{-- Sortable headers look like the other headers; the
                                  arrow marks the active sort (lowest first). --}}
                             <th><a href="{{ $sortLink('name') }}" style="color: inherit; text-decoration: none;" title="Sort by name">Student @if ($sort === 'name') ▲ @else ⇅ @endif</a></th>
-                            <th><a href="{{ $sortLink('current') }}" style="color: inherit; text-decoration: none;" title="Sort by current attendance, lowest first">Current @if ($sort === 'current') ▲ @else ⇅ @endif</a></th>
+                            <th><a href="{{ $sortLink('current') }}" style="color: inherit; text-decoration: none;" title="Sort by semester-so-far attendance, lowest first">Semester so far @if ($sort === 'current') ▲ @else ⇅ @endif</a></th>
                             <th><a href="{{ $sortLink('projected') }}" style="color: inherit; text-decoration: none;" title="Sort by projected end-of-semester attendance, lowest first">Projected end of semester @if ($sort === 'projected') ▲ @else ⇅ @endif</a></th>
                             <th>Trend</th>
                             <th>Reason</th>

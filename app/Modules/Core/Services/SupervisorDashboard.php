@@ -52,7 +52,9 @@ class SupervisorDashboard extends ApproverDashboard
                     return [
                         'student' => $student,
                         'attendance' => $reading,
-                        'tone' => StudentDashboard::toneFor($reading?->percentage),
+                        // The figure the views lead with: the semester so
+                        // far when supplied (AttendanceReading::headline()).
+                        'tone' => StudentDashboard::toneFor($reading?->headline()),
                     ];
                 })
                 // At-risk first, then worst attendance, then by name. A
@@ -60,7 +62,7 @@ class SupervisorDashboard extends ApproverDashboard
                 // twenty rows to find the two that need them.
                 ->sortBy([
                     fn ($a, $b) => ($b['attendance']?->at_risk ?? false) <=> ($a['attendance']?->at_risk ?? false),
-                    fn ($a, $b) => ($a['attendance']?->percentage ?? 101) <=> ($b['attendance']?->percentage ?? 101),
+                    fn ($a, $b) => ($a['attendance']?->headline() ?? 101) <=> ($b['attendance']?->headline() ?? 101),
                 ])
                 ->values();
         }, collect()));

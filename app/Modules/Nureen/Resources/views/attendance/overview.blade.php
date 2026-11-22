@@ -10,23 +10,24 @@
     <div class="card card-wide">
         @if ($latest)
             <div class="stat-cards-row">
-                <div class="stat-card {{ $latest->at_risk ? 'accent-red' : 'accent-green' }}">
-                    <div class="stat-number">{{ $latest->percentage }}%</div>
-                    <div class="stat-label">Latest period</div>
-                </div>
-                {{-- The figure the 80% requirement and the early-warning
-                     email use. Current only: the projection and the trend
-                     are CGS's alone and never appear on a student page. --}}
+                {{-- First: the figure the 80% requirement, the CGS At-Risk
+                     list and the early-warning email use. Current only: the
+                     projection and the trend are CGS's alone and never
+                     appear on a student page. --}}
                 @if ($semesterSoFar !== null)
                     <div class="stat-card {{ $semesterSoFar < 80 ? 'accent-red' : 'accent-green' }}">
                         <div class="stat-number">{{ rtrim(rtrim(number_format($semesterSoFar, 1), '0'), '.') }}%</div>
-                        <div class="stat-label">This semester so far</div>
+                        <div class="stat-label">Semester so far</div>
                     </div>
                 @endif
+                <div class="stat-card {{ $latest->at_risk ? 'accent-red' : 'accent-green' }}">
+                    <div class="stat-number">{{ rtrim(rtrim(number_format((float) $latest->percentage, 1), '0'), '.') }}%</div>
+                    <div class="stat-label">Latest week</div>
+                </div>
             </div>
 
             <p style="color: var(--text-grey); font-size: 12.5px;">
-                Latest period ending {{ $latest->period_end->format('j M Y') }}.
+                Latest week ending {{ $latest->period_end->format('j M Y') }}.
                 The 80% requirement applies to your attendance across the semester.
                 Sessions excused by an approved appeal {{ \App\Modules\Nureen\Models\AttendanceRecord::excusalRule() === 'exclude_from_total' ? 'are left out of the total' : 'count as attended' }}.
             </p>

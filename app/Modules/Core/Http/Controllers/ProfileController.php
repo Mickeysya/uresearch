@@ -81,8 +81,8 @@ class ProfileController extends Controller
             // Absent module, absent panel, no fatal.
             if ($reading = $this->attendanceSource()?->latestFor($user)) {
                 $stats->push([
-                    'label' => 'Attendance',
-                    'value' => rtrim(rtrim(number_format($reading->percentage, 1), '0'), '.').'%',
+                    'label' => 'Attendance ('.strtolower($reading->headlineLabel()).')',
+                    'value' => $reading::format($reading->headline()),
                     'tone' => $reading->at_risk ? 'critical' : 'good',
                 ]);
             }

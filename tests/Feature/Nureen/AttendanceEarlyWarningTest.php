@@ -287,7 +287,7 @@ class AttendanceEarlyWarningTest extends TestCase
             ->assertDontSee('next decision by');
 
         // The current semester figure IS shown -- it is what the email quotes.
-        $this->actingAs($student)->get(route('attendance.overview'))->assertSee('96.3%')->assertSee('This semester so far');
+        $this->actingAs($student)->get(route('attendance.overview'))->assertSee('96.3%')->assertSee('Semester so far');
 
         $this->actingAs($student)->get(route('attendance.at-risk'))->assertForbidden();
     }

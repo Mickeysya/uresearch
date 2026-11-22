@@ -1329,3 +1329,37 @@ should include stages past `admin_verify`.
 **For Nureen's demo video in the meantime:** `NureenVideoDemoSeeder`
 needs nothing from `demo:seed`. It uses only the accounts `DatabaseSeeder`
 makes.
+
+## 23. Attendance figures say which one they are (Core, 22 Nov 2026), done with Nureen's agreement
+
+**Problem.** The student dashboard's attendance ring showed the latest
+week's rate (e.g. 75%), while the CGS At-Risk list and the early-warning
+email showed the semester so far (e.g. 70.8%). Neither figure was labelled,
+and the 80% requirement is measured on the semester so far. No calculation
+changed. Only what is shown first, and its label, changed.
+
+### Core files changed
+
+- `Core/Support/AttendanceReading.php`: a new optional
+  `semester_percentage` (default `null`), plus `headline()` (the semester
+  figure when known, else the latest period), `headlineLabel()`
+  ("Semester so far" / "Latest week") and `format()`. `percentage` still
+  means the latest period. A supplier that does not fill the new field
+  behaves exactly as before.
+- `dashboard/partials/attendance-overview.blade.php` and `stat-cards.blade.php`:
+  the student's ring and stat card lead with `headline()`, labelled. The side
+  grid shows "Latest week" with that week's sessions and end date. The ring's
+  colour follows the figure on display.
+- `dashboard/partials/supervisor-candidates.blade.php`, `supervisor/candidates.blade.php`,
+  `Services/SupervisorDashboard.php`: "Semester so far: X%", with the
+  latest week alongside. Colour and sort order follow the displayed figure.
+- `Http/Controllers/ProfileController.php`: the stat is labelled "Attendance (semester so far)".
+- `students/index.blade.php`, `students/show.blade.php`: relabelled
+  "Semester so far". These were already the semester figure.
+
+Nureen's `AttendanceProvider::latestFor()` fills `semester_percentage` from
+`AttendanceRiskEvaluator::assess()`, the same figure the rule uses.
+`latestPerStudent()` (the CGS bands and admin average) is unchanged and
+still reports latest periods.
+
+**For teammates:** nothing to do. Only Nureen supplies attendance.

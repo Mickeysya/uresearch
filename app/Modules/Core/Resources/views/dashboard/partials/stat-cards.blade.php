@@ -25,10 +25,11 @@
             // Starts full, like the gauge below it -- StudentDashboard::STARTING_PERCENTAGE.
             // The pill still says nothing has been uploaded, so the figure is
             // not mistaken for a measured one.
-            'value' => rtrim(rtrim(number_format(
-                $attendance !== null ? (float) $attendance->percentage : StudentDashboard::STARTING_PERCENTAGE, 1
-            ), '0'), '.').'%',
-            'note' => 'Current Attendance',
+            // Leads with the semester so far, as the ring below does.
+            'value' => \App\Modules\Core\Support\AttendanceReading::format(
+                $attendance !== null ? $attendance->headline() : StudentDashboard::STARTING_PERCENTAGE
+            ),
+            'note' => $attendance?->headlineLabel() ?? 'Semester so far',
             'pill' => $attendance
                 ? ($attendance->at_risk ? 'Needs Attention' : 'Good Standing')
                 : 'No data yet',

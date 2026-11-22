@@ -24,9 +24,13 @@
     // Nothing on file is not zero attendance -- see
     // StudentDashboard::STARTING_PERCENTAGE. The skeleton above still covers
     // the other case, where no module supplies attendance at all.
+    // The dial leads with the SEMESTER SO FAR when the supplier gives it --
+    // the figure the 80% rule and the CGS At-Risk list use -- and the latest
+    // week is shown, labelled, beside it. See AttendanceReading::headline().
     $pct = $attendance !== null
-        ? (float) $attendance->percentage
+        ? $attendance->headline()
         : StudentDashboard::STARTING_PERCENTAGE;
+    $pctLabel = $attendance?->headlineLabel() ?? 'Semester so far';
     $tone = StudentDashboard::toneFor($pct);
     $bands = StudentDashboard::attendanceBands();
 
@@ -60,12 +64,12 @@
     <div class="sdash-card-body sdash-attendance-body">
         <div class="chart-gauge-wrap chart-gauge-circle tone-{{ $tone }}">
             <canvas id="{{ $chartId }}" role="img"
-                    aria-label="Current attendance {{ $pct }} percent{{ $attendance ? '' : ', nothing recorded yet' }}"></canvas>
+                    aria-label="{{ $pctLabel }}: {{ $pct }} percent{{ $attendance ? '' : ', nothing recorded yet' }}"></canvas>
 
             <div class="chart-gauge-value chart-gauge-value-circle tone-{{ $tone }}">
                 <span class="sdash-gauge-number"
                       data-count-to="{{ $pct }}" data-count-decimals="1" data-count-suffix="%" data-count-duration="950">{{ rtrim(rtrim(number_format($pct, 1), '0'), '.') }}%</span>
-                <span class="sdash-gauge-caption">attendance</span>
+                <span class="sdash-gauge-caption">{{ strtolower($pctLabel) }}</span>
             </div>
         </div>
 
@@ -80,16 +84,18 @@
 
             @if ($attendance)
                 <div class="sdash-stat-grid">
+                    @if ($attendance->semester_percentage !== null)
+                        <div class="sdash-stat-cell">
+                            <span class="sdash-stat-cell-label">Latest week</span>
+                            <span class="sdash-stat-cell-value">{{ \App\Modules\Core\Support\AttendanceReading::format($attendance->percentage) }}</span>
+                        </div>
+                    @endif
                     <div class="sdash-stat-cell">
-                        <span class="sdash-stat-cell-label">Sessions attended</span>
+                        <span class="sdash-stat-cell-label">Latest week sessions</span>
                         <span class="sdash-stat-cell-value">{{ $attendance->sessions_attended }} <span class="sdash-fact-unit">/ {{ $attendance->sessions_total }}</span></span>
                     </div>
                     <div class="sdash-stat-cell">
-                        <span class="sdash-stat-cell-label">Missed</span>
-                        <span class="sdash-stat-cell-value">{{ $attendance->sessions_total - $attendance->sessions_attended }}</span>
-                    </div>
-                    <div class="sdash-stat-cell">
-                        <span class="sdash-stat-cell-label">Period ending</span>
+                        <span class="sdash-stat-cell-label">Week ending</span>
                         <span class="sdash-stat-cell-value">{{ $attendance->period_end->format('j M Y') }}</span>
                     </div>
                     @if ($goodBand)

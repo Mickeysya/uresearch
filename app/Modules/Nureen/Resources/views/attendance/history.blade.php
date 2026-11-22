@@ -22,7 +22,7 @@
                         @endif
                     </span>
                 </div>
-                <p>{{ $record->percentage }}%
+                <p>That week: {{ rtrim(rtrim(number_format((float) $record->percentage, 1), '0'), '.') }}%
                     @if ($record->at_risk) <span style="color: var(--red, #c0392b);">at risk</span> @endif
                 </p>
             </div>

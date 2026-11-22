@@ -56,7 +56,7 @@ class AttendanceAtRisk extends Notification implements ShouldQueue
                 ->line($this->reason === AttendanceRiskState::REASON_PROJECTED
                     ? "Their attendance has been declining over recent periods and may fall below the {$threshold} requirement if the trend continues."
                     : "Their attendance is below, or close to, the {$threshold} requirement.")
-                ->line("Their attendance so far this semester is {$current}.")
+                ->line("Semester so far: {$current} (the figure the {$threshold} requirement is measured on).")
                 ->line('If it stays below the requirement, the Postgraduate Handbook allows their GA/GRA allowance to be suspended '
                     .'and their registration for the next semester to be barred; for an international student, CGS may not support a student visa renewal.')
                 ->line('A short conversation now may help them get back on track. They have been told they can contact CGS or submit an attendance appeal if there are circumstances CGS should know about.')
@@ -71,10 +71,10 @@ class AttendanceAtRisk extends Notification implements ShouldQueue
             ? $mail
                 ->line('We are writing because your attendance has been declining over recent periods. '
                     ."If this trend continues, it may fall below the {$threshold} attendance requirement for this semester.")
-                ->line("Your attendance so far this semester is {$current}, so there is still time to turn this around.")
+                ->line("Semester so far: {$current}. There is still time to turn this around.")
             : $mail
                 ->line("We are writing because your attendance is below, or close to, the {$threshold} attendance requirement for this semester.")
-                ->line("Your attendance so far this semester is {$current}.");
+                ->line("Semester so far: {$current} (the figure the {$threshold} requirement is measured on).");
 
         // The real consequences, from the Postgraduate Handbook 2025. Wording
         // only: nothing here acts on them.

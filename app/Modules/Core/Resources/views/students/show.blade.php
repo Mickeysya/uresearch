@@ -104,7 +104,7 @@
                     <p><span class="std-pill std-tone-critical">At risk</span></p>
                 @endif
                 <dl class="std-dl">
-                    <dt>This semester</dt><dd>{{ $pct($attendance['percentage']) ?? 'No data' }}</dd>
+                    <dt>Semester so far</dt><dd>{{ $pct($attendance['percentage']) ?? 'No data' }}</dd>
                     <dt>Latest period</dt><dd>{{ $attendance['latest_period_end'] ? 'Week ending '.$attendance['latest_period_end']->format('j M Y') : 'Not recorded' }}</dd>
                     @if ($seesProjection && array_key_exists('projected_percentage', $attendance))
                         <dt>Projected <span class="std-muted">(CGS only)</span></dt>

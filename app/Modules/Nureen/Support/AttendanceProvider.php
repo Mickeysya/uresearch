@@ -39,7 +39,10 @@ class AttendanceProvider implements SuppliesAttendance
             ->orderByDesc('period_end')
             ->first();
 
-        return $record ? $this->toReading($record) : null;
+        // The semester so far as well -- the figure the 80% rule, the CGS
+        // At-Risk list and the early-warning email all use -- so Core's
+        // dashboard can lead with it and label the latest week separately.
+        return $record ? $this->toReading($record, AttendanceRiskEvaluator::assess($student->id)['current']) : null;
     }
 
     /**
@@ -63,7 +66,7 @@ class AttendanceProvider implements SuppliesAttendance
         $target = app(AttendanceTarget::class)->for($student);
         $view = route('attendance.overview');
 
-        return match ($target['state']) {
+        $card = match ($target['state']) {
             AttendanceTarget::ON_TRACK => [
                 'label' => 'Attendance Target', 'value' => 'On track', 'note' => 'Minimum 80% this semester',
                 'pill' => 'View Attendance', 'pillTone' => 'good', 'url' => $view,
@@ -80,6 +83,16 @@ class AttendanceProvider implements SuppliesAttendance
                 'pill' => 'View Attendance', 'pillTone' => 'muted', 'url' => $view,
             ],
         };
+
+        // The figure the card is about, labelled the way every attendance
+        // figure is: the semester so far, as on the CGS At-Risk list.
+        $soFar = AttendanceRiskEvaluator::assess($student->id)['current'];
+
+        if ($soFar !== null) {
+            $card['note'] = 'Semester so far: '.AttendanceReading::format($soFar).'. '.$card['note'];
+        }
+
+        return $card;
     }
 
     /** 80% is out of reach: ask for a justification, or show the appeal already filed. */
@@ -113,7 +126,7 @@ class AttendanceProvider implements SuppliesAttendance
             ->map(fn (AttendanceRecord $r) => $this->toReading($r));
     }
 
-    protected function toReading(AttendanceRecord $record): AttendanceReading
+    protected function toReading(AttendanceRecord $record, ?float $semesterSoFar = null): AttendanceReading
     {
         return new AttendanceReading(
             percentage: (float) $record->percentage,
@@ -123,6 +136,7 @@ class AttendanceProvider implements SuppliesAttendance
             // A flag stored before the scope changed must not reach Core's
             // dashboards for a student who is no longer monitored.
             at_risk: (bool) $record->at_risk && AttendanceScope::monitors($record->student_id),
+            semester_percentage: $semesterSoFar,
         );
     }
 }

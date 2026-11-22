@@ -113,7 +113,7 @@
                             <th scope="col">Main supervisor</th>
                             @if ($candidacy !== null) <th scope="col">Candidacy</th> @endif
                             @if ($attendance !== null)
-                                <th scope="col" class="std-num"><a href="{{ $sortLink('attendance') }}" class="std-sort">Attendance {{ $sortMark('attendance') }}</a></th>
+                                <th scope="col" class="std-num"><a href="{{ $sortLink('attendance') }}" class="std-sort">Semester so far {{ $sortMark('attendance') }}</a></th>
                             @endif
                             <th scope="col" class="std-num">Pending</th>
                         </tr>

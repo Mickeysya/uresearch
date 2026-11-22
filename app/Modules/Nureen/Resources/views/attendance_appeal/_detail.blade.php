@@ -5,7 +5,7 @@
 @if ($detail)
     @if ($detail->attendanceRecord)
         <p>Disputed Record: period ending {{ $detail->attendanceRecord->period_end->format('j M Y') }}
-            ({{ $detail->attendanceRecord->percentage }}%)</p>
+            (that week: {{ rtrim(rtrim(number_format((float) $detail->attendanceRecord->percentage, 1), '0'), '.') }}%)</p>
         @if ($detail->sessions_requested)
             <p><b>Asks to excuse {{ $detail->sessions_requested }} {{ Str::plural('session', $detail->sessions_requested) }}</b>
                 ({{ $detail->attendanceRecord->sessionsMissed() }} still missed in that period).</p>
