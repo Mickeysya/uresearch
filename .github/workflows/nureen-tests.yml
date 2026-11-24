@@ -1,4 +1,4 @@
-name: Test Nureen automatic test run
+name: Nureen tests
 
 on:
   push:
@@ -6,9 +6,42 @@ on:
 
 jobs:
   tests:
+    # Shows as "Attendance", "GA Extension", ... on the run page instead of "tests".
+    name: ${{ matrix.module }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # one module failing still lets the others report
+      matrix:
+        include:
+          - module: Attendance
+            files: tests/Feature/Nureen/Attendance*Test.php
+          - module: GA Extension
+            files: tests/Feature/Nureen/GaExtension*Test.php
+          - module: Supervision
+            files: tests/Feature/Nureen/Supervision*Test.php tests/Feature/Nureen/SupervisorSafeguardsTest.php
+          - module: Certification
+            files: >-
+              tests/Feature/Nureen/Certification*Test.php
+              tests/Feature/Nureen/CertificateVerificationTest.php
+              tests/Feature/Nureen/LettersTest.php
+              tests/Feature/Nureen/LetterWorstCaseTest.php
+          # A new test file that matches none of the patterns above must be
+          # added here, or CI will not run it.
+          - module: Shared
+            files: >-
+              tests/Feature/Nureen/AnalyticsTest.php
+              tests/Feature/Nureen/ClientCharter*Test.php
+              tests/Feature/Nureen/DocumentPreviewTest.php
+              tests/Feature/Nureen/DraftsTest.php
+              tests/Feature/Nureen/EmailLinksTest.php
+              tests/Feature/Nureen/SeededDocumentsTest.php
+              tests/Feature/Nureen/SnapshotChainReachabilityTest.php
+              tests/Feature/Nureen/StalledReminderTest.php
+              tests/Feature/Nureen/VideoDemoSeederTest.php
+              tests/Feature/Nureen/WorkingDayCalendarTest.php
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -16,12 +49,19 @@ jobs:
           extensions: mbstring, pdo_sqlite, gd, zip, intl
           coverage: none
 
-      - run: composer install --no-interaction --prefer-dist
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
 
-      - run: |
+      - name: Prepare .env
+        run: |
           cp .env.example .env
           php artisan key:generate
 
       # phpunit.xml forces SQLite in memory, a sync queue and the array mailer,
       # so no MySQL or Mailpit service is needed.
-      - run: php artisan test tests/Feature/Nureen
+      - name: Run ${{ matrix.module }} tests
+        run: php artisan test --log-junit junit.xml ${{ matrix.files }}
+
+      - name: Write summary
+        if: always()
+        run: python3 .github/scripts/test-summary.py junit.xml "Nureen · ${{ matrix.module }}" >> "$GITHUB_STEP_SUMMARY"

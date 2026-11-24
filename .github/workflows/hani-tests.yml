@@ -1,4 +1,4 @@
-name: Test Hani Sofia automatic test run
+name: Hani Sofia tests
 
 on:
   push:
@@ -6,9 +6,10 @@ on:
 
 jobs:
   tests:
+    name: Examiner Nomination · Conflict Detection · Re-viva
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -16,12 +17,19 @@ jobs:
           extensions: mbstring, pdo_sqlite, gd, zip, intl
           coverage: none
 
-      - run: composer install --no-interaction --prefer-dist
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
 
-      - run: |
+      - name: Prepare .env
+        run: |
           cp .env.example .env
           php artisan key:generate
 
       # phpunit.xml forces SQLite in memory, a sync queue and the array mailer,
       # so no MySQL or Mailpit service is needed.
-      - run: php artisan test tests/Feature/Hani
+      - name: Run Hani tests
+        run: php artisan test --log-junit junit.xml tests/Feature/Hani
+
+      - name: Write summary
+        if: always()
+        run: python3 .github/scripts/test-summary.py junit.xml "Hani Sofia · all modules" >> "$GITHUB_STEP_SUMMARY"
