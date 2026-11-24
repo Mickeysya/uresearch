@@ -32,4 +32,4 @@ jobs:
 
       - name: Write summary
         if: always()
-        run: python3 .github/scripts/test-summary.py junit.xml "Hani Sofia · all modules" >> "$GITHUB_STEP_SUMMARY"
+        run: python3 .github/scripts/test-summary.py "Hani Sofia · test report" "All Hani modules=junit.xml" >> "$GITHUB_STEP_SUMMARY"

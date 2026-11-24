@@ -62,6 +62,34 @@ jobs:
       - name: Run ${{ matrix.module }} tests
         run: php artisan test --log-junit junit.xml ${{ matrix.files }}
 
+      - name: Keep the report for the summary job
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-${{ matrix.module }}
+          path: junit.xml
+          if-no-files-found: ignore
+
+  # One report for the whole run: overall totals first, then module by module.
+  summary:
+    name: Summary
+    needs: tests
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: junit-*
+          path: reports
+
       - name: Write summary
-        if: always()
-        run: python3 .github/scripts/test-summary.py junit.xml "Nureen · ${{ matrix.module }}" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          python3 .github/scripts/test-summary.py "Nureen · test report" \
+            "Attendance=reports/junit-Attendance/junit.xml" \
+            "GA Extension=reports/junit-GA Extension/junit.xml" \
+            "Supervision=reports/junit-Supervision/junit.xml" \
+            "Certification=reports/junit-Certification/junit.xml" \
+            "Shared=reports/junit-Shared/junit.xml" \
+            --functional docs/functional-tests/results.md >> "$GITHUB_STEP_SUMMARY"
