@@ -6,8 +6,38 @@ on:
 
 jobs:
   tests:
-    name: Examiner Nomination · Conflict Detection · Re-viva
+    # Shows as "Examiner Nomination", "Conflict Detection", ... on the run page.
+    name: ${{ matrix.module }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # one module failing still lets the others report
+      matrix:
+        include:
+          - module: Examiner Nomination
+            files: >-
+              tests/Feature/Hani/Examiner*Test.php
+              tests/Feature/Hani/PanelSeatsTest.php
+              tests/Feature/Hani/NameNormaliserTest.php
+              tests/Feature/Hani/ReleasedExaminerProviderTest.php
+          - module: Conflict Detection
+            files: >-
+              tests/Feature/Hani/ConflictDetection*Test.php
+              tests/Feature/Hani/ConflictOfInterestTest.php
+              tests/Feature/Hani/DuplicateDetectionTest.php
+          - module: Re-viva
+            files: tests/Feature/Hani/ReViva*Test.php
+          - module: Viva
+            files: tests/Feature/Hani/Viva*Test.php tests/Feature/Hani/EvaluationOverTest.php
+          # A new test file that matches none of the patterns above must be
+          # added here, or CI will not run it.
+          - module: Shared
+            files: >-
+              tests/Feature/Hani/EngineStudentEmailsTest.php
+              tests/Feature/Hani/HaniDemoSeederTest.php
+              tests/Feature/Hani/ModuleTrackerTest.php
+              tests/Feature/Hani/ProcessAnalyticsTest.php
+              tests/Feature/Hani/SlaRemindersTest.php
+
     steps:
       - uses: actions/checkout@v7
 
@@ -27,9 +57,36 @@ jobs:
 
       # phpunit.xml forces SQLite in memory, a sync queue and the array mailer,
       # so no MySQL or Mailpit service is needed.
-      - name: Run Hani tests
-        run: php artisan test --log-junit junit.xml tests/Feature/Hani
+      - name: Run ${{ matrix.module }} tests
+        run: php artisan test --log-junit junit.xml ${{ matrix.files }}
+
+      - name: Keep the report for the summary job
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-${{ matrix.module }}
+          path: junit.xml
+          if-no-files-found: ignore
+
+  # One report for the whole run: overall totals first, then module by module.
+  summary:
+    name: Summary
+    needs: tests
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: junit-*
+          path: reports
 
       - name: Write summary
-        if: always()
-        run: python3 .github/scripts/test-summary.py "Hani Sofia · test report" "All Hani modules=junit.xml" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          python3 .github/scripts/test-summary.py "Hani Sofia · test report" \
+            "Examiner Nomination=reports/junit-Examiner Nomination/junit.xml" \
+            "Conflict Detection=reports/junit-Conflict Detection/junit.xml" \
+            "Re-viva=reports/junit-Re-viva/junit.xml" \
+            "Viva=reports/junit-Viva/junit.xml" \
+            "Shared=reports/junit-Shared/junit.xml" >> "$GITHUB_STEP_SUMMARY"
