@@ -99,8 +99,6 @@
         }
         .footer table { width: 100%; border-collapse: collapse; }
         .footer td { vertical-align: top; padding: 0; }
-        .footer td.qr { width: 2.1cm; }
-        .footer td.qr img { width: 1.8cm; height: 1.8cm; }
         .footer .ref { text-align: right; white-space: nowrap; width: 5cm; }
 
         /* ---- DRAFT / REVOKED, on every page ---- */
@@ -130,9 +128,6 @@
     <div class="footer">
         <table>
             <tr>
-                @if ($qrDataUri)
-                    <td class="qr"><img src="{{ $qrDataUri }}" alt="Verification QR code"></td>
-                @endif
                 <td>
                     @if ($verificationUrl)
                         Verify this letter at {{ $verificationUrl }}<br>

@@ -17,9 +17,7 @@ use App\Modules\Nureen\Support\AttendanceOverviewProvider;
 use App\Modules\Nureen\Support\AttendanceProvider;
 use App\Modules\Nureen\Support\AttendanceSourceFactory;
 use App\Modules\Nureen\Support\Contracts\AttendanceSource;
-use App\Modules\Nureen\Support\Contracts\GeneratesQrCode;
 use App\Modules\Nureen\Support\DraftCountProvider;
-use App\Modules\Nureen\Support\QrCode\UnavailableQrCodeGenerator;
 use App\Modules\Nureen\Support\SupervisionHistoryProvider;
 use App\Modules\Nureen\Workflows\AttendanceAppealWorkflow;
 use App\Modules\Nureen\Workflows\CertificationLetterWorkflow;
@@ -58,11 +56,6 @@ class ModuleProvider extends ServiceProvider
         // Which AttendanceSource attendance:sync pulls from -- see
         // config/nureen.php and Support\AttendanceSourceFactory.
         $this->app->bind(AttendanceSource::class, fn () => AttendanceSourceFactory::make());
-
-        // No QR library in composer.json yet -- see SHARED_CHANGES.md. Swap
-        // this binding for a real implementation of GeneratesQrCode the day
-        // one is added; nothing else in this module needs to change.
-        $this->app->bind(GeneratesQrCode::class, UnavailableQrCodeGenerator::class);
     }
 
     public function boot(ModuleRegistry $registry): void

@@ -60,8 +60,7 @@ the only option needing no system binary, so no Dockerfile or server change,
 and it is actively maintained. Its weaknesses (scanned files, odd font
 encodings) are handled honestly by the statuses in §4 rather than hidden.
 
-Put the extractor behind a small interface, as `GeneratesQrCode` and
-`AttendanceSource` are, so `pdftotext` or OCR can replace or join it later
+Put the extractor behind a small interface, as `AttendanceSource` is, so `pdftotext` or OCR can replace or join it later
 without touching the matcher, the storage or the view:
 
 ```php

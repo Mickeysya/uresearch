@@ -184,9 +184,9 @@ Route::post('/attendance/ingest', [AttendanceIngestController::class, 'store'])
     ->name('attendance.ingest');
 
 // ---- Public certificate verification -----------------------------------
-// No login: the whole point is that anyone holding a printed letter (or
-// scanning its QR code) can confirm it is genuine. Throttled for the same
-// reason the ingest endpoint is -- reachable with no session at all.
+// No login: the whole point is that anyone holding a printed letter can
+// confirm it is genuine. Throttled for the same reason the ingest endpoint
+// is -- reachable with no session at all.
 Route::get('/verify/certificate/{reference}', [CertificateVerificationController::class, 'show'])
     ->middleware('throttle:30,1')
     ->where('reference', '.*')

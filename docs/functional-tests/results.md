@@ -4,7 +4,7 @@
 1. Thursday 12 November 2026, 19:50–20:15 (MYT), against `feature/ga-extension-shortcut` at `9a45624`: every case.
 2. Thursday 12 November 2026, 21:21–21:25 (MYT), against `feature/ga-extension-chain` (from `2e2e010`, with its uncommitted GA Extension chain change): GAX-07 to GAX-18 and SHR-03, after CGS confirmed the GA Extension chain Admin → CGS → Supervisor → Senior Director (Puan Akmar, Senior Executive CGS, 12 Nov 2026). Those rows record run 2; every other row records run 1.
 
-**Total:** 59. **Passed:** 54. **Failed:** 3. **Not run:** 2.
+**Total:** 59. **Passed:** 55. **Failed:** 2. **Not run:** 2.
 
 Every result below was observed in a real headless browser (Chromium 156, driven by Playwright) or, for email, in Mailpit. The test cases are the 59 rows of [`../functional-test-cases.md`](../functional-test-cases.md): the original 57, with GAX-07, GAX-08, GAX-10 and GAX-11 rewritten and GAX-17 and GAX-18 added for the confirmed GA Extension chain. Screenshots are `<ID>.png` in this folder.
 
@@ -49,7 +49,7 @@ Every result below was observed in a real headless browser (Chromium 156, driven
 | CER-07 | CGS reviews | zulkifly.cgs: Approve | Pending at Senior Director | #15 moved to Senior Director CGS. | Pass | `CertificationTest::test_the_chain_needs_supervisor_cgs_and_senior_director` |
 | CER-08 | CGS rejects | Reject (separate request #17) | Rejected; student emailed | #17 rejected at CGS; student@ received "Certification Letter Application #17 — Not Approved". | Pass | `CertificationTest::test_the_chain_needs_supervisor_cgs_and_senior_director` |
 | CER-09 | Senior Director previews | director@: Preview letter | DRAFT letter shown; nothing changes | A PDF marked DRAFT; status and reference unchanged (pending, no reference). | Pass | `LettersTest::test_the_certification_preview_writes_and_sends_nothing` |
-| CER-10 | Senior Director approves | director@: Approve & issue letter | Approved; letter CGS/GACERT/… issued; one page with QR code | Approved; letter CGS/GACERT/2026/0001 issued on one page, with the verification link printed but **no QR code**: the QR generator is bound to `UnavailableQrCodeGenerator` ("No QR library in composer.json yet"). | **Fail** | `LetterWorstCaseTest::test_ga_certification_at_its_longest_fits_one_page` (one page; no test checks for the QR) |
+| CER-10 | Senior Director approves | director@: Approve & issue letter | Approved; letter CGS/GACERT/… issued; one page with the verification link printed | Approved; letter CGS/GACERT/2026/0001 issued on one page, with the verification link printed. (Case rewritten 24 Nov 2026 when the QR code was dropped from scope; judged against run 1's observation, which was unchanged.) | Pass | `LetterWorstCaseTest::test_ga_certification_at_its_longest_fits_one_page` |
 | CER-11 | Senior Director rejects | Reject (separate request #18) | Rejected; student emailed | #18 rejected at Senior Director; student@ received "Certification Letter Application #18 — Not Approved". | Pass | `CertificationTest::test_the_chain_needs_supervisor_cgs_and_senior_director` |
 | CER-12 | Verify valid letter | Open /verify/certificate/CGS/GACERT/2026/0001, not signed in | Shows "Valid" and four facts | Shows "Valid", the reference, and four facts: Student, Letter Type, Issue Date, Endorsed By. | Pass | `CertificateVerificationTest::test_the_verification_page_shows_the_four_public_facts_for_a_valid_certificate` |
 | CER-13 | Revoke letter | director@: Issued certificates → Revoke with reason | Letter revoked; student and supervisor emailed; verification shows "Revoked" | "Certificate CGS/GACERT/2026/0001 revoked; the student and their supervisor have been emailed."; both emails arrived; the verification page shows "Revoked". | Pass | `CertificateVerificationTest::test_a_revoked_certificate_shows_revoked_not_valid` |
@@ -75,7 +75,6 @@ Every result below was observed in a real headless browser (Chromium 156, driven
 | ID | Where the cause is | Detail |
 |---|---|---|
 | CER-06 | Configuration, by design | The appointment check is off by default (`NUREEN_GA_CERTIFICATION_APPOINTMENT_CHECK`), since it is not part of CGS's confirmed process. |
-| CER-10 | Not built | No QR library is installed; `UnavailableQrCodeGenerator` is bound, so letters carry the verification link but no QR code. |
 | SHR-03 | Haziq | The GA Application "submitted" email links to the GRA route `/gra-application/{id}/mine`. |
 
 Run 1's GAX-07 and GAX-13 failures are resolved in run 2: GA Extension now starts at Admin and emails Admin (the confirmed chain), and the CGS officer assignment is on `feature/ga-extension-chain` (from `feature/cgs-assignment`).

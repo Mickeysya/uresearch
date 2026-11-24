@@ -11,7 +11,6 @@ use App\Modules\Core\Support\Stage;
 use App\Modules\Nureen\Models\GaCertificationDetail;
 use App\Modules\Nureen\Models\GaExtensionDetail;
 use App\Modules\Nureen\Models\SupervisionDetail;
-use App\Modules\Nureen\Support\Contracts\GeneratesQrCode;
 use App\Modules\Nureen\Workflows\SupervisionWorkflow;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonInterface;
@@ -44,8 +43,6 @@ class LetterRenderer
 
     /** @var array<string, ?string> Downscaled logo per source path, for one request. */
     protected static array $logos = [];
-
-    public function __construct(protected GeneratesQrCode $qr) {}
 
     /* -----------------------------------------------------------------
      | Appointment letter
@@ -507,8 +504,6 @@ class LetterRenderer
     /** @param  array<string, mixed>  $data */
     protected function render(string $view, array $data): string
     {
-        $data['qrDataUri'] = $data['verificationUrl'] ? $this->qr->dataUri($data['verificationUrl']) : null;
-
         return Pdf::loadView($view, $data)
             ->setPaper('a4')
             ->setOption([

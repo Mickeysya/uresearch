@@ -468,7 +468,7 @@ the letterhead (logo and contact details from `config('nureen.letters')`;
 text-only if the logo file is missing), Our Ref and date, addressee,
 salutation, an uppercase subject, numbered paragraphs with a details table,
 the closing and signature block, cc, and a footer on every page (verification
-URL or QR, computer-generated notice, reference). Font subsetting is on: about
+URL, computer-generated notice, reference). Font subsetting is on: about
 97 KB a letter, down from about 879 KB.
 
 - **Who signs is read from `approval_history`, never passed in.** The

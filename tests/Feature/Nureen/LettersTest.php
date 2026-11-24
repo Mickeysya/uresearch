@@ -89,7 +89,7 @@ class LettersTest extends TestCase
     /** @param  array<string, mixed>  $data */
     protected function html(string $view, array $data): string
     {
-        return view($view, $data + ['qrDataUri' => null])->render();
+        return view($view, $data)->render();
     }
 
     protected function letterDocuments(Application $application, string $type): \Illuminate\Support\Collection

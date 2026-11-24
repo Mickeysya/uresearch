@@ -258,7 +258,7 @@ class LetterWorstCaseTest extends TestCase
     {
         $application = $this->certification('GRA');
 
-        $html = view('nureen::letters.certification', app(LetterRenderer::class)->certificationData($application) + ['qrDataUri' => null])->render();
+        $html = view('nureen::letters.certification', app(LetterRenderer::class)->certificationData($application))->render();
         foreach (array_keys(config('nureen.ga_certification.fields.GRA')) as $key) {
             // Nothing is truncated to make it fit: every value is printed whole.
             $this->assertStringContainsString(e(GaCertificationDetail::where('application_id', $application->id)->value($key)), $html);

@@ -63,33 +63,10 @@ developer still sets their own `NUREEN_ATTENDANCE_INGEST_KEY` in their local
 
 ---
 
-## 3. A real QR code library for certificate verification
+## 3. (Withdrawn) A QR code library for certificate verification
 
-**File:** `composer.json`
-
-**Change**, add to `require`:
-
-```
-"endroid/qr-code": "^6.0"
-```
-
-**Why:** `GA/GRA Certification Letter` PDFs now carry a unique reference
-number and link to a public verification page
-(`GET /verify/certificate/{reference}`), and the spec asks for a QR code on
-the PDF pointing at it. No QR-generating package exists in `composer.json`
-today (checked). `App\Modules\Nureen\Support\Contracts\GeneratesQrCode` is
-the seam for this: once the package is added, write an implementation
-(e.g. wrapping `Endroid\QrCode\Builder\Builder`) and swap the binding in
-`Nureen\ModuleProvider::register()` — nothing else in the module needs to
-change, since the PDF template and every caller already go through the
-interface.
-
-**Degrades to:** the default binding
-(`App\Modules\Nureen\Support\QrCode\UnavailableQrCodeGenerator`) always
-returns `null`, and `certificate_pdf.blade.php` already falls back to
-printing the plain verification URL as text when that happens. Reference
-numbers, the verification page, and revocation are all fully functional
-without this — only the QR *image* is missing until the package lands.
+Not needed: the QR code is out of scope (24 Nov 2026). Letters print the
+verification link as text, and the module's QR seam has been removed.
 
 ---
 

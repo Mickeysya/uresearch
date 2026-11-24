@@ -8,7 +8,7 @@ use App\Modules\Nureen\Models\SupervisionDetail;
 use App\Modules\Nureen\Support\LetterRenderer;
 
 /**
- * The public pages a QR code (or a printed reference number) leads to, for
+ * The public pages a printed verification link or reference number leads to, for
  * both of Nureen's letters. No login -- see routes.php. Shows exactly the
  * four facts the spec calls for (who it is for, what it is, when it was
  * issued, who endorsed it) plus Valid/Revoked, nothing else: a letter is

@@ -57,7 +57,7 @@ Chain since 12 Nov 2026, confirmed by Puan Akmar (Senior Executive CGS): **Admin
 | CER-07 | CGS reviews | zulkifly.cgs | Approve | Pending at Senior Director |
 | CER-08 | CGS rejects | zulkifly.cgs | Reject (separate request) | Rejected; student emailed |
 | CER-09 | Senior Director previews | director@ | Preview letter | DRAFT letter shown; nothing changes |
-| CER-10 | Senior Director approves | director@ | Approve | Approved; letter CGS/GACERT/… issued; one page with QR code |
+| CER-10 | Senior Director approves | director@ | Approve | Approved; letter CGS/GACERT/… issued; one page with the verification link printed |
 | CER-11 | Senior Director rejects | director@ | Reject (separate request) | Rejected; student emailed |
 | CER-12 | Verify valid letter | public (not signed in) | Open /verify/certificate/{ref} | Shows "Valid" and four facts |
 | CER-13 | Revoke letter | director@ or zulkifly.cgs | Revoke with reason | Letter revoked; student and supervisor emailed; verification shows "Revoked" |
