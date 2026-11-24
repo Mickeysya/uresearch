@@ -185,6 +185,8 @@ class DemoDataSeeder extends Seeder
     protected function loadDeciders(): void
     {
         $this->deciders = [
+            // GA Extension's chain starts with Admin verification (12 Nov 2026).
+            Role::ADMIN => User::where('email', 'admin@utp.edu.my')->firstOrFail(),
             Role::SUPERVISOR => User::where('email', 'supervisor@utp.edu.my')->firstOrFail(),
             Role::CHAIR => User::where('email', 'chair@utp.edu.my')->firstOrFail(),
             Role::NON_EXEC_CGS => User::where('email', 'cgs@utp.edu.my')->firstOrFail(),
